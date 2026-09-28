@@ -15,21 +15,23 @@ pub struct Program {
     pub name: String,               // module / program name
     pub scope: ScopeId,             // stable module scope (0 if unset)
     pub interner: Interner,         // every IdentId in the program
-    pub surface: Surface,           // exports, for using modules (not serialized)
+    pub surface: Surface,           // exports, for using modules (on the wire since v16)
     pub types: TypeTable,           // type descriptors, dense ids
     pub traits: Vec<TraitDesc>,     // trait tables
     pub trait_slots: Vec<(u32, u32)>,   // global trait-method slots
     pub vtables: Vec<Vec<Option<u32>>>, // per type: slot -> func id
+    pub disposal_impls: Vec<Option<u32>>, // per type: dispose fn id
     pub consts: Vec<ConstVal>,      // the constant pool
     pub funcs: Vec<FuncCode>,       // the code ([Typed bytecode](typed-bytecode.md))
     pub exports: Vec<(IdentId, u32)>,   // host-callable names
 }
 ```
 
-The `Surface` is the in-memory export record — functions, constants,
-types, traits, impl registrations, and the builtin names `core` publishes.
-It is how a *using* module binds a *used* module's members at compile
-time; it is not part of the wire format.
+The `Surface` is the export record — functions, constants, types, traits,
+impl registrations, and the builtin names `core` publishes. It is how a
+*using* module binds a *used* module's members at compile time; since v16
+it is part of the wire format too — the surface section rides after
+`exports`, and decode validates every row against the tables above it.
 
 ## Wire layout
 
@@ -48,9 +50,13 @@ offset  field
         traits: u32 count, then per trait { name, methods[] }
         trait slots: u32 count, then (trait: u32, method: u32) pairs
         vtables: u32 entries, then per entry { ty, [(slot, func)] }  # sparse
+        disposal rows: u32 entries, then (ty, func) pairs            # sparse
         consts: u32 count, then tag + payload (below)
         funcs: u32 count, then per func (below)
         exports: u32 count, then (name: IdentId, func: u32) pairs
+        surface: namespace, funcs, consts, types + scope blocks + type
+                 exports, traits, impls (both ABI lists), the reserved
+                 inherent-impl table, native rows   # v16, below
 ```
 
 - **Name table.** Names are interner ids everywhere — type names, field
@@ -69,6 +75,13 @@ offset  field
   capture count, the typed register table, both operand pools, the op
   stream, the span table, the parallel `(line, col)` position table, and
   the host-fn binding id when the function is a bodyless thunk.
+- **Surface** (v16): the exported surface rides after `exports` — the
+  namespace head, funcs (with their async/host rows), consts, the
+  carried type descriptors + scope blocks + type exports, trait decls,
+  impl registrations in both ABI lists, a reserved length-prefixed
+  inherent-impl table (zero rows until class methods link), and the
+  native rows with their ambient bits. Names are ids into the name
+  table above; decode rejects any id its tables cannot resolve.
 - **Versioning policy**: the version `u32` must equal the toolchain's
   exactly — there is no migration or best-effort decode. A byte that
   changes observable behavior bumps the version; artifacts from older

@@ -9,7 +9,7 @@ use crate::types::{FieldInfo, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
 
 // ---- the loaded program ----
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TraitMethod {
     pub name: IdentId,
     pub params: Vec<TypeId>,
@@ -69,7 +69,7 @@ pub enum ConstVal {
 /// the usable name, its signature, and its module-local id. Names are
 /// [`IdentId`]s into the surface's own [`Surface::names`] interner — a
 /// surface is self-contained and crosses modules intact.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceFn {
     pub name: IdentId,
     pub params: Vec<TypeId>,
@@ -93,7 +93,7 @@ pub struct SurfaceFn {
 /// One exported constant in a module's surface — `calc::PI` and
 /// friends. `bits` is the raw scalar payload (f64 bits, i64 bits, …) the
 /// using module materializes with `ConstRaw`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceConst {
     pub name: IdentId,
     pub ty: TypeId,
@@ -101,7 +101,7 @@ pub struct SurfaceConst {
 }
 
 /// One exported type: its usable name and module-local id.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceType {
     pub name: IdentId,
     /// local id within the exporter's own type block
@@ -124,7 +124,7 @@ pub struct SurfaceType {
 /// `local` is the trait's index in the exporter's own trait table — the
 /// key `TyKind::TraitObj` ids inside carried type descriptors resolve
 /// under (RFC 0015 §6).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceTrait {
     /// the exporter's trait-table index
     pub local: u32,
@@ -147,7 +147,7 @@ pub struct SurfaceTrait {
 /// carry), `methods_concrete` the concrete one. Ref-repr targets
 /// (`str`/`bytes`/records) compile one variant — both lists bind the
 /// same fn id, the ABIs coincide.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceImpl {
     /// the trait's source name (an index into [`Surface::traits`] by name)
     pub trait_name: IdentId,
@@ -231,7 +231,7 @@ pub enum NativeTrait {
 /// Names are [`IdentId`]s into the surface's own [`Surface::names`]
 /// interner — including the names inside the carried [`RutType`]
 /// descriptors — so a surface crosses modules without a lookup context.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Surface {
     /// the name context for every name in this surface (including
     /// `types`' descriptors); starts with the well-known table
@@ -437,7 +437,9 @@ pub struct Program {
     /// and the in-memory [`Surface`](Surface). Self-contained: a decoded
     /// program rebuilds it from the binary's name table (RFC 0033 §1).
     pub interner: Interner,
-    /// exported surface, for using modules (in-memory; not serialized)
+    /// exported surface, for using modules — on the wire since v16
+    /// (names are ids into this program's interner, and a decoded
+    /// surface shares the rebuilt table)
     pub surface: Surface,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
@@ -572,7 +574,20 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// decl-only and had no such section, so a stale v14 artifact would
 /// misparse the func table as disposal rows — refused at the version
 /// byte, the v10 precedent again.
-pub const VERSION: u32 = 15;
+/// v16: surfaces on the wire — a declared-surface change. The encoded
+/// program now carries its full exported surface after the main
+/// tables: the namespace head, exported fns (with their async/host
+/// rows), consts, the carried type descriptors + scope blocks + type
+/// exports, trait decls, impl registrations (both ABI lists), the
+/// native rows with their ambient bits — plus a reserved
+/// length-prefixed inherent-impl table (zero rows until the
+/// linkable-classes phase populates it, so that change rides v16
+/// without a second bump). A consumer can no longer rebuild a surface
+/// from `.d.rut` text (impl→fn-local ids, trait-table indices,
+/// namespace/host rows are not derivable without guesswork), so stale
+/// v15 artifacts — which carry no surface section — are refused with
+/// the standard version error.
+pub const VERSION: u32 = 16;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -714,7 +729,161 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         e.u32(n.0);
         e.u32(*f);
     }
+    // the surface (v16): the module's exported surface. Names are ids
+    // into the program interner — its instance-local tail is already
+    // serialized above, so a decoded surface shares the rebuilt table
+    // (the compiler mounts a clone of it, `Surface::names`). Decode
+    // validates every row against the tables above it.
+    encode_surface(&mut e, &prog.surface);
     e.out
+}
+
+/// The surface section (v16): namespace, funcs, consts, the carried
+/// type descriptors + scope blocks + type exports, trait decls, impl
+/// registrations (both ABI lists), the reserved inherent-impl table,
+/// and the native rows with their ambient bits — in that wire order.
+fn encode_surface(e: &mut Enc, s: &Surface) {
+    // the qualified-access head (`calc` -> `Math`), if the module has
+    // a namespace form
+    match s.namespace {
+        Some(n) => {
+            e.u8(1);
+            e.u32(n.0);
+        }
+        None => e.u8(0),
+    }
+    // funcs: the usable name, its signature, the exporter's local fn
+    // id, and the async/host rows (decl/native modules only)
+    e.u32(s.funcs.len() as u32);
+    for f in &s.funcs {
+        e.u32(f.name.0);
+        e.tys(&f.params);
+        e.u32(f.ret);
+        e.u32(f.local);
+        e.u8(f.is_async as u8);
+        match f.host {
+            Some(h) => {
+                e.u8(1);
+                e.u32(h.0);
+            }
+            None => e.u8(0),
+        }
+    }
+    // consts: raw scalar payloads (`ConstRaw` materializes them)
+    e.u32(s.consts.len() as u32);
+    for c in &s.consts {
+        e.u32(c.name.0);
+        e.u32(c.ty);
+        e.u64(c.bits);
+    }
+    // the carried non-boot type descriptors — the same kind encoding
+    // as the program's own table
+    e.u32(s.types.len() as u32);
+    for t in &s.types {
+        e.u32(t.name.0);
+        encode_kind(e, &t.kind);
+    }
+    // scope blocks: (scope, local offset inside the descriptors above)
+    e.u32(s.scope_blocks.len() as u32);
+    for &(scope, off) in &s.scope_blocks {
+        e.u16(scope);
+        e.u32(off);
+    }
+    // exported (pub) type names
+    e.u32(s.type_exports.len() as u32);
+    for t in &s.type_exports {
+        e.u32(t.name.0);
+        e.u32(t.local);
+        e.u8(t.is_class as u8);
+        e.u8(t.is_generic as u8);
+        match t.scope {
+            Some(sc) => {
+                e.u8(1);
+                e.u16(sc);
+            }
+            None => e.u8(0),
+        }
+    }
+    // trait decls: keyed by the exporter's trait-table index
+    e.u32(s.traits.len() as u32);
+    for t in &s.traits {
+        e.u32(t.local);
+        e.u32(t.name.0);
+        e.u32(t.generics as u32);
+        e.u32(t.methods.len() as u32);
+        for m in &t.methods {
+            e.u32(m.name.0);
+            e.tys(&m.params);
+            e.u32(m.ret);
+        }
+    }
+    // trait impl registrations — both ABI lists (slot + concrete)
+    e.u32(s.impls.len() as u32);
+    for im in &s.impls {
+        e.u32(im.trait_name.0);
+        e.u32(im.target);
+        e.u32(im.methods.len() as u32);
+        for (n, f) in &im.methods {
+            e.u32(n.0);
+            e.u32(*f);
+        }
+        e.u32(im.methods_concrete.len() as u32);
+        for (n, f) in &im.methods_concrete {
+            e.u32(n.0);
+            e.u32(*f);
+        }
+    }
+    // inherent impls (class methods): RESERVED — length-prefixed and
+    // always empty until the linkable-classes phase populates it, so
+    // that change rides v16 without a second format bump
+    e.u32(0);
+    // native rows (core's builtin surface), ambient bits included
+    e.u32(s.native_types.len() as u32);
+    for (n, k, ambient) in &s.native_types {
+        e.u32(n.0);
+        e.u8(match k {
+            NativeTy::Opaque => 0,
+            NativeTy::StackTrace => 1,
+            NativeTy::StrBuf => 2,
+            NativeTy::Weak => 3,
+            NativeTy::DisposalContext => 4,
+        });
+        e.u8(*ambient as u8);
+    }
+    e.u32(s.native_traits.len() as u32);
+    for (n, k, ambient) in &s.native_traits {
+        e.u32(n.0);
+        e.u8(match k {
+            NativeTrait::Disposal => 0,
+            NativeTrait::Index => 1,
+            NativeTrait::Iterator => 2,
+            NativeTrait::Future => 3,
+            NativeTrait::RunContext => 4,
+        });
+        e.u8(*ambient as u8);
+    }
+    e.u32(s.native_fns.len() as u32);
+    for (n, ambient) in &s.native_fns {
+        e.u32(n.0);
+        e.u8(*ambient as u8);
+    }
+    e.u32(s.native_impls.len() as u32);
+    for (t, n, i) in &s.native_impls {
+        e.u32(*t);
+        e.u32(n.0);
+        e.u8(match i {
+            Intrinsic::WrappingAdd => 0,
+            Intrinsic::WrappingSub => 1,
+            Intrinsic::WrappingMul => 2,
+            Intrinsic::WrappingShl => 3,
+            Intrinsic::SaturatingAdd => 4,
+            Intrinsic::SaturatingSub => 5,
+            Intrinsic::SaturatingMul => 6,
+            Intrinsic::CheckedAdd => 7,
+            Intrinsic::CheckedSub => 8,
+            Intrinsic::CheckedMul => 9,
+        });
+    }
 }
 
 fn encode_kind(e: &mut Enc, k: &TyKind) {
@@ -901,7 +1070,267 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let f = d.u32()?;
         exports.push((n, f));
     }
-    Ok(Program { name, interner, types, traits, trait_slots, vtables, disposal_impls, consts, funcs, exports, ..Default::default() })
+    // the surface (v16): names are checked against the rebuilt interner
+    // at read, every id against the tables above — a bad binary never
+    // reaches the VM
+    let surface = decode_surface(&mut d, &interner, funcs.len(), traits.len())?;
+    Ok(Program { name, interner, surface, types, traits, trait_slots, vtables, disposal_impls, consts, funcs, exports, ..Default::default() })
+}
+
+/// The surface section (v16) — the decode side of [`encode_surface`],
+/// same wire order. `surface.names` is a clone of the program's rebuilt
+/// interner: the compiler mounts a clone of it too (`Surface::names`),
+/// so every surface id is an id into the one table.
+fn decode_surface(
+    d: &mut Dec,
+    interner: &Interner,
+    funcs_len: usize,
+    traits_len: usize,
+) -> Result<Surface, String> {
+    let names_len = interner.names().len();
+    // a surface name must be interned in the table the binary carries —
+    // `Interner::name` would panic on anything else
+    let name = |d: &mut Dec| -> Result<IdentId, String> {
+        let id = IdentId(d.u32()?);
+        if id.0 as usize >= names_len {
+            return Err(format!(
+                "bad surface name id {} (the name table carries {names_len})",
+                id.0
+            ));
+        }
+        Ok(id)
+    };
+    let mut s = Surface { names: interner.clone(), ..Default::default() };
+    // the namespace head, if the module has a namespace form
+    s.namespace = if d.u8()? != 0 { Some(name(d)?) } else { None };
+    // funcs
+    let n = d.u32()? as usize;
+    s.funcs = Vec::with_capacity(n);
+    for _ in 0..n {
+        let fname = name(d)?;
+        let params = d.tys()?;
+        let ret = d.u32()?;
+        let local = d.u32()?;
+        let is_async = d.u8()? != 0;
+        let host = if d.u8()? != 0 { Some(name(d)?) } else { None };
+        s.funcs.push(SurfaceFn { name: fname, params, ret, local, is_async, host });
+    }
+    // consts
+    let n = d.u32()? as usize;
+    s.consts = Vec::with_capacity(n);
+    for _ in 0..n {
+        let cname = name(d)?;
+        let ty = d.u32()?;
+        let bits = d.u64()?;
+        s.consts.push(SurfaceConst { name: cname, ty, bits });
+    }
+    // the carried type descriptors — the program type table's encoding
+    let n = d.u32()? as usize;
+    s.types = Vec::with_capacity(n);
+    for _ in 0..n {
+        let tname = name(d)?;
+        let kind = decode_kind(d)?;
+        s.types.push(RutType { name: tname, kind });
+    }
+    // scope blocks
+    let n = d.u32()? as usize;
+    s.scope_blocks = Vec::with_capacity(n);
+    for _ in 0..n {
+        let scope = d.u16()?;
+        let off = d.u32()?;
+        s.scope_blocks.push((scope, off));
+    }
+    // type exports
+    let n = d.u32()? as usize;
+    s.type_exports = Vec::with_capacity(n);
+    for _ in 0..n {
+        let tname = name(d)?;
+        let local = d.u32()?;
+        let is_class = d.u8()? != 0;
+        let is_generic = d.u8()? != 0;
+        let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
+        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, scope });
+    }
+    // trait decls
+    let n = d.u32()? as usize;
+    s.traits = Vec::with_capacity(n);
+    for _ in 0..n {
+        let local = d.u32()?;
+        let tname = name(d)?;
+        let generics = d.u32()? as usize;
+        let nmethods = d.u32()? as usize;
+        let mut methods = Vec::with_capacity(nmethods);
+        for _ in 0..nmethods {
+            let mname = name(d)?;
+            let params = d.tys()?;
+            let ret = d.u32()?;
+            methods.push(TraitMethod { name: mname, params, ret });
+        }
+        s.traits.push(SurfaceTrait { local, name: tname, generics, methods });
+    }
+    // trait impl registrations — both ABI lists
+    let n = d.u32()? as usize;
+    s.impls = Vec::with_capacity(n);
+    for _ in 0..n {
+        let trait_name = name(d)?;
+        let target = d.u32()?;
+        let mut methods = Vec::new();
+        for _ in 0..(d.u32()? as usize) {
+            let mname = name(d)?;
+            methods.push((mname, d.u32()?));
+        }
+        let mut methods_concrete = Vec::new();
+        for _ in 0..(d.u32()? as usize) {
+            let mname = name(d)?;
+            methods_concrete.push((mname, d.u32()?));
+        }
+        s.impls.push(SurfaceImpl { trait_name, target, methods, methods_concrete });
+    }
+    // inherent impls (class methods): reserved — v16 carries zero rows
+    // until the linkable-classes phase populates the table; a nonzero
+    // count is a binary this engine cannot read
+    let ninherent = d.u32()? as usize;
+    if ninherent != 0 {
+        return Err(format!(
+            "bad surface: inherent impl table carries {ninherent} rows (reserved in this version)"
+        ));
+    }
+    // native rows, ambient bits included
+    let n = d.u32()? as usize;
+    s.native_types = Vec::with_capacity(n);
+    for _ in 0..n {
+        let nname = name(d)?;
+        let kind = match d.u8()? {
+            0 => NativeTy::Opaque,
+            1 => NativeTy::StackTrace,
+            2 => NativeTy::StrBuf,
+            3 => NativeTy::Weak,
+            4 => NativeTy::DisposalContext,
+            t => return Err(format!("bad native type tag {t}")),
+        };
+        let ambient = d.u8()? != 0;
+        s.native_types.push((nname, kind, ambient));
+    }
+    let n = d.u32()? as usize;
+    s.native_traits = Vec::with_capacity(n);
+    for _ in 0..n {
+        let nname = name(d)?;
+        let kind = match d.u8()? {
+            0 => NativeTrait::Disposal,
+            1 => NativeTrait::Index,
+            2 => NativeTrait::Iterator,
+            3 => NativeTrait::Future,
+            4 => NativeTrait::RunContext,
+            t => return Err(format!("bad native trait tag {t}")),
+        };
+        let ambient = d.u8()? != 0;
+        s.native_traits.push((nname, kind, ambient));
+    }
+    let n = d.u32()? as usize;
+    s.native_fns = Vec::with_capacity(n);
+    for _ in 0..n {
+        let nname = name(d)?;
+        let ambient = d.u8()? != 0;
+        s.native_fns.push((nname, ambient));
+    }
+    let n = d.u32()? as usize;
+    s.native_impls = Vec::with_capacity(n);
+    for _ in 0..n {
+        let ty = d.u32()?;
+        let nname = name(d)?;
+        let intrinsic = match d.u8()? {
+            0 => Intrinsic::WrappingAdd,
+            1 => Intrinsic::WrappingSub,
+            2 => Intrinsic::WrappingMul,
+            3 => Intrinsic::WrappingShl,
+            4 => Intrinsic::SaturatingAdd,
+            5 => Intrinsic::SaturatingSub,
+            6 => Intrinsic::SaturatingMul,
+            7 => Intrinsic::CheckedAdd,
+            8 => Intrinsic::CheckedSub,
+            9 => Intrinsic::CheckedMul,
+            t => return Err(format!("bad intrinsic tag {t}")),
+        };
+        s.native_impls.push((ty, nname, intrinsic));
+    }
+    validate_surface(&s, TypeTable::boot().types.len(), funcs_len, traits_len)?;
+    Ok(s)
+}
+
+/// Every id a decoded surface row carries must resolve inside the
+/// program the binary carries — a bad binary never reaches the VM (the
+/// law the version byte, the opcode guards, and the table bounds
+/// already enforce). Names were checked at read; type ids are the
+/// exporter's packed `(scope, local)` spellings — boot ids are shared,
+/// everything else must land inside a carried scope block; fn refs and
+/// trait locals are the exporter's module-local ids.
+fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usize) -> Result<(), String> {
+    let types_len = s.types.len();
+    for &(scope, off) in &s.scope_blocks {
+        if scope == crate::id::BOOT_SCOPE {
+            return Err(format!("bad scope block (scope {scope} is the shared boot table)"));
+        }
+        if off as usize > types_len {
+            return Err(format!("bad scope block (scope {scope}, offset {off} outside the carried types)"));
+        }
+    }
+    let ty = |t: TypeId| -> Result<(), String> {
+        let scope = crate::scope_of(t);
+        if scope == crate::id::BOOT_SCOPE {
+            if (t as usize) < boot {
+                return Ok(());
+            }
+            return Err(format!("bad surface type id {t} (outside the boot table)"));
+        }
+        match s.scope_blocks.iter().find(|&&(b, _)| b == scope) {
+            Some(&(_, off)) => {
+                let dense = off as u64 + crate::local_of(t) as u64;
+                if dense < types_len as u64 {
+                    Ok(())
+                } else {
+                    Err(format!("bad surface type id {t} (outside scope {scope}'s block)"))
+                }
+            }
+            None => Err(format!("bad surface type id {t} (no carried block for scope {scope})")),
+        }
+    };
+    for f in &s.funcs {
+        for &p in &f.params {
+            ty(p)?;
+        }
+        ty(f.ret)?;
+        if f.local as usize >= funcs_len {
+            let fname = s.names.name(f.name);
+            return Err(format!("bad surface fn `{fname}` (local {} outside the func table)", f.local));
+        }
+    }
+    for c in &s.consts {
+        ty(c.ty)?;
+    }
+    for t in &s.traits {
+        if t.local as usize >= traits_len {
+            let tname = s.names.name(t.name);
+            return Err(format!("bad surface trait `{tname}` (local {} outside the trait table)", t.local));
+        }
+        for m in &t.methods {
+            for &p in &m.params {
+                ty(p)?;
+            }
+            ty(m.ret)?;
+        }
+    }
+    for im in &s.impls {
+        ty(im.target)?;
+        for &(_, f) in im.methods.iter().chain(&im.methods_concrete) {
+            if f as usize >= funcs_len {
+                return Err(format!("bad surface impl method fn ref {f} (outside the func table)"));
+            }
+        }
+    }
+    for (t, _, _) in &s.native_impls {
+        ty(*t)?;
+    }
+    Ok(())
 }
 
 fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
@@ -1284,7 +1713,7 @@ impl<'a> Dec<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{TY_I32, TY_NIL, TY_STR};
+    use crate::types::{TY_F64, TY_I32, TY_NIL, TY_STR};
 
     fn sample() -> Program {
         let mut p = Program::default();
@@ -1357,6 +1786,131 @@ mod tests {
         let a = encode(&sample());
         let b = encode(&sample());
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn surface_round_trips_row_for_row() {
+        // v16: `Program.surface` is on the wire — decode(encode(p)).surface
+        // == p.surface, every row, both ABI lists, ambient bits included
+        let mut p = sample();
+        let math = p.interner.intern("Math");
+        let double = p.interner.intern("double");
+        let sleep = p.interner.intern("sleep");
+        let pi = p.interner.intern("PI");
+        let area = p.interner.intern("area");
+        let point = p.interner.lookup("Point").unwrap();
+        let shape = p.interner.lookup("Vec").unwrap();
+        p.surface.namespace = Some(math);
+        p.surface.funcs.push(SurfaceFn {
+            name: double,
+            params: vec![TY_I32],
+            ret: TY_I32,
+            local: 0,
+            is_async: false,
+            host: None,
+        });
+        // a host row: the async lane + the registration name (decl and
+        // native modules only)
+        p.surface.funcs.push(SurfaceFn {
+            name: sleep,
+            params: vec![],
+            ret: TY_NIL,
+            local: 0,
+            is_async: true,
+            host: Some(p.interner.intern("rt::sleep")),
+        });
+        p.surface.consts.push(SurfaceConst {
+            name: pi,
+            ty: TY_F64,
+            bits: 3.5f64.to_bits(),
+        });
+        // the carried non-boot descriptors: exactly the Point block
+        p.surface.types = p.types.types[boot_len() as usize..].to_vec();
+        p.surface.scope_blocks.push((7, 0));
+        p.surface.type_exports.push(SurfaceType {
+            name: point,
+            local: 0,
+            is_class: false,
+            is_generic: false,
+            scope: None,
+        });
+        p.surface.traits.push(SurfaceTrait {
+            local: 0,
+            name: shape,
+            generics: 0,
+            methods: vec![TraitMethod { name: area, params: vec![TY_I32], ret: TY_NIL }],
+        });
+        p.surface.impls.push(SurfaceImpl {
+            trait_name: shape,
+            target: crate::id::pack(7, 0),
+            methods: vec![(area, 0)],
+            methods_concrete: vec![(area, 0)],
+        });
+        // native rows (core's builtin surface), ambient bits both ways
+        p.surface.native_types = vec![
+            (sym::OPAQUE, NativeTy::Opaque, true),
+            (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
+        ];
+        p.surface.native_traits = vec![
+            (sym::ITERATOR, NativeTrait::Iterator, true),
+            (sym::DISPOSAL, NativeTrait::Disposal, false),
+        ];
+        p.surface.native_fns = vec![(sym::ASSERT, true)];
+        p.surface.native_impls = vec![(TY_I32, sym::WRAPPING_ADD, Intrinsic::WrappingAdd)];
+        // the producer's law (the compiler mounts a clone of the
+        // program interner — `Surface::names`): the surface's names ARE
+        // the program's
+        p.surface.names = p.interner.clone();
+
+        let bytes = encode(&p);
+        let q = decode(&bytes).expect("decode");
+        assert_eq!(q.surface, p.surface);
+        // the decoded surface shares the program's rebuilt interner —
+        // its names are ids into the one table, like the compiler's
+        assert_eq!(q.surface.names, q.interner);
+    }
+
+    #[test]
+    fn decode_rejects_out_of_range_surface_ids() {
+        // a bad binary never reaches the VM: every surface id is
+        // validated against the tables the binary carries
+        let mut p = sample();
+        p.surface.funcs.push(SurfaceFn {
+            name: IdentId(99_999), // not interned in the name table
+            params: vec![],
+            ret: TY_I32,
+            local: 0,
+            is_async: false,
+            host: None,
+        });
+        assert!(decode(&encode(&p)).is_err(), "name id outside the interner");
+
+        let mut p = sample();
+        p.surface.impls.push(SurfaceImpl {
+            trait_name: p.interner.intern("Shape"),
+            target: crate::id::pack(9, 0), // no block carries scope 9
+            methods: vec![],
+            methods_concrete: vec![],
+        });
+        assert!(decode(&encode(&p)).is_err(), "type id outside the carried blocks");
+
+        let mut p = sample();
+        p.surface.traits.push(SurfaceTrait {
+            local: 7, // the trait table carries one row
+            name: p.interner.intern("Shape"),
+            generics: 0,
+            methods: vec![],
+        });
+        assert!(decode(&encode(&p)).is_err(), "trait local outside the trait table");
+
+        let mut p = sample();
+        p.surface.impls.push(SurfaceImpl {
+            trait_name: p.interner.intern("Shape"),
+            target: TY_I32,
+            methods: vec![(p.interner.intern("area"), 42)], // the func table carries one
+            methods_concrete: vec![],
+        });
+        assert!(decode(&encode(&p)).is_err(), "fn ref outside the func table");
     }
 
     fn boot_len() -> u32 {

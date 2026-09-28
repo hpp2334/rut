@@ -232,7 +232,7 @@ pub enum TyKind {
     Fn { params: Vec<TypeId>, ret: TypeId },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RutType {
     pub name: IdentId,
     pub kind: TyKind,

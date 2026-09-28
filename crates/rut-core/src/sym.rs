@@ -28,7 +28,7 @@ pub struct IdentId(pub u32);
 /// String interner — names are indices, not `String` keys (RFC 0030 §5).
 /// Append-only: a [`&str`] borrowed from [`Interner::name`] stays valid
 /// for the interner's lifetime.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Interner {
     names: Vec<Box<str>>,
     map: std::collections::HashMap<Box<str>, IdentId>,

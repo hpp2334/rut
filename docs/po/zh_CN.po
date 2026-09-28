@@ -4536,7 +4536,7 @@ msgstr "形式"
 #: src/reference/builtin-generic-types.md:104
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:144 src/reference/host-futures.md:34
-#: src/reference/embedding.md:62 src/reference/embedding.md:81
+#: src/reference/embedding.md:62 src/reference/embedding.md:85
 #: src/reference/value-boundary.md:96 src/reference/host-fns.md:239
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
@@ -17688,7 +17688,7 @@ msgstr "帧状态"
 msgid "Resumption"
 msgstr "恢复"
 
-#: src/reference/resource-limits.md:49 src/reference/embedding.md:144
+#: src/reference/resource-limits.md:49 src/reference/embedding.md:148
 msgid "`OutOfMemory`"
 msgstr "`OutOfMemory`"
 
@@ -17704,7 +17704,7 @@ msgstr "在写入之前停放"
 msgid "raise limit / free refs → `resume()`"
 msgstr "提高上限 / 释放引用 → `resume()`"
 
-#: src/reference/resource-limits.md:50 src/reference/embedding.md:143
+#: src/reference/resource-limits.md:50 src/reference/embedding.md:147
 msgid "`OutOfFuel`"
 msgstr "`OutOfFuel`"
 
@@ -18184,7 +18184,7 @@ msgstr "`vm.now_ms()` / `vm.set_now(t)`"
 msgid "read / advance the deterministic virtual clock"
 msgstr "读取 / 推进确定性的虚拟时钟"
 
-#: src/reference/async.md:151 src/reference/embedding.md:90
+#: src/reference/async.md:151 src/reference/embedding.md:94
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr "`vm.next_deadline() -> Option<u64>`"
 
@@ -18204,7 +18204,7 @@ msgid ""
 "no completion"
 msgstr "排空就绪队列，然后轮询停放中的宿主 future，直到一轮空转不再产生任何完成"
 
-#: src/reference/async.md:153 src/reference/embedding.md:92
+#: src/reference/async.md:153 src/reference/embedding.md:96
 msgid "`vm.pending_tasks() -> usize`"
 msgstr "`vm.pending_tasks() -> usize`"
 
@@ -19232,7 +19232,7 @@ msgstr "注册表会被 `Vm::new` 消费：程序声明的每个宿主 thunk 都
 msgid "Driver API (`rut-driver`)"
 msgstr "Driver API（`rut-driver`）"
 
-#: src/reference/embedding.md:62 src/reference/embedding.md:81
+#: src/reference/embedding.md:62 src/reference/embedding.md:85
 #: src/reference/value-boundary.md:96 src/reference/native-containers.md:103
 #: src/reference/templates.md:40
 msgid "API"
@@ -19339,249 +19339,249 @@ msgid ""
 "and declaration files](host-fns.md))."
 msgstr "`mode` 为 `.rut` 取 `Mode::Impl`，为 `.d.rut` 取 `Mode::Decl`（[宿主函数与声明文件](host-fns.md)）。"
 
-#: src/reference/embedding.md:79
+#: src/reference/embedding.md:83
 msgid "VM API (`rut_vm::interp`)"
 msgstr "VM API（`rut_vm::interp`）"
 
-#: src/reference/embedding.md:83
+#: src/reference/embedding.md:87
 msgid "`HostRegistry::new()`"
 msgstr "`HostRegistry::new()`"
 
-#: src/reference/embedding.md:83
+#: src/reference/embedding.md:87
 msgid "an empty binding table"
 msgstr "一张空的绑定表"
 
-#: src/reference/embedding.md:84
+#: src/reference/embedding.md:88
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr "`hosts.register::<_, (P…), R, _>(name, f)`"
 
-#: src/reference/embedding.md:84
+#: src/reference/embedding.md:88
 msgid "bind one body; the closure's Rust shape **is** the declared row"
 msgstr "绑定一个函数体；闭包的 Rust 形状**就是**被声明的行"
 
-#: src/reference/embedding.md:85
+#: src/reference/embedding.md:89
 msgid "`hosts.verify_against(&expected)`"
 msgstr "`hosts.verify_against(&expected)`"
 
-#: src/reference/embedding.md:85
+#: src/reference/embedding.md:89
 msgid "panic on declared-unbound / bound-undeclared / signature drift"
 msgstr "对\"已声明未绑定 / 已绑定未声明 / 签名漂移\" panic"
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:90
 msgid "`Vm::new(prog, &limits, hooks, hosts)`"
 msgstr "`Vm::new(prog, &limits, hooks, hosts)`"
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:90
 msgid "boot; joins every declared host thunk to its binding"
 msgstr "启动；把每个已声明的宿主 thunk join 到它的绑定"
 
-#: src/reference/embedding.md:87
+#: src/reference/embedding.md:91
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr "`vm.call::<A, R>(export, args)`"
 
-#: src/reference/embedding.md:87
+#: src/reference/embedding.md:91
 msgid ""
 "call an export with Rust values, get a Rust value back ([value "
 "boundary](value-boundary.md))"
 msgstr "用 Rust 值调用一个导出，取回一个 Rust 值（[值边界](value-boundary.md)）"
 
-#: src/reference/embedding.md:88
+#: src/reference/embedding.md:92
 msgid "`vm.resume::<R>()`"
 msgstr "`vm.resume::<R>()`"
 
-#: src/reference/embedding.md:88
+#: src/reference/embedding.md:92
 msgid "resume a budget-parked call after refueling"
 msgstr "在补充燃料之后恢复一次因预算而停放的调用"
 
-#: src/reference/embedding.md:89
+#: src/reference/embedding.md:93
 msgid "`vm.run_ready()`"
 msgstr "`vm.run_ready()`"
 
-#: src/reference/embedding.md:89
+#: src/reference/embedding.md:93
 msgid "drain the async ready queue once; returns tasks run"
 msgstr "排空一次异步就绪队列；返回运行的任务数"
 
-#: src/reference/embedding.md:90
+#: src/reference/embedding.md:94
 msgid "the earliest timer deadline, if any"
 msgstr "最早的定时器期限（若有）"
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:95
 msgid "`vm.set_now(t_ms)`"
 msgstr "`vm.set_now(t_ms)`"
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:95
 msgid "advance the virtual clock"
 msgstr "推进虚拟时钟"
 
-#: src/reference/embedding.md:92
+#: src/reference/embedding.md:96
 msgid "unfinished async tasks"
 msgstr "未完成的异步任务"
 
-#: src/reference/embedding.md:93
+#: src/reference/embedding.md:97
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr "`vm.fuel_used` / `vm.heap_usage()`"
 
-#: src/reference/embedding.md:93
+#: src/reference/embedding.md:97
 msgid "budget meters"
 msgstr "预算计量表"
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:98
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr "`vm.alloc_opaque_str(s)`"
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:98
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr "在宿主构建的文本之上铸造一个 `opaque` 盒（logger 的具名 logger）"
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:99
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr "`vm.call_host_row(row, &[Value])`"
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:99
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr "按名称分派一个已注册的行（测试/工具用途的读取）"
 
-#: src/reference/embedding.md:97
+#: src/reference/embedding.md:101
 msgid "The canonical async driving loop (single-threaded; the host owns it):"
 msgstr "规范的异步驱动循环（单线程；由宿主拥有）："
 
-#: src/reference/embedding.md:103
+#: src/reference/embedding.md:107
 msgid "// advance to the next timer\n"
 msgstr "// advance to the next timer\n"
 
-#: src/reference/embedding.md:110
+#: src/reference/embedding.md:114
 msgid ""
 "Cap the loop in embedders that cannot prove termination, so a program that "
 "never idles fails loudly instead of hanging."
 msgstr "在无法证明终止的嵌入方里给循环加上限，让永不空闲的程序响亮地失败，而不是挂死。"
 
-#: src/reference/embedding.md:113
+#: src/reference/embedding.md:117
 msgid "Limits"
 msgstr "限制"
 
-#: src/reference/embedding.md:117
+#: src/reference/embedding.md:121
 msgid "// ops per turn; None = unlimited\n"
 msgstr "// ops per turn; None = unlimited\n"
 
-#: src/reference/embedding.md:119
+#: src/reference/embedding.md:123
 msgid "// ops between interrupt checks\n"
 msgstr "// ops between interrupt checks\n"
 
-#: src/reference/embedding.md:123
+#: src/reference/embedding.md:127
 msgid ""
 "Exhaustion and interrupts surface as traps ([resource "
 "limits](resource-limits.md)). A trap inside re-entrant work propagates to "
 "the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr "耗尽与中断都以陷阱的形式浮现（[资源限制](resource-limits.md)）。重入工作内部的陷阱会传播给停放在宿主操作处的嵌入方；`vm.resume::<R>()` 重新运行该轮。"
 
-#: src/reference/embedding.md:127
+#: src/reference/embedding.md:131
 msgid "Native fn rules"
 msgstr "原生函数规则"
 
-#: src/reference/embedding.md:129
+#: src/reference/embedding.md:133
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr "函数体是 `FnMut(&mut Vm, P…) -> R` 或 `-> Result<R, Trap>`；Rust 参数类型**就是**被声明的行（不可跨越的类型在注册点是编译错误——[值边界](value-boundary.md)）。"
 
-#: src/reference/embedding.md:132
+#: src/reference/embedding.md:136
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr "原生函数运行在操作预算**之外**。宿主被信任是快的——或者会把工作交给一个 future（[异步宿主函数](host-fns.md)）。"
 
-#: src/reference/embedding.md:134
+#: src/reference/embedding.md:138
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr "重入：函数体可以对 rut 导出调用 `vm.call`。嵌套调用从同一个燃料池支取；外层函数体持有的借用受守卫保护（[值边界](value-boundary.md)）。"
 
-#: src/reference/embedding.md:137
+#: src/reference/embedding.md:141
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr "失败是值：返回 `Err(Trap)`——`Trap { kind, msg }`。该函数干净地触发陷阱，错误作为一个 `Err` 连同完整的 rut 回溯传播给嵌入方。陷阱绝不 unwind Rust。"
 
-#: src/reference/embedding.md:141
+#: src/reference/embedding.md:145
 msgid "`TrapKind`"
 msgstr "`TrapKind`"
 
-#: src/reference/embedding.md:141
+#: src/reference/embedding.md:145
 msgid "raised by"
 msgstr "由何引发"
 
-#: src/reference/embedding.md:143
+#: src/reference/embedding.md:147
 msgid "budget exhaustion"
 msgstr "预算耗尽"
 
-#: src/reference/embedding.md:144 src/reference/cli.md:32
+#: src/reference/embedding.md:148 src/reference/cli.md:32
 msgid "heap limit"
 msgstr "堆上限"
 
-#: src/reference/embedding.md:145
+#: src/reference/embedding.md:149
 msgid "`Interrupted`"
 msgstr "`Interrupted`"
 
-#: src/reference/embedding.md:145
+#: src/reference/embedding.md:149
 msgid "interrupt flag"
 msgstr "中断标志"
 
-#: src/reference/embedding.md:146
+#: src/reference/embedding.md:150
 msgid "`Overflow` / `DivByZero`"
 msgstr "`Overflow` / `DivByZero`"
 
-#: src/reference/embedding.md:146
+#: src/reference/embedding.md:150
 msgid "arithmetic"
 msgstr "算术"
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid "`IndexOutOfBounds`"
 msgstr "`IndexOutOfBounds`"
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid "sequence access"
 msgstr "序列访问"
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:152
 msgid "`Assert` / `Panic`"
 msgstr "`Assert` / `Panic`"
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:152
 msgid "`assert` / `panic`"
 msgstr "`assert` / `panic`"
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:153
 msgid "`BadUnbox`"
 msgstr "`BadUnbox`"
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:153
 msgid "a failed unbox"
 msgstr "一次失败的 unbox"
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:154
 msgid "`NilDeref`"
 msgstr "`NilDeref`"
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:154
 msgid "nil where a reference is required"
 msgstr "需要引用之处出现了 nil"
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:155
 msgid "`Invalid`"
 msgstr "`Invalid`"
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:155
 msgid "everything else, including boundary mismatches"
 msgstr "其余一切，包括边界不匹配"
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:157
 msgid "The engine's own natives"
 msgstr "引擎自有的原生设施"
 
-#: src/reference/embedding.md:155
+#: src/reference/embedding.md:159
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, the `StrBuf` "
@@ -19590,78 +19590,78 @@ msgid ""
 "their own registered modules."
 msgstr "VM 启动时自带同一分派家族的内部原生调用——`str`/`bytes` 成员、`f\"...\"` 拼接的下降、`StrBuf` 构建器、数组 length/slice，以及栈追踪捕获。它们是启动时就固定的调用槽，绝不是 IR 级的特殊形式；宿主看到它们与看到自己注册的模块完全一样。"
 
-#: src/reference/embedding.md:161
+#: src/reference/embedding.md:165
 msgid "Host-side helpers (`rut-std`)"
 msgstr "宿主侧辅助设施（`rut-std`）"
 
-#: src/reference/embedding.md:163 src/reference/cli.md:45
+#: src/reference/embedding.md:167 src/reference/cli.md:45
 msgid "installer"
 msgstr "安装器"
 
-#: src/reference/embedding.md:163
+#: src/reference/embedding.md:167
 msgid "binds"
 msgstr "绑定"
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "`math::install_std_math`"
 msgstr "`math::install_std_math`"
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "`calc`'s float functions, both widths"
 msgstr "`calc` 的浮点函数，两种宽度皆有"
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "`logger::install_std_log(&mut hosts, sink)`"
 msgstr "`logger::install_std_log(&mut hosts, sink)`"
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "`rt:log`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr "`rt:log` 的两行，路由到一个 `FnMut(&str)` 汇点"
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "`nmap::install_std_nmap`"
 msgstr "`nmap::install_std_nmap`"
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr "`nmapset` 背后的原生键表（[标准库](stdlib.md)）"
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "`async_host::install_std_async`"
 msgstr "`async_host::install_std_async`"
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr "启动器各行（`__launch`/`__abort`/`__sleep`/`__sleep_yield`）"
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "`http::install_std_http`"
 msgstr "`http::install_std_http`"
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "the std HTTP lanes (reqwest; native builds only)"
 msgstr "标准 HTTP 链路（reqwest；仅原生构建）"
 
-#: src/reference/embedding.md:170
+#: src/reference/embedding.md:174
 msgid "`bench_cross::install_std_bench_cross`"
 msgstr "`bench_cross::install_std_bench_cross`"
 
-#: src/reference/embedding.md:170 src/reference/stdlib.md:132
+#: src/reference/embedding.md:174 src/reference/stdlib.md:132
 msgid "the crossing-tax benchmark rows"
 msgstr "跨越税基准测试行"
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:176
 msgid "In-tree examples"
 msgstr "树内示例"
 
-#: src/reference/embedding.md:174
+#: src/reference/embedding.md:178
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr "[03 — 插件](../examples/03-plugin.md)：一个 Rust 聊天服务器驱动一个 rut 管理插件，从模块目录和打包好的 `.rutbundle` 加载；含重入的 `emit` 跨越。"
 
-#: src/reference/embedding.md:177
+#: src/reference/embedding.md:181
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): mounts the "
 "std packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -20160,7 +20160,7 @@ msgstr "rut 记录真正拥有的布局"
 msgid "A user record (struct or dataclass) is an **array of 8-byte slots**:"
 msgstr "用户记录（struct 或 dataclass）是一个 **8 字节槽位的数组**："
 
-#: src/reference/repr-c.md:14 src/reference/module-binary.md:131
+#: src/reference/repr-c.md:14 src/reference/module-binary.md:144
 msgid "rule"
 msgstr "规则"
 
@@ -24086,7 +24086,7 @@ msgid ""
 "and [Tasks](tasks.md)."
 msgstr "`async fn` 编译成一个状态机：每个 `await` 是隐藏帧里的一个检查点状态，恢复分派是现有的跳转表操作，局部变量成为帧字段，挂起是一次普通的返回。为此操作集零新增——被驱动的那一半是一次普通的 trait-vtable 调用，走 future 的 `yield` 行。完整协议见[异步与 await](async.md)与[任务](tasks.md)。"
 
-#: src/reference/compiler.md:171 src/reference/module-binary.md:77
+#: src/reference/compiler.md:171 src/reference/module-binary.md:90
 msgid "Determinism"
 msgstr "确定性"
 
@@ -24795,8 +24795,8 @@ msgid "// every IdentId in the program\n"
 msgstr "// every IdentId in the program\n"
 
 #: src/reference/module-binary.md:18
-msgid "// exports, for using modules (not serialized)\n"
-msgstr "// exports, for using modules (not serialized)\n"
+msgid "// exports, for using modules (on the wire since v16)\n"
+msgstr "// exports, for using modules (on the wire since v16)\n"
 
 #: src/reference/module-binary.md:19
 msgid "// type descriptors, dense ids\n"
@@ -24815,37 +24815,42 @@ msgid "// per type: slot -> func id\n"
 msgstr "// per type: slot -> func id\n"
 
 #: src/reference/module-binary.md:23
+msgid "// per type: dispose fn id\n"
+msgstr "// per type: dispose fn id\n"
+
+#: src/reference/module-binary.md:24
 msgid "// the constant pool\n"
 msgstr "// the constant pool\n"
 
-#: src/reference/module-binary.md:24
+#: src/reference/module-binary.md:25
 msgid "// the code ([Typed bytecode](typed-bytecode.md))\n"
 msgstr "// the code ([Typed bytecode](typed-bytecode.md))\n"
 
-#: src/reference/module-binary.md:25
+#: src/reference/module-binary.md:26
 msgid "// host-callable names\n"
 msgstr "// host-callable names\n"
 
-#: src/reference/module-binary.md:29
+#: src/reference/module-binary.md:30
 msgid ""
-"The `Surface` is the in-memory export record — functions, constants, types, "
-"traits, impl registrations, and the builtin names `core` publishes. It is "
-"how a _using_ module binds a _used_ module's members at compile time; it is "
-"not part of the wire format."
-msgstr "`Surface` 是内存中的导出记录——函数、常量、类型、trait、impl 注册，以及 `core` 发布的内建名字。_使用方_模块在编译期就是靠它绑定_被使用_模块的成员；它不是线上格式的一部分。"
+"The `Surface` is the export record — functions, constants, types, traits, "
+"impl registrations, and the builtin names `core` publishes. It is how a "
+"_using_ module binds a _used_ module's members at compile time; since v16 it "
+"is part of the wire format too — the surface section rides after `exports`, "
+"and decode validates every row against the tables above it."
+msgstr "`Surface` 是导出记录——函数、常量、类型、trait、impl 注册，以及 `core` 发布的内建名字。_使用方_模块在编译期就是靠它绑定_被使用_模块的成员；自 v16 起它也是线上格式的一部分——surface 节跟在 `exports` 之后，解码会对照上方的各个表校验它的每一行。"
 
-#: src/reference/module-binary.md:34
+#: src/reference/module-binary.md:36
 msgid "Wire layout"
 msgstr "线上布局"
 
-#: src/reference/module-binary.md:36
+#: src/reference/module-binary.md:38
 msgid ""
 "The format is little-endian, everywhere — encoded words, hash inputs, "
 "checksums. The first byte of a byte range is the least significant byte of "
 "word 0; this is a law pinned by unit tests, not an accident of the host."
 msgstr "这个格式处处小端序——编码的字、哈希输入、校验和。一个字节范围的首字节就是第 0 个字的最低有效字节；这是由单元测试钉住的法则，不是宿主的偶然。"
 
-#: src/reference/module-binary.md:41
+#: src/reference/module-binary.md:43
 msgid ""
 "```\n"
 "offset  field\n"
@@ -24858,9 +24863,14 @@ msgid ""
 "        trait slots: u32 count, then (trait: u32, method: u32) pairs\n"
 "        vtables: u32 entries, then per entry { ty, [(slot, func)] }  # "
 "sparse\n"
+"        disposal rows: u32 entries, then (ty, func) pairs            # "
+"sparse\n"
 "        consts: u32 count, then tag + payload (below)\n"
 "        funcs: u32 count, then per func (below)\n"
 "        exports: u32 count, then (name: IdentId, func: u32) pairs\n"
+"        surface: namespace, funcs, consts, types + scope blocks + type\n"
+"                 exports, traits, impls (both ABI lists), the reserved\n"
+"                 inherent-impl table, native rows   # v16, below\n"
 "```"
 msgstr ""
 "```\n"
@@ -24874,12 +24884,17 @@ msgstr ""
 "        trait slots: u32 count, then (trait: u32, method: u32) pairs\n"
 "        vtables: u32 entries, then per entry { ty, [(slot, func)] }  # "
 "sparse\n"
+"        disposal rows: u32 entries, then (ty, func) pairs            # "
+"sparse\n"
 "        consts: u32 count, then tag + payload (below)\n"
 "        funcs: u32 count, then per func (below)\n"
 "        exports: u32 count, then (name: IdentId, func: u32) pairs\n"
+"        surface: namespace, funcs, consts, types + scope blocks + type\n"
+"                 exports, traits, impls (both ABI lists), the reserved\n"
+"                 inherent-impl table, native rows   # v16, below\n"
 "```"
 
-#: src/reference/module-binary.md:56
+#: src/reference/module-binary.md:62
 msgid ""
 "**Name table.** Names are interner ids everywhere — type names, field names, "
 "enum members, trait/method names, function names, exports. The binary "
@@ -24890,20 +24905,20 @@ msgid ""
 "table with the same rebase the type ids get."
 msgstr "**名字表。**名字处处都是驻留器 id——类型名、字段名、枚举成员、trait/方法名、函数名、导出。二进制只携带驻留器的_非知名尾部_；固定的知名前缀（`self`、`nil`、各内建成员、各基本类型……）由格式隐含。解码会重建驻留器，因此解码出的程序是自包含的；链接时，每个模块的尾部以与类型 id 相同的重定基合并进链接后程序的表。"
 
-#: src/reference/module-binary.md:63
+#: src/reference/module-binary.md:69
 msgid ""
 "**Type kinds** encode as a one-byte tag: nil, primitives, `str`, `bytes`, "
 "arrays, enums (member + value pairs), records (field table), trait objects, "
 "`opaque`, fn types, `?T`, trace, string builder, `Weak<T>`."
 msgstr "**类型种类**编码为一个单字节标签：nil、基本类型、`str`、`bytes`、数组、枚举（成员 + 值对）、记录（字段表）、trait 对象、`opaque`、fn 类型、`?T`、trace、字符串构建器、`Weak<T>`。"
 
-#: src/reference/module-binary.md:66
+#: src/reference/module-binary.md:72
 msgid ""
 "**Const tags**: `0` i64, `1` f64, `2` bool, `4` str, `5` type id. Retired "
 "tags fail decode loudly rather than being reinterpreted."
 msgstr "**常量标签**：`0` i64、`1` f64、`2` bool、`4` str、`5` 类型 id。已退役的标签会让解码响亮地失败，而不是被重新解释。"
 
-#: src/reference/module-binary.md:68
+#: src/reference/module-binary.md:74
 msgid ""
 "**Funcs** serialize in full: name, param/ret types, `is_method`, capture "
 "count, the typed register table, both operand pools, the op stream, the span "
@@ -24911,7 +24926,18 @@ msgid ""
 "when the function is a bodyless thunk."
 msgstr "**函数**完整序列化：名字、参数/返回类型、`is_method`、捕获计数、带类型的寄存器表、两个操作数池、操作流、span 表、平行的 `(line, col)` 位置表，以及函数为无体 thunk 时的宿主函数绑定 id。"
 
-#: src/reference/module-binary.md:72
+#: src/reference/module-binary.md:78
+msgid ""
+"**Surface** (v16): the exported surface rides after `exports` — the "
+"namespace head, funcs (with their async/host rows), consts, the carried type "
+"descriptors + scope blocks + type exports, trait decls, impl registrations "
+"in both ABI lists, a reserved length-prefixed inherent-impl table (zero rows "
+"until class methods link), and the native rows with their ambient bits. "
+"Names are ids into the name table above; decode rejects any id its tables "
+"cannot resolve."
+msgstr "**Surface**（v16）：导出的 surface 跟在 `exports` 之后——命名空间头、函数（连同其 async/host 行）、常量、携带的类型描述符 + 作用域块 + 类型导出、trait 声明、两个 ABI 列表中的 impl 注册、一张保留的带长度前缀的固有 impl 表（在类方法可链接之前为零行），以及连同各环境位的原生行。名字是上文名字表中的 id；解码会拒绝其表无法解析的任何 id。"
+
+#: src/reference/module-binary.md:85
 msgid ""
 "**Versioning policy**: the version `u32` must equal the toolchain's exactly "
 "— there is no migration or best-effort decode. A byte that changes "
@@ -24919,7 +24945,7 @@ msgid ""
 "refused with the standard version error."
 msgstr "**版本策略**：版本 `u32` 必须与工具链的完全相等——没有迁移，也没有尽力而为的解码。任何改变可观察行为的字节都会提升版本；来自旧编译器的产物以标准的版本错误被拒绝。"
 
-#: src/reference/module-binary.md:79
+#: src/reference/module-binary.md:92
 msgid ""
 "Same AST + same dependency versions + same compiler version ⇒ byte-identical "
 "bytes. Serialization order is fixed (mount order, manifest order, pool "
@@ -24929,11 +24955,11 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr "相同 AST + 相同依赖版本 + 相同编译器版本 ⇒ 逐字节相同。序列化顺序是固定的（挂载顺序、清单顺序、池顺序），因此二进制可按内容哈希缓存，两次构建 diff 为零，而针对一个二进制捕获的追踪可以针对本地重建的二进制还原（[诊断、追踪与符号化](diagnostics.md)）。"
 
-#: src/reference/module-binary.md:86
+#: src/reference/module-binary.md:99
 msgid "Strip levels"
 msgstr "剥离级别"
 
-#: src/reference/module-binary.md:88
+#: src/reference/module-binary.md:101
 msgid ""
 "The symbolication data rides in every function: the `spans` table (pc → byte "
 "offset) and the parallel `pos` table (pc → line/col). A build that skips "
@@ -24944,11 +24970,11 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr "符号化数据随每个函数走：`spans` 表（pc → 字节偏移）与平行的 `pos` 表（pc → 行/列）。跳过填充 `pos` 的构建产出的二进制，其追踪仍能捕获并渲染，只是退化为仅 pc 的文本。名字随驻留器走；丢弃名字字符串是发布时的选择，被剥离的追踪经由确定性重编译还原（见[诊断、追踪与符号化](diagnostics.md)）。"
 
-#: src/reference/module-binary.md:96
+#: src/reference/module-binary.md:109
 msgid "Type ids at rest and at link"
 msgstr "静止时与链接时的类型 id"
 
-#: src/reference/module-binary.md:98
+#: src/reference/module-binary.md:111
 msgid ""
 "Type ids are program-global in a linked binary only because **link** already "
 "rebased them. At rest (per module, pre-link) ids are module-local; the boot "
@@ -24959,7 +24985,7 @@ msgid ""
 "everything else."
 msgstr "类型 id 在链接后的二进制里是程序全局的，只是因为 **link** 已经重定基过它们。静止时（链接前的每模块状态）id 是模块局部的；启动表——固定的基本类型与内建前缀——被每个模块共享，各模块剩余的类型追加在它之后。从类型描述符、trait 签名、常量、函数签名或操作操作数可达的每个类型 id 都在链接时重映射，`type_id<T>()` 常量与其余一切一起重定基。"
 
-#: src/reference/module-binary.md:106
+#: src/reference/module-binary.md:119
 msgid ""
 "`type_id<T>()` values are `u32`, comparable, and unique per _instantiated_ "
 "type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]` (the "
@@ -24968,105 +24994,105 @@ msgid ""
 "layout](reified-types.md))."
 msgstr "`type_id<T>()` 的值是 `u32`，可比较，且在单次 VM 运行内对每个_已实例化_类型唯一：`Vec<f32>` ≠ `Vec<f64>`，`[i32; 3]` ≠ `[i32; 4]`（常量长度是同一性的一部分），而跨模块的 `Point` = `Point`——同一性在链接时分配（[具体化类型与布局](reified-types.md)）。"
 
-#: src/reference/module-binary.md:112
+#: src/reference/module-binary.md:125
 msgid "Trait and impl tables"
 msgstr "trait 与 impl 表"
 
-#: src/reference/module-binary.md:114
+#: src/reference/module-binary.md:127
 msgid ""
 "Traits serialize with their method signatures; trait ids merge by name at "
 "link — a trait imported in one module and declared in another is one trait, "
 "and every `IsTrait` probe and vtable slot lands on the same global table."
 msgstr "trait 连同其方法签名一起序列化；trait id 在链接时按名字合并——一个模块导入、另一个模块声明的 trait 是同一个 trait，每个 `IsTrait` 探查和 vtable 槽位都落在同一张全局表上。"
 
-#: src/reference/module-binary.md:118
+#: src/reference/module-binary.md:131
 msgid ""
 "Trait-method slots are a global table of `(trait, method)` pairs; vtables "
 "are per-type sparse maps slot → function id, merged at link. A trait impl "
 "registered in any module reaches every call site."
 msgstr "trait 方法槽位是一张 `(trait, method)` 对的全局表；vtable 是每类型的稀疏映射 slot → 函数 id，在链接时合并。在任何模块注册的 trait impl 都能抵达每个调用点。"
 
-#: src/reference/module-binary.md:121
+#: src/reference/module-binary.md:134
 msgid ""
 "**Impl registrations** `(trait, target)` merge at link; a duplicate pair is "
 "a **link error** — per-module compiles cannot see each other, so the pair's "
 "uniqueness is a link-level law ([Traits and dispatch](traits.md))."
 msgstr "**impl 注册** `(trait, target)` 在链接时合并；重复的组合是**链接错误**——每模块编译彼此不可见，因此组合的唯一性是一条链接级法则（[trait 与分派](traits.md)）。"
 
-#: src/reference/module-binary.md:126
+#: src/reference/module-binary.md:139
 msgid "Verification (load time)"
 msgstr "校验（加载期）"
 
-#: src/reference/module-binary.md:128
+#: src/reference/module-binary.md:141
 msgid ""
 "Before any code executes, the verifier re-checks every function in the "
 "binary:"
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
-#: src/reference/module-binary.md:131 src/reference/bundles.md:91
+#: src/reference/module-binary.md:144 src/reference/bundles.md:103
 msgid "check"
 msgstr "检查"
 
-#: src/reference/module-binary.md:133
+#: src/reference/module-binary.md:146
 msgid "register range"
 msgstr "寄存器范围"
 
-#: src/reference/module-binary.md:133
+#: src/reference/module-binary.md:146
 msgid ""
 "every register operand \\< the function's register-file size; `NOREG` legal "
 "only where an optional operand is defined"
 msgstr "每个寄存器操作数 \\< 该函数的寄存器文件大小；`NOREG` 仅在定义了可选操作数之处合法"
 
-#: src/reference/module-binary.md:134
+#: src/reference/module-binary.md:147
 msgid "pool spans"
 msgstr "池跨度"
 
-#: src/reference/module-binary.md:134
+#: src/reference/module-binary.md:147
 msgid ""
 "every `(off, argc)` span lands inside its function's `argv` / `labels` pool"
 msgstr "每个 `(off, argc)` 跨度都落在其函数的 `argv` / `labels` 池之内"
 
-#: src/reference/module-binary.md:135
+#: src/reference/module-binary.md:148
 msgid "type operands"
 msgstr "类型操作数"
 
-#: src/reference/module-binary.md:135
+#: src/reference/module-binary.md:148
 msgid "every type id names a row of the type table"
 msgstr "每个类型 id 都指名类型表的一行"
 
-#: src/reference/module-binary.md:136
+#: src/reference/module-binary.md:149
 msgid "jump targets"
 msgstr "跳转目标"
 
-#: src/reference/module-binary.md:136
+#: src/reference/module-binary.md:149
 msgid "every `jmp`/`br`/`brtable` target is in range"
 msgstr "每个 `jmp`/`br`/`brtable` 目标都在范围内"
 
-#: src/reference/module-binary.md:137
+#: src/reference/module-binary.md:150
 msgid "call arity"
 msgstr "调用元数"
 
-#: src/reference/module-binary.md:137
+#: src/reference/module-binary.md:150
 msgid "call argument counts match the callee's declared signature"
 msgstr "调用实参数量与被调用者声明的签名匹配"
 
-#: src/reference/module-binary.md:138
+#: src/reference/module-binary.md:151
 msgid "enum members"
 msgstr "枚举成员"
 
-#: src/reference/module-binary.md:138
+#: src/reference/module-binary.md:151
 msgid "`EnumNew` member indices in range, target actually an enum"
 msgstr "`EnumNew` 成员索引在范围内，目标确实是枚举"
 
-#: src/reference/module-binary.md:139
+#: src/reference/module-binary.md:152
 msgid "host thunks"
 msgstr "宿主 thunk"
 
-#: src/reference/module-binary.md:139
+#: src/reference/module-binary.md:152
 msgid "bodyless functions are skipped (nothing to verify)"
 msgstr "无函数体的函数被跳过（没有可校验的东西）"
 
-#: src/reference/module-binary.md:141
+#: src/reference/module-binary.md:154
 msgid ""
 "A failed verification is a **load error** naming the module and function — "
 "`function name (#i): op @pc: message`. Corrupted binaries never execute. "
@@ -25075,11 +25101,11 @@ msgid ""
 "misbehaving at runtime."
 msgstr "校验失败是一次点名模块与函数的**加载错误**——`function name (#i): op @pc: message`。损坏的二进制绝不执行。校验是结构性的：它重新确立编译器在发出时强制的东西，因此手工损坏或陈旧的产物在这里失败，而不是在运行时行为不端。"
 
-#: src/reference/module-binary.md:147
+#: src/reference/module-binary.md:160
 msgid "The constant pool and load-time expressions"
 msgstr "常量池与加载期表达式"
 
-#: src/reference/module-binary.md:149
+#: src/reference/module-binary.md:162
 msgid ""
 "Module-level `let` and `static` initializers are **folded at compile time**. "
 "The surviving forms are: literals, enum members, operators over constants, "
@@ -25089,18 +25115,18 @@ msgid ""
 "initializer is a compile error — there is no deferred evaluation."
 msgstr "模块级 `let` 与 `static` 初始化器在**编译期折叠**。存留的形式是：字面量、枚举成员、常量之上的运算符、记录字面量（不朽的常量池单元）、定长数组字面量、`Vec<T>(n)` / `Vec.from([...])` 块、布局内建，以及带常量索引边界检查的 `Array<T, N>.len()`。初始化器里对用户函数的调用是编译错误——没有延迟求值。"
 
-#: src/reference/module-binary.md:157
+#: src/reference/module-binary.md:170
 msgid ""
 "`type_id<T>()` never executes: it folds to a constant from the type table. "
 "`debug` position folding and trace symbolication are covered in "
 "[Diagnostics, traces, and symbolication](diagnostics.md)."
 msgstr "`type_id<T>()` 绝不执行：它从类型表折叠成常量。`debug` 位置折叠与追踪符号化见[诊断、追踪与符号化](diagnostics.md)。"
 
-#: src/reference/module-binary.md:161
+#: src/reference/module-binary.md:174
 msgid "What is not here"
 msgstr "这里没有什么"
 
-#: src/reference/module-binary.md:163
+#: src/reference/module-binary.md:176
 msgid ""
 "A `.d.rut` declaration surface does not produce a binary — it has no bodies, "
 "so it compiles to a signature surface only ([Host fns and declaration "
@@ -26167,122 +26193,122 @@ msgstr ""
 msgid "Deterministic packing"
 msgstr "确定性打包"
 
-#: src/reference/bundles.md:74
+#: src/reference/bundles.md:86
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr "相同目录 + 相同工具链 ⇒ 逐字节相同的 `.rutbundle`："
 
-#: src/reference/bundles.md:76
+#: src/reference/bundles.md:88
 msgid ""
 "fixed entry order — `rut.toml` first, then the entry source and every "
 "transitive relative include in include order, then dep groups (name order, "
 "deduplicated, recursive);"
 msgstr "固定的条目顺序——`rut.toml` 在前，然后是入口源码与每个传递性相对包含（按包含顺序），然后是依赖分组（按名字排序，去重，递归）；"
 
-#: src/reference/bundles.md:79
+#: src/reference/bundles.md:91
 msgid "fixed (zeroed) timestamps;"
 msgstr "固定（清零）的时间戳；"
 
-#: src/reference/bundles.md:80
+#: src/reference/bundles.md:92
 msgid "STORE (no compression) — determinism over size."
 msgstr "STORE（不压缩）——确定性优先于体积。"
 
-#: src/reference/bundles.md:82
+#: src/reference/bundles.md:94
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
 
-#: src/reference/bundles.md:86
+#: src/reference/bundles.md:98
 msgid "Checks on load"
 msgstr "加载时的检查"
 
-#: src/reference/bundles.md:88
+#: src/reference/bundles.md:100
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes:"
 msgstr "每项检查都在加载时、编译与链接之前运行——坏捆绑包绝不执行："
 
-#: src/reference/bundles.md:91
+#: src/reference/bundles.md:103
 msgid "rule on mismatch"
 msgstr "不匹配时的规则"
 
-#: src/reference/bundles.md:93
+#: src/reference/bundles.md:105
 msgid "`rut.toml` present, `format = \"rutbundle\"`"
 msgstr "存在 `rut.toml`，且 `format = \"rutbundle\"`"
 
-#: src/reference/bundles.md:93
+#: src/reference/bundles.md:105
 msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
-#: src/reference/bundles.md:94
+#: src/reference/bundles.md:106
 msgid "`format_version` known"
 msgstr "`format_version` 已知"
 
-#: src/reference/bundles.md:94
+#: src/reference/bundles.md:106
 msgid "refuse — unknown bundle layout"
 msgstr "拒绝——未知的捆绑包布局"
 
-#: src/reference/bundles.md:95
+#: src/reference/bundles.md:107
 msgid "zip entry CRC-32"
 msgstr "zip 条目 CRC-32"
 
-#: src/reference/bundles.md:95
+#: src/reference/bundles.md:107
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr "拒绝——损坏的捆绑包（点名该条目）"
 
-#: src/reference/bundles.md:96
+#: src/reference/bundles.md:108
 msgid "entry name / UTF-8 / STORE method"
 msgstr "条目名 / UTF-8 / STORE 方法"
 
-#: src/reference/bundles.md:96
+#: src/reference/bundles.md:108
 msgid "refuse — corrupt or unsupported"
 msgstr "拒绝——损坏或不受支持"
 
-#: src/reference/bundles.md:97
+#: src/reference/bundles.md:109
 msgid ""
 "`entry.lib` present; includes + declared groups/libs resolvable in the zip"
 msgstr "存在 `entry.lib`；包含与声明的分组/库都能在 zip 中解析"
 
-#: src/reference/bundles.md:97
+#: src/reference/bundles.md:109
 msgid "refuse — load error naming the entry"
 msgstr "拒绝——点名该条目的加载错误"
 
-#: src/reference/bundles.md:98
+#: src/reference/bundles.md:110
 msgid "a declared peer group missing from the archive"
 msgstr "归档中缺失了声明的 peer 分组"
 
-#: src/reference/bundles.md:98
+#: src/reference/bundles.md:110
 msgid "refuse — refuse, never guess"
 msgstr "拒绝——拒绝，绝不猜测"
 
-#: src/reference/bundles.md:100
+#: src/reference/bundles.md:112
 msgid "Loading"
 msgstr "加载"
 
-#: src/reference/bundles.md:102
+#: src/reference/bundles.md:114
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same splice rules:"
 msgstr "捆绑包是目录形式之外的又一个解析来源——同样的名字解析、同样的编译、同样的拼接规则："
 
-#: src/reference/bundles.md:106
+#: src/reference/bundles.md:118
 msgid "// from a file\n"
 msgstr "// from a file\n"
 
-#: src/reference/bundles.md:107
+#: src/reference/bundles.md:119
 msgid "\"vendor/plugin.rutbundle\""
 msgstr "\"vendor/plugin.rutbundle\""
 
-#: src/reference/bundles.md:107
+#: src/reference/bundles.md:119
 msgid "// from bytes (embedders, tests, wasm)\n"
 msgstr "// from bytes (embedders, tests, wasm)\n"
 
-#: src/reference/bundles.md:109
+#: src/reference/bundles.md:121
 msgid "\"mem\""
 msgstr "\"mem\""
 
-#: src/reference/bundles.md:112
+#: src/reference/bundles.md:124
 msgid ""
 "After mounting, the package name resolves through the bundled sources "
 "exactly as the directory form does: the entry source is expanded (relative "
@@ -26293,25 +26319,25 @@ msgid ""
 "packages them, nothing requires it."
 msgstr "挂载之后，包名经由捆绑的源码解析，与目录形式完全一样：入口源码被展开（相对包含内联，include-once），分组与库文件按清单顺序拼接，单元在清单的 `name` 之下编译——然后正常流水线接管（[加载与嵌入循环](loading.md)）。散目录与散 `.rut` 文件仍是有效的发布布局；捆绑包把它们打包起来，但没有任何东西强制如此。"
 
-#: src/reference/bundles.md:120
+#: src/reference/bundles.md:132
 msgid "CLI"
 msgstr "CLI"
 
-#: src/reference/bundles.md:123
+#: src/reference/bundles.md:135
 msgid "# default output: a sibling of the dir\n"
 msgstr "# default output: a sibling of the dir\n"
 
-#: src/reference/bundles.md:127
+#: src/reference/bundles.md:139
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
 
-#: src/reference/bundles.md:130
+#: src/reference/bundles.md:142
 msgid "What a bundle is not"
 msgstr "捆绑包不是什么"
 
-#: src/reference/bundles.md:132
+#: src/reference/bundles.md:144
 msgid ""
 "A bundle is a **source** contract: it carries `rut.toml` + `.rut` sources "
 "and compiles on load. A compiled-artifact payload (`.rutc` binaries plus "

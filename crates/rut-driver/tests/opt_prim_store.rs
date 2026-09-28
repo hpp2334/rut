@@ -505,10 +505,10 @@ fn prim_store_release_walk_skips_element_slots() {
 
 // ---- serialization: the version gate ----------------------------------
 
-/// A VERSION-7 module decodes; the same bytes with the version word rolled
-/// back to 6 are rejected with the standard clear error (stale v6 artifacts
-/// carry the `(T, bool)` downcast lowering the new engines must not run on
-/// the `?T` surface).
+/// A current module decodes; the same bytes with the version word rolled
+/// back are rejected with the standard clear error (stale artifacts carry
+/// the wire vocabulary of an older law, which the new engines must not
+/// misread).
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
@@ -541,8 +541,13 @@ fn version_gate_rejects_stale_artifacts() {
     // the binary gains the per-type `dispose` section beside the
     // vtables (the v14 interim carried the surface decl-only and had
     // no such section, so stale artifacts are refused rather than
-    // misread)
-    assert_eq!(VERSION, 15, "the disposal dispatch owns this VERSION bump");
+    // misread); v16 is surfaces on the wire — the encoded program
+    // carries its full exported surface after the main tables
+    // (namespace, fns, consts, types + scope blocks + type exports,
+    // traits, impls in both ABI lists, native rows with their ambient
+    // bits, and the reserved inherent-impl table): a declared-surface
+    // change, and stale v15 artifacts carry no surface section at all
+    assert_eq!(VERSION, 16, "surfaces on the wire own this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,
