@@ -107,6 +107,49 @@ pre.rut-run {
   opacity: 0.5;
 }
 
+/* runnable blocks are click-to-edit (contenteditable on the <code>):
+ * text cursor on the code, a faint dashed frame while hovered/focused,
+ * ↺ at the top-left to restore the book's original code, and an
+ * "edited" badge once the text no longer matches the book. */
+pre.rut-run code {
+  cursor: text;
+}
+pre.rut-run:hover,
+pre.rut-run:focus-within {
+  outline: 1px dashed rgba(127, 127, 127, 0.45);
+  outline-offset: 3px;
+}
+.rut-run-reset {
+  position: absolute;
+  top: 0.45em;
+  left: 0.45em;
+  padding: 0.15em 0.55em;
+  font-size: 0.8em;
+  font-family: var(--mono, "Source Code Pro", Menlo, monospace);
+  line-height: 1.4;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+pre.rut-run:hover .rut-run-reset,
+.rut-run-reset:focus-visible {
+  opacity: 0.75;
+}
+pre.rut-run.rut-run-edited .rut-run-reset {
+  opacity: 1;
+}
+pre.rut-run.rut-run-edited::after {
+  content: "edited";
+  position: absolute;
+  top: 0.62em;
+  left: 3em;
+  font-size: 0.7em;
+  font-style: italic;
+  opacity: 0.7;
+}
+
 /* the output panel: monospace, the code block's own box language */
 .rut-run-out {
   margin: -0.6em 0 1.5em;
@@ -166,7 +209,10 @@ pre.rut-run {
 /* ---- dark themes (ayu-flavored) ------------------------------------ */
 html.ayu .rut-run-btn,
 html.coal .rut-run-btn,
-html.navy .rut-run-btn {
+html.navy .rut-run-btn,
+html.ayu .rut-run-reset,
+html.coal .rut-run-reset,
+html.navy .rut-run-reset {
   color: #899ba6;
   background: rgba(0, 0, 0, 0.25);
   border-color: #2a3542;
@@ -176,7 +222,13 @@ html.coal .rut-run-btn:hover,
 html.navy .rut-run-btn:hover,
 html.ayu .rut-run-btn:focus-visible,
 html.coal .rut-run-btn:focus-visible,
-html.navy .rut-run-btn:focus-visible {
+html.navy .rut-run-btn:focus-visible,
+html.ayu .rut-run-reset:hover,
+html.coal .rut-run-reset:hover,
+html.navy .rut-run-reset:hover,
+html.ayu .rut-run-reset:focus-visible,
+html.coal .rut-run-reset:focus-visible,
+html.navy .rut-run-reset:focus-visible {
   color: #ffd173;
   border-color: #ffd173;
 }
@@ -194,7 +246,9 @@ html.navy .rut-run-loud code {
 
 /* ---- light themes (github-flavored) -------------------------------- */
 html.light .rut-run-btn,
-html.rust .rut-run-btn {
+html.rust .rut-run-btn,
+html.light .rut-run-reset,
+html.rust .rut-run-reset {
   color: #59636e;
   background: rgba(255, 255, 255, 0.7);
   border-color: #d0d7de;
@@ -202,7 +256,11 @@ html.rust .rut-run-btn {
 html.light .rut-run-btn:hover,
 html.rust .rut-run-btn:hover,
 html.light .rut-run-btn:focus-visible,
-html.rust .rut-run-btn:focus-visible {
+html.rust .rut-run-btn:focus-visible,
+html.light .rut-run-reset:hover,
+html.rust .rut-run-reset:hover,
+html.light .rut-run-reset:focus-visible,
+html.rust .rut-run-reset:focus-visible {
   color: #8250df;
   border-color: #8250df;
 }

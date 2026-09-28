@@ -10,6 +10,13 @@
  * a run either answers with the engine's envelope or says, loudly,
  * how to build the artifact.
  *
+ * Runnable blocks are also EDITABLE: the code itself is
+ * contenteditable (plaintext-only where supported, with plain-text
+ * paste + literal-newline Enter guards where not), ▶ Run always
+ * compiles the text as it stands on click, and a "↺" control at the
+ * block's top-left restores the book's original code. An "edited"
+ * badge marks blocks that no longer match the book's text.
+ *
  * Plain browser JS, zero dependencies. The ABI is the wasm module's
  * export surface (mirrored by demo/src/wasm/rut-api.d.ts):
  *   memory, rut_alloc(len) -> ptr,
@@ -236,10 +243,17 @@
     }
   }
 
-  function wireButton(btn, pre, out, src) {
+  function wireButton(btn, pre, out, getSrc) {
     var inFlight = false;
     btn.addEventListener("click", function () {
       if (inFlight) return;
+      var src = getSrc();
+      if (!src || !src.trim()) {
+        out.hidden = false;
+        out.textContent = "";
+        line(out, "rut-run-err", "nothing to run — the block is empty");
+        return;
+      }
       inFlight = true;
       btn.disabled = true;
       out.hidden = false;
@@ -281,6 +295,47 @@
   // the page's wired controls — the loud-panel path paints all of them
   var controls = [];
 
+  /** the live source of an editable block: rendered text, nbsp cleaned */
+  function srcOf(code) {
+    var t = code.innerText !== undefined ? code.innerText : code.textContent;
+    return String(t).replace(/\u00a0/g, " ").replace(/\r/g, "");
+  }
+
+  /**
+   * Make a runnable block's code editable. plaintext-only is the clean
+   * mode (plain-text paste, literal \n on Enter, no rich DOM); where the
+   * browser does not support it we fall back to contenteditable=true and
+   * enforce the same two invariants by hand. Every input re-marks the
+   * block edited/unedited against the book's original text.
+   */
+  function makeEditable(code, pre, originalText) {
+    var plain = false;
+    try {
+      code.contentEditable = "plaintext-only";
+      plain = code.contentEditable === "plaintext-only";
+    } catch (e) {
+      plain = false;
+    }
+    if (!plain) {
+      code.contentEditable = "true";
+      code.addEventListener("paste", function (ev) {
+        ev.preventDefault();
+        var text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
+        document.execCommand("insertText", false, text);
+      });
+      code.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          document.execCommand("insertText", false, "\n");
+        }
+      });
+    }
+    code.spellcheck = false;
+    code.addEventListener("input", function () {
+      pre.classList.toggle("rut-run-edited", srcOf(code) !== originalText);
+    });
+  }
+
   function makeRunBlock(code) {
     var pre = code.parentElement;
     if (!pre || pre.tagName !== "PRE") return;
@@ -289,11 +344,28 @@
 
     pre.classList.add("rut-run");
 
+    var originalHtml = code.innerHTML;
+    var originalText = srcOf(code);
+    makeEditable(code, pre, originalText);
+
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "rut-run-btn";
     btn.textContent = "▶ Run";
     pre.appendChild(btn);
+
+    // ↺ restores the book's original code (innerHTML brings the baked
+    // highlight spans back); the edited badge leaves with it
+    var reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "rut-run-reset";
+    reset.title = "restore the book's original code";
+    reset.textContent = "↺";
+    reset.addEventListener("click", function () {
+      code.innerHTML = originalHtml;
+      pre.classList.remove("rut-run-edited");
+    });
+    pre.appendChild(reset);
 
     var out = document.createElement("div");
     out.className = "rut-run-out";
@@ -301,7 +373,9 @@
     pre.insertAdjacentElement("afterend", out);
 
     controls.push({ btn: btn, out: out });
-    wireButton(btn, pre, out, src);
+    wireButton(btn, pre, out, function () {
+      return srcOf(code);
+    });
   }
 
   function init() {
