@@ -284,7 +284,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `WeakNew` (RFC 0017 v1) — `Weak(v)`: a WeakBox side cell holding
+    /// `WeakNew` (RFC 0017 v1) — `Weak.new(v)`: a WeakBox side cell holding
     /// the referent's UNRETAINED slot word, registered into the
     /// referent's weak list. `ty` is the instantiated `Weak<elem>` id.
     /// THE ONE CONSUMING OP: the incoming reference is released and the

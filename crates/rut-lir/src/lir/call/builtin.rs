@@ -157,6 +157,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
+            (sym::WEAK, sym::NEW) => {
+                // Weak.new(v) — the weak box's construction (RFC 0017
+                // v1): the class-method form of the old type-call.
+                // Exactly one argument; its type is the instantiation's
+                // elem and must be a reference type (every non-primitive
+                // is — the `Weak<i32>` admission diagnoses here, the
+                // `is_ref` gate). The op consumes the argument's
+                // temporary (the one consuming op).
+                if args.len() != 1 {
+                    self.ctx.err(sp, "Weak.new(v) takes exactly one argument — the value to weak-reference");
+                    return Err(());
+                }
+                let elem = self.compile_expr(args[0], None)?;
+                if !self.ctx.types.is_ref(elem) {
+                    self.ctx.err(sp, format!(
+                        "weak needs a reference type — `{}` moves by value",
+                        self.ctx.type_name(elem)
+                    ));
+                    return Err(());
+                }
+                let weak_ty = self.ctx.mk_weak(elem);
+                let src = self.last_reg;
+                let dst = self.new_reg(weak_ty);
+                self.emit(Op::WeakNew { dst, src, ty: weak_ty }, sp.lo);
+                return Ok(weak_ty);
+            }
             _ => {}
         }
         // the erasure primitive's member static (RFC 0014, builtin-

@@ -1,6 +1,6 @@
 //! `Weak<T>` — the weak reference (RFC 0017 v1, the weak batch). The
 //! surface is the `builtin class` row beside `StackTrace`/`StrBuf`,
-//! constructed by type-call `Weak(v)` (the `opaque(v)` law) with one
+//! constructed by the class method `Weak.new(v)` with one
 //! member `upgrade() -> ?T`. The pins here:
 //!
 //! - alive round trip: `upgrade` retains the live referent (field reads
@@ -19,13 +19,17 @@
 //!   binding kills it;
 //! - weak over an `opaque(v)` box and over a HOST box (D1): store-entry
 //!   referents die on the entry path and their weaks go dead with them;
-//! - the generic path: `Weak(v)` inside a generic fn instantiates per
+//! - the generic path: `Weak.new(v)` inside a generic fn instantiates per
 //!   concrete `T`;
-//! - box identity: two `Weak(v)` of one `v` are distinct boxes (`==` is
+//! - box identity: two `Weak.new(v)` of one `v` are distinct boxes (`==` is
 //!   the cell-identity law); aliasing one box is equality;
-//! - admission + diagnostics: `Weak(prim)` and `Weak(fn)` diagnose
+//! - admission + diagnostics: `Weak.new(prim)` and `Weak.new(fn)` diagnose
 //!   ("weak needs a reference type"), `weak on nil` traps, arity and
 //!   member errors name the one-member contract, `impl Weak` refuses;
+//! - the retired type-call spelling: a bare call of the type name does
+//!   not compile — the diagnostic names the class-method fix;
+//! - the consuming op: `Weak.new(make())` watches a referent that dies
+//!   with the argument's temporary;
 //! - the heap comes back clean: usage after the run returns to the
 //!   post-boot baseline (the weak lists leak nothing), and an OOM at the
 //!   WeakNew mint surfaces as `OutOfMemory` before any registration.
@@ -158,7 +162,7 @@ fn upgrade_round_trips_while_alive() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let t = Tile.new(41);
-    let w = Weak(t);
+    let w = Weak.new(t);
     let b = w.upgrade();
     if (b == nil) {{ return 0; }}   // the referent is alive: the answer is not nil
     return b.n + 1;                 // the SAME cell: field reads see the value
@@ -176,7 +180,7 @@ fn death_answers_nil_forever() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let mut t = Tile.new(7);
-    let w = Weak(t);
+    let w = Weak.new(t);
     t = Tile.new(99);       // the old cell loses its last strong handle: it dies NOW
     let a = w.upgrade();
     if (a != nil) {{ return 1; }}   // the weak did not keep it alive
@@ -204,9 +208,9 @@ pub fn main() -> i32 {{
     let a = Tile.new(10);
     let mut retired = Tile.new(20);
     let mut fresh = Tile.new(30);
-    let wa = Weak(a);
-    let wd = Weak(retired);
-    let wf = Weak(fresh);
+    let wa = Weak.new(a);
+    let wd = Weak.new(retired);
+    let wf = Weak.new(fresh);
     retired = Tile.new(21);   // the old cell retires: wd's referent dies
     fresh = Tile.new(31);     // wf's referent dies too
     return alive_n(wa) + alive_n(wd) + alive_n(wf);   // 10 + 0 + 0
@@ -249,7 +253,7 @@ fn build(rec: ?Flag) -> ?Node {
     let mut c: ?Node = Node.new(rec);
     let oc: ?Node = c;
     p.other = oc;                  // the STRONG edge
-    let wp: ?Weak<?Node> = Weak(p);
+    let wp: ?Weak<?Node> = Weak.new(p);
     c.back = wp;                   // the WEAK edge — the cycle cannot close
     on_drop(p, fn (q: ?Node) {
         q.rec.mark_p();
@@ -286,7 +290,7 @@ fn weak_over_immortal_enum_member_upgrades_forever() {
 enum E { A, B }
 pub fn main() -> i32 {
     let e = E.A;              // the immortal singleton cell
-    let w = Weak(e);          // never dies: the list is never nulled
+    let w = Weak.new(e);          // never dies: the list is never nulled
     let b = w.upgrade();
     if (b == nil) { return 0; }
     let b2 = w.upgrade();
@@ -301,7 +305,7 @@ pub fn main() -> i32 {
 
 #[test]
 fn weak_over_nullable_answers_double_optional_and_dies_with_the_box() {
-    // the referent of `Weak(ot)` is the OPT BOX itself; `upgrade`
+    // the referent of `Weak.new(ot)` is the OPT BOX itself; `upgrade`
     // answers `??Tile` — the ??U spelling pinned as probe_ot's return
     // type. The kill+probe split across a call boundary: in-frame
     // temporaries would lawfully pin the box past the kill.
@@ -312,7 +316,7 @@ fn probe_ot(w: Weak<?Tile>) -> ??Tile {{
 }}
 pub fn main() -> i32 {{
     let mut ot: ?Tile = Tile.new(5);   // the OPT BOX is the referent
-    let w = Weak(ot);                  // Weak<?Tile>: legal (D2)
+    let w = Weak.new(ot);              // Weak<?Tile>: legal (D2)
     ot = nil;                          // the box loses its only strong handle: it dies
     let b = probe_ot(w);
     if (b == nil) {{ return 42; }}
@@ -343,7 +347,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {{
 pub fn main() -> i32 {{
     let t = Tile.new(8);
     let mut o = opaque(t);      // a Rut store entry — the TAGGED-word referent
-    let w = Weak(o);
+    let w = Weak.new(o);
     o = opaque(t);              // the first entry is released: it dies on the entry path
     return probe_o(w);
 }}
@@ -373,7 +377,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {
 }
 pub fn main() -> i32 {
     let mut b = make_box(41);
-    let w = Weak(b);
+    let w = Weak.new(b);
     b = make_box(42);      // the first host box is released: the weak goes dead
     return probe_o(w);
 }
@@ -408,7 +412,7 @@ fn weak_inside_a_generic_fn_instantiates_per_concrete_t() {
     let src = format!(
         r#"{TILE}
 fn watch<T>(v: T) -> Weak<T> {{
-    return Weak(v);
+    return Weak.new(v);
 }}
 pub fn main() -> i32 {{
     let t = Tile.new(3);
@@ -430,8 +434,8 @@ fn weak_boxes_compare_by_cell_identity() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let t = Tile.new(1);
-    let w1 = Weak(t);
-    let w2 = Weak(t);      // a SECOND box over the same referent
+    let w1 = Weak.new(t);
+    let w2 = Weak.new(t);      // a SECOND box over the same referent
     if (w1 == w2) {{ return 1; }}   // distinct cells: never equal
     let alias = w1;
     if (alias != w1) {{ return 2; }} // one handle's alias: equal (the identity law)
@@ -448,7 +452,7 @@ pub fn main() -> i32 {{
 fn weak_of_a_primitive_diagnoses_at_the_instantiation() {
     let diags = compile_diags(
         r#"pub fn main() -> i32 {
-    let w = Weak(5);
+    let w = Weak.new(5);
     return 0;
 }
 "#,
@@ -467,7 +471,7 @@ fn weak_of_a_fn_value_diagnoses() {
     let diags = compile_diags(
         r#"pub fn main() -> i32 {
     let f: fn(i32) -> i32 = fn (x: i32) -> i32 { return x + 1; };
-    let w = Weak(f);
+    let w = Weak.new(f);
     return 0;
 }
 "#,
@@ -484,7 +488,7 @@ fn weak_on_nil_traps() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let t: ?Tile = nil;
-    let w = Weak(t);      // no cell to point at: the loud trap
+    let w = Weak.new(t);      // no cell to point at: the loud trap
     return 0;
 }}
 "#
@@ -506,7 +510,7 @@ fn construction_and_type_position_arity_diagnose() {
     let diags = compile_diags(
         r#"pub fn main() -> i32 {
     let a = 1;
-    let w = Weak(a, a);
+    let w = Weak.new(a, a);
     return 0;
 }
 "#,
@@ -517,7 +521,18 @@ fn construction_and_type_position_arity_diagnose() {
     );
     let diags = compile_diags(
         r#"pub fn main() -> i32 {
-    let w: Weak<i32, i32> = Weak(5);
+    let w = Weak.new();
+    return 0;
+}
+"#,
+    );
+    assert!(
+        diags.iter().any(|d| d.contains("exactly one argument")),
+        "{diags:?}"
+    );
+    let diags = compile_diags(
+        r#"pub fn main() -> i32 {
+    let w: Weak<i32, i32> = Weak.new(5);
     return 0;
 }
 "#,
@@ -526,6 +541,58 @@ fn construction_and_type_position_arity_diagnose() {
         diags.iter().any(|d| d.contains("exactly one type parameter")),
         "{diags:?}"
     );
+}
+
+#[test]
+fn the_retired_type_call_spell_names_the_class_method_fix() {
+    // The retired type-call spelling stopped compiling when construction
+    // became the class method: the diagnostic is loud and actionable,
+    // naming the fix.
+    let diags = compile_diags(
+        r#"pub fn main() -> i32 {
+    let s = "x";
+    let w = Weak(s);
+    return 0;
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`Weak(v)` is not a function")
+                && d.contains("construction is a class method: `Weak.new(v)`")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn weak_new_consumes_the_argument_temporary() {
+    // `Weak.new(v)` consumes the argument's temporary and nulls its
+    // register (the engine's one consuming op): the weak observes the
+    // BINDING's lifetime, never a temporary's — no +1 of the temporary's
+    // own survives the mint. `make()`'s result is bound first (the
+    // documented shape); when the binding is rebound, nothing pins the
+    // old referent — an unconsumed temporary would keep `upgrade()`
+    // answering a handle past the rebind.
+    let src = r#"
+class Gad { n: i32; }
+impl Gad {
+    fn make(n: i32) -> Self { return Self { n: n }; }
+}
+pub fn main() -> i32 {
+    let mut v = Gad.make(9);
+    let w = Weak.new(v);            // the mint consumes the temporary
+    v = Gad.make(10);               // the binding dies: the old referent with it
+    let b1 = w.upgrade();
+    if (b1 != nil) { return 1; }    // dead — the temporary did not pin it
+    let w2 = Weak.new(v);           // a fresh weak over the new binding
+    let b2 = w2.upgrade();
+    if (b2 == nil) { return 2; }    // alive — the new binding keeps it
+    return b2.n + 33;               // 10 + 33
+}
+"#
+    .to_string();
+    assert_eq!(run_main(&src), 43);
 }
 
 #[test]
@@ -550,7 +617,7 @@ fn weak_has_no_other_members() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let t = Tile.new(1);
-    let w = Weak(t);
+    let w = Weak.new(t);
     let b = w.sniff();
     if (b == nil) {{ return 1; }}
     return 0;
@@ -576,7 +643,7 @@ pub fn main() -> i32 {{
     let mut live = 0;
     for (let i = 0; i < 50; i += 1) {{
         let t = Tile.new(i);
-        let w = Weak(t);
+        let w = Weak.new(t);
         let b = w.upgrade();
         if (b != nil) {{ live += 1; }}
         // t, b and the box all leave scope each round: the referent dies,
@@ -618,7 +685,7 @@ fn oom_at_the_weak_mint_traps_before_registration() {
         r#"{TILE}
 pub fn main() -> i32 {{
     let t = Tile.new(1);
-    let w = Weak(t);
+    let w = Weak.new(t);
     return 0;
 }}
 "#

@@ -393,29 +393,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             { let (argv_off, argc) = self.pool_args(&(vec![cap])); self.emit(Op::CallNat { nat: Nat::StrBufNew, recv: NOREG, argv_off, argc, dst }, sp.lo); }
             return Ok(TY_STRBUF);
         }
-        // the weak box's type-call: `Weak(v)` (RFC 0017 v1) — the
-        // `opaque(v)` construction law: a CALL of the type name itself.
-        // Exactly one argument; its type is the instantiation's elem and
-        // must be a reference type (every non-primitive is — the
-        // `Weak<i32>` admission diagnoses here, the `is_ref` gate).
+        // the weak box's retired type-call spelling: construction is a
+        // class method now — `Weak.new(v)` (the Weak arm in
+        // compile_static_call carries the semantics). The loud,
+        // actionable diagnostic names the fix.
         if name == sym::WEAK {
-            if args.len() != 1 {
-                self.ctx.err(sp, "Weak(v) takes exactly one argument — the value to weak-reference");
-                return Err(());
-            }
-            let elem = self.compile_expr(args[0], None)?;
-            if !self.ctx.types.is_ref(elem) {
-                self.ctx.err(sp, format!(
-                    "weak needs a reference type — `{}` moves by value",
-                    self.ctx.type_name(elem)
-                ));
-                return Err(());
-            }
-            let weak_ty = self.ctx.mk_weak(elem);
-            let src = self.last_reg;
-            let dst = self.new_reg(weak_ty);
-            self.emit(Op::WeakNew { dst, src, ty: weak_ty }, sp.lo);
-            return Ok(weak_ty);
+            self.ctx.err(
+                sp,
+                "`Weak(v)` is not a function — construction is a class method: `Weak.new(v)`",
+            );
+            return Err(());
         }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(

@@ -186,7 +186,7 @@ pub enum NativeTy {
     /// `Weak<T>` — the weak reference (RFC 0017 v1): a GENERIC builtin
     /// class (instantiated `Weak<T>` at use, the `Array { elem }` shape);
     /// its one member `upgrade()` is an engine builtin. Constructed by
-    /// type-call `Weak(v)` (the `opaque(v)` law).
+    /// the class method `Weak.new(v)`.
     Weak,
 }
 

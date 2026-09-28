@@ -103,11 +103,11 @@ Two edge rules worth knowing:
 
 ## Weak references
 
-`Weak(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything
-alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil`
-once it died. Construction is a call of the type name, admission is
-checked (reference types only — `Weak<i32>` diagnoses), and `weak(nil)`
-traps.
+`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps
+anything alive**; `w.upgrade()` answers `?T` — the retained referent, or
+`nil` once it died. Construction is the class-method form, admission is
+checked (reference types only — `Weak<i32>` diagnoses), and
+`Weak.new(nil)` traps.
 
 ```rut
 use ink::{ Logger };
@@ -124,7 +124,7 @@ class View {
 pub fn main() {
     let log = Logger.new("rc");
     let mut m = Model { name: "doc" };
-    let v = View { model: nil, observer: Weak(m) };   // observe without owning
+    let v = View { model: nil, observer: Weak.new(m) };   // observe without owning
     log.info(f"holding {m.name}; the view holds only a weak edge");
     m = Model { name: "next" };   // the old cell's last strong reference dies here
     log.info(f"upgrade() answers nil: {v.observer.upgrade() == nil}");

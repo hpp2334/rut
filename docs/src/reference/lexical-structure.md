@@ -94,7 +94,7 @@ replacement:
   construct through their own class methods: `Rect.new(3, 4)`,
   `Rect.from(other)`, `Version.parse(s)` — see
   [Classes and constructors](classes.md). Only builtin surfaces keep
-  call forms: `bytes.zeroed(n)`, `Weak(v)`, `opaque(v)`, the repeat
+  call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat
   `[v; n]`, and `Vec<T>.from(..)` (see
   [Builtin generic types](builtin-generic-types.md)).
 - The trailing-`$` marker is kept meaningful by this style rule alone;

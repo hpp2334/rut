@@ -107,7 +107,7 @@ same=true zeroed=4 from=3
 `opaque(v)` seals any value for recovery with
 `opaque.downcast<T>(o) -> ?T` — see [errors and
 optionality](errors.md). `on_drop(p, cleanup)` runs a callback when a
-cell's refcount reaches zero, and `Weak(v)` holds a non-keeping
+cell's refcount reaches zero, and `Weak.new(v)` holds a non-keeping
 reference (`upgrade() -> ?T`, `nil` once the referent died) — the
 memory stories live in
 [the Rc heap and destructors](../reference/rc-heap.md) and

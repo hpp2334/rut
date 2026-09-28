@@ -82,8 +82,9 @@ builtin class StrBuf {
 
 // The weak reference (RFC 0017 v1): a WeakBox side cell holding an
 // UNRETAINED word to the referent — a weak never keeps anything alive.
-// Construction is a CALL of the type name itself (the `opaque(v)` law):
-// `Weak(v)` mints `Weak<T>` over v's cell and traps on a nil `v`
+// Construction is the class-method form `Weak.new(v)` (compiler-lowered,
+// like the other builtin statics): it mints `Weak<T>` over v's cell and
+// traps on a nil `v`
 // ("weak on nil"); `T` must be a reference type (`Weak<i32>` diagnoses —
 // primitives move by value; `Weak<?U>` is legal and `upgrade` answers
 // `??U`). The referent's death nulls every box BEFORE any user code
@@ -96,6 +97,8 @@ builtin class Weak<T> {
                                   // fresh ?T, or nil once the referent
                                   // died (repeat upgrades are stable)
 }
+// type-static: Weak.new(v) -> Weak<T> — the construction (the retired
+// bare type-call diagnoses, naming this form)
 
 
 // ---- engine builtin primitives (compiler-lowered members) ----

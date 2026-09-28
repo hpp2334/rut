@@ -254,7 +254,7 @@ pub enum Op {
     /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
     /// cell refcount reaches zero
     OnDrop { obj: Reg, cleanup: Reg },
-    /// `Weak(v)` (RFC 0017 v1): mint a WeakBox side cell holding an
+    /// `Weak.new(v)` (RFC 0017 v1): mint a WeakBox side cell holding an
     /// UNRETAINED slot word to `v`'s cell. `ty` is the instantiated
     /// `Weak<elem>` id (the MakeOpt law: the op carries its type — the
     /// natives' CallNat form cannot). Traps on a nil `v` ("weak on nil").

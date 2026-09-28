@@ -47,7 +47,7 @@ fn use_node(n: Node) {
 
 pub fn main() {
     let n = Node.new(1);
-    let w = Weak(n);            // Weak<Node>; T infers from n
+    let w = Weak.new(n);        // Weak<Node>; T infers from n
     let b = w.upgrade();        // ?Node — a live handle
     if (b != nil) {
         use_node(b);
@@ -59,19 +59,21 @@ pub fn main() {
 node 1
 ```
 
-### Construction — `Weak(v)`
+### Construction — `Weak.new(v)`
 
-- Construction is a **type-call** with admission at the instantiation:
-  `T` must be a **reference type**. `Weak<i32>` and `Weak(SomeFn)`
-  diagnose; primitives and `fn` values refuse.
+- Construction is a **class method** with admission at the
+  instantiation: `T` must be a **reference type**. `Weak<i32>` and
+  `Weak.new(some_fn)` diagnose; primitives and `fn` values refuse.
+  (The retired type-call spelling — a bare call of the type name —
+  does not compile; the diagnostic names `Weak.new(v)`.)
 - Works over **any cell**: a class, dataclass, `Vec`, `[T]`, enum, `str`,
   `bytes`, a user `opaque` box, or a host box.
-- `Weak(nil)` traps ("weak on nil").
-- **`Weak(v)` consumes the argument's temporary** and nulls its register
-  (the engine's one consuming op): the weak observes the *binding's*
-  lifetime, never a temporary's. `Weak(make())` watches a referent that
-  dies as soon as the temporary is released — `upgrade()` answers `nil`.
-  Bind the value first:
+- `Weak.new(nil)` traps ("weak on nil").
+- **`Weak.new(v)` consumes the argument's temporary** and nulls its
+  register (the engine's one consuming op): the weak observes the
+  *binding's* lifetime, never a temporary's. `Weak.new(make())` watches
+  a referent that dies as soon as the temporary is released —
+  `upgrade()` answers `nil`. Bind the value first:
 
   ```rut
   use ink::{ Logger };
@@ -83,7 +85,7 @@ node 1
   pub fn main() {
       let log = Logger.new("t");
       let v = make();
-      let w = Weak(v);      // watches the binding v — lives as long as v does
+      let w = Weak.new(v);  // watches the binding v — lives as long as v does
       log.info(f"{w.upgrade() != nil}");
   }
   ```
@@ -92,7 +94,7 @@ node 1
   true
   ```
 
-- Two `Weak(v)` of one `v` are distinct boxes; `==` on weak boxes is
+- Two `Weak.new(v)` of one `v` are distinct boxes; `==` on weak boxes is
   identity, and two weaks of the same referent are not equal to each
   other.
 

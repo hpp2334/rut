@@ -59,7 +59,7 @@ struct Tile { v: i32; }
 pub fn main() {
     let log = Logger.new("t");
     let tile = Tile { v: 7 };
-    let w = Weak(tile);            // does NOT keep the cell alive
+    let w = Weak.new(tile);        // does NOT keep the cell alive
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
     log.info(f"{got.v}");
 }

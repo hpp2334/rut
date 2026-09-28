@@ -129,7 +129,7 @@ struct Tile { v: i32; }
 pub fn main() {
     let log = Logger.new("t");
     let tile = Tile { v: 7 };
-    let w = Weak(tile);            // call-of-the-type-name construction
+    let w = Weak.new(tile);        // the class-method construction
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
     log.info(f"{got.v}");
 }
@@ -139,7 +139,7 @@ pub fn main() {
 7
 ```
 
-- `Weak(v)` traps on a `nil` `v`; `T` must be a reference type
+- `Weak.new(v)` traps on a `nil` `v`; `T` must be a reference type
   (`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is
   legal and `upgrade()` answers `??U`.
 - The referent's death nulls every weak box before any user code runs;

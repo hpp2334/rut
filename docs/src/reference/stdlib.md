@@ -56,9 +56,9 @@ builtin primitive opaque {
 }
 ```
 
-Construction is a call of the type name: `opaque(v)` seals,
-`Weak(v)` wraps, `StrBuf(cap)` pre-sizes
-([opaque](opaque.md), [weak references](weak-refs.md)).
+Construction keeps its builtin forms: `opaque(v)` seals,
+`Weak.new(v)` wraps (the class-method construction), `StrBuf(cap)`
+pre-sizes ([opaque](opaque.md), [weak references](weak-refs.md)).
 
 ### Builtin classes
 
@@ -66,7 +66,7 @@ Construction is a call of the type name: `opaque(v)` seals,
 |---|---|
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
 | `StrBuf` | `StrBuf(cap)`, `push(str)`, `push_code(u32)` (invalid scalars mint U+FFFD), `len() -> i32`, `finish() -> str` — the ONE materialization; the builder keeps its buffer |
-| `Weak<T>` | `Weak(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died |
+| `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died |
 
 ### Engine-woven traits
 

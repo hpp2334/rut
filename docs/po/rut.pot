@@ -4045,7 +4045,7 @@ msgstr ""
 msgid ""
 "`opaque(v)` seals any value for recovery with `opaque.downcast<T>(o) -> ?T` "
 "— see [errors and optionality](errors.md). `on_drop(p, cleanup)` runs a "
-"callback when a cell's refcount reaches zero, and `Weak(v)` holds a "
+"callback when a cell's refcount reaches zero, and `Weak.new(v)` holds a "
 "non-keeping reference (`upgrade() -> ?T`, `nil` once the referent died) — "
 "the memory stories live in [the Rc heap and "
 "destructors](../reference/rc-heap.md) and [weak "
@@ -5926,10 +5926,10 @@ msgstr ""
 
 #: src/core-concepts/memory.md:106
 msgid ""
-"`Weak(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything "
+"`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything "
 "alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once "
-"it died. Construction is a call of the type name, admission is checked "
-"(reference types only — `Weak<i32>` diagnoses), and `weak(nil)` traps."
+"it died. Construction is the class-method form, admission is checked "
+"(reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps."
 msgstr ""
 
 #: src/core-concepts/memory.md:112
@@ -5949,7 +5949,7 @@ msgid ""
 "pub fn main() {\n"
 "    let log = Logger.new(\"rc\");\n"
 "    let mut m = Model { name: \"doc\" };\n"
-"    let v = View { model: nil, observer: Weak(m) };   // observe without "
+"    let v = View { model: nil, observer: Weak.new(m) };   // observe without "
 "owning\n"
 "    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n"
 "    m = Model { name: \"next\" };   // the old cell's last strong reference "
@@ -9621,8 +9621,8 @@ msgid ""
 "**Construction is a method call, never a type-call.** User classes construct "
 "through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, "
 "`Version.parse(s)` — see [Classes and constructors](classes.md). Only "
-"builtin surfaces keep call forms: `bytes.zeroed(n)`, `Weak(v)`, `opaque(v)`, "
-"the repeat `[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic "
+"builtin surfaces keep call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat "
+"`[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic "
 "types](builtin-generic-types.md))."
 msgstr ""
 
@@ -10503,7 +10503,7 @@ msgid ""
 "pub fn main() {\n"
 "    let log = Logger.new(\"t\");\n"
 "    let tile = Tile { v: 7 };\n"
-"    let w = Weak(tile);            // call-of-the-type-name construction\n"
+"    let w = Weak.new(tile);        // the class-method construction\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
 "    log.info(f\"{got.v}\");\n"
 "}\n"
@@ -10512,9 +10512,9 @@ msgstr ""
 
 #: src/reference/builtin-generic-types.md:142
 msgid ""
-"`Weak(v)` traps on a `nil` `v`; `T` must be a reference type (`Weak<i32>` "
-"diagnoses — primitives move by value). `Weak<?U>` is legal and `upgrade()` "
-"answers `??U`."
+"`Weak.new(v)` traps on a `nil` `v`; `T` must be a reference type "
+"(`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and "
+"`upgrade()` answers `??U`."
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:145
@@ -11729,7 +11729,7 @@ msgid ""
 "pub fn main() {\n"
 "    let log = Logger.new(\"t\");\n"
 "    let tile = Tile { v: 7 };\n"
-"    let w = Weak(tile);            // does NOT keep the cell alive\n"
+"    let w = Weak.new(tile);        // does NOT keep the cell alive\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
 "    log.info(f\"{got.v}\");\n"
 "}\n"
@@ -14090,7 +14090,7 @@ msgid ""
 "\n"
 "pub fn main() {\n"
 "    let n = Node.new(1);\n"
-"    let w = Weak(n);            // Weak<Node>; T infers from n\n"
+"    let w = Weak.new(n);        // Weak<Node>; T infers from n\n"
 "    let b = w.upgrade();        // ?Node — a live handle\n"
 "    if (b != nil) {\n"
 "        use_node(b);\n"
@@ -14100,35 +14100,38 @@ msgid ""
 msgstr ""
 
 #: src/reference/weak-refs.md:62
-msgid "Construction — `Weak(v)`"
+msgid "Construction — `Weak.new(v)`"
 msgstr ""
 
 #: src/reference/weak-refs.md:64
 msgid ""
-"Construction is a **type-call** with admission at the instantiation: `T` "
-"must be a **reference type**. `Weak<i32>` and `Weak(SomeFn)` diagnose; "
-"primitives and `fn` values refuse."
+"Construction is a **class method** with admission at the instantiation: `T` "
+"must be a **reference type**. `Weak<i32>` and `Weak.new(some_fn)` diagnose; "
+"primitives and `fn` values refuse. (The retired type-call spelling — a bare "
+"call of the type name — does not compile; the diagnostic names "
+"`Weak.new(v)`.)"
 msgstr ""
 
-#: src/reference/weak-refs.md:67
+#: src/reference/weak-refs.md:69
 msgid ""
 "Works over **any cell**: a class, dataclass, `Vec`, `[T]`, enum, `str`, "
 "`bytes`, a user `opaque` box, or a host box."
 msgstr ""
 
-#: src/reference/weak-refs.md:69
-msgid "`Weak(nil)` traps (\"weak on nil\")."
+#: src/reference/weak-refs.md:71
+msgid "`Weak.new(nil)` traps (\"weak on nil\")."
 msgstr ""
 
-#: src/reference/weak-refs.md:70
+#: src/reference/weak-refs.md:72
 msgid ""
-"**`Weak(v)` consumes the argument's temporary** and nulls its register (the "
-"engine's one consuming op): the weak observes the _binding's_ lifetime, "
-"never a temporary's. `Weak(make())` watches a referent that dies as soon as "
-"the temporary is released — `upgrade()` answers `nil`. Bind the value first:"
+"**`Weak.new(v)` consumes the argument's temporary** and nulls its register "
+"(the engine's one consuming op): the weak observes the _binding's_ lifetime, "
+"never a temporary's. `Weak.new(make())` watches a referent that dies as soon "
+"as the temporary is released — `upgrade()` answers `nil`. Bind the value "
+"first:"
 msgstr ""
 
-#: src/reference/weak-refs.md:76
+#: src/reference/weak-refs.md:78
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14140,54 +14143,54 @@ msgid ""
 "pub fn main() {\n"
 "    let log = Logger.new(\"t\");\n"
 "    let v = make();\n"
-"    let w = Weak(v);      // watches the binding v — lives as long as v "
+"    let w = Weak.new(v);  // watches the binding v — lives as long as v "
 "does\n"
 "    log.info(f\"{w.upgrade() != nil}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/weak-refs.md:95
+#: src/reference/weak-refs.md:97
 msgid ""
-"Two `Weak(v)` of one `v` are distinct boxes; `==` on weak boxes is identity, "
-"and two weaks of the same referent are not equal to each other."
-msgstr ""
-
-#: src/reference/weak-refs.md:99
-msgid "Upgrade — `w.upgrade() -> ?T`"
+"Two `Weak.new(v)` of one `v` are distinct boxes; `==` on weak boxes is "
+"identity, and two weaks of the same referent are not equal to each other."
 msgstr ""
 
 #: src/reference/weak-refs.md:101
+msgid "Upgrade — `w.upgrade() -> ?T`"
+msgstr ""
+
+#: src/reference/weak-refs.md:103
 msgid ""
 "A dead-check plus retain: a live referent is retained into a fresh `?T` "
 "handle; a dead one answers the **null slot** — true `nil`, never a box "
 "containing nil."
 msgstr ""
 
-#: src/reference/weak-refs.md:104
+#: src/reference/weak-refs.md:106
 msgid ""
 "On `Weak<?U>` (legal) the answer is `??U` — the sticky-`?` law "
 "([by-reference and nullable](by-reference-and-nullable.md))."
 msgstr ""
 
-#: src/reference/weak-refs.md:106
+#: src/reference/weak-refs.md:108
 msgid ""
 "`upgrade()` on nil traps (\"upgrade on nil\"); on a non-weak value it traps "
 "(\"upgrade on non-weak\")."
 msgstr ""
 
-#: src/reference/weak-refs.md:109
+#: src/reference/weak-refs.md:111
 msgid "Deterministic ordering"
 msgstr ""
 
-#: src/reference/weak-refs.md:111
+#: src/reference/weak-refs.md:113
 msgid ""
 "The referent's death **nulls every weak box before anything that runs user "
 "code** — before the `on_drop` pin check, before payload teardown. A cleanup "
 "or dispose body that calls `upgrade()` sees `nil`, with no window:"
 msgstr ""
 
-#: src/reference/weak-refs.md:116
+#: src/reference/weak-refs.md:118
 msgid ""
 "```rut\n"
 "class Edge { back: ?Weak<Node>; }\n"
@@ -14200,23 +14203,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/weak-refs.md:126
+#: src/reference/weak-refs.md:128
 msgid ""
 "Weak references are **not** destructors — they observe; they never run code. "
 "They exist for caches, observers, and back-pointers."
 msgstr ""
 
-#: src/reference/weak-refs.md:129
+#: src/reference/weak-refs.md:131
 msgid "Leak reporting"
 msgstr ""
 
-#: src/reference/weak-refs.md:131
+#: src/reference/weak-refs.md:133
 msgid ""
 "**rc discipline** is asserted in debug builds: retain/release pairing, no "
 "underflow, no double destruction."
 msgstr ""
 
-#: src/reference/weak-refs.md:133
+#: src/reference/weak-refs.md:135
 msgid ""
 "**Shutdown leak report**: at `Vm::drop`, surviving non-immortal objects are "
 "reported grouped by type, with allocation sites in debug builds — the "
@@ -14224,25 +14227,25 @@ msgid ""
 "reproduces exactly."
 msgstr ""
 
-#: src/reference/weak-refs.md:137
+#: src/reference/weak-refs.md:139
 msgid ""
 "The host can read live usage at any time (`vm.heap_usage()`, [resource "
 "limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/weak-refs.md:139
+#: src/reference/weak-refs.md:141
 msgid ""
 "Fuzz targets assert no crash and that destructor counts match allocations "
 "minus reported survivors."
 msgstr ""
 
-#: src/reference/weak-refs.md:142
+#: src/reference/weak-refs.md:144
 msgid ""
 "Status: the `Weak<T>` surface above is shipped; the shutdown report and "
 "per-type live counts are the specified diagnostics tier."
 msgstr ""
 
-#: src/reference/weak-refs.md:145
+#: src/reference/weak-refs.md:147
 msgid ""
 "If real code ever demands more, a collector could return only as a separate, "
 "opt-in module — the heap assumes nothing of it today."
@@ -18874,9 +18877,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:59
 msgid ""
-"Construction is a call of the type name: `opaque(v)` seals, `Weak(v)` wraps, "
-"`StrBuf(cap)` pre-sizes ([opaque](opaque.md), [weak "
-"references](weak-refs.md))."
+"Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps "
+"(the class-method construction), `StrBuf(cap)` pre-sizes "
+"([opaque](opaque.md), [weak references](weak-refs.md))."
 msgstr ""
 
 #: src/reference/stdlib.md:63
@@ -18914,8 +18917,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:69
 msgid ""
-"`Weak(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` "
-"once the referent died"
+"`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — "
+"`nil` once the referent died"
 msgstr ""
 
 #: src/reference/stdlib.md:71
