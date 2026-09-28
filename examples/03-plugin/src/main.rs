@@ -7,7 +7,7 @@
 //!
 //! The plugin loads twice from the same source: as a module **directory**
 //! (`plugin/rut.toml`) and as a packed **`.rutbundle`** produced by
-//! `rut_driver::pack_dir` — the two forms of one contract (RFC 0038).
+//! `rut_bundle::pack` — the two forms of one contract (RFC 0038).
 //! Both run the identical scripted session; the transcript printed at
 //! the end is what `tests/session.rs` asserts.
 
@@ -54,7 +54,7 @@ fn main() {
     };
 
     // form 2: the same directory, packed — deterministically (RFC 0038 §3)
-    let bytes = rut_driver::pack_dir(dir).unwrap();
+    let bytes = rut_bundle::pack(dir, &rut_bundle::FsSource).unwrap();
     let bundle = std::env::temp_dir().join("rut-03-plugin-demo.rutbundle");
     std::fs::write(&bundle, &bytes).unwrap();
     let mut p = plugin::Plugin::load(&bundle, &limits()).unwrap();

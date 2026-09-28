@@ -69,6 +69,18 @@ A manifest that declares `[peer-deps]` or `entry.libs` under a layout
 older than the one that introduced them is refused — those layouts have
 no group entries and would silently mount base-only.
 
+## The `rut-bundle` crate
+
+The container codec, the `rut.toml` grammar, and the packer live in the
+`rut-bundle` crate — std-only and **filesystem-free**. Every read goes
+through a one-method `Source` trait: `rut_bundle::FsSource` is the real
+filesystem (the CLI, native hosts); an in-memory path→bytes map serves
+tests and wasm hosts. `rut_bundle::pack(dir, &src)` returns the bundle
+bytes — writing the output file stays with the caller — and reads only
+manifest-named paths, never a directory listing. Mounting a bundle into
+a session stays in `rut-driver` ([Loading](loading.md)), over
+`rut_bundle::Bundle`, the parsed-and-CRC-verified reader.
+
 ## Deterministic packing
 
 Same directory + same toolchain ⇒ byte-identical `.rutbundle`:

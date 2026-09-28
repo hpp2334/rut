@@ -10,6 +10,7 @@ rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
+rut-bundle = { path = "../../crates/rut-bundle" }
 rut-vm = { path = "../../crates/rut-vm" }
 
 [lib]

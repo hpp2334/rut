@@ -18,7 +18,8 @@
 
 use std::path::Path;
 
-use rut_driver::{load_bundle_bytes, load_dir_session, pack_dir};
+use rut_bundle::FsSource;
+use rut_driver::{load_bundle_bytes, load_dir_session};
 
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
@@ -26,7 +27,7 @@ const POUCH_GROUP: &str = "impl JsonSerialize for Vec<T>";
 const NMAPSET_GROUP: &str = "impl JsonSerialize for Map<K, V>";
 
 fn pack(rel: &str) -> Vec<u8> {
-    pack_dir(Path::new(&format!("{PEERS}/{rel}"))).expect("pack")
+    rut_bundle::pack(Path::new(&format!("{PEERS}/{rel}")), &FsSource).expect("pack")
 }
 
 fn load_bytes(bytes: &[u8]) -> Result<(rut_driver::Session, String), String> {
@@ -71,7 +72,7 @@ fn t12_pack_load_run_t2_world() {
 
     // the archive carries the group files beside the entry, per group
     let names: Vec<String> =
-        rut_driver::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     for key in
         ["rut.toml", "cons.rut", "json/rut.toml", "json/json.rut", "json/serde_pouch.rut",
          "json/serde_nmapset.rut", "pouch/rut.toml", "pouch/pouch.rut", "base/rut.toml",
@@ -143,7 +144,7 @@ fn t12_refuse_never_guess() {
         ),
         ("x.rut".into(), b"fn main() -> i32 { return 7; }\n".to_vec()),
     ];
-    let err = load_bytes(&rut_driver::write_bundle(&entries).unwrap()).unwrap_err();
+    let err = load_bytes(&rut_bundle::write_bundle(&entries).unwrap()).unwrap_err();
     assert!(err.contains("format_version"), "{err}");
     assert!(err.contains("1, 2, 3 and 4"), "{err}");
 
@@ -159,7 +160,7 @@ fn t12_refuse_never_guess() {
         ("j.rut".into(), b"pub trait T { fn t(self) -> str; }\n".to_vec()),
         ("serde_pouch.rut".into(), b"".to_vec()),
     ];
-    let err = load_bytes(&rut_driver::write_bundle(&v2_with_peers).unwrap()).unwrap_err();
+    let err = load_bytes(&rut_bundle::write_bundle(&v2_with_peers).unwrap()).unwrap_err();
     assert!(err.contains("needs bundle format_version 3"), "{err}");
 
     // --- back-compat half of the ledger: an honest v2 bundle (no peer
@@ -174,19 +175,19 @@ fn t12_refuse_never_guess() {
         ("d/rut.toml".into(), b"name = \"d\"\nentry.lib = \"./d.rut\"\n".to_vec()),
         ("d/d.rut".into(), b"pub fn four() -> i32 { return 4; }\n".to_vec()),
     ];
-    let (session, root) = load_bytes(&rut_driver::write_bundle(&v2).unwrap()).expect("v2 loads");
+    let (session, root) = load_bytes(&rut_bundle::write_bundle(&v2).unwrap()).expect("v2 loads");
     assert_eq!(root, "m");
     assert!(session.resolve("d").is_ok());
 
     // --- the §4-consistency row: a declared group the archive does not
     // carry is a load error, never a silent base-only mount. ---
     let bytes = pack("cons_pouch");
-    let stripped: Vec<(String, Vec<u8>)> = rut_driver::parse_bundle(&bytes)
+    let stripped: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
         .filter(|(n, _)| n != "json/serde_pouch.rut")
         .collect();
-    let err = load_bytes(&rut_driver::write_bundle(&stripped).unwrap()).unwrap_err();
+    let err = load_bytes(&rut_bundle::write_bundle(&stripped).unwrap()).unwrap_err();
     assert!(err.contains("json/serde_pouch.rut"), "{err}");
 
     // --- D1 through the bundle: a REQUIRED peer absent from the

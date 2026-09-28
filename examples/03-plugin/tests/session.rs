@@ -70,7 +70,7 @@ fn moderated_session_transcript() {
 #[test]
 fn bundle_form_matches_the_directory() {
     // pack the same directory, load the bundle, run the same session
-    let bytes = rut_driver::pack_dir(dir()).unwrap();
+    let bytes = rut_bundle::pack(dir(), &rut_bundle::FsSource).unwrap();
     let path = std::env::temp_dir().join(format!("rut-03-plugin-test-{}.rutbundle", std::process::id()));
     std::fs::write(&path, &bytes).unwrap();
     let mut p = Plugin::load(&path, &limits()).unwrap();
@@ -83,8 +83,8 @@ fn bundle_form_matches_the_directory() {
 
 #[test]
 fn packing_is_deterministic() {
-    let a = rut_driver::pack_dir(dir()).unwrap();
-    let b = rut_driver::pack_dir(dir()).unwrap();
+    let a = rut_bundle::pack(dir(), &rut_bundle::FsSource).unwrap();
+    let b = rut_bundle::pack(dir(), &rut_bundle::FsSource).unwrap();
     assert_eq!(a, b, "same directory => byte-identical bundle");
 }
 
@@ -96,7 +96,7 @@ fn bad_bundles_are_refused_at_load() {
     // unknown format_version — refused before anything else is read
     let manifest =
         "format = \"rutbundle\"\nformat_version = 99\nname = \"plugin\"\nentry.lib = \"./plugin.rut\"\n";
-    let bytes = rut_driver::write_bundle(&[
+    let bytes = rut_bundle::write_bundle(&[
         ("rut.toml".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
     ])
@@ -110,7 +110,7 @@ fn bad_bundles_are_refused_at_load() {
     assert!(err.msg.contains("format_version"), "{}", err.msg);
 
     // a corrupted payload byte fails the CRC check
-    let mut bytes = rut_driver::pack_dir(dir()).unwrap();
+    let mut bytes = rut_bundle::pack(dir(), &rut_bundle::FsSource).unwrap();
     let at = 30 + "format = \"rutbundle\"\n".len();
     bytes[at] ^= 0x01;
     let path = base.join("corrupt.rutbundle");

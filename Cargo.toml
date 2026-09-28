@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/rut-core",
+    "crates/rut-bundle",
     "crates/rut-vm",
     "crates/rut-vm-threaded",
     "crates/rut-std",

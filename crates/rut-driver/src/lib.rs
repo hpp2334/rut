@@ -12,7 +12,7 @@ use rut_core::types::{TyKind, TY_F32, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL}
 use rut_core::{IdentId, sym};
 
 pub mod session;
-pub use session::{Entry, Manifest, ManifestError, Module, PeerDecl, ResolveError, Session};
+pub use session::{Module, PeerDecl, ResolveError, Session};
 
 pub mod decl;
 pub use decl::lower_decl_module;
@@ -22,13 +22,10 @@ pub use graph::{compile_graph, GraphOutput};
 
 pub use rut_lir::check::OriginLeaf;
 
-pub mod bundle;
-pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
-
 pub mod loader;
 pub use loader::{
     assemble_peers, compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session,
-    load_module_source, load_path_session, mount_dir, pack_dir,
+    load_module_source, load_path_session, mount_dir,
 };
 
 pub struct CompileOutput {

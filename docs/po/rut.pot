@@ -3374,7 +3374,7 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:104
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:144 src/reference/host-futures.md:34
-#: src/reference/embedding.md:62 src/reference/embedding.md:81
+#: src/reference/embedding.md:62 src/reference/embedding.md:85
 #: src/reference/value-boundary.md:96 src/reference/host-fns.md:239
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
@@ -7863,7 +7863,7 @@ msgstr ""
 
 #: src/examples/03-plugin.md:193
 msgid ""
-"`main.rs` packs the same directory with `rut_driver::pack_dir`, writes "
+"`main.rs` packs the same directory with `rut_bundle::pack`, writes "
 "`plugin.rutbundle` to temp, and loads it back through the identical "
 "`Plugin::load` — the transcript equality print is the proof. The CLI drives "
 "the same loader for any self-contained module:"
@@ -14690,7 +14690,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:49 src/reference/embedding.md:144
+#: src/reference/resource-limits.md:49 src/reference/embedding.md:148
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -14706,7 +14706,7 @@ msgstr ""
 msgid "raise limit / free refs → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:50 src/reference/embedding.md:143
+#: src/reference/resource-limits.md:50 src/reference/embedding.md:147
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -15162,7 +15162,7 @@ msgstr ""
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:151 src/reference/embedding.md:90
+#: src/reference/async.md:151 src/reference/embedding.md:94
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
@@ -15182,7 +15182,7 @@ msgid ""
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:153 src/reference/embedding.md:92
+#: src/reference/async.md:153 src/reference/embedding.md:96
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
@@ -16161,7 +16161,7 @@ msgstr ""
 msgid "Driver API (`rut-driver`)"
 msgstr ""
 
-#: src/reference/embedding.md:62 src/reference/embedding.md:81
+#: src/reference/embedding.md:62 src/reference/embedding.md:85
 #: src/reference/value-boundary.md:96 src/reference/native-containers.md:103
 #: src/reference/templates.md:40
 msgid "API"
@@ -16251,265 +16251,263 @@ msgstr ""
 msgid "load a module **directory** or `.rutbundle`; returns `(session, root)`"
 msgstr ""
 
-#: src/reference/embedding.md:74
-msgid "`pack_dir(dir)`"
-msgstr ""
-
-#: src/reference/embedding.md:74
+#: src/reference/embedding.md:75
 msgid ""
-"pack a directory into a deterministic `.rutbundle` ([module "
-"bundles](bundles.md))"
+"Packing a `.rutbundle` is not driver API — it lives in the `rut-bundle` "
+"crate: `rut_bundle::pack(dir, &rut_bundle::FsSource)` reads the directory "
+"through a one-method `Source` trait and returns the bundle bytes ([module "
+"bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/embedding.md:76
+#: src/reference/embedding.md:80
 msgid ""
 "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns "
 "and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:79
+#: src/reference/embedding.md:83
 msgid "VM API (`rut_vm::interp`)"
 msgstr ""
 
-#: src/reference/embedding.md:83
+#: src/reference/embedding.md:87
 msgid "`HostRegistry::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:83
+#: src/reference/embedding.md:87
 msgid "an empty binding table"
 msgstr ""
 
-#: src/reference/embedding.md:84
+#: src/reference/embedding.md:88
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr ""
 
-#: src/reference/embedding.md:84
+#: src/reference/embedding.md:88
 msgid "bind one body; the closure's Rust shape **is** the declared row"
 msgstr ""
 
-#: src/reference/embedding.md:85
+#: src/reference/embedding.md:89
 msgid "`hosts.verify_against(&expected)`"
 msgstr ""
 
-#: src/reference/embedding.md:85
+#: src/reference/embedding.md:89
 msgid "panic on declared-unbound / bound-undeclared / signature drift"
 msgstr ""
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:90
 msgid "`Vm::new(prog, &limits, hooks, hosts)`"
 msgstr ""
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:90
 msgid "boot; joins every declared host thunk to its binding"
 msgstr ""
 
-#: src/reference/embedding.md:87
+#: src/reference/embedding.md:91
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr ""
 
-#: src/reference/embedding.md:87
+#: src/reference/embedding.md:91
 msgid ""
 "call an export with Rust values, get a Rust value back ([value "
 "boundary](value-boundary.md))"
 msgstr ""
 
-#: src/reference/embedding.md:88
+#: src/reference/embedding.md:92
 msgid "`vm.resume::<R>()`"
 msgstr ""
 
-#: src/reference/embedding.md:88
+#: src/reference/embedding.md:92
 msgid "resume a budget-parked call after refueling"
 msgstr ""
 
-#: src/reference/embedding.md:89
+#: src/reference/embedding.md:93
 msgid "`vm.run_ready()`"
 msgstr ""
 
-#: src/reference/embedding.md:89
+#: src/reference/embedding.md:93
 msgid "drain the async ready queue once; returns tasks run"
 msgstr ""
 
-#: src/reference/embedding.md:90
+#: src/reference/embedding.md:94
 msgid "the earliest timer deadline, if any"
 msgstr ""
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:95
 msgid "`vm.set_now(t_ms)`"
 msgstr ""
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:95
 msgid "advance the virtual clock"
 msgstr ""
 
-#: src/reference/embedding.md:92
+#: src/reference/embedding.md:96
 msgid "unfinished async tasks"
 msgstr ""
 
-#: src/reference/embedding.md:93
+#: src/reference/embedding.md:97
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/embedding.md:93
+#: src/reference/embedding.md:97
 msgid "budget meters"
 msgstr ""
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:98
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr ""
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:98
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr ""
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:99
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr ""
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:99
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr ""
 
-#: src/reference/embedding.md:97
+#: src/reference/embedding.md:101
 msgid "The canonical async driving loop (single-threaded; the host owns it):"
 msgstr ""
 
-#: src/reference/embedding.md:103
+#: src/reference/embedding.md:107
 msgid "// advance to the next timer\n"
 msgstr ""
 
-#: src/reference/embedding.md:110
+#: src/reference/embedding.md:114
 msgid ""
 "Cap the loop in embedders that cannot prove termination, so a program that "
 "never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/embedding.md:113
+#: src/reference/embedding.md:117
 msgid "Limits"
 msgstr ""
 
-#: src/reference/embedding.md:117
+#: src/reference/embedding.md:121
 msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
-#: src/reference/embedding.md:119
+#: src/reference/embedding.md:123
 msgid "// ops between interrupt checks\n"
 msgstr ""
 
-#: src/reference/embedding.md:123
+#: src/reference/embedding.md:127
 msgid ""
 "Exhaustion and interrupts surface as traps ([resource "
 "limits](resource-limits.md)). A trap inside re-entrant work propagates to "
 "the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
-#: src/reference/embedding.md:127
+#: src/reference/embedding.md:131
 msgid "Native fn rules"
 msgstr ""
 
-#: src/reference/embedding.md:129
+#: src/reference/embedding.md:133
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:132
+#: src/reference/embedding.md:136
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:134
+#: src/reference/embedding.md:138
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:137
+#: src/reference/embedding.md:141
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:141
+#: src/reference/embedding.md:145
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:141
+#: src/reference/embedding.md:145
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:143
+#: src/reference/embedding.md:147
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:144 src/reference/cli.md:32
+#: src/reference/embedding.md:148 src/reference/cli.md:32
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:145
+#: src/reference/embedding.md:149
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:145
+#: src/reference/embedding.md:149
 msgid "interrupt flag"
 msgstr ""
 
-#: src/reference/embedding.md:146
+#: src/reference/embedding.md:150
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:146
+#: src/reference/embedding.md:150
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:152
 msgid "`Assert` / `Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:152
 msgid "`assert` / `panic`"
 msgstr ""
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:153
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:153
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:154
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:154
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:155
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:155
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:157
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:155
+#: src/reference/embedding.md:159
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, the `StrBuf` "
@@ -16518,78 +16516,78 @@ msgid ""
 "their own registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:161
+#: src/reference/embedding.md:165
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:163 src/reference/cli.md:45
+#: src/reference/embedding.md:167 src/reference/cli.md:45
 msgid "installer"
 msgstr ""
 
-#: src/reference/embedding.md:163
+#: src/reference/embedding.md:167
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "`math::install_std_math`"
 msgstr ""
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "`logger::install_std_log(&mut hosts, sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "`rt:log`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "`nmap::install_std_nmap`"
 msgstr ""
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "`async_host::install_std_async`"
 msgstr ""
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "`http::install_std_http`"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "the std HTTP lanes (reqwest; native builds only)"
 msgstr ""
 
-#: src/reference/embedding.md:170
+#: src/reference/embedding.md:174
 msgid "`bench_cross::install_std_bench_cross`"
 msgstr ""
 
-#: src/reference/embedding.md:170 src/reference/stdlib.md:132
+#: src/reference/embedding.md:174 src/reference/stdlib.md:132
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:176
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:174
+#: src/reference/embedding.md:178
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:177
+#: src/reference/embedding.md:181
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): mounts the "
 "std packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -21704,7 +21702,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:131 src/reference/bundles.md:91
+#: src/reference/module-binary.md:131 src/reference/bundles.md:103
 msgid "check"
 msgstr ""
 
@@ -22819,125 +22817,142 @@ msgid ""
 msgstr ""
 
 #: src/reference/bundles.md:72
-msgid "Deterministic packing"
+msgid "The `rut-bundle` crate"
 msgstr ""
 
 #: src/reference/bundles.md:74
+msgid ""
+"The container codec, the `rut.toml` grammar, and the packer live in the "
+"`rut-bundle` crate — std-only and **filesystem-free**. Every read goes "
+"through a one-method `Source` trait: `rut_bundle::FsSource` is the real "
+"filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests "
+"and wasm hosts. `rut_bundle::pack(dir, &src)` returns the bundle bytes — "
+"writing the output file stays with the caller — and reads only "
+"manifest-named paths, never a directory listing. Mounting a bundle into a "
+"session stays in `rut-driver` ([Loading](loading.md)), over "
+"`rut_bundle::Bundle`, the parsed-and-CRC-verified reader."
+msgstr ""
+
+#: src/reference/bundles.md:84
+msgid "Deterministic packing"
+msgstr ""
+
+#: src/reference/bundles.md:86
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:76
+#: src/reference/bundles.md:88
 msgid ""
 "fixed entry order — `rut.toml` first, then the entry source and every "
 "transitive relative include in include order, then dep groups (name order, "
 "deduplicated, recursive);"
 msgstr ""
 
-#: src/reference/bundles.md:79
+#: src/reference/bundles.md:91
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:80
+#: src/reference/bundles.md:92
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:82
+#: src/reference/bundles.md:94
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:86
+#: src/reference/bundles.md:98
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:88
+#: src/reference/bundles.md:100
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes:"
 msgstr ""
 
-#: src/reference/bundles.md:91
+#: src/reference/bundles.md:103
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:93
+#: src/reference/bundles.md:105
 msgid "`rut.toml` present, `format = \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:93
+#: src/reference/bundles.md:105
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:94
+#: src/reference/bundles.md:106
 msgid "`format_version` known"
 msgstr ""
 
-#: src/reference/bundles.md:94
+#: src/reference/bundles.md:106
 msgid "refuse — unknown bundle layout"
 msgstr ""
 
-#: src/reference/bundles.md:95
+#: src/reference/bundles.md:107
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:95
+#: src/reference/bundles.md:107
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:96
+#: src/reference/bundles.md:108
 msgid "entry name / UTF-8 / STORE method"
 msgstr ""
 
-#: src/reference/bundles.md:96
+#: src/reference/bundles.md:108
 msgid "refuse — corrupt or unsupported"
 msgstr ""
 
-#: src/reference/bundles.md:97
+#: src/reference/bundles.md:109
 msgid ""
 "`entry.lib` present; includes + declared groups/libs resolvable in the zip"
 msgstr ""
 
-#: src/reference/bundles.md:97
+#: src/reference/bundles.md:109
 msgid "refuse — load error naming the entry"
 msgstr ""
 
-#: src/reference/bundles.md:98
+#: src/reference/bundles.md:110
 msgid "a declared peer group missing from the archive"
 msgstr ""
 
-#: src/reference/bundles.md:98
+#: src/reference/bundles.md:110
 msgid "refuse — refuse, never guess"
 msgstr ""
 
-#: src/reference/bundles.md:100
+#: src/reference/bundles.md:112
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:102
+#: src/reference/bundles.md:114
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same splice rules:"
 msgstr ""
 
-#: src/reference/bundles.md:106
+#: src/reference/bundles.md:118
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:107
+#: src/reference/bundles.md:119
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
-#: src/reference/bundles.md:107
+#: src/reference/bundles.md:119
 msgid "// from bytes (embedders, tests, wasm)\n"
 msgstr ""
 
-#: src/reference/bundles.md:109
+#: src/reference/bundles.md:121
 msgid "\"mem\""
 msgstr ""
 
-#: src/reference/bundles.md:112
+#: src/reference/bundles.md:124
 msgid ""
 "After mounting, the package name resolves through the bundled sources "
 "exactly as the directory form does: the entry source is expanded (relative "
@@ -22948,25 +22963,25 @@ msgid ""
 "packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:120
+#: src/reference/bundles.md:132
 msgid "CLI"
 msgstr ""
 
-#: src/reference/bundles.md:123
+#: src/reference/bundles.md:135
 msgid "# default output: a sibling of the dir\n"
 msgstr ""
 
-#: src/reference/bundles.md:127
+#: src/reference/bundles.md:139
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."
 msgstr ""
 
-#: src/reference/bundles.md:130
+#: src/reference/bundles.md:142
 msgid "What a bundle is not"
 msgstr ""
 
-#: src/reference/bundles.md:132
+#: src/reference/bundles.md:144
 msgid ""
 "A bundle is a **source** contract: it carries `rut.toml` + `.rut` sources "
 "and compiles on load. A compiled-artifact payload (`.rutc` binaries plus "

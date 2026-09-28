@@ -12,25 +12,16 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::bundle::{parse_bundle, write_bundle};
-use crate::session::{parse_manifest, Entry, Module, Session};
+use rut_bundle::{
+    bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, Manifest,
+};
+use crate::session::{Module, Session};
 
-/// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
-/// outside the archive root is refused (v1 bundles are flat).
-fn bundle_key(rel: &str) -> Result<String, String> {
-    let key = rel.strip_prefix("./").unwrap_or(rel);
-    if key.starts_with('/') || key.split('/').any(|p| p == "..") {
-        return Err(format!("bundle entry `{rel}` escapes the bundle root"));
-    }
-    Ok(key.to_string())
-}
-
-fn read_entry(entries: &[(String, Vec<u8>)], key: &str) -> Result<String, String> {
-    match entries.iter().find(|(n, _)| n == key) {
-        Some((_, bytes)) => String::from_utf8(bytes.clone())
-            .map_err(|_| format!("bundle entry `{key}` is not UTF-8")),
-        None => Err(format!("bundle has no entry `{key}`")),
-    }
+/// Read a directory's `rut.toml` — the real-filesystem lane of
+/// [`rut_bundle::read_manifest`] (the crate itself never touches the
+/// filesystem).
+fn read_manifest(dir: &Path) -> Result<Manifest, String> {
+    rut_bundle::read_manifest(dir, &FsSource)
 }
 
 /// Read one module source file. The language has no include form to
@@ -55,8 +46,7 @@ pub fn load_module_source(path: &Path) -> Result<String, String> {
 ///    declarer alphabetically, so it cannot run during the walk);
 /// 4. compile — unchanged; `compile_graph` sees ordinary sources.
 pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
-    let text = std::fs::read_to_string(dir.join("rut.toml")).map_err(|e| e.to_string())?;
-    let manifest = parse_manifest(&text).map_err(|e| e.to_string())?;
+    let manifest = read_manifest(dir)?;
     let mut session = Session::new();
 
     let root = manifest
@@ -100,7 +90,7 @@ pub fn load_bundle_session(path: &Path) -> Result<(Session, String), String> {
 fn bundle_entry_module(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
-    manifest: &crate::session::Manifest,
+    manifest: &Manifest,
 ) -> Result<Module, String> {
     let read = |rel: &str| -> Result<String, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
@@ -137,8 +127,9 @@ fn bundle_entry_module(
 
 /// [`load_bundle_session`] over in-memory bytes (tests, embedders).
 pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String), String> {
-    let entries = parse_bundle(bytes).map_err(|e| format!("{}: {e}", origin.display()))?;
-    let toml = read_entry(&entries, "rut.toml")
+    let bundle = Bundle::parse(bytes).map_err(|e| format!("{}: {e}", origin.display()))?;
+    let toml = bundle
+        .read("rut.toml")
         .map_err(|_| format!("{}: no `rut.toml` entry — not a rut bundle", origin.display()))?;
     let manifest = parse_manifest(&toml).map_err(|e| format!("{}: {e}", origin.display()))?;
     // §4: the layout version gates everything — refuse before reading
@@ -162,6 +153,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         }
     }
     let is_v3 = matches!(manifest.format_version, Some(3) | Some(4));
+    let entries = bundle.entries();
     let root = manifest
         .name
         .clone()
@@ -360,125 +352,6 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
     ))
 }
 
-/// Pack a module directory into a deterministic `.rutbundle` (RFC 0038 §3):
-/// `rut.toml` first, then the entry source. Same input directory ⇒
-/// byte-identical bundle.
-/// The manifest's entry file (lib preferred, else the `.d.rut` surface).
-fn entry_rel(manifest: &crate::session::Manifest) -> Option<&String> {
-    manifest.entry.lib.as_ref().or(manifest.entry.type_path.as_ref())
-}
-
-/// Collect a package's files for a bundle: its `rut.toml` (byte-for-byte),
-/// its entry file, and — the v3 layout (RFC 0045 §3) — each
-/// `[peer-deps]` descriptor's `lib` group file, and — the v4 layout
-/// (RFC 0041 §5) — each pkg's `entry.libs` files beside the entry, all
-/// under `prefix` (empty for the root, `<pkg>/` for a dep). Descriptor
-/// order is the manifest's (BTreeMap), so the archive stays
-/// deterministic.
-fn collect_pkg_files(
-    dir: &Path,
-    manifest: &crate::session::Manifest,
-    prefix: &str,
-    out: &mut Vec<(String, Vec<u8>)>,
-) -> Result<(), String> {
-    let text = std::fs::read_to_string(dir.join("rut.toml")).map_err(|e| e.to_string())?;
-    out.push((format!("{prefix}rut.toml"), text.into_bytes()));
-    let rel = entry_rel(manifest)
-        .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
-    // normalize the entry's `./` prefix before the group prefix joins it
-    let rel = rel.strip_prefix("./").unwrap_or(rel);
-    let key = bundle_key(&format!("{prefix}{rel}"))?;
-    let src = std::fs::read_to_string(dir.join(rel))
-        .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-    out.push((key, src.into_bytes()));
-    // the v4 layout (RFC 0041 §5): each pkg's `entry.libs` files ride
-    // beside the entry, in manifest order — the array IS the order the
-    // loader splices back, so the archive stays deterministic
-    for lib in &manifest.entry.libs {
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let src = std::fs::read_to_string(dir.join(rel))
-            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-        out.push((key, src.into_bytes()));
-    }
-    for desc in manifest.peer_deps.values() {
-        let Some(lib) = desc.get("lib") else {
-            continue; // presence declared, no integration file to pack
-        };
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let src = std::fs::read_to_string(dir.join(rel))
-            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-        out.push((key, src.into_bytes()));
-    }
-    Ok(())
-}
-
-/// Pack a module directory into a deterministic `.rutbundle` (RFC 0038 §3):
-/// `rut.toml` first, then the entry source, then — the v2 layout — the
-/// whole `[deps]` graph, each package under its own `<pkg>/` group
-/// (manifest + entry), recursively and deduplicated; — the v3 layout
-/// (RFC 0045 §3) — each package's peer-gated integration files
-/// (`[peer-deps]` `lib` keys) beside its entry in its group; and — the
-/// v4 layout (RFC 0041 §5) — each package's `entry.libs` files beside
-/// its entry too. Same input directory ⇒ byte-identical bundle.
-///
-/// This answers RFC 0038 OQ-3: a bundle is self-contained; its deps'
-/// `path` keys are directory-time only — the loader resolves groups by
-/// NAME. A v1 bundle (no deps, source-only) is the one-module special
-/// case the loader still accepts; a v2 bundle still loads but no
-/// longer packs — as does a v3 one — the packer emits v4, the layout
-/// that carries multi-lib entries.
-pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
-    let manifest = read_manifest(dir)?;
-    if manifest.name.is_none() {
-        return Err(format!("{} has no `name`", dir.join("rut.toml").display()));
-    }
-    // the packed rut.toml is the directory's rut.toml byte-for-byte, so
-    // the bundle keys must already be there — directory loading ignores
-    // them, but a bundle loader refuses without them (RFC 0038 §2).
-    // v4 since the multi-lib batch: `entry.libs` files ride the bundle
-    // (an older loader refuses the version — refuse, never guess).
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(4) {
-        return Err(format!(
-            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = 4`",
-            dir.join("rut.toml").display()
-        ));
-    }
-    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-    collect_pkg_files(dir, &manifest, "", &mut entries)?;
-    // the dep graph, recursively, deduplicated by package name
-    fn collect_deps(
-        dir: &Path,
-        manifest: &crate::session::Manifest,
-        out: &mut Vec<(String, Vec<u8>)>,
-        seen: &mut std::collections::BTreeSet<String>,
-    ) -> Result<(), String> {
-        for (spec, desc) in &manifest.deps {
-            if !seen.insert(spec.clone()) {
-                continue;
-            }
-            let rel = desc
-                .get("path")
-                .ok_or_else(|| format!("dep `{spec}` has no `path`"))?;
-            let dep_dir = dir.join(rel);
-            let dm = read_manifest(&dep_dir)?;
-            if dm.name.as_deref() != Some(spec.as_str()) {
-                return Err(format!(
-                    "dep `{spec}` points at `{}` — the manifest there names it `{}`",
-                    dep_dir.display(),
-                    dm.name.as_deref().unwrap_or("<unnamed>")
-                ));
-            }
-            collect_pkg_files(&dep_dir, &dm, &format!("{spec}/"), out)?;
-            collect_deps(&dep_dir, &dm, out, seen)?;
-        }
-        Ok(())
-    }
-    collect_deps(dir, &manifest, &mut entries, &mut std::collections::BTreeSet::new())?;
-    write_bundle(&entries).map_err(|e| e.to_string())
-}
-
 /// Build a directory's entry [`Module`] from its manifest (RFC 0029 §5):
 ///
 /// - `entry.lib` (with or without `entry.type`) — a SOURCE module: the
@@ -488,7 +361,7 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
 ///   module's host fns (RFC 0025); `host_scope`/`inline` ride the
 ///   manifest. No body exists — the embedding Rust binds it at run
 ///   time.
-fn load_entry_module(dir: &Path, manifest: &crate::session::Manifest) -> Result<Module, String> {
+fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> {
     if manifest.entry.lib.is_none() && manifest.entry.type_path.is_some() {
         let rel = manifest.entry.type_path.as_ref().unwrap();
         let origin = format!("{}/{}", dir.display(), rel);
@@ -534,15 +407,10 @@ fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {
     load_module_source(&dir.join(rel))
 }
 
-fn read_manifest(dir: &Path) -> Result<crate::session::Manifest, String> {
-    let text = std::fs::read_to_string(dir.join("rut.toml")).map_err(|e| e.to_string())?;
-    parse_manifest(&text).map_err(|e| e.to_string())
-}
-
 /// Record a manifest's `[peer-deps]` into the session's registry (RFC
 /// 0045): the loader reads every mounted pkg's manifest anyway, so the
 /// registry costs no extra I/O.
-fn record_peers(session: &mut Session, pkg: &str, manifest: &crate::session::Manifest) {
+fn record_peers(session: &mut Session, pkg: &str, manifest: &Manifest) {
     for (peer, desc) in &manifest.peer_deps {
         session.record_peer(pkg, peer, crate::session::PeerDecl::of(desc));
     }
@@ -553,7 +421,7 @@ fn record_peers(session: &mut Session, pkg: &str, manifest: &crate::session::Man
 fn resolve_deps(
     session: &mut Session,
     dir: &Path,
-    manifest: &crate::session::Manifest,
+    manifest: &Manifest,
     visiting: &mut Vec<std::path::PathBuf>,
     mounted: &mut BTreeMap<String, std::path::PathBuf>,
 ) -> Result<(), String> {

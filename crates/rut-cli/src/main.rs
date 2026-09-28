@@ -237,7 +237,7 @@ fn run(path: &str, fuel: Option<u64>) {
 /// deterministic `.rutbundle` (RFC 0038).
 fn pack(dir: &str, out: Option<&str>) {
     let p = std::path::Path::new(dir);
-    let bytes = match rut_driver::pack_dir(p) {
+    let bytes = match rut_bundle::pack(p, &rut_bundle::FsSource) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("pack: {e}");
@@ -246,10 +246,7 @@ fn pack(dir: &str, out: Option<&str>) {
     };
     let out = out
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let stem = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
-            p.with_file_name(format!("{stem}.rutbundle"))
-        });
+        .unwrap_or_else(|| rut_bundle::default_out_path(p));
     if let Err(e) = std::fs::write(&out, &bytes) {
         eprintln!("pack: cannot write {}: {e}", out.display());
         std::process::exit(1);
@@ -368,7 +365,7 @@ fn style_for(f: &std::path::Path) -> Result<rut_fmt::Style, String> {
         let manifest = dir.join("rut.toml");
         if manifest.is_file() {
             let text = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
-            let m = rut_driver::session::parse_manifest(&text).map_err(|e| e.to_string())?;
+            let m = rut_bundle::parse_manifest(&text).map_err(|e| e.to_string())?;
             return rut_fmt::style::from_manifest(&m.style);
         }
         if !dir.pop() {

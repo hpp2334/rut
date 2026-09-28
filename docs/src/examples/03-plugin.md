@@ -190,8 +190,8 @@ pub host fn subscribe(bus: opaque, topic: str, handler: str);
 pub host fn emit(bus: opaque, topic: str, payload: str);
 ```
 
-`main.rs` packs the same directory with `rut_driver::pack_dir`,
-writes `plugin.rutbundle` to temp, and loads it back through the
+`main.rs` packs the same directory with `rut_bundle::pack`, writes
+`plugin.rutbundle` to temp, and loads it back through the
 identical `Plugin::load` — the transcript equality print is the
 proof. The CLI drives the same loader for any self-contained module:
 

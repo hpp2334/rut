@@ -9941,11 +9941,11 @@ msgstr "`server/` 是有意思的那个依赖：一个**纯声明表面**——�
 
 #: src/examples/03-plugin.md:193
 msgid ""
-"`main.rs` packs the same directory with `rut_driver::pack_dir`, writes "
+"`main.rs` packs the same directory with `rut_bundle::pack`, writes "
 "`plugin.rutbundle` to temp, and loads it back through the identical "
 "`Plugin::load` — the transcript equality print is the proof. The CLI drives "
 "the same loader for any self-contained module:"
-msgstr "`main.rs` 用 `rut_driver::pack_dir` 打包同一个目录，把 `plugin.rutbundle` 写进临时目录，再经完全相同的 `Plugin::load` 加载回来——对话记录相等的打印就是证明。CLI 对任何自包含模块都驱动同一个加载器："
+msgstr "`main.rs` 用 `rut_bundle::pack` 打包同一个目录，把 `plugin.rutbundle` 写进临时目录，再经完全相同的 `Plugin::load` 加载回来——对话记录相等的打印就是证明。CLI 对任何自包含模块都驱动同一个加载器："
 
 #: src/examples/03-plugin.md:199
 msgid "# a module directory (rut.toml)\n"
@@ -19322,17 +19322,18 @@ msgstr "`load_path_session(path)`"
 msgid "load a module **directory** or `.rutbundle`; returns `(session, root)`"
 msgstr "加载一个模块**目录**或 `.rutbundle`；返回 `(session, root)`"
 
-#: src/reference/embedding.md:74
-msgid "`pack_dir(dir)`"
-msgstr "`pack_dir(dir)`"
-
-#: src/reference/embedding.md:74
+#: src/reference/embedding.md:75
 msgid ""
-"pack a directory into a deterministic `.rutbundle` ([module "
-"bundles](bundles.md))"
-msgstr "把一个目录打包成确定性的 `.rutbundle`（[模块捆绑包](bundles.md)）"
+"Packing a `.rutbundle` is not driver API — it lives in the `rut-bundle` "
+"crate: `rut_bundle::pack(dir, &rut_bundle::FsSource)` reads the directory "
+"through a one-method `Source` trait and returns the bundle bytes ([module "
+"bundles](bundles.md))."
+msgstr ""
+"打包 `.rutbundle` 不是驱动 API——它属于 `rut-bundle` crate：`rut_bundle::pack"
+"(dir, &rut_bundle::FsSource)` 经由单方法的 `Source` trait 读取目录，返回捆绑"
+"包字节（[模块捆绑包](bundles.md)）。"
 
-#: src/reference/embedding.md:76
+#: src/reference/embedding.md:80
 msgid ""
 "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns "
 "and declaration files](host-fns.md))."
@@ -26139,6 +26140,30 @@ msgid ""
 msgstr "在早于引入这些特性的布局之下声明了 `[peer-deps]` 或 `entry.libs` 的清单会被拒绝——那些布局没有分组条目，会无声地只挂载基础部分。"
 
 #: src/reference/bundles.md:72
+msgid "The `rut-bundle` crate"
+msgstr "`rut-bundle` crate"
+
+#: src/reference/bundles.md:74
+msgid ""
+"The container codec, the `rut.toml` grammar, and the packer live in the "
+"`rut-bundle` crate — std-only and **filesystem-free**. Every read goes "
+"through a one-method `Source` trait: `rut_bundle::FsSource` is the real "
+"filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests "
+"and wasm hosts. `rut_bundle::pack(dir, &src)` returns the bundle bytes — "
+"writing the output file stays with the caller — and reads only "
+"manifest-named paths, never a directory listing. Mounting a bundle into a "
+"session stays in `rut-driver` ([Loading](loading.md)), over "
+"`rut_bundle::Bundle`, the parsed-and-CRC-verified reader."
+msgstr ""
+"容器编解码器、`rut.toml` 语法与打包器都住在 `rut-bundle` crate 里——仅用标准"
+"库，且**不碰文件系统**。每次读取都经由单方法的 `Source` trait：`rut_bundle::"
+"FsSource` 是真实文件系统（CLI、原生宿主）；内存中的路径→字节映射则服务测试与 "
+"wasm 宿主。`rut_bundle::pack(dir, &src)` 返回捆绑包字节——写出输出文件留给调"
+"用方——且只读清单点名的路径，从不列目录。把捆绑包挂载进会话仍属 `rut-driver`"
+"（[加载](loading.md)），建在解析并经 CRC 校验的读取器 `rut_bundle::Bundle` 之"
+"上。"
+
+#: src/reference/bundles.md:84
 msgid "Deterministic packing"
 msgstr "确定性打包"
 

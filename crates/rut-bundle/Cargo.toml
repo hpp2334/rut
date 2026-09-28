@@ -1,0 +1,10 @@
+[package]
+name = "rut-bundle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the .rutbundle container: deterministic zip subset, rut.toml manifest grammar, packer — std-only, filesystem-free (one-method Source trait)"
+
+[lib]
+name = "rut_bundle"
+path = "src/lib.rs"

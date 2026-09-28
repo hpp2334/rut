@@ -14,7 +14,8 @@
 //! - bundles: format_version 4 carries the lib files (pack ⇒ load ⇒
 //!   run); a `libs` manifest under v3 is refused, never base-mounted.
 
-use rut_driver::{load_bundle_bytes, load_dir_session, pack_dir};
+use rut_bundle::{pack, FsSource};
+use rut_driver::{load_bundle_bytes, load_dir_session};
 use std::path::{Path, PathBuf};
 
 fn scratch(tag: &str) -> PathBuf {
@@ -140,12 +141,12 @@ fn manifest_libs_laws_are_loud() {
 #[test]
 fn bundles_carry_libs_at_v4_and_refuse_below() {
     let root = world("v4", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(4));
-    let bytes = pack_dir(&root.join("app")).expect("pack");
+    let bytes = pack(&root.join("app"), &FsSource).expect("pack");
     // determinism: same dir ⇒ byte-identical bundle
-    assert_eq!(bytes, pack_dir(&root.join("app")).unwrap());
+    assert_eq!(bytes, pack(&root.join("app"), &FsSource).unwrap());
     // the archive carries the lib files beside the entry
     let names: Vec<String> =
-        rut_driver::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     for key in ["kid/kid.rut", "kid/part_b.rut", "kid/part_c.rut"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
@@ -155,7 +156,7 @@ fn bundles_carry_libs_at_v4_and_refuse_below() {
     // a `libs` manifest packed as v3 is refused at LOAD — the same
     // refuse-never-guess gate peer groups got (RFC 0041 §5)
     let root = world("v3", Some("\"./part_b.rut\""), Some(3));
-    let bytes = pack_dir(&root.join("app"));
+    let bytes = pack(&root.join("app"), &FsSource);
     assert!(bytes.unwrap_err().contains("format_version = 4"), "the packer demands v4");
     let entries = vec![
         ("rut.toml".into(),
@@ -163,7 +164,7 @@ fn bundles_carry_libs_at_v4_and_refuse_below() {
         ("x.rut".into(), b"fn main() -> i32 { return 0; }\n".to_vec()),
         ("y.rut".into(), b"fn tail() -> i32 { return 1; }\n".to_vec()),
     ];
-    let err = load_bundle_bytes(&rut_driver::write_bundle(&entries).unwrap(), Path::new("mem"))
+    let err = load_bundle_bytes(&rut_bundle::write_bundle(&entries).unwrap(), Path::new("mem"))
         .unwrap_err();
     assert!(err.contains("need bundle format_version 4"), "{err}");
 }

@@ -754,6 +754,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "plugin"
 version = "0.1.0"
 dependencies = [
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-lexer",
@@ -1040,9 +1041,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rut-bundle"
+version = "0.1.0"
+
+[[package]]
 name = "rut-cli"
 version = "0.1.0"
 dependencies = [
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-fmt",
@@ -1061,6 +1067,7 @@ name = "rut-driver"
 version = "0.1.0"
 dependencies = [
  "rut-ast",
+ "rut-bundle",
  "rut-core",
  "rut-lexer",
  "rut-lir",
