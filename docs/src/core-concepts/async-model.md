@@ -20,16 +20,26 @@ nothing runs unless the driving loop runs it.
 ## The surface
 
 ```rut
-async fn countdown(cx: RunContext, n: u32) -> nil {
+use async_host::{ launch_future, sleep };
+use ink::{ Logger };
+
+async fn countdown(cx: RunContext, log: Logger, n: u32) -> nil {
     for (let i = n; i > 0; i -= 1) {
-        rt.log(f"{i}");
+        log.info(f"{i}");
         await sleep(1000);             // the only suspension spelling
     }
 }
 
-fn main() -> nil {
-    launch_future(countdown(3));       // the other consume: launch
+pub fn main() -> nil {
+    let log = Logger.new("countdown");
+    launch_future(countdown(log, 3));  // the other consume: launch
 }
+```
+
+```text
+3
+2
+1
 ```
 
 The rules:

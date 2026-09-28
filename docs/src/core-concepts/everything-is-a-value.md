@@ -29,13 +29,21 @@ to a function retains once. A loop binding iterates the *stored*
 elements, not copies of them.
 
 ```rut
+use ink::{ Logger };
+
 struct Point { x: f32; y: f32 }
 
-fn share() {
+pub fn main() {
+    let log = Logger.new("values");
     let mut p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
     p.x = 4;            // q.x is 4 now — sharing is the law
+    log.info(f"q.x = {q.x}");   // read through the other alias
 }
+```
+
+```text
+q.x = 4
 ```
 
 Mutation through an alias is visible through all of them, in both
@@ -65,10 +73,27 @@ implicit at every value position: field access, method calls, indexing,
 iteration, arithmetic all read through the box.
 
 ```rut
-fn lookup(id: i64) -> ?User { .. }
+use ink::{ Logger };
 
-let u = lookup(7);      // ?User
-print(u.name);          // auto-deref when non-nil
+struct User { id: i64; name: str }
+
+fn lookup(id: i64) -> ?User {
+    if (id == 7) { return User { id: 7, name: "ada" }; }
+    return nil;             // a miss is nil, nothing else
+}
+
+pub fn main() {
+    let log = Logger.new("values");
+    let u = lookup(7);                // ?User
+    log.info(f"u.name = {u.name}");   // auto-deref when non-nil
+    let missing = lookup(8);
+    log.info(f"miss is nil: {missing == nil}");   // guard where absence is expected
+}
+```
+
+```text
+u.name = ada
+miss is nil: true
 ```
 
 A `nil` reaching a value use traps (`NilDeref`) — never a silent read.
@@ -102,15 +127,44 @@ convention:
 - a **non-empty err** means "failed".
 
 ```rut
+use ink::{ Logger };
+
 fn parse_hex(s: str) -> (bytes, str) {
     if (s.len() % 2 != 0) {
         return (bytes.zeroed(0), "hex: odd-length input");
     }
-    // ... (data, "") on success
+    let n = s.len() / 2;
+    let mut buf: [u8] = [0u8; n];
+    for (let i = 0; i < n; i += 1) {
+        let hi = hex_digit(s.code_at(i * 2));
+        let lo = hex_digit(s.code_at(i * 2 + 1));
+        if (hi < 0 || lo < 0) {
+            return (bytes.zeroed(0), "hex: not a digit");
+        }
+        buf[i] = ((hi * 16) + lo) as u8;
+    }
+    return (bytes.from(buf), "");       // (data, "") on success
 }
 
-let (raw, err) = parse_hex(input);
-if (err != "") { return (bytes.zeroed(0), err); }   // propagate
+fn hex_digit(c: u32) -> i64 {
+    if (c >= 48 && c <= 57) { return (c - 48) as i64; }   // '0'..'9'
+    if (c >= 97 && c <= 102) { return (c - 87) as i64; }  // 'a'..'f'
+    return -1;
+}
+
+pub fn main() {
+    let log = Logger.new("values");
+    let (raw, err) = parse_hex("4869");
+    if (err != "") { log.info(f"err: {err}"); return; }   // propagate
+    log.info(f"ok: {raw.decode()} ({raw.len()} bytes)");
+    let (raw, err) = parse_hex("486");
+    if (err != "") { log.info(f"err: {err}"); }           // the failure channel
+}
+```
+
+```text
+ok: Hi (2 bytes)
+err: hex: odd-length input
 ```
 
 The pair destructure in return position is free — the compiler fuses the
@@ -125,7 +179,7 @@ boundary the same pair crosses field by field, which makes
   traffic. Algorithms that churn records and arrays pay aliasing, not
   copying.
 - **Loop variables are fresh per iteration but share elements.** A
-  `for (x of xs)` loop hands you the stored element; writes through it
+  `for (let x of xs)` loop hands you the stored element; writes through it
   mutate the sequence. Each iteration is a fresh *binding*.
 - **Containers of primitives stay flat.** A fixed `[i32]` is a packed
   `i32` buffer; growable sequences of primitives store raw payloads with

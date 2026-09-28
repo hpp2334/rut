@@ -9,14 +9,29 @@ module must say `impl I for T`.
 ## The shape of a trait
 
 ```rut
+use ink::{ Logger };
+
 trait Shape {
     fn area(self) -> f64;
     fn scale(v: f64);
 }
 
+struct Point { x: f32; y: f32 }
+
 impl Shape for Point {
-    fn area(self) -> f64 { self.x as f64 }
+    fn area(self) -> f64 { return self.x as f64; }
+    fn scale(v: f64) { }    // the impl must list every trait method
 }
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let p = Point { x: 3, y: 4 };
+    log.info(f"area = {p.area()}");     // a concrete receiver: static
+}
+```
+
+```text
+area = 3
 ```
 
 - **Methods only, no bodies.** A trait declares signatures — no fields,
@@ -53,10 +68,45 @@ A trait name in type position is the bare name — there is no
 object-type keyword:
 
 ```rut
-fn blit(g: Canvas, s: Shape) { .. }     // a parameter over any Shape
+use ink::{ Logger };
+use pouch::{ Vec };
 
-let mixed: Vec<Shape> = ...;            // heterogeneous storage
-for (s of mixed) { s.area(); }
+trait Shape {
+    fn area(self) -> f64;
+}
+
+struct Circle { r: f64 }
+struct UnitSquare { side: f64 }
+
+impl Shape for Circle {
+    fn area(self) -> f64 { return 3.14159265358979 * self.r * self.r; }
+}
+
+impl Shape for UnitSquare {
+    fn area(self) -> f64 { return self.side * self.side; }
+}
+
+struct Canvas { log: Logger }
+
+impl Canvas {
+    fn render(self, a: f64) { self.log.info(f"blitted a shape of area {a}"); }
+}
+
+fn blit(g: Canvas, s: Shape) { g.render(s.area()); }   // a parameter over any Shape
+
+pub fn main() {
+    let log = Logger.new("shapes");
+    let g = Canvas { log: log };
+    let mut mixed: Vec<Shape> = Vec.new();   // heterogeneous storage
+    mixed.push(Circle { r: 1.0 });
+    mixed.push(UnitSquare { side: 2.0 });
+    for (let s of mixed) { blit(g, s); }
+}
+```
+
+```text
+blitted a shape of area 3.14159265358979
+blitted a shape of area 4
 ```
 
 A trait-typed value is a reference to a real cell that still carries its
@@ -127,7 +177,11 @@ call site means.
 A type is iterable when it implements the builtin `Iterator<E>` trait:
 
 ```rut
-use core::{ Iterator };
+use ink::{ Logger };
+
+class CountUp {
+    n: i32;
+}
 
 impl Iterator<i32> for CountUp {
     fn __iterate(self, emit: fn(i32) -> bool) {
@@ -136,9 +190,24 @@ impl Iterator<i32> for CountUp {
         }
     }
 }
+
+pub fn main() {
+    let log = Logger.new("iter");
+    for (let v of CountUp { n: 3 }) {
+        log.info(f"tick {v}");
+    }
+    log.info("done");
+}
 ```
 
-`for (v of it) { body }` desugars to `it.__iterate(emit)` with a
+```text
+tick 1
+tick 2
+tick 3
+done
+```
+
+`for (let v of it) { body }` desugars to `it.__iterate(emit)` with a
 synthetic closure: the body runs, then `emit` returns `true`; `break`
 returns `false`. The loop variable is the closure's parameter — a fresh
 binding per iteration by construction. The builtin sequences (`[T]`,

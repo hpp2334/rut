@@ -21,13 +21,20 @@ Because assignments and passes copy *handles*, not payloads, the
 refcount traffic is exactly the aliasing the program performs:
 
 ```rut
+use ink::{ Logger };
+
 struct Node { next: ?Node }
 
-fn example() {
+pub fn main() {
+    let log = Logger.new("cells");
     let a: ?Node = Node { next: nil };
     let b = a;              // one retain
-    // ... the cell dies when the LAST of a, b goes away
+    log.info(f"a == b: {a == b}");   // one cell — it dies when the LAST of a, b goes away
 }
+```
+
+```text
+a == b: true
 ```
 
 The compiler knows every register's static type, so it emits
@@ -54,9 +61,31 @@ When a count reaches zero, destruction runs inline, in a fixed order:
    GC" (see [the host boundary](host-boundary.md)).
 
 ```rut
-let conn = Connection.open(url);
-on_drop(conn, fn(c: ?Connection) { c.close(); });
-// ... conn.close() runs exactly when the last reference dies
+use ink::{ Logger };
+
+class Connection {
+    url: str;
+    log: Logger;
+}
+
+impl Connection {
+    fn open(url: str, log: Logger) -> Connection {
+        return Connection { url: url, log: log };
+    }
+    fn close(self) { self.log.info(f"closed {self.url}"); }
+}
+
+pub fn main() {
+    let log = Logger.new("rc");
+    let conn: ?Connection = Connection.open("tcp://edge", log);
+    on_drop(conn, fn(c: ?Connection) { c.close(); });
+    log.info("main is done — the count hits zero at the boundary");
+}
+```
+
+```text
+main is done — the count hits zero at the boundary
+closed tcp://edge
 ```
 
 Compare this with finalizer-based designs: there is no finalizer that
@@ -81,10 +110,30 @@ checked (reference types only — `Weak<i32>` diagnoses), and `weak(nil)`
 traps.
 
 ```rut
+use ink::{ Logger };
+
+class Model {
+    name: str;
+}
+
 class View {
     model: ?Model;
     observer: ?Weak<Model>;      // a back-pointer that closes no cycle
 }
+
+pub fn main() {
+    let log = Logger.new("rc");
+    let mut m = Model { name: "doc" };
+    let v = View { model: nil, observer: Weak(m) };   // observe without owning
+    log.info(f"holding {m.name}; the view holds only a weak edge");
+    m = Model { name: "next" };   // the old cell's last strong reference dies here
+    log.info(f"upgrade() answers nil: {v.observer.upgrade() == nil}");
+}
+```
+
+```text
+holding doc; the view holds only a weak edge
+upgrade() answers nil: true
 ```
 
 The two shapes that cause accidental cycles — **back-pointers**
