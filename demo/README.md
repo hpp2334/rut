@@ -16,7 +16,7 @@ npm run dev         # http://localhost:8080 (dev server; react-refresh lives onl
 npm run dev:channel # dev server + a throwaway https://<random>.trycloudflare.com URL for the room
                     # (Cloudflare QUICK tunnel: no account, no config; needs `cloudflared` on PATH)
 npm run build       # -> dist/ (static; ships both wasm artifacts alongside the bundle)
-npm run smoke       # headless gate: every case really runs + verifies, no browser
+npm run smoke       # headless gate: every case really runs, no browser
 ```
 
 `dev`/`build` preflight the artifacts (loud, name the exact build
@@ -36,9 +36,8 @@ command); `build:wasm` copies them with the same curated loud-fail.
   `npm run build:wasm` drops the artifact at `public/rut.wasm`, and the
   page runs real `compile`/`run` calls through the raw ABI of the
   `rut-wasm` crate (see `src/wasm/rut-api.d.ts` and
-  `../crates/rut-wasm/src/lib.rs`). After every run the output is
-  diffed against the case's inline expected — the StatusBar chip shows
-  ✓/✗ (and a failing verify renders the line-paired diff). The banner
+  `../crates/rut-wasm/src/lib.rs`). Every run really executes; the
+  Output pane is the result surface. The banner
   names the real engine slice mounted into the wasm host.
 - **error mode**: there is no preview fallback. A missing/invalid
   artifact boots a full-page panel naming the exact
@@ -52,23 +51,17 @@ command); `build:wasm` copies them with the same curated loud-fail.
 
 Runs happen without the button:
 
-- **Selecting a case runs it immediately** — the panes and the chip
-  populate the moment a case opens. Auto-runs use a fixed 1M-fuel auto
-  budget and each carries the case's OWN expected, so the chip always
-  names the fuel it verified at (`✓ … @ 1M fuel`).
+- **Selecting a case runs it immediately** — the panes populate the
+  moment a case opens. Auto-runs use a fixed 1M-fuel auto budget.
 - **Edits auto-run once typing settles** — the same 120 ms debounce
   lane as the highlight, LAST-WINS: a rapid burst lands exactly one
-  run. An edit retires the chip at once (the verdict belongs to the
-  last run); the settled run posts a fresh verdict, so breaking the
-  case's contract while typing shows the ✗ + line-paired diff without
-  touching Run.
+  run.
 - **Any auto-run drops a parked frame** — Resume can never point at a
-  frame from a foreign source. The park→resume lesson stays an explicit
-  ▶ Run sequence; the fuel-demo case parks the moment you select it
-  (its expected pins the trap, which matches at any budget, so the
-  auto chip stays green).
+  frame from a foreign source. The park→resume lesson stays an
+  explicit ▶ Run sequence; the fuel-demo case parks the moment you
+  select it.
 - **▶ Run itself is unchanged**: it runs at the fuel box's budget
-  (default 10M) and its chip names that box.
+  (default 10M).
 
 The editor:
 
@@ -128,9 +121,9 @@ dropFrame(): number               // retire a parked frame (case switch,
 
 The demo host exposes the logger (+ calc's math) to the guest.
 Default budgets: 10M fuel / 4 MiB heap. Case 8 intentionally loops
-forever to demonstrate `Trap::OutOfFuel` + the resume button — and its
-expected pins the DEFAULT budget (zero ticks fit in 10M), so a raised
-fuel box or a Resume shows a verify diff BY DESIGN.
+forever to demonstrate `Trap::OutOfFuel` + the resume button — at the
+default budget zero ticks fit in 10M; a raised fuel box or a Resume
+lets the SAME frame run on and the ticks start appearing.
 
 ## Layout
 
@@ -142,12 +135,10 @@ src/
   main.tsx               createRoot bootstrap
   App.tsx                layout, run/resume wiring, budget state, boot-error
                          panels (runner + LSP), the debounced re-analyze
-  cases.ts               prepared cases (name, blurb, source, expected[])
-  verify.ts              the real-run vs expected diff
-  examples/              the classics — real .rut files, expected inline
-    index.ts             metadata + raw .rut imports (asset/source) + the
-                         inline expected blocks (the retired sidecars' bytes,
-                         verbatim); playground order
+  cases.ts               prepared cases (name, blurb, source)
+  examples/              the classics — real .rut files
+    index.ts             metadata + raw .rut imports (asset/source);
+                         playground order
   runner.ts              wasm-or-error resolution (no fallback)
   lsp/
     rut-lsp.ts           the standalone rut-lsp.wasm binding:
@@ -159,8 +150,8 @@ src/
     CaseList.tsx         case selector (groups: cases, classics)
     Editor.tsx           transparent textarea OVER a highlighted <pre> overlay
                          (same metrics, scroll-synced; squiggles + hover tip)
-    Panes.tsx            Output / AST / IR tabs + compile diags + verify diff
-    StatusBar.tsx        run/resume, fuel+heap inputs, verify chip, telemetry
+    Panes.tsx            Output / AST / IR tabs + compile diags
+    StatusBar.tsx        run/resume, fuel+heap inputs, telemetry
 scripts/
   preflight-wasm.mjs     dev/build artifact preflight (loud, both artifacts)
   copy-wasm.mjs          build:wasm's curated copy step (loud)
@@ -184,10 +175,9 @@ zoom regardless; Android forgoes it (honest trade, not a silent one).
 
 ## Honest limits
 
-- **Custom edits verify against the case they came from.** A free-form
-  edit that still matches the case's expected stays green; one that
-  doesn't shows the diff. There is no per-document expected authoring —
-  that is the playground-editing menu item.
+- **No expected-output machinery.** Every run — a prepared case or a
+  free-form edit — executes for real, and the Output pane shows exactly
+  what it produced; there is nothing to match against.
 - **The wasm host mounts a slice, not the whole std**: core, calc, rt,
   ink, pouch, nmapset (+ the nmap host bindings). `select`/`await`
   parse but have no host futures in this host — never taught, honestly.

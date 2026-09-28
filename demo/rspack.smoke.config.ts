@@ -3,7 +3,7 @@ import type { RspackOptions } from "@rspack/core";
 /**
  * The smoke bundle (demo-owned): the app's own RutApi surface bundled
  * for node, so the headless gate drives the SAME code the browser runs
- * (src/runner.ts + src/cases.ts + src/verify.ts + src/examples) — the
+ * (src/runner.ts + src/cases.ts + src/examples) — the
  * lsp-align "drive the shipped artifact through the shipped binding"
  * pattern. No React, no DOM.
  */
@@ -33,9 +33,8 @@ const config: RspackOptions = {
           },
         },
       },
-      // the classics: example sources as strings — rut-ONLY since the
-      // no-sidecars batch (expected rides inline in the case entries),
-      // so a leftover `.expected` import fails the build loudly
+      // the classics: example sources as strings — rut-only, so a
+      // stray non-source import fails the build loudly
       {
         test: /\.rut$/,
         type: "asset/source",

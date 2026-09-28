@@ -1,6 +1,5 @@
 import { memo, useState } from "react";
 import type { AstNode, Diag } from "../wasm/rut-api";
-import type { VerifyResult } from "../verify";
 import { AstTree } from "./AstTree";
 
 export interface PaneData {
@@ -24,7 +23,6 @@ type TabName = (typeof TABS)[number];
 
 export const Panes = memo(function Panes(props: {
   data: PaneData;
-  verify?: VerifyResult | null;
 }): JSX.Element {
   const [active, setActive] = useState<TabName>("Output");
 
@@ -62,23 +60,6 @@ export const Panes = memo(function Panes(props: {
             <pre>{output.join("\n")}</pre>
           ) : (
             !props.data.diags && <pre>(no output)</pre>
-          )}
-          {props.verify && !props.verify.ok && (
-            <div className="diff">
-              <div className="diff-head">
-                ✗ differs from expected — line-paired (got vs expected):
-              </div>
-              <pre className="diff-body">
-                {props.verify.rows
-                  .map((r) => {
-                    if (r.same) return `  = ${r.n} | ${r.got}`;
-                    const got = r.got ?? "⟨missing⟩";
-                    const exp = r.expected ?? "⟨no expected line⟩";
-                    return `  ✗ ${r.n} | got:      ${got}\n    | expected: ${exp}`;
-                  })
-                  .join("\n")}
-              </pre>
-            </div>
           )}
         </div>
         <div className={cls("pane-body ast-pane", active === "AST")}>

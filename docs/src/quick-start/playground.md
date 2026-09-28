@@ -16,9 +16,9 @@ static page. It is deployed at
 - **Editor** — the case's source, live-editable. The cases are read
   from the same `.rut` files the repository's native test gate
   compiles and runs, so what you edit is the real corpus, not a copy.
-- **Output / AST / IR panes** — every run shows the program output
-  plus the two compile views: the parsed AST and the typed IR the
-  compiler lowers to. `rut dump <file>` prints the same structures
+- **Output / AST / IR panes** — every run shows the program's real
+  output plus the two compile views: the parsed AST and the typed IR
+  the compiler lowers to. `rut dump <file>` prints the same structures
   from the CLI.
 - **Budget control** — each run executes under an explicit fuel + heap
   budget (default 10,000,000 fuel / 4 MiB heap). A budget that bites is
@@ -26,14 +26,6 @@ static page. It is deployed at
   on purpose, and the Resume control adds fuel and continues the *same*
   frame — that is structured-concurrency-grade resumption, not a
   restart.
-
-## The ✓/✗ verify chip
-
-Every prepared case carries its expected output inline. After each run
-the output is diffed against that expectation and the status bar shows
-a ✓ or ✗ chip (a failing verify renders a line-paired diff). If a run
-ever disagrees with its expected lines, that is a bug in the engine —
-the chip is the page's honesty contract.
 
 ## No silent fallback
 
@@ -57,7 +49,7 @@ Other lanes:
 
 ```sh
 npm run build        # static build into dist/
-npm run smoke        # headless gate: every case really runs and verifies
+npm run smoke        # headless gate: every case really runs
 npm run dev:channel  # dev server + a throwaway public https URL for demos
 ```
 

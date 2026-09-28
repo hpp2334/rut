@@ -561,29 +561,6 @@ button {
   color: var(--trap);
 }
 
-/* verify chip (survey D2): pass/fail of real-vs-sidecar */
-
-.chip {
-  font-size: 12px;
-  font-family: var(--mono);
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.chip-pass {
-  color: #7dd88a;
-  border-color: #2e5a38;
-  background: #16241a;
-}
-
-.chip-fail {
-  color: var(--trap);
-  border-color: #6b2f2f;
-  background: #2a1616;
-}
-
 /* compile diagnostics — loud, never dropped */
 
 .diags {
@@ -594,27 +571,6 @@ button {
   padding: 8px 10px;
   margin: 0 0 10px;
   white-space: pre-wrap;
-}
-
-/* line-paired expected/got diff (survey D2) */
-
-.diff {
-  margin-top: 10px;
-  border-top: 1px dashed var(--border);
-  padding-top: 8px;
-}
-
-.diff-head {
-  color: var(--trap);
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-
-.diff-body {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--fg-dim);
 }
 
 /* boot error — the full-page panel (survey D1: the runner law) */

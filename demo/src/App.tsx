@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CASES, DEFAULT_BUDGET, type RutCase } from "./cases";
 import { EXAMPLES } from "./examples";
 import { BUILD_WASM_COMMAND, Runner } from "./runner";
-import { verifyAgainstExpected, type VerifyResult } from "./verify";
 import { CaseList, type CaseGroup } from "./components/CaseList";
 import { Editor, type Highlight } from "./components/Editor";
 import { Panes, type PaneData } from "./components/Panes";
@@ -19,10 +18,7 @@ const EMPTY_PANES: PaneData = { output: [], irDump: "" };
 const ANALYZE_DEBOUNCE_MS = 120;
 /** the D-1 fuel stance: auto-runs (case switch + edit lane) execute at
  * a reduced budget so a stray long loop cannot eat the page; the fuel
- * box and the Run button keep the user's full budget untouched. The
- * chip names the fuel it verified at, so the reduction is never
- * silent — and fuel-demo's expected matches at ANY budget, so its
- * chip stays green on the auto lane. */
+ * box and the Run button keep the user's full budget untouched. */
 const AUTO_FUEL = 1_000_000;
 
 /** the full-page boot-error panel — THE RUNNER LAW (survey D1):
@@ -92,7 +88,6 @@ export function App(): JSX.Element {
   const [fuelUsed, setFuelUsed] = useState(0);
   const [heapUsed, setHeapUsed] = useState(0);
   const [parked, setParked] = useState(false);
-  const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [running, setRunning] = useState(false);
   const runToken = useRef(0);
   /** the last successful compile — a Resume re-renders its AST/IR too */
@@ -142,11 +137,10 @@ export function App(): JSX.Element {
     setFuelUsed(0);
     setHeapUsed(0);
     setParked(false);
-    setVerify(null);
   }, []);
 
   const applyRun = useCallback(
-    (res: RunResult, compiled: CompileResult | null, src: string, expected: string[], fuelAtVerify: number) => {
+    (res: RunResult, compiled: CompileResult | null, src: string) => {
       if (compiled) {
         lastCompiled.current = compiled;
         lastCompiledSrc.current = src;
@@ -163,26 +157,17 @@ export function App(): JSX.Element {
       setFuelUsed(res.fuelUsed);
       setHeapUsed(res.heapBytes);
       setParked(res.parked === true);
-      // THE SIDECAR FLIP (survey D2): verify every real run against the
-      // run's OWN case expected — passed IN by the launcher, never read
-      // from state here, so a case switch's IMMEDIATE run (launched in
-      // the same tick as setCurrentCase) cannot verify against the
-      // PREVIOUS case's contract. Auto-runs ride this exact path, so
-      // the chip updates per auto-run and names its fuel.
-      setVerify(
-        verifyAgainstExpected(res, expected, fuelAtVerify),
-      );
     },
     [],
   );
 
-  /** the one compile+run path (survey D1/D2): every run — explicit or
-   * auto — compiles the given source, runs it at the given fuel budget
-   * (the heap box is shared), and applies through applyRun. LAST-WINS:
-   * each run bumps the token, a superseded run's applies die on the
-   * token checks. */
+  /** the one compile+run path (survey D1): every run — explicit or
+   * auto — compiles the given source and runs it at the given fuel
+   * budget (the heap box is shared), then applies through applyRun.
+   * LAST-WINS: each run bumps the token, a superseded run's applies
+   * die on the token checks. */
   const executeRun = useCallback(
-    (src: string, fuelBudget: number, expected: string[]) => {
+    (src: string, fuelBudget: number) => {
       if (!runner) return;
       const token = ++runToken.current;
       setRunning(true);
@@ -210,7 +195,7 @@ export function App(): JSX.Element {
           { fuel: fuelBudget, heapBytes: budget.heapBytes },
         );
         if (token !== runToken.current) return; // stale
-        applyRun(res, compiled, src, expected, fuelBudget);
+        applyRun(res, compiled, src);
       } finally {
         if (token === runToken.current) setRunning(false);
       }
@@ -220,8 +205,8 @@ export function App(): JSX.Element {
 
   /** ▶ Run: the user's FULL box budget — auto-runs never touch it */
   const run = useCallback(() => {
-    executeRun(sourceRef.current, budget.fuel, currentCase.expected);
-  }, [executeRun, budget, currentCase]);
+    executeRun(sourceRef.current, budget.fuel);
+  }, [executeRun, budget]);
 
   /** the D-1 auto-run: parked frames are DROPPED first (a Resume
    * pointing at a frame from a different source is a correctness trap —
@@ -230,9 +215,9 @@ export function App(): JSX.Element {
     (src: string) => {
       runner?.dropFrame();
       setParked(false);
-      executeRun(src, AUTO_FUEL, currentCase.expected);
+      executeRun(src, AUTO_FUEL);
     },
-    [runner, executeRun, currentCase],
+    [runner, executeRun],
   );
   /** the debounced lane reads the LATEST runAuto at fire time, so a
    * budget edit never re-arms the lane for an unchanged source */
@@ -295,15 +280,12 @@ export function App(): JSX.Element {
       setFuelUsed(0);
       setHeapUsed(0);
       setParked(false);
-      setVerify(null);
       // the D-1 design, pinned: the case switch runs IMMEDIATELY (the
-      // chip + panes populate the moment a case opens; the fuel demo
-      // parks at once and teaches the trap on selection) — and the
-      // debounced lane skips this exact source so it never runs twice.
-      // The run carries the FRESH case's expected — the state update
-      // is still in flight, so the closure cannot be trusted for it.
+      // panes populate the moment a case opens; the fuel demo parks at
+      // once and teaches the trap on selection) — and the debounced
+      // lane skips this exact source so it never runs twice.
       immediateRunSrc.current = c.source;
-      executeRun(c.source, AUTO_FUEL, c.expected);
+      executeRun(c.source, AUTO_FUEL);
     },
     [runner, executeRun],
   );
@@ -313,10 +295,6 @@ export function App(): JSX.Element {
     // an edit re-tags the lane as an EDIT lane: even if it lands before
     // the case switch's debounced fire, the auto-run must go out
     immediateRunSrc.current = null;
-    // the verdict belongs to the last run; an edit retires it until the
-    // next run compares fresh (an edited source that then mismatches
-    // shows its diff — the honest signal, survey D2)
-    setVerify(null);
   }, []);
 
   const resume = useCallback(
@@ -331,12 +309,12 @@ export function App(): JSX.Element {
         const res = runner.resume(extra);
         if (token !== runToken.current) return;
         setBudget((b) => ({ ...b, fuel: b.fuel + extra }));
-        applyRun(res, null, "", currentCase.expected, budget.fuel + extra);
+        applyRun(res, null, "");
       } finally {
         if (token === runToken.current) setRunning(false);
       }
     },
-    [runner, budget, applyRun, currentCase],
+    [runner, budget, applyRun],
   );
 
   const banner = useMemo(() => {
@@ -376,7 +354,7 @@ export function App(): JSX.Element {
           onSelect={selectCase}
         />
         <Editor value={source} onChange={editSource} highlight={highlight} />
-        <Panes data={panes} verify={verify} />
+        <Panes data={panes} />
       </main>
 
       <StatusBar
@@ -389,7 +367,6 @@ export function App(): JSX.Element {
         fuelUsed={fuelUsed}
         heapUsed={heapUsed}
         trap={panes.trap}
-        verify={verify}
       />
     </div>
   );

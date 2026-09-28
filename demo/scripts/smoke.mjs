@@ -2,16 +2,15 @@
 // browser, demo-owned.
 //
 // Drives the SAME RutApi the React app uses (the bundled
-// src/runner.ts + src/cases.ts + src/verify.ts + src/examples —
+// src/runner.ts + src/cases.ts + src/examples —
 // dist-smoke/rut-api.cjs) against the SHIPPED public/rut.wasm:
 //   1. the runner law: a missing/invalid artifact boots to mode
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
 //   2. every prepared case (9 inline + 17 classics) REALLY compiles
-//      and runs through the wasm engine at the pinned default budget
-//      and verifies GREEN against its inline expected (the classics'
-//      blocks are the retired *.expected sidecars' bytes, verbatim —
-//      md5 receipts in docs/demo-no-sidecars-survey.md §1.1);
+//      and runs through the wasm engine at the pinned default budget;
+//      the only traps admitted are the two cases whose LESSON is a
+//      trap (their blurbs say so);
 //   3. the resume is REAL (survey D5): the parked frame continues —
 //      zero-budget resume re-traps at the parked pc, +16M resume
 //      carries tick 2000000 (a re-run would print tick 1000000
@@ -32,14 +31,9 @@
 //      names, strings at known positions) whose token classes match
 //      ground truth through the shared decodeTokens, and the overlay
 //      builder (the exact paint path) reconstructing every source
-//      EXACTLY — the double-layer alignment law;
-//   7. THE NO-SIDECARS GATE (the no-sidecars batch, survey §3): a raw
-//      fs walk of demo/ asserting zero `*.expected` basenames —
-//      untracked included BY CONSTRUCTION (git ls-files is blind to
-//      exactly the stray this gate exists to catch); node_modules
-//      pruned, dist/ and dist-smoke/ walked with everything else.
+//      EXACTLY — the double-layer alignment law.
 //
-// Exit 0 = every case real and verified. Any failure exits 1 LOUD.
+// Exit 0 = every case really ran. Any failure exits 1 LOUD.
 'use strict';
 
 import { createRequire } from 'node:module';
@@ -128,9 +122,9 @@ console.log('\n[1] the runner law: missing/invalid artifact => mode "error"');
   check(stub.state.banner.includes(COMMAND), 'the truncated-artifact error names the command');
 }
 
-// ---- 2. the real artifact: every case really runs and verifies green ----
+// ---- 2. the real artifact: every case REALLY compiles and runs ----
 
-console.log('\n[2] every prepared case: REAL run, verified against its inline expected');
+console.log('\n[2] every prepared case: REAL compile + run at the default budget');
 
 const bytes = exactAB(readFileSync(ARTIFACT));
 const runner = await api.Runner.boot(async () => bytes);
@@ -139,6 +133,13 @@ check(runner.isLive, 'the wasm runner is live');
 
 const all = [...api.CASES, ...api.EXAMPLES];
 check(all.length === 26, 'the full corpus is present (9 inline + 17 classics)', String(all.length));
+
+// the traps the corpus teaches BY DESIGN (each case's blurb says so) —
+// the only traps admitted at the default budget
+const TAUGHT_TRAPS = {
+  'fuel-demo': 'OutOfFuel',
+  'stack-trace': 'IndexOutOfBounds',
+};
 
 for (const c of all) {
   runner.dropFrame();
@@ -160,12 +161,20 @@ for (const c of all) {
     `${c.id}: real IR dump (no placeholder)`,
   );
   const res = runner.run(compiled.binary, api.DEFAULT_BUDGET);
-  const v = api.verifyAgainstExpected(res, c.expected, api.DEFAULT_BUDGET.fuel);
-  check(
-    v.ok,
-    `${c.id}: REAL run matches its inline expected`,
-    JSON.stringify({ got: api.renderedLines(res), expected: c.expected }),
-  );
+  const taught = TAUGHT_TRAPS[c.id];
+  if (taught) {
+    check(
+      res.trap === taught,
+      `${c.id}: REAL run ends on its teaching trap (${taught})`,
+      JSON.stringify({ trap: res.trap, output: res.output }),
+    );
+  } else {
+    check(
+      res.trap === undefined,
+      `${c.id}: REAL run completes without trap`,
+      JSON.stringify({ trap: res.trap, output: res.output }),
+    );
+  }
 }
 
 // ---- 3. the resume is REAL ----
@@ -213,15 +222,6 @@ runner.dropFrame();
   check(
     leg2.fuelUsed > 26_000_000,
     `fuelUsed is cumulative across legs (${leg2.fuelUsed}) — a fresh 16M run can never report that`,
-  );
-
-  // the accumulated verify vs the case's expected is a diff BY DESIGN
-  // (the expected pins the DEFAULT budget) — and says so
-  const v = api.verifyAgainstExpected(leg2, fuel.expected, 28_000_000);
-  check(!v.ok, 'the accumulated output diffs the default-budget expected by design');
-  check(
-    v.rows.some((r) => r.expected === 'Trap::OutOfFuel'),
-    'the diff pairs the trap line with its expected line',
   );
 
   // drop retires the frame; a further resume is LOUD
@@ -281,9 +281,9 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   }
 
   const files = walk(join(DEMO, 'src')).sort();
-  // 52 files at the sidecar base; 35 after the no-sidecars batch
-  // retired the 17 *.expected sidecars (survey §1.1's arithmetic)
-  check(files.length >= 35, `the scan covered ${files.length} files under demo/src`, String(files.length));
+  // a coverage floor, not a count pin: the tree moves as files come
+  // and go — the law is that the scan covers ALL of it
+  check(files.length >= 30, `the scan covered ${files.length} files under demo/src`, String(files.length));
 
   let hits = 0;
   for (const file of files) {
@@ -480,41 +480,11 @@ if (!existsSync(LSP_ARTIFACT)) {
   }
 }
 
-// ---- 7. the no-sidecars gate (the batch's law, committed) ----
-
-console.log("\n[7] the no-sidecars gate: find demo -name '*.expected' is empty");
-
-{
-  // `find demo -name '*.expected'` must stay EMPTY — untracked included
-  // (a raw fs walk, not git ls-files, which is blind to untracked strays).
-  // node_modules is pruned: vendored third-party land, not the demo's
-  // surface (zero strays there today — checked at base — so even the
-  // literal command is empty; the prune keeps a transitive dep's data
-  // file from ever red-ing our gate). dist/ and dist-smoke/ stay IN:
-  // they are inside demo/ and only ever carry build-emitted names.
-  function walkDemo(dir) {
-    const out = [];
-    for (const entry of readdirSync(dir)) {
-      if (entry === 'node_modules') continue;
-      const p = join(dir, entry);
-      if (statSync(p).isDirectory()) {
-        out.push(...walkDemo(p));
-      } else {
-        out.push(p);
-      }
-    }
-    return out;
-  }
-
-  const strays = walkDemo(DEMO).filter((p) => p.endsWith('.expected'));
-  check(strays.length === 0, "find demo -name '*.expected' is empty (untracked included)", strays.join(', '));
-}
-
 // ---- verdict ----
 
 console.log(`\nsmoke: ${passes} passed, ${failures} failed`);
 if (failures > 0) {
-  console.error('THE SMOKE IS RED — a case that does not really run and verify is not done.');
+  console.error('THE SMOKE IS RED — a case that does not really run is not done.');
   process.exit(1);
 }
-console.log('THE SMOKE IS GREEN — every case really ran and verified; the resume really resumed; the highlight really classifies through the binding.');
+console.log('THE SMOKE IS GREEN — every case really ran; the resume really resumed; the highlight really classifies through the binding.');

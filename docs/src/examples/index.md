@@ -4,8 +4,8 @@ The repo ships two kinds of example material. The `examples/` directory
 holds **six runnable Cargo projects** (five console programs and one
 browser page) plus **one parse-only corpus example**. Alongside
 them, `demo/src/examples/` holds the **playground classics** — short,
-self-contained programs the web playground runs in the browser, with
-their expected outputs pinned by the same gates the repo runs in CI.
+self-contained programs the web playground runs in the browser, the
+same programs the repo's gates compile and run in CI.
 Each project has its own page in this chapter; the classics share
 [The playground corpus](playground-corpus.md).
 
@@ -18,7 +18,7 @@ Each project has its own page in this chapter; the classics share
 | [04 — Custom async](04-custom-async.md) | parse-only — no runnable harness | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits |
 | [05 — Todolist web](05-todolist-web.md) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | a full page app whose brain is a two-package rut project — ten DOM/timer crossings over web_sys on wasm32 |
 | [06 — GitHub viewer CLI](06-github-viewer-cli.md) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — an async rut brain over the std `http` lane; headers-then-stream downloads, fixture-lane tests |
-| [The playground corpus](playground-corpus.md) | `cd demo && npm run smoke` | the classics: runnable programs with inline expected outputs, compiled and run by two gates |
+| [The playground corpus](playground-corpus.md) | `cd demo && npm run smoke` | the classics: runnable programs, compiled and run by two gates |
 
 All Cargo commands run from the repository root. The runnable crates
 share one session pattern — compile the module, verify the binary,

@@ -1,6 +1,5 @@
 import { memo } from "react";
 import type { Budget } from "../wasm/rut-api";
-import type { VerifyResult } from "../verify";
 
 export const StatusBar = memo(function StatusBar(props: {
   running: boolean;
@@ -12,7 +11,6 @@ export const StatusBar = memo(function StatusBar(props: {
   fuelUsed: number;
   heapUsed: number;
   trap?: string;
-  verify?: VerifyResult | null;
 }): JSX.Element {
   return (
     <footer className="status-bar">
@@ -57,24 +55,6 @@ export const StatusBar = memo(function StatusBar(props: {
           }
         />
       </label>
-
-      {/* the verify chip (survey D2): every real run is diffed against
-          the case's inline expected; the chip names the fuel it
-          verified at — including the auto budget (the D-1 stance) */}
-      {props.verify && (
-        <span
-          className={"chip " + (props.verify.ok ? "chip-pass" : "chip-fail")}
-          title={
-            props.verify.ok
-              ? `the real run matched the expected exactly (at ${props.verify.fuelAtVerify.toLocaleString()} fuel)`
-              : `the real run differs from the expected — see the diff in the Output pane (at ${props.verify.fuelAtVerify.toLocaleString()} fuel)`
-          }
-        >
-          {props.verify.ok
-            ? `✓ matches expected @ ${(props.verify.fuelAtVerify / 1e6).toLocaleString()}M fuel`
-            : `✗ ${props.verify.differ} line${props.verify.differ === 1 ? "" : "s"} differ @ ${(props.verify.fuelAtVerify / 1e6).toLocaleString()}M fuel`}
-        </span>
-      )}
 
       <span className="stat">fuel used: {props.fuelUsed.toLocaleString()}</span>
       <span className="stat">heap: {fmtBytes(props.heapUsed)}</span>

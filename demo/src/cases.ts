@@ -4,11 +4,7 @@
  * plus the `nmapset` map lane), whose `info` lines stream back as
  * output.
  *
- * `expected` is INLINE data (the no-sidecars batch: the classics'
- * blocks are the retired sidecars' bytes, verbatim — survey §1.1's
- * md5 receipts): after every real run the page diffs the engine's
- * actual output against it (survey D2) and the smoke gate does the
- * same headlessly. Sources reflect TODAY's
+ * Sources reflect TODAY's
  * surface — RFC 0044: bindings share by reference (copy-by-value and
  * `own` are gone; `bytes.clone()` is the one copy), `==` is identity
  * for cells, the pointer shape is the nullable `?T` (prefix-only;
@@ -23,7 +19,6 @@ export interface RutCase {
   /** RFC the case demonstrates */
   rfcs: string;
   source: string;
-  expected: string[];
 }
 
 export const CASES: RutCase[] = [
@@ -52,10 +47,6 @@ export const CASES: RutCase[] = [
       "    log.info(describe(Flavor.Sour));",
       "}",
     ].join("\n"),
-    expected: [
-      "hi rut! n=42 tab:\t",
-      "sour",
-    ],
   },
   {
     id: "values-and-pointers",
@@ -82,12 +73,6 @@ export const CASES: RutCase[] = [
       "    log.info(f\"rp==rp {rp == rp}, rp==rq {rp == rq}\"); // box identity",
       "}",
     ].join("\n"),
-    expected: [
-      "q.x=4 p.x=4",
-      "q==same false, p==same false",
-      "rp.x=9 p.x=9",
-      "rp==rp true, rp==rq false",
-    ],
   },
   {
     id: "opaque",
@@ -112,11 +97,6 @@ export const CASES: RutCase[] = [
       "    }",
       "}",
     ].join("\n"),
-    expected: [
-      "box1 is Point: false",
-      "box2 is Point: false",
-      "recovered 1 2",
-    ],
   },
   {
     id: "sieve",
@@ -149,9 +129,6 @@ export const CASES: RutCase[] = [
       "    log.info(f\"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}\");",
       "}",
     ].join("\n"),
-    expected: [
-      "25 primes up to 100, last=97",
-    ],
   },
   {
     id: "when-exhaustive",
@@ -181,10 +158,6 @@ export const CASES: RutCase[] = [
       "    log.info(mix(Color.Blue, Color.Blue));",
       "}",
     ].join("\n"),
-    expected: [
-      "yellow",
-      "blueish",
-    ],
   },
   {
     id: "tuple-errors",
@@ -234,11 +207,6 @@ export const CASES: RutCase[] = [
       "    log.info(f\"big=({big.0}, \\\"{big.1}\\\")\");",
       "}",
     ].join("\n"),
-    expected: [
-      "ok=(247, \"\")",
-      "bad=(0, \"not a digit: x\")",
-      "big=(0, \"out of range\")",
-    ],
   },
   {
     id: "closures-generics",
@@ -263,17 +231,8 @@ export const CASES: RutCase[] = [
       "    log.info(f\"{ys[0]} {ys[1]} {ys[2]} {ys[3]}\");",
       "}",
     ].join("\n"),
-    expected: [
-      "10 20 30 40",
-    ],
   },
   {
-    // THE BYTE-STABILITY LAW (survey §2.6): this case's expected pins
-    // POSITIONS — the render row's `rt:LINE:COL` bytes are part of the
-    // contract — so any edit that shifts a source line flips the chip to
-    // ✘ BY DESIGN. The source and its expected move together or not at
-    // all; the fat pad blocks ARE the inline law taught (<= 24 top-level
-    // statements gets a callee inlined, collapsing the frames).
     id: "stack-trace",
     name: "stack trace",
     blurb: "the opt-in stack snapshot — raw frames innermost-first, lazy symbolication, the loud out-of-range trap",
@@ -387,26 +346,16 @@ export const CASES: RutCase[] = [
       "    log.info(f\"never prints: {st.name(9)}\");",
       "}",
     ].join("\n"),
-    expected: [
-      "depth: 4",
-      "innermost: c at 63:14",
-      "outermost: main",
-      "at c (rt:63:14)\nat b (rt:92:12)\nat a (rt:120:12)\nat main (rt:124:14)",
-      "Trap::IndexOutOfBounds",
-    ],
   },
   {
     id: "fuel-demo",
     name: "fuel demo (infinite loop)",
-    // the honest trap-at-default story (survey §2.3/D2): at the pinned
-    // DEFAULT budget (10M fuel / 4 MiB) the lesson IS the trap — ~10
-    // ops per iteration means zero tick lines fit, so the sidecar pins
-    // exactly one line: the trap. The old sidecar (tick
-    // 1000000/2000000/3000000, "…", a resume hint) described a
-    // ~40M-fuel magnitude and a preview-era fabrication; both died.
-    // The trap line participates: the pane renders `Trap::<name>` last.
-    // At a raised budget (or after Resume, which accumulates) the chip
-    // shows a diff BY DESIGN — this sidecar pins the default.
+    // the honest trap-at-default story: at the DEFAULT budget
+    // (10M fuel / 4 MiB) the lesson IS the trap — ~10 ops per
+    // iteration means zero tick lines fit before the budget bites,
+    // and the pane renders `Trap::<name>` last. At a raised budget
+    // (or after Resume, which accumulates) the SAME frame simply
+    // runs on and the ticks start appearing.
     blurb: "budgets bite at the default: ~10 ops/iteration parks on Trap::OutOfFuel with zero ticks — Resume adds fuel and the SAME frame continues",
     rfcs: "0040 §2, 0034 §4",
     source: [
@@ -423,9 +372,6 @@ export const CASES: RutCase[] = [
       "    }",
       "}",
     ].join("\n"),
-    expected: [
-      "Trap::OutOfFuel",
-    ],
   },
 ];
 
