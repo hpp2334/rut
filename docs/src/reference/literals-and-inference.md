@@ -11,11 +11,21 @@ default is also a ceiling**: an unsuffixed literal adapts to the
 expected type only while it fits that default.
 
 ```rut
-let a = 10;                // i32 (default)
-let b = 10u8;              // u8 via suffix
-let c: u64 = 10;           // u64 via annotation — fits the default
-let big = 18446744073709551615u64;  // past the i32 default: suffix REQUIRED
-// let bad = 13503953896175478587;  // ERROR — exceeds i32, add `u64`
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let a = 10;                // i32 (default)
+    let b = 10u8;              // u8 via suffix
+    let c: u64 = 10;           // u64 via annotation — fits the default
+    let big = 18446744073709551615u64;  // past the i32 default: suffix REQUIRED
+    // let bad = 13503953896175478587;  // ERROR — exceeds i32, add `u64`
+    log.info(f"{a} {b} {c} {big}");
+}
+```
+
+```text
+10 10 10 18446744073709551615
 ```
 
 Past the ceiling the literal must declare itself with a suffix, so a
@@ -36,8 +46,20 @@ Conversions are casts, truncating like C/Rust:
 - a conversion never traps (arithmetic still does).
 
 ```rut
-let cast = 300 as u8;      // 44
-sqrt((x * x + y * y) as f64)
+use calc::{ Math };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let cast = 300 as u8;      // 44
+    let x = 3;
+    let y = 4;
+    log.info(f"{cast} {Math.sqrt((x * x + y * y) as f64)}");
+}
+```
+
+```text
+44 5
 ```
 
 `as` binds tighter than `*`, is left-associative (`x as u32 as u64`
@@ -60,9 +82,22 @@ Tuples are first-class values: type `(T0, T1, ..)`, value `(a, b, ..)`,
 numeric fields `.0` / `.1` / .., and destructuring:
 
 ```rut
-let pair = (1, "two");         // (i32, str)
-let (n, s) = pair;
-fn divmod(a: i32, b: i32) -> (i32, i32);
+use ink::{ Logger };
+
+fn divmod(a: i32, b: i32) -> (i32, i32) {
+    return (a / b, a % b);
+}
+
+pub fn main() {
+    let log = Logger.new("t");
+    let pair = (1, "two");         // (i32, str)
+    let (n, s) = pair;
+    log.info(f"{n} {s} {divmod(7, 2).0}");
+}
+```
+
+```text
+1 two 3
 ```
 
 The `(value, ok)` / `(T, err)` pair is the language's answer channel —

@@ -6,6 +6,8 @@ construction gated behind class methods, no inheritance.
 ## Declaration and construction
 
 ```rut
+use ink::{ Logger };
+
 class Rect {
     w: f32;
     h: f32;
@@ -25,6 +27,16 @@ impl Rect {
 
     pub fn area(self) -> f32 { return self.w * self.h; }
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let r = Rect.from_square(3);
+    log.info(f"area={r.area()}");
+}
+```
+
+```text
+area=9
 ```
 
 - **Classes construct through their own class methods — nothing else is

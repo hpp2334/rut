@@ -6,9 +6,20 @@ with admission-only bounds.
 ## Functions
 
 ```rut
+use ink::{ Logger };
+
 fn add(a: i32, b: i32) -> i32 {
     return a + b;
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    log.info(f"{add(2, 3)}");
+}
+```
+
+```text
+5
 ```
 
 - Parameters are `name: Type`; a mutable parameter declares
@@ -31,12 +42,21 @@ The closure spelling is an **anonymous fn** — block bodies, no arrow
 form:
 
 ```rut
-let add = fn (a: i32, b: i32) -> i32 { return a + b; };
-let area_of = fn (r: f32) -> f32 {
-    let sq = r * r;
-    return sq * 3.14159265f32;
-};
-log.info(f"add={add(1, 2)} area={area_of(1)}");
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let add = fn (a: i32, b: i32) -> i32 { return a + b; };
+    let area_of = fn (r: f32) -> f32 {
+        let sq = r * r;
+        return sq * 3.14159265f32;
+    };
+    log.info(f"add={add(1, 2)} area={area_of(1)}");
+}
+```
+
+```text
+add=3 area=3.1415927
 ```
 
 - An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of
@@ -51,13 +71,23 @@ log.info(f"add={add(1, 2)} area={area_of(1)}");
 ## Generics
 
 ```rut
+use ink::{ Logger };
+
 fn first<T>(xs: [T], fallback: T) -> T {
     if (xs.len() == 0) { return fallback; }
     return xs[0];
 }
 
-let head = first([10, 20], -1);      // first<i32>   — monomorphized
-let name = first(["a", "b"], "?");   // first<str>   — separate instance
+pub fn main() {
+    let log = Logger.new("t");
+    let head = first([10, 20], -1);      // first<i32>   — monomorphized
+    let name = first(["a", "b"], "?");   // first<str>   — separate instance
+    log.info(f"{head} {name}");
+}
+```
+
+```text
+10 a
 ```
 
 - **Generics monomorphize at compile time**: each instantiation emits

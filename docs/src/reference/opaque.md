@@ -18,13 +18,27 @@ it. Its entire API:
 | `x is opaque` | the ordinary concrete test for the box type itself |
 
 ```rut
-let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name
-let p = opaque.downcast<Point>(box1);      // ?Point — the nullable
-when (p != nil) {
-    true -> { log.info(f"point {p.x} {p.y}"); },
-    else  -> { log.info("point: nil"); },
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+enum Flavor { Sour, Sweet }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name
+    let p = opaque.downcast<Point>(box1);      // ?Point — the nullable
+    when (p != nil) {
+        true -> { log.info(f"point {p.x} {p.y}"); },
+        else  -> { log.info("point: nil"); },
+    }
+    let wrong = opaque.downcast<i32>(opaque(Flavor.Sour));  // nil, no trap
+    log.info(f"wrong == nil: {wrong == nil}");
 }
-let wrong = opaque.downcast<i32>(opaque(Flavor.Sour));  // nil, no trap
+```
+
+```text
+point 1 2
+wrong == nil: true
 ```
 
 ## The laws
@@ -38,9 +52,19 @@ let wrong = opaque.downcast<i32>(opaque(Flavor.Sour));  // nil, no trap
   unobservable:
 
   ```rut
-  let mut n = 5;
-  let b = opaque(n);    // a prim payload COPIES the bits
-  n = 9;                // ...so the source moving stays out
+  use ink::{ Logger };
+
+  pub fn main() {
+      let log = Logger.new("t");
+      let mut n = 5;
+      let b = opaque(n);    // a prim payload COPIES the bits
+      n = 9;                // ...so the source moving stays out
+      log.info(f"{opaque.downcast<i32>(b)} vs {n}");
+  }
+  ```
+
+  ```text
+  5 vs 9
   ```
 
 - **A match is the box's own inner cell.** The recovered `?T` shares the
@@ -60,9 +84,17 @@ let wrong = opaque.downcast<i32>(opaque(Flavor.Sour));  // nil, no trap
   box type.
 
   ```rut
-  let b = opaque("hello");
-  b is str;                        // false — `is` names the box
-  opaque.downcast<str>(b) != nil;  // true — downcast recovers
+  use ink::{ Logger };
+
+  pub fn main() {
+      let log = Logger.new("t");
+      let b = opaque("hello");
+      log.info(f"{b is str} {opaque.downcast<str>(b) != nil}");
+  }
+  ```
+
+  ```text
+  false true
   ```
 
 - **Boxes are never equal unless identical**: `opaque(v) == opaque(v)`
@@ -77,8 +109,21 @@ every type position trivially — `Vec<opaque>`, `[opaque]`, fields,
 returns, parameters.
 
 ```rut
-let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two")];
-let vec: Vec<opaque> = Vec.from([opaque(5)]);
+use ink::{ Logger };
+use pouch::{ Vec };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two")];
+    let vec: Vec<opaque> = Vec.from([opaque(5)]);
+    log.info(f"{boxes.len()} {vec.len()}");
+}
+```
+
+```text
+2 1
 ```
 
 - The rut-side box is one small cell: the erased value rides inline in

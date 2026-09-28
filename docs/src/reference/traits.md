@@ -46,10 +46,28 @@ Type bodies are fields only; methods live in impl blocks.
 | fields / empty body | never / legal | never / legal (empty = the opt-in marker) |
 
 ```rut
+use ink::{ Logger };
+
+trait Shape { fn area(self) -> f64; }
+trait Serializable {}
+
+struct Point { x: i32; }
+struct User { name: str; }
+
 impl Shape for Point {
     fn area(self) -> f64 { return self.x as f64; }
 }
 impl Serializable for User {}      // empty trait impl = the opt-in marker
+
+pub fn main() {
+    let log = Logger.new("t");
+    let p = Point { x: 5 };
+    log.info(f"{p.area()}");
+}
+```
+
+```text
+5
 ```
 
 - **Satisfaction is nominal.** A type that declares every member by
@@ -151,6 +169,16 @@ trait name/instantiation.
 A type is iterable when it registers `impl Iterator<E> for T`:
 
 ```rut
+use ink::{ Logger };
+
+class CountUp {
+    n: i32;
+}
+
+impl CountUp {
+    pub fn new(n: i32) -> Self { return Self { n: n }; }
+}
+
 impl Iterator<i32> for CountUp {
     fn __iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
@@ -158,6 +186,19 @@ impl Iterator<i32> for CountUp {
         }
     }
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    for (let v of CountUp.new(3)) {
+        log.info(f"tick {v}");
+    }
+}
+```
+
+```text
+tick 1
+tick 2
+tick 3
 ```
 
 `for (v of it) { body }` desugars to `it.__iterate(emit)` with a

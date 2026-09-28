@@ -40,6 +40,8 @@ matching arm's body produces its value. No fallthrough; exactly one arm
 runs.
 
 ```rut
+use ink::{ Logger };
+
 fn describe(n: i32) -> str {
     return when (n) {
         0         -> "zero",
@@ -47,6 +49,15 @@ fn describe(n: i32) -> str {
         else      -> "big",     // non-enum scrutinee: else REQUIRED
     };
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    log.info(f"{describe(0)} {describe(2)} {describe(10)}");
+}
+```
+
+```text
+zero small big
 ```
 
 ### Patterns
@@ -79,18 +90,45 @@ wildcards only.
 - `when` literal patterns match compile-time values, never runtime `==`.
 
 ```rut
-when (l) {
-    Light.Green  -> { go(); },
-    Light.Yellow -> { brake(); },
-    Light.Red    -> { stop(); },   // every member: else optional
+use ink::{ Logger };
+
+enum Light { Green, Yellow, Red }
+
+fn go() { let log = Logger.new("t"); log.info("go"); }
+fn brake() { let log = Logger.new("t"); log.info("brake"); }
+fn stop() { let log = Logger.new("t"); log.info("stop"); }
+
+pub fn main() {
+    let l = Light.Yellow;
+    when (l) {
+        Light.Green  -> { go(); },
+        Light.Yellow -> { brake(); },
+        Light.Red    -> { stop(); },   // every member: else optional
+    }
 }
+```
+
+```text
+brake
 ```
 
 A `when` is also the idiomatic nullable guard, together with `!= nil`:
 
 ```rut
-when (p != nil) {
-    true -> { log.info(f"{p.x}"); },
-    else -> { /* absent */ },
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let p: ?Point = Point { x: 7, y: 0 };
+    when (p != nil) {
+        true -> { log.info(f"{p.x}"); },
+        else -> { /* absent */ },
+    }
 }
+```
+
+```text
+7
 ```

@@ -37,7 +37,7 @@ so they are fuzzable and reusable in an LSP or formatter with no VM present.
   each (`+=`, `<<=`, `&&=`, …), so there is no munch ambiguity.
 - Numeric literals: `0x`/`0b`/`0o`, `_` separators, and per-width suffixes
   (`u8..u64`, `i8..i64`, `f32`/`f64`). Unsuffixed integers default to
-  `i32`, unsuffixed floats to `f64`.
+  `i32`, unsuffixed floats to `f32`.
 - Comments are dropped (doc comments are re-attached by the formatter's
   gap-scan, below).
 

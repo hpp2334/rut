@@ -18,18 +18,29 @@ one consume law (`await` **or** launch — exactly one), one pender
 ## `async fn` and `await`
 
 ```rut
+use ink::{ Logger };
+use async_host::{ launch_future, sleep };
+
 async fn countdown(cx: RunContext, n: u32) -> u32 {
+    let log = Logger.new("count");
     let mut i = n;
     while (i > 0) {
         await sleep(1000);            // the ONLY suspension point
         i -= 1;
+        log.info(f"tick {i}");
     }
     return i;
 }
 
-fn main() -> nil {
+pub fn main() {
     launch_future(countdown(3));      // trigger; receipt ignored
 }
+```
+
+```text
+tick 2
+tick 1
+tick 0
 ```
 
 Rules:

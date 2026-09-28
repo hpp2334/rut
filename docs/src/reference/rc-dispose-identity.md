@@ -52,8 +52,21 @@ cannot carry destructors — if you need one, write a class whose handle
 demotes any handle to a non-keeping reference:
 
 ```rut
-let w = Weak(tile);            // does NOT keep the cell alive
-let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
+use ink::{ Logger };
+
+struct Tile { v: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let tile = Tile { v: 7 };
+    let w = Weak(tile);            // does NOT keep the cell alive
+    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
+    log.info(f"{got.v}");
+}
+```
+
+```text
+7
 ```
 
 The referent's death nulls every weak box before any user code runs.

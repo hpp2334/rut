@@ -50,12 +50,38 @@ itself — and runs when that cell's count reaches zero:
 
 ```rut
 use core::{ on_drop };
+use ink::{ Logger };
+
+struct AuditLog { n: i32; }
+
+fn load() -> ?bytes {
+    return bytes.from([1, 2, 3, 4]);
+}
+
+fn audit(n: i32) {
+    let log = Logger.new("audit");
+    log.info(f"released {n} octets");
+}
+
+fn use_buf(buf: ?bytes) {
+    let log = Logger.new("work");
+    log.info(f"working with {buf.len()} octets");
+}
 
 fn work(log: ?AuditLog) {
     let buf: ?bytes = load();
     on_drop(buf, fn (b: ?bytes) { audit(b.len()); });  // runs at rc 0
     use_buf(buf);
 }
+
+pub fn main() {
+    work(nil);
+}
+```
+
+```text
+working with 4 octets
+released 4 octets
 ```
 
 Laws:

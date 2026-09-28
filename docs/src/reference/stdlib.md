@@ -134,8 +134,14 @@ no-op — a script cannot accidentally spam an embedded host's stdout.
 ```rut
 use ink::{ Logger };
 
-let log = Logger.new("app");
-log.info(f"started");
+pub fn main() {
+    let log = Logger.new("app");
+    log.info(f"started");
+}
+```
+
+```text
+started
 ```
 
 | method | level passed to `rt` |
@@ -191,10 +197,21 @@ the same key as its content, with no key cell minted on a probe
 
 ```rut
 use calc::{ Math };
+use ink::{ Logger };
 
-let d = Math.sqrt(x * x + y * y);
-let a = Math.abs(x);
-let hf = Math.sqrt_f(2.0);            // f32 twin — the width is in the name
+pub fn main() {
+    let log = Logger.new("t");
+    let x = 3.0f64;
+    let y = 4.0f64;
+    let d = Math.sqrt(x * x + y * y);
+    let a = Math.abs(x);
+    let hf = Math.sqrt_f(2.0);            // f32 twin — the width is in the name
+    log.info(f"{d} {a} {hf}");
+}
+```
+
+```text
+5 3 1.4142135
 ```
 
 Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`,
@@ -249,12 +266,22 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
 ### `strbuild` — the builder
 
 ```rut
+use ink::{ Logger };
 use strbuild::{ StringBuilder };
 
-let mut b = StringBuilder.with_cap(1024);   // octet hint
-b.append(f"{k}=");
-b.append_code(0x21);
-let s = b.build();                          // the ONE materialization
+pub fn main() {
+    let log = Logger.new("t");
+    let k = "name";
+    let mut b = StringBuilder.with_cap(1024);   // octet hint
+    b.append(f"{k}=");
+    b.append_code(0x21);
+    let s = b.build();                          // the ONE materialization
+    log.info(s);
+}
+```
+
+```text
+name=!
 ```
 
 | member | meaning |

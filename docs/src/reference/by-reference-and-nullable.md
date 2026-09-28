@@ -16,9 +16,21 @@ every other page assumes them.
   them.
 
 ```rut
-let mut p = Point { x: 1, y: 2 };
-let q = p;              // SHARE: one cell, two names — no copy
-p.x = 4;                // q.x is 4 now
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let mut p = Point { x: 1, y: 2 };
+    let q = p;              // SHARE: one cell, two names — no copy
+    p.x = 4;                // q.x is 4 now
+    log.info(f"{q.x}");
+}
+```
+
+```text
+4
 ```
 
 - Writing is gated by the **`mut`-binding law**, never by the sharing:
@@ -104,8 +116,19 @@ other type shares on binding, and a divergent value of any other type
 is unreachable — build a new one instead.
 
 ```rut
-let alias = header;          // shares: one buffer, two names
-let diverged = header.clone();   // a fresh buffer, same octets
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let header = bytes.from([1, 2, 3]);
+    let alias = header;              // shares: one buffer, two names
+    let diverged = header.clone();   // a fresh buffer, same octets
+    log.info(f"{alias == header} {diverged == header}");
+}
+```
+
+```text
+true true
 ```
 
 ## Removed spellings

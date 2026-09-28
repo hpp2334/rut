@@ -18,7 +18,19 @@ is VM data, not a script value.
 ## `type_id<T>()`
 
 ```rut
-let TID_POINT: u32 = type_id<Point>();
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let TID_POINT: u32 = type_id<Point>();
+    log.info(f"{TID_POINT} eq={type_id<Point>() == TID_POINT}");
+}
+```
+
+```text
+23 eq=true
 ```
 
 - `type_id<T>() -> u32` — the identity of the **instantiated** type:

@@ -11,8 +11,20 @@ non-growable**. The type is grammar, resolved directly — no `use` names
 it.
 
 ```rut
-let xs: [i32] = [1, 2, 3];   // the literal allocates the cell
-let ys: [?Point] = [nil; 4]; // the repeat: a VALUE and a count
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let xs: [i32] = [1, 2, 3];   // the literal allocates the cell
+    let ys: [?Point] = [nil; 4]; // the repeat: a VALUE and a count
+    log.info(f"{xs.len()} {ys.len()}");
+}
+```
+
+```text
+3 4
 ```
 
 - Construction is the **repeat expression** `[v; n]` — a value and a
@@ -110,8 +122,21 @@ that crosses the host boundary (see
 referent — a weak never keeps anything alive.
 
 ```rut
-let w = Weak(tile);            // call-of-the-type-name construction
-let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
+use ink::{ Logger };
+
+struct Tile { v: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let tile = Tile { v: 7 };
+    let w = Weak(tile);            // call-of-the-type-name construction
+    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
+    log.info(f"{got.v}");
+}
+```
+
+```text
+7
 ```
 
 - `Weak(v)` traps on a `nil` `v`; `T` must be a reference type

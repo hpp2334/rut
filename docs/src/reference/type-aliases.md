@@ -12,12 +12,23 @@ typealias := 'pub'? ('(' vis ')')? 'type' Ident '=' Type ';'
 ```
 
 ```rut
+use ink::{ Logger };
+
 type Meters = i64;
 type Km = Meters;             // chains expand: Km is Meters is i64
 type Row = [i32];
 
 let trip: Km = 1500;          // Km is Meters is i64 — all one type
-let plain: Meters = trip;     // no conversion: the alias IS the target
+
+pub fn main() {
+    let log = Logger.new("t");
+    let plain: Meters = trip;     // no conversion: the alias IS the target
+    log.info(f"{trip} {plain}");
+}
+```
+
+```text
+1500 1500
 ```
 
 - **Transparency by construction**: `X` resolves to the target's type
@@ -70,14 +81,29 @@ gparam := Ident ('requires' bound)?
 ```
 
 ```rut
+use ink::{ Logger };
+
 trait Labeled { fn label(self) -> str; }
+struct Ridge { depth: i32; }
+struct Trench { depth: i32; }
+
+impl Labeled for Ridge { fn label(self) -> str { return "ridge"; } }
 
 fn name<T requires Labeled>(x: T) -> str {
     let w: Labeled = x;      // the widening compiles BECAUSE the bound holds
     return w.label();
 }
 
-fn kind<T requires Ridge | Trench>(x: T) -> str { .. }   // a union bound
+fn kind<T requires Ridge | Trench>(x: T) -> str { return "geo"; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    log.info(f"{name(Ridge { depth: 3 })} {kind(Trench { depth: 1 })}");
+}
+```
+
+```text
+ridge geo
 ```
 
 - Members may be concrete type names (satisfied by exact type identity

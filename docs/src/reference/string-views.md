@@ -8,8 +8,18 @@ view can never observe mutation, so no pointer spelling is needed.
 ## Surface
 
 ```rut
-let s = "hello world";
-let w = s.slice(6, 11);        // "world" — no copy
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let s = "hello world";
+    let w = s.slice(6, 11);        // "world" — no copy
+    log.info(w);
+}
+```
+
+```text
+world
 ```
 
 - `from`/`to` are **codepoint indices**, `from <= to <= s.len()`;
@@ -27,10 +37,17 @@ let w = s.slice(6, 11);        // "world" — no copy
   one (the append fast path, the host crossing).
 
 ```rut
-let accented = "héllo!";
-accented.len();                  // 6 codepoints
-accented.encode().len();         // 7 octets
-accented.slice(1, 2);            // "é"
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("t");
+    let accented = "héllo!";
+    log.info(f"{accented.len()} {accented.encode().len()} {accented.slice(1, 2)}");
+}
+```
+
+```text
+6 7 é
 ```
 
 ## The view cell

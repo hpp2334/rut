@@ -29,19 +29,34 @@ keeps anything alive, and a path through a `Weak` does not close a
 strong cycle.
 
 ```rut
+use ink::{ Logger };
+
 class Node {
     value: u32;
     next: ?Node;          // strong — keeps the tail alive
 }
 
-fn demo() {
-    let n = Node { value: 1, next: nil };
+impl Node {
+    pub fn new(value: u32) -> Self { return Self { value: value, next: nil }; }
+}
+
+fn use_node(n: Node) {
+    let log = Logger.new("t");
+    log.info(f"node {n.value}");
+}
+
+pub fn main() {
+    let n = Node.new(1);
     let w = Weak(n);            // Weak<Node>; T infers from n
     let b = w.upgrade();        // ?Node — a live handle
     if (b != nil) {
         use_node(b);
     }
 }
+```
+
+```text
+node 1
 ```
 
 ### Construction — `Weak(v)`
@@ -59,8 +74,22 @@ fn demo() {
   Bind the value first:
 
   ```rut
-  let v = make();
-  let w = Weak(v);      // watches the binding v — lives as long as v does
+  use ink::{ Logger };
+
+  struct Payload { n: i32; }
+
+  fn make() -> Payload { return Payload { n: 1 }; }
+
+  pub fn main() {
+      let log = Logger.new("t");
+      let v = make();
+      let w = Weak(v);      // watches the binding v — lives as long as v does
+      log.info(f"{w.upgrade() != nil}");
+  }
+  ```
+
+  ```text
+  true
   ```
 
 - Two `Weak(v)` of one `v` are distinct boxes; `==` on weak boxes is

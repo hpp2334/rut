@@ -13,8 +13,19 @@ member := Ident ('=' int)?
 ```
 
 ```rut
+use ink::{ Logger };
+
 enum Color { Red, Green, Blue }              // 0, 1, 2
 enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4
+
+pub fn main() {
+    let log = Logger.new("t");
+    log.info(f"{Color.Blue} {Direction.Right}");
+}
+```
+
+```text
+Blue Right
 ```
 
 - An enum is a distinct named type over fixed-width integer constants.
@@ -28,8 +39,19 @@ enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4
 Members are named through the enum and compare as equal singletons:
 
 ```rut
-let l = Light.Yellow;
-l == Light.Yellow;   // true — members are immortal singleton cells
+use ink::{ Logger };
+
+enum Light { Red, Yellow, Green }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let l = Light.Yellow;
+    log.info(f"{l == Light.Yellow}");   // true — members are immortal singleton cells
+}
+```
+
+```text
+true
 ```
 
 - An enum value renders as its member name in format strings:
@@ -43,11 +65,26 @@ l == Light.Yellow;   // true — members are immortal singleton cells
 a compile error. See [Control flow and when](control-flow.md).
 
 ```rut
-when (l) {
-    Light.Green  -> { go(); },
-    Light.Yellow -> { brake(); },
-    Light.Red    -> { stop(); },   // all members: no else needed
+use ink::{ Logger };
+
+enum Light { Green, Yellow, Red }
+
+fn go() { let log = Logger.new("t"); log.info("go"); }
+fn brake() { let log = Logger.new("t"); log.info("brake"); }
+fn stop() { let log = Logger.new("t"); log.info("stop"); }
+
+pub fn main() {
+    let l = Light.Yellow;
+    when (l) {
+        Light.Green  -> { go(); },
+        Light.Yellow -> { brake(); },
+        Light.Red    -> { stop(); },   // all members: no else needed
+    }
 }
+```
+
+```text
+brake
 ```
 
 ## Boundaries

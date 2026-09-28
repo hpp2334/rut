@@ -6,6 +6,8 @@ literal, sharing its cell like every non-primitive.
 ## Declaration
 
 ```rut
+use ink::{ Logger };
+
 struct Point {
     x: f32;
     y: f32;
@@ -15,6 +17,16 @@ struct Style {
     color: u32 = 0xff00ff;   // field initializer: literals may omit it
     width: f32 = 1;
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let s = Style {};
+    log.info(f"{s.color} {s.width}");
+}
+```
+
+```text
+16711935 1
 ```
 
 The keyword is `struct`. The removed spelling `dataclass` is a reserved
@@ -28,9 +40,21 @@ assignment, argument passing, and returning share the cell, and a
 mutation through any alias is visible through all of them.
 
 ```rut
-let mut p = Point { x: 1, y: 2 };
-let q = p;                       // SHARE: q and p name one cell (O(1))
-p.x = 4;                         // q.x is 4 now — sharing is the law
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let mut p = Point { x: 1, y: 2 };
+    let q = p;                       // SHARE: q and p name one cell (O(1))
+    p.x = 4;                         // q.x is 4 now — sharing is the law
+    log.info(f"{q.x}");
+}
+```
+
+```text
+4
 ```
 
 Writing is gated by the `mut`-binding law (see
@@ -41,9 +65,23 @@ the caller's point; `fn length(pt: Point) -> f64` promises not to, and
 returns a fresh record instead:
 
 ```rut
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+
 fn nudged(pt: Point) -> Point {     // builds a NEW record
     return Point { x: pt.x + 1, y: pt.y };
 }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let p2 = nudged(Point { x: 1, y: 2 });
+    log.info(f"{p2.x} {p2.y}");
+}
+```
+
+```text
+2 2
 ```
 
 `==` on two struct values is a **cell-identity test** — `q == p` is
@@ -65,8 +103,23 @@ everywhere — function bodies and module-level `let` initializers alike
   fields is legal.
 
 ```rut
-let s = Style {};                     // zero-value defaults fill the fields
-let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32; }
+struct Style { color: u32 = 0xff00ff; width: f32 = 1; }
+struct Rect { min: Point; max: Point; }
+
+pub fn main() {
+    let log = Logger.new("t");
+    let q = Point { x: 9, y: 9 };
+    let s = Style {};                     // zero-value defaults fill the fields
+    let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell
+    log.info(f"{s.color} {r.max.x}");
+}
+```
+
+```text
+16711935 9
 ```
 
 ## All fields public, always

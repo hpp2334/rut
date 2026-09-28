@@ -32,6 +32,16 @@ as executable bodies in `.rut`.
 ```rut
 use pouch::{ Vec };
 use ink::Logger;
+
+pub fn main() {
+    let log = Logger.new("uses");
+    let v = Vec<i32>.new();
+    log.info(f"{v.len()}");
+}
+```
+
+```text
+0
 ```
 
 The package is **one bare identifier**; the names are one or more
