@@ -22,9 +22,20 @@ no methods, no computed members — where another language would use a
 union of literal strings, rut uses an enum:
 
 ```rut
+use ink::{ Logger };
+
 enum Light { Green, Yellow, Red }
 
 enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4
+
+pub fn main() {
+    let log = Logger.new("enums");
+    log.info(f"{Light.Green} {Direction.Left} {Direction.Right}");
+}
+```
+
+```text
+Green Left Right
 ```
 
 Members are the enum's values and are spelled qualified:
@@ -37,11 +48,12 @@ their member name in format strings.
 
 ## Structs — open records
 
-Declare with `struct`, construct with a literal — anywhere, including
-module-level constants and nested inside other literals. There is no
-`new`:
+Declare with `struct`, construct with a literal — anywhere in a
+function body, nested inside other literals. There is no `new`:
 
 ```rut
+use ink::{ Logger };
+
 struct Point {
     x: f32;
     y: f32;
@@ -57,9 +69,17 @@ struct Style {
     width: f32 = 1;
 }
 
-let p = Point { x: 1, y: 2 };                    // every field, by name
-let s = Style {};                                // defaults fill the rest
-let r = Rect { min: Point { x: 0, y: 0 }, max: p };
+pub fn main() {
+    let log = Logger.new("structs");
+    let p = Point { x: 1, y: 2 };                    // every field, by name
+    let s = Style {};                                // defaults fill the rest
+    let r = Rect { min: Point { x: 0, y: 0 }, max: p };
+    log.info(f"r.max.x={r.max.x} width={s.width}");
+}
+```
+
+```text
+r.max.x=1 width=1
 ```
 
 All fields are public, always — member visibility in a struct is a
@@ -71,9 +91,21 @@ through any alias is visible through all of them. Writing needs a
 `mut` binding or `mut` parameter:
 
 ```rut
-let mut p = Point { x: 1, y: 2 };
-let q = p;              // q and p name ONE cell
-p.x = 4;                // q.x is 4 now
+use ink::{ Logger };
+
+struct Point { x: f32; y: f32 }
+
+pub fn main() {
+    let log = Logger.new("sharing");
+    let mut p = Point { x: 1, y: 2 };
+    let q = p;              // q and p name ONE cell
+    p.x = 4;                // q.x is 4 now
+    log.info(f"q.x={q.x} same cell: {q == p}");
+}
+```
+
+```text
+q.x=4 same cell: true
 ```
 
 `==` on struct values is **cell identity** — `q == p` is true (one
@@ -84,6 +116,8 @@ Recursive shapes are legal — a record may name itself through a
 nullable field, because `?Node` is one word:
 
 ```rut
+use ink::{ Logger };
+
 struct Node {
     value: i32;
     left: ?Node;
@@ -96,6 +130,20 @@ fn count(n: ?Node) -> i32 {
     if (n.right != nil) { c += count(n.right); }
     return c;
 }
+
+pub fn main() {
+    let log = Logger.new("nodes");
+    let n = Node {
+        value: 1,
+        left: Node { value: 2, left: nil, right: nil },
+        right: nil,
+    };
+    log.info(f"count={count(n)}");
+}
+```
+
+```text
+count=2
 ```
 
 ## Classes — sealed records
@@ -107,6 +155,8 @@ outside literal — the only way to build a class value from outside is
 to call a class method that chooses to.
 
 ```rut
+use ink::{ Logger };
+
 class Counter {
     n: i32 = 0;             // module-private — the class's business
 }
@@ -123,10 +173,17 @@ impl Counter {
     pub fn count(self) -> i32 { return self.n; }
 }
 
-let c = Counter.new();
-c.press();
-c.press();
-c.count();      // 2
+pub fn main() {
+    let log = Logger.new("counter");
+    let c = Counter.new();
+    c.press();
+    c.press();
+    log.info(f"count={c.count()}");      // 2
+}
+```
+
+```text
+count=2
 ```
 
 The pieces:
@@ -144,6 +201,8 @@ The pieces:
   function — it can check arguments and refuse:
 
 ```rut
+use ink::{ Logger };
+
 class Rect {
     w: f32;
     h: f32;
@@ -163,6 +222,17 @@ impl Rect {
 
     pub fn area(self) -> f32 { return self.w * self.h; }
 }
+
+pub fn main() {
+    let log = Logger.new("rect");
+    let r = Rect.new(3, 4);
+    let sq = Rect.from_square(2);
+    log.info(f"area={r.area()} square={sq.area()}");
+}
+```
+
+```text
+area=12 square=4
 ```
 
 A *try*-constructor answers the nullable — `nil` is a failed

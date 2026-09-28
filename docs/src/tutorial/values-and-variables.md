@@ -28,10 +28,20 @@ iterates as one-codepoint `str`s, and codepoints read as `u32`
 ## Variables: `let` and `let mut`
 
 ```rut
-let a = 10;          // an immutable binding
-let mut b = 10;      // a mutable binding
-b = 20;              // OK — b may be reassigned
-// a = 30;           // ERROR: a is not `mut`
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("vars");
+    let a = 10;          // an immutable binding
+    let mut b = 10;      // a mutable binding
+    b = 20;              // OK — b may be reassigned
+    // a = 30;           // ERROR: a is not `mut`
+    log.info(f"a={a} b={b}");
+}
+```
+
+```text
+a=10 b=20
 ```
 
 `mut` is permission to write *through that name*: reassigning the
@@ -51,20 +61,40 @@ defaults to `f32`. The default is also a *ceiling*: a literal adapts to
 the expected type only while it fits the default.
 
 ```rut
-let a = 10;                        // i32
-let b = 10u8;                      // u8 via suffix
-let c: u64 = 10;                   // u64 via annotation — 10 fits
-let big = 18446744073709551615u64; // past the i32 default: suffix required
-let d = 1.5;                       // f32
-let d64: f64 = 1.5;                // f64 via annotation
-let hex = 0xFF_u32;                // 0x / 0b / 0o bases, _ separators
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("numbers");
+    let a = 10;                        // i32
+    let b = 10u8;                      // u8 via suffix
+    let c: u64 = 10;                   // u64 via annotation — 10 fits
+    let big = 18446744073709551615u64; // past the i32 default: suffix required
+    let d = 1.5;                       // f32
+    let d64: f64 = 1.5;                // f64 via annotation
+    let hex = 0xFF_u32;                // 0x / 0b / 0o bases, _ separators
+    log.info(f"a={a} d={d} d64={d64} hex={hex} big={big}");
+}
+```
+
+```text
+a=10 d=1.5 d64=1.5 hex=255 big=18446744073709551615
 ```
 
 Conversions are explicit casts: `expr as T`. Casts truncate like C —
 they never trap.
 
 ```rut
-let cast = 300 as u8;   // 44 — keeps the low 8 bits
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("casts");
+    let cast = 300 as u8;   // 44 — keeps the low 8 bits
+    log.info(f"cast={cast}");
+}
+```
+
+```text
+cast=44
 ```
 
 Arithmetic has two sharp edges:
@@ -83,9 +113,20 @@ Three literal forms. A plain string is always inert — no interpolation
 ever happens implicitly.
 
 ```rut
-let s = "hi\tname";              // plain: escapes processed
-let raw = r"C:\temp\log.txt";    // raw: every byte is literal
-let t = f"hi {name}!";           // format: placeholders evaluated
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("text");
+    let name = "rut";
+    let s = "hi\tname";              // plain: escapes processed
+    let raw = r"C:\temp\log.txt";    // raw: every byte is literal
+    let t = f"hi {name}!";           // format: placeholders evaluated
+    log.info(f"{s} | {raw} | {t}");
+}
+```
+
+```text
+hi	name | C:\temp\log.txt | hi rut!
 ```
 
 Plain and format strings share the same escapes (`\t \n \r \\ \"`
@@ -94,7 +135,16 @@ identifiers, calls, arithmetic — except nested string literals
 (bind one to a variable first). `{{` and `}}` are literal braces:
 
 ```rut
-log.info(f"open{{close}} braces");   // prints: open{close} braces
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("text");
+    log.info(f"open{{close}} braces");   // prints: open{close} braces
+}
+```
+
+```text
+open{close} braces
 ```
 
 What an f-string can render: integers (decimal), floats (shortest
@@ -109,10 +159,18 @@ and call it, or use a debug dump for development.
 The fixed array `[T]` is built from a literal or a repeat:
 
 ```rut
-let arr = [1, 2, 3];         // [i32] — fixed length
-let zero: [u8] = [0u8; 34];  // 34 slots of 0
-arr.len();                   // the length
-arr[0];                      // indexing
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("arrays");
+    let arr = [1, 2, 3];         // [i32] — fixed length
+    let zero: [u8] = [0u8; 34];  // 34 slots of 0
+    log.info(f"len={arr.len()} first={arr[0]} zero.len={zero.len()}");
+}
+```
+
+```text
+len=3 first=1 zero.len=34
 ```
 
 The growable sequence is `Vec<T>` (from the `pouch` package —
@@ -126,9 +184,18 @@ for the full surface.
 `bytes.from(a)` build buffers directly:
 
 ```rut
-let b = "rut runs".encode();
-b.len();               // octets, not codepoints
-b.decode() == "rut runs";   // true — content comparison
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("bytes");
+    let b = "rut runs".encode();
+    let ok = b.decode() == "rut runs";   // true — content comparison
+    log.info(f"len={b.len()} roundtrip={ok}");
+}
+```
+
+```text
+len=8 roundtrip=true
 ```
 
 ## Sharing: the one rule
@@ -139,11 +206,21 @@ O(1) handle move, and a write through any alias is visible through all
 of them.
 
 ```rut
+use ink::{ Logger };
+
 struct Point { x: i32; y: i32 }
 
-let mut p = Point { x: 1, y: 2 };
-let q = p;          // q and p name ONE cell
-p.x = 4;            // q.x is 4 now
+pub fn main() {
+    let log = Logger.new("sharing");
+    let mut p = Point { x: 1, y: 2 };
+    let q = p;          // q and p name ONE cell
+    p.x = 4;            // q.x is 4 now
+    log.info(f"q.x={q.x} same cell: {q == p}");
+}
+```
+
+```text
+q.x=4 same cell: true
 ```
 
 Equality follows the same split:
@@ -166,13 +243,22 @@ Absence is `nil` on a nullable `?T` — see
 Records `(A, B)` are first-class values with numeric fields:
 
 ```rut
+use ink::{ Logger };
+
 fn divmod(a: i32, b: i32) -> (i32, i32) {
     return (a / b, a % b);
 }
 
-let (q, r) = divmod(17, 5);   // destructuring
-let t = (1, true);
-t.0;   // 1 — numeric field access
+pub fn main() {
+    let log = Logger.new("tuples");
+    let (q, r) = divmod(17, 5);   // destructuring
+    let t = (1, true);
+    log.info(f"q={q} r={r} t.0={t.0}");
+}
+```
+
+```text
+q=3 r=2 t.0=1
 ```
 
 The pair is also rut's standard error channel — the next chapters use

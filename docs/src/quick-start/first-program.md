@@ -42,18 +42,23 @@ Three things to notice:
 
 ## Values, briefly
 
-Add a few lines — rut infers, and every type is known at compile time:
+Extend the file — rut infers, and every type is known at compile time:
 
 ```rut
-let n = 10;            // i32 — the integer default
-let scale = 1.5;       // f32 — the float default
-let big: u64 = 10;     // u64 via annotation — fits the default
-let flags = [1, 2, 3]; // [i32] — a fixed heap cell
-let mut sum = 0;       // `mut` — this one is written to
-for (x of flags) {
-    sum += x * n;
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("hello");
+    let n = 10;            // i32 — the integer default
+    let scale = 1.5;       // f32 — the float default
+    let big: u64 = 10;     // u64 via annotation — fits the default
+    let flags = [1, 2, 3]; // [i32] — a fixed heap cell
+    let mut sum = 0;       // `mut` — this one is written to
+    for (let x of flags) {
+        sum += x * n;
+    }
+    log.info(f"sum={sum} scale={scale}");
 }
-log.info(f"sum={sum} scale={scale}");
 ```
 
 ```text

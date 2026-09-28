@@ -31,12 +31,29 @@ match the trait's signature exactly; extra methods don't belong here
 they are as visible as the trait.
 
 ```rut
+use ink::{ Logger };
+
+trait Shape {
+    fn area(self) -> f64;
+    fn name(self) -> str;
+}
+
 struct Circle { r: f64 }
 
 impl Shape for Circle {
     fn area(self) -> f64 { return 3.14159 * self.r * self.r; }
     fn name(self) -> str { return "circle"; }
 }
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let c = Circle { r: 1.0 };
+    log.info(f"{c.name()}={c.area()}");
+}
+```
+
+```text
+circle=3.14159
 ```
 
 Rules worth knowing:
@@ -60,11 +77,25 @@ class methods like `new`, instance methods, helpers. It compiles only
 in the module that declares the type.
 
 ```rut
+use ink::{ Logger };
+
+struct Circle { r: f64 }
+
 impl Circle {
     fn new(r: f64) -> Self {
         return Self { r: r };
     }
 }
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let c = Circle.new(1.0);
+    log.info(f"r={c.r}");
+}
+```
+
+```text
+r=1
 ```
 
 ## Using trait values
@@ -73,19 +104,69 @@ impl Circle {
 annotated binding, a field, an argument, a return.
 
 ```rut
-let c: Shape = Circle { r: 1.0 };   // Circle widens to Shape
+use ink::{ Logger };
+
+trait Shape {
+    fn area(self) -> f64;
+    fn name(self) -> str;
+}
+
+struct Circle { r: f64 }
+
+impl Shape for Circle {
+    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }
+    fn name(self) -> str { return "circle"; }
+}
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let c: Shape = Circle { r: 1.0 };   // Circle widens to Shape
+    log.info(f"{c.name()}={c.area()}");
+}
+```
+
+```text
+circle=3.14159
 ```
 
 **Trait-typed parameters accept any implementor** — write the function
 once, call it with each concrete type:
 
 ```rut
+use ink::{ Logger };
+
+trait Shape {
+    fn area(self) -> f64;
+    fn name(self) -> str;
+}
+
+struct Circle { r: f64 }
+struct Square { side: f64 }
+
+impl Shape for Circle {
+    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }
+    fn name(self) -> str { return "circle"; }
+}
+
+impl Shape for Square {
+    fn area(self) -> f64 { return self.side * self.side; }
+    fn name(self) -> str { return "square"; }
+}
+
 fn describe(s: Shape) -> str {
     return f"{s.name()}={s.area()}";
 }
 
-describe(Circle { r: 1.0 });
-describe(Square { side: 3.0 });
+pub fn main() {
+    let log = Logger.new("traits");
+    log.info(describe(Circle { r: 1.0 }));
+    log.info(describe(Square { side: 3.0 }));
+}
+```
+
+```text
+circle=3.14159
+square=9
 ```
 
 **Heterogeneous containers** hold mixed implementors behind the trait
@@ -94,12 +175,42 @@ collection of `Shape` dispatches through the value's vtable — the
 compiler picks, and mis-guessing costs one hop, never wrong behavior:
 
 ```rut
-let mut shapes: Vec<Shape> = Vec.new();
-shapes.push(Circle { r: 1.0 });
-shapes.push(Square { side: 3.0 });
-for (let s of shapes) {
-    total += s.area();       // dispatches per element
+use pouch::{ Vec };
+use ink::{ Logger };
+
+trait Shape {
+    fn area(self) -> f64;
+    fn name(self) -> str;
 }
+
+struct Circle { r: f64 }
+struct Square { side: f64 }
+
+impl Shape for Circle {
+    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }
+    fn name(self) -> str { return "circle"; }
+}
+
+impl Shape for Square {
+    fn area(self) -> f64 { return self.side * self.side; }
+    fn name(self) -> str { return "square"; }
+}
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let mut shapes: Vec<Shape> = Vec.new();
+    shapes.push(Circle { r: 1.0 });
+    shapes.push(Square { side: 3.0 });
+    let mut total: f64 = 0.0;
+    for (let s of shapes) {
+        total += s.area();       // dispatches per element
+    }
+    log.info(f"total={total} n={shapes.len()}");
+}
+```
+
+```text
+total=12.14159 n=2
 ```
 
 ## Type tests: `is`
@@ -111,9 +222,35 @@ for (let s of shapes) {
   type have an impl of `Shape`?").
 
 ```rut
-let sq = Square { side: 2.0 };
-sq is Shape;      // true
-sq is Circle;     // false
+use ink::{ Logger };
+
+trait Shape {
+    fn area(self) -> f64;
+    fn name(self) -> str;
+}
+
+struct Circle { r: f64 }
+struct Square { side: f64 }
+
+impl Shape for Circle {
+    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }
+    fn name(self) -> str { return "circle"; }
+}
+
+impl Shape for Square {
+    fn area(self) -> f64 { return self.side * self.side; }
+    fn name(self) -> str { return "square"; }
+}
+
+pub fn main() {
+    let log = Logger.new("traits");
+    let sq = Square { side: 2.0 };
+    log.info(f"shape: {sq is Shape} circle: {sq is Circle}");
+}
+```
+
+```text
+shape: true circle: false
 ```
 
 `is` answers the question; it changes nothing — there is no narrowing
@@ -136,6 +273,9 @@ A type becomes a `for..of` target by implementing the builtin
 `Iterator<E>` contract with its single resumption member:
 
 ```rut
+use pouch::{ Vec };
+use ink::{ Logger };
+
 struct CountUp { n: i32 }
 
 impl Iterator<i32> for CountUp {
@@ -146,10 +286,19 @@ impl Iterator<i32> for CountUp {
     }
 }
 
-let ups = CountUp { n: 4 };
-for (let v of ups) {
-    // runs for 1, 2, 3, 4
+pub fn main() {
+    let log = Logger.new("iter");
+    let ups = CountUp { n: 4 };
+    let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures
+    for (let v of ups) {
+        got.push(v);
+    }
+    log.info(f"n={got.len()} first={got[0]} last={got[got.len()-1]}");
 }
+```
+
+```text
+n=4 first=1 last=4
 ```
 
 `for (let v of it)` desugars to `it.__iterate(emit)` with a synthetic

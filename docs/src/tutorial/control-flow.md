@@ -10,13 +10,30 @@ rules live in [the reference on control flow](../reference/control-flow.md).
 Braces are always required, whatever the body length:
 
 ```rut
-if (hits == 0) {
-    first = true;
-} else if (hits < 10) {
-    warm = true;
-} else {
-    hot = true;
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("flow");
+    for (let hits of [0, 5, 12]) {
+        let mut first = false;
+        let mut warm = false;
+        let mut hot = false;
+        if (hits == 0) {
+            first = true;
+        } else if (hits < 10) {
+            warm = true;
+        } else {
+            hot = true;
+        }
+        log.info(f"hits={hits} first={first} warm={warm} hot={hot}");
+    }
 }
+```
+
+```text
+hits=0 first=true warm=false hot=false
+hits=5 first=false warm=true hot=false
+hits=12 first=false warm=false hot=true
 ```
 
 The condition must be a `bool` — there is no truthiness coercion, and
@@ -27,24 +44,47 @@ no parenthesized-assignment footgun.
 **`while`** repeats until its condition is false:
 
 ```rut
-let mut m = i * i;
-while (m <= limit) {
-    marks[m] = 1;
-    m += i;
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("sieve");
+    let i = 2;
+    let limit = 12;
+    let mut marks = [0; 16];
+    let mut m = i * i;
+    while (m <= limit) {
+        marks[m] = 1;
+        m += i;
+    }
+    log.info(f"marks[4]={marks[4]} marks[5]={marks[5]} stopped at m={m}");
 }
+```
+
+```text
+marks[4]=1 marks[5]=0 stopped at m=14
 ```
 
 **`for..of`** iterates anything with elements: fixed arrays, `Vec`s,
 `str` (yielding one-codepoint `str`s), and `bytes` (yielding `u8`s):
 
 ```rut
-for (let w of ["rut", "runs", "rut"]) {
-    // w is a str
-}
+use ink::{ Logger };
 
-for (let c of "héllo") {
-    n += 1;             // 6 iterations — codepoints, not bytes
+pub fn main() {
+    let log = Logger.new("loops");
+    let mut n = 0;
+    for (let w of ["rut", "runs", "rut"]) {
+        // w is a str
+    }
+    for (let c of "héllo") {
+        n += 1;             // 5 iterations — codepoints, not the 6 bytes
+    }
+    log.info(f"n={n}");
 }
+```
+
+```text
+n=5
 ```
 
 The loop variable is always spelled `let` and is fresh each iteration.
@@ -53,9 +93,22 @@ The loop variable is always spelled `let` and is fresh each iteration.
 the update clause (and the body) may assign it without `mut`.
 
 ```rut
-for (let i = 0; i < n; i += 1) {
-    total += xs[i];
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("loops");
+    let xs = [3, 1, 4];
+    let n = xs.len();
+    let mut total = 0;
+    for (let i = 0; i < n; i += 1) {
+        total += xs[i];
+    }
+    log.info(f"total={total}");
 }
+```
+
+```text
+total=8
 ```
 
 **`break` and `continue`** work in every loop form; there are no labels
@@ -67,12 +120,26 @@ and no `do..while`.
 arrow is omitted and `return;` (or falling off the end) returns:
 
 ```rut
+use pouch::{ Vec };
+use ink::{ Logger };
+
 fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
     // no return — the function's type is nil
 }
+
+pub fn main() {
+    let log = Logger.new("swap");
+    let xs = Vec<i32>.from([1, 2, 3]);
+    swap(xs, 0, 2);
+    log.info(f"first={xs[0]} last={xs[2]}");
+}
+```
+
+```text
+first=3 last=1
 ```
 
 ## `when` — the one match
@@ -81,6 +148,8 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 matching arm produces the value. No fallthrough — exactly one arm runs.
 
 ```rut
+use ink::{ Logger };
+
 fn classify(n: i32) -> str {
     return when (n) {
         0       -> "zero",
@@ -88,16 +157,44 @@ fn classify(n: i32) -> str {
         else    -> "big",       // the wildcard
     };
 }
+
+pub fn main() {
+    let log = Logger.new("when");
+    for (let n of [0, 2, 9]) {
+        log.info(f"{n}: {classify(n)}");
+    }
+}
+```
+
+```text
+0: zero
+2: small
+9: big
 ```
 
 The arm body before the `,` is an expression; arms can also be blocks:
 
 ```rut
-when (l) {
-    Light.Green  -> { go(); },
-    Light.Yellow -> { brake(); },
-    Light.Red    -> { stop(); },
+use ink::{ Logger };
+
+enum Light { Green, Yellow, Red }
+
+fn go()    { Logger.new("light").info("go"); }
+fn brake() { Logger.new("light").info("brake"); }
+fn stop()  { Logger.new("light").info("stop"); }
+
+pub fn main() {
+    let l = Light.Yellow;
+    when (l) {
+        Light.Green  -> { go(); },
+        Light.Yellow -> { brake(); },
+        Light.Red    -> { stop(); },
+    }
 }
+```
+
+```text
+brake
 ```
 
 Used as a statement, a `when` must produce nothing — the block arms
@@ -119,6 +216,14 @@ the arm body does that job.
   cannot be enumerated).
 
 ```rut
+use ink::{ Logger };
+
+enum Light { Green, Yellow, Red }
+
+fn go()    { Logger.new("light").info("go"); }
+fn brake() { Logger.new("light").info("brake"); }
+fn stop()  { Logger.new("light").info("stop"); }
+
 fn drive(l: Light) {
     when (l) {
         Light.Green  -> { go(); },
@@ -133,15 +238,40 @@ fn describe(n: i32) -> str {
         else -> "not zero",            // non-enum scrutinee: else REQUIRED
     };
 }
+
+pub fn main() {
+    drive(Light.Red);
+    let log = Logger.new("light");
+    log.info(describe(0));
+    log.info(describe(7));
+}
+```
+
+```text
+stop
+zero
+not zero
 ```
 
 `when` over a `bool` reads nicely as a two-arm check:
 
 ```rut
-when (p != nil) {
-    true -> { log.info(f"point {p.x} {p.y}"); },
-    else -> { log.info("point: nil"); },
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32 }
+
+pub fn main() {
+    let log = Logger.new("nullable");
+    let p: ?Point = Point { x: 1, y: 2 };
+    when (p != nil) {
+        true -> { log.info(f"point {p.x} {p.y}"); },
+        else -> { log.info("point: nil"); },
+    }
 }
+```
+
+```text
+point 1 2
 ```
 
 Duplicate patterns — and arms made unreachable by an earlier one — are
@@ -154,6 +284,10 @@ A `when` that builds a value usually reads best wrapped in a function —
 the function's return type then pins every arm:
 
 ```rut
+use ink::{ Logger };
+
+enum Light { Green, Yellow, Red }
+
 fn light_for(i: i32) -> Light {
     return when (i) {
         0    -> Light.Green,
@@ -161,6 +295,15 @@ fn light_for(i: i32) -> Light {
         else -> Light.Red,
     };
 }
+
+pub fn main() {
+    let log = Logger.new("light");
+    log.info(f"{light_for(0)} {light_for(1)} {light_for(5)}");
+}
+```
+
+```text
+Green Yellow Red
 ```
 
 ## Put it together

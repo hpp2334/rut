@@ -15,10 +15,10 @@ inside a function — and **loading a module executes nothing**. There is
 no load-time side-effect ordering to reason about; the host loads your
 module and calls its entry point (conventionally `pub fn main`).
 
-Module-level `let` initializers must be load-time expressions —
-literals, arithmetic over literals, record literals, fixed arrays.
-Calls to user functions are not (there is no mutable module state;
-programs build their state in `main`).
+Module-level `let` initializers must be load-time literals — `42`,
+`"app"`, `true`. Arithmetic, record literals, and calls to user
+functions are not accepted in this build (there is no mutable module
+state; programs build their state in `main`).
 
 ```rut
 use pouch::{ Vec };
@@ -26,14 +26,20 @@ use ink::{ Logger };
 
 struct Point { x: f32; y: f32 }
 
-let origin = Point { x: 0, y: 0 };     // fine: a literal
+let version = 1;                       // fine: a literal
+let app_name = "app";                  // any literal works
 
 fn main_body() { /* statements live here */ }
 
 pub fn main() {
     let log = Logger.new("app");
-    // ...
+    let origin = Point { x: 0, y: 0 }; // record literals live in function bodies
+    log.info(f"{app_name} v{version} origin.x={origin.x}");
 }
+```
+
+```text
+app v1 origin.x=0
 ```
 
 ## Visibility

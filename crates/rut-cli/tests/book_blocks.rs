@@ -19,14 +19,6 @@ use std::rc::Rc;
 /// Format: (path relative to the repo root, rut-block index (1-based),
 /// reason). Clearing entries is the book lane's job, never the gate's.
 const SKIP: &[(&str, u32, &str)] = &[
-    // the page illustrates module-level `let` bindings; the struct
-    // literal initializer is exactly the load-time-expression case the
-    // engine does not accept yet (literals only in this build)
-    (
-        "docs/src/tutorial/modules.md",
-        1,
-        "module-level `let` with a struct literal initializer — the engine accepts load-time literals only",
-    ),
     // the chapter's walk-through imports the reader-built `greet`
     // package (constructed earlier in the same page) — never a mounted
     // pkg, so this block is a fragment of a larger project

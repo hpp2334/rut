@@ -18,11 +18,23 @@ The design background lives in
 value or `nil`:
 
 ```rut
+use ink::{ Logger };
+
 struct Node {
     value: i32;
     left: ?Node;      // one word — recursive shapes are legal
     right: ?Node;
 }
+
+pub fn main() {
+    let log = Logger.new("nodes");
+    let n = Node { value: 1, left: nil, right: nil };
+    log.info(f"left is nil: {n.left == nil}");
+}
+```
+
+```text
+left is nil: true
 ```
 
 Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is
@@ -30,10 +42,24 @@ automatic at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic
 — and dereferencing a `nil` **traps** `NilDeref`, so guard first:
 
 ```rut
-let hit = scores.get("rut");      // ?i32
-if (hit != nil) {
-    n = hit + 1;                  // a hit auto-unwraps for `+`
+use nmapset::{ HashMap };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("optional");
+    let mut scores: HashMap<str, i32> = HashMap.new();
+    scores.put("rut", 41);
+    let mut n = 0;
+    let hit = scores.get("rut");      // ?i32
+    if (hit != nil) {
+        n = hit + 1;                  // a hit auto-unwraps for `+`
+    }
+    log.info(f"n={n}");
 }
+```
+
+```text
+n=42
 ```
 
 `p == nil` compares against the null. There is no flow-typing: after
@@ -83,13 +109,23 @@ fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 The caller destructures and checks the err half first:
 
 ```rut
-let (n, e) = decodeJson<i64>("42");
-if (e == nil) {
-    log.info(f"n={n}");
-} else {
-    let why = e;
-    log.info(f"decode failed at {why.at}");
+use json::{ decodeJson };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("json");
+    let (n, e) = decodeJson<i64>("42");
+    if (e == nil) {
+        log.info(f"n={n}");
+    } else {
+        let why = e;
+        log.info(f"decode failed at {why.at}");
+    }
 }
+```
+
+```text
+n=42
 ```
 
 Integer arithmetic's checked ladder uses the same idea in miniature:
@@ -117,12 +153,22 @@ pub struct DecodeJsonError {
 The caller picks: branch on `kind`, or just render the fields:
 
 ```rut
-let (bad, be) = decodeJson<i64>("[1,2,3]");
-if (be != nil) {
-    let why = be;
-    // rejected at 0: got '[', wanted an i64
-    log.info(f"rejected at {why.at}: got '{why.got}', wanted {why.expected}");
+use json::{ decodeJson };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("json");
+    let (bad, be) = decodeJson<i64>("[1,2,3]");
+    if (be != nil) {
+        let why = be;
+        // rejected at 0: got '[', wanted an i64
+        log.info(f"rejected at {why.at}: got '{why.got}', wanted {why.expected}");
+    }
 }
+```
+
+```text
+rejected at 0: got '[', wanted an i64
 ```
 
 Enums have no payloads — the struct carries the data. This split keeps
@@ -153,12 +199,23 @@ handles, heterogeneous boxes — `opaque(v)` seals it and
 never a trap):
 
 ```rut
-let box1 = opaque(Point { x: 1, y: 2 });
-let p = opaque.downcast<Point>(box1);   // ?Point
-when (p != nil) {
-    true -> { log.info(f"point {p.x} {p.y}"); },
-    else -> { log.info("point: nil"); },
+use ink::{ Logger };
+
+struct Point { x: i32; y: i32 }
+
+pub fn main() {
+    let log = Logger.new("opaque");
+    let box1 = opaque(Point { x: 1, y: 2 });
+    let p = opaque.downcast<Point>(box1);   // ?Point
+    when (p != nil) {
+        true -> { log.info(f"point {p.x} {p.y}"); },
+        else -> { log.info("point: nil"); },
+    }
 }
+```
+
+```text
+point 1 2
 ```
 
 `x is T` probes the box without recovering it. This is rut's only
