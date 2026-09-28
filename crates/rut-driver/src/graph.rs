@@ -177,23 +177,24 @@ impl<'a> GraphCompiler<'a> {
                 });
             }
             surface.namespace = module.namespace.as_deref().map(|n| surface.names.intern(n));
-            // host-mounted rows are ambient (`true`) — the row shape
-            // carries each name's ambient bit; core's own rows set it
-            // from the decl spelling in `Surface::core`
+            // each row keeps the ambient bit it was mounted with —
+            // host rows default `true`, and core's mount copies the
+            // decl spellings verbatim (the `pub builtin` disposal pair
+            // stays import-gated through registration)
             surface.native_types = module
                 .native_types
                 .iter()
-                .map(|(n, k)| (surface.names.intern(n), *k, true))
+                .map(|(n, k, a)| (surface.names.intern(n), *k, *a))
                 .collect();
             surface.native_traits = module
                 .native_traits
                 .iter()
-                .map(|(n, k)| (surface.names.intern(n), *k, true))
+                .map(|(n, k, a)| (surface.names.intern(n), *k, *a))
                 .collect();
             surface.native_fns = module
                 .native_fns
                 .iter()
-                .map(|n| (surface.names.intern(n), true))
+                .map(|(n, a)| (surface.names.intern(n), *a))
                 .collect();
             // the integer prims' numeric methods (RFC 0032 §1.1 R2) —
             // bound ambient on the receiver primitive, no use gate
@@ -224,10 +225,11 @@ impl<'a> GraphCompiler<'a> {
             return None;
         }
         let uses = uses_of(&ast);
-        // builtin names are AMBIENT (RFC 0028 revised, builtin-surface):
-        // the mounted prelude rides every compilation unit — no `use`
-        // is needed for its names. A `use core::{ .. }` statement stays
-        // legal but is redundant; the surface binds either way.
+        // the mounted prelude rides every compilation unit: its AMBIENT
+        // names need no `use` (a `use core::{ .. }` statement stays
+        // legal but redundant for them), while the `pub builtin`
+        // spellings bind only when the module's use named them — the
+        // binding loops read each row's ambient bit.
         let mut uses = uses;
         if spec != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core")
         {

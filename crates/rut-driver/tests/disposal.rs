@@ -132,3 +132,60 @@ pub fn main() -> i32 { let a = A { n: 9 }; return 0; }
     assert!(flat.disposal_impls.iter().filter(|f| f.is_some()).count() >= 1);
 }
 
+/// Import gating (the `pub builtin` spellings): `Disposal` and
+/// `DisposalContext` resolve ONLY through `use core::{ .. }` — the bare
+/// source fails compilation naming the fix exactly, a use that names
+/// only one of the pair leaves the other missing with its own fix, and
+/// the fully-imported source compiles and runs.
+#[test]
+fn disposal_requires_the_import() {
+    let body = r#"
+struct A { n: i32 = 0; }
+impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
+pub fn main() -> i32 { let a = A { n: 9 }; return a.n; }
+"#;
+    // no use at all: the trait miss names the fix
+    let out = rut_driver::compile_module(body, rut_parser::Mode::Impl, "app_main");
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| d.msg == "`Disposal` is not in scope — `use core::{ Disposal }`"),
+        "the trait miss names the fix: {:?}",
+        out.diags
+    );
+    assert!(out.binary.is_none(), "the bare source must not compile");
+
+    // the trait imported but not the cx type: the type miss names its
+    // own fix (the impl still fails — dispose's signature is wrong)
+    let trait_only = format!("use core::{{ Disposal }};\n{body}");
+    let out = rut_driver::compile_module(&trait_only, rut_parser::Mode::Impl, "app_main");
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| d.msg == "`DisposalContext` is not in scope — `use core::{ DisposalContext }`"),
+        "the cx-type miss names the fix: {:?}",
+        out.diags
+    );
+
+    let with = format!("use core::{{ Disposal, DisposalContext }};\n{body}");
+    let out = rut_driver::compile_module(&with, rut_parser::Mode::Impl, "app_main");
+    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
+    let bytes = out.binary.expect("encoded module");
+    let prog = rut_core::link::flatten(rut_core::binary::decode(&bytes).expect("decode"));
+    rut_vm::verify::verify(&prog).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    let v: i32 = vm.call("main", ()).expect("run");
+    assert_eq!(v, 9);
+}
+

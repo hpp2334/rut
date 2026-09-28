@@ -163,6 +163,11 @@ pub struct DefIndex {
     /// definition layer jumps there instead of the provenance label,
     /// so a workspace that is the rut repo lands in the real file
     pub src_path: Option<String>,
+    /// names whose decl spelled the import-gated builtin linkage
+    /// (`pub builtin` — the core disposal pair): completion offers them
+    /// only when the document's `use` names them, the same ambient
+    /// split the compiler binds by
+    pub pub_gated: Vec<String>,
 }
 
 impl DefIndex {

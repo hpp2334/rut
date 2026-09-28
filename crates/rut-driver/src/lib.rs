@@ -235,28 +235,34 @@ pub fn compile_program_resolved(
                 .collect();
             ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete);
         }
-        // core's native surface (RFC 0028): builtin containers, traits,
-        // and compiler-lowered fns — bound AMBIENT now (RFC 0028 revised,
-        // builtin-surface): no `use` needed, the `use` statement itself
-        // is redundant-but-legal for these names. Pkg mounting (ink/
-        // pouch/calc fns, consts, namespace heads) stays use-gated.
-        // The rows carry each name's ambient bit (`false` = the
-        // `pub builtin` spelling); THIS phase every row still binds for
-        // every unit — the import-gated read of the bit lands with the
-        // gated-mount phase, so it rides along unacted-on here.
-        for (n, kind, _ambient) in &surface.native_types {
+        // core's native surface: builtin containers, traits, and
+        // compiler-lowered fns. Each row's ambient bit rules the
+        // binding — an AMBIENT row (the `prelude builtin` spellings)
+        // binds in every unit, no `use` needed and the use statement
+        // itself stays redundant-but-legal; a non-ambient row (the
+        // `pub builtin` spellings) resolves only through
+        // `use core::{ .. }`, the exact pattern the namespace head
+        // below already uses. Pkg mounting (ink/pouch/calc fns, consts,
+        // namespace heads) stays use-gated.
+        for (n, kind, ambient) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                ctx.add_extern_native_type(id, *kind);
+                if *ambient || ctx.used.contains(&id) {
+                    ctx.add_extern_native_type(id, *kind);
+                }
             }
         }
-        for (n, native, _ambient) in &surface.native_traits {
+        for (n, native, ambient) in &surface.native_traits {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                ctx.add_extern_trait(id, *native);
+                if *ambient || ctx.used.contains(&id) {
+                    ctx.add_extern_trait(id, *native);
+                }
             }
         }
-        for (n, _ambient) in &surface.native_fns {
+        for (n, ambient) in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                ctx.add_extern_native_fn(id);
+                if *ambient || ctx.used.contains(&id) {
+                    ctx.add_extern_native_fn(id);
+                }
             }
         }
         // the namespace head (`Math`): bound like the natives — resolving
@@ -528,7 +534,9 @@ pub fn compile_program_resolved(
 /// native module with no body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
 /// (`rut/core/core.d.rut` mirrors it for the LSP). Builtin names are
-/// AMBIENT (RFC 0028 revised, builtin-surface): no `use` needed.
+/// ambient except the `pub builtin` spellings (the disposal pair) —
+/// those resolve only through `use core::{ .. }`; each mounted row
+/// keeps its ambient bit so the binding loops see the split.
 /// `core` needs no `[deps]`
 /// declaration: the driver mounts it unconditionally (§0.14), while
 /// every other package resolves through `[deps]` or host registration.
@@ -542,9 +550,12 @@ pub fn mount_std_core(session: &mut Session) {
     let _ = session.register_module(
         "core",
         Module {
-            native_types: core.native_types.iter().map(|(n, k, _)| (txt(*n), *k)).collect(),
-            native_traits: core.native_traits.iter().map(|(n, k, _)| (txt(*n), *k)).collect(),
-            native_fns: core.native_fns.iter().map(|(n, _)| txt(*n)).collect(),
+            // each row keeps its ambient bit — the binding loops read
+            // it off the synthesized surface, so the `pub builtin`
+            // spellings stay import-gated end to end
+            native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+            native_traits: core.native_traits.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+            native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
             consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
             native_impls: core
                 .native_impls

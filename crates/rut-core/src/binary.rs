@@ -324,9 +324,9 @@ impl Surface {
                 (sym::STACK_TRACE, NativeTy::StackTrace, true),
                 (sym::STRBUF, NativeTy::StrBuf, true),
                 (sym::WEAK, NativeTy::Weak, true),
-                // the disposal surface: `pub builtin` — import-gated
-                // spellings (the binding stays ambient-for-all until the
-                // gated-mount phase; the bit records the decl's spelling)
+                // the disposal surface: `pub builtin` — the import-gated
+                // spellings (the binding loops gate on this bit: the
+                // name resolves only through `use core::{ .. }`)
                 (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
             ],
             native_traits: vec![
@@ -405,6 +405,25 @@ pub fn removed_core_map(interner: &mut Interner) -> std::collections::HashMap<Id
     REMOVED_CORE
         .iter()
         .map(|(n, msg)| (interner.intern(n), *msg))
+        .collect()
+}
+
+/// The import-gated core names — `Surface::core`'s NON-ambient rows
+/// (the `pub builtin` spellings), keyed by [`IdentId`] exactly like
+/// [`removed_core_map`]. A resolution miss that hits this table names
+/// the fix: `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
+/// The ambient rows never land here — they bind in every unit, so they
+/// cannot produce the miss the table answers.
+pub fn pub_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentId, &'static str> {
+    let core = Surface::core();
+    let rows = core
+        .native_types
+        .iter()
+        .map(|(n, _, a)| (*n, *a))
+        .chain(core.native_traits.iter().map(|(n, _, a)| (*n, *a)))
+        .chain(core.native_fns.iter().map(|(n, a)| (*n, *a)));
+    rows.filter(|(_, ambient)| !ambient)
+        .map(|(n, _)| (interner.intern(core.names.name(n)), sym::text(n).unwrap_or("")))
         .collect()
 }
 

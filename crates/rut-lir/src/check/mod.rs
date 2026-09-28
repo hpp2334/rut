@@ -316,6 +316,10 @@ pub struct Ctx<'a> {
     /// core's removed-name table, keyed by IdentId — interned once at
     /// construction, so removal diagnostics compare symbols, never text
     pub removed: std::collections::HashMap<IdentId, &'static str>,
+    /// core's import-gated names (the `pub builtin` rows of
+    /// `Surface::core`), keyed by IdentId like `removed` — a resolution
+    /// miss that hits it names the fix: `use core::{ Name }`
+    pub pub_core: std::collections::HashMap<IdentId, &'static str>,
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
@@ -436,6 +440,7 @@ impl<'a> Ctx<'a> {
         // name table interns into the same interner (one copy per Ctx).
         let mut interner = ast.interner.clone();
         let removed = rut_core::binary::removed_core_map(&mut interner);
+        let pub_core = rut_core::binary::pub_core_map(&mut interner);
         Ctx {
             ast,
             interner,
@@ -485,19 +490,25 @@ impl<'a> Ctx<'a> {
             own_spec: String::new(),
             extern_origins: std::collections::HashMap::new(),
             removed,
+            pub_core,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
         }
     }
 
-    /// The `core` not-in-scope diagnostic (RFC 0028): the prelude is
-    /// used, never ambient. A v1.1-removed name diagnoses with its
-    /// replacement instead. `None` when `n` is not a prelude name —
-    /// the caller keeps its ordinary message.
+    /// The `core` not-in-scope diagnostic: a v1.1-removed name
+    /// diagnoses with its replacement, and an import-gated core name
+    /// (the `pub builtin` spellings) names the fix exactly —
+    /// `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
+    /// `None` when `n` is neither — the caller keeps its ordinary
+    /// message.
     pub fn not_in_core_scope(&self, n: IdentId) -> Option<String> {
         let text = self.interner.name(n);
         if let Some(msg) = self.removed_core(n) {
             return Some(msg.to_string());
+        }
+        if let Some(name) = self.pub_core.get(&n) {
+            return Some(format!("`{name}` is not in scope — `use core::{{ {name} }}`"));
         }
         rut_core::binary::is_core_name(n).then(|| {
             format!(

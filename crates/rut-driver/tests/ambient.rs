@@ -60,6 +60,27 @@ fn builtins_resolve_with_no_use_statement() {
 }
 
 #[test]
+fn the_ambient_prelude_binds_beyond_the_disposal_pair() {
+    // the import gate is the disposal pair ONLY: assert/panic,
+    // string_join, and Iterator (the for..of contract) still bind with
+    // no `use` statement anywhere in this source
+    let v = run_main(
+        "fn total(v: [i32]) -> i32 {\n\
+             let mut t = 0;\n\
+             for (let x of v) { t += x; }\n\
+             return t;\n\
+         }\n\
+         pub fn main() -> i32 {\n\
+             let s = string_join([\"a\", \"b\"]);\n\
+             assert(s == \"ab\");\n\
+             if (s.len() == 99) { panic(\"unreachable\"); }\n\
+             return total([1, 2, 3]);\n\
+         }\n",
+    );
+    assert_eq!(v, 6);
+}
+
+#[test]
 fn opaque_downcast_member_carries_the_nullable_contract() {
     // the member form yields the nullable (RFC 0014, refval-round2): a
     // mismatch is `nil` — never a zero-value `.0` with a flag

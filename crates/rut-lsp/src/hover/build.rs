@@ -360,7 +360,12 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceFn { name, params, .. } => {
+            ItemKind::SurfaceFn { name, params, linkage, .. } => {
+                // the import-gated builtin linkage (`pub builtin`) — the
+                // name completes only through the document's `use`
+                if matches!(linkage, Linkage::Builtin { ambient: false }) {
+                    idx.pub_gated.push(ast.name(*name).to_string());
+                }
                 idx.fns.push(FnDef {
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),
@@ -373,7 +378,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::BuiltinTy { name, generics, members, .. } => {
+            ItemKind::BuiltinTy { name, ambient, generics, members, .. } => {
+                if !ambient {
+                    idx.pub_gated.push(ast.name(*name).to_string());
+                }
                 let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
@@ -387,7 +395,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::BuiltinPrimitive { name, members, .. } => {
+            ItemKind::BuiltinPrimitive { name, ambient, members, .. } => {
+                if !ambient {
+                    idx.pub_gated.push(ast.name(*name).to_string());
+                }
                 let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
@@ -415,7 +426,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::BuiltinTrait { name, generics, methods, .. } => {
+            ItemKind::BuiltinTrait { name, ambient, generics, methods, .. } => {
+                if !ambient {
+                    idx.pub_gated.push(ast.name(*name).to_string());
+                }
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,

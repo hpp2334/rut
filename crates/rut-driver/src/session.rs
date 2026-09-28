@@ -93,13 +93,17 @@ pub struct Module {
     /// Exported constants: `(name, type, raw bits)` — `calc::PI`.
     pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
     /// Builtin containers published by name (`core` only): the type is
-    /// the compiler's own; the NAME is use-gated (RFC 0028)
-    pub native_types: Vec<(String, rut_core::binary::NativeTy)>,
-    /// Builtin traits published by name (`core` only)
-    pub native_traits: Vec<(String, rut_core::binary::NativeTrait)>,
+    /// the compiler's own; the row carries the name's ambient bit —
+    /// `true` (`prelude builtin`) binds in every unit with no `use`,
+    /// `false` (`pub builtin`) resolves only through `use`
+    pub native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
+    /// Builtin traits published by name (`core` only), each with its
+    /// ambient bit (same law as [`Module::native_types`])
+    pub native_traits: Vec<(String, rut_core::binary::NativeTrait, bool)>,
     /// Compiler-lowered builtin function names (`core` only) — no
-    /// bodies; rut-lir lowers them, reached only through the use
-    pub native_fns: Vec<String>,
+    /// bodies; rut-lir lowers them. Each row carries its ambient bit
+    /// (same law as [`Module::native_types`])
+    pub native_fns: Vec<(String, bool)>,
     /// Force source-inlining into every consumer (`ink`): a module whose
     /// class methods must resolve at the call site cannot be linked.
     pub inline: bool,

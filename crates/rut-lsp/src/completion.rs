@@ -5,6 +5,8 @@
 //! from impls targeting `T`** (RFC 0012 §4/§6). Heuristic, like hover: a
 //! miss is an empty list, never wrong text.
 
+use std::collections::HashSet;
+
 use rut_ast::ast::Ast;
 use rut_lexer::token::{Tok, Token};
 
@@ -36,7 +38,8 @@ pub enum CompletionKind {
 /// typed prefix), otherwise the keyword table plus the visible decls.
 pub fn complete(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Vec<CompletionOut> {
     let Some((recv, prefix)) = recv_before(toks, pos) else {
-        return bare_completions(idxs);
+        let used = used_traits(ast);
+        return bare_completions(idxs, &used);
     };
     // the binding pass — member completion shares hover's receiver
     // inference (field reads, chained calls, loop variables)
@@ -160,7 +163,11 @@ fn member_completions(
 /// set, one canonical list), then the visible decls — the open document
 /// first, then the std surface and the workspace. Free fns and types
 /// only; methods are reached through a receiver, not named bare.
-fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
+/// The import-gated builtin names (`pub builtin` — the core disposal
+/// pair) stay off the list unless the document's `use` names them: the
+/// same ambient split the compiler binds by (offering a name the
+/// compiler then rejects is a trap).
+fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in rut_parser::RESERVED_KW {
         out.push(CompletionOut {
@@ -170,8 +177,16 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
             kind: CompletionKind::Keyword,
         });
     }
+    let gated: HashSet<&str> = idxs
+        .iter()
+        .flat_map(|i| i.pub_gated.iter().map(|s| s.as_str()))
+        .collect();
+    let offered = |name: &str| !gated.contains(name) || used.contains(name);
     for i in idxs {
         for t in &i.types {
+            if !offered(&t.name) {
+                continue;
+            }
             push_item(
                 &mut out,
                 CompletionOut {
@@ -187,6 +202,9 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
         }
         for f in &i.fns {
             if f.owner.is_some() {
+                continue;
+            }
+            if !offered(&f.name) {
                 continue;
             }
             push_item(
@@ -329,6 +347,44 @@ return c.;
         assert!(ls.contains(&"main"), "{ls:?}");
         // methods are reached through a receiver, not named bare
         assert!(!ls.contains(&"area"), "{ls:?}");
+    }
+
+    #[test]
+    fn bare_completion_gates_pub_builtin_core_names() {
+        // the `pub builtin` rows (the core disposal pair) complete only
+        // when the doc's `use` names them — the compiler's ambient split,
+        // mirrored so a completion never offers a name the compile
+        // rejects. Ambient core rows (`prelude builtin`) stay ungated.
+        let core_src = "prelude builtin trait Iterator<E> {\nfn next(mut self) -> ?E;\n}\n\
+                        pub builtin trait Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
+                        pub builtin class DisposalContext { }\n";
+        let c2 = rut_lexer::lexer::normalize(core_src);
+        let (ctoks, _) = rut_lexer::lexer::lex(&c2);
+        let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
+        let core = crate::hover::index(&c2, &cast, &ctoks);
+
+        let mk = |doc: &str| {
+            let d2 = rut_lexer::lexer::normalize(doc);
+            let (toks, _) = rut_lexer::lexer::lex(&d2);
+            let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
+            let di = crate::hover::index(&d2, &ast, &toks);
+            let idxs = [&di, &core];
+            let pos = d2.len() as u32;
+            complete(&idxs, &toks, &ast, pos)
+        };
+
+        let bare = "fn main() -> nil { }\n";
+        let items = mk(bare);
+        let ls = labels(&items);
+        assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");
+        assert!(!ls.contains(&"DisposalContext"), "unused `pub builtin` must not complete: {ls:?}");
+        assert!(ls.contains(&"Iterator"), "the ambient row still completes: {ls:?}");
+
+        let imported = "use core::{ Disposal, DisposalContext };\nfn main() -> nil { }\n";
+        let items = mk(imported);
+        let ls = labels(&items);
+        assert!(ls.contains(&"Disposal"), "the imported trait completes: {ls:?}");
+        assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
     }
 
     #[test]
