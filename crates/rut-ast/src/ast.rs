@@ -389,6 +389,9 @@ pub enum ItemKind {
     /// so users and the LSP see every signature; no impl ever registers.
     BuiltinTy {
         vis: Vis,
+        /// the strict spelling the decl used: `true` — `prelude builtin`
+        /// (ambient), `false` — `pub builtin` (import-gated)
+        ambient: bool,
         name: IdentId,
         generics: Vec<IdentId>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
@@ -402,6 +405,9 @@ pub enum ItemKind {
     /// engine knowledge (`Hashable`) stay plain `trait`.
     BuiltinTrait {
         vis: Vis,
+        /// the strict spelling the decl used: `true` — `prelude builtin`
+        /// (ambient), `false` — `pub builtin` (import-gated)
+        ambient: bool,
         name: IdentId,
         generics: Vec<IdentId>,
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless
@@ -413,6 +419,9 @@ pub enum ItemKind {
     /// like `opaque(..)` / `opaque.downcast<T>`). The Rust-side
     /// representation is the boot table's, unchanged.
     BuiltinPrimitive {
+        /// the strict spelling the decl used: `true` — `prelude builtin`
+        /// (ambient), `false` — `pub builtin` (import-gated)
+        ambient: bool,
         name: IdentId,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },

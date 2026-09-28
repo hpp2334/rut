@@ -534,8 +534,11 @@ fn version_gate_rejects_stale_artifacts() {
     // phase 2 declared-surface change (`capture_stacktrace()` + the
     // `StackTrace` builtin class + the `pos` span table, RFC 0036);
     // v13 is the weak batch (RFC 0017 v1: `TyKind::Weak` + the two
-    // Weak ops — new encoded vocabulary, the bump law)
-    assert_eq!(VERSION, 13, "the weak batch owns this VERSION bump");
+    // Weak ops — new encoded vocabulary, the bump law); v14 is the
+    // disposal surface (the `DisposalContext` boot type — id 22, kind
+    // tag 17 — plus the `Disposal`/`DisposalContext` surface rows, the
+    // v10 declared-surface precedent)
+    assert_eq!(VERSION, 14, "the disposal surface owns this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

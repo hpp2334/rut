@@ -15,8 +15,17 @@ const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
 /// traits, plain traits) + the `builtin impl` method table
-/// (prim → method names).
-fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<(String, Vec<String>)>) {
+/// (prim → method names). The fn/type/trait name lists carry each
+/// decl's ambient bit (`true` — `prelude builtin`, `false` —
+/// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
+/// against `Surface::core`'s rows.
+fn declared_names() -> (
+    Vec<(String, bool)>,
+    Vec<(String, bool)>,
+    Vec<(String, bool)>,
+    Vec<String>,
+    Vec<(String, Vec<String>)>,
+) {
     let (ast, diags) = parse(CORE_DECL, Mode::Decl);
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
@@ -35,26 +44,29 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<
                     generics.is_empty() || !matches!(linkage, Linkage::Host),
                     "crossing signatures are concrete (RFC 0023 §1)"
                 );
-                builtin_fns.push(ast.name(*name).to_string());
+                let ambient = matches!(*linkage, Linkage::Builtin { ambient: true });
+                builtin_fns.push((ast.name(*name).to_string(), ambient));
             }
-            ItemKind::BuiltinTy { name, .. } => {
+            ItemKind::BuiltinTy { name, ambient, .. } => {
                 let n = ast.name(*name).to_string();
                 // `str`/`bytes` are language primitives (RFC 0004) — their
                 // member contracts are doc surface, not registered natives
                 if !rut_parser::is_primitive_ty(&n) {
-                    builtin_types.push(n);
+                    builtin_types.push((n, *ambient));
                 }
             }
-            ItemKind::BuiltinPrimitive { name, .. } => {
+            ItemKind::BuiltinPrimitive { name, ambient, .. } => {
                 let n = ast.name(*name).to_string();
                 // `str`/`bytes` are language primitives (RFC 0004) — their
                 // member contracts are doc surface, not registered natives
                 if rut_parser::is_primitive_ty(&n) {
                     continue;
                 }
-                builtin_types.push(n);
+                builtin_types.push((n, *ambient));
             }
-            ItemKind::BuiltinTrait { name, .. } => builtin_traits.push(ast.name(*name).to_string()),
+            ItemKind::BuiltinTrait { name, ambient, .. } => {
+                builtin_traits.push((ast.name(*name).to_string(), *ambient))
+            }
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
             ItemKind::BuiltinImpl { prim, methods, .. } => {
                 let names = methods
@@ -76,20 +88,22 @@ fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
     let (builtin_fns, builtin_types, builtin_traits, plain_traits, builtin_impls) = declared_names();
 
-    // builtin types: the decl's `builtin` decls are exactly the native types
+    // builtin types: the decl's `builtin` decls are exactly the native
+    // types — name AND ambient bit (the decl spelling vs the row)
     let mut decl_types = builtin_types;
     decl_types.sort();
-    let mut surf_types: Vec<String> =
-        surface.native_types.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
+    let mut surf_types: Vec<(String, bool)> =
+        surface.native_types.iter().map(|(n, _, a)| (surface.names.name(*n).to_string(), *a)).collect();
     surf_types.sort();
     assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
 
     // traits: the decl's builtin traits are exactly the native
-    // traits — and nothing in the prelude is a plain library trait
+    // traits (name AND ambient bit) — and nothing in the prelude is a
+    // plain library trait
     let mut decl_traits = builtin_traits;
     decl_traits.sort();
-    let mut surf_traits: Vec<String> =
-        surface.native_traits.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
+    let mut surf_traits: Vec<(String, bool)> =
+        surface.native_traits.iter().map(|(n, _, a)| (surface.names.name(*n).to_string(), *a)).collect();
     surf_traits.sort();
     assert_eq!(decl_traits, surf_traits, "core.d.rut builtin traits == Surface::core native_traits");
     assert!(
@@ -98,11 +112,12 @@ fn core_decl_matches_the_compilers_surface() {
     );
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
-    // native fns — all of them (own/downcast/assert/panic/str/bytes)
+    // native fns (name AND ambient bit) — all of them
+    // (own/downcast/assert/panic/str/bytes)
     let mut decl_fns = builtin_fns;
     decl_fns.sort();
-    let mut surf_fns: Vec<String> =
-        surface.native_fns.iter().map(|n| surface.names.name(*n).to_string()).collect();
+    let mut surf_fns: Vec<(String, bool)> =
+        surface.native_fns.iter().map(|(n, a)| (surface.names.name(*n).to_string(), *a)).collect();
     surf_fns.sort();
     assert_eq!(decl_fns, surf_fns, "core.d.rut builtin fns == Surface::core native_fns");
 
@@ -227,5 +242,28 @@ fn removed_char_type_positions_diagnose_without_the_kind() {
             "src: {src}\ndiags: {:?}",
             out.diags
         );
+    }
+}
+
+/// VISIBILITY AGREEMENT, spelled out per row: each decl's
+/// `Linkage::Builtin { ambient }` matches the ambient bit on its
+/// `Surface::core()` row (checked set-wise by the lockstep above); this
+/// pin fixes the phase's intent — the disposal pair is the import-gated
+/// spelling (`pub builtin`, ambient=false), every other row is ambient
+/// (`prelude builtin`). A future row flips only with a deliberate test
+/// update.
+#[test]
+fn disposal_rows_are_import_gated_everything_else_ambient() {
+    let surface = rut_core::binary::Surface::core();
+    for (name, _, ambient) in &surface.native_types {
+        let expected = surface.names.name(*name) == "DisposalContext";
+        assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
+    }
+    for (name, _, ambient) in &surface.native_traits {
+        let expected = surface.names.name(*name) == "Disposal";
+        assert_eq!(!*ambient, expected, "native trait `{}`: ambient bit", surface.names.name(*name));
+    }
+    for (name, ambient) in &surface.native_fns {
+        assert!(*ambient, "native fn `{}` stays ambient", surface.names.name(*name));
     }
 }

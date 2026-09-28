@@ -1,7 +1,7 @@
 // core/core.d.rut — the prelude surface (RFC 0028): what the language
 // itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
-// lowered fns, and the engine-woven trait `Iterator` (the
-// `Disposal`/`Index` contracts are gone, v1.1). The array `[T]` is pure
+// lowered fns, and the engine-woven traits `Iterator` and `Disposal`
+// (the `Index` contract is gone, v1.1). The array `[T]` is pure
 // grammar — no decl carries it (RFC 0005 §9).
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
@@ -294,10 +294,12 @@ prelude builtin impl u64 {
 // package's own trait — e.g. an encoding contract for map keys) stay
 // plain `trait`.
 
-// v1.1 removals — `Disposal`/`Index` are gone from the prelude:
-// cleanups attach with `on_drop` (RFC 0016) and indexing is builtin
-// over `[T]`/`Vec`/`str`/`bytes`. Library contracts without engine
-// knowledge (`Hashable`) stay plain `trait` in their module.
+// v1.1 removed `Index` from the prelude: indexing is builtin over
+// `[T]`/`Vec`/`str`/`bytes`. `Disposal` is BACK — registered again as
+// the cell-death contract (`pub builtin`, the import-gated spelling;
+// cleanups still attach with `on_drop` until the engine drives
+// `dispose`). Library contracts without engine knowledge (`Hashable`)
+// stay plain `trait` in their module.
 
 // RFC 0012 §6 — the iteration protocol. A type is iterable when it
 // declares this member (duck-typed satisfaction); `for (x of it)`
@@ -337,4 +339,19 @@ prelude builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;
+}
+
+// The cell-death contract: the engine calls `dispose` when a value of
+// an implementing type reaches refcount zero — weak boxes null first,
+// fields release after it returns. `pub builtin` (the import-gated
+// spelling): the trait resolves through `use core::{Disposal}`; users
+// implement it with an ordinary `impl` block.
+pub builtin trait Disposal {
+    fn dispose(mut self, cx: DisposalContext);
+}
+
+// engine-minted, one per dispose call; no members yet — the
+// parameter exists so the context grows without touching the
+// trait signature
+pub builtin class DisposalContext {
 }

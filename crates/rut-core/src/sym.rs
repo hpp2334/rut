@@ -184,6 +184,11 @@ pub const WELL_KNOWN: &[&str] = &[
     "__abort",    // ABORT_RAW
     "__sleep",    // SLEEP_RAW
     "__sleep_yield", // SLEEP_YIELD
+    // the disposal surface (the cell-death contract): the engine-woven
+    // trait and the context type its one member takes. Well-known so
+    // every interner agrees on the surface names.
+    "Disposal",        // DISPOSAL
+    "DisposalContext", // DISPOSAL_CONTEXT
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -304,6 +309,13 @@ pub const LAUNCH_RAW: IdentId = IdentId(81);
 pub const ABORT_RAW: IdentId = IdentId(82);
 pub const SLEEP_RAW: IdentId = IdentId(83);
 pub const SLEEP_YIELD: IdentId = IdentId(84);
+
+// the disposal surface (the cell-death contract): the engine calls
+// `dispose` when a value of an implementing type reaches refcount zero,
+// minting one `DisposalContext` per call — well-known so every interner
+// agrees on the surface names
+pub const DISPOSAL: IdentId = IdentId(85);
+pub const DISPOSAL_CONTEXT: IdentId = IdentId(86);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -429,6 +441,9 @@ mod tests {
             ("__abort", ABORT_RAW),
             ("__sleep", SLEEP_RAW),
             ("__sleep_yield", SLEEP_YIELD),
+            // the disposal surface
+            ("Disposal", DISPOSAL),
+            ("DisposalContext", DISPOSAL_CONTEXT),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

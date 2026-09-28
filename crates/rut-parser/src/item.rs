@@ -1573,10 +1573,16 @@ impl SurfaceFrame {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
                 let span = Span::new(self.lo, p.span().hi);
+                // the strict spelling the decl used — `prelude builtin`
+                // (ambient) vs `pub builtin` (import-gated); a bare
+                // `builtin` diagnoses and recovers as ambient
+                let ambient =
+                    matches!(self.linkage, Linkage::Builtin { ambient: true });
                 let node = if self.is_trait {
                     p.item(
                         ItemKind::BuiltinTrait {
                             vis: Vis::Self_,
+                            ambient,
                             name: self.name,
                             generics: std::mem::take(&mut self.generics),
                             methods: std::mem::take(&mut self.methods),
@@ -1595,6 +1601,7 @@ impl SurfaceFrame {
                 } else if self.is_primitive {
                     p.item(
                         ItemKind::BuiltinPrimitive {
+                            ambient,
                             name: self.name,
                             members: std::mem::take(&mut self.methods),
                         },
@@ -1604,6 +1611,7 @@ impl SurfaceFrame {
                     p.item(
                         ItemKind::BuiltinTy {
                             vis: Vis::Self_,
+                            ambient,
                             name: self.name,
                             generics: std::mem::take(&mut self.generics),
                             members: std::mem::take(&mut self.methods),

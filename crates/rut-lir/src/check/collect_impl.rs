@@ -202,6 +202,12 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`Weak` takes no impl blocks — its member is engine builtin (`upgrade()`)");
                     None
                 }
+                // the disposal context likewise: engine-minted, no
+                // member surface — there is nothing to impl onto it
+                (rut_core::binary::NativeTy::DisposalContext, _) => {
+                    self.err(sp, "`DisposalContext` takes no impl blocks — the engine mints it per `dispose` call");
+                    None
+                }
             }
         } else if generics.is_empty() && self.extern_types.contains_key(&name) {
             // a USED type (RFC 0035 §1): legal as a TRAIT-impl

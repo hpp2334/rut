@@ -177,20 +177,23 @@ impl<'a> GraphCompiler<'a> {
                 });
             }
             surface.namespace = module.namespace.as_deref().map(|n| surface.names.intern(n));
+            // host-mounted rows are ambient (`true`) — the row shape
+            // carries each name's ambient bit; core's own rows set it
+            // from the decl spelling in `Surface::core`
             surface.native_types = module
                 .native_types
                 .iter()
-                .map(|(n, k)| (surface.names.intern(n), *k))
+                .map(|(n, k)| (surface.names.intern(n), *k, true))
                 .collect();
             surface.native_traits = module
                 .native_traits
                 .iter()
-                .map(|(n, k)| (surface.names.intern(n), *k))
+                .map(|(n, k)| (surface.names.intern(n), *k, true))
                 .collect();
             surface.native_fns = module
                 .native_fns
                 .iter()
-                .map(|n| surface.names.intern(n))
+                .map(|n| (surface.names.intern(n), true))
                 .collect();
             // the integer prims' numeric methods (RFC 0032 §1.1 R2) —
             // bound ambient on the receiver primitive, no use gate

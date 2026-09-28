@@ -655,7 +655,8 @@ impl Heap {
                     }
                 }
             }
-            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace | TyKind::Weak { .. } => {
+            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace | TyKind::Weak { .. }
+            | TyKind::DisposalContext => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,
                 // so enums share (values, RFC 0006); trait objects have no
@@ -665,6 +666,8 @@ impl Heap {
                 // A weak box is identity state over an unretained referent:
                 // the share IS the own (two boxes of one referent stay
                 // distinct cells — RFC 0017).
+                // A disposal context is engine-minted per dispose call:
+                // the handle share IS the own (nothing else holds state).
                 Ok(s)
             }
             TyKind::StrBuf => {

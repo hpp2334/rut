@@ -413,6 +413,8 @@ fn remap_kind(
         TyKind::Trace => TyKind::Trace,
         // the builder carries no type ids — the boot type is global
         TyKind::StrBuf => TyKind::StrBuf,
+        // the disposal context carries no type ids — the boot type is global
+        TyKind::DisposalContext => TyKind::DisposalContext,
     }
 }
 

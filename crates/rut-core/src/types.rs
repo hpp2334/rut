@@ -211,6 +211,12 @@ pub enum TyKind {
     /// never learns what is being built. A cell like `Trace` — methods
     /// mutate through it, assignment shares it.
     StrBuf,
+    /// the disposal drain's minted context cell — the `DisposalContext`
+    /// builtin class's runtime type. The engine mints one per `dispose`
+    /// call; a stateless engine cell today (empty surface), shaped to
+    /// grow without touching the trait's signature. A ref-repr cell like
+    /// `Trace`: assignment shares it.
+    DisposalContext,
     /// `?T` (RFC 0005, RFC 0044) — a nil-able cell; `nil` is the null slot.
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
@@ -284,6 +290,10 @@ pub const TY_OPT_STR: TypeId = 19;
 pub const TY_OPT_BYTES: TypeId = 20;
 /// the `?opaque` answer lane (the legal-host-returns phase): `Opt { elem: TY_OPAQUE }`.
 pub const TY_OPT_OPAQUE: TypeId = 21;
+/// the `DisposalContext` builtin class (the disposal surface) — appended
+/// after the host-answer optionals; fixed ids are wire-stable and must
+/// never be reordered
+pub const TY_DISPOSAL_CONTEXT: TypeId = 22;
 /// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -350,6 +360,9 @@ impl TypeTable {
         push(sym::STR, TyKind::Opt { elem: TY_STR });
         push(sym::BYTES, TyKind::Opt { elem: TY_BYTES });
         push(sym::OPAQUE, TyKind::Opt { elem: TY_OPAQUE });
+        // the disposal drain's context cell (the disposal surface): the
+        // engine mints one per `dispose` call; nothing constructs it
+        push(sym::DISPOSAL_CONTEXT, TyKind::DisposalContext);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {

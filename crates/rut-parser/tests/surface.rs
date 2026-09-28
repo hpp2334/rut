@@ -270,7 +270,7 @@ fn builtin_primitive_parses() {
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinPrimitive { name, members } = ast.item(items[0]) else {
+    let ItemKind::BuiltinPrimitive { name, members, .. } = ast.item(items[0]) else {
         panic!("expected a BuiltinPrimitive item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(ast.name(*name), "opaque");

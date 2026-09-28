@@ -378,13 +378,15 @@ fn version_nine_rejects_stale_artifacts() {
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v13
+    // and a fresh compile round-trips under v14 (the disposal surface:
+    // the `DisposalContext` boot type + the `Disposal`/`DisposalContext`
+    // surface rows, the v10 declared-surface precedent)
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module("app_main", Module { source: Some("pub fn main() -> i32 { return 4; }".into()), ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &13u32.to_le_bytes(), "the header carries v13");
+    assert_eq!(&bytes[4..8], &14u32.to_le_bytes(), "the header carries v14");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

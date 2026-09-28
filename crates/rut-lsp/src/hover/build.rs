@@ -387,7 +387,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::BuiltinPrimitive { name, members } => {
+            ItemKind::BuiltinPrimitive { name, members, .. } => {
                 let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,

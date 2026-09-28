@@ -188,6 +188,13 @@ pub enum NativeTy {
     /// its one member `upgrade()` is an engine builtin. Constructed by
     /// the class method `Weak.new(v)`.
     Weak,
+    /// `DisposalContext` — the disposal drain's minted context cell
+    /// (the disposal surface): engine-implemented, one per `dispose`
+    /// call. Empty member surface for now — the type exists so the
+    /// `Disposal` contract's `cx` parameter resolves and the context
+    /// can grow without touching the trait signature. Never constructed
+    /// by user code.
+    DisposalContext,
 }
 
 /// A builtin trait published by `core`'s native surface (RFC 0028):
@@ -195,7 +202,12 @@ pub enum NativeTy {
 /// for modules that named it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTrait {
-    /// `Disposal { fn dispose(mut self) -> nil }` (RFC 0011/0016)
+    /// `Disposal { fn dispose(mut self, cx: DisposalContext) }` — the
+    /// cell-death contract: the engine calls `dispose` when a value of
+    /// an implementing type reaches refcount zero (weak boxes null
+    /// first; fields release after it returns). The `cx` is the
+    /// engine-minted context cell ([`NativeTy::DisposalContext`]), one
+    /// per call.
     Disposal,
     /// `Index<T>` — the random-access contract (RFC 0012)
     Index,
@@ -244,14 +256,17 @@ pub struct Surface {
     /// trait impl registrations `(trait, target, [method → fn ref])`
     /// (RFC 0012 §2) — merged at link, where duplicate pairs error
     pub impls: Vec<SurfaceImpl>,
-    /// builtin container names (`core` only): name -> constructor
-    pub native_types: Vec<(IdentId, NativeTy)>,
-    /// builtin trait names (`core` only): name -> contract
-    pub native_traits: Vec<(IdentId, NativeTrait)>,
+    /// builtin container names (`core` only): name -> constructor, plus
+    /// the name's ambient bit (`true` binds in every unit with no `use`;
+    /// `false` is the import-gated spelling, resolved through `use`)
+    pub native_types: Vec<(IdentId, NativeTy, bool)>,
+    /// builtin trait names (`core` only), each with its ambient bit
+    /// (same law as [`Surface::native_types`])
+    pub native_traits: Vec<(IdentId, NativeTrait, bool)>,
     /// compiler-lowered builtin function names (`core` only) — no
-    /// `FuncCode`; the bodies are rut-lir lowering, AMBIENT like every
-    /// builtin name (RFC 0028 revised, builtin-surface)
-    pub native_fns: Vec<IdentId>,
+    /// `FuncCode`; the bodies are rut-lir lowering. Each row carries its
+    /// ambient bit (same law as [`Surface::native_types`])
+    pub native_fns: Vec<(IdentId, bool)>,
     /// builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
     /// primitives' `builtin impl` blocks — `(receiver prim, method name,
     /// lowering id)`. No `FuncCode`; rut-lir expands the method call
@@ -306,17 +321,22 @@ impl Surface {
         Surface {
             names: Interner::new(),
             native_types: vec![
-                (sym::OPAQUE, NativeTy::Opaque),
-                (sym::STACK_TRACE, NativeTy::StackTrace),
-                (sym::STRBUF, NativeTy::StrBuf),
-                (sym::WEAK, NativeTy::Weak),
+                (sym::OPAQUE, NativeTy::Opaque, true),
+                (sym::STACK_TRACE, NativeTy::StackTrace, true),
+                (sym::STRBUF, NativeTy::StrBuf, true),
+                (sym::WEAK, NativeTy::Weak, true),
+                // the disposal surface: `pub builtin` — import-gated
+                // spellings (the binding stays ambient-for-all until the
+                // gated-mount phase; the bit records the decl's spelling)
+                (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
             ],
             native_traits: vec![
-                (sym::ITERATOR, NativeTrait::Iterator),
-                (sym::FUTURE, NativeTrait::Future),
-                (sym::RUN_CONTEXT, NativeTrait::RunContext),
+                (sym::ITERATOR, NativeTrait::Iterator, true),
+                (sym::FUTURE, NativeTrait::Future, true),
+                (sym::RUN_CONTEXT, NativeTrait::RunContext, true),
+                (sym::DISPOSAL, NativeTrait::Disposal, false),
             ],
-            native_fns: CORE_FNS.to_vec(),
+            native_fns: CORE_FNS.iter().map(|&n| (n, true)).collect(),
             // core's one const: `use core::{NAN}` — the unwritable float
             // (f64 bits materialized with `ConstRaw`)
             consts: vec![SurfaceConst { name: sym::NAN, ty: crate::types::TY_F64, bits: f64::NAN.to_bits() }],
@@ -333,6 +353,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
         sym::STACK_TRACE => Some(NativeTy::StackTrace),
         sym::STRBUF => Some(NativeTy::StrBuf),
         sym::WEAK => Some(NativeTy::Weak),
+        sym::DISPOSAL_CONTEXT => Some(NativeTy::DisposalContext),
         _ => None,
     }
 }
@@ -341,6 +362,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
 pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
     match name {
         sym::ITERATOR => Some(NativeTrait::Iterator),
+        sym::DISPOSAL => Some(NativeTrait::Disposal),
         _ => None,
     }
 }
@@ -364,7 +386,6 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
     ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
-    ("Disposal", "`Disposal` was removed — attach cleanups with `on_drop` (RFC 0016 v1.1)"),
     ("string_len", "`string_len(s)` was removed — use `s.len()` (RFC 0004 v1.1)"),
     ("string_encode", "`string_encode(s)` was removed — use `s.encode()` (RFC 0004 v1.1)"),
     ("bytes_len", "`bytes_len(b)` was removed — use `b.len()` (RFC 0004 v1.1)"),
@@ -514,7 +535,14 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// `TY_CHAR` boot row (a `Nil` shell holding the wire-stable ids fixed)
 /// ride the same bump. Old v11 artifacts are refused — none may be
 /// misread under the new law.
-pub const VERSION: u32 = 13;
+/// v14: the disposal surface — a new boot type (`DisposalContext`,
+/// type id 22, kind tag 17) and new declared-surface rows
+/// (`NativeTy::DisposalContext`, `NativeTrait::Disposal`) — the v10
+/// precedent: an artifact compiled here may reference the new boot id
+/// or kind, which an older engine can neither place in its boot table
+/// nor decode, so stale artifacts are refused at the version byte
+/// instead of misread.
+pub const VERSION: u32 = 14;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -699,6 +727,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(16);
             e.u32(*elem);
         }
+        TyKind::DisposalContext => e.u8(17),
     }
 }
 
@@ -865,6 +894,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         14 => TyKind::Trace,
         15 => TyKind::StrBuf,
         16 => TyKind::Weak { elem: d.u32()? },
+        17 => TyKind::DisposalContext,
         t => return Err(format!("bad type kind tag {t}")),
     })
 }

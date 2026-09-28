@@ -290,6 +290,15 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`StrBuf` takes no generic arguments — pre-size with the capacity: `StrBuf(cap)`");
                             TY_I32
                         }
+                        // the disposal drain's context cell: the engine mints
+                        // it — the name resolves in type position (a
+                        // `dispose` body's `cx` parameter), nothing
+                        // constructs it
+                        (rut_core::binary::NativeTy::DisposalContext, []) => TY_DISPOSAL_CONTEXT,
+                        (rut_core::binary::NativeTy::DisposalContext, _) => {
+                            self.err(sp, "`DisposalContext` takes no generic arguments");
+                            TY_I32
+                        }
                         // RFC 0017 v1: the ONE generic builtin — `Weak<T>`
                         // interns per instantiation (`mk_weak`, the
                         // `mk_array` law). Exactly one parameter.

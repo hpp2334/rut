@@ -240,17 +240,21 @@ pub fn compile_program_resolved(
         // builtin-surface): no `use` needed, the `use` statement itself
         // is redundant-but-legal for these names. Pkg mounting (ink/
         // pouch/calc fns, consts, namespace heads) stays use-gated.
-        for (n, kind) in &surface.native_types {
+        // The rows carry each name's ambient bit (`false` = the
+        // `pub builtin` spelling); THIS phase every row still binds for
+        // every unit — the import-gated read of the bit lands with the
+        // gated-mount phase, so it rides along unacted-on here.
+        for (n, kind, _ambient) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 ctx.add_extern_native_type(id, *kind);
             }
         }
-        for (n, native) in &surface.native_traits {
+        for (n, native, _ambient) in &surface.native_traits {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 ctx.add_extern_trait(id, *native);
             }
         }
-        for n in &surface.native_fns {
+        for (n, _ambient) in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 ctx.add_extern_native_fn(id);
             }
@@ -533,9 +537,9 @@ pub fn mount_std_core(session: &mut Session) {
     let _ = session.register_module(
         "core",
         Module {
-            native_types: core.native_types.iter().map(|(n, k)| (txt(*n), *k)).collect(),
-            native_traits: core.native_traits.iter().map(|(n, k)| (txt(*n), *k)).collect(),
-            native_fns: core.native_fns.iter().map(|n| txt(*n)).collect(),
+            native_types: core.native_types.iter().map(|(n, k, _)| (txt(*n), *k)).collect(),
+            native_traits: core.native_traits.iter().map(|(n, k, _)| (txt(*n), *k)).collect(),
+            native_fns: core.native_fns.iter().map(|(n, _)| txt(*n)).collect(),
             consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
             native_impls: core
                 .native_impls

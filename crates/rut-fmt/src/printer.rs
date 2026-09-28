@@ -795,25 +795,23 @@ impl<'a> P<'a> {
                 self.text(self.a.name(name));
                 self.fields_body(fields, Some(span));
             }
-            ItemKind::BuiltinTy { vis, name, generics, members } => {
-                let _ = vis;
-                // the type-shaped builtin items carry no linkage field —
-                // the formatter emits the ambient spelling (`prelude
-                // builtin`), the form every decl file spells
-                self.text("prelude builtin class ");
+            ItemKind::BuiltinTy { vis: _, ambient, name, generics, members } => {
+                // the type-shaped builtin items carry the strict spelling
+                // they were declared with (`prelude builtin` ambient /
+                // `pub builtin` import-gated)
+                self.text(if ambient { "prelude builtin class " } else { "pub builtin class " });
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
                 self.trait_body(members, span);
             }
-            ItemKind::BuiltinTrait { vis, name, generics, methods } => {
-                let _ = vis;
-                self.text("prelude builtin trait ");
+            ItemKind::BuiltinTrait { vis: _, ambient, name, generics, methods } => {
+                self.text(if ambient { "prelude builtin trait " } else { "pub builtin trait " });
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
                 self.trait_body(methods, span);
             }
-            ItemKind::BuiltinPrimitive { name, members } => {
-                self.text("prelude builtin primitive ");
+            ItemKind::BuiltinPrimitive { ambient, name, members } => {
+                self.text(if ambient { "prelude builtin primitive " } else { "pub builtin primitive " });
                 self.text(self.a.name(name));
                 self.trait_body(members, span);
             }
