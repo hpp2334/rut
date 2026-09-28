@@ -80,3 +80,23 @@ acceptance):
 - When you change language surface or CLI behavior, update the matching
   book pages in the same change — `mdbook build docs` fails on dead
   links and missing TOC files, so run it before committing doc edits.
+- Bilingual book (en + zh-CN): English is the single source of truth —
+  all prose changes happen in `docs/src/` (and `docs/book.toml`), then
+  the matching `docs/po/zh_CN.po` entries are updated in the SAME
+  change. The zh-CN terminology contract in `docs/po/GLOSSARY.md` is
+  binding for every catalog entry; untranslated entries fall back to
+  the English text by design, and the zh edition must build even at
+  0% translated. `docs/po/` is source, never gitignored;
+  `docs/po/rut.pot` is committed and re-extracted with one byte-stable
+  command after any prose change (it feeds translators' diffing):
+  `MDBOOK_OUTPUT='{"xgettext": {}}' mdbook build docs -d docs/po/_extract && sed -i 's/^"POT-Creation-Date:.*/"POT-Creation-Date: 1970-01-01 00:00:00+00:00\\n"/' docs/po/_extract/messages.pot && mv docs/po/_extract/messages.pot docs/po/rut.pot && rm -rf docs/po/_extract`
+  then fold new/changed strings into `docs/po/zh_CN.po` with a PO
+  tool. Both editions must build before committing doc changes:
+  `mdbook build docs` (en) and
+  `node scripts/deploy.cjs --book --dry-run` (builds the zh edition
+  via `docs/book.zh.toml` — mdbook 0.5 has no `-c`, so deploy.cjs
+  wraps it in a throwaway shim dir — then assembles `docs/dist-book/`:
+  en at the root, zh at `/zh/`, `wasm/rut.wasm` in both — and runs the
+  sanity gates without uploading). The header EN | 中文 toggle
+  (`docs/theme/lang-toggle.js`, both editions) links each page to its
+  sibling edition; keep it wired into BOTH books' `additional-js`.

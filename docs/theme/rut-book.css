@@ -219,3 +219,92 @@ html.light .rut-run-loud code,
 html.rust .rut-run-loud code {
   background: #ffffff;
 }
+
+/* .rut-lang — the EN | 中文 switch (theme/lang-toggle.js). A small
+   fixed pill on every page of BOTH editions, linking to the same page
+   in the other edition. Bottom-right corner: mdbook's sticky menu bar
+   owns the top strip (search/theme buttons) and the full-height
+   prev/next arrow strips own the side edges, so the corner is the one
+   spot that never collides; the z-index keeps clicks on the pill
+   instead of the next-chapter strip underneath. Hidden in print. */
+.rut-lang {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.25em 0.7em;
+  font-size: 0.8em;
+  line-height: 1.4;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+}
+.rut-lang:hover,
+.rut-lang:focus-within {
+  opacity: 1;
+}
+.rut-lang-item {
+  color: inherit;
+  text-decoration: none;
+}
+a.rut-lang-item:hover,
+a.rut-lang-item:focus-visible {
+  text-decoration: underline;
+}
+.rut-lang-current {
+  font-weight: 700;
+  cursor: default;
+}
+.rut-lang-sep {
+  opacity: 0.5;
+}
+
+/* ---- dark themes (ayu-flavored) ------------------------------------ */
+html.ayu .rut-lang,
+html.coal .rut-lang,
+html.navy .rut-lang {
+  color: #899ba6;
+  background: rgba(0, 0, 0, 0.45);
+  border-color: #2a3542;
+}
+html.ayu a.rut-lang-item:hover,
+html.coal a.rut-lang-item:hover,
+html.navy a.rut-lang-item:hover,
+html.ayu a.rut-lang-item:focus-visible,
+html.coal a.rut-lang-item:focus-visible,
+html.navy a.rut-lang-item:focus-visible {
+  color: #ffd173;
+}
+html.ayu .rut-lang-current,
+html.coal .rut-lang-current,
+html.navy .rut-lang-current {
+  color: #e6e1cf;
+}
+
+/* ---- light themes (github-flavored) -------------------------------- */
+html.light .rut-lang,
+html.rust .rut-lang {
+  color: #59636e;
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #d0d7de;
+}
+html.light a.rut-lang-item:hover,
+html.rust a.rut-lang-item:hover,
+html.light a.rut-lang-item:focus-visible,
+html.rust a.rut-lang-item:focus-visible {
+  color: #8250df;
+}
+html.light .rut-lang-current,
+html.rust .rut-lang-current {
+  color: #1f2328;
+}
+
+@media print {
+  .rut-lang {
+    display: none;
+  }
+}

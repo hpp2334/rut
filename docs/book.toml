@@ -23,9 +23,10 @@ edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
 # tag would 404 once deployed), hence the committed shim; the token
 # palette reads well in both the ayu (default) and light themes.
 # rut-book.js (the ▶ Run buttons) runs AFTER the highlighter: it reads
-# block textContent, which spans don't disturb.
+# block textContent, which spans don't disturb. lang-toggle.js is the
+# EN | 中文 switch shared with the zh edition (docs/book.zh.toml).
 additional-css = ["theme/rut-book.css"]
-additional-js = ["theme/rut-highlight.js", "theme/rut-book.js"]
+additional-js = ["theme/rut-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
 
 # The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
 # here: mdbook 0.5 dropped `output.html.additional-resources` (the build

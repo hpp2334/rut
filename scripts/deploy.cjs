@@ -2,8 +2,13 @@
 /**
  * Deploy to Cloudflare Pages. Two targets, one script:
  *
- *   demo (default)   demo/dist/      → playground.rut.hpp2334.com
- *   book (--book)    docs/book/      → rut.hpp2334.com
+ *   demo (default)   demo/dist/       → playground.rut.hpp2334.com
+ *   book (--book)    docs/dist-book/  → rut.hpp2334.com
+ *
+ *   The book target is a TWO-EDITION merge: the English book at the
+ *   site root and the zh-CN book under /zh/ (one Pages project, one
+ *   upload dir). docs/book/ and docs/book-zh/ are intermediate build
+ *   output; docs/dist-book/ is the assembled upload dir.
  *
  * Each target is a Pages project with its custom domain attached
  * (Dashboard → Workers & Pages → <project> → Custom domains; the first
@@ -17,21 +22,34 @@
  *
  * Options:
  *   --book            ship the docs book (mdbook) instead of the demo.
- *                     The book lane also builds the ▶ Run buttons' wasm
- *                     artifact: `rustup target add wasm32-unknown-unknown`
+ *                     Builds BOTH editions loud-fail: `mdbook build
+ *                     docs` (en) and the zh edition via docs/book.zh.toml
+ *                     (never skipped — the untranslated catalog falls
+ *                     back to English and THAT FALLBACK IS THE DESIGN).
+ *                     mdbook 0.5 has no -c/--config, so the zh edition
+ *                     builds through a thin shim dir mirroring docs/
+ *                     (book.toml → ../book.zh.toml + src/theme/po
+ *                     symlinks; see docs/book.zh.toml). The lane also
+ *                     builds the ▶ Run buttons' wasm artifact:
+ *                     `rustup target add wasm32-unknown-unknown`
  *                     (preflight) + `cargo build -p rut-wasm --target
  *                     wasm32-unknown-unknown --release`, staged to
  *                     docs/wasm/rut.wasm (gitignored build output; the
  *                     build is skipped only when --no-build is passed AND
  *                     the staged artifact already exists), then copied
- *                     post-build into the rendered book — mdbook 0.5
+ *                     post-build into BOTH rendered editions — mdbook 0.5
  *                     dropped `additional-resources`, so the lane does
- *                     that copy itself. The post-build step also bakes
- *                     static highlight spans (bake-book.mjs).
- *   --no-build        skip the build step (deploy the existing dist/)
+ *                     that copy itself (the buttons fetch wasm/rut.wasm
+ *                     relative to the page, so each edition root needs
+ *                     its own). The post-build step also bakes static
+ *                     highlight spans (bake-book.mjs) per edition.
+ *   --no-build        skip the build step (deploy the existing dist/).
+ *                     Book lane: reuses existing docs/book + docs/book-zh
+ *                     (still bakes/merges); missing edition → loud death
+ *                     with the build commands.
  *   --project <name>  Pages project name        (env RUT_PAGES_PROJECT, default rut-playground / rut-book)
  *   --branch <name>   branch to deploy as       (env RUT_PAGES_BRANCH,   default: current git branch, else main)
- *   --dist <dir>      directory to upload       (env RUT_PAGES_DIST,     default demo/dist / docs/book)
+ *   --dist <dir>      directory to upload       (env RUT_PAGES_DIST,     default demo/dist / docs/dist-book)
  *   --dry-run         build, print the deploy command, upload nothing
  *   -h, --help
  *
@@ -56,6 +74,13 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 const DEMO = path.join(ROOT, "demo");
+// the book lane: intermediate edition dirs + the merged upload dir
+const DOCS = path.join(ROOT, "docs");
+const BOOK_ROOTS = {
+  en: path.join(DOCS, "book"),
+  zh: path.join(DOCS, "book-zh"),
+};
+const BOOK_MERGED = path.join(DOCS, "dist-book");
 
 // ---------------------------------------------------------------------------
 // output helpers (the repo's loud-fail culture: say what runs, die loudly)
@@ -104,7 +129,7 @@ const book = argv.includes("--book");
 const doBuild = !argv.includes("--no-build");
 const dryRun = argv.includes("--dry-run");
 const defaultProject = book ? "rut-book" : "rut-playground";
-const defaultDist = book ? "docs/book" : "demo/dist";
+const defaultDist = book ? "docs/dist-book" : "demo/dist";
 const project = takeValue("--project") ?? process.env.RUT_PAGES_PROJECT ?? defaultProject;
 const dist = path.resolve(ROOT, takeValue("--dist") ?? process.env.RUT_PAGES_DIST ?? defaultDist);
 const branch = takeValue("--branch") ?? process.env.RUT_PAGES_BRANCH ?? gitBranch() ?? "main";
@@ -120,6 +145,48 @@ function gitBranch() {
   return name && name !== "HEAD" ? name : null;
 }
 
+/**
+ * Build the zh-CN edition into docs/book-zh.
+ *
+ * mdbook 0.5 has no `-c/--config` flag, so the edition config
+ * (docs/book.zh.toml) is built through a throwaway shim dir whose
+ * layout mirrors docs/: book.toml → ../book.zh.toml plus src/theme/po
+ * symlinks. That keeps every path inside book.zh.toml written exactly
+ * like docs/book.toml's. The shim is removed even when the build
+ * fails. See the header of docs/book.zh.toml.
+ */
+function buildZhEdition(mdbookVersion) {
+  const shim = path.join(DOCS, ".book-zh");
+  fs.rmSync(shim, { recursive: true, force: true });
+  fs.mkdirSync(shim);
+  const link = (from, to) => fs.symlinkSync(from, path.join(shim, to));
+  try {
+    link("../book.zh.toml", "book.toml");
+    link("../src", "src");
+    link("../theme", "theme");
+    link("../po", "po");
+    info(
+      dim(
+        `building docs/ (zh) — mdbook build docs/.book-zh -d docs/book-zh (${mdbookVersion.trim()})`
+      )
+    );
+    const r = spawnSync(
+      "mdbook",
+      ["build", path.relative(ROOT, shim), "-d", path.relative(ROOT, BOOK_ROOTS.zh)],
+      { cwd: ROOT, stdio: "inherit" }
+    );
+    if (r.status !== 0)
+      die(
+        `zh edition build failed (exit ${r.status ?? "?"}) — try it directly: ` +
+          `sh -c 'set -e; rm -rf docs/.book-zh; mkdir docs/.book-zh; cd docs/.book-zh; ` +
+          `ln -s ../book.zh.toml book.toml; ln -s ../src src; ln -s ../theme theme; ln -s ../po po; ` +
+          `cd ../..; mdbook build docs/.book-zh -d docs/book-zh; rm -rf docs/.book-zh'`
+      );
+  } finally {
+    fs.rmSync(shim, { recursive: true, force: true });
+  }
+}
+
 const unknown = argv.filter(
   (a) => a.startsWith("-") && a !== "--no-build" && a !== "--dry-run" && a !== "--book"
 );
@@ -132,7 +199,9 @@ if (unknown.length) {
 // 1. build what ships
 //    - demo: preflight-wasm runs inside `npm run build` and fails loudly
 //      with the exact build:wasm command when artifacts are missing
-//    - book: mdbook renders docs/src into docs/book
+//    - book: mdbook renders docs/src into docs/book (en) and — via the
+//      docs/book.zh.toml shim — docs/book-zh (zh), then the lane merges
+//      both into docs/dist-book
 // ---------------------------------------------------------------------------
 
 if (!doBuild) {
@@ -209,15 +278,18 @@ if (!doBuild) {
     }
   }
 
-  // (c) render the book
+  // (c) render BOTH editions. The zh build is NEVER skipped — with the
+  //     seeded untranslated catalog every entry falls back to the
+  //     English source text and that fallback is the design.
   const v = spawnSync("mdbook", ["--version"], { encoding: "utf8" });
   if (v.error?.code === "ENOENT") {
     die("mdbook not found — install it with `cargo install mdbook --locked`");
   }
-  info(dim(`building docs/ — mdbook build docs (${(v.stdout || "").trim()})`));
+  info(dim(`building docs/ (en) — mdbook build docs (${(v.stdout || "").trim()})`));
   if (!dryRun) {
     const r = spawnSync("mdbook", ["build", "docs"], { cwd: ROOT, stdio: "inherit" });
     if (r.status !== 0) die(`book build failed (exit ${r.status ?? "?"})`);
+    buildZhEdition(v.stdout || "");
   }
 } else {
   info(dim("building demo/ — npm run build"));
@@ -228,16 +300,18 @@ if (!doBuild) {
 }
 
 // ---------------------------------------------------------------------------
-// 1.5 book post-build: bake spans + stage the wasm artifact into the book
-//     (mdbook 0.5 dropped output.html.additional-resources — verified, the
-//     build refuses the key — so the lane does both copies itself; both
-//     are idempotent and also self-heal a --no-build deploy)
+// 1.5 book post-build: bake spans + stage the wasm artifact into BOTH
+//     editions, then assemble the merged upload dir (en at the site
+//     root, zh under /zh/). mdbook 0.5 dropped
+//     output.html.additional-resources — verified, the build refuses
+//     the key — so the lane does the copies itself; every step is
+//     idempotent and also self-heals a --no-build deploy. The run
+//     buttons fetch wasm/rut.wasm relative to the page, so EACH
+//     edition root carries the artifact.
 // ---------------------------------------------------------------------------
 
-if (book && !dryRun) {
-  if (!fs.existsSync(dist)) {
-    die(`${dist} does not exist — run \`mdbook build docs\` (or deploy with the build step enabled)`);
-  }
+if (book) {
+  const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
   const bake = path.join(
     ROOT,
     "integrations",
@@ -245,13 +319,57 @@ if (book && !dryRun) {
     "scripts",
     "bake-book.mjs"
   );
-  if (fs.existsSync(bake)) {
-    info(dim("baking static highlight spans — node integrations/rut-highlightjs/scripts/bake-book.mjs"));
-    const bk = spawnSync("node", [bake, dist], { cwd: ROOT, stdio: "inherit" });
-    if (bk.status !== 0)
-      die(`bake-book failed (exit ${bk.status ?? "?"}) — run \`node ${path.relative(ROOT, bake)} ${dist}\` directly`);
+  const notRendered = (root) => !fs.existsSync(path.join(root, "index.html"));
+
+  // (a) bake + wasm into the intermediate editions (skipped under
+  //     --dry-run, like the pre-merge lane; the assemble step below
+  //     still stages the artifact into the merged dir)
+  if (!dryRun) {
+    for (const root of Object.values(BOOK_ROOTS)) {
+      if (notRendered(root)) {
+        die(
+          `${root} does not exist or is not a rendered book — build both editions ` +
+            `\`node scripts/deploy.cjs --book\` (or deploy with the build step enabled)`
+        );
+      }
+    }
+    for (const [lang, root] of Object.entries(BOOK_ROOTS)) {
+      if (fs.existsSync(bake)) {
+        info(dim(`baking static highlight spans (${lang}) — node integrations/rut-highlightjs/scripts/bake-book.mjs ${path.relative(ROOT, root)}`));
+        const bk = spawnSync("node", [bake, root], { cwd: ROOT, stdio: "inherit" });
+        if (bk.status !== 0)
+          die(`bake-book failed (exit ${bk.status ?? "?"}) — run \`node ${path.relative(ROOT, bake)} ${root}\` directly`);
+      }
+      if (!fs.existsSync(artifact)) {
+        die(
+          "docs/wasm/rut.wasm is missing — run " +
+            "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` and " +
+            "copy target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm"
+        );
+      }
+      fs.mkdirSync(path.join(root, "wasm"), { recursive: true });
+      fs.copyFileSync(artifact, path.join(root, "wasm", "rut.wasm"));
+    }
   }
-  const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
+
+  // (b) assemble the merged upload dir: en book → root, zh book → zh/.
+  //     Runs under --dry-run too: staging is local, only the upload is
+  //     dry — that is what makes `--book --dry-run` a real gate.
+  for (const root of Object.values(BOOK_ROOTS)) {
+    if (notRendered(root)) {
+      die(
+        `${root} does not exist or is not a rendered book${doBuild ? "" : " (--no-build)"}` +
+          `${dryRun ? " (this dry-run skipped the build step)" : ""} — ` +
+          `build both editions first: \`node scripts/deploy.cjs --book\` (the zh edition ` +
+          `builds automatically; see docs/book.zh.toml)`
+      );
+    }
+  }
+  info(dim(`assembling the two-edition upload dir — ${path.relative(ROOT, dist)}`));
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.mkdirSync(dist, { recursive: true });
+  fs.cpSync(BOOK_ROOTS.en, dist, { recursive: true });
+  fs.cpSync(BOOK_ROOTS.zh, path.join(dist, "zh"), { recursive: true });
   if (!fs.existsSync(artifact)) {
     die(
       "docs/wasm/rut.wasm is missing — run " +
@@ -259,38 +377,50 @@ if (book && !dryRun) {
         "copy target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm"
     );
   }
-  fs.mkdirSync(path.join(dist, "wasm"), { recursive: true });
-  fs.copyFileSync(artifact, path.join(dist, "wasm", "rut.wasm"));
-}
-
-// ---------------------------------------------------------------------------
-// 2. sanity-check what we are about to ship
-// ---------------------------------------------------------------------------
-
-if (book) {
-  // index.html (the redirect to the intro) plus a real rendered book —
-  // a bare index.html alone would mean an empty build slipped through
-  const htmls = fs.existsSync(dist)
-    ? fs.readdirSync(dist, { recursive: true }).filter((f) => String(f).endsWith(".html"))
-    : [];
-  if (!fs.existsSync(path.join(dist, "index.html")) || htmls.length < 10) {
-    die(
-      `${dist} does not look like a rendered book (${htmls.length} html files) — run ` +
-        `\`mdbook build docs\` (or deploy with the build step enabled)`
-    );
+  for (const sub of ["", "zh"]) {
+    fs.mkdirSync(path.join(dist, sub, "wasm"), { recursive: true });
+    fs.copyFileSync(artifact, path.join(dist, sub, "wasm", "rut.wasm"));
   }
-  // the run buttons' artifact ships with the book — a missing one would
-  // 404 on every ▶ Run click (the buttons show the loud build panel,
-  // but a deploy that knowingly ships it is a broken deploy)
-  if (!fs.existsSync(path.join(dist, "wasm", "rut.wasm"))) {
-    die(
-      `${dist} is missing wasm/rut.wasm (the ▶ Run buttons would 404) — build the artifact ` +
-        `with \`cargo build -p rut-wasm --target wasm32-unknown-unknown --release\`, copy ` +
-        `target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm, then ` +
-        `\`mdbook build docs\` (or deploy with the build step enabled)`
-    );
+
+  // ---------------------------------------------------------------------------
+  // 2. sanity-check what we are about to ship — BOTH edition roots:
+  //    index.html (the redirect to the intro), the run buttons'
+  //    artifact, and a real rendered book (a bare index.html alone
+  //    would mean an empty build slipped through)
+  // ---------------------------------------------------------------------------
+
+  const pages = {};
+  for (const [lang, sub] of [["en", ""], ["zh", "zh"]]) {
+    const root = path.join(dist, sub);
+    const htmls = fs.existsSync(root)
+      ? fs
+          .readdirSync(root, { recursive: true })
+          .filter((f) => String(f).endsWith(".html"))
+          // the en root count excludes the nested zh/ subtree
+          .filter((f) => String(f).split(path.sep)[0] !== "zh")
+      : [];
+    if (!fs.existsSync(path.join(root, "index.html")) || htmls.length < 10) {
+      die(
+        `${root} does not look like a rendered book (${htmls.length} html files) — ` +
+          `build both editions (\`node scripts/deploy.cjs --book\`)`
+      );
+    }
+    // the run buttons' artifact ships with EACH edition — a missing one
+    // would 404 on every ▶ Run click (the buttons show the loud build
+    // panel, but a deploy that knowingly ships it is a broken deploy)
+    if (!fs.existsSync(path.join(root, "wasm", "rut.wasm"))) {
+      die(
+        `${root} is missing wasm/rut.wasm (the ▶ Run buttons would 404) — build the artifact ` +
+          `with \`cargo build -p rut-wasm --target wasm32-unknown-unknown --release\`, then ` +
+          `\`node scripts/deploy.cjs --book\` (the lane copies it into both editions)`
+      );
+    }
+    pages[lang] = htmls.length;
   }
-  ok(`book ready: ${dist} (${htmls.length} pages, wasm/rut.wasm) — ${isProduction ? bold("PRODUCTION") : `preview ${bold(branch)}`}`);
+  ok(
+    `book ready (2 editions): ${dist} — en ${pages.en} pages at /, zh ${pages.zh} pages at /zh/, ` +
+      `wasm/rut.wasm in both — ${isProduction ? bold("PRODUCTION") : `preview ${bold(branch)}`}`
+  );
 } else {
   const need = ["index.html", "main.js", "rut.wasm", "rut-lsp.wasm"];
   const missing = need.filter((f) => !fs.existsSync(path.join(dist, f)));
@@ -344,13 +474,13 @@ if (r.status !== 0) die(`wrangler deploy failed (exit ${r.status ?? "?"})`);
 // ---------------------------------------------------------------------------
 
 const domain = book ? "rut.hpp2334.com" : "playground.rut.hpp2334.com";
-const what = book ? "docs/book" : "demo/dist";
+const what = book ? "docs/dist-book (en + zh editions)" : "demo/dist";
 
 ok(`deployed ${what} → Cloudflare Pages project ${bold(project)} (branch ${bold(branch)})`);
 console.log(`
   ${bold(isProduction ? "production" : "preview")} deployment — see the URL wrangler printed above.
 
-  Custom domain: ${bold(domain)} serves the PRODUCTION
+  Custom domain: ${bold(domain)}${book ? ` (en at /, zh at ${bold(domain + "/zh/")})` : ""} serves the PRODUCTION
   branch (${bold(productionBranch)}) of this project. If the domain is not
   attached yet (one-time):
     Dashboard → Workers & Pages → ${project} → Custom domains → Set up a

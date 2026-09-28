@@ -1,0 +1,69 @@
+# book.zh.toml — the zh-CN edition of the book.
+#
+# English (docs/src + docs/book.toml) is the single SOURCE OF TRUTH;
+# this edition only overrides presentation and wires the gettext
+# translation pipeline. With the seeded, empty docs/po/zh_CN.po every
+# entry falls back to the English source text — THAT FALLBACK IS THE
+# DESIGN. Translations land entry-by-entry in later phases; a partially
+# translated book is a valid book.
+#
+# mdbook 0.5.x has no `-c/--config` flag, so this file is built through
+# a thin build-time shim dir whose layout mirrors docs/ (book.toml ->
+# ../book.zh.toml plus src/theme/po symlinks), which is why every path
+# below is written exactly like docs/book.toml's. deploy.cjs --book
+# creates and removes the shim automatically; the manual command is in
+# AGENTS.md ("Building both editions") and in scripts/deploy.cjs.
+#
+# Build (one command, loud on failure):
+#   sh -c 'set -e; rm -rf docs/.book-zh; mkdir docs/.book-zh;
+#          cd docs/.book-zh;
+#          ln -s ../book.zh.toml book.toml; ln -s ../src src;
+#          ln -s ../theme theme; ln -s ../po po;
+#          cd ../..; mdbook build docs/.book-zh -d docs/book-zh;
+#          rm -rf docs/.book-zh'
+
+[book]
+title = "rut 手册"
+authors = ["hpp2334"]
+description = "rut —— 一种小型、静态类型、可嵌入的脚本语言：Rust 风格的语法、具体化类型（reified types）、无 JIT 的字节码虚拟机"
+src = "src"
+# zh_CN (with an underscore) is deliberate: mdbook-gettext derives the
+# catalog path as <root>/po/<language>.po, and the catalog is
+# docs/po/zh_CN.po — the GNU gettext LL_CC naming. The lang-toggle
+# script normalizes the rendered <html lang> to "zh-CN" client-side.
+language = "zh_CN"
+
+[build]
+build-dir = "book-zh"
+create-missing = false
+
+[preprocessor.gettext]
+# mdbook-gettext (from mdbook-i18n-helpers): translates only when
+# `book.language` is set AND po/<language>.po exists; untranslated
+# entries pass through as the English source. Runs after `links` so
+# {{#include}}d code is already inlined before extraction.
+after = ["links"]
+
+[output.html]
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/hpp2334/rut"
+edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
+# The SAME additional asset set as the en book (see docs/book.toml for
+# the highlight shim / run buttons story) plus the language toggle,
+# which ships on both editions and links between them.
+additional-css = ["theme/rut-book.css"]
+additional-js = ["theme/rut-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
+# All edition pages live under /zh/ in the deployed merge (en book at
+# the site root, zh book under /zh/) — relative asset and search URLs
+# resolve on their own, this keeps canonical links correct.
+site-url = "/zh/"
+
+# The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
+# here: mdbook 0.5 dropped `output.html.additional-resources` (the build
+# refuses the key — verified), so the deploy lane copies it into BOTH
+# editions post-build (the buttons fetch wasm/rut.wasm relative to the
+# page). docs/wasm/ is gitignored build output.
+
+[output.html.search]
+enable = true

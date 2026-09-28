@@ -9,6 +9,15 @@ integrations/vscode-extension/dist
 
 # mdbook build output
 docs/book/
+docs/book-zh/
+
+# the --book deploy merge output (en at root + zh under /zh/, assembled
+# by scripts/deploy.cjs from the two editions above)
+docs/dist-book/
+
+# the zh edition's build-time config shim (book.toml -> ../book.zh.toml
+# plus src/theme/po symlinks; created and removed by the zh build)
+docs/.book-zh/
 
 # the book's run-button artifact (built from crates/rut-wasm, not committed;
 # scripts/deploy.cjs --book and docs/wasm/ own the build+copy lane)
