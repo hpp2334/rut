@@ -1,0 +1,85 @@
+/* rut code-token colors for the built book.
+ *
+ * Pairs with integrations/rut-highlightjs (grammar + register.js): one
+ * small palette over single-segment hljs scopes — keyword, literal,
+ * type, string, comment, number, subst (f-string `{hole}`), title
+ * (member calls), property (member fields).
+ *
+ * mdbook puts the active theme class on <html> and swaps its built-in
+ * highlight stylesheets by toggling `disabled`, so this palette is
+ * scoped per theme family and only re-tints token classes: dark = ayu
+ * (the book's default) / coal / navy, light = light / rust.
+ */
+
+/* ---- dark themes (ayu-flavored) ----------------------------------- */
+html.ayu .hljs-keyword, html.coal .hljs-keyword, html.navy .hljs-keyword {
+  color: #ff8f40;
+}
+html.ayu .hljs-literal, html.coal .hljs-literal, html.navy .hljs-literal,
+html.ayu .hljs-number, html.coal .hljs-number, html.navy .hljs-number {
+  color: #d2a6ff;
+}
+html.ayu .hljs-type, html.coal .hljs-type, html.navy .hljs-type {
+  color: #59c2ff;
+}
+html.ayu .hljs-string, html.coal .hljs-string, html.navy .hljs-string {
+  color: #aad94c;
+}
+html.ayu .hljs-comment, html.coal .hljs-comment, html.navy .hljs-comment {
+  color: #626a73;
+  font-style: italic;
+}
+/* the f-string `{hole}` expression pops against its green string */
+html.ayu .hljs-subst, html.coal .hljs-subst, html.navy .hljs-subst {
+  color: #f29668;
+  font-weight: 600;
+}
+html.ayu .hljs-title, html.coal .hljs-title, html.navy .hljs-title {
+  color: #ffd173;
+}
+html.ayu .hljs-property, html.coal .hljs-property, html.navy .hljs-property {
+  color: #95e6cb;
+}
+html.ayu .hljs-meta, html.coal .hljs-meta, html.navy .hljs-meta {
+  color: #899ba6;
+}
+
+/* ---- light themes (github-flavored) -------------------------------- */
+html.light .hljs-keyword, html.rust .hljs-keyword {
+  color: #cf222e;
+}
+html.light .hljs-literal, html.rust .hljs-literal,
+html.light .hljs-number, html.rust .hljs-number {
+  color: #0550ae;
+}
+html.light .hljs-type, html.rust .hljs-type {
+  color: #6639ba;
+}
+html.light .hljs-string, html.rust .hljs-string {
+  color: #0a3069;
+}
+html.light .hljs-comment, html.rust .hljs-comment {
+  color: #6e7781;
+  font-style: italic;
+}
+html.light .hljs-subst, html.rust .hljs-subst {
+  color: #953800;
+  font-weight: 600;
+}
+html.light .hljs-title, html.rust .hljs-title {
+  color: #8250df;
+}
+html.light .hljs-property, html.rust .hljs-property {
+  color: #116329;
+}
+html.light .hljs-meta, html.rust .hljs-meta {
+  color: #59636e;
+}
+
+/* .rut-run — reserved hook for the upcoming in-book run controls:
+   runnable rut blocks will carry this class on their <pre> and the
+   affordance (border, run marker) gets styled here. Placeholder only —
+   no visual change yet. */
+pre.rut-run {
+  position: relative;
+}

@@ -14,6 +14,16 @@ default-theme = "ayu"
 preferred-dark-theme = "ayu"
 git-repository-url = "https://github.com/hpp2334/rut"
 edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
+# rut code coloring (integrations/rut-highlightjs). theme/rut-highlight.js
+# is a byte-copy of the integration's generated register.js (its single
+# source of truth is src/grammar.js): regen with
+#   cd integrations/rut-highlightjs && node scripts/build.mjs
+#   cp register.js ../../docs/theme/rut-highlight.js
+# mdbook 0.5 does NOT copy cross-tree additional-js into the build (the
+# tag would 404 once deployed), hence the committed shim; the token
+# palette reads well in both the ayu (default) and light themes.
+additional-css = ["theme/rut-book.css"]
+additional-js = ["theme/rut-highlight.js"]
 
 [output.html.search]
 enable = true

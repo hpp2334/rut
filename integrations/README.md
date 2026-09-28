@@ -44,6 +44,15 @@ What it provides (the LSP slice landed early; the
 See [`vscode-extension/`](vscode-extension/) — TextMate grammar + bundled
 server + semantic token scope mappings.
 
+## highlight.js (browsers & the book)
+
+See [`rut-highlightjs/`](rut-highlightjs/) — a zero-dependency
+highlight.js language definition. One grammar file (`src/grammar.js`)
+drives code coloring on any highlight.js-based site and in the book
+(wired through `docs/book.toml`, with a static-span bake for the built
+HTML). Same derivation law as everywhere else: the lexer/parser tables
+are the truth.
+
 ## Neovim (0.11+)
 
 ```lua
@@ -108,6 +117,9 @@ settings until one ships.
 - TextMate grammar for basic coloring (comments, strings, numbers,
   keywords) lives in `vscode-extension/syntaxes/rut.tmLanguage.json` —
   editors that load TextMate grammars can reuse it directly.
+- `rut-highlightjs/register.js` is generated from the package's
+  `src/grammar.js` (`node scripts/build.mjs`) and committed dist-style;
+  the book consumes a byte-copy shim at `docs/theme/rut-highlight.js`.
 - Checker-level diagnostics (M5) and formatting are the remaining
   tooling-milestone items; navigation and inference are parse-level by
   design.
