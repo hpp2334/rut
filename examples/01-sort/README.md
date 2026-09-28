@@ -36,8 +36,10 @@ fuel used: 21142 of Some(5000000)
 ## The design
 
 **One opaque bank; the data never leaves rut.** `Vec<i32>` cannot cross
-the host boundary (RFC 0023 §2 — enforced on `entry fn` signatures at
-compile time), so `create()` boxes a `Bank` in an `opaque` (RFC 0014)
+the host boundary (the [value boundary](../../docs/src/reference/value-boundary.md) —
+enforced on `entry fn` signatures at
+compile time), so `create()` boxes a `Bank` in an
+`opaque` ([opaque](../../docs/src/reference/opaque.md))
 and the host holds the handle. Results come back three ways:
 
 - `serialize(c) -> str` — a JSON array, `[1, 2, 3]`: one string
@@ -54,12 +56,14 @@ and the host holds the handle. Results come back three ways:
 - **`when` on strings** — `sort(c, algo)` dispatches on the algorithm
   name via string-literal pattern arms; unknown names are an ordinary
   `Result.err` value, not a trap
-- **the mut-binding law** (RFC 0003 §1) — every algorithm takes
+- **the mut-binding law** ([modules and visibility](../../docs/src/reference/modules-and-visibility.md)) —
+  every algorithm takes
   `mut xs: Vec<i32>`: writing through a handle requires a `mut` head
   binding, while reading (or `push`) doesn't
-- **wrapping escapes** (RFC 0004 §3) — `fill`'s LCG runs on `&*`/`&+`
+- **wrapping escapes** ([primitive types](../../docs/src/reference/primitive-types.md)) —
+  `fill`'s LCG runs on `&*`/`&+`
   so the u32 math never traps (plain `*` — and `<<` — would)
-- **budgets** (RFC 0040) — the session runs under fuel + heap limits,
+- **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the session runs under fuel + heap limits,
   and `main.rs` prints fuel per algorithm: quick < insertion <
   selection < bubble, as it should be
 - the executable M1 surface — dataclasses, `opaque.new`/`opaque.downcast`,

@@ -1,8 +1,10 @@
 # rut demo page
 
-The wasm playground for the rut language (RFC 0041 §3): pick a prepared
+The wasm playground for the rut language — see
+[the book](../docs/src/README.md): pick a prepared
 case or edit your own, run it, and inspect **Output / AST / IR** — every
-run under an explicit fuel + heap budget (RFC 0040).
+run under an explicit fuel + heap budget
+([resource limits](../docs/src/reference/resource-limits.md)).
 
 ## Quickstart
 
@@ -91,8 +93,7 @@ cd demo && npm run build
 # open http://127.0.0.1:8123/
 ```
 
-What was verified, state by state (screenshots in the batch report,
-`../docs/demo-real-run-report.md`):
+What was verified, state by state:
 
 1. **boot** — banner reads `live — rut.wasm · …`, all 26 cases listed,
    the overlay already painting LSP tokens;
@@ -109,7 +110,7 @@ What was verified, state by state (screenshots in the batch report,
    638 / heap 545 B.
 
 The demo-journey batch later re-drove this whole journey end-to-end
-(before/after pairs for every fix): `../docs/demo-journey-report.md`.
+(before/after pairs for every fix).
 
 ## The wasm contract
 
@@ -133,7 +134,7 @@ fuel box or a Resume shows a verify diff BY DESIGN.
 
 ## Layout
 
-React + rspack + TypeScript (RFC 0041 §3) — no editor dependency; the
+React + rspack + TypeScript — no editor dependency; the
 classic double-layer textarea (CodeMirror is a noted upgrade path):
 
 ```
@@ -142,14 +143,14 @@ src/
   App.tsx                layout, run/resume wiring, budget state, boot-error
                          panels (runner + LSP), the debounced re-analyze
   cases.ts               prepared cases (name, blurb, source, expected[])
-  verify.ts              the real-run vs expected diff (survey D2's sidecar flip)
+  verify.ts              the real-run vs expected diff
   examples/              the classics — real .rut files, expected inline
     index.ts             metadata + raw .rut imports (asset/source) + the
                          inline expected blocks (the retired sidecars' bytes,
                          verbatim); playground order
   runner.ts              wasm-or-error resolution (no fallback)
   lsp/
-    rut-lsp.ts           the standalone rut-lsp.wasm binding (survey D3):
+    rut-lsp.ts           the standalone rut-lsp.wasm binding:
                          rut_begin/alloc envelopes, ONE analyze call per change
     overlay.ts           tokens+diags -> overlay spans (pure, smoke-driven)
   wasm/rut-api.d.ts      the compile/run/resume contract
@@ -186,7 +187,7 @@ zoom regardless; Android forgoes it (honest trade, not a silent one).
 - **Custom edits verify against the case they came from.** A free-form
   edit that still matches the case's expected stays green; one that
   doesn't shows the diff. There is no per-document expected authoring —
-  that is the playground-editing menu item (see the batch report).
+  that is the playground-editing menu item.
 - **The wasm host mounts a slice, not the whole std**: core, calc, rt,
   ink, pouch, nmapset (+ the nmap host bindings). `select`/`await`
   parse but have no host futures in this host — never taught, honestly.
@@ -199,5 +200,4 @@ zoom regardless; Android forgoes it (honest trade, not a silent one).
   ms, full-sync, whole doc). Doc-sized sources make that milliseconds
   (measured 9.3 ms at 1560 lines); there is no delta endpoint upstream,
   and the measured numbers keep it a menu item, not a silent change.
-- **Classifier gaps are recorded, not worked around** — see the MENU
-  in `../docs/demo-real-run-report.md`.
+- **Classifier gaps are recorded, not worked around.**

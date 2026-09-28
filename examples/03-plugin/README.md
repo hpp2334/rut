@@ -7,15 +7,20 @@ of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 the adapter, `plugin/moderator.rut` is the plugin, `src/lib.rs` is the
 embedder SDK, and `src/main.rs` drives a scripted session through **both
 load forms** — the directory and a `.rutbundle` packed from it at runtime
-(RFC 0038). This is the first
-example built on **re-entrant `vm.call`** (RFC 0022 §1) — and the first
+([bundles](../../docs/src/reference/bundles.md)). This is the first
+example built on **re-entrant `vm.call`**
+([embedding](../../docs/src/reference/embedding.md)) — and the first
 where **both opaque directions** meet:
 
 - rut's moderator state lives rut-side behind a rut-constructed `opaque`
-  (`opaque.new(Moderator.new(bus))`, RFC 0014) — the host holds the
+  (`opaque.new(Moderator.new(bus))`, [opaque](../../docs/src/reference/opaque.md)) —
+  the host holds the
   handle and hands it back on every event.
 - the host's event bus lives Rust-side behind a **host-constructed**
-  `Opaque<EventBus>` (RFC 0023/0026) — handed to `init` as the plugin's
+  `Opaque<EventBus>` (the
+  [value boundary](../../docs/src/reference/value-boundary.md) and
+  [native containers](../../docs/src/reference/native-containers.md)) —
+  handed to `init` as the plugin's
   view of the server. `subscribe` and `emit` are that box's callbacks.
 
 ## The layering — callbacks at the edges, classes in the middle
@@ -39,15 +44,18 @@ manifest is bundle-shaped so the same directory packs unchanged.
 
 1. `Plugin::load` constructs the bus box and calls `init(bus)`; the
    plugin registers callback **names** (`join`→`on_join`, …) — closures
-   cannot cross the boundary in either direction (RFC 0023 §2), so
+   cannot cross the boundary in either direction (the
+   [value boundary](../../docs/src/reference/value-boundary.md)), so
    name-registration is the honest callback contract — and returns its
    state handle.
 2. Each event dispatches the subscribed export with the state handle.
 3. The plugin's decisions flow back through `emit(bus, topic, payload)`,
    whose host body **re-enters rut**: a nested `vm.call("render_line")`
    formats the wire line while the emitting handler is still parked
-   mid-op (RFC 0022 §1). The bus stays mutably borrowed across that
-   nested call — the RFC 0023 guard is what makes that sound; a second
+   mid-op ([embedding](../../docs/src/reference/embedding.md)). The bus
+   stays mutably borrowed across that
+   nested call — the [value boundary](../../docs/src/reference/value-boundary.md)
+   guard is what makes that sound; a second
    `emit` fired from inside `render_line` would trap instead of race.
 
 The moderator rules themselves are plain rut: `!stats` command answers,

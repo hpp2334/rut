@@ -19,7 +19,7 @@ literally: the machinery traits are module-private to `ui`, and biz
 cannot name them even to import them.
 
 The `web` crossing is **example-local** by the phase-0 survey's
-decision (`docs/todolist-web-survey.md` §4): `web.d.rut` sits FLAT at
+decision: `web.d.rut` sits FLAT at
 the example root, outside any package directory (its pre-restructure
 placement, kept — the two-package law counts manifests, and the host
 crossing is not a rut package). Both lanes register it by hand
@@ -28,11 +28,12 @@ crossing is not a rut package). Both lanes register it by hand
 ## What it teaches
 
 **1. The async pattern: a hand-written machine.** rut today has no
-async/await (the engine stops at the M3 wall — survey §2.2), but a web
+async/await (the engine stops at the M3 wall), but a web
 page is nothing *but* async. The pattern that fills the gap:
 
 * **state lives in ONE container the host holds.** rut has no mutable
-  module state (RFC 0003 §1 — module lets are load-time literals), so
+  module state (module lets are load-time literals —
+  [modules and visibility](../../docs/src/reference/modules-and-visibility.md)), so
   `main` builds `AppRoot{world, t1, toggles, removes}` and RETURNS it
   as an opaque; the pump hands it back on every turn:
 
@@ -64,7 +65,8 @@ page is nothing *but* async. The pattern that fills the gap:
 * **the "server" is a request table, not a scheduler.** An add never
   touches the list: the machine's `add_m` mutation books a `Req` row
   (tag, kind, latency) and the UI books one
-  `tim_after(req.latency, req.tag)` — the host's clock, RFC 0018. The
+  `tim_after(req.latency, req.tag)` — the host's clock
+  ([async](../../docs/src/reference/async.md)). The
   list changes only when the timer's turn runs the `answer_m` mutation
   — the one commit point, per-kind latency (add 400 / toggle 250 /
   remove 120 ms) so deadline-ordered commits are *visible across
@@ -77,15 +79,15 @@ page is nothing *but* async. The pattern that fills the gap:
   appears only when the answer lands as its own turn.
 
 This shape ages well: at M3 the request table becomes real futures and
-`tim_after` becomes a timer primitive — the t1 survey §5.6 spells the
-migration; the app's turn law and store semantics do not change.
+`tim_after` becomes a timer primitive — the app's turn law and store
+semantics do not change.
 
 **2. The widget framework: biz never sinks to the DOM.** The framework
-(`docs/t1-design.md` is its design — authoritative, including its
-recorded deviations) makes a UI a VALUE:
+makes a UI a VALUE:
 
 * **widgets are plain rut data** — one fat `Widget` struct with
-  payloadless kind/variant enums (the json ruling's shape, RFC 0006)
+  payloadless kind/variant enums (the json ruling's shape,
+  [enums](../../docs/src/reference/enums.md))
   and recursive `Vec<Widget>` children. `view(r)` is a PURE function
   from app state to a `Widget` tree; it runs no crossing and writes no
   cell.
@@ -120,15 +122,17 @@ recorded deviations) makes a UI a VALUE:
 * **styling is a token contract.** `index.html`'s stylesheet keys
   ONLY the lowered tokens (the `t1-*` families, the fixed utility
   ladder, variant tokens); the app spells no class and the stylesheet
-  names no widget field. The §4.1 table IS the styling contract, and
+  names no widget field. The lowering table IS the styling contract,
+  and
   the twin asserts it.
 
 **3. The two-package store: jotai's shape over parameterized trait
-impls** (the restructure survey's addendum — authoritative; it
-records, decision by decision, the reversal of the declared-DAG /
-flush design). The store is the `ui` package's kernel, decoupled from
+impls** (the design records, decision by decision, the reversal of the
+declared-DAG / flush design). The store is the `ui` package's kernel,
+decoupled from
 biz by construction — nothing in it names a todo, a list, or an app
-(RFC 0014's motivating pattern: the reactivity library over opaque
+(the [opaque](../../docs/src/reference/opaque.md) motivating pattern:
+the reactivity library over opaque
 cells). Biz owns HANDLES; the machinery is ui-private. The whole
 surface is two verbs and four minting calls:
 
@@ -150,7 +154,8 @@ store.recompute_count() / store.deps_of(a)               observability
 * **the machinery traits are module-private** — `Readable<T>` and
   `Writable<A, R>` live unexported in `ui`, and `store.get`/`store.set`
   take TRAIT-TYPED parameters (`a: Readable<T>`, `w: Writable<A, R>`);
-  impl-trait methods ride the trait's visibility (RFC 0012), the
+  impl-trait methods ride the trait's visibility
+  ([traits](../../docs/src/reference/traits.md)), the
   parameterized trait impls (`impl Readable<T> for Source<T>`,
   `impl Writable<A, R> for Mutation<A, R>`) are the dispatch. Biz
   cannot name the traits even to import them — which is how
@@ -182,7 +187,9 @@ store.recompute_count() / store.deps_of(a)               observability
   equal-content write on a `source_str` cell marks nothing (`==`
   compiles StrCmp at this concrete lane); a generic `==` would be
   cell identity for `Vec`, so `Source<T>.set` bumps unconditionally —
-  the recorded asymmetry (RFC 0044), pinned by twins on both sides.
+  the recorded asymmetry
+  ([by-reference and nullable](../../docs/src/reference/by-reference-and-nullable.md)),
+  pinned by twins on both sides.
 * **the machine as mutations.** The todolist's verbs — `add_m`,
   `toggle_m`, `remove_m`, `answer_m` — are mutation fns: the multi-
   step writes (book a req, consume it, commit per kind) are VALUES biz
@@ -200,7 +207,7 @@ store.recompute_count() / store.deps_of(a)               observability
   gate holds the tombstones: `TodoStore`, `Rail`, `Seen`, `Atom<`,
   `.refresh(` and friends must survive nowhere in biz.
 
-**What came from tur** (survey §1.2 + the addendum): pull-on-read
+**What came from tur**: pull-on-read
 freshness (tur's model, the flush point dissolved entirely); the
 generation rail (a cached derived is servable iff its recorded
 generations still match); DISCOVERED deps (tur's tracker-stack shape —
@@ -210,13 +217,13 @@ ctx (returned as the MutCtx — its rejection predates first-class fns);
 equality-skip on the `str` lane (type-directed `==`; the general lane
 never skips); cells a store MATERIALIZES, never globals.
 
-**What stayed rejected** (survey §1.3, still): **live-props /
+**What stayed rejected**, still: **live-props /
 SubscriberGraph** per-element re-rendering (the `Val<T>` model,
 rejected twice on purpose — the keyed diff does that job once per
 turn); **`watch()`** and the watch-loop guard (reactive push callbacks
 are reactivity, not state cells; the app's async facts are the host's
 timer tags); **the multi-store** machinery (one app, one `Store`, one
-KV — the split collapses); **families** (§4.6: no tur precedent, no
+KV — the split collapses); **families** (no tur precedent, no
 job here — the per-row state IS the items list).
 
 **The jotai/tur mapping**, honestly drawn:
@@ -244,7 +251,8 @@ to be the wrong extreme too: rut's landed visibility is `pub` or
 module-private, so separate packages could not keep framework tables
 private from each other, and the layering lived only in the law gate.
 The redesign merges the tree into TWO packages, one directory, one
-module, one entry file each (RFC 0035 §1) — the framework's private
+module, one entry file each ([loading](../../docs/src/reference/loading.md)) —
+the framework's private
 tables are private FOR REAL inside `ui`'s one module, and the law
 that remains is enforced by type visibility, not just by grep:
 
@@ -265,7 +273,7 @@ examples/05-todolist-web/
     │   ├── rut.toml                name = "ui"; inline = true (generic
     │   │                           exports splice by law); [deps] pouch
     │   │                           + nmapset; entry.libs = the five
-    │   │                           section files (RFC 0041 §5)
+    │   │                           section files
     │   ├── ui.rut                  the base: the law header + the use
     │   │                           set — then the libs splice in array
     │   │                           order, ONE module
@@ -289,7 +297,8 @@ examples/05-todolist-web/
                                     builders
 ```
 
-* **one module, several files** (RFC 0041 §5, the multi-lib entry):
+* **one module, several files** (the multi-lib
+  entry, [project structure](../../docs/src/reference/project-structure.md)):
   each package's body is authored as section files named by
   `entry.libs` — the loader splices base-first, then the array order,
   `'\n'`-joined, into ONE module. One namespace, one visibility scope:
@@ -302,8 +311,9 @@ examples/05-todolist-web/
   byte-identical through the splice.
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
-  `load_dir_session("rut/biz")` reads `rut/biz/rut.toml` and runs
-  RFC 0045's four passes (the deps walk — `ui`, and through it
+  `load_dir_session("rut/biz")` reads `rut/biz/rut.toml` and runs the
+  [dependency-kinds](../../docs/src/reference/dependency-kinds.md) four
+  passes (the deps walk — `ui`, and through it
   pouch/nmapset/nmap_host — the root's dev-deps, the peer gate,
   compile) FOR REAL — the manifest, not a Rust fn, is the module list.
 * **both lanes, one closure.** The wasm lane keeps the `Session`
@@ -332,8 +342,11 @@ examples/05-todolist-web/
   laws (components' vocabulary unchanged, the store standalone of
   biz, biz DOM-free).
 
-**5. The host-boundary thinness law** (t1 survey §4.5). The crossings
-carry elements (as opaque handles, RFC 0014/0023), strings, i64s and
+**5. The host-boundary thinness law** (the widget framework's own
+law). The crossings
+carry elements (as opaque handles per
+[opaque](../../docs/src/reference/opaque.md) and the
+[value boundary](../../docs/src/reference/value-boundary.md)), strings, i64s and
 bools — nothing else. No app names, no data shipping, no callbacks
 across the boundary, no scheduler in the host. t1 is the law's proof
 of strength: an entire widget system — diff, registry, lowering —
@@ -346,10 +359,11 @@ name, `tim_after`). The host never grew an `ui_create_todo` or an
 **6. Idiomatic current rut.** Parameterized trait impls with
 trait-typed fn params (`impl Readable<T> for Source<T>`;
 `fn get<T>(self, a: Readable<T>)` — the store's whole trick),
-module-private traits behind `pub` methods (RFC 0012's impl-trait
-visibility), first-class fns as values (`store.derive` / `store.mutation`
+module-private traits behind `pub` methods (impl-trait
+visibility, [traits](../../docs/src/reference/traits.md)), first-class fns as values
+(`store.derive` / `store.mutation`
 take fn literals; `opaque.downcast` unwraps the erased program at the
-trust boundary, RFC 0014), dataclass-literal structs (`World`,
+trust boundary, [opaque](../../docs/src/reference/opaque.md)), dataclass-literal structs (`World`,
 `AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (the
 container crossing is NON-NULLABLE end to end: `opaque(AppRoot)` —
 `downcast<AppRoot>` — nil-checked unwrap `let mut r: AppRoot = root`),
@@ -361,7 +375,7 @@ free-floating values.
 
 ## The two state machines, one container
 
-`AppRoot` carries BOTH machines as fields (RFC 0003 §1): the
+`AppRoot` carries BOTH machines as fields: the
 framework's `T1Root` (the patch state) and THE WORLD (the handles
 bundle — the store, the atoms, the derived, the mutations, the event
 wrappers). The draft and the note live IN the store as sources
@@ -400,8 +414,8 @@ retired; freshness is the read's job now.
 |---|---|
 | `rut/biz/rut.toml` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
 | `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
-| `web.d.rut` | the `web` crossing's DECL surface (RFC 0025, `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
-| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, RFC 0041 §5): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff (design: `docs/t1-design.md`); `components.rut` §5 the component vocabulary |
+| `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
+| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
 | `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |
@@ -430,13 +444,11 @@ Trap shapes (all tested in `tests/host_surface.rs`): loud unknown id
 (`web::ui_get: no element '#x'` — a wiring bug is loud, never a rut
 optional); kind mismatch naming both sides (`boundary: got \`ul\`
 where \`HtmlInputElement\` binds`); DOM exceptions carried verbatim;
-the re-entrancy guard; the RFC 0025 boot panics both ways; stale
+the re-entrancy guard; the [host-fn](../../docs/src/reference/host-fns.md) boot panics both ways; stale
 listener ids as host drift.
 
 **Recorded deviations from the original survey's 11 rows** (not
-re-litigated, recorded per the batch law — see
-`docs/todolist-web-report.md`, and `docs/t1-design.md` §8 for the
-framework's five):
+re-litigated):
 
 * `ui_input_value(el) -> str` is absent — the engine's verified-return
   table cannot bind a `-> str` host fn today. Input values are
@@ -473,7 +485,7 @@ manifest session's subgraphs and the app session mount `rut/` for
 real):
 
 * **the framework's bed (32)** — 14 lowering snapshots pinning every
-  kind and variant to its exact tag/token/attr tree (the design §4.1
+  kind and variant to its exact tag/token/attr tree (the lowering
   table as a test), and 18 diff/lifecycle/trap tests through the
   twin's handles: an unchanged render mints zero nodes, a toggle
   patches one token, a keyed reorder preserves element identity and

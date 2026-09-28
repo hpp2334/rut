@@ -67,32 +67,34 @@ npm test               # grammar corpus gate + through-wasm e2e gate + Extension
 npm run test:grammar   # standalone TextMate gate: the grammar asserted over
                        # the repo corpus (rut/ + examples/ + demo/ +
                        # benches/workloads/) via vscode-textmate/oniguruma —
-                       # no wasm, no VS Code needed (M1-M8 lock,
-                       # docs/lsp-survey-extension.md §7)
+                       # no wasm, no VS Code needed (M1-M8 lock)
 npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # driven through the extension's own ABI binding
                        # (src/wasm.ts, bundled to out/wasm.js) over the full
                        # corpus — zero false diagnostics — plus per-feature
                        # smokes through the artifact: hover/completion
                        # (?T alias, ?Circle member resolution, bare
-                       # nmapset/nmap_host completion, the RFC 0044
-                       # diagnostic), definition + typeDefinition
+                       # nmapset/nmap_host completion, the
+                       # by-reference-and-nullable diagnostic),
+                       # definition + typeDefinition
                        # (within-file / cross-file / stdlib), inlay type +
                        # param hints, references (shadow-aware + the
                        # cross-file reverse edge), signature help
                        # (verbatim signature, active slot, mismatch -> no
                        # help). Needs bin/rut-lsp.wasm (npm run
-                       # build:wasm); runs headless in plain node (§8,
-                       # docs/lsp-survey-extension.md)
+                       # build:wasm); runs headless in plain node
 npm run test:host      # the Extension Host run (needs `code` on PATH and
                        # bin/rut-lsp.wasm built); SKIPS LOUDLY (exit 0) on
                        # machines without VS Code — a skip is a skip, the
                        # two other gates still ran
 ```
 
-`test/fixtures/symbols.rut` is a current-grammar sample (RFC 0009 v1.1
-`struct`, RFC 0043 `type` alias + `requires` bound, RFC 0044 `?T`,
-primitive `str`/`bytes`, RFC 0014 `opaque`): the e2e gate analyzes it
+`test/fixtures/symbols.rut` is a current-grammar sample (a
+[struct](../../docs/src/reference/structs.md), a [type
+alias](../../docs/src/reference/type-aliases.md) + `requires` bound,
+a [nullable](../../docs/src/reference/by-reference-and-nullable.md) `?T`,
+primitive `str`/`bytes`, an
+[opaque](../../docs/src/reference/opaque.md)): the e2e gate analyzes it
 through the shipped wasm and hovers its alias; the host suite reads the
 same symbols and semantic tokens on machines with `code`.
 

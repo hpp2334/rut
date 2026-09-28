@@ -5,8 +5,8 @@ A Rust app embedding rut, in the shape of [00-todolist](../00-todolist) and
 embedder — and this time the embedder is also the **oracle**.
 
 The rut side is a byte-level library, everything flowing over `bytes`
-(the immutable binary primitive, RFC 0004), `str`, and `opaque` —
-the shapes RFC 0023 §2 lets cross the host boundary:
+(the immutable binary [primitive](../../docs/src/reference/primitive-types.md)), `str`, and `opaque` —
+the shapes the [value boundary](../../docs/src/reference/value-boundary.md) lets cross the host boundary:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64
   (standard + URL-safe alphabets, padding, invalid-input rejection)
@@ -19,15 +19,17 @@ the shapes RFC 0023 §2 lets cross the host boundary:
   Since the rut-json batch the **encode half rides the std `json` pkg**
   (`rut/json`): `impl JsonSerialize for Json` drives the pkg's
   `JsonWriter` — the exact shape a user type spells (the orphan-legal
-  direction, RFC 0012 §2a — now the compiler's law: json owns the
+  direction — the compiler's law, [traits](../../docs/src/reference/traits.md):
+  json owns the
   trait, `Json` is this file's).
   The decode half stays the private cursor parser until json's
   schema-less `JsonValue` lands
 
 The host verifies everything two independent ways:
 
-1. **canonical vectors** — RFC 1321's MD5 suite, FIPS 180-4's SHA
-   examples, RFC 4648's base64 table, the CRC/FNV catalogues
+1. **canonical vectors** — IETF RFC 1321's published MD5 suite, FIPS
+   180-4's SHA examples, IETF RFC 4648's base64 test table, the
+   CRC/FNV catalogues
 2. **the crates** — `md-5`/`sha1`/`sha2`, `base64`, `crc32fast`, and
    `serde_json` cross-check every algorithm on deterministic
    pseudo-random inputs across every padding-edge length (54-57, 63-65,
@@ -76,39 +78,45 @@ fuel used: 1014105 of Some(50000000)
 ## What it demonstrates
 
 - **the integer surface is enough for real algorithms** — hex literals,
-  `u32`/`u64`, the wrapping family `&+ &* &<<` (RFC 0004 §3), and
+  `u32`/`u64`, the wrapping family `&+ &* &<<`
+  ([primitive types](../../docs/src/reference/primitive-types.md)), and
   signedness-correct `>>`. SHA-512 is the showcase: its 64-bit
   rotations need `>>` to be a *logical* shift on `u64` (a bug fixed in
   this repo right before this example) and `&<<` to truncate to the
   operand width
-- **`bytes` crosses directly** (RFC 0023 §2, RFC 0004) — no opaque
+- **`bytes` crosses directly** (the
+  [value boundary](../../docs/src/reference/value-boundary.md) and
+  [primitive types](../../docs/src/reference/primitive-types.md)) — no opaque
   wrapper needed for byte payloads; `opaque` appears exactly once,
   boxing the recursive JSON tree
-- **payloadless enums + dataclasses build a tagged union** (RFC 0006):
+- **payloadless enums + dataclasses build a tagged union**
+  ([enums](../../docs/src/reference/enums.md)):
   `JTag` + `Json` with children as `Vec<opaque>` — recursion through
-  RFC 0014's escape hatch
+  the [opaque](../../docs/src/reference/opaque.md) escape hatch
 - **errors are values** — malformed hex/base64/JSON and unknown
   algorithm names come back as `Result.err` strings, not traps
-- **budgets are the host's call** (RFC 0040) — the demo runs under
+- **budgets are the host's call**
+  ([resource limits](../../docs/src/reference/resource-limits.md)) — the demo runs under
   50 M fuel; the 64 KiB stress test raises the same session to 500 M
 - **the FNV/djb2/sdbm trio never shifts 64-bit words** — a deliberate
   demonstration that `&*`/`&+`/`^` alone carry the classic hash keys
 - **the serde model, lived in** (the rut-json batch): a user type
   implements another pkg's trait — `impl JsonSerialize for Json` — and
   the lib's writer does the byte work (the f-string accumulator, the
-  RFC 8259 escape policy, the 128-level depth law). The lib teaches
+  IETF RFC 8259's escape policy, the 128-level depth law). The lib teaches
   the shape every json consumer spells — and this block is the orphan
-  rule's type-local case (RFC 0012 §2a): the trait is json's, the type
+  rule's type-local case
+  ([traits](../../docs/src/reference/traits.md)): the trait is json's, the type
   is ours, so the pair is legal exactly here
 
 ## Limitations (honest ones)
 
 - the private decoder still rejects JSON `\uXXXX` escapes with a clear
-  error (it waits for json's schema-less `JsonValue` to land, survey
-  §2.10); UTF-8 content itself round-trips fine
+  error (it waits for json's schema-less `JsonValue` to land); UTF-8
+  content itself round-trips fine
 - the private decoder does not validate raw control characters < 0x20
   in strings; the lib's writer does the right thing on the way OUT —
-  it escapes the full RFC 8259 set, so a smuggled control re-encodes
+  it escapes the full JSON-spec set, so a smuggled control re-encodes
   as `\u00xx` (the old private encoder passed it through unescaped)
 - the encode side is the lib's writer: a tree deeper than 128 levels
   answers a recoverable `Depth` err (the old private encoder recursed

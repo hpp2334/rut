@@ -9,22 +9,23 @@ example:
 | [`00-todolist/`](00-todolist/) | `cargo run -p todolist` | an `entry fn` surface over a rut `class` — the host drives CRUD through `opaque` handles |
 | [`01-sort/`](01-sort/) | `cargo run -p sort` | a sorting library behind one dispatcher entry; `Result` at the boundary, known-input gates |
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
-| [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + `.rutbundle` (RFC 0038) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
-| [`04-custom-async/`](04-custom-async/) | parse-only — vocabulary port LANDED (RFC 0018), runnable harness is the disclosed follow-up | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits; the user-impl-of-builtin-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1, join lands with RFC 0019 |
-| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless (survey: `docs/todolist-web-survey.md`) |
+| [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
+| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up) | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
+| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless |
 | [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival |
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports
 them raw, and `crates/rut-cli/tests/playground.rs` compiles and runs
 every one against its `.expected` sidecar. The parser conformance suite
-(RFC 0030 §7) walks both trees.
+([the frontend](../docs/src/reference/frontend.md)) walks both trees.
 
 ## Packages and manifests — the three dep kinds
 
-Every package carries a `rut.toml` (RFC 0041 §5 — `03-plugin`'s
-`plugin/` and `server/` are the in-tree examples). Since the dep-kinds
-batch (RFC 0045), a manifest relates to other packages through three
+Every package carries a `rut.toml` (the
+[project structure reference](../docs/src/reference/project-structure.md)
+— `03-plugin`'s `plugin/` and `server/` are the in-tree examples). Since
+the dep-kinds batch, a manifest relates to other packages through three
 tables: **`[deps]`** — transitively mounted, unchanged; **`[peer-deps]`**
 — **required by default** (the *consumer* supplies the peer; never
 pulled transitively) with `optional = true` marking the presence-mounted
@@ -65,25 +66,25 @@ Decisions this batch landed, visible in the examples:
   the example is untouched. (The retirement has since been EXECUTED by
   the todolist-restructure batch — the example's packages mount
   separately under the manifest route, appkit proven dead by
-  P1/P2/P3; see `docs/todolist-restructure-report.md` §2.)
+  P1/P2/P3.)
 - **Required-by-default peers** — a missing required peer is a loud
   mount error naming pkg + peer + the fix; silence is reserved for
   absent *optional* peers, which is the feature.
 - **Bundles pack v3** — [`03-plugin`](03-plugin/)'s `plugin/rut.toml`
-  rides `format_version = 3` (RFC 0038's ledger): peer groups ride
+  rides `format_version = 3` ([bundles](../docs/src/reference/bundles.md)):
+  peer groups ride
   the archive; an older loader refuses rather than guess.
 
 Not here, on purpose: registry/index deps and version-range selection
 — `[peer-deps]` is a presence relation over mounted packages, not a
-package manager (RFC 0045 OQ-1). The full record: the survey, the
-diagnostics, and the test matrix in
-[`docs/dep-kinds-report.md`](../docs/dep-kinds-report.md).
+package manager.
 
 ## The orphan rule — one of the pair is local
 
 Every `impl Trait for Type { .. }` needs **at least one of the pair
-defined in your pkg** — the trait's pkg or the type's pkg (RFC 0012
-§2a, the compiler's law since module VERSION 9). Write your impl in
+defined in your pkg** — the trait's pkg or the type's pkg (the
+[traits reference](../docs/src/reference/traits.md), the compiler's law
+since module VERSION 9). Write your impl in
 the pkg that owns a side: your own trait may speak about anyone's
 type, and anyone's trait may speak about your own type — 02-digest's
 `impl JsonSerialize for Json` is the type-local shape (json owns the
@@ -98,27 +99,30 @@ trait, `Json` is that file's).
   is the ordinary local case. `opaque` is a builtin too — a foreign
   trait can never be implemented for it, so a capability probe on a box
   finds nothing (`o is I` is `false`; `is` names the box, never the
-  payload — the 2026-09 opaque-is law, RFC 0014); its cross-type law
-  is RFC 0014's downcast (`opaque.downcast<T> -> ?T`, nil on a miss).
+  payload — the 2026-09 opaque-is law, [opaque](../docs/src/reference/opaque.md));
+  its cross-type law is [opaque's downcast](../docs/src/reference/opaque.md)
+  (`opaque.downcast<T> -> ?T`, nil on a miss).
 - **Generic impls classify by the head** — `impl JsonSerialize for
   Vec<T>` is json's to write (it does, peer-gated); your type
   parameter `T` never makes the impl yours.
 - **Both foreign is an error**, named plainly:
 
   ```
-  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg (RFC 0012 §2a)
+  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg
   ```
 
 The guarantee you get: a pkg's impl set is auditable — "who implements
 `JsonSerialize` for `Vec<T>`" has one answer and a grep to prove it —
 and adding a dependency adds the pairs its pkgs declare, never pairs a
-stranger invented. The record: `docs/orphan-rule-report.md`.
+stranger invented. The full law: [traits and
+dispatch](../docs/src/reference/traits.md).
 
 ## The std `json` package — the surface, the rulings, the run recipe
 
 `rut/json/` is the ninth std pkg (after `core`, `calc`, `nmap_host`,
 `nmapset`, `pouch`, `ink`, `rt`, `bench-cross`) — pure rut, zero host
-fns, the RFC 0028 amendment is its law. Three entries and two traits:
+fns, the [stdlib rules](../docs/src/reference/stdlib.md) are its law.
+Three entries and two traits:
 
 ```rut
 fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
@@ -138,13 +142,16 @@ The locked rulings, user-visible as spells:
 - **`Self`, not a `<T>` param, on `JsonDeserialize`** — you cannot
   decode an A-reader into B; the trait's static call IS the type.
 - **The streams are never nilable** (`mut w: JsonWriter`, `mut r:
-  JsonReader`): RFC 0044 sharing is the default; `?` only where
+  JsonReader`): [by-reference](../docs/src/reference/by-reference-and-nullable.md)
+  sharing is the default; `?` only where
   absence is a legitimate state.
 - **`decodeJsonBytes` is strict UTF-8** — `bytes.decode()` is lossy,
   so the bytes entry validates first (invalid octets → `InvalidUtf8`,
   never a silent U+FFFD). That is why there are two decode entries:
-  RFC 0043 keeps `str | bytes` params illegal.
-- **The error shapes** are RFC 0006's kind/details split:
+  [type aliases](../docs/src/reference/type-aliases.md) keep `str | bytes`
+  params illegal.
+- **The error shapes** are the kind/details split
+  ([enums](../docs/src/reference/enums.md)):
   `DecodeJsonError { kind, at, got, expected }` and
   `EncodeJsonError { kind, at, path }` — `path` is the lazily-built
   `$.rows[3].name` spelling, assembled only on failure.
@@ -183,7 +190,8 @@ The run recipe:
 
 `rut/strbuild/` is the tenth std pkg (after `json`) — pure rut, zero
 host fns, zero deps: the engine's `StrBuf` builder cell is AMBIENT
-(RFC 0028 revised, builtin-surface), so the pkg compiles against
+(builtin-surface per [stdlib](../docs/src/reference/stdlib.md)), so the
+pkg compiles against
 `mount_std_core` alone and a strbuild mount adds no `expected_host_fns`
 entries and no dep edge of its own. The whole contract is one class:
 
@@ -209,7 +217,8 @@ That is the whole surface, closed on the record:
 RECORD — no nat, no call site (adding one is a VERSION conversation
 for zero need). The rulings, user-visible as spells:
 
-- **The mut law is RFC 0044 sharing, not copying.** A binding shares
+- **The mut law is [by-reference sharing](../docs/src/reference/by-reference-and-nullable.md),
+  not copying.** A binding shares
   the ONE instance cell, whose `out` slot shares the ONE engine cell:
   appends through an alias — or through a `mut b: StringBuilder`
   parameter — land in the CALLER's document, visible through the
@@ -233,8 +242,7 @@ json is the reference consumer: its writer's accumulator IS a
 untouched, they never touch the builder). Honest accounting rides
 with it: the class face costs a measured +432,024 fuel (+1.370%) on
 `json-roundtrip` over the raw cell — engine-lowering cost, menued for
-a future engine batch (`docs/strbuild-phase1.md`,
-`docs/strbuild-report.md`), checksums immovable throughout.
+a future engine batch, checksums immovable throughout.
 
 The scoreboard is the suite's surprise: on the pkg's own row,
 **rut is AHEAD of QuickJS** — 0.42× net (352.6 vs 842.5 ms; node's
@@ -275,22 +283,22 @@ instantiation), and every val lives IN the host table's entries:
   takeover (whose headline was killing the grow drain — `refvals`
   exec −32%), deleted outright by the value migration — the migration
   is also when nmapset-hostops phase 2's "zero loops" claim first
-  became TRUE of the file (`docs/nmap-hostvals-report.md` §7; the
+  became TRUE of the file (the
   measured record: fuel −30…−41%, prim-row VM heap to HUNDREDS of
   bytes, in `benches/README.md`'s nmap-hostvals section). (An
   alias-row form that routed the 64-bit vals to native-val-column
   classes was repealed the day it landed — one name = one type — and
   the column classes themselves were REMOVED with the takeover,
   unreached by any public spelling since the repeal; the columns'
-  host crossings remain as legacy escape hatches —
-  `docs/type-name-law-report.md` §5, §8, `docs/nmapset-hostops-report.md`.)
+  host crossings remain as legacy escape hatches.)
 - **The map is an `opaque`, and `opaque` has two kinds.** The `t`
   field addresses a store entry of the Host kind — a HostOpaque (the
   map's own host payload, one per map, borrow-checked by Rust's TypeId
   on every crossing); the other kind, RutOpaque, is a rut value held
   host-side. Two kinds, two identity worlds — TypeId exists only on
   the Host path; rut-side `downcast` and `is` never consult it
-  (RFC 0014's amendment, RFC 0023's nmap-hostvals amendment).
+  ([opaque](../docs/src/reference/opaque.md) and
+  [value boundary](../docs/src/reference/value-boundary.md) law).
 - **`HashSet<T>`** is the host table alone, no machinery about vals.
 - **May spell differently than you expect**: no float KEYS (the
   equality contract), no narrow-val columns, no bool val column (the
@@ -303,8 +311,8 @@ implementation names, spelled nowhere in a public surface (grep-pinned,
 LSP completing only the family), and went UNREACHED the day the alias
 rows were repealed: every spelling resolved to the family class and its
 sidecar, so the classes carried dead weight. Their native val columns
-were real and priced (fuel +15-18 %, 324 B vs MiB —
-`docs/type-name-law-survey.md` §4); the columns' host CROSSINGS stay
+were real and priced (fuel +15-18 %, 324 B vs MiB); the columns' host
+CROSSINGS stay
 bound as legacy escape hatches, and a differently-named public column
 class remains the recorded future shape. The set never had a prim-named
 twin; `HashSet` has always been the one spelling.
@@ -323,9 +331,9 @@ record: checksums IMMOVABLE (the op
 stream does not move — `nmap-primmap`'s pin stayed `734932704`),
 fuel/heap re-seated to the sidecar's measured cost (17,950,301 →
 20,903,285 fuel; 324 B → 3,539,324 B heap —
-`docs/type-name-law-report.md` §6 and `benches/README.md`'s
+`benches/README.md`'s
 type-name-law section; the sidecar's story ends with the nmap-hostvals
-migration, whose own record is in `docs/nmap-hostvals-report.md`).
+migration).
 Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
@@ -485,6 +493,5 @@ pub fn main() {
 
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
-removed: its implemented parts moved to the playground classics, and the
-aspirational sketches live on in the RFCs that specified them (the
-load-bearing snippets are inlined there). Git history keeps the rest.
+removed: its implemented parts moved to the playground classics, and
+git history keeps the rest.

@@ -13,7 +13,7 @@ language core as an in-process wasm module (`crates/rut-lsp-wasm` — see
 [`vscode-extension/README.md`](vscode-extension/README.md)). Both faces
 share one implementation, so features match.
 
-What it provides (M1, the RFC 0001 M6 LSP slice landed early; the
+What it provides (the LSP slice landed early; the
 `lsp-features` batch added the navigation + inference layer):
 
 - **semantic tokens** — grammar highlighting: keywords, literals,
@@ -110,5 +110,4 @@ settings until one ships.
   editors that load TextMate grammars can reuse it directly.
 - Checker-level diagnostics (M5) and formatting are the remaining
   tooling-milestone items; navigation and inference are parse-level by
-  design (the `lsp-features` batch report,
-  `../docs/lsp-features-report.md`, records the honest limits).
+  design.

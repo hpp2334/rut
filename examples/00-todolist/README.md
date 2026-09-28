@@ -41,25 +41,30 @@ fuel used: 680 of Some(1000000)
 1. `createContainer()` → `opaque` — rut boxes a fresh container and the
    host holds the handle (`Value::Opaque`, the Rust-side handle —
    internal names keep theirs). `opaque` is the one cell an
-   embedder may keep (RFC 0014).
+   embedder may keep ([opaque](../../docs/src/reference/opaque.md)).
 2. `create(container)` → `u32` — a new list inside the container; the
    host keeps the handle and passes it (plus the container) to every
    later call.
 3. CRUD calls cross with **plain values only**: `str`/`i32`/`bool` in,
-   `i32`/`bool`/`str`/`Option`/`Result` out (RFC 0023 §2). `TodoList`
+   `i32`/`bool`/`str`/`Option`/`Result` out (the
+   [value boundary](../../docs/src/reference/value-boundary.md)).
+   `TodoList`
    instances never leave the VM.
 
 ## What it demonstrates
 
-- **`entry fn`** — the host-callable surface (RFC 0035 §3), distinct from
-  `pub` (use visibility for rut modules, RFC 0003 §2 — no type
+- **`entry fn`** — the host-callable surface ([loading](../../docs/src/reference/loading.md)),
+  distinct from
+  `pub` (rut-module visibility,
+  [modules and visibility](../../docs/src/reference/modules-and-visibility.md) — no type
   limits there). An entry's signature is checked against the crossing
   rule **at compile time**: a `TodoList` parameter on an entry is a
   source diagnostic, never a call-time failure.
 - **module shape** — entries are compilation roots, so a library module
   with no `main` still emits every entry (`pub fn main` stays the
   conventional entry for scripts)
-- **budgets** (RFC 0040) — the session runs under fuel + heap limits;
+- **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the
+  session runs under fuel + heap limits;
   embedder mistakes (wrong value shape) come back as named traps, never
   silent zeros
 - the executable M1 surface — classes (`Self {}` construction,

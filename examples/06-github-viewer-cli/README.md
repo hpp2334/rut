@@ -19,7 +19,8 @@ error, `2` usage.
 ## The brain is async
 
 `rgh_main` is an ASYNC free fn (`async fn rgh_main(cx: RunContext,
-args: str) -> i32` — the RFC 0018 shape; the cx is engine-minted,
+args: str) -> i32` — the [async](../../docs/src/reference/async.md) shape; the cx is
+engine-minted,
 never passed). The embedder's one entry is `boot`:
 
 ```rut
@@ -30,7 +31,8 @@ entry fn boot(args: str) -> nil {
 
 The host crosses argv in, `boot` launches, and the embedder pumps the
 driving loop (`run_ready` + a wall-clock spin until
-`pending_tasks()` hits 0 — the RFC 0035 §4 lane; real reqwest
+`pending_tasks()` hits 0 — the
+[loading](../../docs/src/reference/loading.md) lane; real reqwest
 workers settle the completers from their threads). The code crosses
 out through the sync `exit` row — the process's one-way door, fired
 mid-pump; the brain keeps the `-> i32` discipline beside it.
@@ -177,7 +179,8 @@ walked, never printed):
 
 - `human size` — `N B` under 1024, then KiB/MiB/GiB with one decimal
   only when the remainder is nonzero. The f-string hole is a bare
-  expression (RFC 0030 §1.1) — no format specs — so the tenth is
+  expression ([the frontend](../../docs/src/reference/frontend.md)) —
+  no format specs — so the tenth is
   integer math (`rem * 10 / unit`, floor), disclosed here by the plan:
   `1536` → `1.5 KiB`, `1048577` → `1.0 MiB`.
 - `hash8` — the first 8 characters of the entry's integrity hash. The
@@ -192,7 +195,7 @@ walked, never printed):
   answers the io error + exit 1);
 - no pagination or limits — the tree endpoint returns the whole tree;
 - no concurrency — the brain awaits its fetches sequentially
-  (join/select is RFC 0019's lane);
+  (join/select is the [tasks](../../docs/src/reference/tasks.md) lane);
 - **`rut run` cannot host rgh itself** — its `rgh_host` rows are
   example-local, so only this embedder (or your own, binding the same
   rows) can run the brain. Ordinary HTTP programs do run under
