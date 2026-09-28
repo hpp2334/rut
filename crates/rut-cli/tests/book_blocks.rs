@@ -27,14 +27,6 @@ const SKIP: &[(&str, u32, &str)] = &[
         4,
         "imports `greet`, the package the reader builds earlier in the chapter",
     ),
-    // the landing page's sieve uses `Logger` without importing ink
-    // (`use pouch::{Vec}` is the only use line) — a book typo to fix in
-    // the docs lane
-    (
-        "docs/src/README.md",
-        1,
-        "uses `Logger` without `use ink::{Logger}`",
-    ),
 ];
 
 fn docs_src() -> std::path::PathBuf {

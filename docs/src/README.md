@@ -15,6 +15,7 @@ bytecode VM with **no JIT** — deterministic, fuel-metered, and small
 enough to embed everywhere a wasm binary fits.
 
 ```rut
+use ink::{ Logger };
 use pouch::{ Vec };
 
 fn sieve(limit: i32) -> Vec<i32> {

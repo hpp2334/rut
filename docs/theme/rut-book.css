@@ -87,7 +87,7 @@ pre.rut-run {
 .rut-run-btn {
   position: absolute;
   top: 0.45em;
-  right: 0.45em;
+  right: 2.7em; /* left of mdbook's copy button — the two overlap at right: 0.45em, and copy swallows the clicks */
   padding: 0.15em 0.7em;
   font-size: 0.8em;
   font-family: var(--mono, "Source Code Pro", Menlo, monospace);
