@@ -98,6 +98,39 @@ pub struct AliasDecl {
     pub resolved: Option<AliasTarget>,
 }
 
+/// A generic type bound from a used module's surface: the declaring
+/// package owns every instantiation of it. The consumer holds the
+/// TEMPLATE (its field descriptors, with `#<param>` placeholder leaves)
+/// so it can lay a concrete instantiation out — the bodies compile in
+/// the owner, which the consumer's instantiation requests name.
+#[derive(Clone, Debug)]
+pub struct ExternGeneric {
+    /// the declaring pkg's spec
+    pub owner: String,
+    /// the generic parameters, in declaration order
+    pub params: Vec<IdentId>,
+    /// the template row's id in THIS module's table (registered from the
+    /// exporter's surface block; its field descriptors carry the
+    /// `#<param>` placeholder leaves)
+    pub template: TypeId,
+    /// `class` — no outside record literal
+    pub is_class: bool,
+}
+
+/// One consumer request routed to a declaring package's compile: an
+/// instantiation (`decl<args>`) a consumer's code used, addressed to the
+/// pkg that owns the bodies. The graph resolves requests after the walk
+/// (canonical, sorted order): a source owner is recompiled with the
+/// seeds; a packaged owner's binary must already carry the row.
+#[derive(Clone, Debug)]
+pub struct InstRequest {
+    pub owner: String,
+    /// the declaration's name, as the consumer spells it
+    pub decl: IdentId,
+    /// the concrete arguments, in the consumer's type space
+    pub args: Vec<TypeId>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ImplDecl {
     pub trait_id: u32,
@@ -127,6 +160,10 @@ pub struct ImplDecl {
     /// always static (the receiver's concrete type names the impl)
     pub inherent: bool,
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    /// the pkg whose source the impl block lives in (the splice-origin
+    /// rule) — the instantiation ledger's owner anchor for the impl's
+    /// monomorphized methods
+    pub origin: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -323,6 +360,26 @@ pub struct Ctx<'a> {
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
+    /// the pkg whose source declared each record/enum: spliced decls
+    /// carry their splice origin, linked generics their exporter, own
+    /// decls this unit — the instantiation ledger's owner anchor
+    /// (`(owner, decl, args)` keys are global across the graph)
+    pub decl_owner: std::collections::HashMap<IdentId, String>,
+    /// generic templates bound from used modules' surfaces (see
+    /// [`ExternGeneric`])
+    pub extern_generics: std::collections::HashMap<IdentId, ExternGeneric>,
+    /// requests this unit routed to declaring packages (see
+    /// [`InstRequest`]) — deduplicated, emission order
+    pub inst_requests: Vec<InstRequest>,
+    requests_seen: std::collections::HashSet<(String, String, Vec<TypeId>)>,
+    /// instantiations the graph seeded into this unit (the owner side of
+    /// a request): `(decl, args)` — materialized after collect, before
+    /// the compile roots
+    pub seeded_insts: Vec<(String, Vec<TypeId>)>,
+    /// the instantiation ledger rows this unit minted (type + fn) —
+    /// copied onto the Program for link's unification
+    pub ledger_types: Vec<rut_core::binary::InstTy>,
+    pub ledger_fns: Vec<rut_core::binary::InstFn>,
 }
 
 /// A used function: the exporter's scope-qualified id and signature.
@@ -493,6 +550,13 @@ impl<'a> Ctx<'a> {
             pub_core,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
+            decl_owner: std::collections::HashMap::new(),
+            extern_generics: std::collections::HashMap::new(),
+            inst_requests: Vec::new(),
+            requests_seen: std::collections::HashSet::new(),
+            seeded_insts: Vec::new(),
+            ledger_types: Vec::new(),
+            ledger_fns: Vec::new(),
         }
     }
 
@@ -563,6 +627,48 @@ impl<'a> Ctx<'a> {
                     TyKind::TraitObj { trait_id } => {
                         if let Some(&g) = tmap.get(trait_id) {
                             *trait_id = g;
+                        }
+                    }
+                    _ => {}
+                }
+                d
+            })
+            .collect();
+        self.types.use_block(descs, blocks);
+    }
+
+    /// The request seeds' requester blocks — `use_types`' registration
+    /// law without the trait map: descriptor names re-intern from the
+    /// requester's interner, packed ids pass through (the block lands
+    /// under the REQUESTER's scope at the same locals their own table
+    /// uses, so both sides spell an instantiation's arguments the same
+    /// way — the owner anchor's whole point).
+    pub fn use_seed_block(
+        &mut self,
+        descs: Vec<RutType>,
+        blocks: &[(rut_core::ScopeId, u32)],
+        source: &Interner,
+    ) {
+        let mut map: std::collections::HashMap<IdentId, IdentId> = std::collections::HashMap::new();
+        let mut re = |interner: &mut Interner, id: IdentId| -> IdentId {
+            if id.0 < source.well_known_len() {
+                return id;
+            }
+            *map.entry(id).or_insert_with(|| interner.intern(source.name(id)))
+        };
+        let descs = descs
+            .into_iter()
+            .map(|mut d| {
+                d.name = re(&mut self.interner, d.name);
+                match &mut d.kind {
+                    TyKind::Data { fields } => {
+                        for f in fields {
+                            f.name = re(&mut self.interner, f.name);
+                        }
+                    }
+                    TyKind::Enum { members } => {
+                        for (n, _) in members.iter_mut() {
+                            *n = re(&mut self.interner, *n);
                         }
                     }
                     _ => {}
@@ -682,6 +788,51 @@ impl<'a> Ctx<'a> {
         match self.origins.partition_point(|l| l.hi <= lo) {
             i if i < self.origins.len() => &self.origins[i].spec,
             _ => &self.own_spec,
+        }
+    }
+
+    /// The pkg that owns `decl`'s instantiations: instantiation happens
+    /// where the body lives. A spliced decl's body lives in its splice
+    /// origin, a linked generic's in its exporter, an own decl in this
+    /// unit — the ledger key's owner anchor.
+    pub fn owner_of_data(&self, decl: IdentId) -> String {
+        self.decl_owner
+            .get(&decl)
+            .cloned()
+            .unwrap_or_else(|| self.own_spec.clone())
+    }
+
+    /// Route an instantiation request to its declaring package
+    /// (deduplicated — one request per `owner + decl + args`).
+    pub fn request_inst(&mut self, owner: String, decl: IdentId, args: Vec<TypeId>) {
+        let key = (owner.clone(), self.name(decl).to_string(), args.clone());
+        if self.requests_seen.insert(key) {
+            self.inst_requests.push(InstRequest { owner, decl, args });
+        }
+    }
+
+    /// Do two type ids spell the SAME owner-anchored instantiation?
+    /// Every unit lays its own mirror row for a foreign instantiation —
+    /// distinct ids pre-link, one row at link. The checker's
+    /// identity-sensitive comparisons read the ledger: same
+    /// `(owner, decl, args)` key, same type. A row this unit only
+    /// REGISTERED (a linked dep's returned instantiation) carries no
+    /// ledger row — its display name is its identity here, the same
+    /// spelling the ledger's rows were built with.
+    pub fn same_instantiation(&self, a: TypeId, b: TypeId) -> bool {
+        if a == b {
+            return true;
+        }
+        let key_of = |ty: TypeId| -> Option<String> {
+            if self.ledger_types.iter().any(|r| r.ty == ty) {
+                return Some(self.type_name(ty).to_string());
+            }
+            let name = self.type_name(ty).to_string();
+            name.contains('<').then_some(name)
+        };
+        match (key_of(a), key_of(b)) {
+            (Some(ka), Some(kb)) => ka == kb,
+            _ => false,
         }
     }
 

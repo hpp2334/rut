@@ -85,6 +85,7 @@ pub(crate) fn ensure_layout(ctx: &mut Ctx, fid: u32, fname: IdentId, ret_ty: Typ
         is_template: false,
         inherent: false,
         methods: vec![],
+        origin: ctx.own_spec.clone(),
     });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, fid));
@@ -930,6 +931,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
         is_template: false,
         inherent: false,
         methods: vec![],
+        origin: ctx.own_spec.clone(),
     });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     let thunk_name = ctx.intern("async_engine::__sleep_yield");
@@ -1141,6 +1143,7 @@ pub(crate) fn ensure_host_async(
         is_template: false,
         inherent: false,
         methods: vec![],
+        origin: ctx.own_spec.clone(),
     });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     let cx_ty = ctx.run_context_ty();

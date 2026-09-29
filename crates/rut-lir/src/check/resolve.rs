@@ -480,6 +480,27 @@ impl<'a> Ctx<'a> {
                         }
                         // used type (RFC 0035 §1): the exporter's
                         // scope-qualified id; link rebases it
+                        if let Some(g) = self.extern_generics.get(&name).cloned() {
+                            // a linked generic: the consumer spells the
+                            // instantiation, the declaring package owns
+                            // it — lay the mirror row out of the
+                            // template and request the bodies
+                            if seg.generics.len() != g.params.len() {
+                                self.err(sp, format!(
+                                    "`{}` takes {} generic argument(s), {} given",
+                                    self.name(name),
+                                    g.params.len(),
+                                    seg.generics.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            return self.mk_data_inst(name, args, sp);
+                        }
                         if let Some(&t) = self.extern_types.get(&name) {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));

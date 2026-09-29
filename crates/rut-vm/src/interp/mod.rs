@@ -1386,6 +1386,8 @@ mod tests {
             consts: Vec::new(),
             funcs: Vec::new(),
             exports: Vec::new(),
+            inst_types: Vec::new(),
+            inst_fns: Vec::new(),
         };
         Vm::new(
             Rc::new(prog),

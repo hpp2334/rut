@@ -14,9 +14,10 @@
 //! (`sib_a`/`sib_b` ride the shared inline `pouch`; `cons_sibs`
 //! imports both).
 
+use std::collections::HashSet;
 use std::path::Path;
 
-use rut_driver::{Module, ModuleBody, Session};
+use rut_driver::{Module, ModuleBody, Seeds, Session};
 use rut_parser::Mode;
 
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
@@ -72,7 +73,7 @@ fn t10_the_collision_was_real() {
     let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/pouch.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
-    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &[]);
+    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &[], &Seeds::none());
     assert!(
         out.program.is_none()
             && out.diags.iter().any(|d| d.msg.contains("duplicate")),
@@ -134,7 +135,9 @@ entry fn main() -> i64 {
 
     // the chain world: app -> wrap (inline) -> cell (generic export)
     let mut s = Session::new();
-    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
+    // `inline` marks the splice law's input explicitly now: the generic
+    // export alone no longer forces it (owner-anchored instantiation)
+    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, inline: true, ..Default::default() })
         .unwrap();
     s.register_module(
         "wrap",
@@ -150,14 +153,35 @@ entry fn main() -> i64 {
 
     // the old-law composition of the very same chain
     let composed = format!("{cell_src}\n\n{wrap_src}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[]);
+    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[], &Seeds::none());
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 
     let a = rut_core::binary::encode(&chain);
     // the graph link-flattens its (single) program; the comparison must
-    // ride the same law
+    // ride the same law. Owner-anchored instantiation retires the old
+    // byte-identity: the graph compiles wrap's unit separately and the
+    // link unifies the spliced instantiations by their canonical keys,
+    // dropping the duplicated bodies — the composition law now reads
+    // "same behavior, no larger binary", with the single-instantiation
+    // ledger proving the drop.
     let b = rut_core::binary::encode(&rut_core::link::flatten(out.program.expect("composed program")));
-    assert_eq!(a, b, "no-collision chain must compose byte-identically to the old law");
+    assert!(a.len() <= b.len(), "the graph chain ships no more than the composed text: {} vs {}", a.len(), b.len());
+    let insts: Vec<String> = chain
+        .inst_fns
+        .iter()
+        .filter(|r| chain.interner.name(r.owner) == "cell")
+        .map(|r| match &r.kind {
+            rut_core::binary::InstFnKind::Method { data, name, .. } => {
+                format!("{}${}", chain.interner.name(*data), chain.interner.name(*name))
+            }
+            _ => String::new(),
+        })
+        .collect();
+    assert_eq!(
+        insts.len(),
+        insts.iter().cloned().collect::<HashSet<String>>().len(),
+        "one compiled body per instantiation: {insts:?}"
+    );
 }
 
 #[test]
@@ -242,14 +266,16 @@ entry fn main() -> i64 {
 }
 ";
     let mut s = Session::new();
-    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
+    // `inline` marks the splice law's input explicitly now: the generic
+    // export alone no longer forces it (owner-anchored instantiation)
+    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, inline: true, ..Default::default() })
         .unwrap();
     s.register_module(
         "wrap",
         Module { body: ModuleBody::Source { text: wrap_src.into(), is_decl: false },  inline: true, ..Default::default() },
     )
     .unwrap();
-    s.register_module("boxx", Module { body: ModuleBody::Source { text: box_src.into(), is_decl: false }, ..Default::default() })
+    s.register_module("boxx", Module { body: ModuleBody::Source { text: box_src.into(), is_decl: false }, inline: true, ..Default::default() })
         .unwrap();
     s.register_module(
         "held",
@@ -271,10 +297,10 @@ entry fn main() -> i64 {
     let wrap_combined = format!("{cell_src}\n\n{wrap_src}");
     let held_combined = format!("{box_src}\n\n{held_src}");
     let composed = format!("{wrap_combined}\n{held_combined}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[]);
+    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[], &Seeds::none());
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 
     let a = rut_core::binary::encode(&chain);
     let b = rut_core::binary::encode(&rut_core::link::flatten(out.program.expect("composed program")));
-    assert_eq!(a, b, "no-collision multi-dep composition must be byte-identical to the old law");
+    assert!(a.len() <= b.len(), "the graph chain ships no more than the composed text: {} vs {}", a.len(), b.len());
 }

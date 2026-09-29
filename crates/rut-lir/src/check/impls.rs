@@ -195,6 +195,7 @@ impl<'a> Ctx<'a> {
             is_template: true,
             inherent: false,
             methods: im.methods.clone(),
+            origin: im.origin.clone(),
         });
         let minted = self.impls.len() - 1;
         // the instantiated method bodies (the vtable rows' callees)

@@ -22972,17 +22972,15 @@ msgstr "`mount_std` 挂载 `core` + `calc`；`mount_std_async` 加上异步那�
 
 #: src/reference/stdlib.md:342
 msgid ""
-"`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
-"are source-inlined into each consumer — required for class-method and "
-"generic surfaces, which cannot cross a module link boundary ([the "
-"frontend](frontend.md))."
-msgstr "`inline = true` 的包（ink、pouch、nmapset、json、strbuild、async_host）以源码形式内联进每个消费方——类方法与泛型表面需要这样做，它们无法跨越模块链接边界（[前端](frontend.md)）。"
+"`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
+msgstr ""
+"`inline = true` 的包（ink、pouch、nmapset、json、strbuild、async_host）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
 
 #: src/reference/stdlib.md:346
 msgid ""
-"Generic functions cannot cross a module link boundary; exported linked "
-"surfaces carry only monomorphized fns."
-msgstr "泛型函数无法跨越模块链接边界；导出的链接表面只携带单态化后的 fn。"
+"- Generic exports link on their own: instantiation happens where the body lives, consumers request it, and `Vec<i64>` is one type program-wide ([the compiler pipeline](compiler.md))."
+msgstr ""
+"- 泛型导出自己就能链接：实例化发生在函数体所在之处，消费方发起请求，`Vec<i64>` 是全程序唯一的类型（[编译器流水线](compiler.md)）。"
 
 #: src/reference/frontend.md:3
 msgid ""
@@ -23931,13 +23929,15 @@ msgstr "泛型函数绝不进入二进制。检查器的实例化队列为每个
 
 #: src/reference/compiler.md:98
 msgid ""
-"The same law has a packaging consequence: a module exporting a **generic "
-"function or generic class** cannot be linked against (a linked surface "
-"carries only monomorphic exports). Such packages set `inline = true` in "
-"their manifest — the graph compiler splices their source into every consumer "
-"instead of linking them (`ink`, `json`, `nmapset`, `strbuild`, `async_host`, "
-"`http`). See [Project structure and rut.toml](project-structure.md)."
-msgstr "同一条法则有一个打包上的推论：导出**泛型函数或泛型类**的模块无法被链接（链接表面只携带单态导出）。这类包在自己的清单里设置 `inline = true`——图编译器把它们的源码拼接进每个消费方，而不是链接它们（`ink`、`json`、`nmapset`、`strbuild`、`async_host`、`http`）。见[项目结构与 rut.toml](project-structure.md)。"
+"The same law fixes WHERE an instantiation compiles: where the body lives. `Vec<i64>` is one type program-wide — the declaring package owns every instantiation of its generics, and consumers request them: a consumer's spelling lays out the concrete shape and routes the bodies to the declaring package's compile, so a linked library's `make() -> Vec<i64>` and the consumer's own `Vec<i64>` are one row, and the binary ships one copy of each instantiation's code."
+msgstr ""
+"同一条法则规定了实例化在哪里编译：在函数体所在之处。`Vec<i64>` 是全程序唯一的类型——声明包拥有其泛型的每一个实例化，消费方则发起请求：消费方的书写铺排出具体形状，并把函数体路由到声明包的编译里，因此被链接库的 `make() -> Vec<i64>` 与消费方自己的 `Vec<i64>` 是同一行，二进制里每个实例化的代码也只有一份。"
+
+#: src/reference/compiler.md:106
+msgid ""
+"That leaves `inline = true` for packages whose methods live on class bodies (inherent impls cross no surface yet): the graph compiler splices their source into every consumer instead of linking them (`ink`, `json`, `nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See [Project structure and rut.toml](project-structure.md)."
+msgstr ""
+"于是 `inline = true` 留给了那些方法写在类体里的包（固有 impl 尚不能跨表面）：图编译器把它们的源码拼接进每个消费方，而不是链接它们（`ink`、`json`、`nmapset`、`strbuild`、`async_host`、`http`、`pouch`）。见[项目结构与 rut.toml](project-structure.md)。"
 
 #: src/reference/compiler.md:105
 msgid "The type lattice"
@@ -24894,14 +24894,15 @@ msgstr "**函数**完整序列化：名字、参数/返回类型、`is_method`�
 
 #: src/reference/module-binary.md:78
 msgid ""
-"**Surface** (v16): the exported surface rides after `exports` — the "
-"namespace head, funcs (with their async/host rows), consts, the carried type "
-"descriptors + scope blocks + type exports, trait decls, impl registrations "
-"in both ABI lists, a reserved length-prefixed inherent-impl table (zero rows "
-"until class methods link), and the native rows with their ambient bits. "
-"Names are ids into the name table above; decode rejects any id its tables "
-"cannot resolve."
-msgstr "**Surface**（v16）：导出的 surface 跟在 `exports` 之后——命名空间头、函数（连同其 async/host 行）、常量、携带的类型描述符 + 作用域块 + 类型导出、trait 声明、两个 ABI 列表中的 impl 注册、一张保留的带长度前缀的固有 impl 表（在类方法可链接之前为零行），以及连同各环境位的原生行。名字是上文名字表中的 id；解码会拒绝其表无法解析的任何 id。"
+"**Surface** (v16): the exported surface rides after `exports` — the namespace head, funcs (with their async/host rows), consts, the carried type descriptors + scope blocks + type exports (generic exports carry their parameter names in order, v17), trait decls, impl registrations in both ABI lists, a reserved length-prefixed inherent-impl table (zero rows until class methods link), and the native rows with their ambient bits. Names are ids into the name table above; decode rejects any id its tables cannot resolve."
+msgstr ""
+"**表面**（v16）：导出的表面随行在 `exports` 之后——命名空间头、函数（带 async/host 行）、常量、携带的类型描述符 + 作用域块 + 类型导出（泛型导出按序携带参数名，v17）、trait 声明、两个 ABI 列表的 impl 注册、一张保留的定长前缀固有 impl 表（类方法可链接之前为零行），以及带环境位的原生行。名字是上文名字表里的 id；解码拒绝任何其表无法解析的 id。"
+
+#: src/reference/module-binary.md:83
+msgid ""
+"**Instantiation ledger** (v17): the owner-anchored identity of every instantiation the program compiled — type rows `(owner, decl, arguments, type id)` first, then fn identities (the kind, the substitution values, and the local fn id). Instantiation is owned by the declaring package, and link unifies rows sharing a key into ONE program-wide row; a consumer resolves its requests against a packaged binary's ledger. Type exports carry their generic parameter lists beside this (see the surface below)."
+msgstr ""
+"**实例化台账**（v17）：程序编译过的每个实例化的属主锚定身份——先是类型行 `(owner, decl, arguments, type id)`，再是函数身份（种类、替换值、局部 fn id）。实例化归声明包所有，链接把共享同一键的行统一为全程序唯一的一行；消费方针对打包二进制的台账解析自己的请求。类型导出在其旁携带自己的泛型参数表（见下方表面）。"
 
 #: src/reference/module-binary.md:85
 msgid ""
@@ -26021,34 +26022,32 @@ msgstr "v5 布局"
 #: src/reference/bundles.md:23
 msgid ""
 "```text\n"
-"rut.toml                 byte-for-byte; format = \"rutbundle\", "
-"format_version = 5\n"
-"rut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n"
-"<pkg>.rutc               the root's compiled binary — bodies + surface\n"
-"<pkg>.d.rut              the root's surface text (humans, LSP), when it "
-"declares one\n"
-"<dep>/rut.toml           per dep group, mixed kinds:\n"
-"<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml "
-"rides too)\n"
-"<dep>/<dep>.d.rut          its surface text, when it declares one\n"
-"<leaf>/rut.toml            splice-needed dep (inline / generic export /\n"
-"<leaf>/<leaf>.rut           trait-object params) or a host pkg → a source\n"
-"<leaf>/<leaf>.rut …         group: the source file set (entry, libs, peer "
-"groups)\n"
-"```"
-msgstr ""
-"```text\n"
 "rut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\n"
 "rut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n"
 "<pkg>.rutc               the root's compiled binary — bodies + surface\n"
 "<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one\n"
 "<dep>/rut.toml           per dep group, mixed kinds:\n"
-"<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too)\n"
+"<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);\n"
+"                           generic exports ride compiled — the binary carries\n"
+"                           the closure's instantiations in its ledger\n"
 "<dep>/<dep>.d.rut          its surface text, when it declares one\n"
-"<leaf>/rut.toml            splice-needed dep (inline / generic export /\n"
-"<leaf>/<leaf>.rut           trait-object params) or a host pkg → a source\n"
-"<leaf>/<leaf>.rut …         group: the source file set (entry, libs, peer groups)\n"
-"```"
+"<leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host\n"
+"<leaf>/<leaf>.rut           pkg → a source group: the source file set\n"
+"<leaf>/<leaf>.rut …         (entry, libs, peer groups)\n```"
+msgstr ""
+"```text\n"
+"rut.toml                 原样字节；format = \"rutbundle\"、format_version = 5\n"
+"rut.scopes               打包期作用域台账（scope = \"spec\" 行）\n"
+"<pkg>.rutc               根的编译二进制——函数体 + 表面\n"
+"<pkg>.d.rut              根的表面文本（供人类与 LSP），若它有声明\n"
+"<dep>/rut.toml           每个依赖组，种类混合：\n"
+"<dep>/<dep>.rutc           可链接依赖 → 编译组（其 rut.toml 一并随行）；\n"
+"                           泛型导出以编译形式随行——二进制在台账里\n"
+"                           携带闭包的实例化\n"
+"<dep>/<dep>.d.rut          其表面文本，若它有声明\n"
+"<leaf>/rut.toml            需要拼接的依赖（`inline` 旗标）或宿主包 →\n"
+"<leaf>/<leaf>.rut           源码组：源码文件集（entry、libs、peer 组）\n"
+"<leaf>/<leaf>.rut …\n```"
 
 #: src/reference/bundles.md:36
 msgid ""
@@ -26073,22 +26072,21 @@ msgstr ""
 
 #: src/reference/bundles.md:48
 msgid ""
-"**Mixed groups, one classifier**: the same splice law that rules the graph "
-"(`inline`, a generic export, or a trait-object parameter — [modules and "
-"visibility](modules-and-visibility.md)) decides each package's kind. Refuse, "
-"never guess: the packer calls the graph's own classifier, there is no second "
-"implementation."
+"**Mixed groups, one classifier**: the same splice law that rules the graph (the `inline` flag — [modules and visibility](modules-and-visibility.md)) decides each package's kind. Refuse, never guess: the packer calls the graph's own classifier, there is no second implementation."
 msgstr ""
-"**混合的组，一个分类器**：统治模块图的同一条拼接法则（`inline`、泛型导出、或 trait 对象参数——[模块与可见性](modules-and-visibility.md)）裁定每个包的种类。拒绝，绝不猜测：打包器调用的就是图自己的分类器，没有第二份实现。"
+"**混合的组，一个分类器**：统治模块图的同一条拼接法则（`inline` 旗标——[模块与可见性](modules-and-visibility.md)）裁定每个包的种类。拒绝，绝不猜测：打包器调用的就是图自己的分类器，没有第二份实现。"
 
 #: src/reference/bundles.md:53
 msgid ""
-"**The root must be linkable** — else `pack: <pkg> exports generic types / "
-"takes trait-object params / is inline — it cannot be published compiled; "
-"share the directory instead`. (The generic closure itself rides as source "
-"groups: a compiled group cannot carry another package's instantiations.)"
+"**Generics ride compiled**: instantiation is owned by the declaring package, and the pack walk seeds each generic dep with the instantiations its consumers spell — the binary's instantiation ledger names every `(owner, decl, arguments)` row, and a consumer session resolves its requests against it. A request the binary does not carry refuses (`re-pack with the consumer in the closure`), never mislinks."
 msgstr ""
-"**根必须可链接**——否则 `pack: <pkg> exports generic types / takes trait-object params / is inline — it cannot be published compiled; share the directory instead`。（泛型闭包本身以源码组随行：编译组带不动另一个包的实例化。）"
+"**泛型以编译形式随行**：实例化归声明包所有，打包遍历会用消费方拼出的实例化为每个泛型依赖播种——二进制的实例化台账记下每一行 `(owner, decl, arguments)`，消费方会话据此解析自己的请求。二进制未携带的请求会被拒绝（`re-pack with the consumer in the closure`），绝不错链。"
+
+#: src/reference/bundles.md:53
+msgid ""
+"**The root must be linkable** — else `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`."
+msgstr ""
+"**根必须可链接**——否则 `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`。"
 
 #: src/reference/bundles.md:59
 msgid "The manifest — `rut.toml`"
@@ -26187,9 +26185,9 @@ msgstr "+ 每个包的 `entry.libs` 文件"
 
 #: src/reference/bundles.md:100
 msgid ""
-"compiled: `.rutc` (v16) + `.d.rut` per linkable pkg, mixed source groups for "
-"splice-needed deps"
-msgstr "编译：每个可链接包一份 `.rutc`（v16）+ `.d.rut`，需要拼接的依赖为混合源码组"
+"compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs"
+msgstr ""
+"编译：每个可链接包一份 `.rutc`（v17）+ `.d.rut`——泛型导出也在内，其实例化已播种进二进制——`inline` 依赖与宿主包则为混合源码组"
 
 #: src/reference/bundles.md:100
 msgid "**the packer's output** — this toolchain reads 5 only"
@@ -26536,10 +26534,9 @@ msgstr "`inline`"
 
 #: src/reference/project-structure.md:40
 msgid ""
-"`true` forces source-inlining into every consumer instead of linking "
-"(packages whose entries are generic functions or whose class methods must "
-"resolve at the call site)"
-msgstr "`true` 强制以源码形式内联进每个消费方而不是链接（入口是泛型函数、或类方法必须在调用点解析的包）"
+"`true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package)"
+msgstr ""
+"`true` 强制把源码内联进每个消费方而非链接（其类方法必须在调用点解析的包——固有 impl 尚不能跨表面；泛型导出自己就能链接，其实例化归声明包所有）"
 
 #: src/reference/project-structure.md:41
 msgid "`format`, `format_version`"

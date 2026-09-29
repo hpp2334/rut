@@ -264,7 +264,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         match op {
                             None => {
                                 let t = self.compile_expr(value, Some(fty))?;
-                                if t != fty {
+                                if !self.same_ty(t, fty) {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
                                 self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
@@ -276,7 +276,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 // accumulator derefs, the result re-boxes
                                 let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
                                 let t = self.compile_expr(value, Some(cty))?;
-                                if t != cty {
+                                if !self.same_ty(t, cty) {
                                     self.ctx.err(sp, "assignment type mismatch");
                                 }
                                 let val_reg = self.last_reg;
@@ -390,7 +390,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match op {
                     None => {
                         let t = self.compile_expr(value, Some(fty))?;
-                        if t != fty {
+                        if !self.same_ty(t, fty) {
                             self.ctx.err(sp, "field assignment type mismatch");
                         }
                         self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
@@ -402,7 +402,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // accumulator derefs, the result re-boxes
                         let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
                         let t = self.compile_expr(value, Some(cty))?;
-                        if t != cty {
+                        if !self.same_ty(t, cty) {
                             self.ctx.err(sp, "assignment type mismatch");
                         }
                         let val_reg = self.last_reg;
@@ -435,7 +435,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match op {
                     None => {
                         let t = self.compile_expr(value, Some(elem))?;
-                        if t != elem {
+                        if !self.same_ty(t, elem) {
                             self.ctx.err(sp, "element assignment type mismatch");
                         }
                         let vreg = self.last_reg;
@@ -447,7 +447,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // accumulator derefs, the result re-boxes
                         let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
                         let t = self.compile_expr(value, Some(cty))?;
-                        if t != cty {
+                        if !self.same_ty(t, cty) {
                             self.ctx.err(sp, "element assignment type mismatch");
                         }
                         let val_reg = self.last_reg;

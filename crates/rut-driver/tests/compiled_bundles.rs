@@ -36,12 +36,13 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linkable
-/// → compiled group) and declares `boxy` (generic export → source
-/// group). The law chains transitively, so a package that USES a
-/// generic splices it and itself becomes splice-needed — the clean
-/// mixed shape is a generic dep the linkable part of the tree does not
-/// absorb, which still rides (declared deps publish completely) as a
-/// source group a consumer can splice.
+/// → compiled group) and declares `boxy` (an explicitly `inline`d pkg →
+/// source group). With instantiation owner-anchored, generic exports
+/// link — the one splice trigger left is the `inline` flag (class
+/// methods cross no surface yet, so a method-bearing pkg keeps sharing
+/// its source). The clean mixed shape is an inline dep the linkable
+/// part of the tree does not absorb, which still rides (declared deps
+/// publish completely) as a source group a consumer can splice.
 fn mixed_world(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let app = root.join("app");
@@ -71,7 +72,7 @@ fn mixed_world(tag: &str) -> PathBuf {
          }\n",
     );
     let boxy = root.join("boxy");
-    write(&boxy, "rut.toml", &manifest("boxy", "boxy.rut", ""));
+    write(&boxy, "rut.toml", &manifest("boxy", "boxy.rut", "inline = true\n"));
     write(
         &boxy,
         "boxy.rut",
@@ -128,7 +129,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     assert_eq!(linked_binary(&session, &app_root), from_dir, "dir and bundle compile identically");
 
     // the closure mixed as declared: the linkable pkgs compiled, the
-    // generic one a source group
+    // explicitly inlined one a source group
     assert!(matches!(
         session.resolve("app").unwrap().body,
         ModuleBody::Compiled(_)
@@ -146,7 +147,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     for key in ["rut.toml", "rut.scopes", "app.rutc", "util/util.rutc", "boxy/rut.toml", "boxy/boxy.rut"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
-    assert!(!names.iter().any(|n| n == "boxy/boxy.rutc"), "the generic pkg rides source, not a binary");
+    assert!(!names.iter().any(|n| n == "boxy/boxy.rutc"), "the inline pkg rides source, not a binary");
 
     // the ledger names every linked module of the packed closure
     let ledger = rut_bundle::parse_bundle(&bytes).unwrap();
@@ -163,7 +164,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
 #[test]
 fn a_source_group_splices_into_a_consumer_session() {
     // the mixed closure's payoff: a consumer compiled AGAINST the
-    // loaded bundle splices the source group (the generic pkg) and
+    // loaded bundle splices the source group (the inline pkg) and
     // binds the compiled groups' surfaces — the two kinds meet in one
     // session, no directory in sight
     let root = mixed_world("splice");
@@ -219,26 +220,9 @@ fn same_dir_packs_byte_identical() {
 
 #[test]
 fn unsharable_roots_are_refused() {
-    // the exact refusal, verbatim, for each splice-law input
-    let want = "exports generic types / takes trait-object params / is inline — it cannot be published compiled; share the directory instead";
-
-    // a generic export
-    let root = scratch("genroot");
-    let app = root.join("app");
-    write(
-        &app,
-        "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n",
-    );
-    write(
-        &app,
-        "app.rut",
-        "pub class G<T> { v: T; }\n\nimpl G<T> { pub fn mk(v: T) -> Self { return Self { v: v }; } }\n\nentry fn go() -> i64 { let g = G<i64>.mk(1); return 0; }\n",
-    );
-    let err = pack_dir(&app).unwrap_err();
-    assert!(err.contains(&format!("pack: app {want}")), "{err}");
-
-    // an inline manifest flag
+    // the one refusal left: an explicitly `inline`d root — its source
+    // is its interface, there is no publishable boundary
+    let want = "is inline — its source is its interface and it cannot be published compiled; share the directory instead";
     let root = scratch("inlineroot");
     let app = root.join("app");
     write(
@@ -249,8 +233,54 @@ fn unsharable_roots_are_refused() {
     write(&app, "app.rut", "pub fn f() -> i32 { return 1; }\n");
     let err = pack_dir(&app).unwrap_err();
     assert!(err.contains(&format!("pack: app {want}")), "{err}");
+    let _ = std::fs::remove_dir_all(&root);
+}
 
-    // a trait-object parameter
+/// Owner-anchored instantiation retired the generic-export and
+/// trait-param refusals: a generic root publishes compiled, and its
+/// consumers' instantiation requests resolve against the binary's
+/// ledger. The pack walk seeds the root's requests into the dep's
+/// compile, so the dep's group binary carries every instantiation the
+/// closure uses.
+#[test]
+fn generic_and_trait_param_roots_publish_compiled() {
+    // a generic root: the exported template rides the binary, the
+    // instantiation the root itself spells compiles inside it, and the
+    // ledger names the row
+    let root = scratch("genroot");
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.toml",
+        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n",
+    );
+    write(
+        &app,
+        "app.rut",
+        "pub struct Pair<A, B> {\n\
+         \x20   fst: A;\n\
+         \x20   snd: B;\n\
+         }\n\n\
+         entry fn go() -> i64 {\n\
+         \x20   let p = Pair<i64, i64> { fst: 1, snd: 2 };\n\
+         \x20   return p.fst + p.snd;\n\
+         }\n",
+    );
+    let bytes = pack_dir(&app).expect("a generic root publishes compiled");
+    let names: Vec<String> =
+        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+    assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
+    assert!(!names.iter().any(|n| n.ends_with(".rut") && !n.ends_with("rut.toml")), "{names:?}");
+    let run = |b: &[u8]| {
+        let (session, app_root) = load_bundle_bytes(b, Path::new("mem")).expect("load");
+        run_entry(session, &app_root, "go")
+    };
+    let got: i64 = run(&bytes);
+    assert_eq!(got, 3);
+    let _ = std::fs::remove_dir_all(&root);
+
+    // a trait-object parameter: the fn crosses and dispatches through
+    // the consumer's impl registration (the vtable merge) — no splice
     let root = scratch("traitroot");
     let app = root.join("app");
     write(
@@ -261,22 +291,21 @@ fn unsharable_roots_are_refused() {
     write(
         &app,
         "app.rut",
-        "pub trait Shape { fn area(self) -> i32; }\npub fn draw(s: Shape) -> i32 { return s.area(); }\n",
+        "pub trait Shape { fn area(self) -> i32; }\n\
+         pub fn draw(s: Shape) -> i32 { return s.area(); }\n\n\
+         entry fn go() -> i32 {\n\
+         \x20   return draw(Square { side: 6 });\n\
+         }\n\n\
+         struct Square { side: i32; }\n\n\
+         impl Shape for Square {\n\
+         \x20   fn area(self) -> i32 { return self.side * self.side; }\n\
+         }\n",
     );
-    let err = pack_dir(&app).unwrap_err();
-    assert!(err.contains(&format!("pack: app {want}")), "{err}");
-
-    // a host pkg has nothing to compile — the same refusal family
-    let root = scratch("hostroot");
-    let app = root.join("app");
-    write(
-        &app,
-        "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.type = \"./app.d.rut\"\n",
-    );
-    write(&app, "app.d.rut", "pub host fn f() -> i32;\n");
-    let err = pack_dir(&app).unwrap_err();
-    assert!(err.contains("cannot be published compiled"), "{err}");
+    let bytes = pack_dir(&app).expect("a trait-param root publishes compiled");
+    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
+    let got: i32 = run_entry(session, &app_root, "go");
+    assert_eq!(got, 36);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

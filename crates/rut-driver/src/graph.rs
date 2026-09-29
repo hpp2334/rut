@@ -30,6 +30,7 @@ use rut_parser::{parse, Mode};
 
 use crate::session::{ModuleBody, Session};
 use crate::compile_program_resolved;
+use crate::Seeds;
 
 /// A linked module graph.
 pub struct GraphOutput {
@@ -80,40 +81,37 @@ pub fn compile_units(session: &Session, root_spec: &str) -> Units {
         visiting: HashSet::new(),
         diags: Vec::new(),
         inline: HashSet::new(),
+        unit_src: HashMap::new(),
+        in_flight: HashMap::new(),
+        body_kind: HashMap::new(),
+        requests: Vec::new(),
+        seed_pool: HashMap::new(),
     };
     let ok = c.ensure(root_spec, false).is_some();
+    c.resolve_requests();
     let (diags, programs, linked, inline) = c.finish();
     Units { diags, programs, linked, inline, ok }
 }
 
 /// Why a compiled module cannot link — THE splice law's verdict, the
-/// one classifier the graph and the packer share: `inline`, a generic
-/// export, or a trait-object parameter routes the module's SOURCE into
-/// its consumers instead of a linked program.
+/// one classifier the graph and the packer share. Owner-anchored
+/// instantiation retired the generic-export and trait-param producers:
+/// a consumer instantiates a foreign generic as a mirror row and
+/// REQUESTS the bodies from the declaring package, so only an
+/// explicitly `inline`d module (a source-shape flag) still splices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Linkability {
-    /// concrete exports only — links
+    /// concrete exports, generic exports, trait-object params — links
     Linkable,
-    /// must splice source (inline, generic export, trait-object param)
+    /// must splice source (the `inline` manifest flag)
     SpliceNeeded,
 }
 
 /// Classify a compiled program (with its manifest's `inline` flag).
 /// The graph's splice decision and the packer's compiled-group
 /// decision both call this — there is no second implementation.
-pub fn linkable(program: &Program, inline: bool) -> Linkability {
-    let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
-    // a fn whose exported signature takes trait-typed PARAMETERS cannot
-    // be linked either: a trait parameter is an implicit generic bound
-    // (RFC 0012 §5) — it specializes per concrete argument, one clone
-    // per argument type (finite, terminating via the Inst cache), and
-    // that must happen where the arguments are. Splice its source in.
-    let has_trait_param = program.surface.funcs.iter().any(|f| {
-        f.params
-            .iter()
-            .any(|&p| matches!(program.types.kind(p), rut_core::types::TyKind::TraitObj { .. }))
-    });
-    if inline || has_generic || has_trait_param {
+pub fn linkable(_program: &Program, inline: bool) -> Linkability {
+    if inline {
         Linkability::SpliceNeeded
     } else {
         Linkability::Linkable
@@ -148,6 +146,34 @@ struct GraphCompiler<'a> {
     diags: Vec<Diag>,
     /// the ensured specs the splice law routed into their consumers
     inline: HashSet<String>,
+    /// linked SOURCE units' exact compile inputs — the recompile a
+    /// request-heavy owner gets replays them verbatim, seeds aside
+    unit_src: HashMap<String, UnitSrc>,
+    /// specs mid-`ensure` (a chain can nest several) → the scope their
+    /// unit will carry. A compiled module mounted while its CONSUMER is
+    /// still being compiled maps the consumer's packed block forward
+    /// through this — the requester's rows travel inside the owner's
+    /// binary (the seeded instantiations reference them).
+    in_flight: HashMap<String, rut_core::ScopeId>,
+    /// how each ensured spec is mounted (source / compiled / host) —
+    /// the request resolution reads it to pick the owner arm
+    body_kind: HashMap<String, u8>,
+    /// instantiation requests routed to declaring packages, with the
+    /// requesting unit's spec (its program holds the argument rows the
+    /// seed blocks copy)
+    requests: Vec<(String, rut_lir::check::InstRequest)>,
+    /// accumulated seeds per owner across resolution rounds (a second
+    /// recompile must keep the first round's seeds)
+    seed_pool: HashMap<String, Vec<(String, rut_lir::check::InstRequest)>>,
+}
+
+/// A linked source unit's compile inputs, recorded for the owner-side
+/// recompile (`ensure_source` replays them verbatim, seeds aside).
+struct UnitSrc {
+    text: String,
+    is_decl: bool,
+    origins: Vec<rut_lir::check::OriginLeaf>,
+    bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)>,
 }
 
 impl<'a> GraphCompiler<'a> {
@@ -197,9 +223,27 @@ impl<'a> GraphCompiler<'a> {
             // scope ledger names them), assign a fresh scope, rebase
             // the packed ids, push. `inline` is a source-shape flag and
             // does not reach here: a compiled module already linked.
-            ModuleBody::Compiled(prog) => self.ensure_compiled(spec, prog),
-            ModuleBody::Host { .. } => self.ensure_host(spec),
-            ModuleBody::Source { text, is_decl } => self.ensure_source(spec, module, text, *is_decl, as_dep),
+            ModuleBody::Compiled(prog) => {
+                self.body_kind.insert(spec.to_string(), 1);
+                self.ensure_compiled(spec, prog)
+            }
+            ModuleBody::Host { .. } => {
+                self.body_kind.insert(spec.to_string(), 2);
+                self.ensure_host(spec)
+            }
+            ModuleBody::Source { text, is_decl } => {
+                self.body_kind.insert(spec.to_string(), 0);
+                // the unit's scope is assigned BEFORE its deps ensure: a
+                // compiled dep's binary may carry this unit's packed rows
+                // (the seeds it was packed with reference its consumer),
+                // and the forward mapping needs the number now
+                let scope = self.next_scope;
+                self.next_scope += 1;
+                self.in_flight.insert(spec.to_string(), scope);
+                let out = self.ensure_source(spec, module, text, *is_decl, as_dep, scope);
+                self.in_flight.remove(spec);
+                out
+            }
         }
     }
 
@@ -316,7 +360,9 @@ impl<'a> GraphCompiler<'a> {
     /// assume pack-time and load-time numbering agree: ensure each
     /// referenced module (in ascending pack-scope order, which replays
     /// the pack walk's post-order), map every scope half to its
-    /// load-time value, rebase, push.
+    /// load-time value, rebase, push. A scope naming a unit that is
+    /// being compiled RIGHT NOW (the requester whose seeded rows travel
+    /// in this binary) maps forward through `in_flight`.
     fn ensure_compiled(&mut self, spec: &str, prog: &Program) -> Option<Unit> {
         let Some(own_pack) = rut_core::link::own_scope(prog) else {
             self.diags.push(Diag::new(
@@ -332,15 +378,24 @@ impl<'a> GraphCompiler<'a> {
         // use order, dep before user
         let mut mapped: Vec<(rut_core::ScopeId, rut_core::ScopeId)> = Vec::new();
         for &pack_scope in &foreign {
-            let Some(dep_spec) = self.session.bundle_scope(pack_scope).map(str::to_string) else {
-                self.diags.push(Diag::new(
-                    Span::new(0, 0),
-                    format!(
-                        "module `{spec}` references scope {pack_scope}, which the bundle's scope ledger does not name — the bundle is incomplete or corrupt"
-                    ),
-                ));
-                return None;
+            let dep_spec = match self.session.bundle_scope(pack_scope).map(str::to_string) {
+                Some(s) => s,
+                None => {
+                    self.diags.push(Diag::new(
+                        Span::new(0, 0),
+                        format!(
+                            "module `{spec}` references scope {pack_scope}, which the bundle's scope ledger does not name — the bundle is incomplete or corrupt"
+                        ),
+                    ));
+                    return None;
+                }
             };
+            // the requester mid-compile: its scope exists (assigned at
+            // ensure entry); bind the pack-time block to it directly
+            if let Some(&live) = self.in_flight.get(&dep_spec) {
+                mapped.push((pack_scope, live));
+                continue;
+            }
             match self.ensure(&dep_spec, true)? {
                 Unit::Linked { scope, .. } => mapped.push((pack_scope, scope)),
                 Unit::Inline { .. } => {
@@ -379,7 +434,9 @@ impl<'a> GraphCompiler<'a> {
 
     /// The compile path: parse the module's source, resolve its uses,
     /// splice what the splice law demands, compile the unit — and
-    /// route it to a linked program or an inline leaf list.
+    /// route it to a linked program or an inline leaf list. `scope` was
+    /// assigned by the dispatcher before the deps ensured (the forward
+    /// mapping a mounted owner binary needs).
     fn ensure_source(
         &mut self,
         spec: &str,
@@ -387,6 +444,7 @@ impl<'a> GraphCompiler<'a> {
         src: &str,
         is_decl: bool,
         as_dep: bool,
+        scope: rut_core::ScopeId,
     ) -> Option<Unit> {
         let (ast, d) = parse(src, if is_decl { Mode::Decl } else { Mode::Impl });
         if !d.is_empty() {
@@ -489,8 +547,6 @@ impl<'a> GraphCompiler<'a> {
             hi: own_lo + src_len,
             spec: spec.to_string(),
         });
-        let scope = self.next_scope;
-        self.next_scope += 1;
         let out = compile_program_resolved(
             &combined,
             if is_decl { Mode::Decl } else { Mode::Impl },
@@ -499,7 +555,11 @@ impl<'a> GraphCompiler<'a> {
             &bound,
             true,
             &origins,
+            &Seeds::none(),
         );
+        for r in &out.requests {
+            self.requests.push((spec.to_string(), r.clone()));
+        }
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(out.diags);
             if out.program.is_none() && self.diags.is_empty() {
@@ -536,11 +596,279 @@ impl<'a> GraphCompiler<'a> {
             self.done.insert(spec.to_string(), unit.clone());
             return Some(unit);
         }
+        // the exact compile inputs, for the owner-side recompile a
+        // consumer request triggers (seeds aside, the replay is verbatim
+        // — same surface bindings, same spliced text, same origins)
+        self.unit_src.insert(
+            spec.to_string(),
+            UnitSrc { text: combined, is_decl, origins, bound },
+        );
         let idx = self.programs.len();
         self.programs.push(program);
         let unit = Unit::Linked { idx, scope };
         self.done.insert(spec.to_string(), unit.clone());
         Some(unit)
+    }
+
+    /// A request's canonical key — owner, declaration text, and the
+    /// argument spellings through the requester's table. The sort order
+    /// of these keys is the resolution order: deterministic for the same
+    /// source, byte-stable for the same pack.
+    fn request_key(&self, requester: &str, r: &rut_lir::check::InstRequest) -> String {
+        let Some((idx, _)) = self.done.get(requester).and_then(|u| match u {
+            Unit::Linked { idx, .. } => Some((*idx, ())),
+            Unit::Inline { .. } => None,
+        }) else {
+            return format!("{}#?", r.owner);
+        };
+        let prog = &self.programs[idx];
+        let decl = prog.interner.name(r.decl).to_string();
+        let args = r
+            .args
+            .iter()
+            .map(|&a| rut_core::link::canon_type(&prog.types, a))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}#{}<{}>", r.owner, decl, args)
+    }
+
+    /// The reachable descriptor closure of `args` in `prog`'s table, as
+    /// one sparse block per scope: rows at their exact locals (padding
+    /// shells fill gaps), so the owner registering the block reproduces
+    /// the requester's id space — the two sides spell every argument the
+    /// same way. Boot rows pass through and carry no descriptor.
+    fn desc_closure(
+        prog: &Program,
+        args: &[rut_core::types::TypeId],
+    ) -> std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType> {
+        let mut out = std::collections::BTreeMap::new();
+        let mut stack: Vec<rut_core::types::TypeId> = args.to_vec();
+        while let Some(id) = stack.pop() {
+            if id == u32::MAX {
+                continue;
+            }
+            let s = rut_core::scope_of(id);
+            if s == rut_core::BOOT_SCOPE {
+                continue;
+            }
+            let l = rut_core::local_of(id);
+            if out.contains_key(&(s, l)) {
+                continue;
+            }
+            let dense = prog.types.dense(id);
+            let Some(row) = prog.types.types.get(dense as usize) else { continue };
+            out.insert((s, l), row.clone());
+            match &row.kind {
+                rut_core::types::TyKind::Array { elem }
+                | rut_core::types::TyKind::Opt { elem }
+                | rut_core::types::TyKind::Weak { elem } => stack.push(*elem),
+                rut_core::types::TyKind::Data { fields } => {
+                    for f in fields {
+                        stack.push(f.ty);
+                    }
+                }
+                rut_core::types::TyKind::Fn { params, ret } => {
+                    stack.extend_from_slice(params);
+                    stack.push(*ret);
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// Resolve the consumer requests: instantiation is owned by the
+    /// declaring package, and each request routes to its owner. A SOURCE
+    /// owner recompiles with the seeds (the requesters' descriptors as
+    /// sparse blocks — the locals match the requester's layout — plus
+    /// the instantiations to materialize before its compile roots); a
+    /// PACKAGED owner's binary must already carry the row, or the
+    /// consumer refuses loudly (re-pack with the consumer in the
+    /// closure). Seeds cascade — a seeded owner's compile may request
+    /// from further owners — until the queue drains; every round
+    /// processes in canonical (sorted) order.
+    fn resolve_requests(&mut self) {
+        for _round in 0..32 {
+            if self.requests.is_empty() {
+                return;
+            }
+            let mut requests = std::mem::take(&mut self.requests);
+            requests.sort_by_cached_key(|(requester, r)| self.request_key(requester, r));
+            for (requester, r) in requests {
+                self.seed_pool.entry(r.owner.clone()).or_default().push((requester, r));
+            }
+            let mut owners: Vec<String> = self.seed_pool.keys().cloned().collect();
+            owners.sort();
+            for owner in owners {
+                let Some(seeds) = self.seed_pool.get(&owner).cloned() else { continue };
+                match self.body_kind.get(&owner).copied() {
+                    Some(0) => self.reseed_source_owner(&owner, &seeds),
+                    Some(1) => self.check_compiled_owner(&owner, &seeds),
+                    _ => {
+                        let first = &seeds[0].1;
+                        let decl = first
+                            .decl
+                            .0
+                            .to_string();
+                        self.diags.push(Diag::new(
+                            Span::new(0, 0),
+                            format!(
+                                "instantiation request for `{owner}` (decl {decl}) — the pkg is mounted as a host module and declares no generics"
+                            ),
+                        ));
+                    }
+                }
+                self.seed_pool.remove(&owner);
+                if !self.diags.is_empty() {
+                    return;
+                }
+            }
+        }
+        if !self.requests.is_empty() {
+            self.diags.push(Diag::new(
+                Span::new(0, 0),
+                "instantiation requests did not settle in 32 resolution rounds — a generic cycle the request law cannot close",
+            ));
+        }
+    }
+
+    /// One seed's argument list in the OWNER's id space: the seed's args
+    /// name the requester's registered block rows, which the recompile
+    /// registers verbatim — the ids carry over untouched.
+    fn reseed_source_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
+        let Some((idx, scope)) = self.done.get(owner).and_then(|u| match u {
+            Unit::Linked { idx, scope } => Some((*idx, *scope)),
+            Unit::Inline { .. } => None,
+        }) else {
+            return;
+        };
+        let Some(src) = self.unit_src.get(owner) else { return };
+        let (text, is_decl, origins, bound) = (
+            src.text.clone(),
+            src.is_decl,
+            src.origins.clone(),
+            src.bound.clone(),
+        );
+        // one seed group per requester: the descriptor closure of every
+        // request's arguments, sparse at the requester's locals
+        let mut per_requester: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType>,
+        > = std::collections::BTreeMap::new();
+        for (requester, r) in seeds {
+            let Some((ridx, _)) = self.done.get(requester).and_then(|u| match u {
+                Unit::Linked { idx, .. } => Some((*idx, ())),
+                Unit::Inline { .. } => None,
+            }) else {
+                continue;
+            };
+            let entry = per_requester.entry(requester.clone()).or_default();
+            for ((s, l), row) in Self::desc_closure(&self.programs[ridx], &r.args) {
+                entry.insert((s, l), row);
+            }
+        }
+        let mut groups: Vec<crate::SeedGroup> = Vec::new();
+        for (requester, rows) in &per_requester {
+            let Some((ridx, _)) = self.done.get(requester).and_then(|u| match u {
+                Unit::Linked { idx, .. } => Some((*idx, ())),
+                Unit::Inline { .. } => None,
+            }) else { continue };
+            let prog = &self.programs[ridx];
+            let mut types: Vec<rut_core::types::RutType> = Vec::new();
+            let mut blocks: Vec<(rut_core::ScopeId, u32)> = Vec::new();
+            let pad = rut_core::types::RutType {
+                name: rut_core::sym::NIL,
+                kind: rut_core::types::TyKind::Nil,
+            };
+            let mut iter = rows.iter().peekable();
+            while let Some(&(&(s, lo), _)) = iter.peek() {
+                // one padded block per contiguous local run per scope
+                let mut off = lo;
+                types.push(pad.clone());
+                blocks.push((s, lo));
+                while let Some(&(&(s2, l2), row)) = iter.peek() {
+                    if s2 != s || l2 != off {
+                        break;
+                    }
+                    let n = types.len();
+                    types[n - 1] = row.clone();
+                    off += 1;
+                    iter.next();
+                }
+            }
+            let insts = seeds
+                .iter()
+                .filter(|(rq, _)| rq == requester)
+                .map(|(_, r)| {
+                    (
+                        prog.interner.name(r.decl).to_string(),
+                        r.args.clone(),
+                    )
+                })
+                .collect();
+            groups.push(crate::SeedGroup {
+                types,
+                blocks,
+                names: &prog.interner,
+                insts,
+            });
+        }
+        let out = compile_program_resolved(
+            &text,
+            if is_decl { Mode::Decl } else { Mode::Impl },
+            owner,
+            scope,
+            &bound,
+            true,
+            &origins,
+            &Seeds { groups: &groups },
+        );
+        for r in &out.requests {
+            self.requests.push((owner.to_string(), r.clone()));
+        }
+        if !out.diags.is_empty() || out.program.is_none() {
+            self.diags.extend(out.diags);
+            return;
+        }
+        self.programs[idx] = out.program.expect("checked above");
+    }
+
+    /// A packaged owner cannot grow: its binary carries exactly the
+    /// instantiations the pack-time closure requested. Each consumer
+    /// request must already have a ledger row — link unifies the
+    /// requester's mirror onto it — or the closure was packed without
+    /// this consumer, which is a loud refusal, never a guess.
+    fn check_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
+        let Some((idx, _)) = self.done.get(owner).and_then(|u| match u {
+            Unit::Linked { idx, .. } => Some((*idx, ())),
+            Unit::Inline { .. } => None,
+        }) else { return };
+        for (requester, r) in seeds {
+            let key = self.request_key(requester, r);
+            let prog = &self.programs[idx];
+            let hit = prog.inst_types.iter().any(|row| {
+                key == format!(
+                    "{}#{}<{}>",
+                    prog.interner.name(row.owner),
+                    prog.interner.name(row.decl),
+                    row.args
+                        .iter()
+                        .map(|&a| rut_core::link::canon_type(&prog.types, a))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            });
+            if !hit {
+                self.diags.push(Diag::new(
+                    Span::new(0, 0),
+                    format!(
+                        "instantiation `{}` was not compiled into `{owner}`'s binary — re-pack with the consumer in the closure",
+                        key
+                    ),
+                ));
+                return;
+            }
+        }
     }
 }
 

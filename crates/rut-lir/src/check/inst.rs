@@ -33,6 +33,65 @@ impl<'a> Ctx<'a> {
             pos: vec![],
             host_id: None,
         });
+        // the owner-anchored fn ledger: link unifies instantiations
+        // sharing a canonical `(owner, decl, args)` key into ONE
+        // program-wide copy. Lambdas and for-of emit closures are
+        // unit-local by construction (their keys name this unit's AST
+        // nodes) and never referenced across packages — no row.
+        let subst: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
+        let origins = inst.trait_origins.clone();
+        match inst.key {
+            FnKey::Lambda(_) | FnKey::ForOfEmit { .. } => {}
+            FnKey::Free(n) => {
+                let origin = self
+                    .fn_nodes
+                    .iter()
+                    .find(|(nm, _)| *nm == n)
+                    .map(|(_, node)| self.origin_of(self.ast.span(node.id()).lo).to_string())
+                    .unwrap_or_else(|| self.own_spec.clone());
+                let owner = self.intern(&origin);
+                self.ledger_fns.push(rut_core::binary::InstFn {
+                    owner,
+                    kind: rut_core::binary::InstFnKind::Free { name: n, subst, origins },
+                    fid,
+                });
+            }
+            FnKey::Method { data, name, .. } => {
+                let owner = self.intern(&self.owner_of_data(data));
+                self.ledger_fns.push(rut_core::binary::InstFn {
+                    owner,
+                    kind: rut_core::binary::InstFnKind::Method { data, name, subst, origins },
+                    fid,
+                });
+            }
+            FnKey::ImplMethod { idx, name, slot_abi } => {
+                let (origin, trait_name, target) = match self.impls.get(idx) {
+                    Some(im) => (im.origin.clone(), im.trait_name, im.target),
+                    None => (self.own_spec.clone(), sym::NIL, TY_I32),
+                };
+                let owner = self.intern(&origin);
+                self.ledger_fns.push(rut_core::binary::InstFn {
+                    owner,
+                    kind: rut_core::binary::InstFnKind::ImplMethod {
+                        trait_name,
+                        target,
+                        name,
+                        slot_abi,
+                        subst,
+                        origins,
+                    },
+                    fid,
+                });
+            }
+            FnKey::HostThunk(n) => {
+                let owner = self.intern(&self.own_spec.clone());
+                self.ledger_fns.push(rut_core::binary::InstFn {
+                    owner,
+                    kind: rut_core::binary::InstFnKind::HostThunk { name: n },
+                    fid,
+                });
+            }
+        }
         self.queue.push(inst);
         fid
     }

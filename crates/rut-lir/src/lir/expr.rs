@@ -211,51 +211,58 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let rt = self.compile_expr(expr, None)?;
                 let recv = self.last_reg;
                 let dst = self.new_reg(TY_BOOL);
-                // resolve the RHS (naming position, RFC 0012 §3)
+                // resolve the RHS (a naming position) — a single-segment
+                // name, generic arguments allowed (an instantiated record
+                // names itself: `v is Vec<i64>`)
                 if let TypeKind::TyPath { segs } = self.ctx.ast.ty(ty) {
-                    if segs.len() == 1 && segs[0].generics.is_empty() {
+                    if segs.len() == 1 {
                         let n = self.ctx.name(segs[0].name).to_string();
-                        // trait RHS —capability probe (or fold)
-                        if let Some(tid) = self.ctx.trait_id_of(segs[0].name) {
-                            match self.ctx.types.kind(rt).clone() {
-                                TyKind::TraitObj { trait_id } if trait_id == tid => {
-                                    self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo); // fold
+                        // trait RHS —capability probe (or fold). A generic
+                        // head (`Vec<i64>`) is never a trait spelling.
+                        if segs[0].generics.is_empty() {
+                            if let Some(tid) = self.ctx.trait_id_of(segs[0].name) {
+                                match self.ctx.types.kind(rt).clone() {
+                                    TyKind::TraitObj { trait_id } if trait_id == tid => {
+                                        self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo); // fold
+                                    }
+                                    TyKind::TraitObj { .. } => {
+                                        self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
+                                    }
+                                    TyKind::Opaque => {
+                                        self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
+                                    }
+                                    exact => {
+                                        let _ = exact;
+                                        // exact receiver: fold — the impl is
+                                        // registered or it is not, wherever it
+                                        // lives (nominal)
+                                        let has = self.ctx.find_impl_ex(tid, rt).is_some();
+                                        self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
+                                    }
                                 }
-                                TyKind::TraitObj { .. } => {
-                                    self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
-                                }
-                                TyKind::Opaque => {
-                                    self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
-                                }
-                                exact => {
-                                    let _ = exact;
-                                    // exact receiver: fold — the impl is
-                                    // registered or it is not, wherever it
-                                    // lives (nominal, RFC 0012 §4)
-                                    let has = self.ctx.find_impl_ex(tid, rt).is_some();
-                                    self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
-                                }
+                                return Ok(TY_BOOL);
                             }
-                            return Ok(TY_BOOL);
-                        }
-                        // Opaque RHS — ambient like the primitive (RFC 0028
-                        // revised, builtin-surface phase 2): the surface
-                        // spelling IS the boot name (`sym::OPAQUE`)
-                        if n == "opaque"
-                            && self.ctx.extern_native_types.get(&segs[0].name).copied()
-                                == Some(rut_core::binary::NativeTy::Opaque)
-                        {
-                            match self.ctx.types.kind(rt).clone() {
-                                TyKind::Opaque => {
-                                    self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo);
+                            // Opaque RHS — ambient like the primitive
+                            // revised, builtin-surface phase 2): the surface
+                            // spelling IS the boot name (`sym::OPAQUE`)
+                            if n == "opaque"
+                                && self.ctx.extern_native_types.get(&segs[0].name).copied()
+                                    == Some(rut_core::binary::NativeTy::Opaque)
+                            {
+                                match self.ctx.types.kind(rt).clone() {
+                                    TyKind::Opaque => {
+                                        self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo);
+                                    }
+                                    _ => {
+                                        self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
+                                    }
                                 }
-                                _ => {
-                                    self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
-                                }
+                                return Ok(TY_BOOL);
                             }
-                            return Ok(TY_BOOL);
                         }
-                        // concrete RHS
+                        // concrete RHS — an instantiated record names
+                        // itself (`v is Vec<i64>` resolves through the
+                        // same instantiation the spelling mints)
                         let want = self.resolve_type_now(ty);
                         if !self.ctx.types.is_ref(want) && want != TY_STR {
                             self.ctx.err(sp, format!(
@@ -268,8 +275,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.emit(Op::IsType { dst, obj: recv, want }, sp.lo);
                             }
                             _ => {
-                                // exact receiver: fold (RFC 0012 §3)
-                                let same = rt == want;
+                                // exact receiver: fold;
+                                // mirrors of one instantiation fold too
+                                let same = self.same_ty(rt, want);
                                 self.emit(Op::ConstRaw { dst, bits: same as u64 }, sp.lo);
                             }
                         }

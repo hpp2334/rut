@@ -341,7 +341,8 @@ points — `build`'s materialization and growth's prefix move.
   file names by `use` ([the rut CLI](cli.md)).
 - `inline = true` packages (ink, pouch, nmapset, json, strbuild,
   async_host) are source-inlined into each consumer — required for
-  class-method and generic surfaces, which cannot cross a module link
-  boundary ([the frontend](frontend.md)).
-- Generic functions cannot cross a module link boundary; exported linked
-  surfaces carry only monomorphized fns.
+  class-method surfaces, whose inherent impls cross no module link
+  boundary yet ([the frontend](frontend.md)).
+- Generic exports link on their own: instantiation happens where the
+  body lives, consumers request it, and `Vec<i64>` is one type
+  program-wide ([the compiler pipeline](compiler.md)).

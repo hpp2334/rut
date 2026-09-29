@@ -46,12 +46,17 @@ impl<'a> Ctx<'a> {
             match self.ast.item(*it) {
                 ItemKind::Dataclass { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
                     // generic records instantiate on use (mk_data_inst), so
-                    // their field types resolve under a substitution, not here
+                    // their field types resolve under the PARAMETER
+                    // PLACEHOLDERS here — the template row crosses the
+                    // surface complete, and a consumer lays a concrete
+                    // instantiation out by substituting the placeholders
                     let is_generic = self
                         .find_data(*name)
                         .map(|d| !d.generics.is_empty())
                         .unwrap_or(false);
-                    if !is_generic {
+                    if is_generic {
+                        self.resolve_template_fields(*name, fields);
+                    } else {
                         self.resolve_data_fields(*name, fields);
                     }
                 }
@@ -156,6 +161,11 @@ impl<'a> Ctx<'a> {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
+        // the instantiation ledger's owner anchor: this decl's bodies
+        // live in the pkg whose source it was parsed from (the splice
+        // origin, or this unit)
+        self.decl_owner
+            .insert(name, self.origin_of(sp.lo).to_string());
         // generic records stay a template (empty fields) until instantiated;
         // `Vec<T>` and RFC 0013 monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
@@ -180,14 +190,44 @@ impl<'a> Ctx<'a> {
         ));
     }
 
+    /// Pass 1b, generic templates — resolve a generic record's field types
+    /// under the PARAMETER PLACEHOLDERS (`param_placeholder`'s `#T` rows)
+    /// and stamp them on the template row. The template then crosses the
+    /// surface complete: a consumer lays `Vec<i64>` out by substituting
+    /// the placeholders, without the declaring body in sight. The
+    /// concrete instantiations still enter at `mk_data_inst`, which
+    /// re-reads the declaration under the caller's substitution.
+    pub(crate) fn resolve_template_fields(
+        &mut self,
+        name: IdentId,
+        fields: &[NodeHandle<FieldDeclNode>],
+    ) {
+        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
+            return;
+        };
+        let ty = self.datas[idx].1.ty;
+        let generics = self.datas[idx].1.generics.clone();
+        let env: Vec<(IdentId, TypeId)> = generics
+            .iter()
+            .map(|&p| (p, self.param_placeholder(p)))
+            .collect();
+        let mut resolved: Vec<FieldInfo> = Vec::new();
+        for f in fields {
+            let fd = self.ast.field_decl(*f);
+            let fty = self.resolve_type(fd.ty, &env);
+            resolved.push(FieldInfo { name: fd.name, ty: fty });
+        }
+        let pi = self.types.dense(ty) as usize;
+        self.types.types[pi].kind = TyKind::Data { fields: resolved };
+    }
+
     /// Pass 1b — resolve a declared record's field types, stamp the payload
     /// layout, and fill the `DataDecl`'s field list.
     pub(crate) fn resolve_data_fields(
         &mut self,
         name: IdentId,
         fields: &[NodeHandle<FieldDeclNode>],
-    ) {
-        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
+    ) {        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
             return;
         };
         let placeholder = self.datas[idx].1.ty;
@@ -407,7 +447,7 @@ impl<'a> Ctx<'a> {
     /// half substitutes the class's concrete argument per instantiation.
     pub(crate) fn param_placeholder(&mut self, p: IdentId) -> TypeId {
         let name = self.intern(&format!("#{}", self.name(p)));
-        self.types.intern(RutType {
+        self.types.intern_own(RutType {
             name,
             kind: TyKind::Data { fields: vec![] },
         })
@@ -445,6 +485,16 @@ impl<'a> Ctx<'a> {
     pub fn mk_data_inst(&mut self, data: IdentId, args: Vec<TypeId>, sp: Span) -> TypeId {
         if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
             return t;
+        }
+        // a generic bound from a used module's surface: the DECLARING
+        // package owns the instantiation. The consumer lays the concrete
+        // row out of the template's placeholder fields and routes the
+        // bodies request to the owner — it never compiles them itself.
+        if self.find_data(data).is_none() {
+            if let Some(g) = self.extern_generics.get(&data).cloned() {
+                return self.mk_extern_data_inst(data, &g, args);
+            }
+            return TY_I32;
         }
         let Some(decl) = self.find_data(data).cloned() else {
             return TY_I32;
@@ -490,6 +540,104 @@ impl<'a> Ctx<'a> {
         }
         let pi = self.types.dense(ty) as usize;
         self.types.types[pi].kind = TyKind::Data { fields: resolved };
+        // the owner-anchored ledger row: wherever this unit's copy of the
+        // instantiation travels, the key says whose it is — link unifies
+        // rows sharing it into ONE program-wide instantiation
+        let owner = self.intern(&self.owner_of_data(data));
+        self.ledger_types.push(rut_core::binary::InstTy {
+            owner,
+            decl: data,
+            args: args.clone(),
+            ty,
+        });
         ty
+    }
+
+    /// The foreign-generic instantiation path: substitute the template's
+    /// placeholder fields with the concrete arguments, intern the mirror
+    /// row, and route the request. `Placeholder` leaves match by their
+    /// `#<param>` name text; structural wrappers (`[?T]`, `?T`, `Weak<T>`,
+    /// `fn(..)`) rebuild through the structural interning, so equal shapes
+    /// land on the rows the unit already uses. A row-kinded field
+    /// (`Node<#T>` spelled inside the template) keeps the template's row —
+    /// the mirror law covers the direct-argument shapes.
+    fn mk_extern_data_inst(&mut self, data: IdentId, g: &ExternGeneric, args: Vec<TypeId>) -> TypeId {
+        let name = self.intern(&format!(
+            "{}<{}>",
+            self.name(data),
+            args.iter()
+                .map(|a| self.type_name(*a).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+        let mut env: std::collections::HashMap<String, TypeId> = std::collections::HashMap::new();
+        for (p, &a) in g.params.iter().zip(args.iter()) {
+            // the template's placeholder leaves spell `#<param>` — the
+            // same convention `param_placeholder` mints with (the `#`
+            // is no identifier character, so no user type collides)
+            env.insert(format!("#{}", self.name(*p)), a);
+        }
+        let TyKind::Data { fields: template } = self.types.kind(g.template) else {
+            return TY_I32;
+        };
+        let template = template.clone();
+        let fields: Vec<FieldInfo> = template
+            .into_iter()
+            .map(|mut f| {
+                f.ty = self.subst_template_ty(f.ty, &env);
+                f
+            })
+            .collect();
+        let ty = self.types.intern(RutType {
+            name,
+            kind: TyKind::Data { fields },
+        });
+        self.type_inst.insert((data, args.clone()), ty);
+        self.inst_data.insert(ty, (data, args.clone()));
+        // a `class` has no outside literal — the gate names the mirror row
+        if g.is_class {
+            self.extern_classes.insert(ty);
+        }
+        let owner = self.intern(&g.owner);
+        self.ledger_types.push(rut_core::binary::InstTy {
+            owner,
+            decl: data,
+            args: args.clone(),
+            ty,
+        });
+        self.request_inst(g.owner.clone(), data, args);
+        ty
+    }
+
+    /// Substitute one template field type: a placeholder leaf becomes its
+    /// argument; structural wrappers rebuild per element.
+    fn subst_template_ty(&mut self, id: TypeId, env: &std::collections::HashMap<String, TypeId>) -> TypeId {
+        let text = self.types.type_at(id).name;
+        let text = self.interner.name(text).to_string();
+        if let Some(&arg) = env.get(&text) {
+            return arg;
+        }
+        let kind = self.types.kind(id).clone();
+        let rebuilt = match kind {
+            TyKind::Array { elem } => {
+                let e = self.subst_template_ty(elem, env);
+                Some(self.mk_array(e))
+            }
+            TyKind::Opt { elem } => {
+                let e = self.subst_template_ty(elem, env);
+                Some(self.mk_opt(e))
+            }
+            TyKind::Weak { elem } => {
+                let e = self.subst_template_ty(elem, env);
+                Some(self.mk_weak(e))
+            }
+            TyKind::Fn { params, ret } => {
+                let r = self.subst_template_ty(ret, env);
+                let ps = params.iter().map(|&p| self.subst_template_ty(p, env)).collect();
+                Some(self.mk_fn_ty(ps, r))
+            }
+            _ => None,
+        };
+        rebuilt.unwrap_or(id)
     }
 }

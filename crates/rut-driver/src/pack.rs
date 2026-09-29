@@ -1,8 +1,9 @@
 //! The v5 packer: a module directory (+ its whole `[deps]` closure) →
 //! one deterministic **compiled** `.rutbundle`. The root and every
 //! linkable dep ride as `.rutc` binaries (bodies + surface — the
-//! linking truth); splice-needed deps (inline / generic export /
-//! trait-object params) and host pkgs ride as source file sets; the
+//! linking truth); explicitly `inline`d deps and host pkgs ride as
+//! source file sets — with instantiation owner-anchored, a generic
+//! export links and its consumers request the instantiations — and the
 //! pack-time scope ledger lets a loader rebase every decoded program
 //! onto its own numbering.
 //!
@@ -82,8 +83,8 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
         return Err(format!("pack: {}", msgs.join("; ")));
     }
-    // the root must be linkable — publishing it compiled otherwise
-    // would strand its generic instantiations in consumers
+    // the root must be linkable — an explicitly inlined pkg carries no
+    // publishable boundary (its whole source is its interface)
     let root_linked = units.linked.get(&root);
     let root_ok = match (&session.resolve(&root).unwrap().body, root_linked) {
         (ModuleBody::Source { .. }, Some(&(idx, _))) => {
@@ -93,7 +94,7 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     };
     if !root_ok {
         return Err(format!(
-            "pack: {root} exports generic types / takes trait-object params / is inline — it cannot be published compiled; share the directory instead"
+            "pack: {root} is inline — its source is its interface and it cannot be published compiled; share the directory instead"
         ));
     }
     // the dep groups: the manifest's [deps] walk (recursively,

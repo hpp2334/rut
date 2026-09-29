@@ -95,12 +95,19 @@ instantiating a body can enqueue more. Instantiation names (`[i32]`,
 folds to a constant from the type table at this point — it never executes
 at runtime.
 
-The same law has a packaging consequence: a module exporting a **generic
-function or generic class** cannot be linked against (a linked surface
-carries only monomorphic exports). Such packages set `inline = true` in
-their manifest — the graph compiler splices their source into every
-consumer instead of linking them (`ink`, `json`, `nmapset`, `strbuild`,
-`async_host`, `http`). See [Project structure and rut.toml](project-structure.md).
+The same law fixes WHERE an instantiation compiles: where the body
+lives. `Vec<i64>` is one type program-wide — the declaring package owns
+every instantiation of its generics, and consumers request them: a
+consumer's spelling lays out the concrete shape and routes the bodies to
+the declaring package's compile, so a linked library's
+`make() -> Vec<i64>` and the consumer's own `Vec<i64>` are one row, and
+the binary ships one copy of each instantiation's code.
+
+That leaves `inline = true` for packages whose methods live on class
+bodies (inherent impls cross no surface yet): the graph compiler splices
+their source into every consumer instead of linking them (`ink`, `json`,
+`nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See
+[Project structure and rut.toml](project-structure.md).
 
 ## The type lattice
 

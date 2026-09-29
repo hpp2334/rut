@@ -26,11 +26,13 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
 <pkg>.rutc               the root's compiled binary — bodies + surface
 <pkg>.d.rut              the root's surface text (humans, LSP), when it declares one
 <dep>/rut.toml           per dep group, mixed kinds:
-<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too)
+<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);
+                           generic exports ride compiled — the binary carries
+                           the closure's instantiations in its ledger
 <dep>/<dep>.d.rut          its surface text, when it declares one
-<leaf>/rut.toml            splice-needed dep (inline / generic export /
-<leaf>/<leaf>.rut           trait-object params) or a host pkg → a source
-<leaf>/<leaf>.rut …         group: the source file set (entry, libs, peer groups)
+<leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host
+<leaf>/<leaf>.rut           pkg → a source group: the source file set
+<leaf>/<leaf>.rut …         (entry, libs, peer groups)
 ```
 
 - The **`.rutc` binaries are the linking truth**: bodies plus the
@@ -46,15 +48,20 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   numbering — pack-time and load-time numbering never have to agree. A
   reference with no ledger row is refused.
 - **Mixed groups, one classifier**: the same splice law that rules the
-  graph (`inline`, a generic export, or a trait-object parameter —
-  [modules and visibility](modules-and-visibility.md)) decides each
-  package's kind. Refuse, never guess: the packer calls the graph's own
-  classifier, there is no second implementation.
-- **The root must be linkable** — else `pack: <pkg> exports generic
-  types / takes trait-object params / is inline — it cannot be
-  published compiled; share the directory instead`. (The generic
-  closure itself rides as source groups: a compiled group cannot carry
-  another package's instantiations.)
+  graph (the `inline` flag — [modules and
+  visibility](modules-and-visibility.md)) decides each package's kind.
+  Refuse, never guess: the packer calls the graph's own classifier,
+  there is no second implementation.
+- **Generics ride compiled**: instantiation is owned by the declaring
+  package, and the pack walk seeds each generic dep with the
+  instantiations its consumers spell — the binary's instantiation
+  ledger names every `(owner, decl, arguments)` row, and a consumer
+  session resolves its requests against it. A request the binary does
+  not carry refuses (`re-pack with the consumer in the closure`), never
+  mislinks.
+- **The root must be linkable** — else `pack: <pkg> is inline — its
+  source is its interface and it cannot be published compiled; share
+  the directory instead`.
 
 ## The manifest — `rut.toml`
 
@@ -97,7 +104,7 @@ a newer bundle.
 | 2 | + the whole `[deps]` graph as `<pkg>/` groups | refused — re-pack the directory |
 | 3 | + each package's `[peer-deps]` `lib` group files | refused — re-pack the directory |
 | 4 | + each package's `entry.libs` files | refused — re-pack the directory |
-| 5 | compiled: `.rutc` (v16) + `.d.rut` per linkable pkg, mixed source groups for splice-needed deps | **the packer's output** — this toolchain reads 5 only |
+| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs | **the packer's output** — this toolchain reads 5 only |
 
 Each historical extension existed because the added files were *part of
 the package*: a bundle that dropped peer groups or multi-lib files would

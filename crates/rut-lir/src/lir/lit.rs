@@ -151,7 +151,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // against its annotation or return (`let m: M<i64, ?Item> = M { .. }`)
         let sty = match self.ctx.ast.ty(ty) {
             TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                let arity = self.ctx.find_data(segs[0].name).map(|d| d.generics.len());
+                let arity = self
+                    .ctx
+                    .find_data(segs[0].name)
+                    .map(|d| d.generics.len())
+                    .or_else(|| self.ctx.extern_generics.get(&segs[0].name).map(|g| g.params.len()));
                 match (arity, expected) {
                     (Some(n), Some(e)) if n > 0
                         && self.ctx.inst_data.get(&e).map(|(d, _)| *d) == Some(segs[0].name) =>
@@ -172,26 +176,45 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             crate::check::DataKind,
             Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>)>,
             Vec<(IdentId, TypeId)>,
-        ) = if let Some((dname, cargs)) = inst {
-            let d = self.ctx.find_data(dname).cloned().unwrap();
-            let class_subst: Vec<(IdentId, TypeId)> =
-                d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
-            let field_nodes = match self.ctx.ast.item(d.node) {
-                ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
-                _ => Vec::new(),
-            };
-            let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
-            let saved_self = self.self_ty;
-            self.self_ty = Some(sty);
-            let mut list = Vec::new();
-            for f in &field_nodes {
-                let fd = self.ctx.ast.field_decl(*f);
-                let fty = self.resolve_type_now(fd.ty);
-                list.push((fd.name, fty, fd.init));
+        ) = if let Some((dname, cargs)) = inst.clone() {
+            match self.ctx.find_data(dname).cloned() {
+                Some(d) => {
+                    let class_subst: Vec<(IdentId, TypeId)> =
+                        d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
+                    let field_nodes = match self.ctx.ast.item(d.node) {
+                        ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+                        _ => Vec::new(),
+                    };
+                    let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+                    let saved_self = self.self_ty;
+                    self.self_ty = Some(sty);
+                    let mut list = Vec::new();
+                    for f in &field_nodes {
+                        let fd = self.ctx.ast.field_decl(*f);
+                        let fty = self.resolve_type_now(fd.ty);
+                        list.push((fd.name, fty, fd.init));
+                    }
+                    self.subst = saved_subst;
+                    self.self_ty = saved_self;
+                    (dname, d.kind, list, class_subst)
+                }
+                // a foreign generic's mirror: the row IS the layout — its
+                // fields resolved under the caller's substitution at the
+                // instantiation, no declaring body in sight
+                None => {
+                    let TyKind::Data { fields: desc } = self.ctx.types.kind(sty) else {
+                        self.ctx.err(sp, format!("`{}` is not a record of this module", self.ctx.type_name(sty)));
+                        return Err(());
+                    };
+                    let desc = desc.clone();
+                    (
+                        dname,
+                        crate::check::DataKind::Dataclass,
+                        desc.into_iter().map(|f| (f.name, f.ty, None)).collect(),
+                        Vec::new(),
+                    )
+                }
             }
-            self.subst = saved_subst;
-            self.self_ty = saved_self;
-            (dname, d.kind, list, class_subst)
         } else if let Some((dname, d)) = local {
             let list = d.fields.iter().map(|(n, t, i, _)| (*n, *t, *i)).collect();
             (dname, d.kind, list, Vec::new())

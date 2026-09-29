@@ -23,7 +23,7 @@
 //! This pass is pure data — nothing runs — and is the compile/link half of
 //! RFC 0035 §1; cyclic uses stay the loader's concern.
 
-use crate::binary::{ConstVal, FuncCode, Program, TraitDesc, TraitMethod};
+use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, TraitDesc, TraitMethod};
 use crate::ops::Op;
 use crate::sym::IdentId;
 use crate::types::{RutType, TyKind, TypeId, TypeTable};
@@ -55,10 +55,33 @@ pub fn flatten(prog: Program) -> Program {
 // assigns the program a fresh scope and rewrites every scope half
 // through a map; boot ids are global by construction and pass through.
 
+/// The canonical spelling of a type id for instantiation-key comparison.
+/// Boot rows spell their global local; every other row its packed
+/// `(scope, local)` — pre-link — or its global dense id — post-link.
+/// Either way the spelling is stable across every program sharing the
+/// block, which is what makes instantiation keys comparable across
+/// module (and binary) boundaries.
+pub fn canon_type(tt: &TypeTable, id: TypeId) -> String {
+    if id == u32::MAX {
+        return "any".into(); // TY_ANY sentinel — never a real type
+    }
+    if tt.packed {
+        if crate::id::scope_of(id) == crate::id::BOOT_SCOPE {
+            format!("b{}", crate::id::local_of(id))
+        } else {
+            format!("s{}:{}", crate::id::scope_of(id), crate::id::local_of(id))
+        }
+    } else if (id as usize) < tt.boot_len as usize {
+        format!("b{id}")
+    } else {
+        format!("s{id}")
+    }
+}
+
 /// Walk every packed `TypeId` a program carries: the type table's
 /// descriptors, trait methods, consts, function signatures and op
-/// operands, and the surface rows. The scope halves of these ids are
-/// the foreign references a rebase must rewrite.
+/// operands, the surface rows, and the instantiation ledger. The scope
+/// halves of these ids are the foreign references a rebase must rewrite.
 fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     fn kind(kind: &TyKind, f: &mut impl FnMut(TypeId)) {
         match kind {
@@ -150,6 +173,32 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     for (t, _, _) in &s.native_impls {
         id(*t);
     }
+    for r in &prog.inst_types {
+        for &a in &r.args {
+            id(a);
+        }
+        id(r.ty);
+    }
+    for r in &prog.inst_fns {
+        match &r.kind {
+            InstFnKind::Free { subst, origins, .. } | InstFnKind::Method { subst, origins, .. } => {
+                for v in [subst, origins] {
+                    for &t in v {
+                        id(t);
+                    }
+                }
+            }
+            InstFnKind::ImplMethod { target, subst, origins, .. } => {
+                id(*target);
+                for v in [subst, origins] {
+                    for &t in v {
+                        id(t);
+                    }
+                }
+            }
+            InstFnKind::HostThunk { .. } => {}
+        }
+    }
 }
 
 /// The scope ids a program's packed ids reference, boot excluded: its
@@ -194,19 +243,19 @@ pub fn foreign_scopes(prog: &Program) -> std::collections::BTreeSet<crate::id::S
     out
 }
 
-/// The scope a (packed) program interns its own types into: the carried
-/// scope block with the greatest base offset. The own block always
-/// closes the table (used blocks are appended first), so the maximum is
-/// the own scope; a tie means an empty own block, whose scope no id
-/// references, so either tie member answers.
+/// The scope a (packed) program interns its own types into: the LAST
+/// scope block the surface carries — the own block always closes the
+/// list (the surface builder appends it after every used block), which
+/// stays unambiguous even when blocks are empty (a pkg with no own
+/// types ties every offset at the boot line, where an offset rule
+/// could only guess).
 pub fn own_scope(prog: &Program) -> Option<crate::id::ScopeId> {
     prog.surface
         .scope_blocks
         .iter()
-        .copied()
-        .filter(|&(s, _)| s != crate::id::BOOT_SCOPE)
-        .max_by_key(|&(_, off)| off)
-        .map(|(s, _)| s)
+        .rev()
+        .find(|&&(s, _)| s != crate::id::BOOT_SCOPE)
+        .map(|&(s, _)| s)
 }
 
 /// Rewrite every packed `(scope, local)` id's scope half through `map`
@@ -218,6 +267,9 @@ pub fn own_scope(prog: &Program) -> Option<crate::id::ScopeId> {
 /// once with the pack-time → load-time scope map. Dense (post-link)
 /// programs must not be rebased: their ids are not scope-qualified.
 pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id::ScopeId) -> Program {
+    // the own scope, read from the PACK-TIME blocks before any rewrite:
+    // the block ids remap below, and the own scope must map exactly once
+    let own_pack = own_scope(&prog);
     let rb_t = |t: TypeId| -> TypeId {
         let s = crate::id::scope_of(t);
         if s == crate::id::BOOT_SCOPE {
@@ -276,16 +328,51 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
         let mapped = if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) };
         set_scope_base(&mut prog.types, mapped, off);
     }
+    // the surface's own block ids rewrite to the load-time scopes: a
+    // consumer registers the carried descriptors under THESE scopes and
+    // binds exports at `(its dep scope, local)` — the halves must agree
+    let remapped: Vec<(crate::id::ScopeId, u32)> = s
+        .scope_blocks
+        .iter()
+        .map(|&(scope, off)| {
+            (if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) }, off)
+        })
+        .collect();
+    s.scope_blocks = remapped;
     for im in s.impls.iter_mut() {
         im.target = rb_t(im.target);
     }
     for (t, _, _) in s.native_impls.iter_mut() {
         *t = rb_t(*t);
     }
+    for r in prog.inst_types.iter_mut() {
+        r.args = r.args.iter().map(|&a| rb_t(a)).collect();
+        r.ty = rb_t(r.ty);
+    }
+    for r in prog.inst_fns.iter_mut() {
+        match &mut r.kind {
+            InstFnKind::Free { subst, origins, .. } | InstFnKind::Method { subst, origins, .. } => {
+                for v in [subst, origins] {
+                    for t in v.iter_mut() {
+                        *t = rb_t(*t);
+                    }
+                }
+            }
+            InstFnKind::ImplMethod { target, subst, origins, .. } => {
+                *target = rb_t(*target);
+                for v in [subst, origins] {
+                    for t in v.iter_mut() {
+                        *t = rb_t(*t);
+                    }
+                }
+            }
+            InstFnKind::HostThunk { .. } => {}
+        }
+    }
     // a decoded program's `scope` field is unset (the wire carries the
-    // ids and the blocks, not the field) — the own scope comes from the
-    // carried blocks, exactly like every own id's scope half
-    let own = own_scope(&prog).unwrap_or(prog.scope);
+    // ids and the blocks, not the field) — the own scope came from the
+    // carried blocks, read before the block ids rewrote
+    let own = own_pack.unwrap_or(prog.scope);
     prog.scope = map(own);
     // the packed bookkeeping: the carried blocks are local offsets from
     // the boot prefix, so each block's dense base is boot_len + offset
@@ -329,6 +416,214 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         .first()
         .map(|m| m.name.clone())
         .unwrap_or_default();
+
+    // ---- planning pass: the owner-anchored instantiation ledger ----
+    //
+    // Instantiation is owned by the declaring package; the rows each
+    // module carries for a foreign-owned instantiation are MIRRORS. The
+    // first module in link order claims a key; every later mirror
+    // redirects onto the claim — type rows remap to the claimed global
+    // id (ONE `Vec<i64>` program-wide), and duplicate instantiation
+    // functions are dropped entirely, their references remapped (the
+    // binary ships one copy). The pass pre-computes the per-module
+    // plans AND the cumulative bases, so the emission pass — which
+    // skips dropped functions — offsets every later module correctly.
+    let mut claim_ty: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut claim_fn: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut scope_base_plan: std::collections::HashMap<crate::id::ScopeId, u32> =
+        std::collections::HashMap::new();
+    scope_base_plan.insert(crate::id::BOOT_SCOPE, 0);
+    let mut func_base_plan: std::collections::HashMap<crate::id::ScopeId, u32> =
+        std::collections::HashMap::new();
+    func_base_plan.insert(crate::id::BOOT_SCOPE, 0);
+    let mut func_off_plan: u32 = 0;
+    let mut type_cursor = out.types.types.len() as u32;
+    struct ModulePlan {
+        /// packed type id in this module -> the claimed global id
+        ty_redirect: std::collections::HashMap<u32, u32>,
+        /// module-local dense index -> the claimed global id (the
+        /// vtable/disposal walks key dense indices)
+        ty_redirect_dense: std::collections::HashMap<u32, u32>,
+        /// local fn id -> the claimed global fn id
+        fn_redirect: std::collections::HashMap<u32, u32>,
+        /// local fn ids whose bodies lose the claim and are dropped
+        skip_fns: std::collections::HashSet<u32>,
+        /// surviving local fn id -> its compacted position (the drop
+        /// closes the gaps, so every reference renumbers through this)
+        renumber: std::collections::HashMap<u32, u32>,
+        /// packed type id -> its canonical instantiation key (the impl
+        /// dedup reads it: registrations aimed at one instantiation are
+        /// ONE registration, wherever they were compiled)
+        inst_key_by_ty: std::collections::HashMap<u32, String>,
+        appended: usize,
+    }
+    impl Default for ModulePlan {
+        fn default() -> Self {
+            ModulePlan {
+                ty_redirect: std::collections::HashMap::new(),
+                ty_redirect_dense: std::collections::HashMap::new(),
+                fn_redirect: std::collections::HashMap::new(),
+                skip_fns: std::collections::HashSet::new(),
+                renumber: std::collections::HashMap::new(),
+                inst_key_by_ty: std::collections::HashMap::new(),
+                appended: 0,
+            }
+        }
+    }
+    let mut plans: Vec<ModulePlan> = Vec::with_capacity(modules.len());
+    for m in modules.iter() {
+        let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
+        let packed = m.types.packed;
+        let own_base = if packed {
+            m.types
+                .scope_base
+                .get(m.types.scope as usize)
+                .copied()
+                .unwrap_or(m_boot)
+        } else {
+            m_boot
+        };
+        let base = type_cursor;
+        if packed {
+            scope_base_plan.insert(m.types.scope, base);
+        }
+        func_base_plan.insert(m.scope, func_off_plan);
+        // the name rebase, exactly as the emission pass spells it —
+        // interning is idempotent, so the two passes agree
+        let wk = m.interner.well_known_len() as usize;
+        let mut name_map: Vec<IdentId> = Vec::with_capacity(m.interner.names().len());
+        for (i, n) in m.interner.names().iter().enumerate() {
+            name_map.push(if i < wk {
+                IdentId(i as u32)
+            } else {
+                out.interner.intern(n)
+            });
+        }
+        let nm = |id: IdentId| -> IdentId { name_map.get(id.0 as usize).copied().unwrap_or(id) };
+        let map = |id: TypeId| -> TypeId {
+            if id == u32::MAX {
+                return id;
+            }
+            if packed {
+                let s = crate::id::scope_of(id);
+                if s == crate::id::BOOT_SCOPE {
+                    crate::id::local_of(id)
+                } else {
+                    scope_base_plan.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
+                }
+            } else if id < m_boot {
+                id
+            } else {
+                base + (id - m_boot)
+            }
+        };
+        // surviving fids renumber compactly (the drop closes the gaps),
+        // so references and claims land on the post-skip positions
+        let mut renumber: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let map_func = |f: u32| -> u32 {
+            if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
+                f + func_off_plan
+            } else {
+                func_base_plan
+                    .get(&crate::id::scope_of(f))
+                    .copied()
+                    .unwrap_or(0)
+                    + crate::id::local_of(f)
+            }
+        };
+        let canonv = |vs: &[TypeId]| -> String {
+            vs.iter()
+                .map(|&t| canon_type(&out.types, map(t)))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let text = |id: IdentId| out.interner.name(nm(id)).to_string();
+        let mut plan = ModulePlan::default();
+        for r in &m.inst_types {
+            let key = format!("{}#{}<{}>", text(r.owner), text(r.decl), canonv(&r.args));
+            plan.inst_key_by_ty.insert(r.ty, key.clone());
+            match claim_ty.get(&key) {
+                Some(&g) => {
+                    plan.ty_redirect.insert(r.ty, g);
+                    plan.ty_redirect_dense.insert(m.types.dense(r.ty), g);
+                }
+                None => {
+                    claim_ty.insert(key, map(r.ty));
+                }
+            }
+        }
+        for r in &m.inst_fns {
+            let key = match &r.kind {
+                InstFnKind::Free { name, subst, origins } => format!(
+                    "{}#f#{}#({})#({})",
+                    text(r.owner),
+                    text(*name),
+                    canonv(subst),
+                    canonv(origins)
+                ),
+                InstFnKind::Method { data, name, subst, origins } => format!(
+                    "{}#m#{}${}#({})#({})",
+                    text(r.owner),
+                    text(*data),
+                    text(*name),
+                    canonv(subst),
+                    canonv(origins)
+                ),
+                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
+                    format!(
+                        "{}#i#{}@{}#${}@{}#({})#({})",
+                        text(r.owner),
+                        text(*trait_name),
+                        if *slot_abi { "s" } else { "c" },
+                        text(*name),
+                        canon_type(&out.types, map(*target)),
+                        canonv(subst),
+                        canonv(origins)
+                    )
+                }
+                InstFnKind::HostThunk { name } => {
+                    format!("{}#h#{}", text(r.owner), text(*name))
+                }
+            };
+            match claim_fn.get(&key) {
+                Some(&g) => {
+                    plan.fn_redirect.insert(r.fid, g);
+                    plan.skip_fns.insert(r.fid);
+                }
+                None => {
+                    claim_fn.insert(key, map_func(r.fid));
+                }
+            }
+        }
+        let mut next = 0u32;
+        for fi in 0..m.funcs.len() as u32 {
+            if plan.skip_fns.contains(&fi) {
+                continue;
+            }
+            renumber.insert(fi, next);
+            next += 1;
+        }
+        plan.renumber = renumber;
+        let renumber = &plan.renumber;
+        let map_func = |f: u32| -> u32 {
+            if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
+                renumber.get(&f).copied().unwrap_or(f) + func_off_plan
+            } else {
+                func_base_plan
+                    .get(&crate::id::scope_of(f))
+                    .copied()
+                    .unwrap_or(0)
+                    + crate::id::local_of(f)
+            }
+        };
+        plan.appended = m.funcs.len() - plan.skip_fns.len();
+        func_off_plan += plan.appended as u32;
+        // a host-synth module carries an empty (non-packed) table — the
+        // emission loop's `skip(own_base)` appends nothing there
+        type_cursor += m.types.types.len().saturating_sub(own_base as usize) as u32;
+        plans.push(plan);
+    }
+
     // scope -> global dense base of that scope's type block (boot = 0)
     let mut scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
         std::collections::HashMap::new();
@@ -350,14 +645,25 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     // global slot index: (global trait id, method) -> global slot
     let mut global_slot: std::collections::HashMap<(u32, u32), u32> =
         std::collections::HashMap::new();
-    // (global trait id, global target type) -> the module that registered
+    // (global trait id, dedup target) -> the module that registered
     // the impl — a second registration is the link-time duplicate error
-    // (RFC 0012 §2: the pair is only detectable here)
-    let mut impl_owner: std::collections::HashMap<(u32, u32), String> =
+    // (the pair is only detectable here). The target half names an
+    // instantiation by its canonical key when the target is an
+    // owner-anchored instantiation row: mirrors of one instantiation
+    // (compiled once per consuming unit in a spliced closure) are ONE
+    // registration once the rows unify.
+    let mut impl_owner: std::collections::HashMap<(u32, String), String> =
         std::collections::HashMap::new();
 
-    for mut m in modules {
-        let nfuncs = m.funcs.len() as u32;
+    // the merged instantiation ledger: every row, with its ids mapped to
+    // the global tables — the linked program documents the
+    // instantiations it ships, the same wire rows a consumer's requests
+    // resolve against
+    let mut out_types_ledger = Vec::new();
+    let mut out_fns_ledger = Vec::new();
+
+    for (mut m, plan) in modules.into_iter().zip(plans) {
+        let nfuncs = plan.appended as u32;
         let nconsts = m.consts.len() as u32;
 
         // where this module's OWN types land, and where its boot prefix ends
@@ -397,10 +703,15 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             name_map.get(id.0 as usize).copied().unwrap_or(id)
         };
         // function ids: `0`-scoped are this module's own (dense); other
-        // scopes name a used module's block
+        // scopes name a used module's block. An instantiation fn that
+        // lost the ledger claim redirects to the claiming copy.
+        let plan = &plan;
         let map_func = |f: u32| -> u32 {
+            if let Some(&g) = plan.fn_redirect.get(&f) {
+                return g;
+            }
             if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
-                f + func_off
+                plan.renumber.get(&f).copied().unwrap_or(f) + func_off
             } else {
                 func_scope_base
                     .get(&crate::id::scope_of(f))
@@ -409,10 +720,15 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     + crate::id::local_of(f)
             }
         };
-        // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense
+        // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense.
+        // A mirrored instantiation row redirects to the claiming module's row —
+        // ONE instantiation program-wide, whoever compiled first.
         let map = |id: TypeId| -> TypeId {
             if id == u32::MAX {
                 return id; // TY_ANY sentinel — never a real type
+            }
+            if let Some(&g) = plan.ty_redirect.get(&id) {
+                return g;
             }
             if packed {
                 let s = crate::id::scope_of(id);
@@ -503,13 +819,22 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         };
 
         // impl registrations: duplicate (trait, type) pairs are a LINK
-        // error (RFC 0012 §2). Generic-target impls stay per-module (the
-        // target is a template) and are not exported.
+        // error. Generic-target impls stay per-module (the target is a
+        // template) and are not exported. A target that is an
+        // owner-anchored instantiation row dedups by the instantiation's
+        // canonical key — mirrors of one instantiation register the same
+        // pair from every consuming unit of a spliced closure, and those
+        // are ONE registration.
         for im in m.surface.impls.iter() {
             let Some(&tg) = global_trait.get(&nm(im.trait_name)) else {
                 continue; // the trait table above covers every declared trait
             };
-            let key = (tg, map(im.target));
+            let target_key = plan
+                .inst_key_by_ty
+                .get(&im.target)
+                .map(|k| format!("inst:{k}"))
+                .unwrap_or_else(|| format!("ty:{}", map(im.target)));
+            let key = (tg, target_key);
             match impl_owner.get(&key) {
                 Some(owner) => {
                     let tname = out
@@ -517,7 +842,8 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                         .get(tg as usize)
                         .map(|t| out.interner.name(t.name).to_string())
                         .unwrap_or_else(|| "?".to_string());
-                    let target = out.types.types.get(key.1 as usize)
+                    let gtarget = map(im.target);
+                    let target = out.types.types.get(gtarget as usize)
                         .map(|t| out.interner.name(t.name).to_string())
                         .unwrap_or_else(|| "?".to_string());
                     return Err(LinkError(format!(
@@ -574,9 +900,15 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // Rows for this module's OWN types are assigned; rows for types
         // this module only USES merge — an impl may live in a different
         // module than the type (RFC 0012 §2), and its fills must reach
-        // the global row the owner module laid down.
+        // the global row the owner module laid down. A mirrored
+        // instantiation row's fills land on the CLAIMING row.
         for (i, vt) in m.vtables.into_iter().enumerate() {
-            let Some(gi) = gi_of(i as u32) else { continue };
+            let gi = plan
+                .ty_redirect_dense
+                .get(&(i as u32))
+                .copied()
+                .or_else(|| gi_of(i as u32));
+            let Some(gi) = gi else { continue };
             let gi = gi as usize;
             if gi >= out.vtables.len() {
                 out.vtables.resize(gi + 1, Vec::new());
@@ -594,11 +926,15 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // per-type disposal rows: `(target type, dispose func id)` — the
         // same remap the vtable loop applies, func ids rebased like every
-        // other func ref. A second fill is unreachable: the duplicate-
-        // impl check above rejected a repeated (Disposal, type) pair.
+        // other func ref; mirrored instantiation rows land on the claim.
         for (i, fid) in std::mem::take(&mut m.disposal_impls).into_iter().enumerate() {
             let Some(fid) = fid else { continue };
-            let Some(gi) = gi_of(i as u32) else { continue };
+            let gi = plan
+                .ty_redirect_dense
+                .get(&(i as u32))
+                .copied()
+                .or_else(|| gi_of(i as u32));
+            let Some(gi) = gi else { continue };
             if gi as usize >= out.disposal_impls.len() {
                 out.disposal_impls.resize(gi as usize + 1, None);
             }
@@ -613,8 +949,15 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             });
         }
 
-        // funcs: signatures, register types and every op operand
-        for f in m.funcs {
+        // funcs: signatures, register types and every op operand.
+        // Instantiation functions that lost the ledger claim are DROPPED —
+        // the claiming module's copy serves every reference (each was
+        // compiled from the same spliced body, so the surviving copy is
+        // the instantiation).
+        for (fi, f) in m.funcs.into_iter().enumerate() {
+            if plan.skip_fns.contains(&(fi as u32)) {
+                continue;
+            }
             out.funcs.push(FuncCode {
                 name: nm(f.name),
                 params: f.params.into_iter().map(|p| map(p)).collect(),
@@ -636,6 +979,42 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             });
         }
 
+        for r in m.inst_types {
+            out_types_ledger.push(InstTy {
+                owner: nm(r.owner),
+                decl: nm(r.decl),
+                args: r.args.iter().map(|&a| map(a)).collect(),
+                ty: map(r.ty),
+            });
+        }
+        for r in m.inst_fns {
+            let kind = match r.kind {
+                InstFnKind::Free { name, subst, origins } => InstFnKind::Free {
+                    name: nm(name),
+                    subst: subst.iter().map(|&t| map(t)).collect(),
+                    origins: origins.iter().map(|&t| map(t)).collect(),
+                },
+                InstFnKind::Method { data, name, subst, origins } => InstFnKind::Method {
+                    data: nm(data),
+                    name: nm(name),
+                    subst: subst.iter().map(|&t| map(t)).collect(),
+                    origins: origins.iter().map(|&t| map(t)).collect(),
+                },
+                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
+                    InstFnKind::ImplMethod {
+                        trait_name: nm(trait_name),
+                        target: map(target),
+                        name: nm(name),
+                        slot_abi,
+                        subst: subst.iter().map(|&t| map(t)).collect(),
+                        origins: origins.iter().map(|&t| map(t)).collect(),
+                    }
+                }
+                InstFnKind::HostThunk { name } => InstFnKind::HostThunk { name: nm(name) },
+            };
+            out_fns_ledger.push(InstFn { owner: nm(r.owner), kind, fid: map_func(r.fid) });
+        }
+
         // exports: function ids
         for (n, fid) in m.exports {
             out.exports.push((nm(n), map_func(fid)));
@@ -644,6 +1023,9 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         func_off += nfuncs;
         const_off += nconsts;
     }
+
+    out.inst_types = out_types_ledger;
+    out.inst_fns = out_fns_ledger;
 
     Ok(out)
 }

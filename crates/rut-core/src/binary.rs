@@ -108,9 +108,16 @@ pub struct SurfaceType {
     pub local: u32,
     /// records: a `class` (no outside literal) vs a `struct`
     pub is_class: bool,
-    /// a generic template (`Vec<T>`): a consumer must monomorphize it, so
-    /// the graph compiler source-inlines the module rather than linking it
+    /// a generic template (`Vec<T>`): the consumer does not monomorphize
+    /// it locally — it binds the template, instantiates a mirror row, and
+    /// REQUESTS the instantiation from the declaring package (whose unit
+    /// compiles the bodies). The template's field descriptors ride the
+    /// carried type block with `#<param>` placeholder leaves, so the
+    /// consumer can lay the instantiation out without the body.
     pub is_generic: bool,
+    /// the generic parameters in declaration order — the positional key
+    /// a consumer's `Vec<i64>` spells its arguments against
+    pub params: Vec<IdentId>,
     /// the id's scope: `None` — the exporter's own scope (ordinary rows);
     /// `Some(s)` — an explicit one. A transparent alias to a BOOT type
     /// (`pub type Meters = i64;`, RFC 0043) points at the shared boot
@@ -427,6 +434,76 @@ pub fn pub_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentI
         .collect()
 }
 
+// ---- the owner-anchored instantiation ledger ----
+//
+// Instantiation is owned by the declaring package: `Vec<i64>` is ONE row
+// program-wide, wherever the bodies were compiled. Every program carries
+// the canonical identity of the instantiations it holds — `(owner, decl,
+// args)` — and link unifies rows sharing a key: the first module in link
+// order claims the type row (and the instantiation's functions); later
+// mirrors redirect onto the claim. This is the trait table's merge-by-name
+// law, generalized to monomorphizations. Keys cross binaries (the rows
+// ride the wire), so a consumer compiled against a packaged binary
+// resolves its requests against the instantiations the pack baked in.
+
+/// One instantiation's type row: the declaring package (`owner`, an
+/// interned pkg spec), the declared class/struct name, the concrete type
+/// arguments, and the program-local row the instantiation interned into.
+/// `args` are `TypeId`s into this program's table — foreign arguments
+/// keep their declaring scope (`pack(scope, local)`), which is what makes
+/// the key comparable across programs (both sides spell the requester's
+/// block the same way).
+#[derive(Clone, Debug, PartialEq)]
+pub struct InstTy {
+    pub owner: IdentId,
+    pub decl: IdentId,
+    pub args: Vec<TypeId>,
+    pub ty: TypeId,
+}
+
+/// One instantiation fn identity: which member of which owner-anchored
+/// shape this compiled function instantiates. `subst`/`origins` carry the
+/// completed substitution's VALUES in declaration order (the parameter
+/// names are positional, never part of the key). `Lambda`/`ForOfEmit`
+/// instantiations are absent — they are unit-local by construction and
+/// never referenced across packages.
+#[derive(Clone, Debug, PartialEq)]
+pub enum InstFnKind {
+    Free {
+        name: IdentId,
+        subst: Vec<TypeId>,
+        origins: Vec<TypeId>,
+    },
+    Method {
+        data: IdentId,
+        name: IdentId,
+        subst: Vec<TypeId>,
+        origins: Vec<TypeId>,
+    },
+    ImplMethod {
+        /// the impl's trait source name (or target type name, inherent)
+        trait_name: IdentId,
+        /// the impl's target type id, as packed in this program
+        target: TypeId,
+        name: IdentId,
+        /// `true` — the slot-ABI variant; `false` — the concrete one
+        slot_abi: bool,
+        subst: Vec<TypeId>,
+        origins: Vec<TypeId>,
+    },
+    HostThunk {
+        name: IdentId,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct InstFn {
+    pub owner: IdentId,
+    pub kind: InstFnKind,
+    /// this program's local fn id for the instantiation
+    pub fid: u32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub name: String,
@@ -455,6 +532,10 @@ pub struct Program {
     pub consts: Vec<ConstVal>,
     pub funcs: Vec<FuncCode>,
     pub exports: Vec<(IdentId, u32)>,
+    /// the owner-anchored instantiation ledger (see [`InstTy`])
+    pub inst_types: Vec<InstTy>,
+    /// the owner-anchored instantiation fn ledger (see [`InstFn`])
+    pub inst_fns: Vec<InstFn>,
 }
 
 impl Program {
@@ -587,7 +668,15 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// namespace/host rows are not derivable without guesswork), so stale
 /// v15 artifacts — which carry no surface section — are refused with
 /// the standard version error.
-pub const VERSION: u32 = 16;
+/// v17: owner-anchored instantiation — a declared-surface change.
+/// Type exports gain their generic parameter lists, and the program
+/// carries its instantiation ledger (type rows + fn identities, each
+/// keyed by `(owner pkg, decl, arguments)`), so link unifies rows
+/// sharing a key into ONE program-wide instantiation and a consumer
+/// can resolve its requests against a packaged binary's ledger.
+/// Stale v16 artifacts carry neither — refused with the standard
+/// version error.
+pub const VERSION: u32 = 17;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -729,6 +818,51 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         e.u32(n.0);
         e.u32(*f);
     }
+    // the instantiation ledger (v17): the owner-anchored identity of
+    // every instantiation this program compiled — type rows first, then
+    // fn identities. Names are interner ids (the tail is serialized
+    // above); type ids are this program's packed ids, shared scope
+    // semantics with every other table.
+    e.u32(prog.inst_types.len() as u32);
+    for r in &prog.inst_types {
+        e.u32(r.owner.0);
+        e.u32(r.decl.0);
+        e.tys(&r.args);
+        e.u32(r.ty);
+    }
+    e.u32(prog.inst_fns.len() as u32);
+    for r in &prog.inst_fns {
+        e.u32(r.owner.0);
+        e.u32(r.fid);
+        match &r.kind {
+            InstFnKind::Free { name, subst, origins } => {
+                e.u8(0);
+                e.u32(name.0);
+                e.tys(subst);
+                e.tys(origins);
+            }
+            InstFnKind::Method { data, name, subst, origins } => {
+                e.u8(1);
+                e.u32(data.0);
+                e.u32(name.0);
+                e.tys(subst);
+                e.tys(origins);
+            }
+            InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
+                e.u8(2);
+                e.u32(trait_name.0);
+                e.u32(*target);
+                e.u32(name.0);
+                e.u8(*slot_abi as u8);
+                e.tys(subst);
+                e.tys(origins);
+            }
+            InstFnKind::HostThunk { name } => {
+                e.u8(3);
+                e.u32(name.0);
+            }
+        }
+    }
     // the surface (v16): the module's exported surface. Names are ids
     // into the program interner — its instance-local tail is already
     // serialized above, so a decoded surface shares the rebuilt table
@@ -796,6 +930,10 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u32(t.local);
         e.u8(t.is_class as u8);
         e.u8(t.is_generic as u8);
+        e.u32(t.params.len() as u32);
+        for p in &t.params {
+            e.u32(p.0);
+        }
         match t.scope {
             Some(sc) => {
                 e.u8(1);
@@ -1070,11 +1208,78 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let f = d.u32()?;
         exports.push((n, f));
     }
+    // the instantiation ledger (v17): owner-anchored identity rows —
+    // names checked against the rebuilt interner; type ids are the
+    // program's packed `(scope, local)` ids, validated like every other
+    // table's at mount/verify
+    let nkey = d.u32()? as usize;
+    let mut inst_types = Vec::with_capacity(nkey);
+    for _ in 0..nkey {
+        let owner = interned(&mut d)?;
+        let decl = interned(&mut d)?;
+        let args = d.tys()?;
+        let ty = d.u32()?;
+        inst_types.push(InstTy { owner, decl, args, ty });
+    }
+    let nfnkey = d.u32()? as usize;
+    let mut inst_fns = Vec::with_capacity(nfnkey);
+    for _ in 0..nfnkey {
+        let owner = interned(&mut d)?;
+        let fid = d.u32()?;
+        if fid as usize >= funcs.len() {
+            return Err(format!("bad instantiation fn row (func {fid})"));
+        }
+        let kind = match d.u8()? {
+            0 => {
+                let name = interned(&mut d)?;
+                let subst = d.tys()?;
+                let origins = d.tys()?;
+                InstFnKind::Free { name, subst, origins }
+            }
+            1 => {
+                let data = interned(&mut d)?;
+                let name = interned(&mut d)?;
+                let subst = d.tys()?;
+                let origins = d.tys()?;
+                InstFnKind::Method { data, name, subst, origins }
+            }
+            2 => {
+                let trait_name = interned(&mut d)?;
+                let target = d.u32()?;
+                let name = interned(&mut d)?;
+                let slot_abi = d.u8()? != 0;
+                let subst = d.tys()?;
+                let origins = d.tys()?;
+                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins }
+            }
+            3 => {
+                let name = interned(&mut d)?;
+                InstFnKind::HostThunk { name }
+            }
+            t => return Err(format!("bad instantiation fn kind tag {t}")),
+        };
+        inst_fns.push(InstFn { owner, kind, fid });
+    }
     // the surface (v16): names are checked against the rebuilt interner
     // at read, every id against the tables above — a bad binary never
     // reaches the VM
     let surface = decode_surface(&mut d, &interner, funcs.len(), traits.len())?;
-    Ok(Program { name, interner, surface, types, traits, trait_slots, vtables, disposal_impls, consts, funcs, exports, ..Default::default() })
+    Ok(Program {
+        name,
+        interner,
+        surface,
+        types,
+        traits,
+        trait_slots,
+        vtables,
+        disposal_impls,
+        consts,
+        funcs,
+        exports,
+        inst_types,
+        inst_fns,
+        ..Default::default()
+    })
 }
 
 /// The surface section (v16) — the decode side of [`encode_surface`],
@@ -1148,8 +1353,13 @@ fn decode_surface(
         let local = d.u32()?;
         let is_class = d.u8()? != 0;
         let is_generic = d.u8()? != 0;
+        let nparams = d.u32()? as usize;
+        let mut params = Vec::with_capacity(nparams);
+        for _ in 0..nparams {
+            params.push(name(d)?);
+        }
         let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
-        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, scope });
+        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, params, scope });
     }
     // trait decls
     let n = d.u32()? as usize;
@@ -1832,6 +2042,7 @@ mod tests {
             local: 0,
             is_class: false,
             is_generic: false,
+            params: Vec::new(),
             scope: None,
         });
         p.surface.traits.push(SurfaceTrait {

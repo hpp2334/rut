@@ -396,25 +396,40 @@ impl TypeTable {
         pack(s, dense - base)
     }
 
-    /// Which scope's block contains a non-boot dense index (the greatest
-    /// registered block start `<= dense`).
+    /// Which scope's block contains a non-boot dense index: the greatest
+    /// registered block start `<= dense`. The OWN block wins a tie at the
+    /// top base (a used block registered empty ties the own block's
+    /// base, and the rows interned after it are this table's own); a
+    /// query below the own block's start still answers with the foreign
+    /// block it lands in.
     fn scope_of_dense(&self, dense: u32) -> ScopeId {
         if dense < self.boot_len {
             return BOOT_SCOPE;
         }
-        let mut best = self.scope;
-        let mut best_base = 0u32;
+        let mut best: Option<(u32, ScopeId)> = None;
+        let mut own_at_best = false;
         for s in 0..self.scope_base.len() as u32 {
             if s == BOOT_SCOPE as u32 {
                 continue;
             }
             let b = self.scope_base[s as usize];
-            if b <= dense && b >= best_base {
-                best = s as ScopeId;
-                best_base = b;
+            if b > dense {
+                continue;
+            }
+            match best {
+                Some((bb, _)) if b < bb => {}
+                Some((bb, _)) if b == bb => own_at_best |= s as ScopeId == self.scope,
+                _ => {
+                    best = Some((b, s as ScopeId));
+                    own_at_best = s as ScopeId == self.scope;
+                }
             }
         }
-        best
+        match best {
+            Some((_, s)) if own_at_best => self.scope,
+            Some((_, s)) => s,
+            None => self.scope,
+        }
     }
 
     /// Use another module's type descriptors. `blocks` gives each scope's
@@ -445,6 +460,30 @@ impl TypeTable {
         // structural interning for anonymous instantiations (Vec<T>, fn(..)...)
         // — names are IdentIds, so the dedup key compare is an integer compare
         for (i, t) in self.types.iter().enumerate() {
+            if t.name == ty.name && t.kind == ty.kind {
+                return self.id_for(i as u32);
+            }
+        }
+        let d = self.types.len() as u32;
+        self.types.push(ty);
+        self.id_for(d)
+    }
+
+    /// Intern into THIS table's own block, never deduplicating against a
+    /// used block's row: a `#param` placeholder (the generic templates'
+    /// field leaves) must live in the own scope, because the template's
+    /// field descriptors reference it and the unit's own compilation —
+    /// splice composition included — must own the row. A used block
+    /// happens to carry an equal-looking placeholder (the exporter's own
+    /// template), and a plain structural hit would graft the template's
+    /// fields onto a foreign block the program may never link.
+    pub fn intern_own(&mut self, ty: RutType) -> TypeId {
+        let own_start = self
+            .scope_base
+            .get(self.scope as usize)
+            .copied()
+            .unwrap_or(self.boot_len) as usize;
+        for (i, t) in self.types.iter().enumerate().skip(own_start) {
             if t.name == ty.name && t.kind == ty.kind {
                 return self.id_for(i as u32);
             }

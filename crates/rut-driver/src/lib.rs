@@ -40,6 +40,34 @@ pub struct CompileOutput {
     pub binary: Option<Vec<u8>>,
 }
 
+/// The owner side of consumer requests, seeded into a recompiled unit.
+/// One group per requester: the requester's reachable type descriptors
+/// (registered as a sparse block under the requester's scope — the
+/// locals match the requester's own layout, which is what makes the
+/// instantiation keys agree), and the instantiations to materialize.
+#[derive(Clone, Default)]
+pub struct Seeds<'a> {
+    pub groups: &'a [SeedGroup<'a>],
+}
+
+/// One requester's seed block: descriptors + scope blocks + the
+/// requester program's interner (the descriptors' name ids resolve
+/// against it, then re-intern into the owner's).
+#[derive(Clone)]
+pub struct SeedGroup<'a> {
+    pub types: Vec<rut_core::types::RutType>,
+    pub blocks: Vec<(rut_core::ScopeId, u32)>,
+    pub names: &'a rut_core::Interner,
+    /// `(decl name text, args in the registered blocks' id space)`
+    pub insts: Vec<(String, Vec<rut_core::types::TypeId>)>,
+}
+
+impl<'a> Seeds<'a> {
+    pub fn none() -> Seeds<'a> {
+        Seeds { groups: &[] }
+    }
+}
+
 /// A compiled module. `program` still carries scope-qualified ids — the
 /// driver links a graph and flattens once (RFC 0035 §1).
 pub struct ProgramOutput {
@@ -48,6 +76,10 @@ pub struct ProgramOutput {
     pub ast_json: String,
     pub ir_dump: String,
     pub program: Option<Program>,
+    /// the instantiation requests this unit routed to declaring
+    /// packages (owner-anchored generics): `(owner, decl, args)` — the
+    /// graph resolves them after the walk
+    pub requests: Vec<rut_lir::check::InstRequest>,
 }
 
 /// Compile one module under `scope`, binding used function surfaces
@@ -62,14 +94,17 @@ pub fn compile_program(
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
 ) -> ProgramOutput {
-    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty(), &[])
+    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty(), &[], &Seeds::none())
 }
 
 /// As [`compile_program`] but with an explicit `allow_uses` flag — the
 /// graph compiler resolves every specifier itself (or inlines it), so it
 /// passes `true` even when a module's only uses were source-inlined —
 /// and with the unit's origin map (RFC 0012 §2a): the spliced leaves'
-/// byte ranges and declaring pkgs, empty for a no-splice unit.
+/// byte ranges and declaring pkgs, empty for a no-splice unit. `seeds`
+/// carries the owner side of consumer instantiation requests: the
+/// requesters' type descriptors (one sparse block per requester scope)
+/// and the instantiations to materialize before the compile roots.
 pub fn compile_program_resolved(
     src: &str,
     mode: Mode,
@@ -78,13 +113,22 @@ pub fn compile_program_resolved(
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
     allow_uses: bool,
     origins: &[OriginLeaf],
+    seeds: &Seeds<'_>,
 ) -> ProgramOutput {
+    let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
+        diags,
+        ast_dump,
+        ast_json,
+        ir_dump: String::new(),
+        program: None,
+        requests: Vec::new(),
+    };
     let (mut ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
     let ast_dump = dump::render_text(&tree, src);
     let ast_json = dump::render_json(&tree);
     if !diags.is_empty() {
-        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
+        return fail(diags, ast_dump, ast_json);
     }
     // Intern every used surface name, so a namespace use (`Math`)
     // resolves its members by name even though the member name is never
@@ -162,6 +206,14 @@ pub fn compile_program_resolved(
     for (_, surface, tmap, _) in &trait_maps {
         ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks, tmap);
     }
+    // the seeds' requester blocks: the same registration law as
+    // `use_types` — the blocks spell the REQUESTERS' scopes at the
+    // locals their own tables use, which is what makes the
+    // instantiation keys agree end to end
+    for group in seeds.groups {
+        ctx.use_seed_block(group.types.clone(), &group.blocks, group.names);
+        ctx.seeded_insts.extend(group.insts.iter().cloned());
+    }
     // ---- pass 3: fns, consts, types, impls, natives
     for (dep_scope, surface, _, origin) in trait_maps.iter() {
         let dep_scope = *dep_scope;
@@ -208,6 +260,25 @@ pub fn compile_program_resolved(
                 ctx.add_extern_type(id, rut_core::pack(scope, t.local), t.is_class);
                 // the type's origin pkg rides the binding (RFC 0012 §2a)
                 ctx.extern_origins.insert(id, origin.clone());
+                // a linked generic: the template row (its placeholder
+                // fields came across in the carried block), the parameter
+                // names in order, and the declaring pkg — the owner every
+                // instantiation is requested from
+                if t.is_generic {
+                    let params = t
+                        .params
+                        .iter()
+                        .map(|&p| ctx.intern(surface.names.name(p)))
+                        .collect();
+                    let template_row = rut_core::pack(scope, t.local);
+                    ctx.add_extern_generic(
+                        id,
+                        origin.clone(),
+                        params,
+                        template_row,
+                        t.is_class,
+                    );
+                }
             }
         }
         // impl registrations (RFC 0012 §2): `(trait, target, method → fn)`,
@@ -276,13 +347,27 @@ pub fn compile_program_resolved(
         }
     }
     ctx.collect();
+    // the graph-seeded instantiations (the owner side of consumer
+    // requests): materialize each BEFORE the compile roots, so the
+    // owner's unit carries the row — and every impl fill keyed on it —
+    // even though its own code never spelled the instantiation
+    for (decl, args) in std::mem::take(&mut ctx.seeded_insts) {
+        let Some(dname) = ctx.lookup_name(&decl) else {
+            ctx.err(
+                rut_lexer::span::Span::new(0, 0),
+                format!("seeded instantiation `{decl}<..>` — no such type here"),
+            );
+            continue;
+        };
+        ctx.mk_data_inst(dname, args, rut_lexer::span::Span::new(0, 0));
+    }
     // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
     // 0023 §2): bad signatures are source diagnostics, never call-time
     // surprises for the embedder
     ctx.check_entries();
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
-        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
+        return fail(diags, ast_dump, ast_json);
     }
     // module lets (load-time expression check, RFC 0003 §1)
     ctx.compile_module_lets();
@@ -324,12 +409,12 @@ pub fn compile_program_resolved(
     for root in roots {
         if ctx.compile_queue(root).is_err() {
             diags.append(&mut ctx.diags);
-            return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
+            return fail(diags, ast_dump, ast_json);
         }
     }
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags);
-        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
+        return fail(diags, ast_dump, ast_json);
     }
     // global trait-method slots: same enumeration order as Ctx::trait_slot
     let mut trait_slots = Vec::new();
@@ -403,7 +488,7 @@ pub fn compile_program_resolved(
         let boot_len = ctx.types.boot_len as usize;
         surface.types = ctx.types.types[boot_len..].to_vec();
         for s in 0..ctx.types.scope_base.len() as u32 {
-            if s == rut_core::BOOT_SCOPE as u32 {
+            if s == rut_core::BOOT_SCOPE as u32 || s == scope as u32 {
                 continue;
             }
             let base = ctx.types.scope_base[s as usize];
@@ -411,12 +496,27 @@ pub fn compile_program_resolved(
                 surface.scope_blocks.push((s as rut_core::ScopeId, base - ctx.types.boot_len));
             }
         }
+        // the unit's OWN block closes the list — `own_scope` reads it
+        // back as the last row, which stays unambiguous even when blocks
+        // are empty (a pkg with no own types ties every offset at the
+        // boot line)
+        let base = ctx.types.scope_base[scope as usize];
+        if base >= ctx.types.boot_len {
+            surface
+                .scope_blocks
+                .push((scope as rut_core::ScopeId, base - ctx.types.boot_len));
+        }
         for (name, d) in &ctx.datas {
             surface.type_exports.push(rut_core::binary::SurfaceType {
                 name: *name,
                 local: rut_core::local_of(d.ty),
                 is_class: d.kind == rut_lir::check::DataKind::Class,
                 is_generic: !d.generics.is_empty(),
+                params: if d.generics.is_empty() {
+                    Vec::new()
+                } else {
+                    d.generics.clone()
+                },
                 scope: None,
             });
         }
@@ -426,6 +526,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(e.ty),
                 is_class: false,
                 is_generic: false,
+                params: Vec::new(),
                 scope: None,
             });
         }
@@ -442,6 +543,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(ty),
                 is_class: false,
                 is_generic: false,
+                params: Vec::new(),
                 scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
             });
         }
@@ -503,6 +605,38 @@ pub fn compile_program_resolved(
     // clone so it stays self-contained when it crosses to a using module
     let interner = std::mem::take(&mut ctx.interner);
     surface.names = interner.clone();
+    // the instantiation ledger, canonical (sorted) order — the wire and
+    // the pack must be byte-deterministic for the same source
+    let name_of = |i: rut_core::IdentId| interner.name(i).to_string();
+    let mut ledger_types = std::mem::take(&mut ctx.ledger_types);
+    ledger_types.sort_by(|a, b| {
+        let ka = (name_of(a.owner), name_of(a.decl), a.args.clone());
+        let kb = (name_of(b.owner), name_of(b.decl), b.args.clone());
+        ka.cmp(&kb)
+    });
+    let mut ledger_fns = std::mem::take(&mut ctx.ledger_fns);
+    let kind_key = |f: &rut_core::binary::InstFn| -> (String, String, String, bool) {
+        match &f.kind {
+            rut_core::binary::InstFnKind::Free { name, .. } => {
+                ("f".into(), String::new(), name_of(*name), false)
+            }
+            rut_core::binary::InstFnKind::Method { data, name, .. } => {
+                ("m".into(), name_of(*data), name_of(*name), false)
+            }
+            rut_core::binary::InstFnKind::ImplMethod { trait_name, name, slot_abi, .. } => {
+                ("i".into(), name_of(*trait_name), name_of(*name), *slot_abi)
+            }
+            rut_core::binary::InstFnKind::HostThunk { name } => {
+                ("h".into(), String::new(), name_of(*name), false)
+            }
+        }
+    };
+    ledger_fns.sort_by(|a, b| {
+        let ka = (name_of(a.owner), kind_key(a), a.fid);
+        let kb = (name_of(b.owner), kind_key(b), b.fid);
+        ka.cmp(&kb)
+    });
+    let requests = std::mem::take(&mut ctx.inst_requests);
     let program = Program {
         name: module_name.to_string(),
         scope,
@@ -516,9 +650,10 @@ pub fn compile_program_resolved(
         consts: ctx.consts,
         funcs,
         exports,
-        ..Default::default()
+        inst_types: ledger_types,
+        inst_fns: ledger_fns,
     };
-    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program) }
+    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program), requests }
 }
 
 /// The `calc` body mount note: `calc` is engine-mounted for now (the

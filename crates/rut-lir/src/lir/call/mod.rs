@@ -412,6 +412,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if from == to {
             return true;
         }
+        // mirrors of one owner-anchored instantiation unify at link —
+        // the checker treats the keys as the identity they compile to
+        if self.ctx.same_instantiation(from, to) {
+            return true;
+        }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
             if self.ctx.find_impl_ex(trait_id, from).is_some() {
                 return true;
@@ -449,6 +454,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return false;
         }
         false
+    }
+
+    /// Identity-sensitive type equality for the assignment checks: the
+    /// ordinary id compare, plus the owner-anchored mirrors (distinct
+    /// ids pre-link, one row at link).
+    pub(crate) fn same_ty(&self, a: TypeId, b: TypeId) -> bool {
+        self.ctx.same_instantiation(a, b)
     }
 
     pub(crate) fn check_recv_mut(&mut self, recv: NodeHandle<AnyExpr>, sp: rut_lexer::span::Span, what: &str) -> bool {

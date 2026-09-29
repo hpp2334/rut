@@ -66,6 +66,26 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// Bind a linked generic: the template row (registered from the
+    /// exporter's carried block), its parameter names in order, and the
+    /// declaring pkg — the owner every instantiation of it is requested
+    /// from. The name still rides `extern_types` (the bare template
+    /// spells the owner's own row, e.g. in a `type_id<T>()` probe).
+    pub fn add_extern_generic(
+        &mut self,
+        name: IdentId,
+        owner: String,
+        params: Vec<IdentId>,
+        template: TypeId,
+        is_class: bool,
+    ) {
+        self.decl_owner.insert(name, owner.clone());
+        self.extern_generics.insert(
+            name,
+            ExternGeneric { owner, params, template, is_class },
+        );
+    }
+
     /// Bind a used core builtin container (`Array`/`Option`/
     /// `Result`/`Opaque` — RFC 0028): the type constructor is the
     /// compiler's own; the binding gates the NAME.

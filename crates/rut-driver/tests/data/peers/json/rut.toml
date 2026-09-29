@@ -5,6 +5,7 @@
 # pairing (T6/T9 self-build on this same manifest).
 name = "json"
 entry.lib = "./json.rut"
+inline = true
 
 [peer-deps]
 pouch   = { path = "../pouch",   optional = true, lib = "./serde_pouch.rut" }

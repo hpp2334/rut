@@ -129,7 +129,7 @@ pub fn mount_host_session(session: &mut rut_driver::Session) -> Result<(), Strin
     session
         .register_module(
             "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, inline: true, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     register_web_surface(session)?;
@@ -208,7 +208,7 @@ pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), Stri
     session
         .register_module(
             "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, inline: true, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     Ok(())

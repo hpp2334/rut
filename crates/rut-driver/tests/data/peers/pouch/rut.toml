@@ -3,6 +3,7 @@
 # into consumers). Rides `base` so T8's peer-of-peer chain is real.
 name = "pouch"
 entry.lib = "./pouch.rut"
+inline = true
 
 [deps]
 base = { path = "../base" }

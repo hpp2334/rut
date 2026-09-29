@@ -334,9 +334,10 @@ fn loads_a_directory_graph() {
 
 #[test]
 fn consumer_uses_pouch_vec() {
-    // a module exporting a generic type is source-inlined into its consumer
-    // (RFC 0013 monomorphizes at compile time); the consumer's `Vec<i32>`
-    // then instantiates against the inlined class body
+    // a module whose methods live on a generic class is source-inlined
+    // into its consumer (`inline` — the splice law's one trigger since
+    // instantiation went owner-anchored); the consumer's `Vec<i32>` then
+    // instantiates against the inlined class body
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");
     let coll_src = rut_driver::load_module_source(&pouch).expect("read");
@@ -345,7 +346,7 @@ fn consumer_uses_pouch_vec() {
     rut_driver::mount_std_core(&mut s);
     s.register_module(
         "pouch",
-        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, ..Default::default() },
+        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, inline: true, ..Default::default() },
     )
     .unwrap();
     s.register_module(

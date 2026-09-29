@@ -37,7 +37,7 @@ The keys, all of them:
 | `[peer-deps]` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `[dev-deps]` | mounted only while building/testing this pkg itself |
 | `host_scope` | the host-fn registration prefix when it must differ from the package name (`rt` keeps its historical `rt:log` scope) |
-| `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose entries are generic functions or whose class methods must resolve at the call site) |
+| `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `[style]` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 

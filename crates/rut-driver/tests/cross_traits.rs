@@ -72,6 +72,26 @@ fn linked(modules: &[(&str, &str)]) -> rut_core::binary::Program {
     g.program.expect("linked program")
 }
 
+/// Compile a graph's linked program down to a runnable VM and answer
+/// `main`'s return.
+fn run_main(p: rut_core::binary::Program) -> i32 {
+    let flat = rut_core::link::flatten(p);
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(flat),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    vm.call("main", ()).expect("main runs")
+}
+
 fn ir(p: &rut_core::binary::Program) -> String {
     rut_driver::ir_dump_of(&p.funcs, &p.interner)
 }
@@ -277,17 +297,18 @@ fn main() -> i32 {
 }
 
 #[test]
-fn trait_typed_parameter_specializes_per_concrete_argument() {
-    // `describe(s: Shape)` cannot be linked: its trait-typed parameter
-    // specializes per concrete argument where the arguments are (RFC
-    // 0012 §5 — one clone per argument type), so its source splices
-    // into the consumer and `s.area()` binds statically against the
-    // argument's type.
+fn trait_typed_parameter_links_and_dispatches_through_the_vtable() {
+    // `describe(s: Shape)` LINKS: with instantiation owner-anchored, a
+    // trait-typed parameter no longer forces a splice — the parameter is
+    // an ordinary value and the call dispatches through the vtable slot
+    // the consumer's impl registration filled. `main` calls the linked
+    // fn through a plain Call, and the fn's body hops the slot (CallI) —
+    // the merged registry answers for every argument type.
     let g = graph(&[
         ("shapes", &format!("{SHAPES}\npub fn describe(s: Shape) -> f64 {{ return s.area(); }}\n")),
         ("app", "\
 use shapes::{Shape, Point, make_point, describe};
-fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let d = describe(p);
     return 0;
@@ -296,26 +317,27 @@ fn main() -> i32 {
     ]);
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let p = g.program.expect("program");
-    // the clone of `describe` for the `Point` argument binds `area`
-    // statically (one clone per concrete argument type, RFC 0012 §5),
-    // and `main` calls it through a plain Call — never the vtable
-    let sidx = p.funcs.iter().position(|f| {
-        p.name_of(f.name) == "describe"
-            && f.code.iter().any(|op| matches!(op, rut_core::ops::Op::CallM { .. }))
-    });
-    let sidx = sidx.unwrap_or_else(|| panic!("describe specialized per argument:\n{}", ir(&p)));
+    // `describe` linked as one fn; `main` calls it directly — never
+    // through a spliced clone
+    let didx = p.funcs.iter().position(|f| p.name_of(f.name) == "describe");
+    let didx = didx.unwrap_or_else(|| panic!("describe linked:\n{}", ir(&p)));
     let main = p.funcs.iter().find(|f| p.name_of(f.name) == "main").unwrap();
     assert!(
         main.code.iter()
-            .any(|op| matches!(op, rut_core::ops::Op::Call { func, .. } if *func as usize == sidx)),
-        "main calls the specialized clone:\n{}",
+            .any(|op| matches!(op, rut_core::ops::Op::Call { func, .. } if *func as usize == didx)),
+        "main calls the linked describe:\n{}",
         ir(&p)
     );
+    // the linked body dispatches through the trait slot — the merged
+    // registry, not a per-argument clone
     assert!(
-        !main.code.iter().any(|op| matches!(op, rut_core::ops::Op::CallI { .. })),
-        "main never hops the vtable:\n{}",
+        p.funcs[didx].code.iter().any(|op| matches!(op, rut_core::ops::Op::CallI { .. })),
+        "describe dispatches through the vtable:\n{}",
         ir(&p)
     );
+    // and the dispatch answers at run time
+    let got = run_main(p);
+    assert_eq!(got, 0, "the linked trait-param call runs");
 }
 
 #[test]

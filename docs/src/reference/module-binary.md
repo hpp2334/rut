@@ -16,6 +16,8 @@ pub struct Program {
     pub scope: ScopeId,             // stable module scope (0 if unset)
     pub interner: Interner,         // every IdentId in the program
     pub surface: Surface,           // exports, for using modules (on the wire since v16)
+    pub inst_types: Vec<InstTy>,    // the instantiation ledger (v17)
+    pub inst_fns: Vec<InstFn>,      //   — link unifies rows by key
     pub types: TypeTable,           // type descriptors, dense ids
     pub traits: Vec<TraitDesc>,     // trait tables
     pub trait_slots: Vec<(u32, u32)>,   // global trait-method slots
@@ -54,6 +56,7 @@ offset  field
         consts: u32 count, then tag + payload (below)
         funcs: u32 count, then per func (below)
         exports: u32 count, then (name: IdentId, func: u32) pairs
+        instantiation ledger: type rows, then fn identities   # v17, below
         surface: namespace, funcs, consts, types + scope blocks + type
                  exports, traits, impls (both ABI lists), the reserved
                  inherent-impl table, native rows   # v16, below
@@ -75,9 +78,18 @@ offset  field
   capture count, the typed register table, both operand pools, the op
   stream, the span table, the parallel `(line, col)` position table, and
   the host-fn binding id when the function is a bodyless thunk.
+- **Instantiation ledger** (v17): the owner-anchored identity of every
+  instantiation the program compiled — type rows `(owner, decl,
+  arguments, type id)` first, then fn identities (the kind, the
+  substitution values, and the local fn id). Instantiation is owned by
+  the declaring package, and link unifies rows sharing a key into ONE
+  program-wide row; a consumer resolves its requests against a packaged
+  binary's ledger. Type exports carry their generic parameter lists
+  beside this (see the surface below).
 - **Surface** (v16): the exported surface rides after `exports` — the
   namespace head, funcs (with their async/host rows), consts, the
-  carried type descriptors + scope blocks + type exports, trait decls,
+  carried type descriptors + scope blocks + type exports (generic
+  exports carry their parameter names in order, v17), trait decls,
   impl registrations in both ABI lists, a reserved length-prefixed
   inherent-impl table (zero rows until class methods link), and the
   native rows with their ambient bits. Names are ids into the name

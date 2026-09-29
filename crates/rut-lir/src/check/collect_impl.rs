@@ -104,6 +104,9 @@ impl<'a> Ctx<'a> {
         // the orphan gate's target-side classification (RFC 0012 §2a) —
         // every unresolvable shape already returned above
         let (ty_display, ty_origin) = self.classify_target_origin(target);
+        // the impl block's own splice origin — the instantiation ledger's
+        // owner anchor for its monomorphized methods
+        let origin = self.origin_of(sp.lo).to_string();
         match trait_ref {
             None => {
                 if is_prim {
@@ -123,12 +126,11 @@ impl<'a> Ctx<'a> {
                     );
                     return;
                 }
-                self.collect_impl_inherent(target, spell, target_ty, target_data, is_local, mths)
+                self.collect_impl_inherent(target, spell, target_ty, target_data, is_local, mths, origin)
             }
-            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths),
+            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths, origin),
         }
     }
-
     /// The TyPath impl target, resolved (RFC 0012 §2 plus the
     /// hashmap-surface batch's seam (c)): the ROW form re-targets
     /// through the family's row first — `impl I for HashMap<K, i64>`
@@ -360,6 +362,7 @@ impl<'a> Ctx<'a> {
         target_data: Option<(IdentId, Vec<IdentId>)>,
         is_local: bool,
         mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+        origin: String,
     ) {
         // `spell` is the target's DECL name (the expansion's decl when
         // the impl was spelled through an alias or a row — seam (c)),
@@ -392,6 +395,7 @@ impl<'a> Ctx<'a> {
                 is_template: false,
                 inherent: true,
                 methods: mths.clone(),
+                origin,
             });
             // concrete targets' methods are eagerly queued (no call site
             // may exist); generic targets monomorphize at their call sites
@@ -455,6 +459,7 @@ impl<'a> Ctx<'a> {
         ty_display: String,
         ty_origin: Option<String>,
         mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+        origin: String,
     ) {
         // the trait ref's head, read before resolution: the v1 shape
         // guard below needs the raw argument nodes (a non-path head
@@ -770,6 +775,7 @@ impl<'a> Ctx<'a> {
             is_template: !param_env.is_empty(),
             inherent: false,
             methods: mths.clone(),
+            origin,
         });
         // every impl method enters the monomorphization queue — vtables
         // need their bodies (RFC 0015 §6). Generic-target impls
