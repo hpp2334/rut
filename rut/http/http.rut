@@ -40,6 +40,7 @@
 // death is DATA — the sticky `read_error()` goes non-nil and stays.
 // Cancellation is best-effort (a worker thread finishes its blocking
 // read; the late result is discarded — disclosed).
+use core::{ Future, RunContext };
 use http_host::{
     http_send, http_body, http_stream_next,
     http_status, http_err, http_read_err, http_resp_stream,

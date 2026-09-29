@@ -643,6 +643,7 @@ mod tests {
     /// The awaits deliver (the answer lane): send at headers, body as
     /// the drain, stream reads per chunk.
     const SRC: &str = r#"
+use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use http_host::{ http_status, http_err, http_read_err };
 use async_host::launch_future;
@@ -872,6 +873,7 @@ entry fn boot_stream(url: str) -> nil {
     #[test]
     fn the_body_lane_answers_the_short_drain_after_a_mid_read_death() {
         let src = r#"
+use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use rt::{ create_logger, logger_log };
@@ -937,6 +939,7 @@ entry fn boot(url: str) -> nil {
     #[test]
     fn the_one_shot_law_degrades_second_takers() {
         let src = r#"
+use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use rt::{ create_logger, logger_log };
@@ -1044,6 +1047,7 @@ entry fn boot(url: str) -> nil {
     #[test]
     fn the_builder_walks_every_verb_and_header() {
         let src = r#"
+use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use async_host::launch_future;
 use rt::{ create_logger, logger_log };
@@ -1172,6 +1176,7 @@ entry fn boot() -> nil {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         let stream_src = r#"
+use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use rt::{ create_logger, logger_log };

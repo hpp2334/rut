@@ -81,6 +81,7 @@ fn diags_of(src: &str) -> Vec<String> {
 #[test]
 fn launch_runs_to_completion() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 
@@ -106,6 +107,7 @@ pub fn main() -> nil {
 #[test]
 fn park_and_resume_through_sleep() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
@@ -135,6 +137,7 @@ pub fn main() -> nil {
 #[test]
 fn nested_awaits() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
@@ -174,6 +177,7 @@ pub fn main() -> nil {
 #[test]
 fn abort_after_park_runs_the_drop_path_then_reports_false() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
@@ -251,7 +255,7 @@ impl Disposal for DropTag {
 fn abort_after_park_disposes_locals_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
-use core::{{ Disposal, DisposalContext }};
+use core::{{ Disposal, DisposalContext, RunContext }};
 use rt::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
@@ -298,7 +302,7 @@ pub fn main() -> nil {{
 fn dispose_locals_fire_in_reverse_order_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
-use core::{{ Disposal, DisposalContext }};
+use core::{{ Disposal, DisposalContext, RunContext }};
 use rt::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
@@ -341,6 +345,7 @@ pub fn main() -> nil {{
 #[test]
 fn abort_before_first_drive_never_runs_the_body() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 
@@ -373,6 +378,7 @@ fn vm_first_ready(vm: &mut Vm) -> rut_vm::Slot {
 #[test]
 fn the_cx_cancelled_probe_answers_in_a_live_body() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 
@@ -400,6 +406,7 @@ pub fn main() -> nil {
 #[test]
 fn a_bound_sleep_future_drives_and_aborts_through_the_box() {
     let src = r#"
+use core::{ Future, RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
@@ -444,6 +451,7 @@ pub fn main() -> nil {
 #[test]
 fn fuel_is_charged_per_drive_step() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 

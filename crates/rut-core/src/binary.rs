@@ -409,9 +409,15 @@ impl Surface {
                 (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
             ],
             native_traits: vec![
-                (sym::ITERATOR, NativeTrait::Iterator, true),
-                (sym::FUTURE, NativeTrait::Future, true),
-                (sym::RUN_CONTEXT, NativeTrait::RunContext, true),
+                // the engine-woven trio: `pub builtin` — the import-gated
+                // spellings, exactly the disposal pair's law. The WEAVE
+                // never consults these bits (async frames, cx minting and
+                // the fused `for..of` loops key on the native-trait
+                // symbols); only source that SPELLS a name resolves it
+                // through `use core::{ .. }`.
+                (sym::ITERATOR, NativeTrait::Iterator, false),
+                (sym::FUTURE, NativeTrait::Future, false),
+                (sym::RUN_CONTEXT, NativeTrait::RunContext, false),
                 (sym::DISPOSAL, NativeTrait::Disposal, false),
             ],
             native_fns: CORE_FNS.iter().map(|&n| (n, true)).collect(),

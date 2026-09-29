@@ -38,6 +38,8 @@ pub fn main() -> nil {
 #[test]
 fn await_on_a_non_future_diagnoses() {
     let msg = one_diag(r#"
+use core::{ RunContext };
+
 async fn work(cx: RunContext) -> nil {
     await 7;
 }
@@ -53,6 +55,8 @@ pub fn main() -> nil {
 #[test]
 fn await_on_a_user_impl_future_diagnoses_in_v1() {
     let msg = one_diag(r#"
+use core::{ RunContext };
+
 class NotWoven {
     n: i32 = 0;
 }
@@ -74,6 +78,7 @@ pub fn main() -> nil {
 #[test]
 fn await_on_the_receipt_diagnoses_with_the_join_law() {
     let msg = one_diag(r#"
+use core::{ RunContext };
 use async_host::{ launch_future, LaunchedFutureHandle };
 
 async fn work(cx: RunContext) -> nil { }
@@ -97,6 +102,7 @@ fn relaunching_the_receipt_is_a_type_error() {
     // ruling 6: `launch_future(launch_future(f))` — the receipt is not
     // a Future; the arrow fails to type, never a runtime check
     let msg = one_diag(r#"
+use core::{ RunContext };
 use async_host::launch_future;
 
 async fn work(cx: RunContext) -> nil { }
@@ -114,6 +120,7 @@ pub fn main() -> nil {
 #[test]
 fn await_select_stays_parse_only() {
     let msg = one_diag(r#"
+use core::{ RunContext };
 use async_host::sleep;
 
 async fn work(cx: RunContext) -> nil {
@@ -144,6 +151,8 @@ pub fn main() -> nil {
 #[test]
 fn runcontext_has_no_other_members() {
     let msg = one_diag(r#"
+use core::{ RunContext };
+
 async fn work(cx: RunContext) -> nil {
     let x = cx.bogus();
 }
@@ -174,6 +183,7 @@ fn a_user_launcher_over_the_same_future_surface() {
     .expect("engine surface");
     s.register_module("my_engine", engine).expect("mount");
     let src = r#"
+use core::{ Future, RunContext };
 use my_engine::{ __launch };
 
 class MyHandle {

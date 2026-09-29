@@ -32,6 +32,8 @@ Semantics:
 Typical shape:
 
 ```rut
+use core::{ RunContext };
+
 async fn worker(cx: RunContext, rx: Receiver<u32>, tx: Sender<u32>) -> nil {
     while (true) {
         let msg = await rx.recv();

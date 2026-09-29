@@ -169,6 +169,7 @@ trait name/instantiation.
 A type is iterable when it registers `impl Iterator<E> for T`:
 
 ```rut
+use core::{ Iterator };
 use ink::{ Logger };
 
 class CountUp {
@@ -218,8 +219,11 @@ engine-closed** — users implement them through the ordinary nominal
 path:
 
 ```rut
-prelude builtin trait Future<T> { fn yield(cx: RunContext); }
-prelude builtin trait RunContext {
+pub builtin trait Iterator<E> {
+    fn __iterate(self, emit: fn(E) -> bool);
+}
+pub builtin trait Future<T> { fn yield(cx: RunContext); }
+pub builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;
@@ -230,9 +234,15 @@ pub builtin trait Disposal {
 ```
 
 `impl Future<nil> for CustomFuture` registers in the same registry as
-any other impl. The ambient traits need no `use`; the import-gated
-`Disposal` pair resolves through `use core::{ Disposal,
-DisposalContext }` (see
+any other impl. Every builtin trait is the import-gated `pub builtin`
+spelling: the ENGINE weaves on the native-trait symbols — async frames,
+the minted cx, and the fused `for..of` loops never consult user scope —
+but source that SPELLS a trait name resolves it only through
+`use core::{ .. }` (`Iterator` for an `impl Iterator<E> for T` or a
+trait-typed parameter; `Future` for a user impl, a launcher's
+`f: Future<T>`, or `downcast<Future<..>>`; `RunContext` for a yield
+signature or an `async fn` head; the `Disposal` pair through
+`use core::{ Disposal, DisposalContext }` — see
 [Host fns and declaration files](host-fns.md)). See
 [Async and await](async.md) and [the Rc heap](rc-heap.md).
 

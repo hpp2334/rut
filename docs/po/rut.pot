@@ -257,7 +257,7 @@ msgstr ""
 msgid "The host futures bridge"
 msgstr ""
 
-#: src/SUMMARY.md:84 src/tutorial/async.md:165
+#: src/SUMMARY.md:84 src/tutorial/async.md:167
 #: src/reference/workers-and-channels.md:1
 msgid "Workers and channels"
 msgstr ""
@@ -419,7 +419,7 @@ msgstr ""
 msgid "If you want to…"
 msgstr ""
 
-#: src/index.md:46 src/reference/async.md:74
+#: src/index.md:46 src/reference/async.md:77
 msgid "Read"
 msgstr ""
 
@@ -967,7 +967,7 @@ msgstr ""
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:123
 #: src/reference/by-reference-and-nullable.md:100
-#: src/reference/workers-and-channels.md:49 src/reference/value-boundary.md:35
+#: src/reference/workers-and-channels.md:51 src/reference/value-boundary.md:35
 #: src/reference/value-boundary.md:36 src/reference/templates.md:19
 msgid "`str`"
 msgstr ""
@@ -1339,8 +1339,8 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:220 src/tutorial/types.md:273
-#: src/tutorial/traits.md:314 src/tutorial/errors.md:225
-#: src/tutorial/modules.md:244 src/tutorial/async.md:177
+#: src/tutorial/traits.md:318 src/tutorial/errors.md:225
+#: src/tutorial/modules.md:244 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:312
 msgid "Put it together"
 msgstr ""
@@ -2843,12 +2843,15 @@ msgstr ""
 #: src/tutorial/traits.md:272
 msgid ""
 "A type becomes a `for..of` target by implementing the builtin `Iterator<E>` "
-"contract with its single resumption member:"
+"contract with its single resumption member (`Iterator` is core's "
+"import-gated `pub builtin` trait — an `impl` names it, so bring it in with "
+"`use core::{ Iterator }`; the builtin sequences themselves never need it):"
 msgstr ""
 
-#: src/tutorial/traits.md:275
+#: src/tutorial/traits.md:278
 msgid ""
 "```rut\n"
+"use core::{ Iterator };\n"
 "use pouch::{ Vec };\n"
 "use ink::{ Logger };\n"
 "\n"
@@ -2875,7 +2878,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:304
+#: src/tutorial/traits.md:308
 msgid ""
 "`for (let v of it)` desugars to `it.__iterate(emit)` with a synthetic "
 "closure. One consequence to know: the loop body's captures are taken at the "
@@ -2884,13 +2887,13 @@ msgid ""
 "`vec.push(v)` — or have the loop body act on values it can see directly."
 msgstr ""
 
-#: src/tutorial/traits.md:311
+#: src/tutorial/traits.md:315
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the "
 "trait — their loops are fused, never a per-element call."
 msgstr ""
 
-#: src/tutorial/traits.md:316
+#: src/tutorial/traits.md:320
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -2939,7 +2942,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:368
+#: src/tutorial/traits.md:372
 msgid "Next: [errors and optionality](errors.md)."
 msgstr ""
 
@@ -3353,7 +3356,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:45 src/reference/modules-and-visibility.md:102
+#: src/tutorial/modules.md:45 src/reference/modules-and-visibility.md:105
 msgid "Visibility"
 msgstr ""
 
@@ -3363,24 +3366,24 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:108
+#: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:111
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:108
+#: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:111
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:92
 #: src/reference/builtin-generic-types.md:104
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
-#: src/reference/async.md:144 src/reference/host-futures.md:34
+#: src/reference/async.md:147 src/reference/host-futures.md:34
 #: src/reference/embedding.md:62 src/reference/embedding.md:84
-#: src/reference/value-boundary.md:96 src/reference/host-fns.md:239
+#: src/reference/value-boundary.md:96 src/reference/host-fns.md:243
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:53 src/reference/modules-and-visibility.md:110
+#: src/tutorial/modules.md:53 src/reference/modules-and-visibility.md:113
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -3388,7 +3391,7 @@ msgstr ""
 msgid "public — importable by any module, other packages included"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:111
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:114
 msgid "`pub(mod) fn ..`"
 msgstr ""
 
@@ -3396,7 +3399,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:112
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:115
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -3680,6 +3683,8 @@ msgstr ""
 #: src/tutorial/async.md:18
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
+"\n"
 "async fn countdown(cx: RunContext, log: Logger, n: u32) {\n"
 "    let mut i = n;\n"
 "    while (i > 0) {\n"
@@ -3692,30 +3697,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:30
+#: src/tutorial/async.md:32
 msgid ""
 "The cx is engine-minted at call sites the way `self` is — you never pass it "
 "when _calling_ an async fn:"
 msgstr ""
 
-#: src/tutorial/async.md:33
+#: src/tutorial/async.md:35
 msgid ""
 "```rut\n"
 "launch_future(countdown(log, 3));   // no cx — the engine supplies it\n"
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:37
+#: src/tutorial/async.md:39
 msgid "Two consume paths, and exactly one per future:"
 msgstr ""
 
-#: src/tutorial/async.md:39
+#: src/tutorial/async.md:41
 msgid ""
 "**`await fut`** — drive it from this async fn's body. Legal only inside an "
 "`async fn`, and only for engine-woven futures (async-fn results and `sleep`)."
 msgstr ""
 
-#: src/tutorial/async.md:42
+#: src/tutorial/async.md:44
 msgid ""
 "**`launch_future(fut)`** — hand it to the driving loop and keep a receipt. "
 "Returns a `LaunchedFutureHandle<T>`, which is _not_ a future: it cannot be "
@@ -3723,21 +3728,21 @@ msgid ""
 "at its next checkpoint and runs its cleanup."
 msgstr ""
 
-#: src/tutorial/async.md:47
+#: src/tutorial/async.md:49
 msgid ""
 "`sleep(ms)` is the one built-in pender — a `Future<nil>` that parks its "
 "frame until the VM's clock reaches the deadline."
 msgstr ""
 
-#: src/tutorial/async.md:50
+#: src/tutorial/async.md:52
 msgid "Both `launch_future` and `sleep` come from the `async_host` package:"
 msgstr ""
 
-#: src/tutorial/async.md:56
+#: src/tutorial/async.md:58
 msgid "Who drives?"
 msgstr ""
 
-#: src/tutorial/async.md:58
+#: src/tutorial/async.md:60
 msgid ""
 "You never write a driving loop — the _embedder_ does. The `rut run` CLI is "
 "an embedder: after `main` returns it pumps the loop — drain ready frames, "
@@ -3746,60 +3751,60 @@ msgid ""
 "appears:"
 msgstr ""
 
-#: src/tutorial/async.md:75
+#: src/tutorial/async.md:77
 msgid ""
 "Calling an async function and awaiting it in the same body is the "
 "straight-line case; launching is for concurrency — independent work that "
 "overlaps through the loop's interleaving."
 msgstr ""
 
-#: src/tutorial/async.md:79
+#: src/tutorial/async.md:81
 msgid "Talking to the network: the `http` package"
 msgstr ""
 
-#: src/tutorial/async.md:81
+#: src/tutorial/async.md:83
 msgid ""
 "The standard `http` package is async-only where work actually waits. "
 "Everything else — the client, the verbs, the builder — is sync construction "
 "sugar:"
 msgstr ""
 
-#: src/tutorial/async.md:92
+#: src/tutorial/async.md:94
 msgid "The shape, step by step:"
 msgstr ""
 
-#: src/tutorial/async.md:94
+#: src/tutorial/async.md:96
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back "
 "a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), "
 "`.body(bytes)` chain on it."
 msgstr ""
 
-#: src/tutorial/async.md:97
+#: src/tutorial/async.md:99
 msgid "`.build()` freezes a re-sendable `Request`."
 msgstr ""
 
-#: src/tutorial/async.md:98
+#: src/tutorial/async.md:100
 msgid ""
 "**`.send(cx)` is the async point.** It resolves at _headers_ — the wire body "
 "is still unread."
 msgstr ""
 
-#: src/tutorial/async.md:100
+#: src/tutorial/async.md:102
 msgid "From the `Response`, take one of two readbacks:"
 msgstr ""
 
-#: src/tutorial/async.md:101
+#: src/tutorial/async.md:103
 msgid "`await resp.body(cx)` — drain the remaining body in one future;"
 msgstr ""
 
-#: src/tutorial/async.md:102
+#: src/tutorial/async.md:104
 msgid ""
 "`resp.byte_stream()` then `await stream.next(cx)` — one chunk per future, "
 "`nil` at end-of-stream, for bounded-memory downloads."
 msgstr ""
 
-#: src/tutorial/async.md:105
+#: src/tutorial/async.md:107
 msgid ""
 "Errors come back as data, not traps: status `0` is reserved for transport "
 "failure (`resp.transport_error()` carries the reason), any real status — 4xx "
@@ -3808,13 +3813,13 @@ msgid ""
 "`stream.error()`."
 msgstr ""
 
-#: src/tutorial/async.md:111
+#: src/tutorial/async.md:113
 msgid ""
 "A complete worker from the repository's GitHub-viewer example — send, then "
 "drain:"
 msgstr ""
 
-#: src/tutorial/async.md:114
+#: src/tutorial/async.md:116
 msgid ""
 "```rut\n"
 "async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, "
@@ -3843,11 +3848,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:138
+#: src/tutorial/async.md:140
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr ""
 
-#: src/tutorial/async.md:140
+#: src/tutorial/async.md:142
 msgid ""
 "```rut\n"
 "let resp = await client.get(url).build().send(cx);\n"
@@ -3865,11 +3870,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:155
+#: src/tutorial/async.md:157
 msgid "`await select`, join, and structured scopes"
 msgstr ""
 
-#: src/tutorial/async.md:157
+#: src/tutorial/async.md:159
 msgid ""
 "Racing futures (`await select { fut1 -> .., fut2 x -> .. }`) and joining a "
 "launched future's value (`await handle`) are spelled in the grammar but not "
@@ -3879,7 +3884,7 @@ msgid ""
 "See [tasks](../reference/tasks.md) for the roadmap."
 msgstr ""
 
-#: src/tutorial/async.md:167
+#: src/tutorial/async.md:169
 msgid ""
 "For true parallelism, a host can spawn **workers** — separate VMs on "
 "separate threads with separate heaps. There is no shared memory: all data "
@@ -3892,9 +3897,10 @@ msgid ""
 "channels](../reference/workers-and-channels.md)."
 msgstr ""
 
-#: src/tutorial/async.md:179
+#: src/tutorial/async.md:181
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
 "use async_host::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
@@ -3915,7 +3921,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:206
+#: src/tutorial/async.md:209
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -4536,7 +4542,7 @@ msgid ""
 msgstr ""
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
-#: src/core-concepts/traits-and-dispatch.md:233 src/core-concepts/memory.md:204
+#: src/core-concepts/traits-and-dispatch.md:239 src/core-concepts/memory.md:204
 msgid "What this buys you"
 msgstr ""
 
@@ -5407,12 +5413,16 @@ msgid "The iteration protocol"
 msgstr ""
 
 #: src/core-concepts/traits-and-dispatch.md:177
-msgid "A type is iterable when it implements the builtin `Iterator<E>` trait:"
+msgid ""
+"A type is iterable when it implements the builtin `Iterator<E>` trait (a "
+"`pub builtin` core name — an `impl` block names it, so the module imports "
+"it, `use core::{ Iterator }`):"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:179
+#: src/core-concepts/traits-and-dispatch.md:181
 msgid ""
 "```rut\n"
+"use core::{ Iterator };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class CountUp {\n"
@@ -5437,7 +5447,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:210
+#: src/core-concepts/traits-and-dispatch.md:213
 msgid ""
 "`for (let v of it) { body }` desugars to `it.__iterate(emit)` with a "
 "synthetic closure: the body runs, then `emit` returns `true`; `break` "
@@ -5447,25 +5457,27 @@ msgid ""
 "they never pay a per-element call."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:217
+#: src/core-concepts/traits-and-dispatch.md:220
 msgid "Engine contracts are traits too"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:219
+#: src/core-concepts/traits-and-dispatch.md:222
 msgid ""
 "The async machinery is spelled as builtin traits — `Future<T>` and "
 "`RunContext` — which the engine _names_ but does not close: a hand-written "
 "type can `impl Future<nil> for MyFuture` through the same registry as any "
-"other impl and be driven by the same loop. See [the async "
-"model](async-model.md) and the worked example in [04 — Custom "
+"other impl and be driven by the same loop. Like `Iterator`, both are `pub "
+"builtin` core names: the engine's weave never needs the import, but source "
+"that spells the names does (`use core::{ Future, RunContext }`). See [the "
+"async model](async-model.md) and the worked example in [04 — Custom "
 "async](../examples/04-custom-async.md)."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:226
+#: src/core-concepts/traits-and-dispatch.md:232
 msgid "Equality is not a trait"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:228
+#: src/core-concepts/traits-and-dispatch.md:234
 msgid ""
 "`==` is builtin and cannot be opted into or out of: primitives compare by "
 "value, `str`/`bytes` by content, everything else by cell identity. "
@@ -5473,20 +5485,20 @@ msgid ""
 "rules. See [everything is a value](everything-is-a-value.md)."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:235
+#: src/core-concepts/traits-and-dispatch.md:241
 msgid ""
 "**Nominal satisfaction** keeps the registry exact: capability probes, "
 "widening, and vtable fills all read one table, so casts stay cheap and "
 "runtime identities stay meaningful."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:238
+#: src/core-concepts/traits-and-dispatch.md:244
 msgid ""
 "**The two-rule law** makes dispatch predictable: you can tell, per call "
 "site, whether you are paying a hop."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:240
+#: src/core-concepts/traits-and-dispatch.md:246
 msgid ""
 "**Placement rules** keep coherence decidable across packages without a "
 "global uniqueness proof — one of the pair is always local."
@@ -5581,6 +5593,7 @@ msgstr ""
 #: src/core-concepts/async-model.md:22
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
 "use async_host::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
@@ -5598,32 +5611,34 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/async-model.md:45
+#: src/core-concepts/async-model.md:46
 msgid "The rules:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:47
+#: src/core-concepts/async-model.md:48
 msgid ""
 "**The first parameter is the context.** `async fn f(cx: RunContext, ..)` — "
 "the engine mints it at call sites and per drive, the way it mints `self`. It "
 "carries the frame edge: `checkpoint()` reads the resume state, `cancelled()` "
-"reads the task's abort flag."
+"reads the task's abort flag. The spelled `RunContext` name is core's, "
+"imported like any package name: `use core::{ RunContext }` — the engine's "
+"weave itself never needs the import, only source that names the trait does."
 msgstr ""
 
-#: src/core-concepts/async-model.md:51
+#: src/core-concepts/async-model.md:55
 msgid ""
 "**Calling does not run.** `async fn f(..) -> T` describes a value that "
 "widens to `Future<T>`; it runs when awaited or launched."
 msgstr ""
 
-#: src/core-concepts/async-model.md:53
+#: src/core-concepts/async-model.md:57
 msgid ""
 "**One consume law.** A future is consumed by `await` _or_ by `launch_future` "
 "— exactly one. The launch returns its own receipt type, which is not a "
 "future and cannot be launched or awaited again."
 msgstr ""
 
-#: src/core-concepts/async-model.md:56
+#: src/core-concepts/async-model.md:60
 msgid ""
 "**`await` targets engine-woven futures** (async-fn results and `sleep`). "
 "Hand-written futures are _launcher-drivable_ — the driving loop finds their "
@@ -5631,17 +5646,17 @@ msgid ""
 "built over the open trait surface."
 msgstr ""
 
-#: src/core-concepts/async-model.md:61 src/reference/async.md:109
+#: src/core-concepts/async-model.md:65 src/reference/async.md:112
 msgid "What the compiler emits"
 msgstr ""
 
-#: src/core-concepts/async-model.md:63
+#: src/core-concepts/async-model.md:67
 msgid ""
 "An `async fn` compiles to one hidden frame — an ordinary heap cell — with a "
 "woven `Future::yield` that the driving loop calls once per resumption:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:81
+#: src/core-concepts/async-model.md:85
 msgid ""
 "The state field _is_ the program counter: resume dispatch is a jump table "
 "over the checkpoint enum. Because locals are mirrored into the frame cell, "
@@ -5650,11 +5665,11 @@ msgid ""
 "no new opcodes, no new runtime machinery."
 msgstr ""
 
-#: src/core-concepts/async-model.md:87
+#: src/core-concepts/async-model.md:91
 msgid "Cancellation is drop"
 msgstr ""
 
-#: src/core-concepts/async-model.md:89
+#: src/core-concepts/async-model.md:93
 msgid ""
 "`handle.abort()` flags the frame's cancellation and re-enqueues it. The "
 "probe at its next checkpoint branches to the drop path: locals release in "
@@ -5666,83 +5681,83 @@ msgid ""
 "[memory](memory.md)); coroutine frames get no special case."
 msgstr ""
 
-#: src/core-concepts/async-model.md:98 src/reference/async.md:140
+#: src/core-concepts/async-model.md:102 src/reference/async.md:143
 msgid "The driving loop"
 msgstr ""
 
-#: src/core-concepts/async-model.md:100
+#: src/core-concepts/async-model.md:104
 msgid "The VM owns the queues; the embedder owns the loop:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:103 src/core-concepts/host-boundary.md:30
+#: src/core-concepts/async-model.md:107 src/core-concepts/host-boundary.md:30
 #: src/reference/vm-heap.md:98 src/reference/resource-limits.md:58
-#: src/reference/host-futures.md:108
+#: src/reference/host-futures.md:111
 msgid "\"main\""
 msgstr ""
 
-#: src/core-concepts/async-model.md:103
+#: src/core-concepts/async-model.md:107
 msgid "// script boots, launches futures\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:105
+#: src/core-concepts/async-model.md:109
 msgid "// one drive per ready frame\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:106
+#: src/core-concepts/async-model.md:110
 msgid "// expire due timers into ready\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:107
+#: src/core-concepts/async-model.md:111
 msgid "// the wall-clock stand-in\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:109
+#: src/core-concepts/async-model.md:113
 msgid "// idle\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:113
+#: src/core-concepts/async-model.md:117
 msgid ""
 "`sleep(ms)` arms a deadline on the VM's **virtual clock** (`vm.now_ms()` / "
 "`vm.set_now()`). A test host advances the clock by hand and gets fully "
 "deterministic schedules — a UI host just maps it to wall time."
 msgstr ""
 
-#: src/core-concepts/async-model.md:117
+#: src/core-concepts/async-model.md:121
 msgid ""
 "Each queue entry owns one reference; a completed drive re-enqueues the "
 "awaiting frame through a one-directional edge pair, so wake wiring never "
 "forms a cycle."
 msgstr ""
 
-#: src/core-concepts/async-model.md:120
+#: src/core-concepts/async-model.md:124
 msgid ""
 "Fuel accounting rides the ordinary per-op budget: a drive that runs out "
 "parks the frame at its checkpoint and resumes there later."
 msgstr ""
 
-#: src/core-concepts/async-model.md:123
+#: src/core-concepts/async-model.md:127
 msgid "Host futures: `pub host async fn`"
 msgstr ""
 
-#: src/core-concepts/async-model.md:125
+#: src/core-concepts/async-model.md:129
 msgid "Native code joins the same model. A declaration file spells the row:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:133
+#: src/core-concepts/async-model.md:137
 msgid ""
 "and the embedder binds it with **one closure** that starts the work and "
 "returns the future's state cell:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:137
+#: src/core-concepts/async-model.md:141
 msgid "\"http_host::http_stream_next\""
 msgstr ""
 
-#: src/core-concepts/async-model.md:143
+#: src/core-concepts/async-model.md:147
 msgid "// settle from any thread\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:149
+#: src/core-concepts/async-model.md:153
 msgid ""
 "`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are "
 "callable from any thread (atomics plus a mutex — the VM stays "
@@ -5756,11 +5771,11 @@ msgid ""
 "into the ready queue."
 msgstr ""
 
-#: src/core-concepts/async-model.md:160
+#: src/core-concepts/async-model.md:164
 msgid "Structured concurrency, honestly"
 msgstr ""
 
-#: src/core-concepts/async-model.md:162
+#: src/core-concepts/async-model.md:166
 msgid ""
 "The language today keeps the vocabulary deliberately small: launch, abort, "
 "and await. Racing (`await select { .. }`) and joining a launched future "
@@ -7040,7 +7055,7 @@ msgstr ""
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:210
-#: src/examples/04-custom-async.md:199 src/examples/05-todolist-web.md:223
+#: src/examples/04-custom-async.md:203 src/examples/05-todolist-web.md:223
 #: src/examples/06-github-viewer-cli.md:206
 #: src/examples/playground-corpus.md:187
 msgid "Takeaways"
@@ -7792,7 +7807,7 @@ msgid ""
 msgstr ""
 
 #: src/examples/03-plugin.md:124 src/reference/embedding.md:35
-#: src/reference/host-fns.md:152
+#: src/reference/host-fns.md:156
 msgid "\"server::emit\""
 msgstr ""
 
@@ -8061,12 +8076,16 @@ msgid ""
 "`async fn`'s hidden frame — but built-in traits are engine _named_, not "
 "engine _closed_. A hand-written machine registers through the ordinary "
 "nominal path, one impl block, and rides the same drive law ([Traits and "
-"dispatch](../core-concepts/traits-and-dispatch.md)):"
+"dispatch](../core-concepts/traits-and-dispatch.md)). `Future` and "
+"`RunContext` are `pub builtin` core names — the impl names them, so the file "
+"imports them (`use core::{ Future, RunContext }`):"
 msgstr ""
 
-#: src/examples/04-custom-async.md:114
+#: src/examples/04-custom-async.md:116
 msgid ""
 "```rut\n"
+"use core::{ Future, RunContext };\n"
+"\n"
 "impl Future<nil> for CustomFuture {\n"
 "    fn yield(self, cx: RunContext) {\n"
 "        // the ledger view: the frame's resume state, read as data\n"
@@ -8083,7 +8102,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/04-custom-async.md:130
+#: src/examples/04-custom-async.md:134
 msgid ""
 "The receiver **is** the frame — the machine's fields are its state — and the "
 "context is the only handle a resumption needs. The frozen context protocol "
@@ -8092,11 +8111,11 @@ msgid ""
 "not an exception it catches."
 msgstr ""
 
-#: src/examples/04-custom-async.md:136
+#: src/examples/04-custom-async.md:140
 msgid "The user launcher"
 msgstr ""
 
-#: src/examples/04-custom-async.md:138
+#: src/examples/04-custom-async.md:142
 msgid ""
 "The engine's standard launcher set (`launch_future`, `LaunchedFutureHandle`, "
 "`sleep`) is ordinary code any module may re-spell — that is the point of "
@@ -8104,7 +8123,7 @@ msgid ""
 "`Future` surface, so the machine never knows which launcher started it:"
 msgstr ""
 
-#: src/examples/04-custom-async.md:154
+#: src/examples/04-custom-async.md:158
 msgid ""
 "The returned `CustomLaunched` receipt is deliberately **not** a future — it "
 "cannot be awaited, and it is not re-launchable (that is a type error, never "
@@ -8112,34 +8131,34 @@ msgid ""
 "task and lets the loop's re-drive run the probe:"
 msgstr ""
 
-#: src/examples/04-custom-async.md:178
+#: src/examples/04-custom-async.md:182
 msgid ""
 "Alongside sits `audit_drive`, the audit twin of the engine loop's drive "
 "columns: run a stage, count the resumption, stop on completion."
 msgstr ""
 
-#: src/examples/04-custom-async.md:181
+#: src/examples/04-custom-async.md:185
 msgid "Scope, honestly"
 msgstr ""
 
-#: src/examples/04-custom-async.md:183
+#: src/examples/04-custom-async.md:187
 msgid "Two boundaries to keep straight when you read this file:"
 msgstr ""
 
-#: src/examples/04-custom-async.md:185
+#: src/examples/04-custom-async.md:189
 msgid ""
 "**User futures are launcher-drivable** — the driving loop finds the "
 "`Future::yield` row in the vtable, exactly as it does for woven frames."
 msgstr ""
 
-#: src/examples/04-custom-async.md:188
+#: src/examples/04-custom-async.md:192
 msgid ""
 "**`await` targets engine-woven futures only** in the current build (async-fn "
 "results and `sleep`); awaiting an arbitrary user impl, and joining "
 "concurrent futures, land with the next async milestone."
 msgstr ""
 
-#: src/examples/04-custom-async.md:192
+#: src/examples/04-custom-async.md:196
 msgid ""
 "So today the file is a parse-checked design corpus and a teaching document: "
 "the shape of the weave, the shape of a launcher, and the proof that the "
@@ -8149,31 +8168,31 @@ msgid ""
 "model](../core-concepts/async-model.md)."
 msgstr ""
 
-#: src/examples/04-custom-async.md:201
+#: src/examples/04-custom-async.md:205
 msgid ""
 "`async fn` compiles to a hidden frame implementing `Future` — this file "
 "spells that frame out in user source."
 msgstr ""
 
-#: src/examples/04-custom-async.md:203
+#: src/examples/04-custom-async.md:207
 msgid ""
 "Built-in traits are engine-named, not engine-closed: `impl Future<nil> for "
 "YourType` registers through the ordinary path."
 msgstr ""
 
-#: src/examples/04-custom-async.md:205
+#: src/examples/04-custom-async.md:209
 msgid ""
 "Cancellation is data the frame reads (`cx.cancelled()`), and every "
 "checkpoint is observable (`cx.checkpoint()`)."
 msgstr ""
 
-#: src/examples/04-custom-async.md:207
+#: src/examples/04-custom-async.md:211
 msgid ""
 "A launcher is just code: driving + audit over the public `Future` surface, "
 "re-spellable by any module."
 msgstr ""
 
-#: src/examples/04-custom-async.md:209
+#: src/examples/04-custom-async.md:213
 msgid ""
 "The file is parse-only by disclosure; the runnable harness is follow-up work "
 "— the machine itself is plain rut (it ran above), but nothing launches or "
@@ -9305,7 +9324,7 @@ msgstr ""
 msgid "`fn`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:131
+#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:135
 msgid "`let`"
 msgstr ""
 
@@ -9333,11 +9352,11 @@ msgstr ""
 msgid "`of`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:132
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:136
 msgid "`enum`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:134
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:138
 msgid "`struct`"
 msgstr ""
 
@@ -9345,7 +9364,7 @@ msgstr ""
 msgid "`class`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:133
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:137
 msgid "`trait`"
 msgstr ""
 
@@ -9767,18 +9786,20 @@ msgstr ""
 #: src/reference/modules-and-visibility.md:54
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, `assert`, "
-"`type_id<T>()`, `str(x)`, the ambient builtin traits — are **ambient**: no "
-"`use` is needed for them. The one gated pair, `Disposal`/`DisposalContext`, "
-"resolves only through `use core::{ .. }` ([Host fns and declaration "
+"`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
+"gated names resolve only through `use core::{ .. }`: the const `NAN`, the "
+"`Disposal`/ `DisposalContext` pair, and every builtin trait (`Iterator`, "
+"`Future`, `RunContext`) — the engine's weave never needs the import, only "
+"source that spells a trait name does ([Host fns and declaration "
 "files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts "
 "only through `use`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:62
+#: src/reference/modules-and-visibility.md:65
 msgid "Module-level `let`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:64
+#: src/reference/modules-and-visibility.md:67
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, "
 "builtin operators over load-time expressions, struct literals whose fields "
@@ -9787,18 +9808,18 @@ msgid ""
 "Calls to user functions are not load-time expressions."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:75
+#: src/reference/modules-and-visibility.md:78
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:79
+#: src/reference/modules-and-visibility.md:82
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:81
+#: src/reference/modules-and-visibility.md:84
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "conventionally `pub fn main`, sync or async. `entry fn` publishes a function "
@@ -9807,18 +9828,18 @@ msgid ""
 "ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:88
+#: src/reference/modules-and-visibility.md:91
 msgid "Bindings: `let` vs `let mut`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:90
+#: src/reference/modules-and-visibility.md:93
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through "
 "`x`, and no `mut self` method calls on it. It is a **read-only view of the "
 "shared object**."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:93
+#: src/reference/modules-and-visibility.md:96
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object "
 "it holds**. Every non-primitive is a shared cell (see [By-reference and "
@@ -9827,68 +9848,68 @@ msgid ""
 "path must run through a `mut` binding."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:98
+#: src/reference/modules-and-visibility.md:101
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the "
 "caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn "
 "area(p: Point)` promises not to."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:104
+#: src/reference/modules-and-visibility.md:107
 msgid ""
 "Modules form a tree per package (files in directories; the package root is "
 "the root module). Every declaration — and every class member — carries a "
 "visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:110
+#: src/reference/modules-and-visibility.md:113
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:111
+#: src/reference/modules-and-visibility.md:114
 msgid "visible everywhere inside this **package's module tree**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:112
+#: src/reference/modules-and-visibility.md:115
 msgid "visible to the **parent module** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:113
+#: src/reference/modules-and-visibility.md:116
 msgid "`pub(self) fn ..`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:113
+#: src/reference/modules-and-visibility.md:116
 msgid "module-private — **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:115
+#: src/reference/modules-and-visibility.md:118
 msgid ""
 "Unannotated = `pub(self)`: nothing leaks unless it says `pub`. There is no "
 "`private` keyword — the unannotated default _is_ the private spelling."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:118
+#: src/reference/modules-and-visibility.md:121
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `trait`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases. On a `class` "
 "declaration it means the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:121
+#: src/reference/modules-and-visibility.md:124
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:124
+#: src/reference/modules-and-visibility.md:127
 msgid ""
 "Dataclass members are **always public** — no visibility dial (see "
 "[Structs](structs.md)). Trait method signatures and impl methods are as "
 "visible as their trait (see [Traits and dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:127
+#: src/reference/modules-and-visibility.md:130
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -10020,7 +10041,7 @@ msgid ""
 "bug, not data)"
 msgstr ""
 
-#: src/reference/primitive-types.md:29 src/reference/stdlib.md:35
+#: src/reference/primitive-types.md:29 src/reference/stdlib.md:39
 msgid "`str.from_code(n: u32) -> str`"
 msgstr ""
 
@@ -10260,7 +10281,7 @@ msgstr ""
 #: src/reference/literals-and-inference.md:136
 #: src/reference/by-reference-and-nullable.md:61
 #: src/reference/workers-and-channels.md:17
-#: src/reference/workers-and-channels.md:46
+#: src/reference/workers-and-channels.md:48
 msgid "Type"
 msgstr ""
 
@@ -10449,7 +10470,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:299
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:306
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -10465,7 +10486,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:174
+#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:181
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -10481,7 +10502,7 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:173
+#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:180
 msgid "`freeze() -> bytes`"
 msgstr ""
 
@@ -12278,6 +12299,7 @@ msgstr ""
 #: src/reference/traits.md:171
 msgid ""
 "```rut\n"
+"use core::{ Iterator };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class CountUp {\n"
@@ -12305,7 +12327,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/traits.md:204
+#: src/reference/traits.md:205
 msgid ""
 "`for (v of it) { body }` desugars to `it.__iterate(emit)` with a synthetic "
 "closure: the body runs, then `emit` returns `true`; `break` returns `false` "
@@ -12317,30 +12339,36 @@ msgid ""
 "`str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
 
-#: src/reference/traits.md:214
+#: src/reference/traits.md:215
 msgid "Engine contracts"
 msgstr ""
 
-#: src/reference/traits.md:216
+#: src/reference/traits.md:217
 msgid ""
 "`builtin trait` names are compiler-backed but **engine-named, not "
 "engine-closed** — users implement them through the ordinary nominal path:"
 msgstr ""
 
-#: src/reference/traits.md:232
+#: src/reference/traits.md:236
 msgid ""
 "`impl Future<nil> for CustomFuture` registers in the same registry as any "
-"other impl. The ambient traits need no `use`; the import-gated `Disposal` "
-"pair resolves through `use core::{ Disposal, DisposalContext }` (see [Host "
-"fns and declaration files](host-fns.md)). See [Async and await](async.md) "
-"and [the Rc heap](rc-heap.md)."
+"other impl. Every builtin trait is the import-gated `pub builtin` spelling: "
+"the ENGINE weaves on the native-trait symbols — async frames, the minted cx, "
+"and the fused `for..of` loops never consult user scope — but source that "
+"SPELLS a trait name resolves it only through `use core::{ .. }` (`Iterator` "
+"for an `impl Iterator<E> for T` or a trait-typed parameter; `Future` for a "
+"user impl, a launcher's `f: Future<T>`, or `downcast<Future<..>>`; "
+"`RunContext` for a yield signature or an `async fn` head; the `Disposal` "
+"pair through `use core::{ Disposal, DisposalContext }` — see [Host fns and "
+"declaration files](host-fns.md)). See [Async and await](async.md) and [the "
+"Rc heap](rc-heap.md)."
 msgstr ""
 
-#: src/reference/traits.md:239
+#: src/reference/traits.md:249
 msgid "Equality"
 msgstr ""
 
-#: src/reference/traits.md:241
+#: src/reference/traits.md:251
 msgid ""
 "`==` is a builtin operator with no vtable dispatch: primitives by value, "
 "`str`/`bytes` by content, everything else by cell identity — see [Rc, "
@@ -12355,7 +12383,7 @@ msgid ""
 "admission-only bounds."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:6 src/reference/stdlib.md:27
+#: src/reference/functions-closures-generics.md:6 src/reference/stdlib.md:31
 msgid "Functions"
 msgstr ""
 
@@ -13678,7 +13706,7 @@ msgstr ""
 msgid "pass `x` directly — sharing needs no spelling"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:108
+#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:115
 msgid "`Option<T>` / `Result<T, E>`"
 msgstr ""
 
@@ -14135,7 +14163,7 @@ msgid ""
 "back-pointers) as well as through collections."
 msgstr ""
 
-#: src/reference/weak-refs.md:24 src/reference/stdlib.md:72
+#: src/reference/weak-refs.md:24 src/reference/stdlib.md:76
 msgid "`Weak<T>`"
 msgstr ""
 
@@ -14879,6 +14907,7 @@ msgstr ""
 #: src/reference/async.md:20
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
 "use ink::{ Logger };\n"
 "use async_host::{ launch_future, sleep };\n"
 "\n"
@@ -14899,103 +14928,106 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/async.md:46 src/reference/host-futures.md:17
+#: src/reference/async.md:47 src/reference/host-futures.md:17
 #: src/reference/host-fns.md:65
 msgid "Rules:"
 msgstr ""
 
-#: src/reference/async.md:48
+#: src/reference/async.md:49
 msgid ""
 "The **first parameter is the cx**: `async fn f(cx: RunContext, ..)`. The "
-"engine mints it at call sites and per drive — call sites do not pass it."
+"engine mints it at call sites and per drive — call sites do not pass it. The "
+"spelled `RunContext` name is core's (`pub builtin`, import-gated): `use "
+"core::{ RunContext }` brings it in — the weave itself never needs the "
+"import, only the spelled name does."
 msgstr ""
 
-#: src/reference/async.md:51
+#: src/reference/async.md:54
 msgid ""
 "`async fn f(..) -> T` describes a value that widens to `Future<T>`. "
 "**Calling it runs nothing** (cold). It runs when the future is `await`ed or "
 "launched."
 msgstr ""
 
-#: src/reference/async.md:54
+#: src/reference/async.md:57
 msgid ""
 "`await` is legal only inside an `async fn`. In this build it targets "
 "**engine-woven futures** — async-fn results and `sleep`."
 msgstr ""
 
-#: src/reference/async.md:56
+#: src/reference/async.md:59
 msgid ""
 "A future is awaited or launched by **exactly one driver**; each path "
 "consumes it. Driving one frame from two paths is a disclosed misuse, not a "
 "soundness hole."
 msgstr ""
 
-#: src/reference/async.md:59
+#: src/reference/async.md:62
 msgid ""
 "`launch_future(launch_future(f))` is a **type error**: the receipt is not a "
 "`Future` ([tasks](tasks.md))."
 msgstr ""
 
-#: src/reference/async.md:61
+#: src/reference/async.md:64
 msgid ""
 "Async **methods** are not woven in this build — async points are free fns. A "
 "sync method may mint the future internally and return it typed `Future<T>` "
 "(the standard HTTP face does exactly this)."
 msgstr ""
 
-#: src/reference/async.md:64
+#: src/reference/async.md:67
 msgid ""
 "Cancellation-by-drop: the probe at the resumed checkpoint branches to a drop "
 "path that releases the frame's cell-backed locals (their `Disposal` impls "
 "run, [the Rc heap](rc-heap.md)), retires the state, and returns."
 msgstr ""
 
-#: src/reference/async.md:69
+#: src/reference/async.md:72
 msgid "The cx protocol"
 msgstr ""
 
-#: src/reference/async.md:71
+#: src/reference/async.md:74
 msgid ""
 "`RunContext` carries two reads, usable as plain data inside a future impl "
 "([the host futures bridge](host-futures.md)):"
 msgstr ""
 
-#: src/reference/async.md:74
+#: src/reference/async.md:77
 msgid "Answers"
 msgstr ""
 
-#: src/reference/async.md:76
+#: src/reference/async.md:79
 msgid "`cx.checkpoint()`"
 msgstr ""
 
-#: src/reference/async.md:76
+#: src/reference/async.md:79
 msgid "this frame's current resume state (a `u32`)"
 msgstr ""
 
-#: src/reference/async.md:77
+#: src/reference/async.md:80
 msgid "`cx.cancelled()`"
 msgstr ""
 
-#: src/reference/async.md:77
+#: src/reference/async.md:80
 msgid "the frame's abort flag"
 msgstr ""
 
-#: src/reference/async.md:79
+#: src/reference/async.md:82
 msgid "Cancellation is data the frame reads — never an exception it catches."
 msgstr ""
 
-#: src/reference/async.md:81
+#: src/reference/async.md:84
 msgid "The standard launcher set"
 msgstr ""
 
-#: src/reference/async.md:83
+#: src/reference/async.md:86
 msgid ""
 "Launchers are **host surface** — ordinary rut code over the open `Future` "
 "surface, provided by the `rut/async_host` package (users may write their own "
 "the same way):"
 msgstr ""
 
-#: src/reference/async.md:87
+#: src/reference/async.md:90
 msgid ""
 "```rut\n"
 "pub fn launch_future<T>(f: Future<T>) -> LaunchedFutureHandle<T>;\n"
@@ -15004,7 +15036,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/async.md:93
+#: src/reference/async.md:96
 msgid ""
 "Each embedder mounts `rut/async_engine` (the rows `__launch`, `__abort`, "
 "`__sleep`, `__sleep_yield`) plus `rut/async_host`, and installs the row "
@@ -15012,7 +15044,7 @@ msgid ""
 "works inline."
 msgstr ""
 
-#: src/reference/async.md:98
+#: src/reference/async.md:101
 msgid ""
 "The crossings cross as **`opaque`** — there is no `any` in the vocabulary: "
 "`opaque(f)` seals a frame on the way out, `opaque.downcast<Future<nil>>(b) "
@@ -15021,78 +15053,78 @@ msgid ""
 "engine's minted sleep frame."
 msgstr ""
 
-#: src/reference/async.md:104
+#: src/reference/async.md:107
 msgid ""
 "Host async fns declared in a declaration file — `pub host async fn "
 "fetch(url: str) -> bytes;` — mint the same cold woven frames; the embedder "
 "backs them with a `Completer` ([the host futures bridge](host-futures.md))."
 msgstr ""
 
-#: src/reference/async.md:111
+#: src/reference/async.md:114
 msgid ""
 "One `async fn` compiles into **one** code body over existing ops only — no "
 "new vocabulary:"
 msgstr ""
 
-#: src/reference/async.md:114
+#: src/reference/async.md:117
 msgid "a hidden **frame record** is the future:"
 msgstr ""
 
-#: src/reference/async.md:116
+#: src/reference/async.md:119
 msgid "field"
 msgstr ""
 
-#: src/reference/async.md:116 src/reference/repr-c.md:14
+#: src/reference/async.md:119 src/reference/repr-c.md:14
 msgid "content"
 msgstr ""
 
-#: src/reference/async.md:118
+#: src/reference/async.md:121
 msgid "`state`"
 msgstr ""
 
-#: src/reference/async.md:118
+#: src/reference/async.md:121
 msgid "the checkpoint enum's member singleton; **null = completed or dropped**"
 msgstr ""
 
-#: src/reference/async.md:119
+#: src/reference/async.md:122
 msgid "`cancelled`"
 msgstr ""
 
-#: src/reference/async.md:119
+#: src/reference/async.md:122
 msgid "the abort flag"
 msgstr ""
 
-#: src/reference/async.md:120
+#: src/reference/async.md:123
 msgid "`awaiter`"
 msgstr ""
 
-#: src/reference/async.md:120
+#: src/reference/async.md:123
 msgid "the frame awaiting this one"
 msgstr ""
 
-#: src/reference/async.md:121
+#: src/reference/async.md:124
 msgid "`pending`"
 msgstr ""
 
-#: src/reference/async.md:121
+#: src/reference/async.md:124
 msgid "the future this one parks on"
 msgstr ""
 
-#: src/reference/async.md:122
+#: src/reference/async.md:125
 msgid "`[4..]`"
 msgstr ""
 
-#: src/reference/async.md:122
+#: src/reference/async.md:125
 msgid "locals — every binding, cell-backed"
 msgstr ""
 
-#: src/reference/async.md:124
+#: src/reference/async.md:127
 msgid ""
 "a per-fn **checkpoint enum** whose member index _is_ the resume state, "
 "dispatched with a branch table — **the state field is the pc**;"
 msgstr ""
 
-#: src/reference/async.md:126
+#: src/reference/async.md:129
 msgid ""
 "each await site: read the callee's state; not done → drive one step (a plain "
 "vtable call of `Future::yield`); still pending → store the awaiter/pending "
@@ -15100,13 +15132,13 @@ msgid ""
 "reads the state field for the answer (`Done | Parked`);"
 msgstr ""
 
-#: src/reference/async.md:131
+#: src/reference/async.md:134
 msgid ""
 "the drop path: clear the pending edges, release ref locals in binding order, "
 "retire."
 msgstr ""
 
-#: src/reference/async.md:134
+#: src/reference/async.md:137
 msgid ""
 "Locals are mirrored into the frame cell uniformly, so no liveness analysis "
 "decides which locals survive a park. A completed frame re-drive answers at "
@@ -15114,106 +15146,106 @@ msgid ""
 "one-directional — a driven frame re-enqueues its awaiter, and no cycle forms."
 msgstr ""
 
-#: src/reference/async.md:142
+#: src/reference/async.md:145
 msgid "The VM owns the queues; the **embedder owns the loop**:"
 msgstr ""
 
-#: src/reference/async.md:144
+#: src/reference/async.md:147
 msgid "Engine API"
 msgstr ""
 
-#: src/reference/async.md:146
+#: src/reference/async.md:149
 msgid "`vm.launch(fut)`"
 msgstr ""
 
-#: src/reference/async.md:146
+#: src/reference/async.md:149
 msgid "enqueue a future (the queue owns one reference)"
 msgstr ""
 
-#: src/reference/async.md:147
+#: src/reference/async.md:150
 msgid "`vm.cancel(fut) -> bool`"
 msgstr ""
 
-#: src/reference/async.md:147
+#: src/reference/async.md:150
 msgid "flag cancellation + re-enqueue; `false` when already retired"
 msgstr ""
 
-#: src/reference/async.md:148
+#: src/reference/async.md:151
 msgid "`vm.drive(fut) -> Drive`"
 msgstr ""
 
-#: src/reference/async.md:148
+#: src/reference/async.md:151
 msgid "one re-entrant call of `Future::yield`; reads the state field"
 msgstr ""
 
-#: src/reference/async.md:149
+#: src/reference/async.md:152
 msgid "`vm.arm_timer(deadline_ms, fut)`"
 msgstr ""
 
-#: src/reference/async.md:149
+#: src/reference/async.md:152
 msgid "arm a sleep deadline on the virtual clock"
 msgstr ""
 
-#: src/reference/async.md:150
+#: src/reference/async.md:153
 msgid "`vm.now_ms()` / `vm.set_now(t)`"
 msgstr ""
 
-#: src/reference/async.md:150
+#: src/reference/async.md:153
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:151 src/reference/embedding.md:93
+#: src/reference/async.md:154 src/reference/embedding.md:93
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
-#: src/reference/async.md:151
+#: src/reference/async.md:154
 msgid ""
 "expire due timers into the ready queue; answer the earliest remaining "
 "deadline"
 msgstr ""
 
-#: src/reference/async.md:152
+#: src/reference/async.md:155
 msgid "`vm.run_ready() -> usize`"
 msgstr ""
 
-#: src/reference/async.md:152
+#: src/reference/async.md:155
 msgid ""
 "drain the ready queue, then poll parked host futures, until a spin produces "
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:153 src/reference/embedding.md:95
+#: src/reference/async.md:156 src/reference/embedding.md:95
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
-#: src/reference/async.md:153
+#: src/reference/async.md:156
 msgid "ready + armed timers + host futures parked on Completers — the idle test"
 msgstr ""
 
-#: src/reference/async.md:155
+#: src/reference/async.md:158
 msgid "Two embedder pumps:"
 msgstr ""
 
-#: src/reference/async.md:158
+#: src/reference/async.md:161
 msgid "// wall-clock (a CLI or service): settle from real threads\n"
 msgstr ""
 
-#: src/reference/async.md:159
+#: src/reference/async.md:162
 msgid "\"boot\""
 msgstr ""
 
-#: src/reference/async.md:164
+#: src/reference/async.md:167
 msgid "// virtual clock (tests): fully deterministic\n"
 msgstr ""
 
-#: src/reference/async.md:172
+#: src/reference/async.md:175
 msgid ""
 "Fuel rides the existing per-op budget ([resource "
 "limits](resource-limits.md)): a drive that runs out parks the frame and "
 "propagates `OutOfFuel`; a re-drive re-enters at the frame's checkpoint."
 msgstr ""
 
-#: src/reference/async.md:177
+#: src/reference/async.md:180
 msgid ""
 "See [tasks](tasks.md) for receipts, cancellation, and the join/select tier; "
 "[the host futures bridge](host-futures.md) for backing a host async fn with "
@@ -15374,7 +15406,7 @@ msgstr ""
 #: src/reference/tasks.md:57
 msgid ""
 "```rut\n"
-"use core::{ Disposal, DisposalContext };\n"
+"use core::{ Disposal, DisposalContext, RunContext };\n"
 "\n"
 "class Drops {\n"
 "    n: u32;\n"
@@ -15722,6 +15754,9 @@ msgstr ""
 #: src/reference/host-futures.md:92
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
+"use async_host::launch_future;\n"
+"\n"
 "async fn grab(cx: RunContext, path: str) -> bytes {\n"
 "    let body = await fetch(path);\n"
 "    return body;\n"
@@ -15733,19 +15768,19 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-futures.md:103
+#: src/reference/host-futures.md:106
 msgid "The embedder's loop"
 msgstr ""
 
-#: src/reference/host-futures.md:105
+#: src/reference/host-futures.md:108
 msgid "The engine polls every future parked on a completer:"
 msgstr ""
 
-#: src/reference/host-futures.md:110
+#: src/reference/host-futures.md:113
 msgid "// drain + poll + drain\n"
 msgstr ""
 
-#: src/reference/host-futures.md:115
+#: src/reference/host-futures.md:118
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each "
 "poll runs the `__yield` probe; a ready one is driven through `__take` and "
@@ -15755,17 +15790,17 @@ msgid ""
 "loop alive — the flip side of best-effort cancellation."
 msgstr ""
 
-#: src/reference/host-futures.md:123
+#: src/reference/host-futures.md:126
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` "
 "for deterministic tests ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/host-futures.md:127
+#: src/reference/host-futures.md:130
 msgid "In-tree users"
 msgstr ""
 
-#: src/reference/host-futures.md:129
+#: src/reference/host-futures.md:132
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send`, "
 "`http_body`, and `http_stream_next` are `pub host async fn` rows whose "
@@ -15775,7 +15810,7 @@ msgid ""
 "example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 
-#: src/reference/host-futures.md:136
+#: src/reference/host-futures.md:139
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) "
 "are the other half of the boundary — see [embedding and native "
@@ -15872,6 +15907,8 @@ msgstr ""
 #: src/reference/workers-and-channels.md:34
 msgid ""
 "```rut\n"
+"use core::{ RunContext };\n"
+"\n"
 "async fn worker(cx: RunContext, rx: Receiver<u32>, tx: Sender<u32>) -> nil "
 "{\n"
 "    while (true) {\n"
@@ -15883,192 +15920,192 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:44
+#: src/reference/workers-and-channels.md:46
 msgid "What may cross an isolate boundary"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:46
+#: src/reference/workers-and-channels.md:48
 msgid "Crossing rule"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:48
+#: src/reference/workers-and-channels.md:50
 msgid "primitives (ints, floats, `bool`)"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:48
+#: src/reference/workers-and-channels.md:50
 msgid "copy"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:49
+#: src/reference/workers-and-channels.md:51
 msgid "copy (immutable)"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:50
+#: src/reference/workers-and-channels.md:52
 msgid ""
 "every other cell — `Vec<T>`, `[T]`, class/dataclass instances, enums, `?T` "
 "boxes"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:50
+#: src/reference/workers-and-channels.md:52
 msgid ""
 "**transfer** if `rc == 1`, else deep copy — the zero-copy fast path is the "
 "common case; every element/field must itself be crossable"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:51
+#: src/reference/workers-and-channels.md:53
 msgid "`Slice<T>` view"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:51
+#: src/reference/workers-and-channels.md:53
 msgid ""
 "same rule as its owner cell; provenance (which `Vec`/`[T]` it views) is "
 "invisible across the boundary"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:52
+#: src/reference/workers-and-channels.md:54
 msgid "`Sender` / `Receiver`"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:52
+#: src/reference/workers-and-channels.md:54
 msgid "transfer"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:53 src/reference/templates.md:20
+#: src/reference/workers-and-channels.md:55 src/reference/templates.md:20
 msgid "`Template`"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:53
+#: src/reference/workers-and-channels.md:55
 msgid ""
 "copy — a builtin carrier; its `opaque` args must themselves be crossable "
 "([templates](templates.md))"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:54
+#: src/reference/workers-and-channels.md:56
 msgid "host opaque types"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:54
+#: src/reference/workers-and-channels.md:56
 msgid ""
 "transfer **only** if the host registered `send` for them — checked at the "
 "transfer, by type"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:55 src/reference/typed-bytecode.md:93
+#: src/reference/workers-and-channels.md:57 src/reference/typed-bytecode.md:93
 msgid "closures"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:55
+#: src/reference/workers-and-channels.md:57
 msgid ""
 "**not transferable** — compile-time error at the `send`/`spawn_worker` site"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:56
+#: src/reference/workers-and-channels.md:58
 msgid "anything else (receipts, wakers)"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:56
+#: src/reference/workers-and-channels.md:58
 msgid "compile-time error at the call site"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:58
+#: src/reference/workers-and-channels.md:60
 msgid "Enforcement is two-layered:"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:60
+#: src/reference/workers-and-channels.md:62
 msgid ""
 "**Static** at the send/spawn site — the checker knows `T` and rejects "
 "non-crossable types (closures, unregistered host types)."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:62
+#: src/reference/workers-and-channels.md:64
 msgid ""
 "**Runtime** on the receiving heap — `transfer_into` detects uniqueness: an "
 "`rc == 1` buffer is _adopted_ (the raw block moves, no copy); anything "
 "shared is deep-copied through a descriptor-driven walk."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:67
+#: src/reference/workers-and-channels.md:69
 msgid ""
 "Transfers move **accounting**, not just pointers: a moved buffer's bytes are "
 "charged to the child heap at the transfer ([the VM heap](vm-heap.md))."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:71
+#: src/reference/workers-and-channels.md:73
 msgid "Worker lifecycle"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:73
+#: src/reference/workers-and-channels.md:75
 msgid ""
 "```rut\n"
 "let w = spawn_worker(\"workers/fetch\", (url, ch.sender()));\n"
 "```"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:77
+#: src/reference/workers-and-channels.md:79
 msgid "`spawn_worker(module, args)` is a host hook:"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:79
+#: src/reference/workers-and-channels.md:81
 msgid ""
 "construct a child `Vm` sharing the **type table and loader — never the "
 "heap** ([the VM heap](vm-heap.md));"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:81
+#: src/reference/workers-and-channels.md:83
 msgid "load the module;"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:82
+#: src/reference/workers-and-channels.md:84
 msgid ""
 "transfer the args into the child heap — charged to the **child** budget "
 "before the worker starts, so a worker cannot OOM its parent ([resource "
 "limits](resource-limits.md));"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:85
+#: src/reference/workers-and-channels.md:87
 msgid ""
 "run the worker's entry to completion on its own thread; entry parameters "
 "**are** the transferred args;"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:87
+#: src/reference/workers-and-channels.md:89
 msgid ""
 "return a `Worker` handle; `worker.join() -> Future<Result<(), Trap>>` "
 "completes when the entry returns."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:90
+#: src/reference/workers-and-channels.md:92
 msgid "Isolation laws"
 msgstr ""
 
-#: src/reference/workers-and-channels.md:92
+#: src/reference/workers-and-channels.md:94
 msgid ""
 "**A trap inside a worker kills only that worker**: `join()` answers the trap "
 "and the host decides — restart it, surface it, ignore it. The parent VM and "
 "its other workers are untouched."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:95
+#: src/reference/workers-and-channels.md:97
 msgid ""
 "**The main VM blocks on nothing**: `join()` is a future, channel receives "
 "are awaits; the parent's driving loop keeps running while workers compute."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:98
+#: src/reference/workers-and-channels.md:100
 msgid ""
 "**No data races by construction**: nothing is shared, so there is nothing to "
 "lock. Two isolates communicate only through transferred values and channel "
 "messages."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:101
+#: src/reference/workers-and-channels.md:103
 msgid ""
 "A worker's exit does not close channels it received senders from — the "
 "shutdown signal is the _drop_ of the sender endpoints, which falls out of "
 "the worker's heap teardown."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:105
+#: src/reference/workers-and-channels.md:107
 msgid ""
 "Open surface: bounded channels and MPMC; cross-isolate sharing of immutable "
 "data; receive fairness across multiple awaiting receivers (FIFO per channel "
@@ -16581,7 +16618,7 @@ msgstr ""
 msgid "`bench_cross::install_std_bench_cross`"
 msgstr ""
 
-#: src/reference/embedding.md:173 src/reference/stdlib.md:132
+#: src/reference/embedding.md:173 src/reference/stdlib.md:139
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
@@ -17388,7 +17425,7 @@ msgstr ""
 msgid "bound at link against"
 msgstr ""
 
-#: src/reference/host-fns.md:7 src/reference/host-fns.md:135
+#: src/reference/host-fns.md:7 src/reference/host-fns.md:139
 msgid "`host fn` / `host struct`"
 msgstr ""
 
@@ -17400,7 +17437,7 @@ msgstr ""
 msgid "the load-time contract (below)"
 msgstr ""
 
-#: src/reference/host-fns.md:8 src/reference/host-fns.md:136
+#: src/reference/host-fns.md:8 src/reference/host-fns.md:140
 msgid "`prelude builtin` / `pub builtin` rows"
 msgstr ""
 
@@ -17550,33 +17587,36 @@ msgstr ""
 msgid ""
 "**`prelude builtin`** — the **ambient** engine surface: the name binds in "
 "every compilation unit, no `use` needed. The primitives and their `builtin "
-"impl` methods, `opaque`, `Weak`, `StrBuf`, `StackTrace`, "
-"`assert`/`panic`/`string_join`, `capture_stacktrace`, and the "
-"`Iterator`/`Future`/`RunContext` traits are all ambient."
+"impl` methods, `opaque`, `Weak`, `StrBuf`, `StackTrace`, and "
+"`assert`/`panic`/`string_join`/ `capture_stacktrace` are all ambient."
 msgstr ""
 
-#: src/reference/host-fns.md:98
+#: src/reference/host-fns.md:97
 msgid ""
 "**`pub builtin`** — the **import-gated** engine surface: the name resolves "
 "only through `use core::{ .. }`, the way a package's names do. Today's rows "
-"are the disposal pair — `Disposal` and `DisposalContext` ([the Rc "
-"heap](rc-heap.md))."
+"are every builtin trait — `Iterator`, `Future`, `RunContext` — and the "
+"disposal pair, `Disposal` and `DisposalContext` ([traits](traits.md), [async "
+"and await](async.md), [the Rc heap](rc-heap.md)). The engine's weave never "
+"consults the gate — it keys on the native-trait symbols — so a module with "
+"no imports still iterates, awaits, and launches; only spelling a name in "
+"source gates."
 msgstr ""
 
-#: src/reference/host-fns.md:103
+#: src/reference/host-fns.md:107
 msgid ""
 "Using a `pub builtin` name without the use line is a resolution miss that "
 "names the fix, never a bare \"unknown name\":"
 msgstr ""
 
-#: src/reference/host-fns.md:110
+#: src/reference/host-fns.md:114
 msgid ""
 "The split is per name: a unit that imports one gated name still sees every "
 "ambient name for free, and an unused name in a `use core` line stays a lint, "
 "not an error."
 msgstr ""
 
-#: src/reference/host-fns.md:114
+#: src/reference/host-fns.md:118
 msgid ""
 "**`opaque` wraps native state; there is no host class.** rut wraps the "
 "handle in a class of its own — the wrapper-class pattern ([native containers "
@@ -17585,99 +17625,99 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:119
+#: src/reference/host-fns.md:123
 msgid ""
 "**Workers**: an `opaque` box crosses isolates only if the host registered "
 "the boxed type as `send` — checked at the transfer, by type ([workers and "
 "channels](workers-and-channels.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:123 src/reference/frontend.md:157
+#: src/reference/host-fns.md:127 src/reference/frontend.md:157
 #: src/reference/cli.md:114
 msgid "Declaration mode"
 msgstr ""
 
-#: src/reference/host-fns.md:125
+#: src/reference/host-fns.md:129
 msgid ""
 "A `.d.rut` is parsed in **declaration mode**: declarations only, each "
 "complete as a surface."
 msgstr ""
 
-#: src/reference/host-fns.md:128
+#: src/reference/host-fns.md:132
 msgid "allowed"
 msgstr ""
 
-#: src/reference/host-fns.md:128 src/reference/stdlib.md:77
+#: src/reference/host-fns.md:132 src/reference/stdlib.md:81
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr ""
 
-#: src/reference/host-fns.md:130
+#: src/reference/host-fns.md:134
 msgid "`use` / `pub`"
 msgstr ""
 
-#: src/reference/host-fns.md:130
+#: src/reference/host-fns.md:134
 msgid ""
 "visibility exactly as in a module; non-exported decls are known inside the "
 "file, nameable nowhere else"
 msgstr ""
 
-#: src/reference/host-fns.md:131
+#: src/reference/host-fns.md:135
 msgid "with load-time constant initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:132
+#: src/reference/host-fns.md:136
 msgid "the member list is the whole definition"
 msgstr ""
 
-#: src/reference/host-fns.md:133
+#: src/reference/host-fns.md:137
 msgid "method signatures (+ `requires`) are the whole definition"
 msgstr ""
 
-#: src/reference/host-fns.md:134
+#: src/reference/host-fns.md:138
 msgid "fields only, with load-time initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:135
+#: src/reference/host-fns.md:139
 msgid "signatures only, concrete over the crossing set"
 msgstr ""
 
-#: src/reference/host-fns.md:136
+#: src/reference/host-fns.md:140
 msgid "toolchain decl files only — the two spellings above"
 msgstr ""
 
-#: src/reference/host-fns.md:138
+#: src/reference/host-fns.md:142
 msgid ""
 "Forbidden — the parser errors _\"implementation in a declaration file\"_: "
 "any fn/class body, statements. Symmetrically, a `.rut` file that spells "
 "`host` errors _\"belongs in a `.d.rut`\"_."
 msgstr ""
 
-#: src/reference/host-fns.md:142
+#: src/reference/host-fns.md:146
 msgid "Signatures are derived, not hand-written"
 msgstr ""
 
-#: src/reference/host-fns.md:144
+#: src/reference/host-fns.md:148
 msgid "The registered callable's Rust shape **is** the `.d.rut` row:"
 msgstr ""
 
-#: src/reference/host-fns.md:149
+#: src/reference/host-fns.md:153
 msgid "\"server::make\""
 msgstr ""
 
-#: src/reference/host-fns.md:150
+#: src/reference/host-fns.md:154
 msgid ""
 "// two-plus params: spell the marker tuple once, the closure stays plain\n"
 msgstr ""
 
-#: src/reference/host-fns.md:156
+#: src/reference/host-fns.md:160
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's "
 "parameter and return types; a param type with no crossing impl is a "
 "**compile error at the register site**."
 msgstr ""
 
-#: src/reference/host-fns.md:159
+#: src/reference/host-fns.md:163
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` "
 "(fallible). Errors travel an explicit trap channel — a trapped body "
@@ -17685,62 +17725,62 @@ msgid ""
 "modules](embedding.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:163
+#: src/reference/host-fns.md:167
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call "
 "([value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:166
+#: src/reference/host-fns.md:170
 msgid "The load-time contract"
 msgstr ""
 
-#: src/reference/host-fns.md:168
+#: src/reference/host-fns.md:172
 msgid ""
 "Mounting a host pkg **declares**; the embedding Rust **binds**. The two "
 "sides are checked against each other before any rut code runs:"
 msgstr ""
 
-#: src/reference/host-fns.md:172
+#: src/reference/host-fns.md:176
 msgid "// panics on mismatch\n"
 msgstr ""
 
-#: src/reference/host-fns.md:173
+#: src/reference/host-fns.md:177
 msgid "// joins the rest\n"
 msgstr ""
 
-#: src/reference/host-fns.md:176
+#: src/reference/host-fns.md:180
 msgid ""
 "A mismatch is an embedder wiring bug — a **panic**, never a rut diagnostic — "
 "on exactly three classes:"
 msgstr ""
 
-#: src/reference/host-fns.md:179
+#: src/reference/host-fns.md:183
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr ""
 
-#: src/reference/host-fns.md:180
+#: src/reference/host-fns.md:184
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr ""
 
-#: src/reference/host-fns.md:181
+#: src/reference/host-fns.md:185
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding "
 "took `(opaque, i64, str)`."
 msgstr ""
 
-#: src/reference/host-fns.md:184
+#: src/reference/host-fns.md:188
 msgid ""
 "The law follows the mount: **mount what you bind**. An embedder that mounts "
 "`calc` must bind its float fns; an embedder that needs only `core` mounts "
 "only `core`."
 msgstr ""
 
-#: src/reference/host-fns.md:188
+#: src/reference/host-fns.md:192
 msgid "Slots, not strings"
 msgstr ""
 
-#: src/reference/host-fns.md:190
+#: src/reference/host-fns.md:194
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in "
 "declaration order; the module binary carries the slot table. Calls compile "
@@ -17750,11 +17790,11 @@ msgid ""
 "be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 
-#: src/reference/host-fns.md:198
+#: src/reference/host-fns.md:202
 msgid "Async host fns"
 msgstr ""
 
-#: src/reference/host-fns.md:200
+#: src/reference/host-fns.md:204
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -17763,120 +17803,120 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:206
+#: src/reference/host-fns.md:210
 msgid ""
 "The embedder binds the family with one registration; the closure spawns the "
 "work, hands out a completer clone, and returns:"
 msgstr ""
 
-#: src/reference/host-fns.md:210
+#: src/reference/host-fns.md:214
 msgid "\"http_host::http_send\""
 msgstr ""
 
-#: src/reference/host-fns.md:224
+#: src/reference/host-fns.md:228
 msgid "/* optional abort hook: */"
 msgstr ""
 
-#: src/reference/host-fns.md:224
+#: src/reference/host-fns.md:228
 msgid "/* best-effort cancel */"
 msgstr ""
 
-#: src/reference/host-fns.md:228
+#: src/reference/host-fns.md:232
 msgid ""
 "`register_async!(hosts, name, (P…) -> R, start [, abort])` emits the family "
 "the compiler's weave joins:"
 msgstr ""
 
-#: src/reference/host-fns.md:231
+#: src/reference/host-fns.md:235
 msgid "emitted row"
 msgstr ""
 
-#: src/reference/host-fns.md:231 src/reference/reflection.md:75
-#: src/reference/stdlib.md:29 src/reference/stdlib.md:167
-#: src/reference/stdlib.md:293 src/reference/typed-bytecode.md:101
+#: src/reference/host-fns.md:235 src/reference/reflection.md:75
+#: src/reference/stdlib.md:33 src/reference/stdlib.md:174
+#: src/reference/stdlib.md:300 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:30 src/reference/cli.md:125
 msgid "meaning"
 msgstr ""
 
-#: src/reference/host-fns.md:233
+#: src/reference/host-fns.md:237
 msgid "`<name>`"
 msgstr ""
 
-#: src/reference/host-fns.md:233
+#: src/reference/host-fns.md:237
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future "
 "at the call site"
 msgstr ""
 
-#: src/reference/host-fns.md:234
+#: src/reference/host-fns.md:238
 msgid "`<name>__start(P…) -> opaque`"
 msgstr ""
 
-#: src/reference/host-fns.md:234
+#: src/reference/host-fns.md:238
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr ""
 
-#: src/reference/host-fns.md:235
+#: src/reference/host-fns.md:239
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:235
+#: src/reference/host-fns.md:239
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr ""
 
-#: src/reference/host-fns.md:236
+#: src/reference/host-fns.md:240
 msgid "`<name>__take(state) -> R`"
 msgstr ""
 
-#: src/reference/host-fns.md:236
+#: src/reference/host-fns.md:240
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:241
 msgid "`<name>__cancel(state)`"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:241
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-fns.md:239
+#: src/reference/host-fns.md:243
 msgid "`Completer<T>` API"
 msgstr ""
 
-#: src/reference/host-fns.md:241
+#: src/reference/host-fns.md:245
 msgid "`Completer::new()`"
 msgstr ""
 
-#: src/reference/host-fns.md:241
+#: src/reference/host-fns.md:245
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr ""
 
-#: src/reference/host-fns.md:242
+#: src/reference/host-fns.md:246
 msgid "`complete(v)` / `fail(msg)`"
 msgstr ""
 
-#: src/reference/host-fns.md:242
+#: src/reference/host-fns.md:246
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr ""
 
-#: src/reference/host-fns.md:243
+#: src/reference/host-fns.md:247
 msgid "`poll() -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:243
+#: src/reference/host-fns.md:247
 msgid "the driving loop's probe"
 msgstr ""
 
-#: src/reference/host-fns.md:244
+#: src/reference/host-fns.md:248
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr ""
 
-#: src/reference/host-fns.md:244
+#: src/reference/host-fns.md:248
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr ""
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:250
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. "
 "Cancellation is best-effort — a worker runs to its blocking completion and "
@@ -17884,43 +17924,43 @@ msgid ""
 "and [async and await](async.md)."
 msgstr ""
 
-#: src/reference/host-fns.md:251
+#: src/reference/host-fns.md:255
 msgid "Declaration files as artifacts"
 msgstr ""
 
-#: src/reference/host-fns.md:253
+#: src/reference/host-fns.md:257
 msgid "A published package ships:"
 msgstr ""
 
-#: src/reference/host-fns.md:255
+#: src/reference/host-fns.md:259
 msgid "artifact"
 msgstr ""
 
-#: src/reference/host-fns.md:255
+#: src/reference/host-fns.md:259
 msgid "role"
 msgstr ""
 
-#: src/reference/host-fns.md:257
+#: src/reference/host-fns.md:261
 msgid "`mod.rutc`"
 msgstr ""
 
-#: src/reference/host-fns.md:257
+#: src/reference/host-fns.md:261
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module "
 "binary and verification](module-binary.md))"
 msgstr ""
 
-#: src/reference/host-fns.md:258
+#: src/reference/host-fns.md:262
 msgid "`mod.d.rut`"
 msgstr ""
 
-#: src/reference/host-fns.md:258
+#: src/reference/host-fns.md:262
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); "
 "documentation only, never the loader's source of truth"
 msgstr ""
 
-#: src/reference/host-fns.md:260
+#: src/reference/host-fns.md:264
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, trait-table "
@@ -17928,59 +17968,59 @@ msgid ""
 "guesswork."
 msgstr ""
 
-#: src/reference/host-fns.md:264
+#: src/reference/host-fns.md:268
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table "
 "— a pure data compare. Drift is a load error naming both modules, never a "
 "runtime surprise."
 msgstr ""
 
-#: src/reference/host-fns.md:267
+#: src/reference/host-fns.md:271
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are "
 "stripped (`--release` drops member-name strings), but code is recoverable "
 "with effort. What publishing guarantees is API discipline."
 msgstr ""
 
-#: src/reference/host-fns.md:271
+#: src/reference/host-fns.md:275
 msgid "Surface resolution during compilation"
 msgstr ""
 
-#: src/reference/host-fns.md:273
+#: src/reference/host-fns.md:277
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first "
 "hit wins:"
 msgstr ""
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:280
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr ""
 
-#: src/reference/host-fns.md:277
+#: src/reference/host-fns.md:281
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface "
 "on the wire) — or its bundled source for a splice-needed group; explicit "
 "mounts outrank stray sources, never dev source;"
 msgstr ""
 
-#: src/reference/host-fns.md:280
+#: src/reference/host-fns.md:284
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside "
 "the registered implementation."
 msgstr ""
 
-#: src/reference/host-fns.md:283
+#: src/reference/host-fns.md:287
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose "
 "implementation is absent is legal and complete — checking passes; only "
 "running requires the bodies."
 msgstr ""
 
-#: src/reference/host-fns.md:287
+#: src/reference/host-fns.md:291
 msgid "End-to-end shape"
 msgstr ""
 
-#: src/reference/host-fns.md:289
+#: src/reference/host-fns.md:293
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds "
 "`server::subscribe`/`server::emit` over its own `EventBus` box, the plugin "
@@ -18876,61 +18916,64 @@ msgstr ""
 
 #: src/reference/stdlib.md:19
 msgid ""
-"Every builtin name is in scope in every compilation unit; no `use` is "
-"needed. A `use core::{ … };` statement stays legal but is redundant. The "
-"exceptions: the const `NAN`, and the `Disposal` pair — `Disposal` and "
-"`DisposalContext` are the **import-gated** spellings, resolving only through "
-"`use core::{ Disposal, DisposalContext }`. The two builtin spellings "
+"The builtin fns, primitives, and containers are in scope in every "
+"compilation unit; no `use` is needed. A `use core::{ … };` statement stays "
+"legal but is redundant for them. The exceptions — the **import-gated** "
+"spellings, resolving only through `use core::{ .. }`: the const `NAN`, the "
+"`Disposal` pair (`Disposal`, `DisposalContext`), and every engine-woven "
+"trait (`Iterator`, `Future`, `RunContext`) — the engine's weave itself never "
+"needs the import, only source that spells the names (an `impl` block, a "
+"trait-typed signature, a `downcast<Future<..>>`). The two builtin spellings "
 "(ambient vs import-gated) are documented in [Host fns and declaration "
 "files](host-fns.md)."
 msgstr ""
 
-#: src/reference/stdlib.md:29
+#: src/reference/stdlib.md:33
 msgid "signature"
 msgstr ""
 
-#: src/reference/stdlib.md:31
+#: src/reference/stdlib.md:35
 msgid "`assert(cond: bool, msg: str) -> nil`"
 msgstr ""
 
-#: src/reference/stdlib.md:31
+#: src/reference/stdlib.md:35
 msgid "trap `Assert` when false; `msg` may be omitted at the call site"
 msgstr ""
 
-#: src/reference/stdlib.md:32
+#: src/reference/stdlib.md:36
 msgid "`panic(msg: str) -> nil`"
 msgstr ""
 
-#: src/reference/stdlib.md:32
+#: src/reference/stdlib.md:36
 msgid "abort with the message"
 msgstr ""
 
-#: src/reference/stdlib.md:33
+#: src/reference/stdlib.md:37
 msgid "`string_join(parts: [str]) -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:33
+#: src/reference/stdlib.md:37
 msgid "join in one pass"
 msgstr ""
 
-#: src/reference/stdlib.md:34
+#: src/reference/stdlib.md:38
 msgid "`capture_stacktrace() -> StackTrace`"
 msgstr ""
 
-#: src/reference/stdlib.md:34
+#: src/reference/stdlib.md:38
 msgid ""
 "opt-in stack snapshot: raw frames only, symbols resolved lazily per access"
 msgstr ""
 
-#: src/reference/stdlib.md:35
+#: src/reference/stdlib.md:39
 msgid "the 1-codepoint string"
 msgstr ""
 
-#: src/reference/stdlib.md:37
+#: src/reference/stdlib.md:41
 msgid "Primitives and their members"
 msgstr ""
 
-#: src/reference/stdlib.md:39
+#: src/reference/stdlib.md:43
 msgid ""
 "```rut\n"
 "builtin primitive str {\n"
@@ -18960,359 +19003,371 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:62
+#: src/reference/stdlib.md:66
 msgid ""
 "Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps "
 "(the class-method construction), `StrBuf(cap)` pre-sizes "
 "([opaque](opaque.md), [weak references](weak-refs.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:66
+#: src/reference/stdlib.md:70
 msgid "Builtin classes"
 msgstr ""
 
-#: src/reference/stdlib.md:68
+#: src/reference/stdlib.md:72
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:68
+#: src/reference/stdlib.md:72
 msgid "members"
 msgstr ""
 
-#: src/reference/stdlib.md:70
+#: src/reference/stdlib.md:74
 msgid "`StackTrace`"
 msgstr ""
 
-#: src/reference/stdlib.md:70
+#: src/reference/stdlib.md:74
 msgid ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, "
 "`render() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:75
 msgid "`StrBuf`"
 msgstr ""
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:75
 msgid ""
 "`StrBuf(cap)`, `push(str)`, `push_code(u32)` (invalid scalars mint U+FFFD), "
 "`len() -> i32`, `finish() -> str` — the ONE materialization; the builder "
 "keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:72
+#: src/reference/stdlib.md:76
 msgid ""
 "`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — "
 "`nil` once the referent died"
 msgstr ""
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:77
 msgid "`DisposalContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:77
 msgid ""
 "no members — the engine-minted parameter of a `dispose` body; it exists so "
 "the context can grow without touching the trait signature"
 msgstr ""
 
-#: src/reference/stdlib.md:75
+#: src/reference/stdlib.md:79
 msgid "Engine-woven traits"
 msgstr ""
 
-#: src/reference/stdlib.md:77
+#: src/reference/stdlib.md:81
 msgid "trait"
 msgstr ""
 
-#: src/reference/stdlib.md:77 src/reference/stdlib.md:167
-#: src/reference/stdlib.md:293
+#: src/reference/stdlib.md:81 src/reference/stdlib.md:174
+#: src/reference/stdlib.md:300
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:79
+#: src/reference/stdlib.md:83
 msgid "`Iterator<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:79
+#: src/reference/stdlib.md:83
 msgid "`fn __iterate(self, emit: fn(E) -> bool)`"
 msgstr ""
 
-#: src/reference/stdlib.md:79
-msgid "`for (x of it)` desugars to it; `emit` returning `false` stops"
+#: src/reference/stdlib.md:83
+msgid ""
+"`for (x of it)` desugars to it; `emit` returning `false` stops. "
+"**import-gated** — `use core::{ Iterator }` (an `impl Iterator<E> for T` "
+"names it); the builtin sequences' fused loops never do"
 msgstr ""
 
-#: src/reference/stdlib.md:80
+#: src/reference/stdlib.md:84
 msgid "`Future<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:80
+#: src/reference/stdlib.md:84
 msgid "`fn yield(cx: RunContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:80
-msgid "every `async fn`'s hidden frame implements it; `await` consumes it"
+#: src/reference/stdlib.md:84
+msgid ""
+"every `async fn`'s hidden frame implements it; `await` consumes it. "
+"**import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: "
+"Future<T>`, `downcast<Future<..>>`)"
 msgstr ""
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:85
 msgid "`RunContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:85
 msgid ""
 "`checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, "
 "`cancelled() -> bool`"
 msgstr ""
 
-#: src/reference/stdlib.md:81
-msgid "the async protocol's cx record ([async and await](async.md))"
+#: src/reference/stdlib.md:85
+msgid ""
+"the async protocol's cx record ([async and await](async.md)); "
+"**import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield "
+"signature spells it)"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:86
 msgid "`Disposal`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:86
 msgid "`fn dispose(mut self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:86
 msgid ""
 "the cell-death contract: the engine calls it at refcount zero ([the Rc "
 "heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, "
 "DisposalContext }`"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:88
 msgid ""
 "Users implement these with ordinary `impl` blocks; the engine has "
-"compiler-backed impls for its own types."
+"compiler-backed impls for its own types. All four are `pub builtin` (the "
+"import-gated spelling): the weave is keyed on the native-trait symbols and "
+"never consults user scope — a module that imports nothing still iterates "
+"builtins, awaits, and launches."
 msgstr ""
 
-#: src/reference/stdlib.md:87
+#: src/reference/stdlib.md:94
 msgid "Numeric methods (per integer width `i8`–`u64`)"
 msgstr ""
 
-#: src/reference/stdlib.md:96
+#: src/reference/stdlib.md:103
 msgid ""
 "Ambient like the primitives themselves: `x.wrapping_add(y)` needs no `use`. "
 "The trap-on-overflow `+`/`-`/`*`/`<<` stay the default operators."
 msgstr ""
 
-#: src/reference/stdlib.md:99
+#: src/reference/stdlib.md:106
 msgid "Constants"
 msgstr ""
 
-#: src/reference/stdlib.md:101
+#: src/reference/stdlib.md:108
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float "
 "constants are `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:104
+#: src/reference/stdlib.md:111
 msgid "What core does _not_ have"
 msgstr ""
 
-#: src/reference/stdlib.md:106
+#: src/reference/stdlib.md:113
 msgid "removed"
 msgstr ""
 
-#: src/reference/stdlib.md:106
+#: src/reference/stdlib.md:113
 msgid "replacement"
 msgstr ""
 
-#: src/reference/stdlib.md:108
+#: src/reference/stdlib.md:115
 msgid ""
 "`?T` with `nil` as absence; `(T, err)` tuples ([by-reference and "
 "nullable](by-reference-and-nullable.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:109
+#: src/reference/stdlib.md:116
 msgid "`own` / `make_ptr`"
 msgstr ""
 
-#: src/reference/stdlib.md:109
+#: src/reference/stdlib.md:116
 msgid "`?T` bindings are the cell reference"
 msgstr ""
 
-#: src/reference/stdlib.md:110
+#: src/reference/stdlib.md:117
 msgid "`char`"
 msgstr ""
 
-#: src/reference/stdlib.md:110
+#: src/reference/stdlib.md:117
 msgid "`str` of one codepoint; `s.code()`/`str.from_code(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:118
 msgid "free `downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:118
 msgid "`opaque.downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:112
+#: src/reference/stdlib.md:119
 msgid "`Array` as a name"
 msgstr ""
 
-#: src/reference/stdlib.md:112
+#: src/reference/stdlib.md:119
 msgid "the `[T]` grammar; `[v; n]` repeat construction"
 msgstr ""
 
-#: src/reference/stdlib.md:113
+#: src/reference/stdlib.md:120
 msgid "`on_drop(p, cleanup)`"
 msgstr ""
 
-#: src/reference/stdlib.md:113
+#: src/reference/stdlib.md:120
 msgid ""
 "implement `Disposal` for the type — the engine calls `dispose` at refcount "
 "zero ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:121
 msgid "output builtins (`print`, `console`)"
 msgstr ""
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:121
 msgid "a logger package (`ink`)"
 msgstr ""
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:123
 msgid ""
 "No removed surface keeps compatibility routing: a removed head in an "
 "unresolvable position is an ordinary unknown-name error."
 msgstr ""
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:126
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:130
+#: src/reference/stdlib.md:128 src/reference/project-structure.md:130
 msgid "package"
 msgstr ""
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:128
 msgid "kind"
 msgstr ""
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:128
 msgid "surface"
 msgstr ""
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:130
 msgid "`rt`"
 msgstr ""
 
-#: src/reference/stdlib.md:123 src/reference/stdlib.md:129
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:130 src/reference/stdlib.md:136
+#: src/reference/stdlib.md:139
 msgid "host pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:130
 msgid ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, "
 "msg: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:131
 msgid "`ink`"
 msgstr ""
 
-#: src/reference/stdlib.md:124 src/reference/stdlib.md:125
+#: src/reference/stdlib.md:131 src/reference/stdlib.md:132
 msgid "inline rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:131
 msgid "the `Logger` class over `rt`"
 msgstr ""
 
-#: src/reference/stdlib.md:125 src/reference/project-structure.md:136
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:136
 msgid "`pouch`"
 msgstr ""
 
-#: src/reference/stdlib.md:125
+#: src/reference/stdlib.md:132
 msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:133
 msgid "`nmap_host` / `nmapset`"
 msgstr ""
 
-#: src/reference/stdlib.md:126 src/reference/stdlib.md:130
+#: src/reference/stdlib.md:133 src/reference/stdlib.md:137
 msgid "host pkg + inline rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:133
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:127 src/reference/project-structure.md:137
+#: src/reference/stdlib.md:134 src/reference/project-structure.md:137
 msgid "`json`"
 msgstr ""
 
-#: src/reference/stdlib.md:127
+#: src/reference/stdlib.md:134
 msgid "inline rut pkg, zero host fns"
 msgstr ""
 
-#: src/reference/stdlib.md:127
+#: src/reference/stdlib.md:134
 msgid "`encodeJson` / `decodeJson` / `decodeJsonBytes` + traits"
 msgstr ""
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:135
 msgid "`strbuild`"
 msgstr ""
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:135
 msgid "inline rut pkg, zero deps"
 msgstr ""
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:135
 msgid "the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:129 src/reference/project-structure.md:133
+#: src/reference/stdlib.md:136 src/reference/project-structure.md:133
 msgid "`calc`"
 msgstr ""
 
-#: src/reference/stdlib.md:129
+#: src/reference/stdlib.md:136
 msgid "the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:137
 msgid "`async_engine` / `async_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:137
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr ""
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:138
 msgid "`http_host` / `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:138
 msgid "host pkg + rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:131 src/reference/cli.md:52
+#: src/reference/stdlib.md:138 src/reference/cli.md:52
 msgid "the std HTTP lanes"
 msgstr ""
 
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:139
 msgid "`bench-cross`"
 msgstr ""
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:141
 msgid "`rt` and `ink` — logging"
 msgstr ""
 
-#: src/reference/stdlib.md:136
+#: src/reference/stdlib.md:143
 msgid ""
 "There is no `print`, no global output builtin. All logging goes through a "
 "used logger; the host owns the sink, and an uninstalled sink is a silent "
 "no-op — a script cannot accidentally spam an embedded host's stdout."
 msgstr ""
 
-#: src/reference/stdlib.md:140
+#: src/reference/stdlib.md:147
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -19324,116 +19379,116 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:153
+#: src/reference/stdlib.md:160
 msgid "method"
 msgstr ""
 
-#: src/reference/stdlib.md:153
+#: src/reference/stdlib.md:160
 msgid "level passed to `rt`"
 msgstr ""
 
-#: src/reference/stdlib.md:155
+#: src/reference/stdlib.md:162
 msgid "`debug(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:155
+#: src/reference/stdlib.md:162
 msgid "0"
 msgstr ""
 
-#: src/reference/stdlib.md:156
+#: src/reference/stdlib.md:163
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:156 src/reference/frontend.md:97
+#: src/reference/stdlib.md:163 src/reference/frontend.md:97
 #: src/reference/bundles.md:103
 msgid "1"
 msgstr ""
 
-#: src/reference/stdlib.md:157
+#: src/reference/stdlib.md:164
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:157 src/reference/frontend.md:98
+#: src/reference/stdlib.md:164 src/reference/frontend.md:98
 #: src/reference/bundles.md:104
 msgid "2"
 msgstr ""
 
-#: src/reference/stdlib.md:158
+#: src/reference/stdlib.md:165
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:158 src/reference/frontend.md:99
+#: src/reference/stdlib.md:165 src/reference/frontend.md:99
 #: src/reference/bundles.md:105
 msgid "3"
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:167
 msgid ""
 "Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| "
 "println!(\"{s}\"))`. Mounting `ink` pulls `rt` along (`[deps]`)."
 msgstr ""
 
-#: src/reference/stdlib.md:163
+#: src/reference/stdlib.md:170
 msgid "`pouch` — `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:172
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:176
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:176
 msgid "construction (`[v; n]` under the hood)"
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:177
 msgid "`push(v)` / `pop() -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:177
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > "
 "0`"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:178
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:178
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr ""
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:179
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:179
 msgid "bridges to the fixed array"
 msgstr ""
 
-#: src/reference/stdlib.md:173
+#: src/reference/stdlib.md:180
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr ""
 
-#: src/reference/stdlib.md:174
+#: src/reference/stdlib.md:181
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:183
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:185
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:181
+#: src/reference/stdlib.md:188
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -19452,7 +19507,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:194
+#: src/reference/stdlib.md:201
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -19463,11 +19518,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:202
+#: src/reference/stdlib.md:209
 msgid "`calc` — the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:204
+#: src/reference/stdlib.md:211
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -19486,7 +19541,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:223
+#: src/reference/stdlib.md:230
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, "
 "`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, "
@@ -19497,31 +19552,31 @@ msgid ""
 "methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:238
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:240
 msgid ""
 "Pure rut, `inline = true`, zero host fns — a json mount adds no host "
 "bindings."
 msgstr ""
 
-#: src/reference/stdlib.md:245
+#: src/reference/stdlib.md:252
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:248
+#: src/reference/stdlib.md:255
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:251
+#: src/reference/stdlib.md:258
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -19529,13 +19584,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:255
+#: src/reference/stdlib.md:262
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:257
+#: src/reference/stdlib.md:264
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -19544,11 +19599,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:262
+#: src/reference/stdlib.md:269
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:263
+#: src/reference/stdlib.md:270
 msgid ""
 "**Ownership**: json owns the traits; all container impls live in json, gated "
 "by peer groups — `Vec` rows activate when `pouch` is anywhere in the "
@@ -19556,17 +19611,17 @@ msgid ""
 "kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 
-#: src/reference/stdlib.md:268
+#: src/reference/stdlib.md:275
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:272
+#: src/reference/stdlib.md:279
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:274
+#: src/reference/stdlib.md:281
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -19584,62 +19639,62 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:295
+#: src/reference/stdlib.md:302
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:295
+#: src/reference/stdlib.md:302
 msgid "grow from small"
 msgstr ""
 
-#: src/reference/stdlib.md:296
+#: src/reference/stdlib.md:303
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:296
+#: src/reference/stdlib.md:303
 msgid "pre-size to an octet hint (negative traps)"
 msgstr ""
 
-#: src/reference/stdlib.md:297
+#: src/reference/stdlib.md:304
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:297
+#: src/reference/stdlib.md:304
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:298
+#: src/reference/stdlib.md:305
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:298
+#: src/reference/stdlib.md:305
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:299
+#: src/reference/stdlib.md:306
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:300
+#: src/reference/stdlib.md:307
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:300
+#: src/reference/stdlib.md:307
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:309
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
 "`build`'s materialization and growth's prefix move."
 msgstr ""
 
-#: src/reference/stdlib.md:306
+#: src/reference/stdlib.md:313
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:308
+#: src/reference/stdlib.md:315
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
@@ -19650,14 +19705,14 @@ msgid ""
 "futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:315
+#: src/reference/stdlib.md:322
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); "
 "`http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / "
 "`Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:327
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -19672,18 +19727,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:339
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:336
+#: src/reference/stdlib.md:343
 msgid "Mounting"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:345
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. "
 "Swappable packages mount by directory or bundle ([module "
@@ -19691,7 +19746,7 @@ msgid ""
 "names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:349
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
 "are source-inlined into each consumer — required for class-method surfaces, "
@@ -19699,7 +19754,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:346
+#: src/reference/stdlib.md:353
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "

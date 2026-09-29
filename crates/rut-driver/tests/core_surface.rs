@@ -250,20 +250,21 @@ fn removed_char_type_positions_diagnose_without_the_kind() {
 /// VISIBILITY AGREEMENT, spelled out per row: each decl's
 /// `Linkage::Builtin { ambient }` matches the ambient bit on its
 /// `Surface::core()` row (checked set-wise by the lockstep above); this
-/// pin fixes the phase's intent — the disposal pair is the import-gated
-/// spelling (`pub builtin`, ambient=false), every other row is ambient
-/// (`prelude builtin`). A future row flips only with a deliberate test
-/// update.
+/// pin fixes the phase's intent — the disposal pair and the
+/// engine-woven trio (`Iterator`/`Future`/`RunContext`) are the
+/// import-gated spelling (`pub builtin`, ambient=false; the engine
+/// weaves on the symbols regardless), the native types gate only
+/// `DisposalContext`, and every fn row stays ambient (`prelude
+/// builtin`). A future row flips only with a deliberate test update.
 #[test]
-fn disposal_rows_are_import_gated_everything_else_ambient() {
+fn engine_trait_rows_are_import_gated_everything_else_ambient() {
     let surface = rut_core::binary::Surface::core();
     for (name, _, ambient) in &surface.native_types {
         let expected = surface.names.name(*name) == "DisposalContext";
         assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
     }
     for (name, _, ambient) in &surface.native_traits {
-        let expected = surface.names.name(*name) == "Disposal";
-        assert_eq!(!*ambient, expected, "native trait `{}`: ambient bit", surface.names.name(*name));
+        assert!(!*ambient, "native trait `{}` is import-gated (`pub builtin`)", surface.names.name(*name));
     }
     for (name, ambient) in &surface.native_fns {
         assert!(*ambient, "native fn `{}` stays ambient", surface.names.name(*name));

@@ -90,6 +90,9 @@ Rut side, the closure's own surface is invisible — callers see a
 normal async fn:
 
 ```rut
+use core::{ RunContext };
+use async_host::launch_future;
+
 async fn grab(cx: RunContext, path: str) -> bytes {
     let body = await fetch(path);
     return body;

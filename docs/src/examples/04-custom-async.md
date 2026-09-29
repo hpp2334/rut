@@ -109,9 +109,13 @@ pub fn main() {
 every `async fn`'s hidden frame — but built-in traits are engine
 *named*, not engine *closed*. A hand-written machine registers
 through the ordinary nominal path, one impl block, and rides the same
-drive law ([Traits and dispatch](../core-concepts/traits-and-dispatch.md)):
+drive law ([Traits and dispatch](../core-concepts/traits-and-dispatch.md)).
+`Future` and `RunContext` are `pub builtin` core names — the impl
+names them, so the file imports them (`use core::{ Future, RunContext }`):
 
 ```rut
+use core::{ Future, RunContext };
+
 impl Future<nil> for CustomFuture {
     fn yield(self, cx: RunContext) {
         // the ledger view: the frame's resume state, read as data

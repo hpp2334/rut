@@ -198,6 +198,7 @@ fn run_loop(vm: &mut Vm, fx: &Fixture, cap: usize) {
 #[test]
 fn await_orders_after_completion() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
@@ -229,6 +230,7 @@ pub fn main() -> nil {
 #[test]
 fn two_awaits_run_concurrently_and_settle_by_deadline() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
@@ -282,6 +284,7 @@ pub fn main() -> nil {
 #[test]
 fn a_failed_completer_traps_with_its_message() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::boom;
@@ -326,6 +329,7 @@ pub fn main() -> nil {
 #[test]
 fn cancel_maps_the_data_path_to_the_arm_and_discards_late_results() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
@@ -394,6 +398,7 @@ pub fn main() -> nil {
 #[test]
 fn await_delivers_the_host_answer() {
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
@@ -423,6 +428,7 @@ fn await_delivers_through_user_frames_and_type_checks() {
     // the rgh shape: a user async fn awaits another user async fn whose
     // body awaits the HOST row — the value crosses two answer lanes
     let src = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
@@ -467,6 +473,7 @@ pub fn main() -> nil {
 #[test]
 fn the_rows_drive_directly_through_call_host_row() {
     let src = r#"
+use core::{ RunContext };
 use async_host::launch_future;
 use fixture::probe;
 
@@ -549,6 +556,7 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     .expect("fixture");
     s.register_module("fixture", fixture).expect("mount fixture");
     let app = r#"
+use core::{ RunContext };
 use rt::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::wall;

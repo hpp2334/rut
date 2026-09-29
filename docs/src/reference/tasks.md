@@ -55,7 +55,7 @@ synchronous at the engine level (flag + re-enqueue); a frame parked on
 a host future only observes the flag when the loop drives it again.
 
 ```rut
-use core::{ Disposal, DisposalContext };
+use core::{ Disposal, DisposalContext, RunContext };
 
 class Drops {
     n: u32;

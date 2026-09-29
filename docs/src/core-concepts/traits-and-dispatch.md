@@ -174,9 +174,12 @@ call site means.
 
 ## The iteration protocol
 
-A type is iterable when it implements the builtin `Iterator<E>` trait:
+A type is iterable when it implements the builtin `Iterator<E>` trait
+(a `pub builtin` core name — an `impl` block names it, so the module
+imports it, `use core::{ Iterator }`):
 
 ```rut
+use core::{ Iterator };
 use ink::{ Logger };
 
 class CountUp {
@@ -219,7 +222,10 @@ instead; they never pay a per-element call.
 The async machinery is spelled as builtin traits — `Future<T>` and
 `RunContext` — which the engine *names* but does not close: a
 hand-written type can `impl Future<nil> for MyFuture` through the same
-registry as any other impl and be driven by the same loop. See
+registry as any other impl and be driven by the same loop. Like
+`Iterator`, both are `pub builtin` core names: the engine's weave never
+needs the import, but source that spells the names does
+(`use core::{ Future, RunContext }`). See
 [the async model](async-model.md) and the worked example in
 [04 — Custom async](../examples/04-custom-async.md).
 

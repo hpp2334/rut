@@ -18,6 +18,7 @@ one consume law (`await` **or** launch — exactly one), one pender
 ## `async fn` and `await`
 
 ```rut
+use core::{ RunContext };
 use ink::{ Logger };
 use async_host::{ launch_future, sleep };
 
@@ -47,7 +48,9 @@ Rules:
 
 - The **first parameter is the cx**: `async fn f(cx: RunContext, ..)`.
   The engine mints it at call sites and per drive — call sites do not
-  pass it.
+  pass it. The spelled `RunContext` name is core's (`pub builtin`,
+  import-gated): `use core::{ RunContext }` brings it in — the weave
+  itself never needs the import, only the spelled name does.
 - `async fn f(..) -> T` describes a value that widens to `Future<T>`.
   **Calling it runs nothing** (cold). It runs when the future is
   `await`ed or launched.

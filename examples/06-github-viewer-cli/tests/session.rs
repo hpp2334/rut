@@ -577,6 +577,7 @@ fn rate_limit_and_other_statuses_map() {
 /// then stream (the mint degrades to a dead reader), stream then body
 /// (the drain degrades to empty) — through the SAME fixture lane.
 const ONESHOT_SRC: &str = r#"
+use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use rgh_host::{ out };

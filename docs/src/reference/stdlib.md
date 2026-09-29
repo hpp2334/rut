@@ -16,12 +16,16 @@ package**: a declaration file plus Rust bodies registered the same way
 
 ## core — the prelude surface
 
-Every builtin name is in scope in every compilation unit; no `use` is
-needed. A `use core::{ … };` statement stays legal but is redundant.
-The exceptions: the const `NAN`, and the `Disposal` pair — `Disposal`
-and `DisposalContext` are the **import-gated** spellings, resolving
-only through `use core::{ Disposal, DisposalContext }`. The two
-builtin spellings (ambient vs import-gated) are documented in
+The builtin fns, primitives, and containers are in scope in every
+compilation unit; no `use` is needed. A `use core::{ … };` statement
+stays legal but is redundant for them. The exceptions — the
+**import-gated** spellings, resolving only through
+`use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`,
+`DisposalContext`), and every engine-woven trait (`Iterator`,
+`Future`, `RunContext`) — the engine's weave itself never needs the
+import, only source that spells the names (an `impl` block, a
+trait-typed signature, a `downcast<Future<..>>`). The two builtin
+spellings (ambient vs import-gated) are documented in
 [Host fns and declaration files](host-fns.md).
 
 ### Functions
@@ -76,13 +80,16 @@ pre-sizes ([opaque](opaque.md), [weak references](weak-refs.md)).
 
 | trait | member | notes |
 |---|---|---|
-| `Iterator<E>` | `fn __iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops |
-| `Future<T>` | `fn yield(cx: RunContext)` | every `async fn`'s hidden frame implements it; `await` consumes it |
-| `RunContext` | `checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool` | the async protocol's cx record ([async and await](async.md)) |
+| `Iterator<E>` | `fn __iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops. **import-gated** — `use core::{ Iterator }` (an `impl Iterator<E> for T` names it); the builtin sequences' fused loops never do |
+| `Future<T>` | `fn yield(cx: RunContext)` | every `async fn`'s hidden frame implements it; `await` consumes it. **import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: Future<T>`, `downcast<Future<..>>`) |
+| `RunContext` | `checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool` | the async protocol's cx record ([async and await](async.md)); **import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield signature spells it) |
 | `Disposal` | `fn dispose(mut self, cx: DisposalContext)` | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, DisposalContext }` |
 
 Users implement these with ordinary `impl` blocks; the engine has
-compiler-backed impls for its own types.
+compiler-backed impls for its own types. All four are `pub builtin`
+(the import-gated spelling): the weave is keyed on the native-trait
+symbols and never consults user scope — a module that imports nothing
+still iterates builtins, awaits, and launches.
 
 ### Numeric methods (per integer width `i8`–`u64`)
 

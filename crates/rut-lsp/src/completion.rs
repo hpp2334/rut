@@ -351,13 +351,15 @@ return c.;
 
     #[test]
     fn bare_completion_gates_pub_builtin_core_names() {
-        // the `pub builtin` rows (the core disposal pair) complete only
-        // when the doc's `use` names them — the compiler's ambient split,
-        // mirrored so a completion never offers a name the compile
-        // rejects. Ambient core rows (`prelude builtin`) stay ungated.
-        let core_src = "prelude builtin trait Iterator<E> {\nfn next(mut self) -> ?E;\n}\n\
+        // the `pub builtin` rows (the disposal pair and, since the trio
+        // flipped, every builtin trait) complete only when the doc's
+        // `use` names them — the compiler's ambient split, mirrored so a
+        // completion never offers a name the compile rejects. Ambient
+        // core rows (`prelude builtin`) stay ungated.
+        let core_src = "pub builtin trait Iterator<E> {\nfn next(mut self) -> ?E;\n}\n\
                         pub builtin trait Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
-                        pub builtin class DisposalContext { }\n";
+                        pub builtin class DisposalContext { }\n\
+                        prelude builtin class Weak { }\n";
         let c2 = rut_lexer::lexer::normalize(core_src);
         let (ctoks, _) = rut_lexer::lexer::lex(&c2);
         let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
@@ -378,13 +380,15 @@ return c.;
         let ls = labels(&items);
         assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");
         assert!(!ls.contains(&"DisposalContext"), "unused `pub builtin` must not complete: {ls:?}");
-        assert!(ls.contains(&"Iterator"), "the ambient row still completes: {ls:?}");
+        assert!(!ls.contains(&"Iterator"), "the gated builtin trait must not complete: {ls:?}");
+        assert!(ls.contains(&"Weak"), "the ambient row still completes: {ls:?}");
 
-        let imported = "use core::{ Disposal, DisposalContext };\nfn main() -> nil { }\n";
+        let imported = "use core::{ Disposal, DisposalContext, Iterator };\nfn main() -> nil { }\n";
         let items = mk(imported);
         let ls = labels(&items);
         assert!(ls.contains(&"Disposal"), "the imported trait completes: {ls:?}");
         assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
+        assert!(ls.contains(&"Iterator"), "the imported builtin trait completes: {ls:?}");
     }
 
     #[test]

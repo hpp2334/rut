@@ -1,9 +1,11 @@
 //! Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
-//! `use` is needed for the engine's names — the erasure primitive's
-//! statics are `opaque(..)` / `opaque.downcast<T>`. The type-name
-//! string itself is `opaque` since phase 2 (interner/boot/crossing in
-//! lockstep); the old boot/free call spellings are gone (their removal
-//! is pinned in `the_old_spellings_are_gone` below).
+//! `use` is needed for the engine's fns and containers — the erasure
+//! primitive's statics are `opaque(..)` / `opaque.downcast<T>`. The
+//! type-name string itself is `opaque` since phase 2 (interner/boot/
+//! crossing in lockstep); the old boot/free call spellings are gone
+//! (their removal is pinned in `the_old_spellings_are_gone` below).
+//! The builtin TRAITS are the other half of the split: every one is
+//! `pub builtin` (import-gated) — see `the_gated_traits_require_the_import`.
 
 use rut_core::binary::Surface;
 use rut_parser::Mode;
@@ -60,10 +62,13 @@ fn builtins_resolve_with_no_use_statement() {
 }
 
 #[test]
-fn the_ambient_prelude_binds_beyond_the_disposal_pair() {
-    // the import gate is the disposal pair ONLY: assert/panic,
-    // string_join, and Iterator (the for..of contract) still bind with
-    // no `use` statement anywhere in this source
+fn the_ambient_prelude_binds_beyond_the_gated_names() {
+    // the native fns (assert/panic/string_join) and the native
+    // containers still bind with no `use` statement anywhere in this
+    // source. The `for..of` here runs over `[i32]` — a builtin
+    // sequence's FUSED loop, which never names `Iterator` — so it works
+    // without the import too; an `impl Iterator<E> for T` or a
+    // trait-typed parameter WOULD gate (see the_gated_traits_require_the_import below).
     let v = run_main(
         "fn total(v: [i32]) -> i32 {\n\
              let mut t = 0;\n\
@@ -78,6 +83,52 @@ fn the_ambient_prelude_binds_beyond_the_disposal_pair() {
          }\n",
     );
     assert_eq!(v, 6);
+}
+
+/// The import-gated builtin traits (the `pub builtin` spellings):
+/// naming `Iterator`/`Future`/`RunContext` in source resolves ONLY
+/// through `use core::{ .. }` — the bare spelling names the fix
+/// exactly — while the engine's weave never consults user scope: the
+/// fused `for..of` over `[i32]` above and every launched host frame
+/// run with no import at all. With the import, an `impl Iterator<i32>
+/// for CountUp` compiles and the duck-typed `for..of` drives it.
+#[test]
+fn the_gated_traits_require_the_import() {
+    // no use: each bare spelling names its fix
+    for (src, name) in [
+        ("class C { }\nimpl Iterator<i32> for C { fn __iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterator"),
+        ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\npub fn main() -> i32 { return f(nil); }\n", "RunContext"),
+        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\npub fn main() -> i32 { return 0; }\n", "Future"),
+    ] {
+        let out = compile(src);
+        assert!(
+            out.diags
+                .iter()
+                .any(|d| d.msg == format!("`{name}` is not in scope — `use core::{{ {name} }}`")),
+            "the {name} miss names the fix: {:?}",
+            out.diags
+        );
+        assert!(out.program.is_none(), "the bare {name} source must not compile");
+    }
+
+    // with the import: the impl registers and for..of drives it
+    let v = run_main(
+        "use core::{ Iterator };\n\
+         class CountUp { n: i32 = 0; }\n\
+         impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
+         impl Iterator<i32> for CountUp {\n\
+             fn __iterate(self, emit: fn(i32) -> bool) {\n\
+                 for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
+             }\n\
+         }\n\
+         class Acc { total: i32 = 0; }\n\
+         pub fn main() -> i32 {\n\
+             let mut acc: ?Acc = Acc { };\n\
+             for (let v of CountUp.new(4)) { acc.total = acc.total + v; }\n\
+             return acc.total;\n\
+         }\n",
+    );
+    assert_eq!(v, 10);
 }
 
 #[test]

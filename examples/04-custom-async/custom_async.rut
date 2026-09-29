@@ -149,6 +149,7 @@ impl Future<nil> for CustomFuture {
 // re-launchable (ruling 6: a type error, never a runtime check), one
 // member: the cancel edge.
 
+use core::{ Future, RunContext };
 use async_engine::{ __abort, __launch };
 
 struct CustomLaunched {

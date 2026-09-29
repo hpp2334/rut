@@ -270,9 +270,13 @@ makes widening legal inside the body: `let w: Labeled = x;`.
 ## Making your type iterable
 
 A type becomes a `for..of` target by implementing the builtin
-`Iterator<E>` contract with its single resumption member:
+`Iterator<E>` contract with its single resumption member (`Iterator`
+is core's import-gated `pub builtin` trait — an `impl` names it, so
+bring it in with `use core::{ Iterator }`; the builtin sequences
+themselves never need it):
 
 ```rut
+use core::{ Iterator };
 use pouch::{ Vec };
 use ink::{ Logger };
 

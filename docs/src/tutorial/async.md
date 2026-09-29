@@ -16,6 +16,8 @@ parameter*. Calling it runs nothing: it returns a cold future. `await`
 is the one in-body suspension point, and it consumes the future:
 
 ```rut
+use core::{ RunContext };
+
 async fn countdown(cx: RunContext, log: Logger, n: u32) {
     let mut i = n;
     while (i > 0) {
@@ -177,6 +179,7 @@ see [workers and channels](../reference/workers-and-channels.md).
 ## Put it together
 
 ```rut
+use core::{ RunContext };
 use async_host::{ launch_future, sleep };
 use ink::{ Logger };
 

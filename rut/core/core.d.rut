@@ -286,28 +286,42 @@ prelude builtin impl u64 {
 // backed impls and lowering hooks. Users implement them with ordinary
 // `impl` blocks. Library contracts without engine knowledge (a
 // package's own trait — e.g. an encoding contract for map keys) stay
-// plain `trait`.
+// plain `trait`. Every trait here is `pub builtin` (the import-gated
+// spelling): the engine weaves on the native-trait symbols — only
+// source that SPELLS a trait name resolves it, through
+// `use core::{ .. }`.
 
 // v1.1 removed `Index` from the prelude: indexing is builtin over
 // `[T]`/`Vec`/`str`/`bytes`. `Disposal` is BACK — registered again as
-// the cell-death contract (`pub builtin`, the import-gated spelling):
-// the engine pins a cell whose type implements `Disposal` when its
-// strong count reaches zero (weak boxes null first) and runs
-// `dispose(self, cx)` at the next call boundary; the fields release
-// after it returns. Library contracts without engine knowledge
-// (`Hashable`) stay plain `trait` in their module.
+// the cell-death contract: the engine pins a cell whose type
+// implements `Disposal` when its strong count reaches zero (weak boxes
+// null first) and runs `dispose(self, cx)` at the next call boundary;
+// the fields release after it returns. Library contracts without
+// engine knowledge (`Hashable`) stay plain `trait` in their module.
 
-// RFC 0012 §6 — the iteration protocol. A type is iterable when it
-// declares this member (duck-typed satisfaction); `for (x of it)`
-// desugars to `it.__iterate(emit)` with a fresh per-iteration binding:
-// `emit` returning `false` stops the iteration (a `break`).
-prelude builtin trait Iterator<E> {
+// The iteration protocol. A type is iterable when it declares this
+// member (duck-typed satisfaction); `for (x of it)` desugars to
+// `it.__iterate(emit)` with a fresh per-iteration binding: `emit`
+// returning `false` stops the iteration (a `break`). `pub builtin`
+// (the import-gated spelling): the builtin sequences (`[T]`, `Vec`,
+// `str`, `bytes`) keep their fused loops and never name the trait —
+// only source that SPELLS `Iterator` (an `impl Iterator<E> for T`, a
+// trait-typed parameter) resolves it, through `use core::{ Iterator }`.
+pub builtin trait Iterator<E> {
     fn __iterate(self, emit: fn(E) -> bool);
 }
 
-// RFC 0012 §7 / RFC 0018 — the async protocol, the Future-only
-// vocabulary. Two engine-named traits, user-open (ordinary `impl`
-// blocks register through the same path as `Iterator` impls):
+// The async protocol, the Future-only vocabulary. Two engine-named
+// traits, user-open (ordinary `impl` blocks register through the same
+// path as `Iterator` impls). Both are `pub builtin` (the import-gated
+// spelling): the ENGINE weaves without them — every `async fn`'s
+// hidden frame gets its `impl Future<T>` and every drive mints the cx
+// record internally, keyed on the native-trait symbols, never on
+// user-scope resolution. Source that SPELLS the names resolves them
+// only through `use core::{ Future }` / `use core::{ RunContext }`:
+// a user `impl Future<T> for ..`, a launcher's `f: Future<T>`
+// parameter, `downcast<Future<..>>`, `cx: RunContext` in a yield
+// signature or an `async fn` head.
 //
 // `Future<T>` — a cold, once-drivable computation. The engine weaves
 // `impl Future<T>` for every `async fn`'s hidden frame type; user
@@ -323,15 +337,15 @@ prelude builtin trait Iterator<E> {
 // the frozen surface is this signature set, nothing more.
 //
 // v1 awaiting targets engine-woven futures (async-fn results and
-// `sleep`); user impls drive through launchers — join lands with
-// RFC 0019. `launch_future` / `LaunchedFutureHandle` / `sleep` are
-// HOST surface (the embedder's standard set), never core: users may
-// write their own launchers over this same Future surface.
-prelude builtin trait Future<T> {
+// `sleep`); user impls drive through launchers — join lands later.
+// `launch_future` / `LaunchedFutureHandle` / `sleep` are HOST surface
+// (the embedder's standard set), never core: users may write their own
+// launchers over this same Future surface.
+pub builtin trait Future<T> {
     fn yield(cx: RunContext);
 }
 
-prelude builtin trait RunContext {
+pub builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;
