@@ -598,11 +598,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "generic paths are not supported in this build");
                 return Err(());
             }
-            if let Some(e) = self.ctx.find_enum(base).cloned() {
-                if let Some(i) = e.members.iter().position(|&m| m == member) {
-                    let reg = self.new_reg(e.ty);
-                    self.emit(Op::EnumNew { dst: reg, ty: e.ty, member: i as u32 }, sp.lo);
-                    return Ok(e.ty);
+            // a LOCAL enum (the decl's member list) or a USED enum (the
+            // carried descriptor row — the member values ride it)
+            let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
+                if let Some(e) = self.ctx.find_enum(base).cloned() {
+                    Some((e.ty, e.members.iter().map(|m| (*m, 0)).collect()))
+                } else {
+                    self.ctx.extern_enum(base)
+                };
+            if let Some((ty, members)) = enum_hit {
+                if let Some(i) = members.iter().position(|(m, _)| *m == member) {
+                    let reg = self.new_reg(ty);
+                    self.emit(Op::EnumNew { dst: reg, ty, member: i as u32 }, sp.lo);
+                    return Ok(ty);
                 }
                 self.ctx.err(sp, format!("`{}` is not a member of enum {}", self.ctx.name(member), self.ctx.name(base)));
                 return Err(());

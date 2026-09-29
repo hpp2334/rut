@@ -14,9 +14,11 @@ use super::*;
 // methods), `method` (receiver dispatch + the missing-method
 // diagnostic), `trait_static` (registered/generic/extern trait
 // statics + the vtable finisher), `inline` (inherent calls + the
-// inline-at-site fast paths), `field` (field reads + union guards).
-// Shared arg-widening and receiver-mut helpers stay here.
+// inline-at-site fast paths), `extern_class` (used-class method
+// calls — the linkable-classes phase), `field` (field reads + union
+// guards). Shared arg-widening and receiver-mut helpers stay here.
 mod builtin;
+mod extern_class;
 mod field;
 mod free;
 mod inline;
@@ -305,8 +307,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
-        if let Some(ef) = self.ctx.extern_fn(name).cloned() {
-            // the host future lane (phase 4): an async host fn's call
+        if let Some(ef) = self.ctx.extern_fn(name).cloned() {            // the host future lane (phase 4): an async host fn's call
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
             if ef.is_async {
@@ -340,6 +341,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
             return Ok(ef.ret);
+        }
+        // a used GENERIC fn (the linkable-classes phase): the body
+        // lives per argument list in the owner — infer the type
+        // arguments against the placeholder signature, mint the mirror
+        // instantiation, and request the body
+        if let Some(gf) = self.ctx.extern_generic_fn(name).cloned() {
+            return self.compile_extern_generic_fn_call(name, &gf, generics, args, expected, sp);
         }
         // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
         if name == sym::BYTES {

@@ -1,9 +1,9 @@
+# pouch/ — the growable sequence package (RFC 0028): `Vec<T>` in rut.
+# Publishes COMPILED (the linkable-classes phase): the class's methods
+# cross on the surface's inherent rows (generic — placeholder
+# signatures the consumer substitutes per instantiation), and a
+# consumer's `Vec<i64>` instantiates + requests the bodies from this
+# pkg (owner-anchored generics) — ONE row program-wide, identity by
+# owner. No source ever crosses.
 name = "pouch"
 entry.lib = "./pouch.rut"
-# `inline = true` — Vec's methods are inherent impl members, which cross
-# no surface yet: consumers splice the pkg's source and monomorphize at
-# their own sites. Instantiation is owner-anchored now (the declaring pkg
-# owns every `Vec<i64>` row; mirrors unify at link), and this flag is the
-# only splice trigger left — it retires when class methods ride the
-# surface and pouch publishes compiled.
-inline = true

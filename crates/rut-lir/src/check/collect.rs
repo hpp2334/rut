@@ -162,10 +162,10 @@ impl<'a> Ctx<'a> {
             return;
         }
         // the instantiation ledger's owner anchor: this decl's bodies
-        // live in the pkg whose source it was parsed from (the splice
-        // origin, or this unit)
+        // live in this unit — every decl's origin IS its module (no
+        // source crosses a boundary)
         self.decl_owner
-            .insert(name, self.origin_of(sp.lo).to_string());
+            .insert(name, self.own_spec.clone());
         // generic records stay a template (empty fields) until instantiated;
         // `Vec<T>` and RFC 0013 monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
@@ -445,7 +445,7 @@ impl<'a> Ctx<'a> {
     /// resolution and the coverage check can proceed; it is a
     /// template-level type, never a runtime one — the phase-2 dispatch
     /// half substitutes the class's concrete argument per instantiation.
-    pub(crate) fn param_placeholder(&mut self, p: IdentId) -> TypeId {
+    pub fn param_placeholder(&mut self, p: IdentId) -> TypeId {
         let name = self.intern(&format!("#{}", self.name(p)));
         self.types.intern_own(RutType {
             name,
@@ -609,9 +609,12 @@ impl<'a> Ctx<'a> {
         ty
     }
 
-    /// Substitute one template field type: a placeholder leaf becomes its
-    /// argument; structural wrappers rebuild per element.
-    fn subst_template_ty(&mut self, id: TypeId, env: &std::collections::HashMap<String, TypeId>) -> TypeId {
+    /// Substitute one template type: a placeholder leaf (`#<param>`,
+    /// matched by name text) becomes its argument; structural wrappers
+    /// rebuild per element; everything else (boot rows, registered
+    /// block rows) passes through — the consumer-side law for the
+    /// carried surface signatures of generic classes.
+    pub(crate) fn subst_template_ty(&mut self, id: TypeId, env: &std::collections::HashMap<String, TypeId>) -> TypeId {
         let text = self.types.type_at(id).name;
         let text = self.interner.name(text).to_string();
         if let Some(&arg) = env.get(&text) {
@@ -635,6 +638,27 @@ impl<'a> Ctx<'a> {
                 let r = self.subst_template_ty(ret, env);
                 let ps = params.iter().map(|&p| self.subst_template_ty(p, env)).collect();
                 Some(self.mk_fn_ty(ps, r))
+            }
+            // a TUPLE (record with numeric fields) mentioning a
+            // placeholder (`(?#T, ?DecodeJsonError)` — the generic fns'
+            // return shapes): rebuild with the substituted fields. A row
+            // whose fields substitute to themselves (a used class's own
+            // row, say) passes through unchanged.
+            TyKind::Data { fields } if !fields.is_empty() => {
+                let fs: Vec<FieldInfo> = fields
+                    .iter()
+                    .map(|f| FieldInfo { name: f.name, ty: self.subst_template_ty(f.ty, env) })
+                    .collect();
+                let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
+                if changed {
+                    let name = self.intern(&format!(
+                        "({})",
+                        fs.iter().map(|f| self.type_name(f.ty).to_string()).collect::<Vec<_>>().join(", ")
+                    ));
+                    Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                } else {
+                    None
+                }
             }
             _ => None,
         };

@@ -1,8 +1,10 @@
 # async_host/ — the standard launcher surface, in rut (RFC 0018): the
-# typed half of the embedder's async set. `inline = true` splices the
-# source into every consumer, so the generic `launch_future<T>` and the
-# generic handle class resolve at each call site (a class-method module
-# cannot be linked; the ink package's law).
+# typed half of the embedder's async set. Publishes COMPILED (the
+# linkable-classes phase): the generic `launch_future<T>` and the
+# generic handle class link like any other export — a consumer
+# instantiates and requests the bodies from this pkg (owner-anchored
+# generics), and `LaunchedFutureHandle::abort` crosses on the surface's
+# inherent rows.
 #
 # The laws the types encode:
 #   `Future<T>` — cold, yours to hold: await it or launch it (launch
@@ -13,7 +15,6 @@
 
 name = "async_host"
 entry.lib = "./async_host.rut"
-inline = true
 
 [deps]
 async_engine = { path = "../async_engine" }

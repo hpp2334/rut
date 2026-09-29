@@ -334,10 +334,10 @@ fn loads_a_directory_graph() {
 
 #[test]
 fn consumer_uses_pouch_vec() {
-    // a module whose methods live on a generic class is source-inlined
-    // into its consumer (`inline` — the splice law's one trigger since
-    // instantiation went owner-anchored); the consumer's `Vec<i32>` then
-    // instantiates against the inlined class body
+    // pouch LINKS (the linkable-classes phase): the consumer's
+    // `Vec<i32>` instantiates as a mirror row and requests the bodies
+    // from pouch's unit (owner-anchored generics); the methods bind
+    // through the surface's inherent rows
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");
     let coll_src = rut_driver::load_module_source(&pouch).expect("read");
@@ -346,7 +346,7 @@ fn consumer_uses_pouch_vec() {
     rut_driver::mount_std_core(&mut s);
     s.register_module(
         "pouch",
-        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, inline: true, ..Default::default() },
+        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, ..Default::default() },
     )
     .unwrap();
     s.register_module(
@@ -372,7 +372,18 @@ fn consumer_uses_pouch_vec() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     assert_eq!(p.funcs.iter().filter(|f| p.name_of(f.name) == "main").count(), 1);
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
+    // the consumer's `Vec<i32>` and pouch's own row unify through the
+    // ledger: ONE program-wide instantiation (dead mirrors may sit in
+    // the merged table, but every ledger row maps to one id)
+    let mut tys: Vec<u32> = p
+        .inst_types
+        .iter()
+        .filter(|r| p.interner.name(r.owner) == "pouch" && p.interner.name(r.decl) == "Vec")
+        .map(|r| r.ty)
+        .collect();
+    tys.sort();
+    tys.dedup();
+    assert_eq!(tys.len(), 1, "one program-wide Vec<i32> row: {tys:?}");
 }
 
 #[test]

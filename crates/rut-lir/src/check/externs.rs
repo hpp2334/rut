@@ -18,6 +18,19 @@ impl<'a> Ctx<'a> {
         is_async: bool,
         host: Option<String>,
     ) {
+        // the engine-minted cx singleton (the async frame's RunContext)
+        // is per-unit minted; a foreign surface's cx param re-spells to
+        // THIS unit's row, so the crossing check sees one type
+        let cx_ty = self.run_context_ty();
+        let cx_ty_name = self.types.type_at(cx_ty).name;
+        let remap = |t: TypeId| -> TypeId {
+            if self.types.type_at(t).name == cx_ty_name {
+                cx_ty
+            } else {
+                t
+            }
+        };
+        let params = params.iter().map(|t| remap(*t)).collect();
         self.extern_fns
             .insert(name, ExternFn { func, params, ret, is_async, host });
     }
@@ -80,6 +93,7 @@ impl<'a> Ctx<'a> {
         is_class: bool,
     ) {
         self.decl_owner.insert(name, owner.clone());
+        
         self.extern_generics.insert(
             name,
             ExternGeneric { owner, params, template, is_class },
@@ -149,6 +163,133 @@ impl<'a> Ctx<'a> {
         methods_concrete: Vec<(IdentId, u32)>,
     ) {
         self.extern_impls.push(ExternImpl { trait_id, trait_name, target, methods, methods_concrete });
+    }
+
+    /// Bind a used enum (the linkable-classes phase): the member paths
+    /// (`EncodeErrorKind.Depth`) resolve through this registry; the
+    /// descriptor row itself rides the carried type block.
+    pub fn add_extern_enum(&mut self, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {
+        self.extern_enums.insert(name, (ty, members));
+    }
+
+    /// The used enum's (type id, members), if bound.
+    pub fn extern_enum(&self, name: IdentId) -> Option<(TypeId, Vec<(IdentId, i64)>)> {
+        self.extern_enums.get(&name).cloned()
+    }
+
+    /// The async Future trait objects re-spell at the binding: a linked
+    /// pkg's `Future<Response>` ret is ITS unit's instantiation
+    /// (per-unit minted); the importing unit's await keys the Future
+    /// trait_inst per-unit, so the ret re-spells to THIS unit's
+    /// `Future<Response>`. The element decodes from the
+    /// instantiation's name (its only carrier) and resolves through
+    /// `resolve_elem` (the binding's own type exports, then the
+    /// carried/boot rows).
+    pub fn respell_future_ret(
+        &mut self,
+        ret: TypeId,
+        surface_exports: &[(IdentId, TypeId)],
+    ) -> TypeId {
+        let trait_obj = match self.types.kind(ret).clone() {
+            TyKind::TraitObj { trait_id } => trait_id,
+            _ => return ret,
+        };
+        let tname = self.name(self.traits[trait_obj as usize].name).to_string();
+        let Some(inner) = tname.strip_prefix("Future<").and_then(|s| s.strip_suffix('>')) else {
+            return ret;
+        };
+        // the element resolves through the binding's own type exports
+        // first (the pkg carries the row), then through the carried /
+        // boot rows by name
+        let inner_id = self.intern(inner);
+        let elem = surface_exports
+            .iter()
+            .find(|(n, _)| *n == inner_id)
+            .map(|(_, ty)| *ty)
+            .or_else(|| self.types.dense_id_of_name(inner_id))
+            .or_else(|| self.ast.interner.lookup(inner).map(|i| i.0));
+        let Some(elem) = elem else {
+            return ret;
+        };
+        let fut_name = self.intern("Future");
+        let fut = self.mk_future_inst(fut_name, elem);
+        self.mk_trait_obj(fut)
+    }
+
+    /// Bind a used class's inherent method surface (the
+    /// linkable-classes phase): `methods` ride the surface verbatim,
+    /// each fn id scope-qualified with the exporter's scope.
+    pub fn add_extern_inherent(
+        &mut self,
+        target: TypeId,
+        methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool)>,
+    ) {
+        if methods.is_empty() {
+            return;
+        }
+        self.extern_inherents.push(ExternInherent { target, methods });
+    }
+
+    /// Bind a used module's exported generic fn (the linkable-classes
+    /// phase): the placeholder signature the call site checks against,
+    /// and the declaring pkg the body requests route to.
+    pub fn add_extern_generic_fn(
+        &mut self,
+        name: IdentId,
+        owner: String,
+        params: Vec<IdentId>,
+        args: Vec<TypeId>,
+        ret: TypeId,
+    ) {
+        self.extern_generic_fns
+            .insert(name, ExternGenericFn { owner, params, args, ret });
+    }
+
+    pub fn extern_generic_fn(&self, name: IdentId) -> Option<&ExternGenericFn> {
+        self.extern_generic_fns.get(&name)
+    }
+
+    /// The used class whose inherent surface answers `name` on
+    /// receiver `rt`, with the receiver's class substitution: the
+    /// row's target matches either the receiver's own id (a plain
+    /// class's extern row) or the receiver's instantiation's TEMPLATE
+    /// (a mirror instantiation of a used generic — `inst_data` names
+    /// the class, `extern_generics` its template). The substitution
+    /// pairs the template's parameter names with the receiver's
+    /// concrete arguments, in the row's own order.
+    pub fn find_extern_method(
+        &self,
+        rt: TypeId,
+        name: IdentId,
+    ) -> Option<(usize, usize, Vec<(IdentId, TypeId)>)> {
+        for (i, ih) in self.extern_inherents.iter().enumerate() {
+            // the receiver names the class: either directly (the plain
+            // extern row) or through its instantiation's decl name
+            let (dname, cargs) = match self.inst_data.get(&rt) {
+                Some((d, args)) => (Some(*d), args.clone()),
+                None => (None, vec![]),
+            };
+            let hit = ih.target == rt
+                || dname.and_then(|d| self.extern_generics.get(&d))
+                    .map_or(false, |g| g.template == ih.target);
+            if !hit {
+                continue;
+            }
+            if let Some(midx) = ih.methods.iter().position(|(n, ..)| *n == name) {
+                let subst = match dname.and_then(|d| self.extern_generics.get(&d)) {
+                    Some(g) => g.params.iter().cloned().zip(cargs.iter().cloned()).collect(),
+                    None => vec![],
+                };
+                return Some((i, midx, subst));
+            }
+        }
+        None
+    }
+
+    /// Does the used class surface provide `name` at all (the
+    /// capability probe for union bounds and diagnostics)?
+    pub fn has_extern_method(&self, rt: TypeId, name: IdentId) -> bool {
+        self.find_extern_method(rt, name).is_some()
     }
 
     /// The id of a used module's exported trait, if the module used the

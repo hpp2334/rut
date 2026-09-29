@@ -428,11 +428,39 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     // binary ships one copy). The pass pre-computes the per-module
     // plans AND the cumulative bases, so the emission pass — which
     // skips dropped functions — offsets every later module correctly.
+    // Every scope's FINAL linked type base, known before any claims: a
+    // block's position depends only on the tables' own-row counts, so
+    // one sweep fixes the map for the whole link — including the
+    // FORWARD references a reseeded owner carries (its seeded bodies
+    // spell the requesters' `(scope, local)` ids, and post-order emits
+    // the owner BEFORE the requesters, whose blocks the incremental
+    // walk has not reached yet).
+    let mut final_type_base: std::collections::HashMap<crate::id::ScopeId, u32> =
+        std::collections::HashMap::new();
+    final_type_base.insert(crate::id::BOOT_SCOPE, 0);
+    {
+        let mut cursor = out.types.types.len() as u32;
+        for m in modules.iter() {
+            let packed = m.types.packed;
+            let m_boot = if packed { m.types.boot_len } else { boot as u32 };
+            let own_base = if packed {
+                m.types
+                    .scope_base
+                    .get(m.types.scope as usize)
+                    .copied()
+                    .unwrap_or(m_boot)
+            } else {
+                m_boot
+            };
+            if packed {
+                final_type_base.insert(m.types.scope, cursor);
+            }
+            cursor += m.types.types.len().saturating_sub(own_base as usize) as u32;
+        }
+    }
+
     let mut claim_ty: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut claim_fn: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
-    let mut scope_base_plan: std::collections::HashMap<crate::id::ScopeId, u32> =
-        std::collections::HashMap::new();
-    scope_base_plan.insert(crate::id::BOOT_SCOPE, 0);
     let mut func_base_plan: std::collections::HashMap<crate::id::ScopeId, u32> =
         std::collections::HashMap::new();
     func_base_plan.insert(crate::id::BOOT_SCOPE, 0);
@@ -484,9 +512,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             m_boot
         };
         let base = type_cursor;
-        if packed {
-            scope_base_plan.insert(m.types.scope, base);
-        }
         func_base_plan.insert(m.scope, func_off_plan);
         // the name rebase, exactly as the emission pass spells it —
         // interning is idempotent, so the two passes agree
@@ -509,7 +534,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 if s == crate::id::BOOT_SCOPE {
                     crate::id::local_of(id)
                 } else {
-                    scope_base_plan.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
+                    final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
                 }
             } else if id < m_boot {
                 id
@@ -570,13 +595,25 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     canonv(origins)
                 ),
                 InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
+                    // the target half spells the instantiation's canonical
+                    // key when the target is an owner-anchored
+                    // instantiation row (`Vec<i64>`'s mirror lives at a
+                    // different id in every unit — the key must not): the
+                    // SAME impl method compiled in the owner and mirrored
+                    // by a consumer therefore claims once. A non-
+                    // instantiation target (a prim, a plain class) keeps
+                    // the type spelling.
+                    let tkey = match plan.inst_key_by_ty.get(target) {
+                        Some(k) => format!("inst:{k}"),
+                        None => format!("ty:{}", canon_type(&out.types, map(*target))),
+                    };
                     format!(
                         "{}#i#{}@{}#${}@{}#({})#({})",
                         text(r.owner),
                         text(*trait_name),
                         if *slot_abi { "s" } else { "c" },
                         text(*name),
-                        canon_type(&out.types, map(*target)),
+                        tkey,
                         canonv(subst),
                         canonv(origins)
                     )
@@ -624,14 +661,19 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         plans.push(plan);
     }
 
-    // scope -> global dense base of that scope's type block (boot = 0)
-    let mut scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
+    // Every scope's final linked FUNCTION base, from the settled plans
+    // (the same forward-reference law as the type bases above: a
+    // reseeded owner's seed-impl calls aim at the requesters' fns).
+    let mut final_func_base: std::collections::HashMap<crate::id::ScopeId, u32> =
         std::collections::HashMap::new();
-    scope_base.insert(crate::id::BOOT_SCOPE, 0);
-    // scope -> global base of that scope's function block
-    let mut func_scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
-        std::collections::HashMap::new();
-    func_scope_base.insert(crate::id::BOOT_SCOPE, 0);
+    final_func_base.insert(crate::id::BOOT_SCOPE, 0);
+    {
+        let mut cursor = 0u32;
+        for (m, plan) in modules.iter().zip(plans.iter()) {
+            final_func_base.insert(m.scope, cursor);
+            cursor += plan.appended as u32;
+        }
+    }
 
     let mut func_off: u32 = 0;
     let mut const_off: u32 = 0;
@@ -681,10 +723,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         } else {
             m_boot
         };
-        if packed {
-            scope_base.insert(m.types.scope, base);
-        }
-        func_scope_base.insert(m.scope, func_off);
 
         // names: merge this module's interner into the output's — the name
         // rebase mirrors the type rebase (RFC 0035 §1). Well-known ids are
@@ -713,11 +751,16 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
                 plan.renumber.get(&f).copied().unwrap_or(f) + func_off
             } else {
-                func_scope_base
+                let base = *final_func_base
                     .get(&crate::id::scope_of(f))
-                    .copied()
-                    .unwrap_or(0)
-                    + crate::id::local_of(f)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "link: no function base for scope {} (module {})",
+                            crate::id::scope_of(f),
+                            m.name
+                        )
+                    });
+                base + crate::id::local_of(f)
             }
         };
         // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense.
@@ -735,7 +778,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 if s == crate::id::BOOT_SCOPE {
                     crate::id::local_of(id)
                 } else {
-                    scope_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
+                    final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
                 }
             } else if id < m_boot {
                 id
@@ -889,13 +932,16 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     }
                 }
                 let (s, b) = owner?;
-                let gb = *scope_base.get(&s)?;
+                let gb = *final_type_base.get(&s)?;
                 Some(gb + (i - b))
             } else {
                 Some(base + (i - own_base))
             }
         };
 
+        if std::env::var("RUT_DEBUG_LINK").is_ok() {
+            eprintln!("EMIT module={} scope={} func_off={} appended={} final_func_base={:?}", m.name, m.types.scope, func_off, plan.appended, final_func_base);
+        }
         // per-type vtables: keyed by type, slot-indexed, value = func id.
         // Rows for this module's OWN types are assigned; rows for types
         // this module only USES merge — an impl may live in a different

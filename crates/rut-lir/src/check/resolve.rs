@@ -212,7 +212,11 @@ impl<'a> Ctx<'a> {
         }
         let name = self.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
         let fname = self.intern(rut_core::async_frame::RUN_CONTEXT_FRAME_FIELD);
-        let ty = self.types.intern(RutType {
+        // the cx singleton is THIS unit's own engine row — interned into
+        // the own block, never deduplicating against a used block's
+        // carried copy (a linked pkg's surface carries its own minting;
+        // the crossing re-spells at the binding instead)
+        let ty = self.types.intern_own(RutType {
             name,
             kind: TyKind::Data { fields: vec![FieldInfo { name: fname, ty: TY_OPAQUE }] },
         });

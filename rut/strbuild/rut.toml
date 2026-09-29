@@ -6,12 +6,9 @@
 # No [peer-deps], no [dev-deps] — nothing to integrate with; pkg tests
 # ride the driver's program tests, json-style.
 #
-# `inline = true` — LOAD-BEARING, not stylistic (ink/nmapset/json's
-# flag, the same law): this is a CLASS-METHOD pkg, and a class-method
-# module cannot be linked — the flag keeps StringBuilder's methods
-# resolvable (and the checker's P1.3 receiver-call inlining live) at
-# every consumer's call site, so `b.append(...)` lowers to the same
-# forwarded CallNat the engine cell always cost.
+# Publishes COMPILED (the linkable-classes phase): StringBuilder's
+# methods cross on the surface's inherent rows, so `b.append(...)`
+# binds in every consumer from this pkg's binary — the ordinary call
+# boundary, no source ever crossing.
 name = "strbuild"
 entry.lib = "./strbuild.rut"
-inline = true

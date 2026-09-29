@@ -88,7 +88,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
-        let is_data = self.ctx.find_data(base).is_some();
+        // A used class (own or linked — the linkable-classes phase) takes
+        // them the same way.
+        let is_data = self.ctx.find_data(base).is_some()
+            || self.ctx.extern_types.contains_key(&base)
+            || self.ctx.extern_generics.contains_key(&base);
         if !base_generics.is_empty() && !is_data {
             self.ctx.err(sp, format!(
                 "generic type paths (`{}<..>.{}`) are not supported in this build",
@@ -308,6 +312,43 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.mk_data_inst(dname, class_args.clone(), sp)
                 };
                 return self.compile_direct_method(dname, class_args, self_ty, mnode, args, sp);
+            }
+        }
+        // used classes (the linkable-classes phase): the surface's
+        // inherent rows answer static (class-method) calls — a plain
+        // class binds the exporter's fn, a generic class resolves its
+        // arguments here (explicit ones, else the expected type's own
+        // instantiation) and mints the mirror instantiation the
+        // owner's unit compiles. (Generic classes ride `extern_types`
+        // too — the template row — so the generic arm answers first.)
+        if let Some(g) = self.ctx.extern_generics.get(&base).cloned() {
+            if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == g.template) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self)| !*has_self && *n == member) {
+                    let class_args = if !base_generics.is_empty() {
+                        base_generics.iter().map(|gn| self.resolve_type_now(*gn)).collect()
+                    } else {
+                        // infer from the expected type's instantiation
+                        match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                            Some((ed, eargs)) if ed == base => eargs,
+                            _ => {
+                                self.ctx.err(sp, format!(
+                                    "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                    b = self.ctx.name(base), m = self.ctx.name(member)
+                                ));
+                                return Err(());
+                            }
+                        }
+                    };
+                    let self_ty = self.ctx.mk_data_inst(base, class_args.clone(), sp);
+                    return self.compile_extern_class_method_call(ih, midx, Some(base), class_args, Some(self_ty), args, sp);
+                }
+            }
+        }
+        if let Some(&t) = self.ctx.extern_types.get(&base) {
+            if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == t) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self)| !*has_self && *n == member) {
+                    return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
+                }
             }
         }        if let Some(e) = self.ctx.find_enum(base) {
             let _ = e;

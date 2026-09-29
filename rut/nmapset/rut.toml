@@ -2,9 +2,10 @@
 # generic wrapper classes over the `nmap_host` host table. The native side
 # owns keys (and — since round3 — prim vals); reference values stay
 # rut-side (the `[?V]` parallel array), so the `get -> ?V` aliasing
-# semantics are the law. `inline = true` like
-# ink — a generic-class module is source-inlined into its consumer, and
-# the flag keeps that explicit.
+# semantics are the law. Publishes COMPILED (the linkable-classes
+# phase): the generic classes' methods cross on the surface's inherent
+# rows, and a consumer instantiates + requests the bodies from this pkg
+# (owner-anchored generics).
 #
 # The key contract is a COMPILE-TIME union bound now (`K requires
 # i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`):
@@ -18,7 +19,6 @@
 # `[deps] mapset` splice-collision note lives in nmapset.rut's header).
 name = "nmapset"
 entry.lib = "./nmapset.rut"
-inline = true
 
 [deps]
 nmap_host = { path = "../nmap_host" }

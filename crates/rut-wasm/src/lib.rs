@@ -133,7 +133,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             "ink",
             rut_driver::Module {
                 body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/ink/ink.rut").to_string(), is_decl: false },
-                inline: true,
                 ..Default::default()
             },
         )
@@ -147,21 +146,21 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount pouch");
-    // `nmapset` — inline like `ink` (a generic-class module is
-    // source-inlined into its consumer); its `use nmap_host::` resolves
+    // `nmapset` links like `ink` (its generic classes' methods cross on
+    // the surface's inherent rows; a consumer requests the
+    // instantiations); its `use nmap_host::` resolves
     // against the mounted surface above
     session
         .register_module(
             "nmapset",
             rut_driver::Module {
                 body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/nmapset/nmapset.rut").to_string(), is_decl: false },
-                inline: true,
                 ..Default::default()
             },
         )
         .expect("mount nmapset");
     // the async set (RFC 0018): the engine rows lower from their decl,
-    // the typed launcher surface mounts as an inline source module —
+    // the typed launcher surface mounts as a linked source module —
     // `install_std_async` binds the crossings in `rut_run`
     let async_engine = rut_driver::lower_decl_module(
         include_str!("../../../rut/async_engine/engine.d.rut"),
@@ -176,7 +175,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             "async_host",
             rut_driver::Module {
                 body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/async_host/async_host.rut").to_string(), is_decl: false },
-                inline: true,
                 ..Default::default()
             },
         )
@@ -193,7 +191,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             "strbuild",
             rut_driver::Module {
                 body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/strbuild/strbuild.rut").to_string(), is_decl: false },
-                inline: true,
                 ..Default::default()
             },
         )
@@ -203,7 +200,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             "json",
             rut_driver::Module {
                 body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/json/json.rut").to_string(), is_decl: false },
-                inline: true,
                 ..Default::default()
             },
         )

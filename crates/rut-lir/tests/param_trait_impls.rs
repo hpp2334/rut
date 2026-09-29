@@ -32,7 +32,7 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
             .join("; "));
     }
     session
-        .register_module("test", Module { body: ModuleBody::Source { text: src.to_string(), is_decl: false },  inline: true, ..Default::default() })
+        .register_module("test", Module { body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() })
         .map_err(|e| format!("{e:?}"))?;
     let compiled = rut_driver::compile_module_in(&mut session, src, Mode::Impl, "testroot");
     if !compiled.diags.is_empty() {

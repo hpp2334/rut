@@ -42,14 +42,15 @@ impl Bundle {
     }
 }
 
-/// A dep group's payload kind — the v5 mixed closure.
+/// A dep group's payload kind.
 #[derive(Clone, Debug)]
 pub enum GroupKind {
-    /// a linkable dep: its decoded `.rutc` (v16, decode-verified) rides
-    /// `<pkg>/<pkg>.rutc` — bodies + surface, the linking truth
+    /// a source pkg's compiled group: its decoded `.rutc` (v17,
+    /// decode-verified) rides `<pkg>/<pkg>.rutc` — bodies + surface,
+    /// the linking truth
     Compiled(Program),
-    /// a splice-needed dep (inline / generic export / trait-object
-    /// params) or a host pkg: the source file set rides under `<pkg>/`
+    /// a host pkg (a `.d.rut` surface, no body) or a declared-but-
+    /// never-compiled dep: the declaration file set rides under `<pkg>/`
     Source,
 }
 

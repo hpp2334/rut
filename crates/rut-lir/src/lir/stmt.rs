@@ -200,8 +200,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
                         if !self.widens(t, self.ret_ty) {
                             self.ctx.err(sp, format!(
-                                "return type mismatch: `{}` expected, `{}` returned",
-                                self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
+                                "return type mismatch: `{}` ({:?}) expected, `{}` ({:?}) returned",
+                                self.ctx.type_name(self.ret_ty), self.ret_ty, self.ctx.type_name(t), t
                             ));
                         }
                         self.widen_to_slot(t, self.ret_ty, sp.lo);
@@ -286,8 +286,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // a concrete value coerces to a trait-typed return
                         if !self.widens(t, self.ret_ty) {
                             self.ctx.err(sp, format!(
-                                "return type mismatch: `{}` expected, `{}` returned",
-                                self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
+                                "return type mismatch: `{}` ({:?}) expected, `{}` ({:?}) returned",
+                                self.ctx.type_name(self.ret_ty), self.ret_ty, self.ctx.type_name(t), t
                             ));
                         }
                         self.widen_to_slot(t, self.ret_ty, sp.lo);

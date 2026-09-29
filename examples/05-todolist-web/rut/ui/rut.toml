@@ -5,15 +5,12 @@
 # the array IS the order. See ui.rut's header for the store's surface
 # law and the file map.
 #
-# `inline = true`: generic exports splice by law (Source<T> and
-# friends); the flag keeps it explicit — the atom/nmapset/ink
-# precedent. `web` is the HOST DECL surface (RFC 0025): the embedder
+# `web` is the HOST DECL surface (RFC 0025): the embedder
 # registers it in both lanes (src/mount.rs), so it rides no manifest
 # path here — the registration prefix every crossing carries is `web`.
 name = "ui"
 entry.lib = "./ui.rut"
 entry.libs = ["./store.rut", "./widget.rut", "./lowering.rut", "./diff.rut", "./components.rut"]
-inline = true
 
 [deps]
 pouch = { path = "../../../../rut/pouch" }

@@ -9,25 +9,22 @@
 # RFC 0045 §2's own example, landed as the mechanism's first real
 # consumer.
 #
-# `inline = true` (ink/nmapset's flag, the same law): json's entries are
-# GENERIC FUNCTIONS, and a generic fn cannot cross a module link
-# boundary — the exported surface carries only monomorphic fns, so a
-# linked json would answer `unknown function decodeJson` in every
-# consumer. Source-inlining composes json into each consumer's unit,
-# where the entries specialize per concrete argument — DIRECT decode's
-# own law (survey §2.1: a decode mints exactly the program's own
-# values, once). The base alone splices exactly the same way (the light
-# consumer's law): the flag is not about the peer groups, it is about
-# the fn shape.
+# Publishes COMPILED (the linkable-classes phase): the entries are
+# GENERIC FUNCTIONS, and instantiation is owner-anchored — a consumer
+# requests `decodeJson<i64>` from this pkg, whose unit compiles the
+# monomorphized body (the surface exports names + signatures; the
+# ledger carries the instantiations). The peer groups compile INTO
+# json's unit wherever json is packed (the dev-deps supply presence at
+# pack time — compile once per owner), so the container rows travel
+# inside json's binary and the `lib` keys stay the presence/D2
+# contract.
 name = "json"
 entry.lib = "./json.rut"
-inline = true
 
 # the writer's accumulator rides the std builder (the strbuild batch
 # phase 1; docs/strbuild-survey.md §4): a REQUIRED dep, not a peer —
 # the writer cannot exist without the cell, so every json closure
-# carries strbuild. strbuild is itself dep-free (the cell is ambient)
-# and `inline = true`, so the edge adds no host surface and no link.
+# carries strbuild. strbuild is itself dep-free (the cell is ambient).
 [deps]
 strbuild = { path = "../strbuild" }
 

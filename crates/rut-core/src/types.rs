@@ -241,6 +241,12 @@ pub struct RutType {
 #[derive(Clone, Debug, Default)]
 pub struct TypeTable {
     pub types: Vec<RutType>,
+    /// When set, NEW rows intern into the OWN scope directly
+    /// (`pack(scope, dense - own_base)`), never attributed to a foreign
+    /// block that happens to sit above the own block (a reseed's seed
+    /// rows do exactly that). The fresh compile leaves it off — its own
+    /// block is the topmost anyway.
+    pub own_attribution: bool,
     /// packed-id mode (compiler): ids are `(scope, local)`; `scope_base[s]`
     /// is the dense index where scope `s`'s block starts
     pub scope_base: Vec<u32>,
@@ -384,6 +390,12 @@ impl TypeTable {
     /// Pack a dense index into this table's id space. Handles multi-scope
     /// tables: used blocks keep the scope they were declared under.
     #[inline]
+    /// The packed id for a dense index (the pub twin of [`Self::id_for`],
+    /// for the driver's seed-region registration).
+    pub fn id_for_pub(&self, dense: u32) -> TypeId {
+        self.id_for(dense)
+    }
+
     fn id_for(&self, dense: u32) -> TypeId {
         if !self.packed {
             return dense;
@@ -456,16 +468,51 @@ impl TypeTable {
         self.scope_base[self.scope as usize] = self.types.len() as u32;
     }
 
+    /// [`Self::use_block`] without the own-base tail: the seed rows a
+    /// RESEED registers append after the unit's own rows already exist
+    /// (the roots have compiled), so the own block's base must stay
+    /// where it is — the owner's own ids spell through it.
+    pub fn use_seed_rows(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
+        if !self.packed {
+            return;
+        }
+        let start = self.types.len() as u32;
+        self.types.extend(descs);
+        for (s, off) in blocks {
+            let need = *s as usize + 1;
+            if self.scope_base.len() < need {
+                self.scope_base.resize(need, 0);
+            }
+            self.scope_base[*s as usize] = start + *off;
+        }
+    }
+
     pub fn intern(&mut self, ty: RutType) -> TypeId {
         // structural interning for anonymous instantiations (Vec<T>, fn(..)...)
         // — names are IdentIds, so the dedup key compare is an integer compare
+        let own_base = self
+            .scope_base
+            .get(self.scope as usize)
+            .copied()
+            .unwrap_or(self.boot_len);
         for (i, t) in self.types.iter().enumerate() {
             if t.name == ty.name && t.kind == ty.kind {
+                // under own attribution, a hit ABOVE the own block (a
+                // reseed's seed region) re-spells into the own scope:
+                // the row is this unit's compilation's, and the linked
+                // table appends everything from the own base upward as
+                // this unit's block
+                if self.own_attribution && i as u32 >= own_base {
+                    return pack(self.scope, i as u32 - own_base);
+                }
                 return self.id_for(i as u32);
             }
         }
         let d = self.types.len() as u32;
         self.types.push(ty);
+        if self.own_attribution {
+            return pack(self.scope, d - own_base);
+        }
         self.id_for(d)
     }
 
@@ -490,7 +537,24 @@ impl TypeTable {
         }
         let d = self.types.len() as u32;
         self.types.push(ty);
+        if self.own_attribution {
+            let own_base = self
+                .scope_base
+                .get(self.scope as usize)
+                .copied()
+                .unwrap_or(self.boot_len);
+            return pack(self.scope, d - own_base);
+        }
         self.id_for(d)
+    }
+
+    /// The id of the FIRST row named `name` (the engine singleton
+    /// lookup — `RunContext`): None when the unit has not minted it.
+    pub fn dense_id_of_name(&self, name: IdentId) -> Option<TypeId> {
+        self.types
+            .iter()
+            .position(|t| t.name == name)
+            .map(|i| self.id_for(i as u32))
     }
 
     /// The descriptor at `id`.

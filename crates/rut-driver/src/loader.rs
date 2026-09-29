@@ -96,7 +96,6 @@ fn bundle_entry_module(
         let src = read(rel)?;
         let mut m = crate::decl::lower_decl_module(&src, &format!("{prefix}{rel}"))?;
         m.host_scope = manifest.host_scope.clone();
-        m.inline = manifest.inline;
         m.entry = manifest.entry.clone();
         return Ok(m);
     }
@@ -113,7 +112,6 @@ fn bundle_entry_module(
     Ok(Module {
         body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
-        inline: manifest.inline,
         host_scope: manifest.host_scope.clone(),
         ..Default::default()
     })
@@ -161,7 +159,6 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             Module {
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
-                inline: manifest.inline,
                 host_scope: manifest.host_scope.clone(),
                 ..Default::default()
             },
@@ -186,14 +183,6 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         }
         let module = match kind {
             GroupKind::Compiled(program) => {
-                // a compiled group may not declare peer lib files —
-                // appending source into a compiled pkg is impossible
-                if dm.peer_deps.values().any(|d| d.contains_key("lib")) {
-                    return Err(format!(
-                        "{}: `{name}` is a compiled group and declares `[peer-deps]` lib files — a compiled pkg cannot take appended source (re-pack without it)",
-                        origin.display()
-                    ));
-                }
                 // the ledger must name the group, and the row must be
                 // the scope the binary itself carries (refuse, never
                 // guess — a mismatch is a corrupt or doctored bundle)
@@ -222,7 +211,6 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                 Module {
                     body: ModuleBody::Compiled(program.clone()),
                     entry: dm.entry.clone(),
-                    inline: dm.inline,
                     host_scope: dm.host_scope.clone(),
                     ..Default::default()
                 }
@@ -255,11 +243,15 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
 ///
 /// - required peer absent → the loud D1 mount error (matrix row 1);
 /// - optional peer absent → inert; the group simply never mounts;
-/// - peer present → the declarer's group file (the descriptor's `lib`,
-///   an impl-only `.rut`) is read from the archive and appended to its
-///   source. A declared group the archive does not carry is a load
-///   error — the consistency row (a bundle that declares a group must
-///   carry it).
+/// - peer present → the declarer's group rows mount. A COMPILED
+///   declarer's rows are already in its `.rutc` (the pack-time
+///   closure's dev-deps supplied the peers — compile once per owner),
+///   so only the presence law runs; a SOURCE declarer's group file
+///   (the descriptor's `lib`, an impl-only `.rut`) is read from the
+///   archive and recorded for the graph to compile into the
+///   declarer's unit. A declared group a source declarer's archive
+///   does not carry is a load error — the consistency row (a bundle
+///   that declares a group must carry it).
 ///
 /// The D3 path checks are directory-time law (a broken `[peer-deps]`
 /// path is the declaring pkg's own packaging bug): a bundle has no
@@ -287,6 +279,10 @@ fn run_bundle_peer_gate(
             let Some(lib) = &decl.lib else {
                 continue; // presence declared, no integration file to mount
             };
+            // a compiled declarer's rows ride its binary — nothing to read
+            if matches!(session.resolve(pkg).map(|m| &m.body), Ok(ModuleBody::Compiled(_))) {
+                continue;
+            }
             let Some(prefix) = prefixes.get(pkg) else {
                 return Err(format!(
                     "pkg `{pkg}` declares `[peer-deps]` but is not mounted"
@@ -301,7 +297,7 @@ fn run_bundle_peer_gate(
         }
     }
     for (pkg, text) in appends {
-        session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
+        session.record_peer_group(&pkg, &text);
         session.mark_groups_mounted(&pkg);
     }
     Ok(())
@@ -329,7 +325,7 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
 ///   body compiles; the surface derives from its exports.
 /// - `entry.type` ALONE — a **host pkg**: a pure declaration surface.
 ///   The `.d.rut` parses in declaration mode and lowers into the
-///   module's host fns (RFC 0025); `host_scope`/`inline` ride the
+///   module's host fns (RFC 0025); `host_scope` rides the
 ///   manifest. No body exists — the embedding Rust binds it at run
 ///   time.
 fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> {
@@ -339,7 +335,6 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
         let src = load_module_source(&dir.join(rel))?;
         let mut m = crate::decl::lower_decl_module(&src, &origin)?;
         m.host_scope = manifest.host_scope.clone();
-        m.inline = manifest.inline;
         m.entry = manifest.entry.clone();
         return Ok(m);
     }
@@ -359,10 +354,6 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
     Ok(Module {
         body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
-        // the manifest's mount properties ride the module regardless of
-        // entry shape (`inline` is ink's; `host_scope` matters only for
-        // host pkgs but is harmless elsewhere)
-        inline: manifest.inline,
         host_scope: manifest.host_scope.clone(),
         ..Default::default()
     })
@@ -384,6 +375,20 @@ fn record_peers(session: &mut Session, pkg: &str, manifest: &Manifest) {
     for (peer, desc) in &manifest.peer_deps {
         session.record_peer(pkg, peer, crate::session::PeerDecl::of(desc));
     }
+}
+
+/// Mount `dir`'s `[dev-deps]` table into an EXISTING session — the
+/// packer's compile-once-per-owner pass (a dep's unit packs the same
+/// bytes wherever it travels, its dev-mounted peers included).
+/// First-mount-wins, exactly like the `[deps]` walk.
+pub fn mount_dev_table(
+    session: &mut Session,
+    dir: &Path,
+    manifest: &Manifest,
+) -> Result<(), String> {
+    let mut visiting = Vec::new();
+    let mut mounted = BTreeMap::new();
+    resolve_table(session, dir, &manifest.dev_deps, &mut visiting, &mut mounted)
 }
 
 /// Resolve a manifest's `[deps]` recursively (RFC 0041 §3) — pass 1 of
@@ -457,8 +462,9 @@ fn resolve_table(
 /// - required peer absent → the loud D1 mount error: names the pkg, the
 ///   peer, and the fix. Never auto-pulled — the consumer supplies.
 /// - peer present (any reason) → the pkg's group file (the descriptor's
-///   `lib`, an impl-only `.rut`) is appended to its source —
-///   presence-based mounting, groups in peer-name order after the base.
+///   `lib`, an impl-only `.rut`) is recorded for the graph to compile
+///   INTO the declarer's unit (groups in peer-name order after the
+///   base) — presence-based mounting; the mounted body stays pristine.
 /// - optional peer absent → inert; the group simply never mounts.
 ///
 /// The program root's own peer paths are read and name-checked even
@@ -475,9 +481,15 @@ fn run_peer_gate(
 ) -> Result<(), String> {
     // collected first, applied after — the registry borrows the session
     let mut appends: Vec<(String, String)> = Vec::new();
+    let mut pre_compiled: Vec<String> = Vec::new();
     for (pkg, peers) in session.peer_decls() {
         if session.groups_mounted(pkg) {
             continue; // an earlier gate pass over this session mounted them
+        }
+        // a compiled declarer's rows ride its binary — presence law only
+        if matches!(session.resolve(pkg).map(|m| &m.body), Ok(ModuleBody::Compiled(_))) {
+            pre_compiled.push(pkg.clone());
+            continue;
         }
         let Some(pkg_dir) = mounted.get(pkg) else {
             return Err(format!("pkg `{pkg}` declares `[peer-deps]` but is not mounted"));
@@ -526,7 +538,10 @@ fn run_peer_gate(
         }
     }
     for (pkg, text) in appends {
-        session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
+        session.record_peer_group(&pkg, &text);
+        session.mark_groups_mounted(&pkg);
+    }
+    for pkg in pre_compiled {
         session.mark_groups_mounted(&pkg);
     }
     Ok(())

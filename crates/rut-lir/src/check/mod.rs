@@ -21,19 +21,6 @@ mod resolve;
 
 // ---- decl indices ----
 
-/// One spliced leaf's byte range in the combined unit text, and the pkg
-/// whose source it is (RFC 0012 §2a). `lo` is inclusive, `hi` exclusive —
-/// the leaf's own text exactly, seams excluded. Built by the graph's
-/// composition (rut-driver), consumed through [`Ctx::origin_of`]; a unit
-/// compiled with an empty map has every definition's origin = its own
-/// spec, which keeps the orphan rule inert wherever no splice happened.
-#[derive(Clone, Debug)]
-pub struct OriginLeaf {
-    pub lo: u32,
-    pub hi: u32,
-    pub spec: String,
-}
-
 #[derive(Clone, Debug)]
 pub struct EnumDecl {
     pub ty: TypeId,
@@ -129,6 +116,23 @@ pub struct InstRequest {
     pub decl: IdentId,
     /// the concrete arguments, in the consumer's type space
     pub args: Vec<TypeId>,
+    /// the methods whose mirrors this request exists for (the
+    /// linkable-classes phase): an instantiation IS its bodies, but a
+    /// body only compiles when some call site needs it — the owner
+    /// seeds exactly the mirrored methods at the requested
+    /// instantiation, never the whole method set (a body may only
+    /// typecheck at some instantiations)
+    pub methods: Vec<IdentId>,
+    /// a GENERIC FN seed (the linkable-classes phase): `decl` names a
+    /// fn, not a type, and `args` are the fn's type arguments — the
+    /// owner queues the fn's monomorphized body
+    pub is_fn: bool,
+    /// a GENERIC-TARGET IMPL METHOD seed: `decl` names the trait,
+    /// `args[0]` is the concrete target row (in the consumer's space,
+    /// registered verbatim in the owner's seed block), and `methods[0]`
+    /// the method whose body the owner mints + compiles
+    pub is_impl: bool,
+    pub impl_target: TypeId,
 }
 
 #[derive(Clone, Debug)]
@@ -291,6 +295,19 @@ pub struct Ctx<'a> {
     pub extern_trait_decls: std::collections::HashMap<IdentId, ExternTrait>,
     /// trait impls registered by used modules' surfaces (RFC 0012 §2)
     pub extern_impls: Vec<ExternImpl>,
+    /// used enums (the linkable-classes phase): name → (the enum's
+    /// type id, its members as bound) — a used enum's member paths
+    /// (`EncodeErrorKind.Depth`) resolve through this registry; the
+    /// descriptor row itself rides the carried type block
+    pub extern_enums: std::collections::HashMap<IdentId, (TypeId, Vec<(IdentId, i64)>)>,
+    /// inherent method surfaces bound from used modules' surfaces (the
+    /// linkable-classes phase): the class-method rows a consumer's
+    /// `b.append(..)` / `Logger.new(..)` resolve through
+    pub extern_inherents: Vec<ExternInherent>,
+    /// generic fns bound from used modules' surfaces: name → the
+    /// placeholder signature + parameter names. The call mints the
+    /// mirror instantiation and requests the body from the owner.
+    pub extern_generic_fns: std::collections::HashMap<IdentId, ExternGenericFn>,
     /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures)
@@ -337,13 +354,11 @@ pub struct Ctx<'a> {
     pub async_fns: std::collections::HashSet<IdentId>,
     /// whether `use` is resolved by the driver (module loading on)
     pub allow_uses: bool,
-    /// the spliced-leaf origin map (RFC 0012 §2a): byte range → the pkg
-    /// whose source it is. Empty for a no-splice unit.
-    pub origins: Vec<OriginLeaf>,
-    /// this unit's own pkg spec (= the module name) — the origin map's
-    /// fallback: with an empty map every definition's origin is the
-    /// unit's own spec, which is what keeps the orphan rule inert
-    /// wherever no splice happened
+    /// this unit's own pkg spec (= the module name). Every decl's
+    /// origin IS its module — source crosses no boundary since the
+    /// linkable-classes phase retired splicing, so the orphan rule's
+    /// inputs are this spec and the bound names' exporters
+    /// ([`Ctx::extern_origins`]).
     pub own_spec: String,
     /// the origin pkg of every bound (used) name (RFC 0012 §2a): a used
     /// type's or trait's DECLARING pkg, recorded beside the binding —
@@ -371,11 +386,22 @@ pub struct Ctx<'a> {
     /// requests this unit routed to declaring packages (see
     /// [`InstRequest`]) — deduplicated, emission order
     pub inst_requests: Vec<InstRequest>,
-    requests_seen: std::collections::HashSet<(String, String, Vec<TypeId>)>,
+    requests_seen: std::collections::HashSet<(String, String, Vec<TypeId>, String)>,
     /// instantiations the graph seeded into this unit (the owner side of
     /// a request): `(decl, args)` — materialized after collect, before
     /// the compile roots
-    pub seeded_insts: Vec<(String, Vec<TypeId>)>,
+    pub seeded_insts: Vec<(String, Vec<TypeId>, Vec<String>)>,
+    /// the graph-seeded GENERIC FN bodies: `(fn name, type arguments)`
+    /// — the owner side of a consumer's mirrored fn call
+    pub seeded_fns: Vec<(String, Vec<TypeId>)>,
+    /// the requesters' own impl registrations (trait text, target in
+    /// the requester's scope, method rows scope-qualified likewise) —
+    /// registered after `collect`, when the trait table exists
+    pub seed_impls: Vec<(String, TypeId, Vec<(String, u32)>, Vec<(String, u32)>)>,
+    /// the mirrored GENERIC-TARGET impl methods: `(trait text, target
+    /// row in the requester's space, method text)` — the owner mints
+    /// the template impl at the concrete target and compiles the body
+    pub seeded_impl_methods: Vec<(String, TypeId, String)>,
     /// the instantiation ledger rows this unit minted (type + fn) —
     /// copied onto the Program for link's unification
     pub ledger_types: Vec<rut_core::binary::InstTy>,
@@ -435,6 +461,33 @@ pub struct ExternImpl {
     /// trait method name → the exporter's scope-qualified fn id
     /// (concrete-ABI variant; falls back to `methods` when absent)
     pub methods_concrete: Vec<(IdentId, u32)>,
+}
+
+/// One used class's inherent method surface (the linkable-classes
+/// phase): the exporter's class row and its method signatures + fn
+/// ids. `target` is packed with the exporter's scope — a plain
+/// class's own row, a generic class's TEMPLATE row (signatures spell
+/// the `#<param>` placeholder rows a call site substitutes per
+/// instantiation; `local` is zero — the bodies ride the owner-side
+/// request machinery, keyed by the class name via
+/// [`Ctx::extern_generics`]).
+#[derive(Clone, Debug)]
+pub struct ExternInherent {
+    pub target: TypeId,
+    /// (name, argument types with the receiver excluded, return, fn
+    /// local, instance-vs-class)
+    pub methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool)>,
+}
+
+/// A used module's exported GENERIC fn: the owner pkg, the parameter
+/// names in order, and the `#<param>`-spelled signature the call site
+/// typechecks (and infers) against.
+#[derive(Clone, Debug)]
+pub struct ExternGenericFn {
+    pub owner: String,
+    pub params: Vec<IdentId>,
+    pub args: Vec<TypeId>,
+    pub ret: TypeId,
 }
 
 /// Where a satisfying impl was found (RFC 0012 §4): a local impl block
@@ -529,6 +582,9 @@ impl<'a> Ctx<'a> {
             extern_traits: std::collections::HashMap::new(),
             extern_trait_decls: std::collections::HashMap::new(),
             extern_impls: Vec::new(),
+            extern_inherents: Vec::new(),
+            extern_enums: std::collections::HashMap::new(),
+            extern_generic_fns: std::collections::HashMap::new(),
             for_of_sigs: std::collections::HashMap::new(),
             extern_native_fns: std::collections::HashSet::new(),
             extern_namespaces: std::collections::HashSet::new(),
@@ -543,7 +599,6 @@ impl<'a> Ctx<'a> {
             frame_yield_slot: std::collections::HashMap::new(),
             async_fns: std::collections::HashSet::new(),
             allow_uses: false,
-            origins: Vec::new(),
             own_spec: String::new(),
             extern_origins: std::collections::HashMap::new(),
             removed,
@@ -555,6 +610,9 @@ impl<'a> Ctx<'a> {
             inst_requests: Vec::new(),
             requests_seen: std::collections::HashSet::new(),
             seeded_insts: Vec::new(),
+            seeded_fns: Vec::new(),
+            seeded_impl_methods: Vec::new(),
+            seed_impls: Vec::new(),
             ledger_types: Vec::new(),
             ledger_fns: Vec::new(),
         }
@@ -676,7 +734,7 @@ impl<'a> Ctx<'a> {
                 d
             })
             .collect();
-        self.types.use_block(descs, blocks);
+        self.types.use_seed_rows(descs, blocks);
     }
 
     pub fn err(&mut self, span: Span, msg: impl Into<String>) {
@@ -778,23 +836,13 @@ impl<'a> Ctx<'a> {
         self.aliases.iter().find(|a| a.name == name)
     }
 
-    /// The pkg whose source this byte offset was parsed from (RFC 0012
-    /// §2a). The search takes the FIRST leaf whose range extends past
-    /// `lo`, so a seam byte belongs to the following leaf — which makes
-    /// the own-source fallback exact (the own leaf opens right after the
-    /// final seam). `own_spec` when the map is empty or the offset lies
-    /// past every leaf.
-    pub fn origin_of(&self, lo: u32) -> &str {
-        match self.origins.partition_point(|l| l.hi <= lo) {
-            i if i < self.origins.len() => &self.origins[i].spec,
-            _ => &self.own_spec,
-        }
-    }
-
+    /// this unit's own pkg spec. Every definition in the unit is the
+    /// unit's own — the orphan rule's locality input, trivial since
+    /// splicing retired.
     /// The pkg that owns `decl`'s instantiations: instantiation happens
-    /// where the body lives. A spliced decl's body lives in its splice
-    /// origin, a linked generic's in its exporter, an own decl in this
-    /// unit — the ledger key's owner anchor.
+    /// where the body lives. Every own decl's bodies live in this unit,
+    /// a linked generic's in its exporter — the ledger key's owner
+    /// anchor.
     pub fn owner_of_data(&self, decl: IdentId) -> String {
         self.decl_owner
             .get(&decl)
@@ -805,9 +853,90 @@ impl<'a> Ctx<'a> {
     /// Route an instantiation request to its declaring package
     /// (deduplicated — one request per `owner + decl + args`).
     pub fn request_inst(&mut self, owner: String, decl: IdentId, args: Vec<TypeId>) {
-        let key = (owner.clone(), self.name(decl).to_string(), args.clone());
+        let key = (owner.clone(), self.name(decl).to_string(), args.clone(), String::new());
         if self.requests_seen.insert(key) {
-            self.inst_requests.push(InstRequest { owner, decl, args });
+            self.inst_requests.push(InstRequest { owner, decl, args, methods: vec![], is_fn: false, is_impl: false, impl_target: 0 });
+        }
+    }
+
+    /// Route a mirrored METHOD body request (the linkable-classes
+    /// phase): the mirror stub's instantiation + the method whose body
+    /// must exist in the owner. Dedup per `owner + decl + args +
+    /// method`; several methods on one instantiation ride as several
+    /// rows that the owner merges.
+    pub fn request_inst_method(
+        &mut self,
+        owner: String,
+        decl: IdentId,
+        args: Vec<TypeId>,
+        method: IdentId,
+    ) {
+        let key = (
+            owner.clone(),
+            self.name(decl).to_string(),
+            args.clone(),
+            self.name(method).to_string(),
+        );
+        if self.requests_seen.insert(key) {
+            self.inst_requests.push(InstRequest {
+                owner,
+                decl,
+                args,
+                methods: vec![method],
+                is_fn: false,
+                is_impl: false,
+                impl_target: 0,
+            });
+        }
+    }
+
+    /// Route a mirrored GENERIC-TARGET impl method request (the
+    /// linkable-classes phase): the trait + the concrete target row (in
+    /// the consumer's space — the seed block registers it verbatim) +
+    /// the method whose body the owner must mint + compile.
+    pub fn request_inst_impl_method(
+        &mut self,
+        owner: String,
+        trait_name: IdentId,
+        target: TypeId,
+        method: IdentId,
+    ) {
+        let key = (
+            owner.clone(),
+            format!("impl:{}", self.name(trait_name)),
+            vec![target],
+            self.name(method).to_string(),
+        );
+        if self.requests_seen.insert(key) {
+            
+            self.inst_requests.push(InstRequest {
+                owner,
+                decl: trait_name,
+                args: vec![target],
+                methods: vec![method],
+                is_fn: false,
+                is_impl: true,
+                impl_target: target,
+            });
+        }
+    }
+
+    /// Route a mirrored GENERIC FN body request (the linkable-classes
+    /// phase): `name` is the fn, `args` its type arguments in the
+    /// consumer's space (the seed block carries their rows to the
+    /// owner, so the ids spell identically there).
+    pub fn request_generic_fn_body(&mut self, owner: String, name: IdentId, args: Vec<TypeId>) {
+        let key = (owner.clone(), format!("fn:{}", self.name(name)), args.clone(), String::new());
+        if self.requests_seen.insert(key) {
+            self.inst_requests.push(InstRequest {
+                owner,
+                decl: name,
+                args,
+                methods: vec![],
+                is_fn: true,
+                is_impl: false,
+                impl_target: 0,
+            });
         }
     }
 
@@ -919,8 +1048,10 @@ impl<'a> Ctx<'a> {
     }
     /// Resolve a signature type under `env`, with `self_ty` spelling the
     /// method's `Self` (the impl target inside an impl block). Bare
-    /// `Self` outside an impl is the caller's diagnostic.
-    pub(crate) fn resolve_sig_ty(
+    /// `Self` outside an impl is the caller's diagnostic. The driver's
+    /// surface build resolves exported methods' template signatures
+    /// through this (the `#<param>` placeholder env).
+    pub fn resolve_sig_ty(
         &mut self,
         node: NodeHandle<AnyTy>,
         env: &[(IdentId, TypeId)],
@@ -998,10 +1129,12 @@ impl<'a> Ctx<'a> {
 
     pub fn mk_array(&mut self, elem: TypeId) -> TypeId {
         let name = self.intern(&format!("Array<{}>", self.type_name(elem)));
-        self.types.intern(RutType {
+        let id = self.types.intern(RutType {
             name,
             kind: TyKind::Array { elem },
-        })
+        });
+        
+        id
     }
     /// A trait-typed value (`i: I`) — the trait object type: a cell handle whose cell's own
     /// type reaches the vtable (RFC 0015 §6)

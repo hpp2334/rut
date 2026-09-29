@@ -104,9 +104,10 @@ impl<'a> Ctx<'a> {
         // the orphan gate's target-side classification (RFC 0012 §2a) —
         // every unresolvable shape already returned above
         let (ty_display, ty_origin) = self.classify_target_origin(target);
-        // the impl block's own splice origin — the instantiation ledger's
-        // owner anchor for its monomorphized methods
-        let origin = self.origin_of(sp.lo).to_string();
+        // the impl block's owner — the instantiation ledger's owner
+        // anchor for its monomorphized methods. Every impl in the unit
+        // is the unit's own (no splicing), so this is the unit's spec.
+        let origin = self.own_spec.clone();
         match trait_ref {
             None => {
                 if is_prim {
@@ -178,6 +179,24 @@ impl<'a> Ctx<'a> {
                 }
                 Some((d.ty, Some((name, params)), true, false, false, name))
             }
+        } else if let Some(g) = self.extern_generics.get(&name).cloned() {
+            // a used GENERIC class (the linkable-classes phase): a trait
+            // impl registers on the exporter's template row — the
+            // registering unit owns the bodies (json's container groups),
+            // the instantiations mint at the consumers' sites and route
+            // back here as body requests (the owner-anchor law)
+            let Some(params) = self.ty_generic_idents(&generics) else {
+                self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
+                return None;
+            };
+            if params.len() != g.params.len() {
+                self.err(sp, format!(
+                    "`{}<..>` takes {} type parameter(s), {} given",
+                    self.name(name), g.params.len(), params.len()
+                ));
+                return None;
+            }
+            Some((g.template, Some((name, params)), false, true, false, name))
         } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
             match (kind, generics.as_slice()) {
                 (rut_core::binary::NativeTy::Opaque, []) => Some((TY_OPAQUE, None, false, false, false, name)),
@@ -229,6 +248,7 @@ impl<'a> Ctx<'a> {
             }
             Some((prim, None, false, false, true, name))
         } else {
+            
             self.err(
                 sp,
                 "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
@@ -289,10 +309,9 @@ impl<'a> Ctx<'a> {
                 let name = segs[0].name;
                 let display = self.name(name).to_string();
                 if let Some(d) = self.find_data(name) {
-                    // a decl of THIS unit — own source or a spliced leaf;
-                    // the origin map tells the two apart
-                    let lo = self.ast.span(d.node.id()).lo;
-                    (display, Some(self.origin_of(lo).to_string()))
+                    // a decl of THIS unit — every decl's origin IS its
+                    // module (no splicing)
+                    (display, Some(self.own_spec.clone()))
                 } else if let Some(AliasTarget::Ty(t)) = self
                     .find_alias(name)
                     .and_then(|a| a.resolved)
@@ -301,10 +320,7 @@ impl<'a> Ctx<'a> {
                     // TARGET's decl (already validated — collect_impl's
                     // target resolution ran first)
                     match self.datas.iter().find(|(_, d)| d.ty == t) {
-                        Some((_, d)) => {
-                            let lo = self.ast.span(d.node.id()).lo;
-                            (display, Some(self.origin_of(lo).to_string()))
-                        }
+                        Some(_) => (display, Some(self.own_spec.clone())),
                         None => (display, None),
                     }
                 } else if self.extern_native_types.contains_key(&name) {
@@ -337,9 +353,8 @@ impl<'a> Ctx<'a> {
     /// reaches the orphan gate resolved, so the own-spec fallback never
     /// fires.
     fn trait_origin(&self, name: IdentId) -> String {
-        if let Some(info) = self.find_trait(name) {
-            let lo = self.ast.span(info.node).lo;
-            return self.origin_of(lo).to_string();
+        if self.find_trait(name).is_some() {
+            return self.own_spec.clone();
         }
         if let Some(spec) = self.extern_origins.get(&name) {
             return spec.clone();
@@ -438,6 +453,34 @@ impl<'a> Ctx<'a> {
             }
         }
         self.datas[idx].1.methods.extend(mths);
+    }
+
+    /// The descriptor-derived sig type vs the impl's concrete sig type:
+    /// the trait's declared `Self` (this trait's object type, nested in
+    /// the return shape — `(?Self, ?DecodeJsonError)`) accepts the
+    /// impl's concrete spelling at the leaf; everything else matches
+    /// structurally (same kind, same members).
+    fn desc_sig_matches(&self, a: TypeId, b: TypeId, trait_id: u32) -> bool {
+        if a == b {
+            return true;
+        }
+        let self_obj = |t: TypeId| -> bool {
+            matches!(self.types.kind(t), TyKind::TraitObj { trait_id: tid } if *tid == trait_id)
+        };
+        if self_obj(b) {
+            return true;
+        }
+        match (self.types.kind(a).clone(), self.types.kind(b).clone()) {
+            (TyKind::Opt { elem: ae }, TyKind::Opt { elem: be }) => self.desc_sig_matches(ae, be, trait_id),
+            (TyKind::Array { elem: ae }, TyKind::Array { elem: be }) => self.desc_sig_matches(ae, be, trait_id),
+            (TyKind::Data { fields: fa }, TyKind::Data { fields: fb }) => {
+                fa.len() == fb.len()
+                    && fa.iter().zip(fb.iter()).all(|(x, y)| {
+                        x.ty == y.ty || self.desc_sig_matches(x.ty, y.ty, trait_id)
+                    })
+            }
+            _ => false,
+        }
     }
 
     /// `impl I for T { .. }` — a trait impl (one of the pair local, RFC
@@ -545,7 +588,7 @@ impl<'a> Ctx<'a> {
         // local trait may be implemented for one. Placement precedes
         // registration: an orphan never reaches the duplicate check or
         // the impl table.
-        let own = self.origin_of(sp.lo);
+        let own = self.own_spec.as_str();
         let trait_origin = self.trait_origin(trait_name);
         if trait_origin != own && ty_origin.as_deref() != Some(own) {
             let trait_side = format!("`{}` is {}'s", self.name(trait_name), trait_origin);
@@ -732,7 +775,14 @@ impl<'a> Ctx<'a> {
                 };
                 let ptys_match = ptys.len() == req.ptys.len()
                     && ptys.iter().zip(req.ptys.iter()).all(|(a, b)| a == b || self_obj(b));
-                if !ptys_match || ret != req.ret {
+                // the descriptor-derived sig spells `Self` as this
+                // trait's object type, nested in the return shape
+                // (`(?Self, ?DecodeJsonError)`); the impl's concrete sig
+                // satisfies it structurally — same shape, leaves equal,
+                // the trait-object leaf accepting any concrete spelling
+                // (RFC 0012 §4)
+                let ret_match = self.desc_sig_matches(ret, req.ret, trait_id);
+                if !ptys_match || !ret_match {
                     let fmt = |tys: &[TypeId]| tys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ");
                     self.err(
                         self.ast.span(mnode.id()),

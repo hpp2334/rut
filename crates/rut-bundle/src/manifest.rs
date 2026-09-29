@@ -88,10 +88,6 @@ pub struct Manifest {
     /// from the package name (`rt` keeps its historical `rt:log` scope,
     /// RFC 0022)
     pub host_scope: Option<String>,
-    /// `inline = true` — force source-inlining into every consumer
-    /// (`ink`: a module whose class methods must resolve at the call
-    /// site cannot be linked)
-    pub inline: bool,
 }
 
 /// A malformed manifest — a load error, never a runtime trap.
@@ -163,8 +159,8 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
                 // the host-fn registration prefix override (`rt` → `rt:log`)
                 "host_scope" => m.host_scope = Some(parse_string(value, lineno)?),
-                // force source-inlining into every consumer (`ink`)
-                "inline" => m.inline = parse_bool(value, lineno)?,
+                // `inline` (the retired source-inlining flag) rides as an
+                // unknown key: old manifests keep parsing
                 // dotted entry keys: `entry.type = "..."` etc.
                 "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
@@ -545,22 +541,20 @@ entry.type = "./pouch.d.rut"
     }
 
     #[test]
-    fn host_scope_and_inline_parse() {
+    fn host_scope_parses_and_inline_retires() {
         // the host pkg's manifest keys (RFC 0022 / the host-pkgs plan):
-        // `host_scope` overrides the registration prefix, `inline`
-        // forces source-inlining into every consumer
+        // `host_scope` overrides the registration prefix. `inline` (the
+        // retired source-inlining flag) parses as an unknown key — old
+        // manifests keep loading, the flag does nothing.
         let m = parse_manifest(
             "name = \"rt\"\nentry.type = \"./rt.d.rut\"\nhost_scope = \"rt:log\"\n",
         )
         .unwrap();
         assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
-        assert!(!m.inline);
+        assert_eq!(m.host_scope, None);
         let m = parse_manifest("name = \"ink\"\nentry.lib = \"./ink.rut\"\ninline = true\n")
             .unwrap();
-        assert!(m.inline);
-        assert_eq!(m.host_scope, None);
-        // a non-bool `inline` is a load error
-        assert!(parse_manifest("inline = yes\n").is_err());
+        assert_eq!(m.entry.lib.as_deref(), Some("./ink.rut"));
     }
 
     // ---- the dep kinds (RFC 0045): the three tables, `optional`, the

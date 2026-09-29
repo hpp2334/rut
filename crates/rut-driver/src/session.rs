@@ -103,9 +103,6 @@ pub struct Module {
     /// module's use path while its internal registration naming remains
     /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
     pub host_scope: Option<String>,
-    /// Force source-inlining into every consumer (`ink`): a module whose
-    /// class methods must resolve at the call site cannot be linked.
-    pub inline: bool,
 }
 
 /// One recorded `[peer-deps]` declaration (RFC 0045 §2): the declaring
@@ -202,6 +199,13 @@ pub struct Session {
     /// through this table to the module to ensure — a reference with no
     /// row is a load error (refuse, never guess).
     bundle_scopes: BTreeMap<rut_core::id::ScopeId, String>,
+    /// Presence-gated peer-integration groups (RFC 0045 §3): declaring
+    /// pkg → the group texts whose optional peers are in the program's
+    /// closure, in the declarer's peer-table order. The graph compiles
+    /// them INTO the declarer's unit (after its own source) — the
+    /// module's mounted body stays pristine, no source is ever
+    /// appended into a mounted pkg.
+    peer_groups: BTreeMap<String, Vec<String>>,
 }
 
 impl Session {
@@ -355,28 +359,18 @@ impl Session {
         self.bundle_scopes.get(&scope).map(String::as_str)
     }
 
-    /// Append peer-group source to a mounted module's body (RFC 0045
-    /// §3, presence-based group assembly): the combined text stays ONE
-    /// source string, so every consumer of a source body — the graph
-    /// splice, the wasm mounts — is untouched. A module without a
-    /// source body (a host pkg, a compiled `.rutc`) refuses: appended
-    /// groups are a source-shape law.
-    pub fn append_source(&mut self, spec: &str, text: &str) -> Result<(), ManifestError> {
-        let Some(m) = self.modules.get_mut(spec) else {
-            return Err(ManifestError(format!(
-                "cannot append a peer group to `{spec}` — no such module is mounted"
-            )));
-        };
-        match &mut m.body {
-            ModuleBody::Source { text: src, .. } => {
-                src.push('\n');
-                src.push_str(text);
-                Ok(())
-            }
-            _ => Err(ManifestError(format!(
-                "cannot append a peer group to `{spec}` — the module has no rut source body; a `.d.rut` decl surface does not gate (RFC 0045 §3)"
-            ))),
-        }
+    /// Record one presence-gated peer-integration group for `pkg`
+    /// (RFC 0045 §3): the gate read the descriptor's `lib` file because
+    /// the peer is in the closure. The graph compiles recorded groups
+    /// into the declarer's own unit, after its source — a mounted
+    /// module's body is never mutated.
+    pub fn record_peer_group(&mut self, pkg: &str, text: &str) {
+        self.peer_groups.entry(pkg.to_string()).or_default().push(text.to_string());
+    }
+
+    /// The peer groups recorded for `pkg`, in gate order.
+    pub fn peer_groups_of(&self, pkg: &str) -> Vec<String> {
+        self.peer_groups.get(pkg).cloned().unwrap_or_default()
     }
 
     /// Parse and mount a module manifest; a consumer manifest's `[deps]`
@@ -513,21 +507,24 @@ nmapset = { path = "../nmapset" }
                 path: "../pouch".into()
             }
         );
-        // append_source keeps ONE source string; a sourceless module refuses
+        // a recorded peer group rides the session, never the module body
         let mut s = Session::new();
         s.register_module(
             "m",
             Module { body: ModuleBody::Source { text: "fn a() {}".into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
-        s.append_source("m", "fn b() {}").unwrap();
+        s.record_peer_group("m", "fn b() {}");
         let m = s.resolve("m").unwrap();
         assert!(
-            matches!(&m.body, ModuleBody::Source { text, .. } if text == "fn a() {}\nfn b() {}"),
+            matches!(&m.body, ModuleBody::Source { text, .. } if text == "fn a() {}"),
             "{:?}",
             m.body
         );
-        // a host body (no rut source) refuses the append
+        assert_eq!(s.peer_groups_of("m"), vec!["fn b() {}".to_string()]);
+        assert!(s.peer_groups_of("other").is_empty());
+        // a host body (no rut source) carries no group text either —
+        // groups compile into SOURCE units only
         s.register_module(
             "d",
             Module {
@@ -543,6 +540,6 @@ nmapset = { path = "../nmapset" }
             },
         )
         .unwrap();
-        assert!(s.append_source("d", "fn c() {}").is_err());
+        assert!(s.peer_groups_of("d").is_empty());
     }
 }

@@ -17,8 +17,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// boxed and the prologue unboxes; a BARE concrete receiver calls the
     /// CONCRETE variant — the receiver stays raw, `Self`-spelled params
     /// cross as the concrete type, no box is minted. At concrete sites a
-    /// small body inlines at the call site (P1.3).
-    #[allow(clippy::too_many_arguments)]
+    /// small body inlines at the call site (P1.3).    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compile_trait_static_call(
         &mut self,
         impl_idx: usize,
@@ -305,10 +304,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         concrete: TypeId,
         rreg: u16,
         args: Vec<NodeHandle<AnyExpr>>,
-        _expected: Option<TypeId>,
+        expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
         slot_abi: bool,
     ) -> TcResult<TypeId> {
+        // a used GENERIC-target impl (the row's target is a registered
+        // template): the per-instantiation bodies live in the impl's
+        // owner — mint the mirror request instead of binding the
+        // placeholder surface fn ids
+        let im_target = self.ctx.extern_impls[ext_idx].target;
+        let is_template = self
+            .ctx
+            .extern_generics
+            .values()
+            .any(|g| g.template == im_target)
+            || self.ctx.impl_target_is_structural_template(im_target);
+        if is_template {
+            let subst = self
+                .ctx
+                .inst_data
+                .get(&concrete)
+                .cloned()
+                .map(|(_, a)| a)
+                .unwrap_or_else(|| match self.ctx.types.kind(concrete).clone() {
+                    TyKind::Opt { elem } | TyKind::Array { elem } => vec![elem],
+                    _ => vec![],
+                });
+            return self.compile_extern_impl_template_call(ext_idx, midx, concrete, subst, rreg, args, expected, sp);
+        }
         let (fid, tm, trait_id) = {
             let im = &self.ctx.extern_impls[ext_idx];
             let tdesc = self.ctx.trait_by_id(im.trait_id);
@@ -375,10 +398,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// sees it for the "use `I` .." diagnostic.
     pub(crate) fn find_extern_trait_impl_method(&self, rt: TypeId, name: IdentId) -> Option<(usize, usize)> {
         for (eidx, im) in self.ctx.extern_impls.iter().enumerate() {
-            if !self.ctx.extern_trait_decls.contains_key(&im.trait_name) {
+            // the use-both gate (RFC 0012 §6): the trait's name must be
+            // callable here — a bound foreign trait, or the owner's own
+            // declaration (a seed impl re-registers a caller's impl of
+            // the owner's own trait; the caller used the trait to spell
+            // the call)
+            if !self.ctx.extern_trait_decls.contains_key(&im.trait_name)
+                && self.ctx.find_trait(im.trait_name).is_none()
+            {
                 continue;
             }
-            if im.target != rt || !im.methods.iter().any(|(n, _)| *n == name) {
+            let target_hit = im.target == rt
+                || self
+                    .ctx
+                    .impl_target_is_template_for(im.target, rt)
+                || self
+                    .ctx
+                    .impl_target_is_structural_template_for(im.target, rt);
+            if !target_hit || !im.methods.iter().any(|(n, _)| *n == name) {
                 continue;
             }
             let tdesc = self.ctx.trait_by_id(im.trait_id);

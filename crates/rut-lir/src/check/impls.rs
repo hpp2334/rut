@@ -12,6 +12,7 @@ impl<'a> Ctx<'a> {
     /// records) keep one — the ABIs coincide.
     pub fn impl_is_dual_abi(&self, idx: usize) -> bool {
         let im = &self.impls[idx];
+        
         !im.inherent && matches!(self.types.kind(im.target), TyKind::Prim(_))
     }
 
@@ -56,6 +57,13 @@ impl<'a> Ctx<'a> {
                             return true;
                         }
                     }
+                    // a used generic class (the linkable-classes phase):
+                    // the impl registers on the exporter's template row
+                    if let Some(g) = self.extern_generics.get(d) {
+                        if g.template == i.target {
+                            return true;
+                        }
+                    }
                 }
                 match (self.types.kind(target), &i.target_data) {
                     (TyKind::Opt { .. }, Some((d, params))) if *d == sym::OPT && params.len() == 1 => true,
@@ -68,16 +76,62 @@ impl<'a> Ctx<'a> {
     /// The impl satisfying `(trait, target)` wherever it lives: a local
     /// impl block, or another module's surface registration (RFC 0012
     /// §2/§5). Extern impls are gated on the trait's name having been
-    /// used — an unused trait's impl is invisible to dispatch.
+    /// used — an unused trait's impl is invisible to dispatch. A used
+    /// GENERIC-target impl (`impl JsonSerialize for Vec<T>` compiled in
+    /// json) answers a receiver that instantiates the same used
+    /// generic: the row's target is the template, the receiver names
+    /// the class through its mirror instantiation.
     pub fn find_impl_ex(&self, trait_id: u32, target: TypeId) -> Option<ImplHit> {
         if let Some(idx) = self.find_impl_for(trait_id, target) {
             return Some(ImplHit::Local(idx));
         }
         self.extern_impls.iter().position(|im| {
             im.trait_id == trait_id
-                && im.target == target
-                && self.extern_trait_decls.contains_key(&im.trait_name)
+            && (im.target == target
+                || self.impl_target_is_template_for(im.target, target)
+                || self.impl_target_is_structural_template_for(im.target, target))
+            && (self.extern_trait_decls.contains_key(&im.trait_name)
+                || self.find_trait(im.trait_name).is_some())
         }).map(ImplHit::Extern)
+    }
+
+    /// Does the extern impl row's template target answer `target`'s
+    /// instantiation of the same used generic?
+    pub(crate) fn impl_target_is_template_for(&self, im_target: TypeId, target: TypeId) -> bool {
+        match self.inst_data.get(&target) {
+            Some((d, args)) if !args.is_empty() => self
+                .extern_generics
+                .get(d)
+                .map_or(false, |g| g.template == im_target),
+            _ => false,
+        }
+    }
+
+    /// Does the extern impl row's target spell a STRUCTURAL template
+    /// (`?T` / `[T]` — the elem is a `#param` placeholder row) that
+    /// answers `target`'s same-shape structural row (`?Json` / `[u8]`)?
+    /// The linkable-classes phase's cross-module shape dispatch.
+    pub(crate) fn impl_target_is_structural_template_for(&self, im_target: TypeId, target: TypeId) -> bool {
+        let placeholder_elem = |e: TypeId| -> bool {
+            self.interner.name(self.types.type_at(e).name).starts_with('#')
+        };
+        let tpl = self.types.kind(im_target);
+        let recv = self.types.kind(target);
+        matches!((tpl, recv),
+            (TyKind::Opt { elem: pe }, TyKind::Opt { elem: re }) if placeholder_elem(*pe) && placeholder_elem(*re))
+            || matches!((tpl, recv),
+            (TyKind::Array { elem: pe }, TyKind::Array { elem: re }) if placeholder_elem(*pe) && placeholder_elem(*re))
+    }
+
+    /// Is the extern impl row's target a structural template at all?
+    pub fn impl_target_is_structural_template(&self, im_target: TypeId) -> bool {
+        let placeholder_elem = |e: TypeId| -> bool {
+            self.interner.name(self.types.type_at(e).name).starts_with('#')
+        };
+        match self.types.kind(im_target) {
+            TyKind::Opt { elem } | TyKind::Array { elem } => placeholder_elem(*elem),
+            _ => false,
+        }
     }
 
     // ---- parameterized trait impls: the dispatch half (phase 2) ----
@@ -329,7 +383,8 @@ impl<'a> Ctx<'a> {
             TyKind::Prim(_) => self.builtin_impl(name, ty).is_some() || self.has_trait_impl_method(ty, name),
             TyKind::Data { .. } => {
                 // inherent: the declaring class/struct's inline methods or
-                // an `impl T { .. }` block
+                // an `impl T { .. }` block — or a used class's surface
+                // rows (the linkable-classes phase)
                 let inherent = match self.inst_data.get(&ty).cloned() {
                     Some((dname, _)) => self
                         .find_data(dname)
@@ -343,7 +398,7 @@ impl<'a> Ctx<'a> {
                     .impls
                     .iter()
                     .any(|im| im.inherent && self.impl_target_is(im, ty) && im.methods.iter().any(|(n, _)| *n == name));
-                inherent || self.has_trait_impl_method(ty, name)
+                inherent || self.has_extern_method(ty, name) || self.has_trait_impl_method(ty, name)
             }
             TyKind::Array { .. } => self
                 .impls

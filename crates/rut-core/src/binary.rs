@@ -153,7 +153,13 @@ pub struct SurfaceTrait {
 /// `methods` binds the slot variant (the one vtable fills and links
 /// carry), `methods_concrete` the concrete one. Ref-repr targets
 /// (`str`/`bytes`/records) compile one variant — both lists bind the
-/// same fn id, the ABIs coincide.
+/// same fn id, the ABIs coincide. A GENERIC-target impl (`impl I for
+/// Vec<T>`) rides the same row shape with `target` naming the TEMPLATE
+/// row — recognizable at bind time because the target equals a
+/// registered generic template — and its method fn ids are
+/// placeholders (zero): one body exists per instantiation, none at
+/// surface build time, so the consumer mints a mirror instantiation
+/// request instead of binding the ids.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceImpl {
     /// the trait's source name (an index into [`Surface::traits`] by name)
@@ -167,6 +173,38 @@ pub struct SurfaceImpl {
     /// trait method name → the exporter's module-local fn id (concrete
     /// ABI); empty when the exporter predates the dual ABI
     pub methods_concrete: Vec<(IdentId, u32)>,
+}
+
+/// One exported class's inherent method surface (the linkable-classes
+/// phase): `(class row → method name → fn local + signature)`. The
+/// class row is packed in the exporter's table — a plain class's own
+/// row, a generic class's TEMPLATE row (signatures spell the
+/// `#<param>` placeholder rows; the consumer substitutes per
+/// instantiation and REQUESTS the bodies from the owner). Class
+/// methods (no receiver) and instance methods ride the same row list;
+/// `params` excludes the receiver, `has_self` says which call shape
+/// the site lowers to (`Call` vs `CallM`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SurfaceInherent {
+    /// the class's type id, packed in the exporter's table
+    pub target: TypeId,
+    /// the methods: name, argument types (receiver excluded), return,
+    /// fn local, and whether the first parameter is a receiver
+    pub methods: Vec<SurfaceMethod>,
+}
+
+/// One inherent method row of [`SurfaceInherent`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct SurfaceMethod {
+    pub name: IdentId,
+    pub params: Vec<TypeId>,
+    pub ret: TypeId,
+    /// the exporter's module-local fn id (a plain class: the one
+    /// compiled body; a generic class: zero — bodies are per
+    /// instantiation and ride the request machinery)
+    pub local: u32,
+    /// instance method (receiver) vs class method (no receiver)
+    pub has_self: bool,
 }
 
 /// A builtin container published by `core`'s native surface (RFC 0028):
@@ -234,6 +272,22 @@ pub enum NativeTrait {
     RunContext,
 }
 
+/// One exported GENERIC function (`pub fn decodeJson<T>(..)`): the
+/// usable name, its generic parameters in order, and the
+/// placeholder-spelled signature (params/ret carry the `#<param>`
+/// rows). A generic fn's body exists per argument list only — the
+/// consumer mints the mirror instantiation and requests the body from
+/// the owner, exactly like a generic class's methods.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SurfaceGenericFn {
+    pub name: IdentId,
+    /// the generic parameters, in declaration order
+    pub params: Vec<IdentId>,
+    /// argument types, receivers excluded, placeholders spelled
+    pub args: Vec<TypeId>,
+    pub ret: TypeId,
+}
+
 /// The usable surface a module publishes.
 /// Names are [`IdentId`]s into the surface's own [`Surface::names`]
 /// interner — including the names inside the carried [`RutType`]
@@ -258,11 +312,19 @@ pub struct Surface {
     pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
     /// exported (pub) type names
     pub type_exports: Vec<SurfaceType>,
+    /// exported GENERIC fns (the linkable-classes phase): names +
+    /// placeholder signatures — the bodies ride the owner-side request
+    /// machinery
+    pub fn_generics: Vec<SurfaceGenericFn>,
     /// declared trait declarations (non-generic, RFC 0012 §5)
     pub traits: Vec<SurfaceTrait>,
     /// trait impl registrations `(trait, target, [method → fn ref])`
     /// (RFC 0012 §2) — merged at link, where duplicate pairs error
     pub impls: Vec<SurfaceImpl>,
+    /// inherent method surfaces (the linkable-classes phase): one row
+    /// per class with methods — the wire's reserved table, populated
+    /// since the phase that retired source-inlining
+    pub inherents: Vec<SurfaceInherent>,
     /// builtin container names (`core` only): name -> constructor, plus
     /// the name's ambient bit (`true` binds in every unit with no `use`;
     /// `false` is the import-gated spelling, resolved through `use`)
@@ -661,9 +723,9 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// rows), consts, the carried type descriptors + scope blocks + type
 /// exports, trait decls, impl registrations (both ABI lists), the
 /// native rows with their ambient bits — plus a reserved
-/// length-prefixed inherent-impl table (zero rows until the
-/// linkable-classes phase populates it, so that change rides v16
-/// without a second bump). A consumer can no longer rebuild a surface
+/// length-prefixed inherent-impl table (zero rows, populated by the
+/// linkable-classes phase within the same format version). A consumer
+/// can no longer rebuild a surface
 /// from `.d.rut` text (impl→fn-local ids, trait-table indices,
 /// namespace/host rows are not derivable without guesswork), so stale
 /// v15 artifacts — which carry no surface section — are refused with
@@ -675,8 +737,18 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// sharing a key into ONE program-wide instantiation and a consumer
 /// can resolve its requests against a packaged binary's ledger.
 /// Stale v16 artifacts carry neither — refused with the standard
-/// version error.
-pub const VERSION: u32 = 17;
+/// version error. The v17 surface also POPULATED the inherent-impl
+/// table v16 reserved (the reservation paid off — that half of the
+/// linkable-classes phase rode without a bump).
+/// v18: the linkable-classes phase, declared-surface half — the
+/// surface gains its exported GENERIC fns (`decodeJson<T>` and
+/// friends: name + parameter names + the `#<param>`-spelled
+/// signature). A generic fn's body exists per argument list, so the
+/// consumer mints the mirror instantiation and requests the body from
+/// the owner; the signature is what the call site typechecks against.
+/// Stale v17 artifacts carry no fn-generics section — refused with the
+/// standard version error.
+pub const VERSION: u32 = 18;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -942,6 +1014,18 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             None => e.u8(0),
         }
     }
+    // exported generic fns: names + placeholder signatures (the bodies
+    // ride the request machinery)
+    e.u32(s.fn_generics.len() as u32);
+    for g in &s.fn_generics {
+        e.u32(g.name.0);
+        e.u32(g.params.len() as u32);
+        for p in &g.params {
+            e.u32(p.0);
+        }
+        e.tys(&g.args);
+        e.u32(g.ret);
+    }
     // trait decls: keyed by the exporter's trait-table index
     e.u32(s.traits.len() as u32);
     for t in &s.traits {
@@ -971,10 +1055,21 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             e.u32(*f);
         }
     }
-    // inherent impls (class methods): RESERVED — length-prefixed and
-    // always empty until the linkable-classes phase populates it, so
-    // that change rides v16 without a second format bump
-    e.u32(0);
+    // inherent impls (class methods): one row per class with methods —
+    // the table v16 reserved (length-prefixed, zero rows) so this
+    // population rides the same format without a second bump
+    e.u32(s.inherents.len() as u32);
+    for ih in &s.inherents {
+        e.u32(ih.target);
+        e.u32(ih.methods.len() as u32);
+        for m in &ih.methods {
+            e.u32(m.name.0);
+            e.tys(&m.params);
+            e.u32(m.ret);
+            e.u32(m.local);
+            e.u8(m.has_self as u8);
+        }
+    }
     // native rows (core's builtin surface), ambient bits included
     e.u32(s.native_types.len() as u32);
     for (n, k, ambient) in &s.native_types {
@@ -1361,6 +1456,23 @@ fn decode_surface(
         let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
         s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, params, scope });
     }
+    // exported generic fns
+    let n = d.u32()? as usize;
+    s.fn_generics = Vec::with_capacity(n);
+    for _ in 0..n {
+        let gname = name(d)?;
+        let nparams = d.u32()? as usize;
+        let mut params = Vec::with_capacity(nparams);
+        for _ in 0..nparams {
+            params.push(name(d)?);
+        }
+        let mut args = Vec::new();
+        for _ in 0..(d.u32()? as usize) {
+            args.push(d.u32()?);
+        }
+        let ret = d.u32()?;
+        s.fn_generics.push(SurfaceGenericFn { name: gname, params, args, ret });
+    }
     // trait decls
     let n = d.u32()? as usize;
     s.traits = Vec::with_capacity(n);
@@ -1396,14 +1508,27 @@ fn decode_surface(
         }
         s.impls.push(SurfaceImpl { trait_name, target, methods, methods_concrete });
     }
-    // inherent impls (class methods): reserved — v16 carries zero rows
-    // until the linkable-classes phase populates the table; a nonzero
-    // count is a binary this engine cannot read
+    // inherent impls (class methods): one row per class with methods —
+    // v16 reserved the table (zero rows) so this population rides the
+    // same format version
     let ninherent = d.u32()? as usize;
-    if ninherent != 0 {
-        return Err(format!(
-            "bad surface: inherent impl table carries {ninherent} rows (reserved in this version)"
-        ));
+    s.inherents = Vec::with_capacity(ninherent);
+    for _ in 0..ninherent {
+        let target = d.u32()?;
+        let nmeths = d.u32()? as usize;
+        let mut methods = Vec::with_capacity(nmeths);
+        for _ in 0..nmeths {
+            let mname = name(d)?;
+            let mut params = Vec::new();
+            for _ in 0..(d.u32()? as usize) {
+                params.push(d.u32()?);
+            }
+            let ret = d.u32()?;
+            let local = d.u32()?;
+            let has_self = d.u8()? != 0;
+            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self });
+        }
+        s.inherents.push(SurfaceInherent { target, methods });
     }
     // native rows, ambient bits included
     let n = d.u32()? as usize;

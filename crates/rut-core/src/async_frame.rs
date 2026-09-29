@@ -46,6 +46,12 @@ pub const LOCALS_BASE: u32 = 5;
 /// it in type position, and the driving loop finds it by this name to
 /// mint the per-drive cx.
 pub const RUN_CONTEXT_TYPE: &str = "RunContext";
+
+/// The well-known symbol for the engine-minted cx type (`RunContext`) —
+/// the cross-unit singleton's name (the linkable-classes phase: a
+/// linked pkg's surface cx params re-spell to the importing unit's
+/// minted row).
+pub const RUN_CONTEXT_TYPE_SYM: &str = RUN_CONTEXT_TYPE;
 /// The cx record's single field: the frame edge.
 pub const RUN_CONTEXT_FRAME_FIELD: &str = "frame";
 

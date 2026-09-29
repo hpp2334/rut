@@ -33,16 +33,16 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 }
 
 /// One session, one in-memory module set (no filesystem): the specs'
-/// sources registered by hand, `inline` spelled where the test means it.
+/// sources registered by hand. Every module links (the `bool` arg is
+/// the retired `inline` flag's seat, kept for the callers' shape).
 fn session_of(modules: &[(&str, &str, bool)]) -> Session {
     let mut s = Session::new();
     mount_std(&mut s);
-    for (spec, src, inline) in modules {
+    for (spec, src, _inline_retired) in modules {
         s.register_module(
             spec,
             Module {
                 body: ModuleBody::Source { text: src.to_string(), is_decl: false },
-                inline: *inline,
                 ..Default::default()
             },
         )

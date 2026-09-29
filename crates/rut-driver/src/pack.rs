@@ -1,31 +1,30 @@
 //! The v5 packer: a module directory (+ its whole `[deps]` closure) →
 //! one deterministic **compiled** `.rutbundle`. The root and every
-//! linkable dep ride as `.rutc` binaries (bodies + surface — the
-//! linking truth); explicitly `inline`d deps and host pkgs ride as
-//! source file sets — with instantiation owner-anchored, a generic
-//! export links and its consumers request the instantiations — and the
-//! pack-time scope ledger lets a loader rebase every decoded program
-//! onto its own numbering.
+//! source dep ride as `.rutc` binaries (bodies + surface — the
+//! linking truth); host/decl pkgs ride as their declaration file sets.
+//! Instantiation is owner-anchored (a generic export links, its
+//! consumers request), class methods cross on the surface's inherent
+//! rows, and the pack-time scope ledger lets a loader rebase every
+//! decoded program onto its own numbering.
 //!
 //! The packer lives in the driver because it needs the compiler: it
-//! loads the directory's session, walks the graph once
-//! ([`compile_units`]), and classifies each package with the graph's
-//! own splice law ([`linkable`] — there is no second implementation).
-//! The bytes come back; writing the output file stays with the caller
+//! loads the directory's session, mounts every dep's `[dev-deps]` too
+//! (compile once per owner — a dep's unit is the same bytes wherever
+//! it is packed), and walks the graph once ([`compile_units`]). The
+//! bytes come back; writing the output file stays with the caller
 //! (the CLI). Same input directory ⇒ byte-identical bundle.
 //!
-//! Refusals (never guesses): a root that cannot link, a would-be
-//! compiled group declaring `[peer-deps]` lib files, and a manifest
-//! that is not bundle-shaped v5. Source sharing stays what it always
-//! was outside bundles: a directory (`rut run <dir>`).
+//! Refusals (never guesses): cycles and name collisions — the graph's
+//! own laws, surfaced as pack errors. Source sharing stays what it
+//! always was outside bundles: a directory (`rut run <dir>`).
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use rut_bundle::{collect_source_group, parse_manifest, write_bundle, FsSource};
 
-use crate::graph::{compile_units, linkable, Linkability};
-use crate::loader::load_dir_session;
+use crate::graph::compile_units;
+use crate::loader::{load_dir_session};
 use crate::session::ModuleBody;
 
 /// The v5 bundle layout version — the only one this toolchain packs or
@@ -78,30 +77,23 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
             dir.join("rut.toml").display()
         ));
     }
+    // compile once per owner: every dep group's unit is the same bytes
+    // wherever it is packed, so each dep's own `[dev-deps]` mount too —
+    // the presence a declarer's peer groups ride (json's rows ship with
+    // json, wherever json travels) — then re-run the gate over the
+    // grown closure
+    let mut dirs = BTreeMap::new();
+    collect_group_dirs(dir, &manifest, &mut dirs, &mut std::collections::BTreeSet::new())?;
+    for (spec, gdir) in &dirs {
+        let dm = rut_bundle::read_manifest(gdir, &FsSource)?;
+        crate::loader::mount_dev_table(&mut session, gdir, &dm)?;
+    }
+    crate::loader::assemble_peers(&mut session)?;
     let units = compile_units(&session, &root);
     if !units.diags.is_empty() || !units.ok {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
         return Err(format!("pack: {}", msgs.join("; ")));
     }
-    // the root must be linkable — an explicitly inlined pkg carries no
-    // publishable boundary (its whole source is its interface)
-    let root_linked = units.linked.get(&root);
-    let root_ok = match (&session.resolve(&root).unwrap().body, root_linked) {
-        (ModuleBody::Source { .. }, Some(&(idx, _))) => {
-            linkable(&units.programs[idx], manifest.inline) == Linkability::Linkable
-        }
-        _ => false,
-    };
-    if !root_ok {
-        return Err(format!(
-            "pack: {root} is inline — its source is its interface and it cannot be published compiled; share the directory instead"
-        ));
-    }
-    // the dep groups: the manifest's [deps] walk (recursively,
-    // deduplicated by package name, name-checked) — the same set the
-    // source packer carried, now classified per package
-    let mut groups_tree = BTreeMap::new();
-    collect_group_dirs(dir, &manifest, &mut groups_tree, &mut std::collections::BTreeSet::new())?;
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     // the manifest byte-for-byte, then the scope ledger
     entries.push(("rut.toml".into(), manifest_bytes));
@@ -114,6 +106,16 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     entries.push(("rut.scopes".into(), ledger_text(&ledger).into_bytes()));
     // the root's compiled binary (+ its surface text for humans, when
     // the package declares one)
+    let root_linked = units.linked.get(&root);
+    let root_ok = matches!(
+        (&session.resolve(&root).unwrap().body, root_linked),
+        (ModuleBody::Source { .. }, Some(&_))
+    );
+    if !root_ok {
+        return Err(format!(
+            "pack: {root} produced no compiled program — a host pkg (a `.d.rut` surface with no body) cannot be a bundle root; pack a source pkg instead"
+        ));
+    }
     let root_idx = root_linked.unwrap().0;
     entries.push((format!("{name}.rutc"), rut_core::binary::encode(&units.programs[root_idx])));
     if let Some(rel) = &manifest.entry.type_path {
@@ -122,32 +124,19 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
             .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
         entries.push((rut_bundle::bundle_key(&format!("{name}.d.rut"))?, text));
     }
-    // the dep groups, name order — mixed kinds: linkable → compiled,
-    // splice-needed / host / unused → the source file set
-    for (spec, gdir) in &groups_tree {
+    // the dep groups, name order: source pkgs → compiled, host/decl
+    // pkgs and declared-but-unused pkgs → the declaration file set
+    for (spec, gdir) in &dirs {
         if *spec == root || session.resolve(spec).is_err() {
             continue; // the root rode above; names are already mounted
         }
         let dm = rut_bundle::read_manifest(gdir, &FsSource)?;
         let prefix = format!("{spec}/");
         let compiled = match &session.resolve(spec).unwrap().body {
-            ModuleBody::Source { .. } => match units.linked.get(spec) {
-                Some(&(idx, _)) => {
-                    linkable(&units.programs[idx], dm.inline) == Linkability::Linkable
-                }
-                None => false, // mounted but never ensured — rides as source
-            },
+            ModuleBody::Source { .. } => units.linked.contains_key(spec),
             _ => false, // host pkgs have nothing to compile
         };
         if compiled {
-            // a compiled group may not declare `[peer-deps]` lib files
-            // (appending source into a compiled pkg is impossible —
-            // the v1-precedent refusal)
-            if dm.peer_deps.values().any(|d| d.contains_key("lib")) {
-                return Err(format!(
-                    "pack: {spec} declares `[peer-deps]` lib group files — a linkable pkg cannot be published compiled while its groups append source; share the directory instead"
-                ));
-            }
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
             // its name, mount flags, and peer declarations from it
@@ -170,7 +159,8 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
 
 /// The `[deps]` graph, recursively — each package under its name,
 /// deduplicated, name-checked against its manifest (the packer only
-/// ever reads manifest-named paths).
+/// ever reads manifest-named paths). Exposed for the packer's
+/// compile-once-per-owner dev mounting.
 fn collect_group_dirs(
     dir: &Path,
     manifest: &rut_bundle::Manifest,

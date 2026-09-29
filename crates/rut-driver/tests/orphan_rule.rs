@@ -56,14 +56,12 @@ impl Mark for Set<T> {
 fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     let mut s = Session::new();
     for (spec, src) in modules {
-        // `coll`/`fmt` export generic classes whose methods their
-        // consumers splice — the inline flag is the splice law's one
-        // trigger since instantiation went owner-anchored, and these
-        // tests pin the orphan rule over SPLICED foreign classes
-        let inline = *spec == "coll" || *spec == "fmt";
+        // every module links now (the linkable-classes phase): foreign
+        // classes cross on their surfaces, and these tests pin the
+        // orphan rule over LINKED foreign types and traits
         let _ = s.register_module(
             spec,
-            Module { spec: spec.to_string(), body: ModuleBody::Source { text: src.to_string(), is_decl: false }, inline, ..Default::default() },
+            Module { spec: spec.to_string(), body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() },
         );
     }
     let (root, _) = modules.last().expect("root module");

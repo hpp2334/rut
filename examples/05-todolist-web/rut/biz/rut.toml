@@ -15,12 +15,6 @@
 name = "app"
 entry.lib = "./biz.rut"
 entry.libs = ["./domain.rut", "./world.rut", "./app.rut"]
-# `inline = true`: the app's public surface spells foreign-generic
-# instantiations (`World`'s fields are `Mutation<str, Req>` and
-# friends), so its consumers splice the source and align with their own
-# rows until class methods ride the surface. The splice law's one
-# explicit trigger since instantiation went owner-anchored.
-inline = true
 
 [deps]
 ui = { path = "../ui" }

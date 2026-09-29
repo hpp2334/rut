@@ -1,11 +1,10 @@
 # http/ — the std HTTP lane's rut face: the async-only client, builder
 # and response classes over the `http_host` rows (the ink pattern).
-# `inline = true` keeps the class methods resolvable at every
-# consumer's call site (a class-method module cannot be linked; the
-# ink/strbuild law).
+# Publishes COMPILED (the linkable-classes phase): the classes' methods
+# cross on the surface's inherent rows, so every consumer's call site
+# binds them from this pkg's binary.
 name = "http"
 entry.lib = "./http.rut"
-inline = true
 
 [deps]
 http_host = { path = "../http_host" }

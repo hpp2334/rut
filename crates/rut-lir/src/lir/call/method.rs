@@ -32,7 +32,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     || self.ctx.extern_native_types.contains_key(&base)
                     || self.ctx.is_extern_namespace(base)
                     || self.ctx.find_enum(base).is_some()
-                    || self.ctx.find_data(base).is_some();
+                    || self.ctx.find_data(base).is_some()
+                    || self.ctx.extern_types.contains_key(&base)
+                    || self.ctx.extern_generics.contains_key(&base);
                 if is_type {
                     return self.compile_static_call(base, segs[0].generics.clone(), name, generics, args, expected, sp);
                 }
@@ -538,6 +540,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((dname, class_args, mnode)) = found {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, generics, args, expected, sp);
             }
+            // a used class (the linkable-classes phase): the surface's
+            // inherent rows answer — a plain class binds the exporter's
+            // fn, a generic class mints the mirror instantiation the
+            // owner's unit compiles
+            if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
+                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, args, expected, sp);
+            }
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
                 // a bare concrete receiver calls the CONCRETE-ABI variant:
                 // the receiver register stays raw and the args cross
@@ -689,6 +698,40 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+    }
+
+    /// The used class whose inherent surface answers `name` on `rt`:
+    /// `(row, method index, class substitution, decl name when
+    /// generic)`. The mirror machinery needs the decl name + argument
+    /// types for the owner request; a plain class returns `None` for
+    /// both (its fn id rides the surface row).
+    pub(crate) fn find_extern_inherent(
+        &self,
+        rt: TypeId,
+        name: IdentId,
+    ) -> Option<(usize, usize, Vec<(IdentId, TypeId)>, Option<IdentId>)> {
+        let (dname, cargs) = match self.ctx.inst_data.get(&rt) {
+            Some((d, args)) => (Some(*d), args.clone()),
+            None => (None, vec![]),
+        };
+        for (i, ih) in self.ctx.extern_inherents.iter().enumerate() {
+            let generic = dname.and_then(|d| self.ctx.extern_generics.get(&d));
+            let hit = ih.target == rt
+                || generic.map_or(false, |g| g.template == ih.target);
+            if !hit {
+                continue;
+            }
+            let Some(midx) = ih.methods.iter().position(|(n, ..)| *n == name) else {
+                continue;
+            };
+            let subst = generic
+                .map(|g| g.params.iter().cloned().zip(cargs.iter().cloned()).collect())
+                .unwrap_or_default();
+            return Some((i, midx, subst, generic.map(|g| {
+                dname.expect("generic implies decl name")
+            })));
+        }
+        None
     }
 
     /// The registered trait impl on `rt` whose method set contains

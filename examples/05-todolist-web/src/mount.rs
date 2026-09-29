@@ -10,7 +10,7 @@
 //! THE MIRROR (the wasm lane): the Session is I/O-free by law (wasm
 //! hosts mount in memory), so `mount_app_session` registers the same
 //! closure by hand — one `register_module` per package, the same
-//! `inline`/`host_scope` values the manifests state, everything
+//! `host_scope` values the manifests state, everything
 //! `include_str!` (the rut-wasm ink/rt precedent). Nothing here knows
 //! the app's SOURCE: the root's body crosses the ABI (loader.js hands
 //! over `rut/biz/biz.rut`) and [`compile_app`] compiles it as the
@@ -29,9 +29,9 @@
 //! mounts what the closure uses (the `mount_std_core` precedent).
 //!
 //! What died here before this file's current shape: the old
-//! concatenation module (ONE inline module fabricated from the store
-//! and t1 sources) — dep-kinds landed splice-dedup-by-origin and the
-//! workaround's reason was gone (survey §2.5, P1/P2/P3). What the
+//! concatenation module (ONE module fabricated from the store
+//! and t1 sources) — dep-kinds landed and the workaround's reason was
+//! gone (survey §2.5, P1/P2/P3). What the
 //! TWO-PACKAGE law retired on top: the sixteen per-concept manifests —
 //! t1's three, the components' eight, the store's three, the app's
 //! three — merged into ui (framework) and biz (domain + app), one
@@ -129,7 +129,7 @@ pub fn mount_host_session(session: &mut rut_driver::Session) -> Result<(), Strin
     session
         .register_module(
             "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     register_web_surface(session)?;
@@ -208,7 +208,7 @@ pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), Stri
     session
         .register_module(
             "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -230,20 +230,19 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     session
         .register_module(
             "nmapset",
-            Module { body: ModuleBody::Source { text: NMAPSET_RUT.to_string(), is_decl: false },  inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: NMAPSET_RUT.to_string(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
 
     // THE UI PACKAGE — the framework: the atom store machinery, the
     // widget type, the lowering table, the keyed diff, the component
-    // vocabulary — ONE module (the two-package law; inline, its
-    // manifest's stated shape: generic exports splice by law). The
+    // vocabulary — ONE module (the two-package law). The
     // multi-lib files ride through ui_source() — the manifest's
     // `entry.libs`, spliced base-first in array order (RFC 0041 §5).
     session
         .register_module(
             "ui",
-            Module { body: ModuleBody::Source { text: ui_source(), is_decl: false },  inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: ui_source(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
 

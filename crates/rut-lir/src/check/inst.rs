@@ -43,12 +43,14 @@ impl<'a> Ctx<'a> {
         match inst.key {
             FnKey::Lambda(_) | FnKey::ForOfEmit { .. } => {}
             FnKey::Free(n) => {
-                let origin = self
-                    .fn_nodes
-                    .iter()
-                    .find(|(nm, _)| *nm == n)
-                    .map(|(_, node)| self.origin_of(self.ast.span(node.id()).lo).to_string())
-                    .unwrap_or_else(|| self.own_spec.clone());
+                // a mirrored FOREIGN generic fn names its owner (the
+                // linkable-classes phase): the stub's row must spell the
+                // same owner text the real body's row does, or the keys
+                // never unify at link. Own fns keep this unit's spec.
+                let origin = match self.extern_generic_fns.get(&n) {
+                    Some(gf) => gf.owner.clone(),
+                    None => self.own_spec.clone(),
+                };
                 let owner = self.intern(&origin);
                 self.ledger_fns.push(rut_core::binary::InstFn {
                     owner,
@@ -92,7 +94,94 @@ impl<'a> Ctx<'a> {
                 });
             }
         }
+        
         self.queue.push(inst);
+        fid
+    }
+
+    /// Mint an instantiation's fn id + ledger row WITHOUT queueing a
+    /// body — the mirror arm of [`Ctx::ensure_inst`] (the
+    /// linkable-classes phase): a consumer's call into a used generic
+    /// class's method binds a mirror fn that has no body here. The
+    /// ledger row names the declaring package as owner, so LINK
+    /// redirects the mirror onto the owner's compiled copy (the key
+    /// canonicalizes the instantiation the same way the owner's own
+    /// row spells it) and drops the bodyless stub.
+    pub fn mirror_inst(&mut self, inst: Inst) -> u32 {
+        if let Some(&f) = self.inst_map.get(&inst) {
+            return f;
+        }
+        // a mirrored GENERIC fn or GENERIC-class method doubles as the
+        // owner-side body request: the stub's ledger row claims nothing
+        // until the owner's unit compiles the body at this
+        // instantiation
+        match inst.key {
+            FnKey::Method { data, name } => {
+                let args: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
+                if let Some(g) = self.extern_generics.get(&data).cloned() {
+                    let owner = g.owner.clone();
+                    self.request_inst_method(owner, data, args, name);
+                }
+            }
+            FnKey::Free(name) => {
+                if let Some(gf) = self.extern_generic_fns.get(&name).cloned() {
+                    let args: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
+                    self.request_generic_fn_body(gf.owner, name, args);
+                }
+            }
+            _ => {}
+        }
+        let saved_queue = std::mem::take(&mut self.queue);
+        let fid = self.ensure_inst(inst);
+        self.queue = saved_queue;
+        fid
+    }
+
+    /// The impl-method mirror: a consumer's static call into a used
+    /// GENERIC-target trait impl (`json`'s
+    /// `impl JsonSerialize for Vec<T>` at the consumer's `Vec<i64>`).
+    /// The row spells `(trait, target instantiation, name, concrete
+    /// ABI, arguments)` under the impl owner's spec; link canonicalizes
+    /// the target through the instantiation ledger, so the key matches
+    /// the owner's compiled row wherever the bodies live. No local
+    /// [`FnKey`] exists for a foreign impl — the fn is bodyless here.
+    pub fn mirror_impl_method(
+        &mut self,
+        owner: String,
+        trait_name: IdentId,
+        target: TypeId,
+        name: IdentId,
+        subst: Vec<TypeId>,
+    ) -> u32 {
+        let owner_id = self.intern(&owner);
+        let fid = self.funcs.len() as u32;
+        let fname = self.intern(&format!("{}${}", self.name(trait_name), self.name(name)));
+        self.funcs.push(FuncCode {
+            name: fname,
+            params: vec![],
+            ret: TY_NIL,
+            is_method: false,
+            n_captures: 0,
+            regs: vec![],
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            pos: vec![],
+            host_id: None,
+        });
+        self.ledger_fns.push(rut_core::binary::InstFn {
+            owner: owner_id,
+            kind: rut_core::binary::InstFnKind::ImplMethod {
+                trait_name,
+                target,
+                name,
+                slot_abi: false,
+                subst,
+                origins: vec![],
+            },
+            fid,
+        });
         fid
     }
 
@@ -119,6 +208,14 @@ impl<'a> Ctx<'a> {
 
     pub fn compile_queue(&mut self, root: Inst) -> TcResult<()> {
         self.ensure_inst(root);
+        self.drain_queue()
+    }
+
+    /// Drain the instantiation queue without a root — the library
+    /// shape's compile entry (a pkg may seed method bodies via owner
+    /// requests and carry no `main`/`entry fn`/class-method roots of
+    /// its own).
+    pub fn drain_queue(&mut self) -> TcResult<()> {
         let mut guard = 0;
         while let Some(inst) = self.queue.pop() {
             guard += 1;
@@ -130,7 +227,11 @@ impl<'a> Ctx<'a> {
                 return Err(());
             }
             let fid = self.inst_map[&inst];
-            FnCompiler::compile(self, &inst, fid)?;
+            
+            if FnCompiler::compile(self, &inst, fid).is_err() {
+                
+                return Err(());
+            }
         }
         Ok(())
     }
