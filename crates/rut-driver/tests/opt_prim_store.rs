@@ -547,13 +547,14 @@ fn version_gate_rejects_stale_artifacts() {
     // traits, impls in both ABI lists, native rows with their ambient
     // bits, and the reserved inherent-impl table): a declared-surface
     // change, and stale v15 artifacts carry no surface section at all;
-    // v17 is owner-anchored instantiation — type exports carry their
+    // v17 was owner-anchored instantiation — type exports carry their
     // generic parameter lists and the program carries the
     // instantiation ledger (type rows + fn identities keyed by
     // `(owner pkg, decl, arguments)`), so link unifies one
     // instantiation program-wide and consumers resolve requests
-    // against a packaged binary's ledger
-    assert_eq!(VERSION, 17, "owner-anchored instantiation owns this VERSION bump");
+    // against a packaged binary's ledger; v18 adds the exported
+    // generic fns' placeholder signatures
+    assert_eq!(VERSION, 18, "the exported-fn-generics section owns this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

@@ -396,6 +396,21 @@ impl TypeTable {
         self.id_for(dense)
     }
 
+    /// [`Self::id_for_pub`] without the trap: `None` when the dense
+    /// index sits below its scope's registered base (a row stranded by a
+    /// later base move — the seed attach re-registers requester scopes).
+    pub fn id_for_pub_checked(&self, dense: u32) -> Option<TypeId> {
+        if dense < self.boot_len {
+            return Some(pack(BOOT_SCOPE, dense));
+        }
+        let s = self.scope_of_dense(dense);
+        let base = self.scope_base.get(s as usize).copied().unwrap_or(0);
+        if base > dense {
+            return None;
+        }
+        Some(pack(s, dense - base))
+    }
+
     fn id_for(&self, dense: u32) -> TypeId {
         if !self.packed {
             return dense;
@@ -487,6 +502,25 @@ impl TypeTable {
         }
     }
 
+    /// Does this dense index sit in a REGISTERED block (the boot prefix,
+    /// a used block, the seed region, or the own block)? A host module's
+    /// surface appends rows WITHOUT a scope registration (`scope_base`
+    /// stays 0 there), and a spelling that deduped onto such a row would
+    /// mint an id resolving through the 0-base trap — a different row in
+    /// every other table, and nothing at link.
+    fn dense_is_registered(&self, i: u32) -> bool {
+        if i < self.boot_len {
+            return true;
+        }
+        for (s, &b) in self.scope_base.iter().enumerate() {
+            if s == BOOT_SCOPE as usize || b == 0 || b > i {
+                continue;
+            }
+            return true;
+        }
+        false
+    }
+
     pub fn intern(&mut self, ty: RutType) -> TypeId {
         // structural interning for anonymous instantiations (Vec<T>, fn(..)...)
         // — names are IdentIds, so the dedup key compare is an integer compare
@@ -496,7 +530,7 @@ impl TypeTable {
             .copied()
             .unwrap_or(self.boot_len);
         for (i, t) in self.types.iter().enumerate() {
-            if t.name == ty.name && t.kind == ty.kind {
+            if t.name == ty.name && t.kind == ty.kind && self.dense_is_registered(i as u32) {
                 // under own attribution, a hit ABOVE the own block (a
                 // reseed's seed region) re-spells into the own scope:
                 // the row is this unit's compilation's, and the linked

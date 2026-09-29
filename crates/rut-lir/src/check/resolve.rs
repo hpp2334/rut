@@ -137,7 +137,7 @@ impl<'a> Ctx<'a> {
             return id;
         }
         let id = self.traits.len() as u32;
-        let tname = self.intern(&format!("Iterator<{}>", self.type_name(arg)));
+        let tname = self.intern(&format!("Iterator<{}>", self.elem_spelling(arg)));
         let emit = self.mk_fn_ty(vec![arg], TY_BOOL);
         self.traits.push(TraitDesc {
             name: tname,
@@ -151,6 +151,19 @@ impl<'a> Ctx<'a> {
         id
     }
 
+    /// The element spelling inside a trait-inst NAME: boot optionals'
+    /// rows ride the shell convention (the `?bytes` row is named
+    /// "bytes"), and the name is the element's only carrier across a
+    /// binding — an optional element must spell the `?` or the
+    /// optionality is lost.
+    fn elem_spelling(&self, arg: TypeId) -> String {
+        let n = self.type_name(arg).to_string();
+        if matches!(self.types.kind(arg), TyKind::Opt { .. }) && !n.starts_with('?') {
+            return format!("?{n}");
+        }
+        n
+    }
+
     /// The `Future<T>` protocol contract (RFC 0012 §7 / RFC 0018): one
     /// trait per type-argument list, its single member `yield(cx)`. The
     /// engine weaves impls for async fn frames; user impls register
@@ -162,7 +175,7 @@ impl<'a> Ctx<'a> {
             return id;
         }
         let id = self.traits.len() as u32;
-        let tname = self.intern(&format!("Future<{}>", self.type_name(arg)));
+        let tname = self.intern(&format!("Future<{}>", self.elem_spelling(arg)));
         let cx = self.run_context_ty();
         self.traits.push(TraitDesc {
             name: tname,

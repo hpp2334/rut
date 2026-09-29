@@ -136,10 +136,12 @@ fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 }
 
 #[test]
-fn inherent_impl_on_a_spliced_foreign_class_stays_legal() {
-    // probe A (the orphan-rule survey §1.5): an INHERENT block on a
-    // spliced foreign class compiles — the splice hole is recorded out
-    // of scope, and this pin keeps the rule scoped to trait impls
+fn inherent_impl_on_a_used_class_is_the_orphan_error() {
+    // the probe A law, restated for linked packages: an INHERENT block
+    // on a used class lives in the type's module — the class's surface
+    // carries its methods, and a consumer's block would need the
+    // private layout. Only `impl Trait for UsedType` may name a used
+    // type; the inherent head is the orphan error.
     let g = graph(&[
         ("tr", TR),
         ("coll", COLL),
@@ -151,7 +153,12 @@ impl Set<T> {
 fn main() -> i32 { return 0; }
 "),
     ]);
-    assert!(g.diags.is_empty(), "{}", diags_of(&g));
+    assert!(g.program.is_none(), "the inherent orphan must refuse");
+    let ds = diags_of(&g);
+    assert!(
+        ds.contains("inherent impls live in the type's module"),
+        "{ds}"
+    );
 }
 
 // ---- the orphan errors ----------------------------------------------

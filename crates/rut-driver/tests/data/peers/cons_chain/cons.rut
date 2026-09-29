@@ -3,6 +3,7 @@
 // ride json's spliced unit (no direct `use pouch`: the T10 shape is
 // avoided).
 use json::{JsonSerialize};
+use pouch::{Vec};
 
 fn tag() -> str {
     return pouch_tag();

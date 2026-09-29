@@ -39,6 +39,40 @@ fn green(rel: &str) {
     }
 }
 
+/// The trait/target spellings of json's registered impl rows, in the
+/// compiled unit's order — the compiled-world observable for "the group
+/// mounted" (the groups ride the owner's compile, presence-gated; the
+/// mounted source stays pristine).
+fn json_impl_order(rel: &str) -> Vec<String> {
+    json_impl_order_of(rel, "json")
+}
+
+fn json_impl_order_of(rel: &str, declarer: &str) -> Vec<String> {
+    let (session, root) = load(rel).expect("mount");
+    let units = rut_driver::compile_units(&session, &root);
+    assert!(
+        units.diags.is_empty(),
+        "{}",
+        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let mut out = Vec::new();
+    for (spec, &(idx, _)) in &units.linked {
+        if spec != declarer {
+            continue;
+        }
+        let prog = &units.programs[idx];
+        for im in &prog.surface.impls {
+            out.push(format!(
+                "{} for {}",
+                prog.interner.name(im.trait_name),
+                prog.interner.name(prog.types.type_at(im.target).name),
+            ));
+        }
+    }
+    out.sort();
+    out
+}
+
 fn source_of(s: &Session, spec: &str) -> String {
     match &s.resolve(spec).expect(spec).body {
         rut_driver::ModuleBody::Source { text, .. } => text.clone(),
@@ -71,8 +105,17 @@ fn t2_peer_present_group_mounts_and_dispatches() {
     // (presence-based resolution); the group's impl dispatches through
     // the trait; orphan/placement green.
     let (s, _) = load("cons_pouch").expect("mount");
-    assert!(source_of(&s, "json").contains(POUCH_GROUP), "the pouch group must mount");
-    assert!(!source_of(&s, "json").contains(NMAPSET_GROUP), "nmapset is absent — inert");
+    // the mounted source stays pristine — the groups ride the compile
+    assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
+    let impls = json_impl_order("cons_pouch");
+    assert!(
+        impls.iter().any(|r| r.contains("Vec")),
+        "the pouch group's rows compiled into json's unit: {impls:?}"
+    );
+    assert!(
+        !impls.iter().any(|r| r.contains("Map")),
+        "nmapset is absent — inert: {impls:?}"
+    );
     green("cons_pouch");
 }
 
@@ -82,11 +125,11 @@ fn t3_both_peers_mount_in_name_order() {
     // (BTreeMap) order — `nmapset` before `pouch` — after the base;
     // both impl sets dispatch.
     let (s, _) = load("cons_both").expect("mount");
-    let src = source_of(&s, "json");
-    let a = src.find(NMAPSET_GROUP).expect("nmapset group mounted");
-    let b = src.find(POUCH_GROUP).expect("pouch group mounted");
-    assert!(a < b, "groups mount in peer-name (BTreeMap) order");
-    assert!(src.contains("pub trait JsonSerialize"), "the base rides first");
+    assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
+    let impls = json_impl_order("cons_both");
+    let a = impls.iter().position(|r| r.contains("Map")).expect("nmapset group rows compiled");
+    let b = impls.iter().position(|r| r.contains("Vec")).expect("pouch group rows compiled");
+    assert!(a < b, "groups compile in peer-name (BTreeMap) order: {impls:?}");
     green("cons_both");
 }
 
@@ -162,9 +205,9 @@ fn t6_self_build_dev_deps_guarantee_presence() {
     assert!(s.resolve("pouch").is_ok(), "the dev pass mounted pouch");
     assert!(s.resolve("nmapset").is_ok(), "the dev pass mounted nmapset");
     assert!(s.resolve("base").is_ok(), "the dev walk is transitive");
-    let src = source_of(&s, "json");
-    assert!(src.contains(POUCH_GROUP));
-    assert!(src.contains(NMAPSET_GROUP));
+    let impls = json_impl_order("json");
+    assert!(impls.iter().any(|r| r.contains("Vec")), "{impls:?}");
+    assert!(impls.iter().any(|r| r.contains("Map")), "{impls:?}");
     let g = rut_driver::compile_graph(&s, &root);
     assert!(
         g.diags.is_empty(),
@@ -196,9 +239,10 @@ fn t7b_broken_peer_path_is_inert_for_consumers() {
     // read — the optional peer is absent (inert), the group never
     // mounts, no error.
     let (s, _) = load("cons_broken").expect("the broken path must be inert for a consumer");
+    let impls = json_impl_order("cons_broken");
     assert!(
-        !source_of(&s, "json_broken").contains(POUCH_GROUP),
-        "the group must not mount"
+        !impls.iter().any(|r| r.contains("Vec")),
+        "the group must not mount: {impls:?}"
     );
     green("cons_broken");
 }
@@ -209,9 +253,10 @@ fn t7c_presence_is_by_name_the_path_is_never_read() {
     // OWN path, so the group mounts even though json_broken's peer
     // path is broken (first-mount-wins: the consumer's path won).
     let (s, _) = load("cons_broken_supply").expect("mount");
+    let impls = json_impl_order_of("cons_broken_supply", "json_broken");
     assert!(
-        source_of(&s, "json_broken").contains(POUCH_GROUP),
-        "the group mounts on presence, not on the declarer's path"
+        impls.iter().any(|r| r.contains("Vec")),
+        "the group mounts on presence, not on the declarer's path: {impls:?}"
     );
     green("cons_broken_supply");
 }
@@ -223,9 +268,10 @@ fn t8_peer_gate_is_one_post_closure_pass() {
     // new pkg names, so no fixpoint is needed.
     let (s, _) = load("cons_chain").expect("mount");
     assert!(s.resolve("base").is_ok(), "pouch's own dep walked");
+    let impls = json_impl_order("cons_chain");
     assert!(
-        source_of(&s, "json").contains(POUCH_GROUP),
-        "the group mounted with the full closure in the session"
+        impls.iter().any(|r| r.contains("Vec")),
+        "the group mounted with the full closure in the session: {impls:?}"
     );
     green("cons_chain");
 }
@@ -243,7 +289,9 @@ fn t9_both_kinds_pairing_end_to_end() {
         .expect("the pairing parses");
     assert!(decl.optional, "the peer half is optional");
     assert!(s.resolve("pouch").is_ok(), "the dev half mounted");
-    assert!(source_of(&s, "json").contains(POUCH_GROUP));
+    let impls = json_impl_order("json");
+    assert!(impls.iter().any(|r| r.contains("Vec")), "{impls:?}");
+    assert!(impls.iter().any(|r| r.contains("Map")), "{impls:?}");
     let g = rut_driver::compile_graph(&s, &root);
     assert!(
         g.diags.is_empty(),

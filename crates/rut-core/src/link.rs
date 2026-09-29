@@ -564,6 +564,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         };
         let text = |id: IdentId| out.interner.name(nm(id)).to_string();
         let mut plan = ModulePlan::default();
+        let mut won_claims: Vec<(String, u32)> = Vec::new();
         for r in &m.inst_types {
             let key = format!("{}#{}<{}>", text(r.owner), text(r.decl), canonv(&r.args));
             plan.inst_key_by_ty.insert(r.ty, key.clone());
@@ -628,7 +629,12 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     plan.skip_fns.insert(r.fid);
                 }
                 None => {
-                    claim_fn.insert(key, map_func(r.fid));
+                    // the winner re-claims AFTER this module's renumber
+                    // exists: the stored slot must be the post-skip
+                    // position (a module's own dropped mirrors compact
+                    // the table, so the raw fid would overshoot into
+                    // whatever appends there)
+                    won_claims.push((key, r.fid));
                 }
             }
         }
@@ -641,6 +647,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             next += 1;
         }
         plan.renumber = renumber;
+        for (key, fid) in won_claims {
+            let slot = plan.renumber.get(&fid).copied().unwrap_or(fid);
+            claim_fn.insert(key, slot + func_off_plan);
+        }
         let renumber = &plan.renumber;
         let map_func = |f: u32| -> u32 {
             if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
@@ -672,6 +682,18 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         for (m, plan) in modules.iter().zip(plans.iter()) {
             final_func_base.insert(m.scope, cursor);
             cursor += plan.appended as u32;
+        }
+    }
+    // the global fn position map: `(scope, local)` → the SURVIVING fn's
+    // global slot. A dropped mirror closes the gap (the owner module's
+    // renumber), and a foreign surface's scope-qualified fn id must land
+    // on the compacted position — the raw local would aim past it.
+    let mut final_fn_pos: std::collections::HashMap<(crate::id::ScopeId, u32), u32> =
+        std::collections::HashMap::new();
+    for (m, plan) in modules.iter().zip(plans.iter()) {
+        let base = final_func_base[&m.scope];
+        for (local, pos) in &plan.renumber {
+            final_fn_pos.insert((m.scope, *local), base + *pos);
         }
     }
 
@@ -751,21 +773,28 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
                 plan.renumber.get(&f).copied().unwrap_or(f) + func_off
             } else {
+                let scope = crate::id::scope_of(f);
+                let local = crate::id::local_of(f);
+                if let Some(&g) = final_fn_pos.get(&(scope, local)) {
+                    return g;
+                }
                 let base = *final_func_base
-                    .get(&crate::id::scope_of(f))
+                    .get(&scope)
                     .unwrap_or_else(|| {
                         panic!(
                             "link: no function base for scope {} (module {})",
-                            crate::id::scope_of(f),
+                            scope,
                             m.name
                         )
                     });
-                base + crate::id::local_of(f)
+                base + local
             }
         };
         // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense.
         // A mirrored instantiation row redirects to the claiming module's row —
         // ONE instantiation program-wide, whoever compiled first.
+        let merged_names: Vec<String> =
+            out.types.types.iter().map(|t| out.interner.name(t.name).to_string()).collect();
         let map = |id: TypeId| -> TypeId {
             if id == u32::MAX {
                 return id; // TY_ANY sentinel — never a real type
@@ -778,7 +807,16 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 if s == crate::id::BOOT_SCOPE {
                     crate::id::local_of(id)
                 } else {
-                    final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
+                    let g = final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id);
+                    if std::env::var("RUT_DEBUG_LINK").is_ok() && m.name == "store_probe" {
+                        let d = m.types.dense(id) as usize;
+                        let src = m.types.types.get(d).map(|t| m_interner.name(t.name).to_string()).unwrap_or("?".into());
+                        let dst = merged_names.get(g as usize).map(|n| n.clone()).unwrap_or("?".into());
+                        if src != dst {
+                            eprintln!("DBG pmap probe id={} scope={} local={} src={} -> g={} dst={}", id, s, crate::id::local_of(id), src, g, dst);
+                        }
+                    }
+                    g
                 }
             } else if id < m_boot {
                 id
@@ -900,7 +938,18 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             }
         }
 
-        for t in m.types.types.iter().skip(own_base as usize) {
+        for (di, t) in m.types.types.iter().enumerate().skip(own_base as usize) {
+            if let TyKind::Opt { elem } = &t.kind {
+                let en = m_interner.name(
+                    m.types.types.get(*elem as usize).map(|e| e.name).unwrap_or(crate::sym::NIL),
+                );
+                if en == "nil" {
+                    eprintln!(
+                        "DBG optnil module={} dense={} emits-at={} elem_dense={}",
+                        m.name, di, out.types.types.len(), elem
+                    );
+                }
+            }
             out.types.types.push(RutType {
                 name: nm(t.name),
                 kind: remap_kind(&t.kind, &map, &nm, &tm),
@@ -939,9 +988,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             }
         };
 
-        if std::env::var("RUT_DEBUG_LINK").is_ok() {
-            eprintln!("EMIT module={} scope={} func_off={} appended={} final_func_base={:?}", m.name, m.types.scope, func_off, plan.appended, final_func_base);
-        }
         // per-type vtables: keyed by type, slot-indexed, value = func id.
         // Rows for this module's OWN types are assigned; rows for types
         // this module only USES merge — an impl may live in a different
@@ -1026,6 +1072,13 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         }
 
         for r in m.inst_types {
+            // a mirror row that lost the claim remaps onto the claiming
+            // copy — re-emitting it would duplicate the row (same key,
+            // same id), and a later pass over this binary would treat
+            // the pair as a fresh collision. One instantiation, one row.
+            if plan.ty_redirect.contains_key(&r.ty) {
+                continue;
+            }
             out_types_ledger.push(InstTy {
                 owner: nm(r.owner),
                 decl: nm(r.decl),
@@ -1034,6 +1087,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             });
         }
         for r in m.inst_fns {
+            // dropped mirrors stay dropped (see the inst_types note)
+            if plan.skip_fns.contains(&r.fid) {
+                continue;
+            }
             let kind = match r.kind {
                 InstFnKind::Free { name, subst, origins } => InstFnKind::Free {
                     name: nm(name),
@@ -1072,6 +1129,30 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
     out.inst_types = out_types_ledger;
     out.inst_fns = out_fns_ledger;
+
+    if std::env::var("RUT_DEBUG_LINK").is_ok() {
+        let mut bases: Vec<String> = final_type_base.iter().map(|(s, b)| format!("s{}@{}", s, b)).collect();
+        bases.sort();
+        eprintln!("DBG final-bases {}", bases.join(" "));
+        for w in [88, 89, 90, 91, 92, 93] {
+            if let Some(t) = out.types.types.get(w) {
+                eprintln!("DBG merged-row {} = {}", w, out.interner.name(t.name));
+            }
+        }
+        for (i, t) in out.types.types.iter().enumerate() {
+            let n = out.interner.name(t.name);
+            if n == "?nil" {
+                if let TyKind::Opt { elem } = &t.kind {
+                    let en = out.interner.name(
+                        out.types.types.get(*elem as usize).map(|e| e.name).unwrap_or(crate::sym::NIL),
+                    );
+                    if en != "nil" {
+                        eprintln!("DBG postlink badopt idx={} elem={} elemname={}", i, elem, en);
+                    }
+                }
+            }
+        }
+    }
 
     Ok(out)
 }
@@ -1295,6 +1376,7 @@ mod tests {
             target: 0, // irrelevant here
             methods: vec![],
             methods_concrete: vec![],
+            trait_args: vec![],
         });
         let b = trait_module("b");
         let out = link(vec![a, b]).expect("link");
@@ -1335,6 +1417,7 @@ mod tests {
                 target,
                 methods: vec![],
                 methods_concrete: vec![],
+            trait_args: vec![],
             });
             p
         };

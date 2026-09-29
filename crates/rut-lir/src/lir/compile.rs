@@ -65,21 +65,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 // self: the concrete target — a generic target instantiates
                 // under the Inst substitution; a native builtin target
-                // rebuilds its shape (`Array<T>`)
+                // rebuilds its shape (`Array<T>`). A FOREIGN generic's
+                // instantiation mirrors through the extern path (the
+                // owner compiles the body, the self row is the mirror)
                 let (self_ty, cname) = match &im.target_data {
-                    Some((dname, params)) if ctx.find_data(*dname).is_some() => {
-                        let args: Vec<TypeId> = params
-                            .iter()
-                            .map(|g| {
-                                inst.subst
-                                    .iter()
-                                    .find(|(n, _)| n == g)
-                                    .map(|(_, t)| *t)
-                                    .unwrap_or(TY_I32)
-                            })
-                            .collect();
-                        (ctx.mk_data_inst(*dname, args, ctx.ast.span(m.id())), Some(*dname))
-                    }
                     Some((dname, params))
                         if dname == &sym::ARRAY && params.len() == 1 =>
                     {
@@ -105,6 +94,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             .map(|(_, t)| *t)
                             .unwrap_or(TY_I32);
                         (ctx.mk_opt(elem), None)
+                    }
+                    Some((dname, params)) => {
+                        let args: Vec<TypeId> = params
+                            .iter()
+                            .map(|g| {
+                                inst.subst
+                                    .iter()
+                                    .find(|(n, _)| n == g)
+                                    .map(|(_, t)| *t)
+                                    .unwrap_or(TY_I32)
+                            })
+                            .collect();
+                        (ctx.mk_data_inst(*dname, args, ctx.ast.span(m.id())), Some(*dname))
                     }
                     _ => {
                         let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);

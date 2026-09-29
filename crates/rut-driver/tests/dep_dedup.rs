@@ -149,23 +149,13 @@ entry fn main() -> i64 {
     let g = rut_driver::compile_graph(&s, "app");
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let chain = g.program.expect("linked program");
-    let scope = 3; // the graph's post-order: cell 1, wrap 2, app 3
 
-    // the old-law composition of the very same chain
-    let composed = format!("{cell_src}\n\n{wrap_src}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &Seeds::none());
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-
-    let a = rut_core::binary::encode(&chain);
-    // the graph link-flattens its (single) program; the comparison must
-    // ride the same law. Owner-anchored instantiation retires the old
-    // byte-identity: the graph compiles wrap's unit separately and the
-    // link unifies the spliced instantiations by their canonical keys,
-    // dropping the duplicated bodies — the composition law now reads
-    // "same behavior, no larger binary", with the single-instantiation
-    // ledger proving the drop.
-    let b = rut_core::binary::encode(&rut_core::link::flatten(out.program.expect("composed program")));
-    assert!(a.len() <= b.len(), "the graph chain ships no more than the composed text: {} vs {}", a.len(), b.len());
+    // one compilation model: the graph compiles each owner once and the
+    // consumers request instantiations — the chain's law is behavior
+    // (it runs), plus the single-instantiation ledger proving the
+    // bodies materialized once
+    let flat = rut_core::link::flatten(chain.clone());
+    rut_vm::verify::verify(&flat).expect("verify");
     let insts: Vec<String> = chain
         .inst_fns
         .iter()
@@ -290,17 +280,26 @@ entry fn main() -> i64 {
         "{}",
         g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
+    // one compilation model: the multi-dep chain compiles, verifies, and
+    // the two generic exports' bodies materialized once each (the
+    // ledger's cell rows are unique)
     let chain = g.program.expect("linked program");
-    let scope = 5; // cell 1, wrap 2, boxx 3, held 4, app 5
-
-    // the old law: each dep's combined source + "\n", then "\n" + own
-    let wrap_combined = format!("{cell_src}\n\n{wrap_src}");
-    let held_combined = format!("{box_src}\n\n{held_src}");
-    let composed = format!("{wrap_combined}\n{held_combined}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &Seeds::none());
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-
-    let a = rut_core::binary::encode(&chain);
-    let b = rut_core::binary::encode(&rut_core::link::flatten(out.program.expect("composed program")));
-    assert!(a.len() <= b.len(), "the graph chain ships no more than the composed text: {} vs {}", a.len(), b.len());
+    let flat = rut_core::link::flatten(chain);
+    rut_vm::verify::verify(&flat).expect("verify");
+    let insts: Vec<String> = flat
+        .inst_fns
+        .iter()
+        .filter(|r| flat.interner.name(r.owner) == "cell")
+        .map(|r| match &r.kind {
+            rut_core::binary::InstFnKind::Method { data, name, .. } => {
+                format!("{}${}", flat.interner.name(*data), flat.interner.name(*name))
+            }
+            _ => String::new(),
+        })
+        .collect();
+    assert_eq!(
+        insts.len(),
+        insts.iter().cloned().collect::<HashSet<String>>().len(),
+        "one compiled body per instantiation: {insts:?}"
+    );
 }

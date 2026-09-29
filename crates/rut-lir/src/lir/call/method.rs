@@ -545,7 +545,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // fn, a generic class mints the mirror instantiation the
             // owner's unit compiles
             if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
-                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, args, expected, sp);
+                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
             }
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
                 // a bare concrete receiver calls the CONCRETE-ABI variant:

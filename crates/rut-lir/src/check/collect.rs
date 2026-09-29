@@ -562,6 +562,9 @@ impl<'a> Ctx<'a> {
     /// (`Node<#T>` spelled inside the template) keeps the template's row —
     /// the mirror law covers the direct-argument shapes.
     fn mk_extern_data_inst(&mut self, data: IdentId, g: &ExternGeneric, args: Vec<TypeId>) -> TypeId {
+        if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
+            return t;
+        }
         let name = self.intern(&format!(
             "{}<{}>",
             self.name(data),
@@ -639,23 +642,58 @@ impl<'a> Ctx<'a> {
                 let ps = params.iter().map(|&p| self.subst_template_ty(p, env)).collect();
                 Some(self.mk_fn_ty(ps, r))
             }
+            // the `Future<E>` protocol shape: the element rides the
+            // trait-inst name (its only carrier — the kind holds a
+            // unit-local trait-table index), so decode, substitute, and
+            // re-mint this unit's inst
+            TyKind::TraitObj { .. } => self.subst_future_obj(id, env),
             // a TUPLE (record with numeric fields) mentioning a
             // placeholder (`(?#T, ?DecodeJsonError)` — the generic fns'
-            // return shapes): rebuild with the substituted fields. A row
-            // whose fields substitute to themselves (a used class's own
-            // row, say) passes through unchanged.
+            // return shapes): rebuild with the substituted fields. A
+            // NOMINAL row whose name parses as `Base<..>` with a bound
+            // foreign generic re-mints at the substituted arguments (the
+            // mirror law — the owner request rides along). A row whose
+            // fields substitute to themselves (a used class's own row,
+            // say) passes through unchanged.
             TyKind::Data { fields } if !fields.is_empty() => {
-                let fs: Vec<FieldInfo> = fields
-                    .iter()
-                    .map(|f| FieldInfo { name: f.name, ty: self.subst_template_ty(f.ty, env) })
-                    .collect();
-                let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
-                if changed {
-                    let name = self.intern(&format!(
-                        "({})",
-                        fs.iter().map(|f| self.type_name(f.ty).to_string()).collect::<Vec<_>>().join(", ")
-                    ));
-                    Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                if text.starts_with('(') {
+                    let fs: Vec<FieldInfo> = fields
+                        .iter()
+                        .map(|f| FieldInfo { name: f.name, ty: self.subst_template_ty(f.ty, env) })
+                        .collect();
+                    let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
+                    if changed {
+                        let name = self.intern(&format!(
+                            "({})",
+                            fs.iter().map(|f| self.type_name(f.ty).to_string()).collect::<Vec<_>>().join(", ")
+                        ));
+                        Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                    } else {
+                        None
+                    }
+                } else if let Some((base_text, rest)) = text.split_once('<') {
+                    let Some(args_text) = rest.strip_suffix('>') else { return id };
+                    let base_id = self.intern(base_text);
+                    let Some(g) = self.extern_generics.get(&base_id).cloned() else {
+                        return id;
+                    };
+                    let arg_texts = split_top_commas(args_text);
+                    if arg_texts.len() != g.params.len() {
+                        return id;
+                    }
+                    let mut args = Vec::with_capacity(arg_texts.len());
+                    for a in &arg_texts {
+                        if let Some(&t) = env.get(a.as_str()) {
+                            args.push(t);
+                            continue;
+                        }
+                        let aid = self.intern(a);
+                        match self.types.dense_id_of_name(aid) {
+                            Some(t) => args.push(t),
+                            None => return id,
+                        }
+                    }
+                    Some(self.mk_extern_data_inst(base_id, &g, args))
                 } else {
                     None
                 }
@@ -664,4 +702,75 @@ impl<'a> Ctx<'a> {
         };
         rebuilt.unwrap_or(id)
     }
+
+    /// The `Future<E>` trait-object shape under a substitution: decode
+    /// the element from the instantiation's name (its only carrier —
+    /// the kind stores a unit-local trait-table index), substitute or
+    /// resolve it, re-mint this unit's inst. A non-`Future` trait
+    /// object, or an element that resolves nowhere, passes through.
+    fn subst_future_obj(
+        &mut self,
+        id: TypeId,
+        env: &std::collections::HashMap<String, TypeId>,
+    ) -> Option<TypeId> {
+        let tname = self.types.type_at(id).name;
+        let tname = self.interner.name(tname).to_string();
+        let inner = tname
+            .strip_prefix("[trait] Future<")
+            .and_then(|s| s.strip_suffix('>'))?;
+        let elem = match env.get(inner) {
+            Some(&a) => a,
+            None if inner.starts_with('?') => {
+                let bid = self.intern(&inner[1..]);
+                let e = self.types.dense_id_of_name(bid)?;
+                self.mk_opt(e)
+            }
+            None => {
+                let iid = self.intern(inner);
+                self.types.dense_id_of_name(iid)?
+            }
+        };
+        let fut_name = self.intern("Future");
+        let fut = self.mk_future_inst(fut_name, elem);
+        Some(self.mk_trait_obj(fut))
+    }
+}
+
+/// Split a type-argument list at top-level commas (`Vec<Vec<i64>>, str`
+/// → two arguments); nesting depth tracks `<`/`>` and `( )` (a tuple
+/// argument's comma is not a separator).
+pub(crate) fn split_top_commas(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut paren = 0usize;
+    let mut cur = String::new();
+    for ch in s.chars() {
+        match ch {
+            '<' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            '>' => {
+                depth = depth.saturating_sub(1);
+                cur.push(ch);
+            }
+            '(' => {
+                paren += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                paren = paren.saturating_sub(1);
+                cur.push(ch);
+            }
+            ',' if depth == 0 && paren == 0 => {
+                out.push(cur.trim().to_string());
+                cur = String::new();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur.trim().to_string());
+    }
+    out
 }

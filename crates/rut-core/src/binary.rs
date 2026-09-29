@@ -173,6 +173,12 @@ pub struct SurfaceImpl {
     /// trait method name → the exporter's module-local fn id (concrete
     /// ABI); empty when the exporter predates the dual ABI
     pub methods_concrete: Vec<(IdentId, u32)>,
+    /// a parameterized impl head's trait arguments, resolved as rows in
+    /// the exporter's table (`impl Readable<T> for Source<T>` carries
+    /// the `#T` placeholder row once per slot) — empty for exact
+    /// (non-generic) heads; the consumer unifies a call's trait inst
+    /// against these
+    pub trait_args: Vec<TypeId>,
 }
 
 /// One exported class's inherent method surface (the linkable-classes
@@ -205,6 +211,10 @@ pub struct SurfaceMethod {
     pub local: u32,
     /// instance method (receiver) vs class method (no receiver)
     pub has_self: bool,
+    /// a generic method's own type parameters (`store.source<T>`) —
+    /// the call site substitutes and the bodies ride the request
+    /// machinery; empty for plain methods
+    pub generics: Vec<IdentId>,
 }
 
 /// A builtin container published by `core`'s native surface (RFC 0028):
@@ -1054,6 +1064,10 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             e.u32(n.0);
             e.u32(*f);
         }
+        e.u32(im.trait_args.len() as u32);
+        for &a in &im.trait_args {
+            e.u32(a);
+        }
     }
     // inherent impls (class methods): one row per class with methods —
     // the table v16 reserved (length-prefixed, zero rows) so this
@@ -1068,6 +1082,10 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             e.u32(m.ret);
             e.u32(m.local);
             e.u8(m.has_self as u8);
+            e.u32(m.generics.len() as u32);
+            for g in &m.generics {
+                e.u32(g.0);
+            }
         }
     }
     // native rows (core's builtin surface), ambient bits included
@@ -1506,7 +1524,11 @@ fn decode_surface(
             let mname = name(d)?;
             methods_concrete.push((mname, d.u32()?));
         }
-        s.impls.push(SurfaceImpl { trait_name, target, methods, methods_concrete });
+        let mut trait_args = Vec::new();
+        for _ in 0..(d.u32()? as usize) {
+            trait_args.push(d.u32()?);
+        }
+        s.impls.push(SurfaceImpl { trait_name, target, methods, methods_concrete, trait_args });
     }
     // inherent impls (class methods): one row per class with methods —
     // v16 reserved the table (zero rows) so this population rides the
@@ -1526,7 +1548,11 @@ fn decode_surface(
             let ret = d.u32()?;
             let local = d.u32()?;
             let has_self = d.u8()? != 0;
-            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self });
+            let mut generics = Vec::new();
+            for _ in 0..(d.u32()? as usize) {
+                generics.push(name(d)?);
+            }
+            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self, generics });
         }
         s.inherents.push(SurfaceInherent { target, methods });
     }
@@ -2181,6 +2207,7 @@ mod tests {
             target: crate::id::pack(7, 0),
             methods: vec![(area, 0)],
             methods_concrete: vec![(area, 0)],
+            trait_args: vec![],
         });
         // native rows (core's builtin surface), ambient bits both ways
         p.surface.native_types = vec![
@@ -2227,6 +2254,7 @@ mod tests {
             target: crate::id::pack(9, 0), // no block carries scope 9
             methods: vec![],
             methods_concrete: vec![],
+            trait_args: vec![],
         });
         assert!(decode(&encode(&p)).is_err(), "type id outside the carried blocks");
 
@@ -2245,6 +2273,7 @@ mod tests {
             target: TY_I32,
             methods: vec![(p.interner.intern("area"), 42)], // the func table carries one
             methods_concrete: vec![],
+            trait_args: vec![],
         });
         assert!(decode(&encode(&p)).is_err(), "fn ref outside the func table");
     }

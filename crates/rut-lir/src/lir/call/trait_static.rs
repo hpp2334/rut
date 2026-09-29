@@ -241,14 +241,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(ret_ty);
         }
         if let Some((eidx, midx)) = self.find_extern_trait_impl_method(param, name) {
-            let im = &self.ctx.extern_impls[eidx];
-            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            let (im_trait_id, im, tdesc) = {
+                let imv = &self.ctx.extern_impls[eidx];
+                (imv.trait_id, imv.clone(), self.ctx.trait_by_id(imv.trait_id).clone())
+            };
             let tm = tdesc.methods[midx].clone();
             let list = im.methods_concrete.iter().find(|(n, _)| *n == tm.name);
-            let (fid, ptys, ret_ty) = match list {
-                Some(&(_, f)) => (f, tm.params.clone(), tm.ret),
+            // the desc's `?Self` (`fn decode(r) -> (?Self, ?E)`) resolves
+            // against THIS call's concrete type parameter, or the
+            // caller's destructure types the value as the bare trait
+            // object
+            let fid = match list {
+                Some(&(_, f)) => f,
                 None => match im.methods.iter().find(|(n, _)| *n == tm.name) {
-                    Some(&(_, f)) => (f, tm.params.clone(), tm.ret),
+                    Some(&(_, f)) => f,
                     None => {
                         let t = self.ctx.name(tdesc.name);
                         self.ctx.err(sp, format!("impl `{t}` is missing `{}`", self.ctx.name(tm.name)));
@@ -256,6 +262,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 },
             };
+            let ptys = tm.params.clone();
+            let ret_ty = self.ctx.respell_trait_self_deep(tm.ret, im_trait_id, param);
             if args.len() != ptys.len() {
                 self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
                 return Err(());
@@ -355,7 +363,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 },
             }
         };
-        // param types for the chosen ABI
+        // param types for the chosen ABI; the RETURN re-spells either
+        // way — a desc's `?Self` (`fn decode(r) -> (?Self, ?E)`)
+        // resolves against THIS call's concrete target, or the caller's
+        // tuple destructure types the value as the bare trait object
         let ptys: Vec<TypeId> = if slot_abi {
             tm.params.clone()
         } else {
@@ -367,7 +378,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 })
                 .collect()
         };
-        let ret_ty = tm.ret;
+        let ret_ty = self
+            .ctx
+            .respell_trait_self_deep(tm.ret, trait_id, concrete);
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());

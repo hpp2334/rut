@@ -161,20 +161,212 @@ impl<'a> Ctx<'a> {
         target: TypeId,
         methods: Vec<(IdentId, u32)>,
         methods_concrete: Vec<(IdentId, u32)>,
+        trait_args: Vec<TypeId>,
     ) {
-        self.extern_impls.push(ExternImpl { trait_id, trait_name, target, methods, methods_concrete });
+        self.extern_impls.push(ExternImpl {
+            trait_id,
+            trait_name,
+            target,
+            methods,
+            methods_concrete,
+            trait_args,
+        });
+    }
+
+    /// The carried mirror rows join the instantiation maps: a field's
+    /// type (`Mutation<str, Req>`) arrives through a used struct's type
+    /// block, never through this unit's own resolution, so the
+    /// method-call route's `inst_data` lookup — and a later spelling of
+    /// the same instantiation, which must dedup onto the very row the
+    /// field carries — needs the maps filled. Rows this unit resolved
+    /// itself are already registered; a row whose base is not a used
+    /// generic class passes through.
+    pub fn register_carried_insts(&mut self) {
+        let names: Vec<String> = (0..self.types.types.len())
+            .map(|i| {
+                let name = self.types.types[i].name;
+                self.interner.name(name).to_string()
+            })
+            .collect();
+        for (i, text) in names.iter().enumerate() {
+            let Some(ty) = self.types.id_for_pub_checked(i as u32) else { continue };
+            if self.inst_data.contains_key(&ty) {
+                continue;
+            }
+            let Some((base_text, args_text)) = text.split_once('<') else {
+                continue;
+            };
+            let Some(args_text) = args_text.strip_suffix('>') else {
+                continue;
+            };
+            let Some((base, g)) = self
+                .extern_generics
+                .iter()
+                .find(|(n, _)| self.name(**n) == base_text)
+                .map(|(n, g)| (*n, g.clone()))
+            else {
+                continue;
+            };
+            let arg_texts = crate::check::collect::split_top_commas(args_text);
+            if arg_texts.len() != g.params.len() {
+                continue;
+            }
+            let mut args = Vec::with_capacity(arg_texts.len());
+            let mut ok = true;
+            for at in &arg_texts {
+                // a no-intern lookup: a miss must not grow the name
+                // table (the two compile lanes byte-compare programs)
+                let resolved = if let Some(bare) = at.strip_prefix('?') {
+                    self.interner
+                        .lookup(bare)
+                        .and_then(|bid| self.types.dense_id_of_name(bid))
+                        .map(|e| self.mk_opt(e))
+                } else {
+                    self.interner
+                        .lookup(at)
+                        .and_then(|iid| self.types.dense_id_of_name(iid))
+                };
+                match resolved {
+                    Some(a) => args.push(a),
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                continue;
+            }
+            // NO type_inst entry: a later spelling of the same
+            // instantiation must mint its OWN row (this unit's substitute
+            // of the template's fields — ids this unit can resolve). The
+            // carried row's internal ids name the EXPORTER's world (its
+            // deps, its seed region); deduping onto it would hand the
+            // speller a type whose fields resolve only in the exporter.
+            // `inst_data` stays: the method/dispatch route reads the
+            // carried row where it sits, and the link unifies mirrors of
+            // one owner-anchored instantiation at the canonical key.
+            self.inst_data.insert(ty, (base, args.clone()));
+            if g.is_class {
+                self.extern_classes.insert(ty);
+            }
+            let owner = self.intern(&g.owner);
+            self.ledger_types.push(rut_core::binary::InstTy {
+                owner,
+                decl: base,
+                args: args.clone(),
+                ty,
+            });
+            self.request_inst(g.owner.clone(), base, args);
+        }
     }
 
     /// Bind a used enum (the linkable-classes phase): the member paths
     /// (`EncodeErrorKind.Depth`) resolve through this registry; the
     /// descriptor row itself rides the carried type block.
-    pub fn add_extern_enum(&mut self, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {
-        self.extern_enums.insert(name, (ty, members));
+    pub fn add_extern_enum(&mut self, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {        self.extern_enums.insert(name, (ty, members));
     }
 
     /// The used enum's (type id, members), if bound.
     pub fn extern_enum(&self, name: IdentId) -> Option<(TypeId, Vec<(IdentId, i64)>)> {
         self.extern_enums.get(&name).cloned()
+    }
+
+    /// Is this type row a bare placeholder leaf for one of `params`
+    /// (the `#<param>` row the surface build spelled)?
+    pub fn template_leaf(&self, t: TypeId, params: &[IdentId]) -> bool {
+        let text = self.interner.name(self.types.type_at(t).name).to_string();
+        params
+            .iter()
+            .any(|p| format!("#{}", self.name(*p)) == text)
+    }
+
+    /// The element of a `Future<E>` trait-object type: the kind stores
+    /// the trait-table index (unit-local — a carried row's index is the
+    /// exporter's), so the instantiation's name ("[trait] Future<E>")
+    /// is the only carrier; the element text resolves through the
+    /// carried/boot rows by name.
+    pub fn future_elem(&mut self, ty: TypeId) -> Option<TypeId> {
+        if !matches!(self.types.kind(ty), TyKind::TraitObj { .. }) {
+            return None;
+        }
+        let tname = self.name(self.types.type_at(ty).name).to_string();
+        let inner = tname
+            .strip_prefix("[trait] Future<")
+            .and_then(|s| s.strip_suffix('>'))?;
+        self.resolve_elem_text(inner)
+    }
+
+    /// Re-spell a foreign impl method's signature type for THIS call's
+    /// concrete target: a `Self`-spelled trait object (the descriptor's
+    /// `?Self`, at any structural depth) becomes the concrete type. A
+    /// row that mentions no `Self` passes through unchanged.
+    pub fn respell_trait_self_deep(
+        &mut self,
+        t: TypeId,
+        trait_id: u32,
+        concrete: TypeId,
+    ) -> TypeId {
+        let kind = self.types.kind(t).clone();
+        let rebuilt = match kind {
+            TyKind::TraitObj { trait_id: t } if t == trait_id => Some(concrete),
+            TyKind::Opt { elem } => {
+                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                (e != elem).then(|| self.mk_opt(e))
+            }
+            TyKind::Array { elem } => {
+                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                (e != elem).then(|| self.mk_array(e))
+            }
+            TyKind::Weak { elem } => {
+                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                (e != elem).then(|| self.mk_weak(e))
+            }
+            TyKind::Fn { params, ret } => {
+                let ps: Vec<TypeId> = params
+                    .iter()
+                    .map(|&p| self.respell_trait_self_deep(p, trait_id, concrete))
+                    .collect();
+                let r = self.respell_trait_self_deep(ret, trait_id, concrete);
+                (ps != params || r != ret).then(|| self.mk_fn_ty(ps, r))
+            }
+            TyKind::Data { fields } if !fields.is_empty() => {
+                let fs: Vec<FieldInfo> = fields
+                    .iter()
+                    .map(|f| FieldInfo {
+                        name: f.name,
+                        ty: self.respell_trait_self_deep(f.ty, trait_id, concrete),
+                    })
+                    .collect();
+                let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
+                changed.then(|| {
+                    let name = self.intern(&format!(
+                        "({})",
+                        fs.iter()
+                            .map(|f| self.type_name(f.ty).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } })
+                })
+            }
+            _ => None,
+        };
+        rebuilt.unwrap_or(t)
+    }
+
+    /// Resolve an element TEXT (a trait-inst name's carrier) to a row:
+    /// the carried/boot rows by name; a leading `?` peels to the
+    /// element and rebuilds the nullable (the boot answer lanes are
+    /// named by their element, so the plain lookup cannot see them).
+    pub fn resolve_elem_text(&mut self, inner: &str) -> Option<TypeId> {
+        if let Some(bare) = inner.strip_prefix('?') {
+            let bid = self.intern(bare);
+            let elem = self.types.dense_id_of_name(bid)?;
+            return Some(self.mk_opt(elem));
+        }
+        let id = self.intern(inner);
+        self.types.dense_id_of_name(id)
     }
 
     /// The async Future trait objects re-spell at the binding: a linked
@@ -190,24 +382,31 @@ impl<'a> Ctx<'a> {
         ret: TypeId,
         surface_exports: &[(IdentId, TypeId)],
     ) -> TypeId {
-        let trait_obj = match self.types.kind(ret).clone() {
-            TyKind::TraitObj { trait_id } => trait_id,
-            _ => return ret,
-        };
-        let tname = self.name(self.traits[trait_obj as usize].name).to_string();
-        let Some(inner) = tname.strip_prefix("Future<").and_then(|s| s.strip_suffix('>')) else {
+        if !matches!(self.types.kind(ret), TyKind::TraitObj { .. }) {
+            return ret;
+        }
+        // the trait id inside a carried TraitObj row is the EXPORTER's
+        // trait-table index — meaningless here, and the local table may
+        // not even have that slot. The type row's own name
+        // ("[trait] Future<nil>") is the only carrier: decode the
+        // element from it and re-mint this unit's Future inst.
+        let tname = self.name(self.types.type_at(ret).name).to_string();
+        let Some(inner) = tname
+            .strip_prefix("[trait] Future<")
+            .and_then(|s| s.strip_suffix('>'))
+        else {
             return ret;
         };
         // the element resolves through the binding's own type exports
         // first (the pkg carries the row), then through the carried /
-        // boot rows by name
+        // boot rows by name (a leading `?` peels — see
+        // `resolve_elem_text`)
         let inner_id = self.intern(inner);
         let elem = surface_exports
             .iter()
             .find(|(n, _)| *n == inner_id)
             .map(|(_, ty)| *ty)
-            .or_else(|| self.types.dense_id_of_name(inner_id))
-            .or_else(|| self.ast.interner.lookup(inner).map(|i| i.0));
+            .or_else(|| self.resolve_elem_text(inner));
         let Some(elem) = elem else {
             return ret;
         };
@@ -222,7 +421,7 @@ impl<'a> Ctx<'a> {
     pub fn add_extern_inherent(
         &mut self,
         target: TypeId,
-        methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool)>,
+        methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool, Vec<IdentId>)>,
     ) {
         if methods.is_empty() {
             return;

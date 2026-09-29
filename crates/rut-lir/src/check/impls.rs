@@ -85,14 +85,36 @@ impl<'a> Ctx<'a> {
         if let Some(idx) = self.find_impl_for(trait_id, target) {
             return Some(ImplHit::Local(idx));
         }
+        // a carried trait-object row references the EXPORTER's trait
+        // table (its inst descriptor's unit-local index); the registered
+        // impl names the BASE trait. The bridge is the base name: a
+        // `Readable<#T>` descriptor answers an `impl Readable<..> for ..`
+        // row. (`trait_base_text` bounds-checks — a dangling index
+        // bridges by nothing.) The use-gate holds for direct dispatch;
+        // the bridge arm is self-gated — a carried descriptor exists
+        // only because this unit BIND a signature that names the trait,
+        // which is the acknowledgment the use-gate law asks for.
+        let tbase = self.trait_base_text(trait_id);
         self.extern_impls.iter().position(|im| {
-            im.trait_id == trait_id
+            (im.trait_id == trait_id || tbase.as_deref() == Some(self.name(im.trait_name)))
             && (im.target == target
                 || self.impl_target_is_template_for(im.target, target)
                 || self.impl_target_is_structural_template_for(im.target, target))
             && (self.extern_trait_decls.contains_key(&im.trait_name)
-                || self.find_trait(im.trait_name).is_some())
+                || self.find_trait(im.trait_name).is_some()
+                || tbase.as_deref() == Some(self.name(im.trait_name)))
         }).map(ImplHit::Extern)
+    }
+
+    /// The trait row's BASE name text: the row itself for a
+    /// declaration, the spelled instantiation's head (`Readable<#T>` →
+    /// `Readable`) for a per-argument-list descriptor row. `None` for an
+    /// out-of-range index (a carried row whose exporter table never
+    /// remapped here).
+    pub fn trait_base_text(&self, trait_id: u32) -> Option<String> {
+        let row = self.traits.get(usize::try_from(trait_id).ok()?)?;
+        let text = self.interner.name(row.name);
+        Some(text.split('<').next()?.to_string())
     }
 
     /// Does the extern impl row's template target answer `target`'s

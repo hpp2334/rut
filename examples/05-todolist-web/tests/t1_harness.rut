@@ -292,7 +292,28 @@ entry fn t1p_trap_bad_size(c: opaque) {
 entry fn t1p_trap_text_no_variant(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    t1_render(root, Widget { kind: WKind.Text, text: "anon" });
+    t1_render(root, Widget {
+        kind: WKind.Text,
+        text: "anon",
+        tvar: nil,
+        bvar: nil,
+        on: false,
+        placeholder: "",
+        value: "",
+        text$: nil,
+        value$: nil,
+        live: nil,
+        on_click: nil,
+        on_input: nil,
+        on_row: nil,
+        row_arg: 0,
+        hook: "",
+        key: "",
+        gap: 0,
+        pad: 0,
+        size: 0,
+        children: Vec.new(),
+    });
 }
 
 /// A listening widget that carries no event mutation.

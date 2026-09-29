@@ -3,6 +3,8 @@
 // fns are entry fns so T12 can run the packed bundle through the host
 // boundary and pin both dispatch results.
 use json::{JsonSerialize};
+use pouch::{Vec};
+use nmapset::{Map};
 
 entry fn go_vec() -> str {
     let v = Vec<str>.filled("x", 2);

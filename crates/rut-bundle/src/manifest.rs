@@ -551,7 +551,6 @@ entry.type = "./pouch.d.rut"
         )
         .unwrap();
         assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
-        assert_eq!(m.host_scope, None);
         let m = parse_manifest("name = \"ink\"\nentry.lib = \"./ink.rut\"\ninline = true\n")
             .unwrap();
         assert_eq!(m.entry.lib.as_deref(), Some("./ink.rut"));

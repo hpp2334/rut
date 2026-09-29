@@ -9,6 +9,7 @@
 
 use ui::{Store, Source, Derived, Mutation};
 use app::{World, world_boot, Todo};
+use pouch::{ Vec };
 
 entry fn store_new() -> opaque {
     let w: ?World = world_boot("");
@@ -178,7 +179,7 @@ entry fn atom_str_get(c: opaque, name: str) -> str {
 entry fn atom_items_set(c: opaque, title: str) -> nil {
     let mut w = wt(c);
     let fresh: Vec<Todo> = Vec.new();
-    fresh.push(Todo { id: 1, title: title });
+    fresh.push(Todo { id: 1, title: title, done: false });
     w.items$.set(fresh);
 }
 

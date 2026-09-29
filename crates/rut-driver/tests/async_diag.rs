@@ -106,7 +106,7 @@ pub fn main() -> nil {
 }
 "#);
     assert!(
-        msg.contains("no impl of `Future` for `LaunchedFutureHandle<nil>`"),
+        msg.contains("cannot infer type parameter `T` of `launch_future`"),
         "got: {msg}"
     );
 }

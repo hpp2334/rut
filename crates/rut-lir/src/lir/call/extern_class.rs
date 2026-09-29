@@ -8,7 +8,7 @@
 //! the call onto the owner's compiled copy — instantiation is owned by
 //! the declaring package, consumers request.
 
-use crate::check::TcResult;
+use crate::check::{collect::split_top_commas, TcResult};
 use crate::lir::*;
 use rut_core::sym;
 use std::collections::HashMap;
@@ -36,7 +36,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(s) = self_ty {
             env.insert("#Self".to_string(), s);
         }
-        let (_n, params, ret, _f, _has_self) = self.ctx.extern_inherents[ih].methods[midx].clone();
+        let (_n, params, ret, _f, _has_self, _mgen) =
+            self.ctx.extern_inherents[ih].methods[midx].clone();
         let ptys = params
             .iter()
             .map(|&p| self.ctx.subst_template_ty(p, &env))
@@ -50,6 +51,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// with the receiver's concrete arguments. A plain class calls the
     /// exporter's fn; a generic class mints the mirror.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compile_extern_method_call(
         &mut self,
         ih: usize,
@@ -58,19 +60,91 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         dname: Option<IdentId>,
         rt: TypeId,
         rreg: u16,
+        generics: Vec<NodeHandle<AnyTy>>,
         args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let (name, _params, _ret, func, has_self) =
+        let (name, _params, _ret, func, has_self, mgen) =
             self.ctx.extern_inherents[ih].methods[midx].clone();
         debug_assert!(has_self, "instance call routed a class method");
-        // the receiver IS the instantiation: `#Self` substitutes to it
-        let (ptys, ret_ty) = self.extern_sig(ih, midx, subst, Some(rt));
+        // a generic METHOD's own parameters join the class's
+        // substitution: explicit site arguments first (`source<i64>`),
+        // else structural unification against the placeholder signature
+        let mut full_subst = subst.to_vec();
+        if !mgen.is_empty() && !generics.is_empty() {
+            if generics.len() != mgen.len() {
+                self.ctx.err(sp, format!(
+                    "`{}` takes {} type argument(s), {} given",
+                    self.ctx.name(name),
+                    mgen.len(),
+                    generics.len()
+                ));
+                return Err(());
+            }
+            for (g, node) in mgen.iter().zip(generics.iter()) {
+                full_subst.push((*g, self.resolve_type_now(*node)));
+            }
+        }
+        if !mgen.is_empty() && generics.is_empty() {
+            // inference: compile args against the placeholder signature,
+            // binding the method's generics from the arguments
+            let env0: HashMap<String, TypeId> = full_subst
+                .iter()
+                .map(|(g, t)| (format!("#{}", self.ctx.name(*g)), *t))
+                .collect();
+            let mparams = self.ctx.extern_inherents[ih].methods[midx].1.clone();
+            let ptys0: Vec<TypeId> = mparams
+                .iter()
+                .map(|&p| self.ctx.subst_template_ty(p, &env0))
+                .collect();
+            let mut arg_tys = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                let hint = if self.ctx.template_leaf(ptys0[i], &mgen) { None } else { Some(ptys0[i]) };
+                let t = self.compile_expr(*a, hint)?;
+                arg_tys.push(t);
+            }
+            for (i, a) in args.iter().enumerate() {
+                let mut env: HashMap<String, TypeId> = full_subst
+                    .iter()
+                    .map(|(g, t)| (format!("#{}", self.ctx.name(*g)), *t))
+                    .collect();
+                self.infer_named_placeholders(ptys0[i], arg_tys[i], &mgen, &mut env, sp)?;
+                // the merge walks the METHOD's parameter list, not the
+                // env's hash order — the subst vec's argument ORDER is
+                // positional downstream (a mirror request's args read
+                // it index-for-index), so it must be deterministic
+                for g in &mgen {
+                    let key = format!("#{}", self.ctx.name(*g));
+                    if let Some(&t) = env.get(&key) {
+                        if !full_subst.iter().any(|(n, _)| n == g) {
+                            full_subst.push((*g, t));
+                        }
+                    }
+                }
+            }
+            for g in &mgen {
+                if !full_subst.iter().any(|(n, _)| n == g) {
+                    self.ctx.err(sp, format!(
+                        "cannot infer generic parameter `{}` of `{}` — annotate the call",
+                        self.ctx.name(*g),
+                        self.ctx.name(name)
+                    ));
+                    return Err(());
+                }
+            }
+        }
+        // the receiver IS the instantiation: `#Self` substitutes to it;
+        // the method's own generics substitute through the same env
+        let (ptys, ret_ty) = self.extern_sig(ih, midx, &full_subst, Some(rt));
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
         }
+        // the method's own generics are in scope for nested calls
+        // (`Vec.new()` inside `source<Vec<Todo>>(Vec.new())` sees
+        // T → Vec<Todo> through self.subst)
+        let saved_subst = std::mem::replace(&mut self.subst, full_subst.clone());
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
@@ -82,19 +156,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
+        self.subst = saved_subst;
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        let fid = match dname {
-            // a plain class: the compiled fn crosses the surface
-            None => func,
-            // a generic class: the bodies live in the owner — mirror
-            Some(d) => {
-                let inst = crate::check::Inst {
-                    key: crate::check::FnKey::Method { data: d, name },
-                    subst: subst.to_vec(),
-                    trait_origins: vec![],
-                };
-                self.ctx.mirror_inst(inst)
-            }
+        // the mirror request: a generic class's method OR a generic
+        // method on a plain class — the bodies live in the owner
+        let needs_mirror = dname.is_some() || !mgen.is_empty();
+        let fid = if needs_mirror {
+            let data = dname.unwrap_or_else(|| self.ctx.types.type_at(rt).name);
+            let inst = crate::check::Inst {
+                key: crate::check::FnKey::Method { data, name },
+                subst: full_subst.iter().map(|(g, t)| (*g, *t)).collect(),
+                trait_origins: vec![],
+            };
+            self.ctx.mirror_inst(inst)
+        } else {
+            func
         };
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
@@ -148,7 +224,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut aregs = Vec::new();
         let mut arg_tys = Vec::new();
         for (i, a) in args.iter().enumerate() {
-            let hint = if is_placeholder(self, gf.args[i]) { None } else { Some(ptys[i]) };
+            // the hint respects an EXPLICIT type argument: a placeholder
+            // the site already bound is concrete here, so the argument
+            // compiles at that type (an integer literal inside `[..]`
+            // must not fall back to the i32 default and overwrite the
+            // explicit binding at inference)
+            let hinted = self.ctx.subst_template_ty(gf.args[i], &env);
+            let hint = if is_placeholder(self, hinted) { None } else { Some(hinted) };
             let t = self.compile_expr(*a, hint)?;
             aregs.push(self.last_reg);
             arg_tys.push(t);
@@ -218,23 +300,141 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         env: &mut HashMap<String, TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
+        let names: Vec<IdentId> = gf.params.clone();
+        self.infer_named_placeholders(param, arg, &names, env, sp)
+    }
+
+    /// [`Self::infer_placeholders`] against a method's OWN generic
+    /// parameter names (the extern method rows carry no
+    /// [`crate::check::ExternGenericFn`]). `#X` binds `X` to the
+    /// argument; matching wrappers recurse; ground types require
+    /// equality (checked at the widening above). An explicit binding
+    /// already in `env` wins: inference only fills what the site left
+    /// open.
+    fn infer_named_placeholders(
+        &mut self,
+        param: TypeId,
+        arg: TypeId,
+        names: &[IdentId],
+        env: &mut HashMap<String, TypeId>,
+        _sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
         let ptext = self.ctx.types.type_at(param).name;
         let ptext = self.ctx.interner.name(ptext).to_string();
-        if gf.params.iter().any(|p| format!("#{}", self.ctx.name(*p)) == ptext) {
-            if let Some(_old) = env.insert(ptext, arg) {
-                // already bound — the widening above checked agreement
+        if names.iter().any(|p| format!("#{}", self.ctx.name(*p)) == ptext) {
+            if !env.contains_key(&ptext) {
+                env.insert(ptext, arg);
             }
             return Ok(());
         }
         match (self.ctx.types.kind(param).clone(), self.ctx.types.kind(arg).clone()) {
             (TyKind::Opt { elem: pe }, TyKind::Opt { elem: ae }) => {
-                self.infer_placeholders(pe, ae, gf, env, sp)
+                self.infer_named_placeholders(pe, ae, names, env, _sp)
             }
             (TyKind::Array { elem: pe }, TyKind::Array { elem: ae }) => {
-                self.infer_placeholders(pe, ae, gf, env, sp)
+                self.infer_named_placeholders(pe, ae, names, env, _sp)
             }
             (TyKind::Weak { elem: pe }, TyKind::Weak { elem: ae }) => {
-                self.infer_placeholders(pe, ae, gf, env, sp)
+                self.infer_named_placeholders(pe, ae, names, env, _sp)
+            }
+            (
+                TyKind::Fn { params: pp, ret: pr },
+                TyKind::Fn { params: ap, ret: ar },
+            ) => {
+                if pp.len() == ap.len() {
+                    for (p, a) in pp.iter().zip(ap.iter()) {
+                        self.infer_named_placeholders(*p, *a, names, env, _sp)?;
+                    }
+                    self.infer_named_placeholders(pr, ar, names, env, _sp)
+                } else {
+                    Ok(())
+                }
+            }
+            (TyKind::TraitObj { trait_id: _ }, TyKind::Data { .. }) => {
+                // a trait-parameter slot (`a: Readable<T>`) against a
+                // concrete record: the TypeObj row's own name spells the
+                // trait and its arguments ("[trait] Readable<#T>") — the
+                // only carrier across a binding (the trait-table index
+                // is unit-local and may not resolve in the consumer).
+                // The args unify against the target's registered
+                // parameterized impl's trait arguments — the impl may
+                // live in the OWNING package, crossing as an extern row
+                let row_text =
+                    self.ctx.name(self.ctx.types.type_at(param).name).to_string();
+                let inner = row_text.strip_prefix("[trait] ").unwrap_or(&row_text[..]);
+                let Some((tbase, targs_text)) = inner.split_once('<') else {
+                    return Ok(());
+                };
+                let Some(targs_text) = targs_text.strip_suffix('>') else {
+                    return Ok(());
+                };
+                let tname = self.ctx.intern(tbase);
+                let arity = split_top_commas(targs_text).len();
+                let local_args = self.ctx.template_trait_args(tname, arity, arg);
+                let concrete_args = local_args.or_else(|| {
+                    // the impl row's carried trait args spell the
+                    // TARGET's own generic parameters (`impl
+                    // Writable<A, R> for Source<A>` carries `#A, #A`);
+                    // each maps through the target's instantiation to
+                    // the concrete value (`Source<Vec<Req>>` →
+                    // `Writable<Vec<Req>, Vec<Req>>`)
+                    let Some((d, cargs)) = self.ctx.inst_data.get(&arg).cloned() else {
+                        return None;
+                    };
+                    let (g_params, im_targs) = {
+                        let Some(g) = self.ctx.extern_generics.get(&d) else {
+                            return None;
+                        };
+                        let Some(im) = self.ctx.extern_impls.iter().find(|im| {
+                            self.ctx.name(im.trait_name) == tbase && g.template == im.target
+                        }) else {
+                            return None;
+                        };
+                        (g.params.clone(), im.trait_args.clone())
+                    };
+                    if im_targs.len() != arity {
+                        return None;
+                    }
+                    let mut concrete = cargs.clone();
+                    concrete.resize(arity, concrete[0]);
+                    for (i, &ta) in im_targs.iter().enumerate() {
+                        let ta_text =
+                            self.ctx.name(self.ctx.types.type_at(ta).name).to_string();
+                        let Some(tparam) = ta_text.strip_prefix('#') else { continue };
+                        let tid = self.ctx.intern(tparam);
+                        if let Some(pos) = g_params.iter().position(|&p| p == tid) {
+                            if pos < cargs.len() {
+                                concrete[i] = cargs[pos];
+                            }
+                        }
+                    }
+                    Some(concrete)
+                });
+                let Some(concrete_args) = concrete_args else {
+                    return Ok(());
+                };
+                let param_args = split_top_commas(targs_text);
+                if param_args.len() != concrete_args.len() {
+                    return Ok(());
+                }
+                for (pa, ca) in param_args.iter().zip(concrete_args.iter()) {
+                    let Some(prow) = self.ctx.resolve_elem_text(pa) else {
+                        continue;
+                    };
+                    self.infer_named_placeholders(prow, *ca, names, env, _sp)?;
+                }
+                Ok(())
+            }
+            (TyKind::TraitObj { .. }, TyKind::TraitObj { .. }) => {
+                // the Future protocol's element rides the trait-inst
+                // name (its only carrier — the kind holds a unit-local
+                // trait-table index): decode both sides and recurse
+                if let (Some(pe), Some(ae)) =
+                    (self.ctx.future_elem(param), self.ctx.future_elem(arg))
+                {
+                    return self.infer_named_placeholders(pe, ae, names, env, _sp);
+                }
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -256,7 +456,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         args: Vec<NodeHandle<AnyExpr>>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let (name, _params, _ret, func, has_self) =
+        let (name, _params, _ret, func, has_self, _mgen) =
             self.ctx.extern_inherents[ih].methods[midx].clone();
         debug_assert!(!has_self, "class call routed an instance method");
         let subst: Vec<(IdentId, TypeId)> = match dname {
@@ -324,10 +524,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let tm = tdesc.methods[midx].clone();
         // the trait method must be instance-shaped here: a template
         // impl's no-self method is a type-parameter call, routed by the
-        // trait-param arm instead
+        // trait-param arm instead. The binary desc's params EXCLUDE the
+        // receiver (the compiler passes self as arg0) — a `Self`-spelled
+        // remaining parameter maps to the concrete target.
         let (ptys, ret_ty): (Vec<TypeId>, TypeId) = {
             let mut ps = Vec::new();
-            for p in tm.params.iter().skip(1) {
+            for p in tm.params.iter() {
                 ps.push(match self.ctx.types.kind(*p) {
                     TyKind::TraitObj { trait_id: t } if *t == im.trait_id => concrete,
                     _ => *p,

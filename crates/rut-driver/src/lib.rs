@@ -38,7 +38,7 @@ fn respell_surface_ty(
     cx_ty: TypeId,
 ) -> TypeId {
     let s = rut_core::id::scope_of(t);
-    if s == own_scope && own_scope != dep_scope {
+    if s == own_scope {
         let dense = types
             .scope_base
             .get(s as usize)
@@ -46,11 +46,16 @@ fn respell_surface_ty(
             .unwrap_or(0)
             + rut_core::id::local_of(t);
         if let Some(row) = types.types.get(dense as usize) {
+            // the engine-minted cx record is THIS unit's row: a carried
+            // surface's RunContext re-spells to it by name, so the
+            // crossing check sees one type
             if row.name == cx_name {
                 return cx_ty;
             }
         }
-        return rut_core::pack(dep_scope, rut_core::id::local_of(t));
+        if own_scope != dep_scope {
+            return rut_core::pack(dep_scope, rut_core::id::local_of(t));
+        }
     }
     t
 }
@@ -74,13 +79,16 @@ pub struct Seeds<'a> {
     pub groups: &'a [SeedGroup<'a>],
 }
 
-/// One requester's seed block: descriptors + scope blocks + the
-/// requester program's interner (the descriptors' name ids resolve
-/// against it, then re-intern into the owner's).
+/// One requester's seed block: the descriptor closure as
+/// `(scope, local) → row` pairs + the requester program's interner
+/// (the descriptors' name ids resolve against it, then re-intern into
+/// the owner's). The attach side merges EVERY group's rows into one
+/// run per scope — two requesters' rows share a scope (the classes of
+/// a common dependency), and a second base registration would strand
+/// the first group's ids.
 #[derive(Clone)]
 pub struct SeedGroup<'a> {
-    pub types: Vec<rut_core::types::RutType>,
-    pub blocks: Vec<(rut_core::ScopeId, u32)>,
+    pub rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)>,
     pub names: &'a rut_core::Interner,
     /// `(decl name text, args in the registered blocks' id space, the
     /// method names whose bodies this request needs — empty for a
@@ -232,16 +240,21 @@ pub fn compile_program_resolved(
         let mut tmap: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         for t in &surface.traits {
             let text = surface.names.name(t.name);
+            // an inst descriptor's spelling (`Readable<#T>`) is not a
+            // declaration name: it rides for the trait map's remap and
+            // registers nameless (no use-gate, no dispatch registry)
+            let is_inst_desc = text.contains('<');
             let used_name = ast
                 .interner
                 .lookup(text)
                 .filter(|id| ctx.used.contains(id));
-            if used_name.is_none() && !impl_trait_texts.contains(text) {
+            if !is_inst_desc && used_name.is_none() && !impl_trait_texts.contains(text) {
                 continue;
             }
-            let cid = ctx.add_extern_trait_decl(used_name, t, &surface.names);
+            let reg_name = if is_inst_desc { None } else { used_name };
+            let cid = ctx.add_extern_trait_decl(reg_name, t, &surface.names);
             // the trait's origin pkg rides the binding (RFC 0012 §2a)
-            if let Some(n) = used_name {
+            if let Some(n) = reg_name {
                 ctx.extern_origins.insert(n, origin.clone());
             }
             tmap.insert(t.local, cid);
@@ -370,7 +383,9 @@ pub fn compile_program_resolved(
             // an impl of a native trait (`Iterator`) stays in its
             // declaring module — the consumer instantiates its own
             // trait per element type (v1)
-            let Some(&tid) = ext_trait.get(text) else { continue };
+            let Some(&tid) = ext_trait.get(text) else {
+                continue;
+            };
             let tname = ctx.intern(text);
             let methods = im
                 .methods
@@ -382,7 +397,7 @@ pub fn compile_program_resolved(
                 .iter()
                 .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
                 .collect();
-            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete);
+            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, im.trait_args.clone());
         }
         
         // inherent method surfaces (the linkable-classes phase): the
@@ -394,45 +409,66 @@ pub fn compile_program_resolved(
         // verbatim — re-spelled here to pack(dep_scope, local), the
         // same law the type exports speak, or two linked pkgs (each
         // compiling as its own scope 1) collide on their ids.
-        let (own_scope, own_base) = surface
-            .scope_blocks
-            .last()
-            .map(|(s, off)| (*s, *off))
-            .unwrap_or((dep_scope, 0));
-        let cx_name = ctx.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
-        let cx_ty = ctx.run_context_ty();
-        let exports: Vec<(rut_core::IdentId, TypeId)> = surface
-            .type_exports
-            .iter()
-            .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
-            .collect();
-        for ih in &surface.inherents {
-            let methods: Vec<(rut_core::IdentId, Vec<TypeId>, TypeId, u32, bool)> = ih
-                .methods
-                .iter()
-                .map(|m| {
-                    (
-                        ctx.intern(surface.names.name(m.name)),
-                        m.params
-                            .iter()
-                            .map(|p| {
-                                respell_surface_ty(
-                                    &ctx.types, *p, own_scope, dep_scope, cx_name, cx_ty,
-                                )
-                            })
-                            .collect(),
-                        respell_surface_ty(
-                            &ctx.types, m.ret, own_scope, dep_scope, cx_name, cx_ty,
-                        ),
-                        rut_core::pack(dep_scope, m.local),
-                        m.has_self,
-                    )
-                })
-                .collect();
-            let target2 = respell_surface_ty(
-                &ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty,
-            );
-            ctx.add_extern_inherent(target2, methods);
+        //
+        // Gated on the surface actually carrying rows: the cx re-spell
+        // mints this unit's RunContext row (interning its field name),
+        // and a unit that binds no class surface must compile to the
+        // same bytes whether or not the prelude is mounted.
+        if !surface.inherents.is_empty() {
+            let own_scope = surface
+                .scope_blocks
+                .last()
+                .map(|(s, _)| *s)
+                .unwrap_or(dep_scope);
+            let cx_name = ctx.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
+            let cx_ty = ctx.run_context_ty();
+            for ih in &surface.inherents {
+                let methods: Vec<(
+                    rut_core::IdentId,
+                    Vec<TypeId>,
+                    TypeId,
+                    u32,
+                    bool,
+                    Vec<rut_core::IdentId>,
+                )> = ih
+                    .methods
+                    .iter()
+                    .map(|m| {
+                        (
+                            ctx.intern(surface.names.name(m.name)),
+                            m.params
+                                .iter()
+                                .map(|p| {
+                                    respell_surface_ty(
+                                        &ctx.types, *p, own_scope, dep_scope, cx_name, cx_ty,
+                                    )
+                                })
+                                .collect(),
+                            respell_surface_ty(
+                                &ctx.types, m.ret, own_scope, dep_scope, cx_name, cx_ty,
+                            ),
+                            rut_core::pack(dep_scope, m.local),
+                            m.has_self,
+                            m.generics
+                                .iter()
+                                .map(|&g| ctx.intern(surface.names.name(g)))
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                let target2 = respell_surface_ty(
+                    &ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty,
+                );
+                ctx.add_extern_inherent(target2, methods);
+                // the class's declaring pkg anchors the mirror requests
+                // (`MutCtx::set<A, R>` — a PLAIN class's generic method —
+                // names its owner through this row; `owner_of_data`
+                // reads it)
+                ctx.decl_owner.insert(
+                    ctx.types.type_at(target2).name,
+                    origin.clone(),
+                );
+            }
         }
         // core's native surface: builtin containers, traits, and
         // compiler-lowered fns. Each row's ambient bit rules the
@@ -474,6 +510,10 @@ pub fn compile_program_resolved(
             }
         }
     }
+    // the carried mirror rows join the instantiation maps (see
+    // `register_carried_insts`) — after the surfaces bind (the extern
+    // generics must be known) and before the unit's own collect
+    ctx.register_carried_insts();
     ctx.collect();
     // the seed half: the requesters' rows join AFTER the roots — the
     // owner's own block must intern at the exact locals the un-seeded
@@ -562,22 +602,475 @@ pub fn compile_program_resolved(
         diags.append(&mut ctx.diags.clone());
         return fail(diags, ast_dump, ast_json);
     }
+    diags.append(&mut ctx.diags);
+    if ctx.drain_queue().is_err() || !ctx.diags.is_empty() {
+        diags.append(&mut ctx.diags);
+        return fail(diags, ast_dump, ast_json);
+    }
+    // vtable pass 1: collects the impl fills and queues their bodies
+    // (they drain with the seeds below); the SHIPPED rows assemble at
+    // the tail, once the settle makes every fill resolve
+    let _ = ctx.build_vtables();
+    // per-type disposal rows: `(target type, dispose func id)` per
+    // `impl ..: Disposal` — the release path's table, flowing module→link
+    // beside the vtables
+    let disposal_impls = ctx.disposal_impls();
+    if !ctx.diags.is_empty() {
+        diags.append(&mut ctx.diags);
+        return fail(diags, ast_dump, ast_json);
+    }
+    // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
+    // conventional `main` when it is exported.
+    let mut exports: Vec<(IdentId, u32)> = Vec::new();
+    let mut names: Vec<IdentId> = ctx.entries.clone();
+    if ctx.exports.iter().any(|(n, _)| *n == sym::MAIN) && !names.contains(&sym::MAIN) {
+        names.push(sym::MAIN);
+    }
+    for n in names {
+        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![], trait_origins: vec![] }) {
+            exports.push((n, f));
+        }
+    }
+    // exported surface: every `pub` fn + its signature, for using modules
+    let mut surface = rut_core::binary::Surface::default();
+    for (name, _) in &ctx.exports {
+        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![], trait_origins: vec![] }) {
+            if let Some(f) = ctx.funcs.get(fid as usize) {
+                surface.funcs.push(rut_core::binary::SurfaceFn {
+                    name: *name,
+                    params: f.params.clone(),
+                    ret: f.ret,
+                    local: fid,
+                    is_async: false,
+                    host: None,
+                });
+            }
+        }
+    }
+    // inherent method surface (the linkable-classes phase): one row
+    // per class with exported methods — a plain class's row binds
+    // the compiled fn ids; a generic class's row spells the
+    // TEMPLATE (placeholder `#<param>` signatures, fn local zero),
+    // and the consumer substitutes per instantiation and requests
+    // the bodies. Member visibility is the class law (dataclasses
+    // are all-public); async and generic METHODS cross no surface
+    // (call-site shapes).
+    for (dname, d) in ctx.datas.clone() {
+        if d.methods.is_empty() {
+            continue;
+        }
+        // the class's template substitution: each generic parameter
+        // spells its `#<param>` placeholder row, `Self` — for a
+        // GENERIC class — its own `#Self` placeholder (the
+        // consumer's receiver instantiation substitutes it; a
+        // plain class's `Self` is the class's own row, which
+        // resolves through the carried block). `resolve_sig_ty`
+        // binds `Self` at any structural depth.
+        let generic = !d.generics.is_empty();
+        let self_ph = if generic {
+            Some(ctx.param_placeholder(sym::SELF_TY))
+        } else {
+            None
+        };
+        let env: Vec<(IdentId, TypeId)> = d
+            .generics
+            .iter()
+            .map(|&p| (p, ctx.param_placeholder(p)))
+            .collect();
+        let mut methods = Vec::new();
+        for (mname, mnode) in &d.methods {
+            let md = ctx.ast.method_decl(*mnode);
+            let exported =
+                d.kind == rut_lir::check::DataKind::Dataclass || md.vis == Some(rut_ast::ast::Vis::Pub);
+            // GENERIC methods cross too: the row carries the method's
+            // own generic parameters, the call site substitutes, and
+            // the bodies ride the request machinery
+            if !exported || md.is_async {
+                continue;
+            }
+            let method_generic = !md.generics.is_empty();
+            let has_self = matches!(
+                md.params.first().map(|p| ctx.ast.param(*p)),
+                Some(rut_ast::ast::MemberKind::SelfParam(_))
+            );
+            // a generic method's signature resolves under ITS OWN
+            // placeholder env layered on the class's (the class env for
+            // the receiver's `Self`, the method env for its parameters)
+            let mut menv = env.clone();
+            menv.extend(
+                md.generics
+                    .iter()
+                    .map(|&p| (p, ctx.param_placeholder(p))),
+            );
+            let self_ty = self_ph.unwrap_or(d.ty);
+            let mut params = Vec::new();
+            for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
+                match ctx.ast.param(*p) {
+                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                        params.push(ctx.resolve_sig_ty(*t, &menv, Some(self_ty)));
+                    }
+                    _ => params.push(TY_I32),
+                }
+            }
+            let ret = md
+                .ret
+                .map(|r| ctx.resolve_sig_ty(r, &menv, Some(self_ty)))
+                .unwrap_or(TY_NIL);
+            // a plain non-generic method's fn id: the eager class-method
+            // roots compiled it; a generic class's or generic method's
+            // body is per instantiation — zero, the request machinery
+            // carries it
+            let local = if generic || method_generic {
+                0
+            } else {
+                ctx.inst_map
+                    .get(&Inst {
+                        key: FnKey::Method { data: dname, name: *mname },
+                        subst: vec![],
+                        trait_origins: vec![],
+                    })
+                    .copied()
+                    .unwrap_or(0)
+            };
+            methods.push(rut_core::binary::SurfaceMethod {
+                name: *mname,
+                params,
+                ret,
+                local,
+                has_self,
+                generics: if method_generic { md.generics.clone() } else { vec![] },
+            });
+        }
+        if methods.is_empty() {
+            continue;
+        }
+        surface.inherents.push(rut_core::binary::SurfaceInherent {
+            target: d.ty,
+            methods,
+        });
+    }
+
+    // exported GENERIC fns (the linkable-classes phase): names +
+    // placeholder signatures — the bodies exist per argument list, so
+    // nothing compiles here; the consumer mints the mirror
+    // instantiation and requests the body from this pkg
+    for (name, node) in ctx.fn_nodes.clone() {
+        let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
+        if !is_pub {
+            continue;
+        }
+        let fd = ctx.ast.fn_decl(node);
+        if fd.generics.is_empty() || fd.is_async {
+            continue;
+        }
+        // the placeholder substitution: each generic parameter spells
+        // its `#<param>` row (interned BEFORE the type snapshot below
+        // carries it)
+        let env: Vec<(IdentId, TypeId)> = fd
+            .generics
+            .iter()
+            .map(|&p| (p, ctx.param_placeholder(p)))
+            .collect();
+        let args: Vec<TypeId> = fd
+            .params
+            .iter()
+            .map(|p| match ctx.ast.param(*p) {
+                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                    ctx.resolve_sig_ty(*t, &env, None)
+                }
+                _ => TY_I32,
+            })
+            .collect();
+        let ret = fd.ret.map(|r| ctx.resolve_sig_ty(r, &env, None)).unwrap_or(TY_NIL);
+        surface.fn_generics.push(rut_core::binary::SurfaceGenericFn {
+            name,
+            params: fd.generics.clone(),
+            args,
+            ret,
+        });
+    }
+
+    // type surface: the whole non-boot block (so `(scope, local)` ids and
+    // field layouts resolve in a using module) + the exported names.
+    // The inherent surface above ran FIRST: its template signature rows
+    // (`#<param>`, `#Self`, their structural spellings) are interned
+    // before this snapshot carries them.
+    {
+        let boot_len = ctx.types.boot_len as usize;
+        surface.types = ctx.types.types[boot_len..].to_vec();
+        // the type block's trait-object references: each carried
+        // `[trait] ..` row names a trait-table index the consumer's
+        // `use_types` remaps through the trait map — generic traits'
+        // per-argument-list INST DESCRIPTORS ride here (their base
+        // declarations export above; neither row carries signatures —
+        // dispatch reads the impl rows)
+        let mut inst_traits: Vec<u32> = Vec::new();
+        for d in &surface.types {
+            if let rut_core::types::TyKind::TraitObj { trait_id } = d.kind {
+                if trait_id == u32::MAX || inst_traits.contains(&trait_id) {
+                    continue;
+                }
+                // only GENERIC traits' per-argument-list descriptors — a
+                // row whose spelled name has no `<` is a base
+                // declaration, exported (with its methods) by its
+                // declaring unit alone; re-exporting it bare would
+                // collide with that row at link
+                let Some(row) = ctx.traits.get(trait_id as usize) else { continue };
+                if !ctx.interner.name(row.name).contains('<') {
+                    continue;
+                }
+                inst_traits.push(trait_id);
+            }
+        }
+        for tid in inst_traits {
+            let Some(row) = ctx.traits.get(tid as usize) else { continue };
+            if surface.traits.iter().any(|t| t.local == tid) {
+                continue;
+            }
+            surface.traits.push(rut_core::binary::SurfaceTrait {
+                local: tid,
+                name: row.name,
+                generics: 0,
+                methods: row.methods.clone(),
+            });
+        }
+        for s in 0..ctx.types.scope_base.len() as u32 {
+            if s == rut_core::BOOT_SCOPE as u32 || s == scope as u32 {
+                continue;
+            }
+            let base = ctx.types.scope_base[s as usize];
+            if base >= ctx.types.boot_len {
+                surface.scope_blocks.push((s as rut_core::ScopeId, base - ctx.types.boot_len));
+            }
+        }
+        // the unit's OWN block closes the list — `own_scope` reads it
+        // back as the last row, which stays unambiguous even when blocks
+        // are empty (a pkg with no own types ties every offset at the
+        // boot line)
+        let base = ctx.types.scope_base[scope as usize];
+        if base >= ctx.types.boot_len {
+            surface
+                .scope_blocks
+                .push((scope as rut_core::ScopeId, base - ctx.types.boot_len));
+        }
+        for (name, d) in &ctx.datas {
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name: *name,
+                local: rut_core::local_of(d.ty),
+                is_class: d.kind == rut_lir::check::DataKind::Class,
+                is_generic: !d.generics.is_empty(),
+                params: if d.generics.is_empty() {
+                    Vec::new()
+                } else {
+                    d.generics.clone()
+                },
+                scope: None,
+            });
+        }
+        for (name, e) in &ctx.enums {
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name: *name,
+                local: rut_core::local_of(e.ty),
+                is_class: false,
+                is_generic: false,
+                params: Vec::new(),
+                scope: None,
+            });
+        }
+        // type aliases (RFC 0043): a single-target alias adds a row keyed
+        // by the TARGET's id — importers need zero changes, cross-module
+        // transparency by construction; `is_class`/`is_generic` false
+        // (aliases are non-generic). Union aliases stay module-local.
+        // A boot target (`pub type Meters = i64;`) keeps the shared boot
+        // scope — its id needs no rebase.
+        for (name, ty) in ctx.alias_exports() {
+            let scope = rut_core::scope_of(ty);
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name,
+                local: rut_core::local_of(ty),
+                is_class: false,
+                is_generic: false,
+                params: Vec::new(),
+                scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
+            });
+        }
+        // trait surface (RFC 0012 §5): declared traits with their
+        // resolved signatures, keyed by the exporter's trait-table
+        // index (`local`) — the key the carried `[trait] ..` descriptors
+        // reference. Generic traits instantiate per argument list where
+        // they are declared (their methods are per-inst, so the base
+        // row carries none) but the DECLARATION itself crosses: a
+        // consumer binds the trait's parameterized impls (`impl
+        // Readable<T> for Source<T>`) through it.
+        for (name, info) in &ctx.trait_decls {
+            if info.id == u32::MAX {
+                surface.traits.push(rut_core::binary::SurfaceTrait {
+                    local: u32::MAX,
+                    name: *name,
+                    generics: info.generics.len(),
+                    methods: Vec::new(),
+                });
+                continue;
+            }
+            if info.id as usize >= ctx.traits.len() {
+                continue;
+            }
+            surface.traits.push(rut_core::binary::SurfaceTrait {
+                local: info.id,
+                name: *name,
+                generics: info.generics.len(),
+                methods: ctx.traits[info.id as usize].methods.clone(),
+            });
+        }
+        // impl registrations (RFC 0012 §2): `(trait, target, method → fn
+        // ref)` — link merges them and errors on a duplicate pair.
+        // Concrete-target impls bind their compiled fns (both ABI
+        // variants — identical ids for single-ABI impls, see
+        // `SurfaceImpl`). GENERIC-target impls (`impl I for Vec<T>`)
+        // ride the same row shape with the TEMPLATE target and zero fn
+        // ids: one body exists per instantiation, none at surface build
+        // time — the consumer mirrors the request (see `ExternImpl`).
+        let impls_snapshot = ctx.impls.clone();
+        for (idx, im) in impls_snapshot.iter().enumerate() {
+            if im.inherent {
+                continue;
+            }
+            let template = im.target_data.is_some();
+            let mut methods = Vec::new();
+            let mut methods_concrete = Vec::new();
+            for (mname, _) in &im.methods {
+                if template {
+                    // request-bound: the names dispatch, the ids don't
+                    methods.push((*mname, 0));
+                    methods_concrete.push((*mname, 0));
+                    continue;
+                }
+                let slot_key = Inst {
+                    key: ctx.impl_method_key(idx, *mname, true),
+                    subst: vec![],
+                    trait_origins: vec![],
+                };
+                let concrete_key = Inst {
+                    key: ctx.impl_method_key(idx, *mname, false),
+                    subst: vec![],
+                    trait_origins: vec![],
+                };
+                if let Some(&fid) = ctx.inst_map.get(&slot_key) {
+                    methods.push((*mname, fid));
+                }
+                if let Some(&fid) = ctx.inst_map.get(&concrete_key) {
+                    methods_concrete.push((*mname, fid));
+                }
+            }
+            // a parameterized impl head's trait arguments (`impl
+            // Readable<T> for Source<T>` → the `#T` placeholder rows),
+            // resolved under the target's own placeholder env — the
+            // consumer unifies its call's trait inst against these
+            let trait_args: Vec<TypeId> = im
+                .trait_arg_nodes
+                .iter()
+                .map(|g| {
+                    let env: Vec<(IdentId, TypeId)> = im
+                        .target_data
+                        .as_ref()
+                        .map(|(_, ps)| {
+                            ps.iter()
+                                .map(|&p| (p, ctx.param_placeholder(p)))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    ctx.resolve_type(*g, &env)
+                })
+                .collect();
+            surface.impls.push(rut_core::binary::SurfaceImpl {
+                trait_name: im.trait_name,
+                target: im.target,
+                methods,
+                methods_concrete,
+                trait_args: if template { trait_args } else { vec![] },
+            });
+        }
+    }
+    // the seed half attaches only AFTER the surface snapshot: the
+    // surface's template rows must intern at the exact locals the
+    // un-seeded compile gave them, or every surface id an
+    // earlier-compiled consumer already bound goes stale (the seeded
+    // bodies' fresh structural rows would otherwise land between).
     ctx.types.own_attribution = true;
-    for group in seeds.groups {
-        ctx.use_seed_block(group.types.clone(), &group.blocks, group.names);
-        ctx.seeded_insts.extend(group.insts.iter().cloned());
-        ctx.seeded_fns.extend(group.fns.iter().cloned());
-        ctx.seeded_impl_methods.extend(group.impl_methods.iter().cloned());
-        // the requesters' own impls (registered below, once the trait
-        // table exists — it does, post-collect)
-        ctx.seed_impls.extend(group.impls.iter().map(|im| {
-            (
-                im.trait_name.clone(),
-                im.target,
-                im.methods.clone(),
-                im.methods_concrete.clone(),
-            )
-        }));
+    // the seed region's start: everything the seed blocks append from
+    // here is the requesters' carried rows — the nested-instantiation
+    // scan below walks exactly this range
+    let seed_start = ctx.types.types.len();
+    // ONE run per scope across ALL groups: two requesters' rows share
+    // a scope (the classes of a common dependency), and a second base
+    // registration would strand the first group's ids. Each group's
+    // rows re-intern through ITS OWN interner first; identical texts
+    // converge onto one ident here, so equal keys dedup safely.
+    {
+        let mut merged: std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType> =
+            std::collections::BTreeMap::new();
+        for group in seeds.groups {
+            for ((s, l), row) in ctx.stage_seed_rows(group.rows.clone(), group.names) {
+                merged.entry((s, l)).or_insert(row);
+            }
+        }
+        let pad = rut_core::types::RutType {
+            name: rut_core::sym::NIL,
+            kind: rut_core::types::TyKind::Nil,
+        };
+        // one PADDED run per scope, from local 0: the row for local
+        // L lands at run-start + L, and the block entry carries the
+        // run's OFFSET WITHIN THE BUILT VEC — the runs concatenate
+        // (two requesters' rows share no scope, but one attach serves
+        // several), and an off-0 for every scope would point the
+        // second-and-later scopes' ids at the FIRST run's rows.
+        // `use_seed_rows` then sets scope_base[s] = attach-start + off,
+        // so this table's dense of a requester's packed id `(s, L)`
+        // hits the row exactly (the two sides spell every argument the
+        // same way — the owner anchor's whole point). Absent locals ride
+        // Nil shells.
+        let mut types: Vec<rut_core::types::RutType> = Vec::new();
+        let mut blocks: Vec<(rut_core::ScopeId, u32)> = Vec::new();
+        let mut iter = merged.iter().peekable();
+        while let Some((&(s, lo), _)) = iter.peek() {
+            let s: rut_core::ScopeId = s;
+            let run_off = types.len() as u32;
+            types.extend((0..lo).map(|_| pad.clone()));
+            blocks.push((s, run_off));
+            let mut off = lo;
+            loop {
+                match iter.peek() {
+                    Some(&(&(s2, l2), row)) if s2 == s => {
+                        // pad any gap inside the scope's local space,
+                        // then take the row at its local
+                        while off < l2 {
+                            types.push(pad.clone());
+                            off += 1;
+                        }
+                        types.push(row.clone());
+                        off += 1;
+                        iter.next();
+                    }
+                    _ => break,
+                }
+            }
+        }
+        ctx.use_staged_seed_rows(types, &blocks);
+        for group in seeds.groups {
+            ctx.seeded_insts.extend(group.insts.iter().cloned());
+            ctx.seeded_fns.extend(group.fns.iter().cloned());
+            ctx.seeded_impl_methods.extend(group.impl_methods.iter().cloned());
+            // the requesters' own impls (registered below, once the trait
+            // table exists — it does, post-collect)
+            ctx.seed_impls.extend(group.impls.iter().map(|im| {
+                (
+                    im.trait_name.clone(),
+                    im.target,
+                    im.methods.clone(),
+                    im.methods_concrete.clone(),
+                )
+            }));
+        }
     }
     // the requesters' own impls: a generic body the owner compiles for
     // a requester dispatches through THESE — a consumer's
@@ -606,7 +1099,7 @@ pub fn compile_program_resolved(
             .into_iter()
             .map(|(n, f)| (ctx.intern(&n), f))
             .collect();
-        ctx.add_extern_impl(tname, tid, target, methods, methods_concrete);
+        ctx.add_extern_impl(tname, tid, target, methods, methods_concrete, vec![]);
     }
     let mut seeded_bodies: Vec<Inst> = Vec::new();
     // the graph-seeded instantiations (the owner side of consumer
@@ -624,6 +1117,20 @@ pub fn compile_program_resolved(
         };
         ctx.mk_data_inst(dname, args.clone(), rut_lexer::span::Span::new(0, 0));
         if let Some(d) = ctx.find_data(dname).cloned() {
+            // a generic CLASS's bodies substitute the class parameters;
+            // a PLAIN class's seeded method (`MutCtx::set<A, R>`) reads
+            // the args as the METHOD's own parameters, in declaration
+            // order
+            let plain_method_env = |ctx: &Ctx, mname: rut_core::IdentId| -> Vec<(rut_core::IdentId, rut_core::types::TypeId)> {
+                d.methods
+                    .iter()
+                    .find(|(n, _)| *n == mname)
+                    .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .zip(args.iter().cloned())
+                    .collect()
+            };
             if !d.generics.is_empty() {
                 let env: Vec<(rut_core::IdentId, rut_core::types::TypeId)> =
                     d.generics.iter().cloned().zip(args.iter().cloned()).collect();
@@ -632,6 +1139,15 @@ pub fn compile_program_resolved(
                     seeded_bodies.push(Inst {
                         key: FnKey::Method { data: dname, name: mname },
                         subst: env.clone(),
+                        trait_origins: vec![],
+                    });
+                }
+            } else {
+                for m in &methods {
+                    let Some(mname) = ctx.lookup_name(m) else { continue };
+                    seeded_bodies.push(Inst {
+                        key: FnKey::Method { data: dname, name: mname },
+                        subst: plain_method_env(&ctx, mname),
                         trait_origins: vec![],
                     });
                 }
@@ -646,7 +1162,6 @@ pub fn compile_program_resolved(
     // used generic; the args resolve to the closure's own rows (or the
     // boot rows for primitives).
     if !ctx.extern_generics.is_empty() {
-        let seed_start = ctx.types.types.len();
         fn split_top_commas(s: &str) -> Vec<String> {
             let mut out = Vec::new();
             let mut depth = 0usize;
@@ -675,13 +1190,22 @@ pub fn compile_program_resolved(
         }
         // pass 1: the name -> id map over the whole table (the closure
         // copies and the boot rows answer)
-        let by_name: std::collections::HashMap<String, TypeId> = ctx
-            .types
-            .types
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (ctx.interner.name(t.name).to_string(), ctx.types.id_for_pub(i as u32)))
-            .collect();
+        // FIRST row wins: the boot optionals' shell rows reuse their
+        // element's name (`?bytes` is a row named "bytes"), and a seed
+        // row's argument text must resolve to the primitive, never the
+        // shell answer lane spelled over it. Only the two ranges whose
+        // ids are well-defined here — boot and the seed region — feed
+        // the map; the scan's candidates and their arguments live there.
+        let mut by_name: std::collections::HashMap<String, TypeId> =
+            std::collections::HashMap::new();
+        for (i, t) in ctx.types.types.iter().enumerate() {
+            if i >= ctx.types.boot_len as usize && i < seed_start as usize {
+                continue;
+            }
+            by_name
+                .entry(ctx.interner.name(t.name).to_string())
+                .or_insert(ctx.types.id_for_pub(i as u32));
+        }
         // pass 2: register the seed rows' instantiations
         let rows2: Vec<(String, rut_core::types::RutType)> = ctx
             .types
@@ -752,8 +1276,13 @@ pub fn compile_program_resolved(
             _ => ctx.inst_data.get(&target).cloned(),
         };
         let Some((dname, cargs)) = shape else { continue };
-        let t_d = ctx.types.dense(target);
-        let t_kind = ctx.types.kind(target).clone();
+        // the mint's target materializes as THIS unit's instantiation
+        // row: the fn ledger's target must spell the same row the
+        // inst_types ledger carries (the seed-block copy has no ledger
+        // row of its own, so link's canonical key would miss it).
+        // mk_data_inst routes the owning package's request — already
+        // seeded, deduped by the graph's request keys.
+        let target = ctx.mk_data_inst(dname, cargs.clone(), rut_lexer::span::Span::new(0, 0));
         
         // the local TEMPLATE impl answering (trait, shape)
         let templates: Vec<(usize, rut_lir::check::ImplDecl)> = ctx
@@ -822,33 +1351,93 @@ pub fn compile_program_resolved(
         diags.append(&mut ctx.diags);
         return fail(diags, ast_dump, ast_json);
     }
-    if !ctx.diags.is_empty() {
-        diags.append(&mut ctx.diags);
-        return fail(diags, ast_dump, ast_json);
-    }
-    // global trait-method slots: same enumeration order as Ctx::trait_slot
+    // the trait-method slot table enumerates the FINAL trait table —
+    // after the second drain: the seeded bodies mint trait
+    // instantiations (a `Readable<T>` dispatch inside a seeded `get`),
+    // and a table snapshotted before them truncates their slots.
+    // vtable pass 2: the settled rows — every fill body compiled by the
+    // drain above now answers in `inst_map`, so the shipped rows carry
+    // the seeded instantiations' dispatch entries too. The link re-lays
+    // both tables through the merged trait table.
+    let vtables = ctx.build_vtables();
     let mut trait_slots = Vec::new();
     for (i, t) in ctx.traits.iter().enumerate() {
         for m in 0..t.methods.len() {
             trait_slots.push((i as u32, m as u32));
         }
     }
-    let vtables = ctx.build_vtables();
-    // per-type disposal rows: `(target type, dispose func id)` per
-    // `impl ..: Disposal` — the release path's table, flowing module→link
-    // beside the vtables
-    let disposal_impls = ctx.disposal_impls();
-    // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
-    // conventional `main` when it is exported.
-    let mut exports: Vec<(IdentId, u32)> = Vec::new();
-    let mut names: Vec<IdentId> = ctx.entries.clone();
-    if ctx.exports.iter().any(|(n, _)| *n == sym::MAIN) && !names.contains(&sym::MAIN) {
-        names.push(sym::MAIN);
-    }
-    for n in names {
-        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![], trait_origins: vec![] }) {
-            exports.push((n, f));
+    if std::env::var("RUT_DEBUG_LINK").is_ok() {
+        let mut parts: Vec<String> = Vec::new();
+        for (s, &b) in ctx.types.scope_base.iter().enumerate() {
+            let n = ctx
+                .types
+                .types
+                .get(b as usize)
+                .map(|t| ctx.interner.name(t.name).to_string())
+                .unwrap_or("-".into());
+            parts.push(format!("s{}@{}:{}", s, b, n));
         }
+        let own: Vec<String> = ctx.types.types
+            [ctx.types.scope_base.get(ctx.types.scope as usize).copied().unwrap_or(ctx.types.boot_len) as usize..]
+            .iter()
+            .take(8)
+            .map(|t| ctx.interner.name(t.name).to_string())
+            .collect();
+        eprintln!(
+            "DBG unit-scopes unit={} scope={} boot={} len={} {} own={:?}",
+            module_name,
+            ctx.types.scope,
+            ctx.types.boot_len,
+            ctx.types.types.len(),
+            parts.join(" "),
+            own
+        );
+    }
+    if std::env::var("RUT_DEBUG_LINK").is_ok() && module_name == "store_probe" {
+        for (ti, t) in ctx.types.types.iter().enumerate() {
+            let n = ctx.interner.name(t.name).to_string();
+            if n == "Vec<str>" || n == "Array<str>" {
+                if let rut_core::types::TyKind::Data { fields } = &t.kind {
+                    let fs: Vec<String> = fields.iter().map(|f| {
+                        let fty = f.ty;
+                        format!("{}:{}(s{},l{})", ctx.interner.name(f.name), ctx.interner.name(ctx.types.type_at(fty).name), rut_core::id::scope_of(fty), rut_core::id::local_of(fty))
+                    }).collect();
+                    eprintln!("DBG probe-desc dense={} {} ty-id=(s{},l{}) fields=[{}]", ti, n, rut_core::id::scope_of(0), 0, fs.join(", "));
+                }
+            }
+        }
+        for f in ctx.funcs.iter() {
+            if ctx.interner.name(f.name) != "probe_pull" { continue; }
+            for (ri, r) in f.regs.iter().enumerate().skip(10).take(14) {
+                let n = ctx
+                    .types
+                    .type_at(*r)
+                    .name;
+                eprintln!("DBG probe-reg reg{} raw={} name={} len={}", ri, r, ctx.interner.name(n), ctx.types.types.len());
+            }
+        }
+    }
+    if std::env::var("RUT_DEBUG_LINK").is_ok() {
+        let mut s4rows: Vec<String> = Vec::new();
+        for (i, t) in ctx.types.types.iter().enumerate() {
+            for f in match &t.kind {
+                rut_core::types::TyKind::Data { fields } => fields.iter().map(|f| f.ty).collect::<Vec<_>>(),
+                rut_core::types::TyKind::Opt { elem } => vec![*elem],
+                _ => vec![],
+            } {
+                if rut_core::id::scope_of(f) == 4 {
+                    s4rows.push(format!("dense{} {} -> (4,{})", i, ctx.interner.name(t.name), rut_core::id::local_of(f)));
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "DBG surface unit={} types={} table_len={} s4rows={:?}",
+            module_name,
+            surface.types.len(),
+            ctx.types.types.len(),
+            s4rows.first()
+        );
     }
     let mut funcs = std::mem::take(&mut ctx.funcs);
     // RFC 0036 §4 — resolve pc → (line, col) beside the byte-offset span
@@ -876,282 +1465,10 @@ pub fn compile_program_resolved(
         f.pos = f.spans.iter().map(|(_, lo)| line_col(*lo)).collect();
     }
     let ir_dump = ir_dump_of(&funcs, &ctx.interner);
-    // exported surface: every `pub` fn + its signature, for using modules
-    let mut surface = rut_core::binary::Surface::default();
-    for (name, _) in &ctx.exports {
-        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![], trait_origins: vec![] }) {
-            if let Some(f) = funcs.get(fid as usize) {
-                surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: *name,
-                    params: f.params.clone(),
-                    ret: f.ret,
-                    local: fid,
-                    is_async: false,
-                    host: None,
-                });
-            }
-        }
-    }
-    // inherent method surface (the linkable-classes phase): one row
-    // per class with exported methods — a plain class's row binds
-    // the compiled fn ids; a generic class's row spells the
-    // TEMPLATE (placeholder `#<param>` signatures, fn local zero),
-    // and the consumer substitutes per instantiation and requests
-    // the bodies. Member visibility is the class law (dataclasses
-    // are all-public); async and generic METHODS cross no surface
-    // (call-site shapes).
-    for (dname, d) in ctx.datas.clone() {
-        if d.methods.is_empty() {
-            continue;
-        }
-        // the class's template substitution: each generic parameter
-        // spells its `#<param>` placeholder row, `Self` — for a
-        // GENERIC class — its own `#Self` placeholder (the
-        // consumer's receiver instantiation substitutes it; a
-        // plain class's `Self` is the class's own row, which
-        // resolves through the carried block). `resolve_sig_ty`
-        // binds `Self` at any structural depth.
-        let generic = !d.generics.is_empty();
-        let self_ph = if generic {
-            Some(ctx.param_placeholder(sym::SELF_TY))
-        } else {
-            None
-        };
-        let env: Vec<(IdentId, TypeId)> = d
-            .generics
-            .iter()
-            .map(|&p| (p, ctx.param_placeholder(p)))
-            .collect();
-        let mut methods = Vec::new();
-        for (mname, mnode) in &d.methods {
-            let md = ctx.ast.method_decl(*mnode);
-            let exported =
-                d.kind == rut_lir::check::DataKind::Dataclass || md.vis == Some(rut_ast::ast::Vis::Pub);
-            if !exported || md.is_async || !md.generics.is_empty() {
-                continue;
-            }
-            let has_self = matches!(
-                md.params.first().map(|p| ctx.ast.param(*p)),
-                Some(rut_ast::ast::MemberKind::SelfParam(_))
-            );
-            let self_ty = self_ph.unwrap_or(d.ty);
-            let mut params = Vec::new();
-            for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
-                match ctx.ast.param(*p) {
-                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
-                        params.push(ctx.resolve_sig_ty(*t, &env, Some(self_ty)));
-                    }
-                    _ => params.push(TY_I32),
-                }
-            }
-            let ret = md
-                .ret
-                .map(|r| ctx.resolve_sig_ty(r, &env, Some(self_ty)))
-                .unwrap_or(TY_NIL);
-            // a plain class's fn id: the eager class-method roots
-            // compiled it (subst is empty — no class generics)
-            let local = if generic {
-                0
-            } else {
-                ctx.inst_map
-                    .get(&Inst {
-                        key: FnKey::Method { data: dname, name: *mname },
-                        subst: vec![],
-                        trait_origins: vec![],
-                    })
-                    .copied()
-                    .unwrap_or(0)
-            };
-            methods.push(rut_core::binary::SurfaceMethod {
-                name: *mname,
-                params,
-                ret,
-                local,
-                has_self,
-            });
-        }
-        if methods.is_empty() {
-            continue;
-        }
-        surface.inherents.push(rut_core::binary::SurfaceInherent {
-            target: d.ty,
-            methods,
-        });
-    }
-
-    // exported GENERIC fns (the linkable-classes phase): names +
-    // placeholder signatures — the bodies exist per argument list, so
-    // nothing compiles here; the consumer mints the mirror
-    // instantiation and requests the body from this pkg
-    for (name, node) in ctx.fn_nodes.clone() {
-        let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
-        if !is_pub {
-            continue;
-        }
-        let fd = ctx.ast.fn_decl(node);
-        if fd.generics.is_empty() || fd.is_async {
-            continue;
-        }
-        // the placeholder substitution: each generic parameter spells
-        // its `#<param>` row (interned BEFORE the type snapshot below
-        // carries it)
-        let env: Vec<(IdentId, TypeId)> = fd
-            .generics
-            .iter()
-            .map(|&p| (p, ctx.param_placeholder(p)))
-            .collect();
-        let args: Vec<TypeId> = fd
-            .params
-            .iter()
-            .map(|p| match ctx.ast.param(*p) {
-                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
-                    ctx.resolve_sig_ty(*t, &env, None)
-                }
-                _ => TY_I32,
-            })
-            .collect();
-        let ret = fd.ret.map(|r| ctx.resolve_sig_ty(r, &env, None)).unwrap_or(TY_NIL);
-        surface.fn_generics.push(rut_core::binary::SurfaceGenericFn {
-            name,
-            params: fd.generics.clone(),
-            args,
-            ret,
-        });
-    }
-
-    // type surface: the whole non-boot block (so `(scope, local)` ids and
-    // field layouts resolve in a using module) + the exported names.
-    // The inherent surface above ran FIRST: its template signature rows
-    // (`#<param>`, `#Self`, their structural spellings) are interned
-    // before this snapshot carries them.
-    {
-        let boot_len = ctx.types.boot_len as usize;
-        surface.types = ctx.types.types[boot_len..].to_vec();
-        for s in 0..ctx.types.scope_base.len() as u32 {
-            if s == rut_core::BOOT_SCOPE as u32 || s == scope as u32 {
-                continue;
-            }
-            let base = ctx.types.scope_base[s as usize];
-            if base >= ctx.types.boot_len {
-                surface.scope_blocks.push((s as rut_core::ScopeId, base - ctx.types.boot_len));
-            }
-        }
-        // the unit's OWN block closes the list — `own_scope` reads it
-        // back as the last row, which stays unambiguous even when blocks
-        // are empty (a pkg with no own types ties every offset at the
-        // boot line)
-        let base = ctx.types.scope_base[scope as usize];
-        if base >= ctx.types.boot_len {
-            surface
-                .scope_blocks
-                .push((scope as rut_core::ScopeId, base - ctx.types.boot_len));
-        }
-        for (name, d) in &ctx.datas {
-            surface.type_exports.push(rut_core::binary::SurfaceType {
-                name: *name,
-                local: rut_core::local_of(d.ty),
-                is_class: d.kind == rut_lir::check::DataKind::Class,
-                is_generic: !d.generics.is_empty(),
-                params: if d.generics.is_empty() {
-                    Vec::new()
-                } else {
-                    d.generics.clone()
-                },
-                scope: None,
-            });
-        }
-        for (name, e) in &ctx.enums {
-            surface.type_exports.push(rut_core::binary::SurfaceType {
-                name: *name,
-                local: rut_core::local_of(e.ty),
-                is_class: false,
-                is_generic: false,
-                params: Vec::new(),
-                scope: None,
-            });
-        }
-        // type aliases (RFC 0043): a single-target alias adds a row keyed
-        // by the TARGET's id — importers need zero changes, cross-module
-        // transparency by construction; `is_class`/`is_generic` false
-        // (aliases are non-generic). Union aliases stay module-local.
-        // A boot target (`pub type Meters = i64;`) keeps the shared boot
-        // scope — its id needs no rebase.
-        for (name, ty) in ctx.alias_exports() {
-            let scope = rut_core::scope_of(ty);
-            surface.type_exports.push(rut_core::binary::SurfaceType {
-                name,
-                local: rut_core::local_of(ty),
-                is_class: false,
-                is_generic: false,
-                params: Vec::new(),
-                scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
-            });
-        }
-        // trait surface (RFC 0012 §5): declared non-generic traits with
-        // their resolved signatures, keyed by the exporter's trait-table
-        // index (`local`) — the key the carried `[trait] ..` descriptors
-        // reference. Generic traits instantiate per argument list where
-        // they are declared and stay module-local (v1).
-        for (name, info) in &ctx.trait_decls {
-            if info.id == u32::MAX || info.id as usize >= ctx.traits.len() {
-                continue;
-            }
-            surface.traits.push(rut_core::binary::SurfaceTrait {
-                local: info.id,
-                name: *name,
-                generics: info.generics.len(),
-                methods: ctx.traits[info.id as usize].methods.clone(),
-            });
-        }
-        // impl registrations (RFC 0012 §2): `(trait, target, method → fn
-        // ref)` — link merges them and errors on a duplicate pair.
-        // Concrete-target impls bind their compiled fns (both ABI
-        // variants — identical ids for single-ABI impls, see
-        // `SurfaceImpl`). GENERIC-target impls (`impl I for Vec<T>`)
-        // ride the same row shape with the TEMPLATE target and zero fn
-        // ids: one body exists per instantiation, none at surface build
-        // time — the consumer mirrors the request (see `ExternImpl`).
-        for (idx, im) in ctx.impls.iter().enumerate() {
-            if im.inherent {
-                continue;
-            }
-            let template = im.target_data.is_some();
-            let mut methods = Vec::new();
-            let mut methods_concrete = Vec::new();
-            for (mname, _) in &im.methods {
-                if template {
-                    // request-bound: the names dispatch, the ids don't
-                    methods.push((*mname, 0));
-                    methods_concrete.push((*mname, 0));
-                    continue;
-                }
-                let slot_key = Inst {
-                    key: ctx.impl_method_key(idx, *mname, true),
-                    subst: vec![],
-                    trait_origins: vec![],
-                };
-                let concrete_key = Inst {
-                    key: ctx.impl_method_key(idx, *mname, false),
-                    subst: vec![],
-                    trait_origins: vec![],
-                };
-                if let Some(&fid) = ctx.inst_map.get(&slot_key) {
-                    methods.push((*mname, fid));
-                }
-                if let Some(&fid) = ctx.inst_map.get(&concrete_key) {
-                    methods_concrete.push((*mname, fid));
-                }
-            }
-            surface.impls.push(rut_core::binary::SurfaceImpl {
-                trait_name: im.trait_name,
-                target: im.target,
-                methods,
-                methods_concrete,
-            });
-        }
-    }
     // the program's interner moves out of the Ctx; the surface carries a
     // clone so it stays self-contained when it crosses to a using module
+    // (the ids it carries stay valid: interning is append-only, so the
+    // program's later tail never renumbers a surface id)
     let interner = std::mem::take(&mut ctx.interner);
     surface.names = interner.clone();
     // the instantiation ledger, canonical (sorted) order — the wire and

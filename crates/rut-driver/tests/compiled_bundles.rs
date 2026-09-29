@@ -218,24 +218,6 @@ fn same_dir_packs_byte_identical() {
     assert_eq!(a, b, "same dir => byte-identical v5 bundle");
 }
 
-#[test]
-fn unsharable_roots_are_refused() {
-    // the one refusal left: an explicitly `inline`d root — its source
-    // is its interface, there is no publishable boundary
-    let want = "is inline — its source is its interface and it cannot be published compiled; share the directory instead";
-    let root = scratch("inlineroot");
-    let app = root.join("app");
-    write(
-        &app,
-        "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\ninline = true\n",
-    );
-    write(&app, "app.rut", "pub fn f() -> i32 { return 1; }\n");
-    let err = pack_dir(&app).unwrap_err();
-    assert!(err.contains(&format!("pack: app {want}")), "{err}");
-    let _ = std::fs::remove_dir_all(&root);
-}
-
 /// Owner-anchored instantiation retired the generic-export and
 /// trait-param refusals: a generic root publishes compiled, and its
 /// consumers' instantiation requests resolve against the binary's
@@ -309,10 +291,11 @@ fn generic_and_trait_param_roots_publish_compiled() {
 }
 
 #[test]
-fn peer_deps_on_a_compiled_group_is_a_pack_refusal() {
-    // a linkable dep that declares `[peer-deps]` lib files: appending
-    // source into a compiled pkg is impossible (the v1-precedent
-    // refusal) — the pack refuses instead of downgrading
+fn peer_deps_on_a_compiled_group_ride_the_binary() {
+    // presence-gated compiled rows: a compiled dep that declares
+    // `[peer-deps]` publishes with whatever rows its pack-time closure
+    // gated in — no source append, no downgrade. The group file itself
+    // does not travel; the rows live in the declarer's binary.
     let root = scratch("peerref");
     let app = root.join("app");
     write(
@@ -320,7 +303,7 @@ fn peer_deps_on_a_compiled_group_is_a_pack_refusal() {
         "rut.toml",
         &format!(
             "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\nlibbed = { path = \"../libbed\" }\n")
+            manifest("app", "app.rut", "[deps]\nlibbed = { path = \"../libbed\" }\np = { path = \"../p\" }\n")
         ),
     );
     write(&app, "app.rut", "use libbed::{ f };\nentry fn go() -> i32 { return f(); }\n");
@@ -339,10 +322,18 @@ fn peer_deps_on_a_compiled_group_is_a_pack_refusal() {
     write(&root.join("p"), "rut.toml", &manifest("p", "p.rut", ""));
     write(&root.join("p"), "p.rut", "pub class K { x: i32; }\n");
 
-    let err = pack_dir(&app).unwrap_err();
-    assert!(err.contains("libbed"), "{err}");
-    assert!(err.contains("[peer-deps]"), "{err}");
-    assert!(err.contains("cannot be published compiled"), "{err}");
+    // the pack succeeds: the closure has the peer, the gate recorded the
+    // group, and the group's rows compiled into libbed's unit (the file
+    // here is impl-only — no rows to carry; the shape is the pin)
+    let bytes = pack_dir(&app).expect("peer-deps publish compiled");
+    let names: Vec<String> =
+        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+    assert!(names.contains(&"libbed/libbed.rutc".to_string()), "{names:?}");
+    assert!(!names.contains(&"libbed/ser_p.rut".to_string()), "{names:?}");
+    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
+    let got: i32 = run_entry(session, &app_root, "go");
+    assert_eq!(got, 7);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The T2 world, re-launched on v5: the peer-gated pkg is INLINE
@@ -351,10 +342,15 @@ fn peer_deps_on_a_compiled_group_is_a_pack_refusal() {
 /// presence. Its consumers splice the inline pkg's text, so they stay
 /// linkable: the root publishes compiled.
 #[test]
-fn peer_groups_ride_v5_as_source_groups() {
+fn peer_groups_ride_v5_as_compiled_rows() {
+    // presence-gated compiled rows: the peer gate reads the group at
+    // pack time (the peer is in the closure) and the group's impl rows
+    // compile into the declarer's OWN binary. The group file does not
+    // travel, the mounted body stays compiled, and the dispatch works
+    // — the directory world and the bundle world compile identically.
     let root = scratch("peers");
 
-    // peered: inline pkg + the trait + the peer-gated impl group
+    // peered: the trait + the peer-gated impl group
     let peered = root.join("peered");
     write(
         &peered,
@@ -362,7 +358,7 @@ fn peer_groups_ride_v5_as_source_groups() {
         &manifest(
             "peered",
             "peered.rut",
-            "inline = true\n\n[peer-deps]\ntagger = { path = \"../tagger\", optional = true, lib = \"./ser_tag.rut\" }\n",
+            "[peer-deps]\ntagger = { path = \"../tagger\", optional = true, lib = \"./ser_tag.rut\" }\n",
         ),
     );
     write(
@@ -382,11 +378,9 @@ fn peer_groups_ride_v5_as_source_groups() {
         "use tagger::{ Badge };\n\nimpl Tag for Badge { fn tag(self) -> str { return \"badged\"; } }\n",
     );
 
-    // the peer: a concrete INLINE class (spliced beside the group's
-    // impl — one unit, the orphan rule holds; the real json's peers are
-    // inline the same way)
+    // the peer: a concrete class
     let tagger = root.join("tagger");
-    write(&tagger, "rut.toml", &manifest("tagger", "tagger.rut", "inline = true\n"));
+    write(&tagger, "rut.toml", &manifest("tagger", "tagger.rut", ""));
     write(
         &tagger,
         "tagger.rut",
@@ -422,7 +416,8 @@ fn peer_groups_ride_v5_as_source_groups() {
          }\n",
     );
 
-    // the directory world first (the load-time peer gate appends there)
+    // the directory world first (the load-time peer gate rides the same
+    // compile — the rows land in the declarer's unit there too)
     let (dir_session, dir_root) = load_dir_session(&app).expect("dir load");
     let from_dir = linked_binary(&dir_session, &dir_root);
 
@@ -430,14 +425,14 @@ fn peer_groups_ride_v5_as_source_groups() {
     let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
     assert_eq!(linked_binary(&session, &app_root), from_dir, "dir and bundle compile identically");
 
-    // peered rode as a source group WITH its group file; the loader's
-    // peer gate appended it by presence (tagger is in the closure)
-    assert!(matches!(session.resolve("peered").unwrap().body, ModuleBody::Source { .. }));
+    // the group rides INSIDE the declarer's compiled binary: the body
+    // is compiled, no source group travels
+    assert!(matches!(session.resolve("peered").unwrap().body, ModuleBody::Compiled(_)));
     let names: Vec<String> =
         rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    assert!(names.contains(&"peered/ser_tag.rut".to_string()), "{names:?}");
+    assert!(!names.contains(&"peered/ser_tag.rut".to_string()), "{names:?}");
     assert!(names.contains(&"base/base.rutc".to_string()), "{names:?}");
-    assert!(names.contains(&"tagger/rut.toml".to_string()), "{names:?}");
+    assert!(names.contains(&"tagger/tagger.rutc".to_string()), "{names:?}");
 
     // and the group's impl dispatches
     let got: String = run_entry(session, &app_root, "go");
@@ -539,32 +534,3 @@ fn stale_and_corrupt_group_binaries_are_refused() {
     );
 }
 
-#[test]
-fn doctored_source_group_compiled_kind_refuses_at_load() {
-    // the loader-side twin of the pack refusal: a hand-doctored archive
-    // whose COMPILED group declares a peer lib cannot mount — appending
-    // source into a compiled pkg is impossible
-    let root = mixed_world("doctored");
-    let bytes = pack_dir(&root.join("app")).expect("pack");
-    let doctored: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(&bytes)
-        .unwrap()
-        .into_iter()
-        .map(|(n, b)| match n.as_str() {
-            // util is a compiled group: give it a peer lib row
-            "util/rut.toml" => (
-                n,
-                b"name = \"util\"\nentry.lib = \"./util.rut\"\n\n[peer-deps]\np = { path = \"../p\", optional = true, lib = \"./ser_p.rut\" }\n"
-                    .to_vec(),
-            ),
-            _ => (n, b),
-        })
-        .collect();
-    let mut doctored = doctored;
-    doctored.push(("util/ser_p.rut".into(), b"// an impl-only group\n".to_vec()));
-    let err =
-        load_bundle_bytes(&rut_bundle::write_bundle(&doctored).unwrap(), Path::new("doctored"))
-            .unwrap_err();
-    assert!(err.contains("compiled group"), "{err}");
-    assert!(err.contains("util"), "{err}");
-    assert!(err.contains("peer-deps"), "{err}");
-}

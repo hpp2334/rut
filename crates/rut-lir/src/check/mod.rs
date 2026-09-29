@@ -12,7 +12,7 @@ use rut_core::binary::{ConstVal, FuncCode, TraitDesc};
 use rut_core::types::*;
 use rut_core::{Interner, sym};
 
-mod collect;
+pub(crate) mod collect;
 mod collect_impl;
 mod externs;
 mod impls;
@@ -461,6 +461,8 @@ pub struct ExternImpl {
     /// trait method name → the exporter's scope-qualified fn id
     /// (concrete-ABI variant; falls back to `methods` when absent)
     pub methods_concrete: Vec<(IdentId, u32)>,
+    /// a parameterized impl head's trait arguments as placeholder rows
+    pub trait_args: Vec<TypeId>,
 }
 
 /// One used class's inherent method surface (the linkable-classes
@@ -475,8 +477,8 @@ pub struct ExternImpl {
 pub struct ExternInherent {
     pub target: TypeId,
     /// (name, argument types with the receiver excluded, return, fn
-    /// local, instance-vs-class)
-    pub methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool)>,
+    /// local, instance-vs-class, the method's own generic parameters)
+    pub methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool, Vec<IdentId>)>,
 }
 
 /// A used module's exported GENERIC fn: the owner pkg, the parameter
@@ -695,18 +697,17 @@ impl<'a> Ctx<'a> {
         self.types.use_block(descs, blocks);
     }
 
-    /// The request seeds' requester blocks — `use_types`' registration
-    /// law without the trait map: descriptor names re-intern from the
-    /// requester's interner, packed ids pass through (the block lands
-    /// under the REQUESTER's scope at the same locals their own table
-    /// uses, so both sides spell an instantiation's arguments the same
-    /// way — the owner anchor's whole point).
-    pub fn use_seed_block(
+    /// The request seeds' requester rows, re-interned through
+    /// `source` into THIS unit's interner — without appending. The
+    /// attach side merges every seed group's rows into ONE run per
+    /// scope (two requesters' rows share a scope — the classes of a
+    /// common dependency — and a second base registration would strand
+    /// the first group's ids), then appends once.
+    pub fn stage_seed_rows(
         &mut self,
-        descs: Vec<RutType>,
-        blocks: &[(rut_core::ScopeId, u32)],
+        rows: Vec<((rut_core::ScopeId, u32), RutType)>,
         source: &Interner,
-    ) {
+    ) -> Vec<((rut_core::ScopeId, u32), RutType)> {
         let mut map: std::collections::HashMap<IdentId, IdentId> = std::collections::HashMap::new();
         let mut re = |interner: &mut Interner, id: IdentId| -> IdentId {
             if id.0 < source.well_known_len() {
@@ -714,9 +715,8 @@ impl<'a> Ctx<'a> {
             }
             *map.entry(id).or_insert_with(|| interner.intern(source.name(id)))
         };
-        let descs = descs
-            .into_iter()
-            .map(|mut d| {
+        rows.into_iter()
+            .map(|(key, mut d)| {
                 d.name = re(&mut self.interner, d.name);
                 match &mut d.kind {
                     TyKind::Data { fields } => {
@@ -731,9 +731,19 @@ impl<'a> Ctx<'a> {
                     }
                     _ => {}
                 }
-                d
+                (key, d)
             })
-            .collect();
+            .collect()
+    }
+
+    /// [`Self::use_staged_seed_rows`] for rows already re-interned into
+    /// this unit's interner ([`Self::stage_seed_rows`]): append +
+    /// register, no re-mapping pass.
+    pub fn use_staged_seed_rows(
+        &mut self,
+        descs: Vec<RutType>,
+        blocks: &[(rut_core::ScopeId, u32)],
+    ) {
         self.types.use_seed_rows(descs, blocks);
     }
 

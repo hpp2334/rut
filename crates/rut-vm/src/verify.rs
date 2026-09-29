@@ -69,8 +69,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
                     if matches!(op, Op::CallM { .. }) && !callee.is_method {
                         return Err(bad("CallM to a non-method".into()));
-                    }
-                    // the pool span is the callee's whole parameter list
+                    }                    // the pool span is the callee's whole parameter list
                     // (`CallM` folds the receiver into `argv[0]`)
                     let n = *argc as usize;
                     if n != callee.params.len() {
@@ -156,6 +155,14 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     }
                 }
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
+                    if std::env::var("RUT_DEBUG_LINK").is_ok() {
+                        let aty = f.regs.get(*arr as usize).copied();
+                        if let Some(ty) = aty {
+                            if !matches!(prog.types.kind(ty), TyKind::Array { .. } | TyKind::Bytes) {
+                                eprintln!("DBG arr fn={} op@{} arr-reg={} ty={} raw={} scope={} local={} | reg15={:?} ops={:?}", prog.interner.name(f.name), pc, arr, prog.type_name(ty), ty, rut_core::id::scope_of(ty), rut_core::id::local_of(ty), f.regs.get(15), f.code.iter().skip(pc.saturating_sub(4)).take(6).collect::<Vec<_>>());
+                            }
+                        }
+                    }
                     let ety = match prog.types.kind(f.regs[*arr as usize]) {
                         TyKind::Array { elem } => *elem,
                         TyKind::Bytes => TY_U8,

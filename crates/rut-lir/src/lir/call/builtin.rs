@@ -323,7 +323,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // too — the template row — so the generic arm answers first.)
         if let Some(g) = self.ctx.extern_generics.get(&base).cloned() {
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == g.template) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self)| !*has_self && *n == member) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self, _)| !*has_self && *n == member) {
                     let class_args = if !base_generics.is_empty() {
                         base_generics.iter().map(|gn| self.resolve_type_now(*gn)).collect()
                     } else {
@@ -346,7 +346,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if let Some(&t) = self.ctx.extern_types.get(&base) {
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == t) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self)| !*has_self && *n == member) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self, _)| !*has_self && *n == member) {
                     return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
                 }
             }

@@ -121,6 +121,14 @@ impl<'a> Ctx<'a> {
                 if let Some(g) = self.extern_generics.get(&data).cloned() {
                     let owner = g.owner.clone();
                     self.request_inst_method(owner, data, args, name);
+                } else if self.extern_inherents.iter().any(|ih| {
+                    self.types.type_at(ih.target).name == data
+                }) || self.extern_origins.contains_key(&data) {
+                    // a plain class's GENERIC method: the row's bound
+                    // name names the declaring package, and the body
+                    // rides the same owner-side machinery
+                    let owner = self.owner_of_data(data);
+                    self.request_inst_method(owner, data, args, name);
                 }
             }
             FnKey::Free(name) => {
@@ -226,6 +234,7 @@ impl<'a> Ctx<'a> {
             if self.diags.len() > 64 {
                 return Err(());
             }
+            let fid = self.inst_map[&inst];
             let fid = self.inst_map[&inst];
             
             if FnCompiler::compile(self, &inst, fid).is_err() {
@@ -363,10 +372,16 @@ impl<'a> Ctx<'a> {
         // the async weave's engine-minted impls (RFC 0018): the hidden
         // frame's `Future::yield` row and the sleep future's engine-
         // backed row — no AST method nodes, so the walk above can't
-        // see them; their (type, slot, fid) fills were recorded at mint
-        for (ty, slot, fid) in std::mem::take(&mut self.extra_vtable_fills) {
-            vt[self.types.dense(ty) as usize][slot as usize] = Some(fid);
+        // see them; their (type, slot, fid) fills were recorded at mint.
+        // The fills RESTORE after applying: the rows are idempotent
+        // (same fid rewrites the same slot), and a later pass — the
+        // driver builds vtables twice around the fill-body drain — must
+        // see them again.
+        let pending = std::mem::take(&mut self.extra_vtable_fills);
+        for (ty, slot, fid) in &pending {
+            vt[self.types.dense(*ty) as usize][*slot as usize] = Some(*fid);
         }
+        self.extra_vtable_fills = pending;
         vt
     }
 

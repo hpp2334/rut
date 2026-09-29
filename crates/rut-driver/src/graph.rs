@@ -80,6 +80,8 @@ pub fn compile_units(session: &Session, root_spec: &str) -> Units {
         body_kind: HashMap::new(),
         requests: Vec::new(),
         seed_pool: HashMap::new(),
+        seeded_keys: HashSet::new(),
+        fresh_owners: HashSet::new(),
     };
     let ok = c.ensure(root_spec).is_some();
     c.resolve_requests();
@@ -123,6 +125,13 @@ struct GraphCompiler<'a> {
     /// accumulated seeds per owner across resolution rounds (a second
     /// recompile must keep the first round's seeds)
     seed_pool: HashMap<String, Vec<(String, rut_lir::check::InstRequest)>>,
+    /// request keys already routed to a seed pool: a re-seeded owner's
+    /// own mirrors re-emit the same rows every recompile, and feeding
+    /// them back would loop the resolution forever
+    seeded_keys: HashSet<String>,
+    /// owners that received at least one NEW seed this round — the only
+    /// units a resolution round re-resolves
+    fresh_owners: HashSet<String>,
 }
 
 /// A linked source unit's compile inputs, recorded for the owner-side
@@ -486,10 +495,38 @@ impl<'a> GraphCompiler<'a> {
         let args = r
             .args
             .iter()
-            .map(|&a| rut_core::link::canon_type(&prog.types, a))
+            .map(|&a| {
+                // the semantic spelling: boot rows by id, everything else
+                // by the row's own name text. A reseeded owner's own-block
+                // locals shift between rounds (its table grows with every
+                // materialized body), and a scope-packed canon would read
+                // the same request as a new one forever. The text — not
+                // the interner id — crosses compiles.
+                if rut_core::scope_of(a) == rut_core::BOOT_SCOPE {
+                    format!("b{}", rut_core::local_of(a))
+                } else {
+                    prog.interner.name(prog.types.type_at(a).name).to_string()
+                }
+            })
             .collect::<Vec<_>>()
             .join(",");
-        format!("{}#{}<{}>", r.owner, decl, args)
+        // the kind + methods ride the key: one (decl, args) pair can carry
+        // several method-body requests, and a fn body request is not a
+        // type instantiation
+        let kind = if r.is_impl {
+            "i"
+        } else if r.is_fn {
+            "f"
+        } else {
+            "t"
+        };
+        let methods = r
+            .methods
+            .iter()
+            .map(|&m| prog.interner.name(m).to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}#{}#{}<{}>#{}", r.owner, kind, decl, args, methods)
     }
 
     /// The reachable descriptor closure of `args` in `prog`'s table, as
@@ -564,9 +601,18 @@ impl<'a> GraphCompiler<'a> {
             let mut requests = std::mem::take(&mut self.requests);
             requests.sort_by_cached_key(|(requester, r)| self.request_key(requester, r));
             for (requester, r) in requests {
+                let key = self.request_key(&requester, &r);
+                if self.seeded_keys.contains(&key) {
+                    continue;
+                }
+                self.seeded_keys.insert(key);
+                self.fresh_owners.insert(r.owner.clone());
                 self.seed_pool.entry(r.owner.clone()).or_default().push((requester, r));
             }
-            let mut owners: Vec<String> = self.seed_pool.keys().cloned().collect();
+            // only owners that received NEW seeds this round re-resolve:
+            // a reseed re-emits its own mirrors' requests, and re-running
+            // an unchanged owner would feed the loop forever
+            let mut owners: Vec<String> = self.fresh_owners.drain().collect();
             owners.sort();
             for owner in owners {
                 let Some(seeds) = self.seed_pool.get(&owner).cloned() else { continue };
@@ -587,7 +633,12 @@ impl<'a> GraphCompiler<'a> {
                         ));
                     }
                 }
-                self.seed_pool.remove(&owner);
+                // the pool ACCUMULATES: a later round's reseed must carry
+                // every seed this owner has seen, or the replacement
+                // program drops the bodies an earlier round already
+                // materialized (a consumer's mirror then claims nothing).
+                // The loop ends when the request queue drains; identical
+                // seeds re-materialize nothing (ensure_inst dedups).
                 if !self.diags.is_empty() {
                     return;
                 }
@@ -616,7 +667,8 @@ impl<'a> GraphCompiler<'a> {
         };
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
         // one seed group per requester: the descriptor closure of every
-        // request's arguments, sparse at the requester's locals
+        // request's arguments, sparse at the requester's locals — the
+        // attach side merges the groups into one padded run per scope
         let mut per_requester: std::collections::BTreeMap<
             String,
             std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType>,
@@ -627,7 +679,8 @@ impl<'a> GraphCompiler<'a> {
             };
             let entry = per_requester.entry(requester.clone()).or_default();
             let owner_scope = self.done.get(owner).map(|u| u.scope).unwrap_or(0);
-            for ((s, l), row) in Self::desc_closure(&self.programs[ridx], &r.args, owner_scope) {
+            let closure = Self::desc_closure(&self.programs[ridx], &r.args, owner_scope);
+            for ((s, l), row) in closure {
                 entry.insert((s, l), row);
             }
         }
@@ -635,42 +688,8 @@ impl<'a> GraphCompiler<'a> {
         for (requester, rows) in &per_requester {
             let Some((ridx, requester_scope)) = self.done.get(requester).map(|u| (u.idx, u.scope)) else { continue };
             let prog = &self.programs[ridx];
-            let mut types: Vec<rut_core::types::RutType> = Vec::new();
-            let mut blocks: Vec<(rut_core::ScopeId, u32)> = Vec::new();
-            let pad = rut_core::types::RutType {
-                name: rut_core::sym::NIL,
-                kind: rut_core::types::TyKind::Nil,
-            };
-            // one PADDED run per scope, from local 0: the row for local
-            // L lands at run-start + L, and the block entry says off 0 —
-            // `use_seed_block` then sets scope_base[s] = run start, so
-            // the owner's dense of the requester's packed id
-            // `(s, L)` hits the row exactly (the two sides spell every
-            // argument the same way — the owner anchor's whole point).
-            // Absent locals ride Nil shells.
-            let mut iter = rows.iter().peekable();
-            while let Some((&(s, lo), _)) = iter.peek() {
-                let s: rut_core::ScopeId = s;
-                types.extend((0..lo).map(|_| pad.clone()));
-                blocks.push((s, 0));
-                let mut off = lo;
-                loop {
-                    match iter.peek() {
-                        Some(&(&(s2, l2), row)) if s2 == s => {
-                            // pad any gap inside the scope's local space,
-                            // then take the row at its local
-                            while off < l2 {
-                                types.push(pad.clone());
-                                off += 1;
-                            }
-                            types.push(row.clone());
-                            off += 1;
-                            iter.next();
-                        }
-                        _ => break,
-                    }
-                }
-            }
+            let rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)> =
+                rows.iter().map(|(k, v)| (*k, v.clone())).collect();
             let mine: Vec<_> = seeds.iter().filter(|(rq, _)| rq == requester).collect();
             let insts = mine
                 .iter()
@@ -735,8 +754,7 @@ impl<'a> GraphCompiler<'a> {
             
             
             groups.push(crate::SeedGroup {
-                types,
-                blocks,
+                rows,
                 names: &prog.interner,
                 insts,
                 fns,
@@ -773,17 +791,25 @@ impl<'a> GraphCompiler<'a> {
         for (requester, r) in seeds {
             let key = self.request_key(requester, r);
             let prog = &self.programs[idx];
+            // the ledger side spells the same key: a type instantiation
+            // row (kind `t`, no methods), its arguments through the
+            // owner's own table — boot rows by id, everything else by
+            // the row's name text (the same semantic canon the request
+            // side speaks)
             let hit = prog.inst_types.iter().any(|row| {
-                key == format!(
-                    "{}#{}<{}>",
-                    prog.interner.name(row.owner),
-                    prog.interner.name(row.decl),
-                    row.args
-                        .iter()
-                        .map(|&a| rut_core::link::canon_type(&prog.types, a))
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
+                let args = row
+                    .args
+                    .iter()
+                    .map(|&a| {
+                        if rut_core::scope_of(a) == rut_core::BOOT_SCOPE {
+                            format!("b{}", rut_core::local_of(a))
+                        } else {
+                            prog.interner.name(prog.types.type_at(a).name).to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                key == format!("{}#t#{}<{}>#", prog.interner.name(row.owner), prog.interner.name(row.decl), args)
             });
             if !hit {
                 self.diags.push(Diag::new(

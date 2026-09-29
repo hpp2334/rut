@@ -5,6 +5,7 @@
 // `go` is an entry fn so T12 can run the packed bundle through the host
 // boundary and pin the dispatch result.
 use json::{JsonSerialize};
+use pouch::{Vec};
 
 entry fn go() -> str {
     let v = Vec<i64>.filled(7, 3);
