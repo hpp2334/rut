@@ -52,7 +52,7 @@ for the user to annotate. An unreferenced use name is a lint, not an
 error.
 
 The engine's builtin names — the primitives, `opaque`, `panic`,
-`assert`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is
+`type_id<T>()`, `str(x)` — are **ambient**: no `use` is
 needed for them. The gated names resolve only through
 `use core::{ .. }`: the const `NAN`, the `Disposal`/
 `DisposalContext` pair, and every builtin trait (`Iterator`,

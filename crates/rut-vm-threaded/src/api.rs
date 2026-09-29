@@ -97,7 +97,8 @@ pub const T_UNBOX: u8 = 77;
 pub const T_BOX: u8 = 78;
 pub const T_MAKECLOSURE: u8 = 79;
 pub const T_PANIC: u8 = 80;
-pub const T_ASSERT: u8 = 81;
+// 81 is RETIRED (T_ASSERT died with the `assert` builtin — never
+// re-meaninged, the same law as the wire's retired opcodes)
 pub const T_CONV: u8 = 82;
 pub const T_STRCODEAT: u8 = 83;
 pub const NTAGS: usize = 84;
@@ -174,7 +175,6 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::Box { .. } => T_BOX,
         Op::MakeClosure { .. } => T_MAKECLOSURE,
         Op::Panic { .. } => T_PANIC,
-        Op::Assert { .. } => T_ASSERT,
         Op::Conv { .. } => T_CONV,
         Op::StrCodeAt { .. } => T_STRCODEAT,
         // every current variant has a tag; keep the fallback so a future op
@@ -393,7 +393,6 @@ pub trait Machine {
     fn op_box(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_makeclosure(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_panic(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
-    fn op_assert(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_conv(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_strcodeat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
 }

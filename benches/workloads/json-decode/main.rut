@@ -1,6 +1,10 @@
 use pouch::{ Vec };
 use ink::{ Logger };
 
+// the assert builtin is gone — the workload keeps its sanity checks
+// with the plain-rut helper over `panic`
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+
 // json-decode — opaque-mint churn: the digest JSON decoder ported
 // verbatim (tree = tagged union by hand — JTag + Json — children boxed
 // in `opaque`, RFC 0014, to break recursion), driven over a LARGE

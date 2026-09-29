@@ -479,10 +479,6 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*s);
             push(*idx);
         }
-        Op::Assert { cond, msg } => {
-            push(*cond);
-            msg.into_iter().for_each(|m| v.push(*m));
-        }
         Op::Jmp { .. } | Op::LoopHead => {}
         #[allow(unreachable_patterns)]
         Op::Pad { .. } => unreachable!("layout pin, never constructed"),

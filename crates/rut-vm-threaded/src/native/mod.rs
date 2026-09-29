@@ -146,7 +146,6 @@ op_handler!(h_unbox, op_unbox);
 op_handler!(h_box, op_box);
 op_handler!(h_makeclosure, op_makeclosure);
 op_handler!(h_panic, op_panic);
-op_handler!(h_assert, op_assert);
 op_handler!(h_conv, op_conv);
 op_handler!(h_strcodeat, op_strcodeat);
 
@@ -230,7 +229,6 @@ fn table<M: Machine>() -> Table<M> {
     t[T_BOX as usize] = h_box::<M>;
     t[T_MAKECLOSURE as usize] = h_makeclosure::<M>;
     t[T_PANIC as usize] = h_panic::<M>;
-    t[T_ASSERT as usize] = h_assert::<M>;
     t[T_CONV as usize] = h_conv::<M>;
     t[T_STRCODEAT as usize] = h_strcodeat::<M>;
     Table { entries: t }

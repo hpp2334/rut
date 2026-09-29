@@ -115,7 +115,7 @@ the message, and (via `vm.fuel_used`, `heap_usage()`) the budget context
 
 ## Where the surfaces live
 
-- `assert(cond, msg)`, `panic(msg)` — the core builtins that raise;
+- `panic(msg)` — the core builtin that raises;
   the `Disposal` trait is the cleanup surface
   ([The Rc heap and destructors](rc-heap.md)).
 - `capture_stacktrace()` and the `StackTrace` class — ambient builtin

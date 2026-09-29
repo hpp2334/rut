@@ -5,6 +5,10 @@ use json::{
     JsonDeserialize, JsonReader, JsonSerialize, JsonWriter,
 };
 
+// the assert builtin is gone — the workload keeps its sanity checks
+// with the plain-rut helper over `panic`
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+
 // json-roundtrip — the std json pkg's bench row (rut-json batch,
 // phase 2; docs/rut-json-survey.md §2.11 is this file's contract).
 //

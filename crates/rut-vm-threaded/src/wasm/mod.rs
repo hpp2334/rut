@@ -109,7 +109,6 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
             T_BOX => m.op_box(op, regs, pc)?,
             T_MAKECLOSURE => m.op_makeclosure(op, regs, pc)?,
             T_PANIC => m.op_panic(op, regs, pc)?,
-            T_ASSERT => m.op_assert(op, regs, pc)?,
             T_CONV => m.op_conv(op, regs, pc)?,
             T_STRCODEAT => m.op_strcodeat(op, regs, pc)?,
             _ => m.op_loophead(op, regs, pc)?,

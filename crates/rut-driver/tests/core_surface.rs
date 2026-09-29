@@ -113,7 +113,9 @@ fn core_decl_matches_the_compilers_surface() {
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
     // native fns (name AND ambient bit) — all of them
-    // (own/downcast/assert/panic/str/bytes)
+    // (own/downcast/panic/str/bytes — `assert` left the surface: it is
+    // plain rut code over `panic` now, pinned by tests/ambient.rs and
+    // the removal row in REMOVED_CORE)
     let mut decl_fns = builtin_fns;
     decl_fns.sort();
     let mut surf_fns: Vec<(String, bool)> =
@@ -245,6 +247,85 @@ fn removed_char_type_positions_diagnose_without_the_kind() {
             out.diags
         );
     }
+}
+
+/// `assert` left the core surface (the builtin's removal): it is plain
+/// rut code the business writes over `panic`. THE LAW the removal must
+/// keep: `REMOVED_CORE` fires only on otherwise-UNRESOLVED names — a
+/// module's own `fn assert` resolves, compiles, and works (a failing
+/// condition traps with the given message through the user fn's
+/// `panic`), while the bare unresolved spelling diagnoses with the
+/// removal row's recipe.
+fn compile_with_core(src: &str) -> rut_driver::GraphOutput {
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std_core(&mut s);
+    s.register_module(
+        "app_main",
+        rut_driver::Module {
+            body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    rut_driver::compile_graph(&s, "app_main")
+}
+
+fn vm_for(src: &str) -> rut_vm::interp::Vm {
+    let out = compile_with_core(src);
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let prog = out.program.expect("linked program");
+    rut_vm::verify::verify(&prog).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm")
+}
+
+#[test]
+fn own_assert_helper_still_resolves() {
+    // the helper compiles and answers at run time: a failing condition
+    // traps with the CALLER's message, kind `Panic` (the user fn's
+    // abort — there is no `Assert` trap kind anymore)
+    let err = vm_for(
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
+         fn check(total: i32) { assert(total == 42, \"checksum failed\"); }\n\
+         pub fn main() -> i32 { check(7); return 0; }\n",
+    )
+    .call::<_, i32>("main", ())
+    .expect_err("the failing assert must trap");
+    assert_eq!(err.kind, rut_vm::TrapKind::Panic);
+    assert_eq!(err.msg, "checksum failed");
+
+    // the passing side stays silent
+    let v = vm_for(
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
+         pub fn main() -> i32 { assert(1 == 1, \"never\"); return 5; }\n",
+    )
+    .call::<_, i32>("main", ())
+    .expect("run");
+    assert_eq!(v, 5);
+}
+
+/// The unresolved bare spelling — NO local helper — diagnoses with the
+/// removal row's exact recipe, never "unknown function".
+#[test]
+fn unresolved_assert_names_the_recipe() {
+    const REMOVED: &str = "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`";
+    let out = compile_with_core("pub fn main() -> i32 { assert(1 == 1, \"fine\"); return 0; }\n");
+    assert!(
+        out.diags.iter().any(|d| d.msg == REMOVED),
+        "the bare assert miss carries the recipe: {:?}",
+        out.diags
+    );
+    assert!(out.program.is_none(), "the unresolved spelling must not compile");
 }
 
 /// VISIBILITY AGREEMENT, spelled out per row: each decl's

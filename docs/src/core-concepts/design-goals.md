@@ -120,8 +120,8 @@ source ──► lexer/parser ──► typecheck ──► IR ──► typed b
   interrupt callbacks. A UI host drives script between frames and stays
   responsive; a test host virtualizes the clock and gets fully
   deterministic schedules.
-- **Traps stop at the boundary.** A panic in script (overflow, nil
-  deref, a failed `assert`) unwinds as a `Trap` value to the host call —
+- **Traps stop at the boundary.** A panic in script (overflow,
+  nil deref) unwinds as a `Trap` value to the host call —
   rut code never catches one. Bugs become host-visible errors with a
   script backtrace, not corrupted state.
 

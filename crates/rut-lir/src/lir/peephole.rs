@@ -872,12 +872,6 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
         }
         Op::MakeClosure { dst, .. } => d.push(*dst),
         Op::Panic { msg } => u.push(*msg),
-        Op::Assert { cond, msg } => {
-            u.push(*cond);
-            if let Some(x) = msg {
-                u.push(*x);
-            }
-        }
         Op::Conv { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);
@@ -994,12 +988,6 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
         Op::Box { val, .. } => f(val),
 
         Op::Panic { msg } => f(msg),
-        Op::Assert { cond, msg, .. } => {
-            f(cond);
-            if let Some(x) = msg {
-                f(x);
-            }
-        }
         Op::Conv { src, .. } => f(src),
         Op::StrCodeAt { s, idx, .. } => {
             f(s);

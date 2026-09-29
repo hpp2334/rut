@@ -134,14 +134,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // only when the name was used from the core surface — the
         // prelude is used, never ambient. A local fn of the same name
         // wins when the use statement is absent (fallthrough below).
+        // Removed prelude spellings (`assert`, `own`, …) diagnose at the
+        // resolution miss at the bottom (`not_in_core_scope` consults
+        // the removal table first) — the removal fires only on an
+        // otherwise-UNRESOLVED name, so a module's own fn of a removed
+        // name (the `assert`-over-`panic` helper) compiles and wins.
         let core_fn = self.ctx.extern_native_fns.contains(&name);
-        // removed prelude spellings diagnose themselves — compared as
-        // symbols against the interned removal table, they are not
-        // well-known symbols
-        if let Some(msg) = self.ctx.removed_core(name) {
-            self.ctx.err(sp, msg);
-            return Err(());
-        }
         if name == sym::PRINT {
             self.ctx.err(sp, "`print` was removed — use a logger (`use ink::{log}`)");
             return Err(());
@@ -207,28 +205,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "panic takes a `str`");
                 }
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
-                return Ok(TY_NIL);
-            }
-            sym::ASSERT if core_fn => {
-                if args.is_empty() || args.len() > 2 {
-                    self.ctx.err(sp, "assert(cond, msg?) takes a condition (RFC 0034 §2)");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_BOOL))?;
-                if t != TY_BOOL {
-                    self.ctx.err(sp, "assert takes a `bool`");
-                }
-                let cond = self.last_reg;
-                let msg = if args.len() == 2 {
-                    let t = self.compile_expr(args[1], Some(TY_STR))?;
-                    if t != TY_STR {
-                        self.ctx.err(sp, "assert message must be a `str`");
-                    }
-                    Some(self.last_reg)
-                } else {
-                    None
-                };
-                self.emit(Op::Assert { cond, msg }, sp.lo);
                 return Ok(TY_NIL);
             }
             sym::CAPTURE_STACKTRACE if core_fn => {

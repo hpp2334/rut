@@ -1529,7 +1529,7 @@ pub fn compile_program_resolved(
 
 /// Mount `core` — the prelude surface (RFC 0028): the erasure
 /// primitive (`opaque`), the builtin trait (`Iterator`), and
-/// the compiler-lowered functions (`assert`/`panic`, the
+/// the compiler-lowered functions (`panic`, the
 /// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
 /// sites diagnose with the removal. A
 /// native module with no body: its surface is
@@ -1855,7 +1855,6 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
             argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
         ),
         Op::Panic { msg } => format!("panic r{msg}"),
-        Op::Assert { cond, msg } => format!("assert r{cond}, {:?}", msg.map(|m| format!("r{m}"))),
         Op::LoopHead => "loophead".to_string(),
         #[allow(unreachable_patterns)]
         Op::Pad { .. } => unreachable!("layout pin, never constructed"),

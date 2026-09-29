@@ -121,7 +121,7 @@ an indirect jump through the vtable.
 
 Failure is a **trap**, not an exception and not a Rust panic: integer
 overflow on the plain operators, a `nil` deref, an out-of-bounds index,
-a failed `assert` or `panic(..)`, or an exhausted budget. A trap
+a `panic(..)`, or an exhausted budget. A trap
 captures the raw frame chain (rendered lazily — symbolication happens
 only if someone prints it), runs destructors on the way out, and
 unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one;

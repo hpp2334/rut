@@ -359,9 +359,11 @@ pub struct Surface {
 /// (`downcast` is no longer a declared prelude fn — builtin-surface
 /// phase 1 folded it into the `opaque` primitive's `downcast` member;
 /// rut-lir still lowers the free spelling as a phase-1 alias until the
-/// phase-2 sweep retires the call sites.)
+/// phase-2 sweep retires the call sites. `assert` is likewise no
+/// longer declared — it is plain rut code over `panic` now, and the
+/// removal table diagnoses the bare spelling.)
 pub const CORE_FNS: &[IdentId] = &[
-    sym::ASSERT, sym::PANIC,
+    sym::PANIC,
     sym::STRING_JOIN,
     sym::CAPTURE_STACKTRACE,
 ];
@@ -481,6 +483,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null (RFC 0044)"),
     ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
     ("on_drop", "`on_drop` was removed — implement `Disposal` for the type; the engine calls `dispose` at refcount zero"),
+    ("assert", "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`"),
 ];
 
 /// The removal table keyed by [`IdentId`] — interned once per compiler
@@ -1822,7 +1825,6 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::Box { dst, val, ty } => { e.u8(42); e.u16(*dst); e.u16(*val); e.u32(*ty); }
         Op::MakeClosure { dst, func, argv_off, argc } => { e.u8(43); e.u16(*dst); e.u32(*func); e.u32(*argv_off); e.u16(*argc); }
         Op::Panic { msg } => { e.u8(44); e.u16(*msg); }
-        Op::Assert { cond, msg } => { e.u8(45); e.u16(*cond); e.u8opt(msg); }
         Op::LoopHead => e.u8(46),
         Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u8(from.to_u8()); e.u8(to.to_u8()); }
         Op::StrCodeAt { dst, s, idx } => { e.u8(91); e.u16(*dst); e.u16(*s); e.u16(*idx); }
@@ -1868,7 +1870,6 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         42 => Op::Box { dst: d.u16()?, val: d.u16()?, ty: d.u32()? },
         43 => Op::MakeClosure { dst: d.u16()?, func: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         44 => Op::Panic { msg: d.u16()? },
-        45 => Op::Assert { cond: d.u16()?, msg: d.u8opt()? },
         46 => Op::LoopHead,
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         // 48 is RETIRED (StrCharAt died with the char exorcism — never
@@ -1877,6 +1878,9 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         // 90 is RETIRED (OnDrop died with the destructor removal — never
         // re-meaninged): name the number loudly instead of the generic catch-all
         90 => return Err("bad opcode 90 (OnDrop retired — cell-death code is the `Disposal` trait; recompile)".into()),
+        // 45 is RETIRED (Assert died with the builtin's removal — never
+        // re-meaninged): assert is plain rut code over `panic` now
+        45 => return Err("bad opcode 45 (Assert retired — `assert` is plain rut code over `panic` now; recompile)".into()),
         91 => Op::StrCodeAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         92 => Op::WeakNew { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         93 => Op::WeakUpgrade { recv: d.u16()?, dst: d.u16()?, ty: d.u32()? },

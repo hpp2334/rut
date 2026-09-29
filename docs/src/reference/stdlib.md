@@ -32,7 +32,6 @@ spellings (ambient vs import-gated) are documented in
 
 | signature | meaning |
 |---|---|
-| `assert(cond: bool, msg: str) -> nil` | trap `Assert` when false; `msg` may be omitted at the call site |
 | `panic(msg: str) -> nil` | abort with the message |
 | `string_join(parts: [str]) -> str` | join in one pass |
 | `capture_stacktrace() -> StackTrace` | opt-in stack snapshot: raw frames only, symbols resolved lazily per access |
@@ -119,6 +118,7 @@ constants are `calc`'s.
 | `Array` as a name | the `[T]` grammar; `[v; n]` repeat construction |
 | `on_drop(p, cleanup)` | implement `Disposal` for the type — the engine calls `dispose` at refcount zero ([the Rc heap](rc-heap.md)) |
 | output builtins (`print`, `console`) | a logger package (`ink`) |
+| `assert(cond, msg?)` | plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }` — write the helper where you need it |
 
 No removed surface keeps compatibility routing: a removed head in an
 unresolvable position is an ordinary unknown-name error.

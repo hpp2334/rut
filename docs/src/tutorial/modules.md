@@ -71,7 +71,7 @@ use json::{ decodeJsonBytes, JsonDeserialize };
 ```
 
 Builtin names — the primitives, `str`/`bytes` members, `panic`,
-`assert`, `Vec`-free array grammar, `opaque` — are **ambient**: no
+`Vec`-free array grammar, `opaque` — are **ambient**: no
 `use` needed. The exceptions are core's import-gated pair,
 `Disposal`/`DisposalContext` — they resolve only through
 `use core::{ .. }`, like any package name. Package names from your

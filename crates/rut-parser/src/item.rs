@@ -1487,7 +1487,7 @@ impl SurfaceFrame {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                // engine fns are compiler-lowered (assert/panic) —
+                // engine fns are compiler-lowered (panic, string_join) —
                 // generics are fine: nothing crosses a boundary
                 if matches!(p.tok(), Tok::Lt) {
                     let (gens, pending) = generic_params(p, false, "builtin fn");

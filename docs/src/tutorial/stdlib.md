@@ -17,7 +17,14 @@ The reference page is [core and the swappable packages](../reference/stdlib.md).
 
 ```rut
 panic("Rect: negative extents");       // abort with a message
-assert(total == expected, "checksum"); // abort when false (message optional)
+```
+
+`assert` is not a builtin — a package that wants one writes the helper
+over `panic` ([bugs, not flow](errors.md#panic-for-bugs-not-for-flow)):
+
+```rut
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+assert(total == expected, "checksum"); // abort when false
 ```
 
 ### Integer safety ladder
@@ -317,6 +324,9 @@ use strbuild::{ StringBuilder };
 use calc::{ Math };
 use ink::{ Logger };
 
+// assert is plain rut code now: the helper a package writes over panic
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+
 pub fn main() {
     let log = Logger.new("std");
 
@@ -345,7 +355,7 @@ pub fn main() {
     let f = Math.sqrt_f(2.0);
     log.info(f"sqrt2 f64~{d} f32~{f} pi={Math.PI}");
 
-    // assert: the builtin bug-catcher
+    // assert: the bug-catcher this file wrote itself
     assert(v.len() == 2, "vec should hold two");
     log.info("asserted");
 }

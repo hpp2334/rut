@@ -2,6 +2,10 @@ use ink::{ Logger };
 use pouch::{ Vec };
 use strbuild::{ StringBuilder };
 
+// the assert builtin is gone — the workload keeps its sanity checks
+// with the plain-rut helper over `panic`
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+
 // strbuild — the std strbuild pkg's bench row (the strbuild batch,
 // phase 2; docs/strbuild-survey.md §5 is this file's PRE-REGISTERED
 // contract — the workload runs the design as written, no tuning).

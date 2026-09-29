@@ -334,14 +334,6 @@ impl Vm {
                 let m = cell_of(r!(msg)).as_str().to_string();
                 return Err(Trap::new(TrapKind::Panic, m));
             }
-            Op::Assert { cond, msg } => {
-                if !r!(cond).as_bool() {
-                    let m = msg
-                        .map(|m| cell_of(r!(m)).as_str().to_string())
-                        .unwrap_or_else(|| "assertion failed".to_string());
-                    return Err(Trap::new(TrapKind::Assert, m));
-                }
-            }
             Op::Conv { dst, src, from, to } => {
                 let v = self.convert(r!(src), from, to)?;
                 self.cur_regs[dst as usize] = v;

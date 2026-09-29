@@ -7,7 +7,7 @@ mechanisms cover everything:
 - **Failure** is a value in the second slot of a pair — the `(T, err)`
   answer channel.
 - **Bugs** — broken contracts — trap loudly and immediately
-  (`panic`, `assert`, a nil deref, an out-of-bounds index).
+  (`panic`, a nil deref, an out-of-bounds index).
 
 The design background lives in
 [everything is a value](../core-concepts/everything-is-a-value.md).
@@ -175,17 +175,25 @@ Enums have no payloads — the struct carries the data. This split keeps
 every error a plain value: copy it, store it in a log, put a location
 next to it, test it.
 
-## `panic` and `assert`: for bugs, not for flow
+## `panic`: for bugs, not for flow
 
 ```rut
 panic("Rect: negative extents");        // abort with a message
-assert(total == expected, "checksum");  // abort when the condition is false
 ```
 
-Use these when continuing would be a lie: a broken invariant, an
+Use it when continuing would be a lie: a broken invariant, an
 impossible state, a caller error that is a programming mistake. Data
 problems — a bad byte in a file, a missing key, a network error — are
 *values* and belong in the answer channel, so callers can recover.
+
+There is no builtin `assert`: if a package wants one, it writes the
+two-line helper over `panic` and owns it:
+
+```rut
+fn assert(c: bool, m: str) { if (!c) { panic(m); } }
+
+assert(total == expected, "checksum");  // abort when the condition is false
+```
 
 A trap's message and a stack trace (opt-in via `capture_stacktrace()`)
 land in the host's diagnostics — see

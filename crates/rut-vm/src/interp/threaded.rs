@@ -839,17 +839,6 @@ impl Machine for Vm {
         Err(Trap::new(TrapKind::Panic, m))
     }
 
-    fn op_assert(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Assert { cond, msg } = op else { unreachable_op!("op_assert: unexpected op") };
-        if !unsafe { (*regs.add(*cond as usize)).as_bool() } {
-            let m = msg
-                .map(|m| cell_of(unsafe { *regs.add(m as usize) }).as_str().to_string())
-                .unwrap_or_else(|| "assertion failed".to_string());
-            return Err(Trap::new(TrapKind::Assert, m));
-        }
-        Ok(Flow::Next(pc + 1))
-    }
-
     fn op_conv(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Conv { dst, src, from, to } = op else {
             unreachable_op!("op_conv: unexpected op")

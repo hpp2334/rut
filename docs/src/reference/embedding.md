@@ -148,7 +148,7 @@ op; `vm.resume::<R>()` re-runs the turn.
 | `Interrupted` | interrupt flag |
 | `Overflow` / `DivByZero` | arithmetic |
 | `IndexOutOfBounds` | sequence access |
-| `Assert` / `Panic` | `assert` / `panic` |
+| `Panic` | `panic` |
 | `BadUnbox` | a failed unbox |
 | `NilDeref` | nil where a reference is required |
 | `Invalid` | everything else, including boundary mismatches |

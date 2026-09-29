@@ -98,7 +98,7 @@ fn run_main(app_src: &str) -> i32 {
 /// relocation the native grow drives.
 #[test]
 fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
-    let checksum = run_main("use core::{ assert };\n\
+    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -141,7 +141,7 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
 /// with no value machinery, duplicate adds, removes.
 #[test]
 fn hashmap_str_keys_and_hashset() {
-    let checksum = run_main("use core::{ assert };\n\
+    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap, HashSet };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -193,7 +193,7 @@ fn hashmap_str_keys_and_hashset() {
 /// on its DEAD slot, and the re-added value is the fresh cell's.
 #[test]
 fn str_key_remove_readd_get_tombstone_round_trip() {
-    let checksum = run_main("use core::{ assert };\n\
+    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
@@ -224,7 +224,7 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
 #[test]
 fn a_user_record_key_fails_at_compile_time_naming_the_union() {
     let ds = diags_of(
-        "use core::{ assert };\n\
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
          pub fn main() -> i32 {\n\
@@ -295,7 +295,7 @@ fn nmapset_instantiates_the_wrapper_classes() {
 /// with the pkg; the scenario and its checksum pin remain the
 /// wrapper's own semantics law. History: git.)
 const PARITY_BODY: &str = "\
-         use core::{ assert };\n\
+         fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          pub fn main() -> i32 {\n\
          \x20   let mut fails = 0;\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\

@@ -81,7 +81,7 @@ work, no allocation.
 ## Traps
 
 Bugs are traps, errors are values. Arithmetic overflow, division by
-zero, indexing out of bounds, nil dereference, failed `assert`,
+zero, indexing out of bounds, nil dereference,
 `panic(...)`, a failed downcast guard, and budget exhaustion all unwind as
 `Err(Trap)` — never a Rust panic:
 
@@ -91,7 +91,7 @@ pub struct Trap { pub kind: TrapKind, pub msg: String }
 pub enum TrapKind {
     OutOfFuel, OutOfMemory, Interrupted,
     Overflow, DivByZero, IndexOutOfBounds,
-    Assert, Panic, BadUnbox, Invalid, NilDeref,
+    Panic, BadUnbox, Invalid, NilDeref,
 }
 ```
 

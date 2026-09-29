@@ -294,9 +294,8 @@ pub enum Op {
     /// capture registers in the function's `argv` pool
     MakeClosure { dst: Reg, func: u32, argv_off: u32, argc: u16 },
 
-    /// panic(msg) / assert(cond, msg?) — RFC 0034 §2
+    /// panic(msg) — the engine abort
     Panic { msg: Reg },
-    Assert { cond: Reg, msg: Option<Reg> },
 
     /// explicit numeric conversion `i32(x)` etc — always a call, never an
     /// operator (RFC 0007 §1); narrowing traps when the value doesn't fit

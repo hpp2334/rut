@@ -51,10 +51,10 @@ fn builtins_resolve_with_no_use_statement() {
          pub fn main() -> i32 {\n\
              let b = opaque(Point { x: 3, y: 4 });\n\
              let p = opaque.downcast<Point>(b);\n\
-             assert(p != nil);\n\
+             if (p == nil) { panic(\"point downcast failed\"); }\n\
              let b2 = opaque(7);\n\
              let n = opaque.downcast<i32>(b2);\n\
-             assert(n != nil);\n\
+             if (n == nil) { panic(\"int downcast failed\"); }\n\
              return p.x + p.y + n;\n\
          }\n",
     );
@@ -63,7 +63,7 @@ fn builtins_resolve_with_no_use_statement() {
 
 #[test]
 fn the_ambient_prelude_binds_beyond_the_gated_names() {
-    // the native fns (assert/panic/string_join) and the native
+    // the native fns (panic/string_join) and the native
     // containers still bind with no `use` statement anywhere in this
     // source. The `for..of` here runs over `[i32]` — a builtin
     // sequence's FUSED loop, which never names `Iterator` — so it works
@@ -77,7 +77,7 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
          }\n\
          pub fn main() -> i32 {\n\
              let s = string_join([\"a\", \"b\"]);\n\
-             assert(s == \"ab\");\n\
+             if (s != \"ab\") { panic(\"join diverged\"); }\n\
              if (s.len() == 99) { panic(\"unreachable\"); }\n\
              return total([1, 2, 3]);\n\
          }\n",

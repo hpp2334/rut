@@ -60,7 +60,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
 
-`panic(msg)` and `assert(cond, msg?)` are prelude functions, not keywords.
+`panic(msg)` is a prelude function, not a keyword.
 
 ## Reserved words
 
