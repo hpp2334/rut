@@ -28,7 +28,7 @@
 use core::{ RunContext };
 use pouch::{ Vec };
 use json::{
-    decodeJsonBytes, DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonDeserialize,
+    DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonDeserialize,
     JsonReader, JsonSerialize, JsonWriter,
 };
 use async_host::launch_future;
@@ -126,8 +126,8 @@ struct Entry {
 // admitted receiver spelling (struct instantiations are outside the
 // static-call receiver set — the json-roundtrip bench inlines the same
 // loop for the same reason), so the array row rides a generic shim: at
-// T = Entry it IS the peer-gated `impl JsonDeserialize for Vec<T>`'s
-// body, and `T.decode(r)` dispatches Entry's impl recursively.
+// T = Entry it monomorphizes in THIS unit (its own fn), and
+// `T.decode(r)` dispatches Entry's impl recursively.
 fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
     let mut v = Vec<T>.new();
     r.begin_array();
@@ -193,16 +193,24 @@ impl JsonDeserialize for Entry {
 }
 
 // the serialize twin — load-bearing, not decoration. The peer-gated
-// `impl JsonSerialize for Vec<T>` (json's pouch group, spliced by
-// `assemble_peers` because pouch is in this program's closure)
-// monomorphizes at every `Vec<..>` shape in this unit, and `Vec<Entry>`
-// rides the struct field above; its element `x.encode(w)` needs Entry's
-// own encode COMPILED, or the binary fails load-time verify — the
-// engine-side devirtualization gap 02-digest disclosed (its consumer
-// hit it at T = opaque, where the orphan rule forbids the fix; Entry is
-// type-local, so this pkg can and does write the impl). The twin also
-// dispatches the peer row itself: `kids.encode(w)` below IS the
-// spliced `Vec<T>` encode at T = Entry.
+// `impl JsonSerialize for Vec<T>` (json's pouch group) is
+// owner-anchored: its per-shape instantiation compiles at JSON, and
+// only what json's own pack closure spells rides its compiled binary —
+// `Vec<Entry>` could never be seeded there (this pkg's Entry did not
+// exist at json's pack time; the orphan rule forbids spelling the impl
+// here). So the array row rides a LOCAL generic shim, the
+// `decode_entry_files` twin: at T = Entry it monomorphizes in THIS
+// unit, and `x.encode(w)` dispatches Entry's own encode recursively.
+fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, mut w: JsonWriter) -> ?EncodeJsonError {
+    w.begin_array();
+    for (let x of kids) {
+        let e = x.encode(w);
+        if (e != nil) { return e; }
+    }
+    w.end_array();
+    return nil;
+}
+
 impl JsonSerialize for Entry {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
@@ -218,7 +226,7 @@ impl JsonSerialize for Entry {
         if (self.files != nil) {
             let kids: Vec<Entry> = self.files;
             w.key("files");
-            let e = kids.encode(w);
+            let e = encode_entry_array<Entry>(kids, w);
             if (e != nil) { return e; }
         }
         w.end_object();
@@ -229,6 +237,29 @@ impl JsonSerialize for Entry {
 // the document root — only its `files` array matters here
 struct Root {
     files: ?Vec<Entry>;
+}
+
+// decodeJsonBytes<Root>, shimmed locally. THE BUNDLE LAW: json's
+// generic-fn bodies are owner-anchored — only what json's own pack
+// closure spells rides its compiled binary, and `decodeJsonBytes<Root>`
+// could never be seeded there (this pkg's Root did not exist at json's
+// pack time). This shim is the wrapper's reader-route tail as a LOCAL
+// generic fn: it monomorphizes in THIS unit, `T.decode(r)` dispatches
+// Root's own impl, and the wrapper's trailing-data check is spelled
+// verbatim. The wrapper's strict UTF-8 DFA stays json-side — jsDelivr's
+// tree JSON is UTF-8, and `bytes.decode()` (lossy) never fires on it;
+// a body that somehow carried a broken octet surfaces as a reader
+// parse error, same exit code, one message.
+fn decode_root_bytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError) {
+    let mut r = JsonReader.of(b.decode());
+    let (v, e) = T.decode(r);
+    if (e != nil) { return (nil, e); }
+    if (!r.at_end()) {
+        let at = r.here();
+        let got = r.rest();
+        return (nil, DecodeJsonError { kind: DecodeErrorKind.Trailing, at: at as i64, got: got, expected: "end of input" });
+    }
+    return (v, nil);
 }
 
 impl JsonDeserialize for Root {
@@ -332,7 +363,7 @@ async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: 
         eprint(why);
         return 1;
     }
-    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));
+    let (tree, e) = decode_root_bytes<Root>(await resp.body(cx));
     if (e != nil) {
         let why: DecodeJsonError = e;
         eprint(f"rgh: the CDN's tree JSON did not parse at {why.at}: expected {why.expected}");

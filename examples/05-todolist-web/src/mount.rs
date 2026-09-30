@@ -51,7 +51,16 @@ use rut_driver::{Module, ModuleBody};
 pub const WEB_D_RUT: &str = include_str!("../web.d.rut");
 
 const POUCH_RUT: &str = include_str!("../../../rut/pouch/pouch.rut");
-const NMAP_HOST_D_RUT: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
+// the nmap host surface, from the COMMITTED CDN artifact (the v6 decl
+// bundle — `dist/std/nmap_host.rutbundle`, sha256-pinned by the pins
+// gate). THE BUNDLE LAW: a compiled decl surface binds like the
+// hand-lowered one — the mirror's `register_module` becomes a
+// `mount_bundle_bytes`, the wasm lane's url-dep mount. pouch and
+// nmapset stay verbatim sources: they are GENERIC owners, and a
+// compiled bundle serves only the instantiations its own pack closure
+// spelled (consumer shapes like this page's `Vec<Node>` are the
+// directory lane — see docs/src/reference/bundles.md).
+const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmap_host.rutbundle");
 const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 
 const UI_RUT: &str = include_str!("../rut/ui/ui.rut");
@@ -224,8 +233,11 @@ pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), Stri
 pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String> {
     mount_host_session(session)?;
 
-    let nmap = rut_driver::lower_decl_module(NMAP_HOST_D_RUT, "nmap.d.rut")?;
-    session.register_module("nmap_host", nmap).map_err(|e| e.to_string())?;
+    // the nmap host surface, from the CDN artifact (the v6 decl bundle)
+    // — the wasm lane's url-dep mount; the registration scope IS the
+    // package name the bundle answers to
+    let mounted = rut_driver::mount_bundle_bytes(session, NMAP_HOST_BUNDLE)?;
+    debug_assert_eq!(mounted, "nmap_host");
     session
         .register_module(
             "nmapset",

@@ -950,6 +950,7 @@ dependencies = [
 name = "rgh"
 version = "0.1.0"
 dependencies = [
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-lexer",

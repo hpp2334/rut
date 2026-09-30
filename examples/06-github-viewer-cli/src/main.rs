@@ -23,63 +23,108 @@
 //! this file never branches on test env, and nothing here touches the
 //! network at test time.
 
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::io::Write as _;
 use std::rc::Rc;
+use std::task::{Context, Poll};
 
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
-const MOUNT_DIRS: &[&str] = &[
-    // the brain's libs: pouch (Vec) + nmapset + json, the std order
-    // (json slots after pouch and nmapset), and the peer gate runs on
-    // the whole closure (the CLI's own loose-file recipe) — json's
-    // impl-only integration groups mount because pouch/nmapset are in
-    // it. The http pair closes the list on the same law (http after its
-    // http_host dep; http's own [deps] pull http_host AND strbuild —
-    // the builder's header accumulator — regardless).
-    "rut/pouch",
-    "rut/nmapset",
-    "rut/json",
-    "rut/http_host",
-    "rut/http",
-];
+/// The std closure mounts through the PROJECT MANIFEST (`rut.toml`) —
+/// the manifest is the ONLY url carrier: it is parsed here, and every
+/// url row's bytes seed the fetcher from the committed artifact
+/// (offline: the seed IS the cache — the human `rut fetch` lane fills
+/// the same shape over the network). Path rows mount natively inside
+/// the same load; the four passes (deps walk, peer gate included) run
+/// for real. The example's own CLI-I/O rows (`rgh_host`) mount beside
+/// the closure — nothing fetches for them; the embedder binds the
+/// bodies.
+struct Table(BTreeMap<String, Vec<u8>>);
+
+impl rut_driver::DepFetch for Table {
+    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+        let r = match self.0.get(url) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(format!("no seeded bytes for {url}")),
+        };
+        std::future::ready(r)
+    }
+}
+
+/// The std-only driver for the `_with` lane: the fetched futures are
+/// `ready`, so one noop-waker poll settles them.
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+/// The manifest lane's mount: load the project root with the seeded
+/// fetcher, then the embedder half every lane owns (rgh_host's rows).
+fn load_rgh_session() -> Result<(rut_driver::Session, String), String> {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest_text = std::fs::read_to_string(base.join("rut.toml"))
+        .map_err(|e| format!("rut.toml: {e}"))?;
+    let manifest =
+        rut_bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+    let dist = base.join("../../dist/std");
+    let mut table = BTreeMap::new();
+    for desc in manifest.deps.values() {
+        let Some(url) = desc.get("url") else { continue };
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
+        table.insert(url.clone(), bytes);
+    }
+    let (mut session, root) =
+        block_on(rut_driver::load_dir_session_with(&base, &Table(table)))?;
+    // the example's own CLI-I/O rows (nothing fetches — the embedder
+    // binds the bodies)
+    rut_driver::mount_dir(
+        &mut session,
+        &base.join("rgh_host"),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok((session, root))
+}
 
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>().join("\n");
 
-    let mut session = rut_driver::Session::new();
+    // the std closure mounts through the manifest lane (rut.toml is
+    // the url carrier; the committed artifact seeds the fetcher), and
+    // the brain's module registers with it — the four passes run for
+    // real, peer gate included
+    let (mut session, root) = match load_rgh_session() {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
     rut_driver::mount_std(&mut session);
     // the async pair (the launcher set `boot` drives)
     rut_driver::mount_std_async(&mut session);
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for dir in MOUNT_DIRS {
-        rut_driver::mount_dir(&mut session, &tree.join(dir)).expect("mount tree pkg");
-    }
-    rut_driver::mount_dir(
-        &mut session,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"),
-    )
-    .expect("mount rgh_host");
     rut_driver::assemble_peers(&mut session).expect("assemble peer groups");
 
     let src =
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh.rut"))
             .expect("read rgh.rut");
-    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "rgh");
-    if !out.diags.is_empty() {
-        eprint!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
+    let g = rut_driver::compile_graph(&session, &root);
+    if !g.diags.is_empty() {
+        eprint!("{}", rut_lexer::diag::render_diags(&src, &g.diags));
         std::process::exit(1);
     }
-    let Some(binary) = out.binary else {
+    let Some(prog) = g.program else {
         eprintln!("rgh: no binary emitted");
         std::process::exit(1);
-    };
-    let prog = match rut_core::binary::decode(&binary) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("rgh: decode: {e}");
-            std::process::exit(1);
-        }
     };
     if let Err(e) = rut_vm::verify::verify(&prog) {
         eprintln!("rgh: verify: {e}");
