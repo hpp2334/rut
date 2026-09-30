@@ -1,0 +1,7 @@
+# sieve/ — Sieve of Eratosthenes over flat Vec<u8>/Vec<i32> primitive buffers.
+name = "sieve"
+entry.lib = "./main.rut"
+
+[deps]
+pouch = { path = "../../../../rut/pouch" }
+ink = { path = "../../../../rut/ink" }

@@ -28,7 +28,7 @@ fn find(src: &str, spans: &[(Span, TokenType)], text: &str) -> Vec<TokenType> {
 #[test]
 fn output_is_sorted_and_disjoint() {
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../demo/src/examples/literals.rut");
+        .join("../../demo/src/examples/literals/main.rut");
     let src = std::fs::read_to_string(&p).unwrap();
     let spans = classify_src(&src);
     let mut prev_hi = 0;

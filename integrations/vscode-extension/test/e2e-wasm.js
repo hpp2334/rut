@@ -621,9 +621,9 @@ async function main() {
 
   // ---- phase 3: for-of corpus ground truth — the element of an
   // ANNOTATED Vec<i32> types the loop variable, in a second corpus
-  // file (demo/src/examples/closures-generics.rut) ----
+  // file (demo/src/examples/closures-generics/main.rut) ----
   {
-    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics.rut');
+    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics', 'main.rut');
     const cgSrc = fs.readFileSync(cgPath, 'utf8');
     const cgUri = `file://${cgPath}`;
     const a = rut.analyze(cgUri, cgSrc);

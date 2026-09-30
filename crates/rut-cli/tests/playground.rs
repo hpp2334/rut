@@ -1,4 +1,4 @@
-//! Playground classics gate — every `demo/src/examples/*.rut`
+//! Playground classics gate — every `demo/src/examples/*/main.rut`
 //! compiles AND runs clean through the full pipeline: the demo reads the
 //! same sources raw, so what the page offers to run is exactly what the
 //! native engine accepts and executes — never a hand-written guess.
@@ -12,11 +12,14 @@ fn examples_dir() -> std::path::PathBuf {
 #[test]
 fn classics_run_clean() {
     let dir = examples_dir();
+    // the dir-shaped classics: one module dir (rut.toml + main.rut) per
+    // name — the snippet identity is the DIRECTORY name
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "rut"))
+        .filter(|p| p.is_dir())
+        .map(|d| d.join("main.rut"))
         .collect();
     files.sort();
     assert!(
@@ -28,7 +31,13 @@ fn classics_run_clean() {
 
     let mut failures: Vec<String> = Vec::new();
     for path in &files {
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let name = path
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         let src = std::fs::read_to_string(path).unwrap();
 
         // the classics use the toolchain libs (`ink`+`ink_host`, `pouch`) —

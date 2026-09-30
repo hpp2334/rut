@@ -1,0 +1,6 @@
+# bytes/ — the binary primitive: encode/decode, clone as the ONE copy.
+name = "bytes"
+entry.lib = "./main.rut"
+
+[deps]
+ink = { path = "../../../../rut/ink" }
