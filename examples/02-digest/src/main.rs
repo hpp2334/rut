@@ -119,6 +119,9 @@ fn main() {
     let ctx = session.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    // json's writer rides the strbuild pkg — its `strbuild_host` rows are
+    // in this closure's declared set, so the bodies install here too
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     hosts.verify_against(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
 
