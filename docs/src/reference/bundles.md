@@ -29,11 +29,16 @@ programs.
 rut.toml                 byte-for-byte; format = "rutbundle", format_version = 5
 rut.scopes               the pack-time scope ledger (scope = "spec" rows)
 <pkg>.rutc               the root's compiled binary — bodies + surface
+<pkg>.rut                the root's generic-bearing source, when its surface
+                           exports generics (the riding law, below)
 <pkg>.d.rut              the root's surface text (humans, LSP), when it declares one
 <dep>/rut.toml           per dep group, mixed kinds:
 <dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);
                            generic exports ride compiled — the binary carries
                            the closure's instantiations in its ledger
+<dep>/<dep>.rut            the group's generic-bearing source, when its surface
+<dep>/group-*.rut …        exports generics (the entry + the [peer-deps] group
+                           files, verbatim — the riding law, below)
 <dep>/<dep>.d.rut          its surface text, when it declares one
 <leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host
 <leaf>/<leaf>.rut           pkg → a source group: the source file set
@@ -57,13 +62,25 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   visibility](modules-and-visibility.md)) decides each package's kind.
   Refuse, never guess: the packer calls the graph's own classifier,
   there is no second implementation.
-- **Generics ride compiled**: instantiation is owned by the declaring
+- **Generics ride compiled — and their source rides beside them** (the
+  generic-source riding law): instantiation is owned by the declaring
   package, and the pack walk seeds each generic dep with the
   instantiations its consumers spell — the binary's instantiation
-  ledger names every `(owner, decl, arguments)` row, and a consumer
-  session resolves its requests against it. A request the binary does
-  not carry refuses (`re-pack with the consumer in the closure`), never
-  mislinks.
+  ledger names every `(owner, decl, arguments)` row. A compiled pkg
+  whose surface exports an OPEN generic surface (generic fns, generic
+  type exports, generic methods, generic-target impls) ALSO rides the
+  source that serves consumer-spelled shapes: the entry lib, each
+  `entry.libs` file, and each `[peer-deps]` group file, verbatim,
+  beside the binary. The entry lib's presence is the loader's dispatch
+  marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
+  source-free. At the consumer's link, a request the ledger lacks
+  lowers the ridden text in the consumer's session and compiles the
+  monomorphized body with owner = the pkg's spec — one row
+  program-wide, indistinguishable from a pack-time one, nothing
+  persisted. A bundle with no riding source refuses such a request
+  loudly (`this bundle predates generic-source riding — re-pack it`),
+  never mislinks. `--strip` refuses the combination: the ridden text
+  would recompile clean-named beside mangled binaries.
 - **The root must be linkable** — else `pack: <pkg> is inline — its
   source is its interface and it cannot be published compiled; share
   the directory instead`. A root that has nothing to compile is not
@@ -175,22 +192,27 @@ a newer bundle.
 | 2 | + the whole `[deps]` graph as `<pkg>/` groups | refused — re-pack the directory |
 | 3 | + each package's `[peer-deps]` `lib` group files | refused — re-pack the directory |
 | 4 | + each package's `entry.libs` files | refused — re-pack the directory |
-| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs | **the lib root's layout** |
+| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries, and a generic-owning pkg's source riding beside its binary — mixed source groups for `inline` deps and host pkgs | **the lib root's layout** |
 | 6 | decl: a `type = "host"` root — the manifest + its `.d.rut` surface, single-package | **the host root's layout** |
 
 Each historical extension existed because the added files were *part of
 the package*: a bundle that dropped peer groups or multi-lib files would
 load base-only — semantically wrong. v5 replaced the source contract
-with the compiled one: source sharing is a directory (`rut run <dir>`),
-as it always was outside bundles.
+with the compiled one — one exception, the riding law above: a
+generic-owning compiled pkg's source rides beside its binary so
+consumer-spelled shapes stay servable. Source sharing as the general
+contract stays a directory (`rut run <dir>`), as it always was outside
+bundles.
 
-A compiled group that declares `[peer-deps]` `lib` files is refused at
-pack (and a hand-doctored archive at load): appending source into a
-compiled package is impossible. Peer-gated packages publish inside v5
-the splice-needed way — as source groups, their group files riding
-beside the entry — and the loader's peer gate appends by presence
-exactly as in a directory world ([Dependency
-kinds](dependency-kinds.md)).
+Peer-gated packages publish inside v5 two ways, per their group-kind
+law: a NON-generic compiled declarer's peer groups compile into its
+binary at pack time (the rows ride the binary; the group files do not
+travel), and a splice-needed declarer publishes as a source group, its
+group files riding beside the entry — the loader's peer gate appends by
+presence exactly as in a directory world ([Dependency
+kinds](dependency-kinds.md)). A generic-owning compiled declarer rides
+its group files too (the riding law), and the on-demand recompile
+splices exactly the rows whose peers are in the consumer's closure.
 
 **The ledger namespaces per archive.** Each archive's scope rows shift
 into a fresh numeric range of the mounting session (boot passes
@@ -264,7 +286,7 @@ and version, then every group's decode, then the mount.
 | `rut.scopes` present, every row a bare package name (v5) | refuse — not a v5 compiled bundle |
 | `<pkg>.rutc` decode: version, tables, surface ids | refuse — names the entry and the cause |
 | a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
-| a compiled group declaring `[peer-deps]` `lib` files | refuse — appending into a compiled pkg is impossible |
+| a riding source entry that fails to read or decode (UTF-8) | refuse — names the entry; a bad archive never reaches the session |
 | every declared dep satisfied by a group (v5) | refuse — names the missing group |
 
 ## The std tree on a CDN — the per-package delivery
@@ -290,18 +312,22 @@ http = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutb
   url/sha256 rows; `--tag` prints the publish commands. Tags advance
   (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively.
 - **What a compiled bundle serves.** Instantiation is owner-anchored:
-  a compiled owner carries exactly the generic instantiations its own
-  pack closure spelled, and a consumer requesting a new shape refuses
-  loudly (`re-pack with the consumer in the closure`). So the CDN lane
-  serves **host surfaces** (v6 decl bundles — no generics) and
-  **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on
-  the surface's inherent rows, and the lib's whole closure rides
-  inside). The **generic owners** — `pouch`, `nmapset`, `json`,
-  `async_host` — are the DIRECTORY lane for consumers: consumer-spelled
-  shapes (`Vec<Todo>`, `Map<K,V>`, `launch_future<T>`) compile on
-  demand from source. This is why the examples mix the two dep kinds
-  per row, and why a compiled generic owner is not a consumer delivery
-  however fresh its pin.
+  a compiled owner carries the generic instantiations its own pack
+  closure spelled in its ledger — and, the generic-source riding law,
+  a compiled pkg whose surface exports generics also rides the source
+  that serves consumer-spelled shapes: at the consumer's link a
+  request the ledger lacks lowers the ridden text in the consumer's
+  session and compiles the monomorphized body under the declaring
+  pkg's spec (one row program-wide, nothing persisted). So the CDN
+  lane delivers **host surfaces** (v6 decl bundles), **concrete-class
+  libs** (`http`, `ink`, `strbuild` — methods cross on the surface's
+  inherent rows), **and the generic owners** (`pouch`, `nmapset`,
+  `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>`
+  compile at the link from the ridden source). A bundle that predates
+  the riding refuses a consumer-spelled shape loudly and says so
+  (re-pack it), and a bundle-mounted json names its pack-time dev
+  closure in its ledger, so the consumer's closure must contain those
+  names (`pouch`, `nmapset` beside `json` — the six-pin law).
 - **Duplicate mounts are safe.** Two archives may carry the same group
   (`json`'s and `http`'s closures both carry `strbuild`):
   first-mount-wins mounts one body, and the per-archive ledger

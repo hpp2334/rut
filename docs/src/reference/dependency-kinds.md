@@ -110,22 +110,27 @@ re-pointed — jsDelivr caches aggressively; the artifacts are committed
 at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate
 is a pure byte-equality repack — CI never touches the network).
 
-**What a url row can deliver** is the engine's owner-anchored
-instantiation law, read from the CDN side: a compiled bundle carries
-exactly the generic instantiations its own pack closure spelled, so
+**What a url row can deliver** is the engine's instantiation law, read
+from the CDN side: a compiled bundle carries the generic instantiations
+its own pack closure spelled **in its ledger**, and — since the
+generic-source riding law — a compiled pkg whose surface exports
+generics **also rides the source that serves consumer-spelled shapes**:
 
 - **host surfaces and concrete-class libs deliver** — a `type = "host"`
   bundle is a declaration surface (no generics), and a lib of concrete
   classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent
   rows with its whole closure riding inside;
-- **generic owners do not** — `pouch`, `nmapset`, `json`,
-  `async_host` serve only the shapes their own pack spelled; a
-  consumer's `Vec<Todo>` or `launch_future<T>` refuses loudly
-  (`re-pack with the consumer in the closure`). Consumer-spelled
-  generic shapes are the **directory lane**: keep those rows `path`,
-  which compiles them on demand. The examples mix the kinds per row
-  exactly this way ([Module bundles](bundles.md) — the std-CDN
-  section).
+- **generic owners deliver too** — `pouch`, `nmapset`, `json`,
+  `async_host` ride their entry + group source beside the binaries, so
+  a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the
+  consumer's link**: the ridden text lowers in the consumer's session,
+  the monomorphized bodies register under the declaring pkg's spec (one
+  row program-wide, identity by owner), and nothing persists (`.rutc`
+  caches stay pack-time). A bundle that predates the riding — no source
+  beside the binary — refuses a consumer-spelled shape loudly and says
+  so: re-pack it. A bundle-mounted json also names its pack-time dev
+  closure in its ledger, so the consumer's closure must contain those
+  names (`pouch`, `nmapset` beside `json` — the six-pin law).
 
 ## Semantics
 

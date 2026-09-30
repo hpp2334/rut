@@ -130,9 +130,14 @@ the pack). That determinism is also the honest limitation:
   original source can rebuild the same closure deterministically and
   regenerate an identical map. Treat `.rutsym` like a `.pdb`: distribute
   it only to parties who may see names and positions.
-- Extending a stripped bundle from source (a consumer binding a
-  compiled group's surface later) is a loud unification miss, never a
-  mislink — re-pack with the consumer in the closure instead.
+- **Stripping and the generic-source riding law refuse each other.**
+  A compiled pkg whose surface exports generics rides its source (so
+  consumer-spelled shapes compile at the link), and the ridden text
+  would recompile clean-named beside mangled binaries — the packer
+  refuses `--strip` on such a closure and says so. A fully
+  concrete-class closure (no generic exports anywhere) strips as
+  before, and a consumer binding a stripped compiled group's surface
+  later is still a loud unification miss, never a mislink.
 
 ## What is not here
 

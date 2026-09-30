@@ -65,6 +65,8 @@ source text by design; a partially translated book is a valid book.
 | embed loop | 嵌入循环 | |
 | compiled group | 编译组 | a bundle dep whose `.rutc` rides（对照 source group） |
 | source group | 源码组 | a splice-needed dep / host pkg riding its source file set |
+| riding (generic-source) | 承载（泛型源码承载） | the riding law → 承载法则；rides beside the binary → 在二进制旁承载；generic-source riding → 泛型源码承载；a generic-owning pkg → 拥有泛型的 pkg；distinction from rode-along（随行）: riding = a pkg's OWN source beside its compiled binary |
+| six-pin law | 六钉法则 | a bundle-mounted pkg's ledger names its pack-time dev closure — the consumer's closure must contain those names |
 | scope ledger | 作用域台账 | `rut.scopes` stays code；打包期作用域 → 打包期作用域 |
 | splice | 拼接 | splice-needed → 需要拼接；the splice law → 拼接法则 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |

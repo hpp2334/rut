@@ -151,12 +151,17 @@ CDN artifact that way. For the url-dep *walk* (pins, closure checks,
 the peer gate over archive groups) stay on the load/pack lanes —
 `mount_bundle_bytes` is the offer, not the walk.
 
-**What to take from a url** is the engine's generic law, read from the
-embedding side: a compiled bundle serves host surfaces and
-concrete-class libs; consumer-spelled generic shapes
-(`Vec<MyTodo>`, `launch_future<T>`) are the directory lane
-(`mount_dir`/path rows), which compiles them on demand
-([module bundles](bundles.md) — the std-CDN section).
+**What to take from a url** is the engine's instantiation law, read
+from the embedding side: a compiled bundle serves host surfaces,
+concrete-class libs, **and** — since the generic-source riding law —
+the generic owners: a request the pack-time ledger lacks lowers the
+ridden source in the consumer's session and compiles the monomorphized
+body under the declaring pkg's spec, at the link, nothing persisted
+(`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the
+std-CDN section). A legacy bundle without the riding refuses such a
+request loudly (re-pack it), and a bundle-mounted json names its
+pack-time dev closure in its ledger, so the consumer's closure must
+contain those names.
 
 ## Driver API (`rut-driver`)
 

@@ -7378,8 +7378,8 @@ msgstr ""
 msgid "**Mounting a bundle into an existing session** — the in-memory counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the compile owns presence) — is `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`: both root kinds mount (a v5 compiled root with its groups, the ledger namespaced into the session; a v6 decl root as the pkg's host rows), first-mount-wins, and the bundle root's package name comes back. Wasm hosts `include_bytes!` the committed artifact and mount through this — 05-todolist-web's mirror lane takes the `nmap_host` surface from the CDN artifact that way. For the url-dep _walk_ (pins, closure checks, the peer gate over archive groups) stay on the load/pack lanes — `mount_bundle_bytes` is the offer, not the walk."
 msgstr ""
 
-msgid "**What to take from a url** is the engine's generic law, read from the embedding side: a compiled bundle serves host surfaces and concrete-class libs; consumer-spelled generic shapes (`Vec<MyTodo>`, `launch_future<T>`) are the directory lane (`mount_dir`/path rows), which compiles them on demand ([module bundles](bundles.md) — the std-CDN section)."
-msgstr ""
+msgid "**What to take from a url** is the engine's instantiation law, read from the embedding side: a compiled bundle serves host surfaces, concrete-class libs, **and** — since the generic-source riding law — the generic owners: a request the pack-time ledger lacks lowers the ridden source in the consumer's session and compiles the monomorphized body under the declaring pkg's spec, at the link, nothing persisted (`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the std-CDN section). A legacy bundle without the riding refuses such a request loudly (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names."
+msgstr "**从一条 url 拿什么**是从嵌入一侧读到的引擎实例化法则：编译的包服务宿主表面、具体类库，**以及** —— 自泛型源码承载法则起 —— 泛型 owner：台账缺失的请求会在消费者的会话中降低被承载的源码，并以声明 pkg 的 spec 在链接处编译单态化代码体，不持久化（`Vec<MyTodo>`、`decodeJson<T>` —— [模块包](bundles.md) —— std-CDN 一节）。没有承载的旧式包会大声拒绝这类请求（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字。"
 
 msgid "Driver API (`rut-driver`)"
 msgstr "Driver API（`rut-driver`）"
@@ -10891,8 +10891,8 @@ msgstr "**字符串值是数据，不是名字**——二进制里的字符串�
 msgid "**The sidecar is the private half, not a secret.** Anyone holding the original source can rebuild the same closure deterministically and regenerate an identical map. Treat `.rutsym` like a `.pdb`: distribute it only to parties who may see names and positions."
 msgstr "**旁车是私有的一半，不是秘密。**任何持有原始源码的人都能确定性地重建同一闭包，再生成一份相同的映射。把 `.rutsym` 当作 `.pdb` 对待：只分发给被允许看到名字与位置的一方。"
 
-msgid "Extending a stripped bundle from source (a consumer binding a compiled group's surface later) is a loud unification miss, never a mislink — re-pack with the consumer in the closure instead."
-msgstr "从源码扩展一个已剥离的捆绑包（消费方日后绑定某编译组的表面）是一次响亮的合一失配，绝不是错误链接——请把消费方放进闭包重新打包。"
+msgid "**Stripping and the generic-source riding law refuse each other.** A compiled pkg whose surface exports generics rides its source (so consumer-spelled shapes compile at the link), and the ridden text would recompile clean-named beside mangled binaries — the packer refuses `--strip` on such a closure and says so. A fully concrete-class closure (no generic exports anywhere) strips as before, and a consumer binding a stripped compiled group's surface later is still a loud unification miss, never a mislink."
+msgstr "**剥离与泛型源码承载法则互相拒绝。** 表面导出泛型的编译 pkg 会承载其源码（使消费者拼写的形状在链接处编译），而被承载的文本会在被改名的二进制旁以干净名字重新编译 —— 打包器拒绝在这类闭包上使用 `--strip` 并说明缘由。完全具体类的闭包（任何地方都无泛型导出）照旧剥离，而稍后从源码扩展一个已剥离编译组表面的消费者仍是大声的统一失败，绝非错误链接。"
 
 msgid "`rut dump` on a `.rutc` with `--symbols`, and auto-keeping the shared surfaces of a mixed closure (so it could strip anyway), are natural follow-ups; neither ships today."
 msgstr "对 `.rutc` 的 `rut dump` 支持 `--symbols`，以及混合闭包共享表面的自动保留（让它本来就能剥离），都是自然的后续；今天都不随版本发布。"
@@ -11389,8 +11389,8 @@ msgstr "包含与拼接绝不逃出归档：没有外部。"
 msgid "The v5 layout — a compiled root"
 msgstr ""
 
-msgid "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\nrut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n<pkg>.rutc               the root's compiled binary — bodies + surface\n<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one\n<dep>/rut.toml           per dep group, mixed kinds:\n<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);\n                           generic exports ride compiled — the binary carries\n                           the closure's instantiations in its ledger\n<dep>/<dep>.d.rut          its surface text, when it declares one\n<leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host\n<leaf>/<leaf>.rut           pkg → a source group: the source file set\n<leaf>/<leaf>.rut …         (entry, libs, peer groups)\n```"
-msgstr "```text\nrut.toml                 原样字节；format = \"rutbundle\"、format_version = 5\nrut.scopes               打包期作用域台账（scope = \"spec\" 行）\n<pkg>.rutc               根的编译二进制——函数体 + 表面\n<pkg>.d.rut              根的表面文本（供人类与 LSP），若它有声明\n<dep>/rut.toml           每个依赖组，种类混合：\n<dep>/<dep>.rutc           可链接依赖 → 编译组（其 rut.toml 一并随行）；\n                           泛型导出以编译形式随行——二进制在台账里\n                           携带闭包的实例化\n<dep>/<dep>.d.rut          其表面文本，若它有声明\n<leaf>/rut.toml            需要拼接的依赖（`inline` 旗标）或宿主包 →\n<leaf>/<leaf>.rut           源码组：源码文件集（entry、libs、peer 组）\n<leaf>/<leaf>.rut …\n```"
+msgid "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\nrut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n<pkg>.rutc               the root's compiled binary — bodies + surface\n<pkg>.rut                the root's generic-bearing source, when its surface\n                           exports generics (the riding law, below)\n<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one\n<dep>/rut.toml           per dep group, mixed kinds:\n<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);\n                           generic exports ride compiled — the binary carries\n                           the closure's instantiations in its ledger\n<dep>/<dep>.rut            the group's generic-bearing source, when its surface\n<dep>/group-*.rut …        exports generics (the entry + the [peer-deps] group\n                           files, verbatim — the riding law, below)\n<dep>/<dep>.d.rut          its surface text, when it declares one\n<leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host\n<leaf>/<leaf>.rut           pkg → a source group: the source file set\n<leaf>/<leaf>.rut …         (entry, libs, peer groups)\n```"
+msgstr "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\nrut.scopes               打包期作用域台账（scope = \"spec\" 行）\n<pkg>.rutc               根的编译产物 —— 代码体 + 表面\n<pkg>.rut                根的承载泛型的源码，当其表面导出泛型时（承载法则，见下）\n<pkg>.d.rut              根的表面文本（给人与 LSP 用），当它声明了一个时\n<dep>/rut.toml           每个依赖组，混合类别：\n<dep>/<dep>.rutc           可链接依赖 → 编译组（其 rut.toml 一同承载）；泛型导出以编译形式跨越 —— 二进制在其台账中承载闭包的实例化\n<dep>/<dep>.rut            该组承载泛型的源码，当其表面导出泛型时\n<dep>/group-*.rut …        （入口 + [peer-deps] 组文件，逐字 —— 承载法则，见下）\n<dep>/<dep>.d.rut          其表面文本，当它声明了一个时\n<leaf>/rut.toml            需要拼接的依赖（`inline` 旗标）或宿主\n<leaf>/<leaf>.rut           pkg → 源码组：源码文件集\n<leaf>/<leaf>.rut …         （入口、libs、peer 组）\n```"
 
 msgid "The **`.rutc` binaries are the linking truth**: bodies plus the surface on the wire ([module binary and verification](module-binary.md)). A consumer binds a compiled group's exports from the binary alone — nothing is rebuilt from `.d.rut` text. The `.d.rut` files ride for humans and tooling; the loader never reads them."
 msgstr "**`.rutc` 二进制是链接的真相**：函数体加线上的表面（[模块二进制与验证](module-binary.md)）。使用方仅凭二进制就绑定编译组的导出——没有任何东西从 `.d.rut` 文本重建。`.d.rut` 文件为人类与工具随行；加载器从不读它们。"
@@ -11401,8 +11401,8 @@ msgstr "**作用域台账**记下闭包里每个被链接模块的打包期作�
 msgid "**Mixed groups, one classifier**: the same splice law that rules the graph (the `inline` flag — [modules and visibility](modules-and-visibility.md)) decides each package's kind. Refuse, never guess: the packer calls the graph's own classifier, there is no second implementation."
 msgstr "**混合的组，一个分类器**：统治模块图的同一条拼接法则（`inline` 旗标——[模块与可见性](modules-and-visibility.md)）裁定每个包的种类。拒绝，绝不猜测：打包器调用的就是图自己的分类器，没有第二份实现。"
 
-msgid "**Generics ride compiled**: instantiation is owned by the declaring package, and the pack walk seeds each generic dep with the instantiations its consumers spell — the binary's instantiation ledger names every `(owner, decl, arguments)` row, and a consumer session resolves its requests against it. A request the binary does not carry refuses (`re-pack with the consumer in the closure`), never mislinks."
-msgstr "**泛型以编译形式随行**：实例化归声明包所有，打包遍历会用消费方拼出的实例化为每个泛型依赖播种——二进制的实例化台账记下每一行 `(owner, decl, arguments)`，消费方会话据此解析自己的请求。二进制未携带的请求会被拒绝（`re-pack with the consumer in the closure`），绝不错链。"
+msgid "**Generics ride compiled — and their source rides beside them** (the generic-source riding law): instantiation is owned by the declaring package, and the pack walk seeds each generic dep with the instantiations its consumers spell — the binary's instantiation ledger names every `(owner, decl, arguments)` row. A compiled pkg whose surface exports an OPEN generic surface (generic fns, generic type exports, generic methods, generic-target impls) ALSO rides the source that serves consumer-spelled shapes: the entry lib, each `entry.libs` file, and each `[peer-deps]` group file, verbatim, beside the binary. The entry lib's presence is the loader's dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay source-free. At the consumer's link, a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body with owner = the pkg's spec — one row program-wide, indistinguishable from a pack-time one, nothing persisted. A bundle with no riding source refuses such a request loudly (`this bundle predates generic-source riding — re-pack it`), never mislinks. `--strip` refuses the combination: the ridden text would recompile clean-named beside mangled binaries."
+msgstr "**泛型以编译形式跨越 —— 且其源码在旁承载**（泛型源码承载法则）：实例化由声明包持有，打包遍历以其消费者拼写的实例化种子化每个泛型依赖 —— 二进制的实例化台账命名每一行 `(owner, decl, arguments)`。表面导出开放泛型表面（泛型 fn、泛型类型导出、泛型方法、泛型目标 impl）的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：入口 lib、每个 `entry.libs` 文件、每个 `[peer-deps]` 组文件，逐字，就在二进制旁。入口 lib 的存在是加载器的分发标记；非泛型 pkg（`http`、`ink`、`strbuild`）保持无源码。在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以 owner = 该 pkg 的 spec 编译单态化代码体 —— 全程序一行，与打包期产生的无从分辨，不持久化任何东西。没有承载源码的包会大声拒绝这类请求（`this bundle predates generic-source riding — re-pack it`），绝不错误链接。`--strip` 拒绝该组合：被承载的文本会在被改名的二进制旁以干净名字重新编译。"
 
 msgid "**The root must be linkable** — else `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`. A root that has nothing to compile is not this refusal: a `type = \"host\"` pkg packs as a v6 decl root, below."
 msgstr ""
@@ -11494,8 +11494,8 @@ msgstr "+ 每个包的 `[peer-deps]` `lib` 组文件"
 msgid "+ each package's `entry.libs` files"
 msgstr "+ 每个包的 `entry.libs` 文件"
 
-msgid "compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs"
-msgstr "编译：每个可链接包一份 `.rutc`（v17）+ `.d.rut`——泛型导出也在内，其实例化已播种进二进制——`inline` 依赖与宿主包则为混合源码组"
+msgid "compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries, and a generic-owning pkg's source riding beside its binary — mixed source groups for `inline` deps and host pkgs"
+msgstr "编译形式：每个可链接 pkg 一个 `.rutc`（v17）+ `.d.rut` —— 泛型导出在内，其实例化种子化进二进制，且拥有泛型的 pkg 的源码在其二进制旁承载 —— `inline` 依赖与宿主 pkg 用混合源码组"
 
 msgid "**the lib root's layout**"
 msgstr ""
@@ -11506,11 +11506,11 @@ msgstr ""
 msgid "**the host root's layout**"
 msgstr ""
 
-msgid "Each historical extension existed because the added files were _part of the package_: a bundle that dropped peer groups or multi-lib files would load base-only — semantically wrong. v5 replaced the source contract with the compiled one: source sharing is a directory (`rut run <dir>`), as it always was outside bundles."
-msgstr "每一步历史性扩展都因为新增的文件是_包的一部分_：丢掉对等组或多库文件的捆绑包会只挂载基座——语义上就是错的。v5 用编译契约取代了源码契约：源码共享是目录（`rut run <dir>`），一如捆绑包之外的历来情形。"
+msgid "Each historical extension existed because the added files were _part of the package_: a bundle that dropped peer groups or multi-lib files would load base-only — semantically wrong. v5 replaced the source contract with the compiled one — one exception, the riding law above: a generic-owning compiled pkg's source rides beside its binary so consumer-spelled shapes stay servable. Source sharing as the general contract stays a directory (`rut run <dir>`), as it always was outside bundles."
+msgstr "每一代历史扩展都因新增文件是*包的一部分*而存在：一个丢掉 peer 组或多 lib 文件的包会只装载基座 —— 语义错误。v5 用编译契约替换了源码契约 —— 一条例外，即上面的承载法则：拥有泛型的编译 pkg 的源码在其二进制旁承载，使消费者拼写的形状保持可服务。作为一般契约的源码共享仍是目录（`rut run <dir>`），一如包外世界的惯例。\n\nPeer 门控的包以两种方式在 v5 内发布，依其组别类法则：非泛型的编译声明者，其 peer 组在打包期编译进其二进制（行随二进制跨越；组文件不随行）；需要拼接的声明者以源码组发布，其组文件在入口旁承载 —— 加载器的 peer 门按存在性追加，与目录世界完全一致（[依赖类别](dependency-kinds.md)）。拥有泛型的编译声明者也承载其组文件（承载法则），按需重编译只拼接 peer 在消费者闭包中的那些行。"
 
-msgid "A compiled group that declares `[peer-deps]` `lib` files is refused at pack (and a hand-doctored archive at load): appending source into a compiled package is impossible. Peer-gated packages publish inside v5 the splice-needed way — as source groups, their group files riding beside the entry — and the loader's peer gate appends by presence exactly as in a directory world ([Dependency kinds](dependency-kinds.md))."
-msgstr "声明了 `[peer-deps]` `lib` 文件的编译组在打包时被拒绝（手工篡改的档案则在加载时）：把源码追加进编译包是不可能的。对等门控的包以需要拼接的方式在 v5 内发布——作为源码组，组文件随行于条目旁——而加载器的对等门禁按在场追加，与目录世界分毫不差（[依赖类型](dependency-kinds.md)）。"
+msgid "Peer-gated packages publish inside v5 two ways, per their group-kind law: a NON-generic compiled declarer's peer groups compile into its binary at pack time (the rows ride the binary; the group files do not travel), and a splice-needed declarer publishes as a source group, its group files riding beside the entry — the loader's peer gate appends by presence exactly as in a directory world ([Dependency kinds](dependency-kinds.md)). A generic-owning compiled declarer rides its group files too (the riding law), and the on-demand recompile splices exactly the rows whose peers are in the consumer's closure."
+msgstr "Peer 门控的包以两种方式在 v5 内发布，依其组别类法则：非泛型的编译声明者，其 peer 组在打包期编译进其二进制（行随二进制跨越；组文件不随行）；需要拼接的声明者以源码组发布，其组文件在入口旁承载 —— 加载器的 peer 门按存在性追加，与目录世界完全一致（[依赖类别](dependency-kinds.md)）。拥有泛型的编译声明者也承载其组文件（承载法则），按需重编译只拼接 peer 在消费者闭包中的那些行。"
 
 msgid "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the mounting session (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one session without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr ""
@@ -11602,11 +11602,11 @@ msgstr "编译组的台账行与其二进制自身的作用域一致"
 msgid "refuse — corrupt or doctored"
 msgstr "拒绝——损坏或被篡改"
 
-msgid "a compiled group declaring `[peer-deps]` `lib` files"
-msgstr "声明了 `[peer-deps]` `lib` 文件的编译组"
+msgid "a riding source entry that fails to read or decode (UTF-8)"
+msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
-msgid "refuse — appending into a compiled pkg is impossible"
-msgstr "拒绝——向编译包追加源码是不可能的"
+msgid "refuse — names the entry; a bad archive never reaches the session"
+msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 msgid "every declared dep satisfied by a group (v5)"
 msgstr ""
@@ -11629,8 +11629,8 @@ msgstr ""
 msgid "**Committed artifacts, immutable tags.** `scripts/pack-std.cjs` packs all 15 (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate: `--check` repacks and byte-compiles, no network); `--pins` rewrites the example manifests' url/sha256 rows; `--tag` prints the publish commands. Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-msgid "**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries exactly the generic instantiations its own pack closure spelled, and a consumer requesting a new shape refuses loudly (`re-pack with the consumer in the closure`). So the CDN lane serves **host surfaces** (v6 decl bundles — no generics) and **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows, and the lib's whole closure rides inside). The **generic owners** — `pouch`, `nmapset`, `json`, `async_host` — are the DIRECTORY lane for consumers: consumer-spelled shapes (`Vec<Todo>`, `Map<K,V>`, `launch_future<T>`) compile on demand from source. This is why the examples mix the two dep kinds per row, and why a compiled generic owner is not a consumer delivery however fresh its pin."
-msgstr ""
+msgid "**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (v6 decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). A bundle that predates the riding refuses a consumer-spelled shape loudly and says so (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
+msgstr "**一个编译的包能服务什么。** 实例化由 owner 锚定：编译的 owner 在其台账中承载其打包期闭包拼写的泛型实例化 —— 加上泛型源码承载法则，表面导出泛型的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。因此 CDN 通道交付**宿主表面**（v6 decl 包）、**具体类库**（`http`、`ink`、`strbuild` —— 方法在表面的固有行上跨越），**以及泛型 owner**（`pouch`、`nmapset`、`json`、`async_host` —— `Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。早于承载法则的包会大声拒绝消费者拼写的形状并说明缘由（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 msgid "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): first-mount-wins mounts one body, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. Pin sets stay minimal-top anyway — a closed bundle carries the rest."
 msgstr ""
@@ -11893,14 +11893,14 @@ msgstr ""
 msgid "The std tree ships as committed per-package bundles — `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`, pinned by sha256 (placeholders here by law: real pins live only in the examples, so docs never rot). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively; the artifacts are committed at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality repack — CI never touches the network)."
 msgstr ""
 
-msgid "**What a url row can deliver** is the engine's owner-anchored instantiation law, read from the CDN side: a compiled bundle carries exactly the generic instantiations its own pack closure spelled, so"
-msgstr ""
+msgid "**What a url row can deliver** is the engine's instantiation law, read from the CDN side: a compiled bundle carries the generic instantiations its own pack closure spelled **in its ledger**, and — since the generic-source riding law — a compiled pkg whose surface exports generics **also rides the source that serves consumer-spelled shapes**:"
+msgstr "**一条 url 行能交付什么**是从 CDN 一侧读到的引擎实例化法则：编译的包在其台账中承载其打包期闭包拼写的泛型实例化，而且 —— 自泛型源码承载法则起 —— 表面导出泛型的编译 pkg **还会承载服务消费者拼写形状的源码**：\n\n- **宿主表面与具体类库交付** —— `type = \"host\"` 包是一个声明表面（无泛型），具体类的库（`http`、`ink`、`strbuild`）在其表面的固有行上跨越，整个闭包在内部承载；\n- **泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 msgid "**host surfaces and concrete-class libs deliver** — a `type = \"host\"` bundle is a declaration surface (no generics), and a lib of concrete classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent rows with its whole closure riding inside;"
 msgstr ""
 
-msgid "**generic owners do not** — `pouch`, `nmapset`, `json`, `async_host` serve only the shapes their own pack spelled; a consumer's `Vec<Todo>` or `launch_future<T>` refuses loudly (`re-pack with the consumer in the closure`). Consumer-spelled generic shapes are the **directory lane**: keep those rows `path`, which compiles them on demand. The examples mix the kinds per row exactly this way ([Module bundles](bundles.md) — the std-CDN section)."
-msgstr ""
+msgid "**generic owners deliver too** — `pouch`, `nmapset`, `json`, `async_host` ride their entry + group source beside the binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden text lowers in the consumer's session, the monomorphized bodies register under the declaring pkg's spec (one row program-wide, identity by owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that predates the riding — no source beside the binary — refuses a consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json also names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
+msgstr "**泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 msgid "Semantics"
 msgstr "语义"
@@ -12315,3 +12315,4 @@ msgstr "HTTP 链路仅限原生：CLI 构建携带它，wasm 构建不携带。"
 
 msgid "`run` on a module directory is the deployment path for development; `pack` + `run <bundle>` is the shipping path — both run the identical contract ([loading and the embed loop](loading.md))."
 msgstr "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
+
