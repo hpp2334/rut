@@ -10,6 +10,26 @@ signature-equal implementation before the first instruction runs.
 There is no load-time execution: loading verifies and links; the host runs
 entry points explicitly.
 
+## Getting the crates
+
+The engine ships as **git dependencies** — the crates are not on
+crates.io. Name the repository once per crate, every crate on the
+**same** `rev` (cargo then resolves them to one checkout):
+
+```toml
+[dependencies]
+rut-driver = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-core   = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-parser = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-vm     = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+```
+
+The build needs the nightly this repo pins (`rut-vm-threaded` uses
+incomplete features) — your project's `rust-toolchain.toml` carries the
+pin. Add `rut-std` the same way when the program uses std packages; the
+full walk-through (hash lookup, nightly pin, a runnable smoke test) is
+[installation](../quick-start/installation.md).
+
 ## The embed loop
 
 ```rust

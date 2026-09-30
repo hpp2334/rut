@@ -45,7 +45,7 @@ pub fn main() {
 
 | If you want to… | Read |
 |---|---|
-| Install the toolchain and run a program | [Quick Start](quick-start/installation.md) |
+| Use rut in your Rust project (and the temporary-run CLI) | [Quick Start](quick-start/installation.md) |
 | Learn the language hands-on | the [Tutorial](tutorial/values-and-variables.md) |
 | Understand *why* the language is shaped this way | [Core Concepts](core-concepts/design-goals.md) |
 | Study complete programs | [Examples](examples/index.md) |
@@ -65,11 +65,16 @@ demo/       the wasm playground
 docs/       this book (built with mdbook)
 ```
 
-Build everything from source:
+Build the CLI binary from a checkout:
 
 ```sh
 cargo build --release -p rut-cli   # the `rut` binary: run / fmt / pack / dump
 ```
+
+That binary is the **temporary-run** lane — loose-file experiments,
+`fmt`, `dump`, `pack`. To *use* rut in your own project, depend on the
+engine crates as a git dependency — the crates are not on crates.io
+([Quick Start](quick-start/installation.md)).
 
 ## License
 

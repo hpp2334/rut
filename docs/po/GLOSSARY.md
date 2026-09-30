@@ -68,6 +68,8 @@ source text by design; a partially translated book is a valid book.
 | splice | 拼接 | splice-needed → 需要拼接；the splice law → 拼接法则 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |
 | linkable | 可链接 | the splice law's verdict — Linkable |
+| temporary-run lane | 临时运行车道 | the CLI's role — quick experiments (run/fmt/dump/pack)，不是交付路径；两条消费车道都叫车道 |
+| git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

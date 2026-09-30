@@ -5,6 +5,13 @@ The `rut` binary is the toolchain's command-line face. It is also a
 standard native bodies, and drives the async loop — the same contract an
 embedded host implements ([embedding and native modules](embedding.md)).
 
+It is the **temporary-run** lane: loose-file experiments, `fmt`,
+`dump`, `pack`. The intended consumption path is depending on the engine
+crates from your own project through a Cargo git dependency
+([installation](../quick-start/installation.md)) and embedding the VM
+([embedding and native modules](embedding.md)) — this page documents the
+binary itself.
+
 ```sh
 rut run <file.rut | dir | mod.rutbundle> [--fuel N]
 rut fmt <file.rut | dir> [--check]

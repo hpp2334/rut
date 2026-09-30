@@ -450,8 +450,8 @@ msgid "Read"
 msgstr "阅读"
 
 #: src/index.md:48
-msgid "Install the toolchain and run a program"
-msgstr "安装工具链并运行一个程序"
+msgid "Use rut in your Rust project (and the temporary-run CLI)"
+msgstr "在你的 Rust 项目里使用 rut（以及临时运行的 CLI）"
 
 #: src/index.md:48
 msgid "[Quick Start](quick-start/installation.md)"
@@ -501,12 +501,20 @@ msgid "The repo"
 msgstr "仓库"
 
 #: src/index.md:68
-msgid "Build everything from source:"
-msgstr "从源码构建一切："
+msgid "Build the CLI binary from a checkout:"
+msgstr "从检出构建 CLI 二进制："
 
 #: src/index.md:71
 msgid "# the `rut` binary: run / fmt / pack / dump\n"
 msgstr "# the `rut` binary: run / fmt / pack / dump\n"
+
+#: src/index.md:74
+msgid ""
+"That binary is the **temporary-run** lane — loose-file experiments, `fmt`, "
+"`dump`, `pack`. To _use_ rut in your own project, depend on the engine "
+"crates as a git dependency — the crates are not on crates.io ([Quick "
+"Start](quick-start/installation.md))."
+msgstr "这个二进制是**临时运行**车道——散文件实验、`fmt`、`dump`、`pack`。要在你自己的项目里_使用_ rut，请以 git 依赖的形式依赖引擎 crate——这些 crate 不在 crates.io 上（[快速开始](quick-start/installation.md)）。"
 
 #: src/index.md:74
 msgid "License"
@@ -517,12 +525,17 @@ msgid "MIT OR Apache-2.0."
 msgstr "MIT OR Apache-2.0."
 
 #: src/quick-start/installation.md:3
+msgid "rut reaches your project in two ways, ranked by intent:"
+msgstr "rut 以两种方式进入你的项目，按意图排序："
+
+#: src/quick-start/installation.md:5
 msgid ""
-"rut is a self-hosting-free, from-source toolchain: one Rust build gives you "
-"the `rut` binary (run / format / pack / dump) plus the language's in-tree "
-"packages, which the engine mounts automatically when you run a standalone "
-"file."
-msgstr "rut 是一套无需自举、从源码构建的工具链：一次 Rust 构建就给你 `rut` 二进制（run / format / pack / dump），外加这门语言随树内置的包——运行独立文件时，引擎会自动挂载它们。"
+"**Depend on the engine crates** from your own Rust project through a Cargo "
+"git dependency. This is the intended path — your `Cargo.toml` names this "
+"repository and a commit, and the engine (lexer, parser, compiler, typed "
+"bytecode, VM) builds as part of _your_ build, ready to "
+"[embed](../reference/embedding.md)."
+msgstr "**依赖引擎 crate**——通过 Cargo git 依赖，从你自己的 Rust 项目。这是预期的路径——你的 `Cargo.toml` 写明这个仓库和一个提交，引擎（词法分析器、语法分析器、编译器、类型化字节码、VM）就作为_你的_构建的一部分编译出来，随时可以[嵌入](../reference/embedding.md)。"
 
 #: src/quick-start/installation.md:8
 msgid "Prerequisites"
@@ -530,20 +543,37 @@ msgstr "前提条件"
 
 #: src/quick-start/installation.md:10
 msgid ""
-"**Rust (nightly)** — the repo pins an exact nightly in "
-"`rust-toolchain.toml`; `rustup` installs it on the first build. Any recent "
-"`rustup` works."
-msgstr "**Rust（nightly）**——仓库在 `rust-toolchain.toml` 里锁定了一个确切的 nightly；首次构建时 `rustup` 会安装它。任何较新的 `rustup` 都行。"
+"**Build the `rut` CLI** from a checkout of this repository — the "
+"**temporary-run** lane: loose-file experiments, `fmt`, `dump`, `pack`. The "
+"fastest way to poke at the language; not the way anyone ships."
+msgstr "**从这个仓库的检出构建 `rut` CLI**——**临时运行**车道：散文件实验、`fmt`、`dump`、`pack`。是把玩这门语言最快的路；不是用来交付软件的路。"
 
-#: src/quick-start/installation.md:13
-msgid "**git** — for the checkout."
-msgstr "**git**——用于检出仓库。"
+#: src/quick-start/installation.md:22
+msgid ""
+"**Rust (nightly)** — the repo pins an exact nightly in `rust-toolchain.toml` "
+"(because `rut-vm-threaded` uses incomplete features); `rustup` installs it "
+"on the first build. Any recent `rustup` works."
+msgstr "**Rust（nightly）**——仓库在 `rust-toolchain.toml` 里锁定了一个确切的 nightly（因为 `rut-vm-threaded` 使用了未完成的特性）；首次构建时 `rustup` 会安装它。任何较新的 `rustup` 都行。"
+
+#: src/quick-start/installation.md:26
+msgid "**git** — to fetch the dependency."
+msgstr "**git**——用于拉取依赖。"
+
+#: src/quick-start/installation.md:15
+msgid ""
+"Both lanes build the same engine, and the crates are not published to "
+"crates.io — the git dependency is the only consumption path."
+msgstr "两条车道构建的是同一个引擎，而且这些 crate 没有发布到 crates.io——git 依赖是唯一的获取途径。"
 
 #: src/quick-start/installation.md:15
 msgid ""
 "**Node.js 20+** — only if you want to build or drive the wasm playground "
 "(the rest of the book does not need it)."
 msgstr "**Node.js 20+**——仅当你要构建或驱动 wasm Playground 时才需要（本书的其余部分用不到它）。"
+
+#: src/quick-start/installation.md:18
+msgid "Use rut in your project"
+msgstr "在你的项目中使用 rut"
 
 #: src/quick-start/installation.md:18
 msgid "Build the toolchain"
@@ -560,6 +590,11 @@ msgid ""
 msgstr "这会在 `target/release/rut` 生成 `rut` 二进制。把它放进你的 `PATH`（或直接按路径调用——这里的页面都使用裸名称）："
 
 #: src/quick-start/installation.md:31
+msgid ""
+"No checkout of this repository is needed — your `Cargo.toml` does everything."
+msgstr "不需要检出这个仓库——你的 `Cargo.toml` 包办一切。"
+
+#: src/quick-start/installation.md:140
 msgid "\"$PWD/target/release:$PATH\""
 msgstr "\"$PWD/target/release:$PATH\""
 
@@ -572,6 +607,14 @@ msgstr ""
 "# usage: rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt "
 "<file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump "
 "<file.rut>\n"
+
+#: src/quick-start/installation.md:34
+msgid "Depend on the crates"
+msgstr "依赖这些 crate"
+
+#: src/quick-start/installation.md:36
+msgid "Name the engine crates as git dependencies:"
+msgstr "把引擎 crate 写成 git 依赖："
 
 #: src/quick-start/installation.md:36
 msgid ""
@@ -607,11 +650,38 @@ msgstr ""
 "EOF\n"
 "rut run hello.rut\n"
 
-#: src/quick-start/installation.md:60
+#: src/quick-start/installation.md:46
+msgid "Grab the current commit and drop it into every `rev`:"
+msgstr "取到当前提交，填进每一个 `rev`："
+
+#: src/quick-start/installation.md:52
 msgid ""
-"If that printed, your toolchain is complete. Continue to [your first rut "
-"program](first-program.md)."
-msgstr "如果打印出了这一行，你的工具链就齐了。继续阅读[你的第一个 rut 程序](first-program.md)。"
+"Pin **all** the rut crates to the **same** rev — cargo then resolves them to "
+"a single checkout, one consistent engine. These four are the minimal "
+"embedder set: the driver pipeline, binary decode, the parser's `Mode`, and "
+"verify + the VM itself."
+msgstr "把**所有** rut crate 锁定到**同一个** rev——cargo 随后会把它们解析到同一次检出，一个自洽的引擎。这四个是最小嵌入方集合：驱动器管线、二进制解码、语法分析器的 `Mode`，以及 verify 加 VM 本体。"
+
+#: src/quick-start/installation.md:57
+msgid "Pin the nightly"
+msgstr "锁定 nightly"
+
+#: src/quick-start/installation.md:59
+msgid ""
+"`rut-vm` depends on `rut-vm-threaded`, which uses the incomplete "
+"`#![feature(explicit_tail_calls)]` and `#![feature(rust_preserve_none_cc)]` "
+"— a stable toolchain refuses to build it. Give your project the same pin the "
+"repo uses (check this repo's `rust-toolchain.toml` for the current value):"
+msgstr "`rut-vm` 依赖 `rut-vm-threaded`，后者使用了未完成的 `#![feature(explicit_tail_calls)]` 和 `#![feature(rust_preserve_none_cc)]`——稳定版工具链拒绝编译它。给你的项目配上与仓库相同的锁定（当前值查看这个仓库的 `rust-toolchain.toml`）："
+
+#: src/quick-start/installation.md:169
+msgid ""
+"If that printed, the CLI is ready. Continue to [your first rut "
+"program](first-program.md) — and keep the lane's role in mind: the CLI is "
+"for **temporary runs** (loose files, `fmt`, `dump`, `pack`), not a shipping "
+"path. Real projects depend on the crates and embed the engine; [the rut "
+"CLI](../reference/cli.md) is the binary's reference."
+msgstr "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（散文件、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 #: src/quick-start/installation.md:63
 msgid "Optional: the wasm playground"
@@ -622,6 +692,16 @@ msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs one extra target:"
 msgstr "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要一个额外的 target："
+
+#: src/quick-start/installation.md:71
+msgid "Smoke-test the embed"
+msgstr "嵌入冒烟测试"
+
+#: src/quick-start/installation.md:73
+msgid ""
+"One rut module — compiled, verified, booted, called from Rust — the "
+"[embedding loop](../reference/embedding.md) at minimum size:"
+msgstr "一个 rut 模块——编译、校验、启动、从 Rust 调用——是[嵌入循环](../reference/embedding.md)的最小形态："
 
 #: src/quick-start/installation.md:73
 msgid ""
@@ -638,13 +718,42 @@ msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
-#: src/quick-start/installation.md:87
+#: src/quick-start/installation.md:200
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr "# live-reload preview at http://localhost:3000\n"
 
-#: src/quick-start/installation.md:88
+#: src/quick-start/installation.md:201
 msgid "# static site in docs/book/\n"
 msgstr "# static site in docs/book/\n"
+
+#: src/quick-start/installation.md:115
+msgid ""
+"`entry fn` is the host-callable surface — what `vm.call` can name. `cargo "
+"run` prints `answer = 42`: a rut value crossed into Rust unchanged, no std "
+"bindings involved."
+msgstr "`entry fn` 是宿主可调用的表面——`vm.call` 能点名的导出。`cargo run` 打印 `answer = 42`：一个 rut 值原封不动地穿到了 Rust，不涉及任何 std 绑定。"
+
+#: src/quick-start/installation.md:119
+msgid ""
+"When the program uses the std packages (`ink`, `pouch`, `json`, …), add "
+"`rut-std` as a dependency the same way and bind its `pkg()` builders — the "
+"[embedding and native modules](../reference/embedding.md) page is the full "
+"contract."
+msgstr "当程序用到 std 包（`ink`、`pouch`、`json` 等）时，以同样的方式加上 `rut-std` 依赖并绑定它的 `pkg()` 构建器——[嵌入与原生模块](../reference/embedding.md)一页是完整的契约。"
+
+#: src/quick-start/installation.md:124
+msgid "The rut CLI — temporary runs"
+msgstr "rut CLI——临时运行"
+
+#: src/quick-start/installation.md:126
+msgid ""
+"For loose-file experiments the repo builds a standalone binary. Clone and "
+"build it:"
+msgstr "散文件实验用仓库构建的独立二进制。克隆并构建它："
+
+#: src/quick-start/installation.md:151
+msgid "Try it:"
+msgstr "试一下："
 
 #: src/quick-start/first-program.md:3
 msgid ""
@@ -656,6 +765,15 @@ msgstr "rut 表面感觉像 TypeScript，引擎盖之下是 Rust。本页带着�
 #: src/quick-start/first-program.md:8
 msgid "Write and run"
 msgstr "编写并运行"
+
+#: src/quick-start/first-program.md:10
+msgid ""
+"This chapter drives everything through the temporary-run `rut` CLI — the "
+"fastest lane for learning the language ([installation](installation.md)). A "
+"real project embeds the engine instead and calls it from Rust ([embedding "
+"and native modules](../reference/embedding.md)); the language, the types, "
+"and the workflow below are the same either way."
+msgstr "本章的一切都通过临时运行的 `rut` CLI 驱动——这是学这门语言最快的车道（[安装](installation.md)）。真实的项目则会嵌入引擎并从 Rust 调用它（[嵌入与原生模块](../reference/embedding.md)）；无论哪种方式，语言、类型和下面的工作流都是一样的。"
 
 #: src/quick-start/first-program.md:10
 msgid ""
@@ -19312,8 +19430,19 @@ msgid ""
 msgstr "没有加载期执行：加载只做校验和链接；入口点由宿主显式运行。"
 
 #: src/reference/embedding.md:13
+msgid "Getting the crates"
+msgstr "获取 crate"
+
+#: src/reference/embedding.md:13
 msgid "The embed loop"
 msgstr "嵌入循环"
+
+#: src/reference/embedding.md:15
+msgid ""
+"The engine ships as **git dependencies** — the crates are not on crates.io. "
+"Name the repository once per crate, every crate on the **same** `rev` (cargo "
+"then resolves them to one checkout):"
+msgstr "引擎以 **git 依赖**的形式分发——这些 crate 不在 crates.io 上。每个 crate 都写一遍这个仓库，且都落在**同一个** `rev` 上（cargo 随后把它们解析到同一次检出）："
 
 #: src/reference/embedding.md:17
 msgid "// 1. Mount the packages the program uses. core + calc are the base.\n"
@@ -19340,19 +19469,21 @@ msgid "// 2. Compile the program against the mounted surfaces.\n"
 msgstr "// 2. Compile the program against the mounted surfaces.\n"
 
 #: src/reference/embedding.md:27
+msgid ""
+"The build needs the nightly this repo pins (`rut-vm-threaded` uses "
+"incomplete features) — your project's `rust-toolchain.toml` carries the pin. "
+"Add `rut-std` the same way when the program uses std packages; the full "
+"walk-through (hash lookup, nightly pin, a runnable smoke test) is "
+"[installation](../quick-start/installation.md)."
+msgstr "构建需要这个仓库锁定的 nightly（`rut-vm-threaded` 使用了未完成的特性）——锁写在你的项目的 `rust-toolchain.toml` 里。程序用到 std 包时，以同样的方式加上 `rut-std`；完整的走一遍（哈希查询、nightly 锁定、可运行的冒烟测试）见[安装](../quick-start/installation.md)。"
+
+#: src/reference/embedding.md:27
 msgid "\"app\""
 msgstr "\"app\""
 
 #: src/reference/embedding.md:28
 msgid "/* render and exit */"
 msgstr "/* render and exit */"
-
-#: src/reference/embedding.md:31
-msgid "// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —\\n// "
-"the registry is a pre-VM table and the ctx is the declared side.\\n"
-msgstr "// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —
-//  "
-"the registry is a pre-VM table and the ctx is the declared side."
 
 
 #: src/reference/embedding.md:37
@@ -27510,6 +27641,16 @@ msgid ""
 "native bodies, and drives the async loop — the same contract an embedded "
 "host implements ([embedding and native modules](embedding.md))."
 msgstr "`rut` 二进制是工具链的命令行门面。它同时也是一个**完整宿主**：运行程序时会挂载基础包、绑定标准原生函数体，并驱动异步循环——与嵌入式宿主实现的是同一份契约（[嵌入与原生模块](embedding.md)）。"
+
+#: src/reference/cli.md:8
+msgid ""
+"It is the **temporary-run** lane: loose-file experiments, `fmt`, `dump`, "
+"`pack`. The intended consumption path is depending on the engine crates from "
+"your own project through a Cargo git dependency "
+"([installation](../quick-start/installation.md)) and embedding the VM "
+"([embedding and native modules](embedding.md)) — this page documents the "
+"binary itself."
+msgstr "它是**临时运行**车道：散文件实验、`fmt`、`dump`、`pack`。预期的使用方式是通过 Cargo git 依赖，从你自己的项目依赖引擎 crate（[安装](../quick-start/installation.md)）并嵌入 VM（[嵌入与原生模块](embedding.md)）——本页只记录这个二进制本身。"
 
 #: src/reference/cli.md:15
 msgid "Running `rut` with no subcommand prints the usage line to stderr."

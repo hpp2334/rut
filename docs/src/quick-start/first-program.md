@@ -7,6 +7,12 @@ the workflow.
 
 ## Write and run
 
+This chapter drives everything through the temporary-run `rut` CLI —
+the fastest lane for learning the language ([installation](installation.md)).
+A real project embeds the engine instead and calls it from Rust
+([embedding and native modules](../reference/embedding.md)); the
+language, the types, and the workflow below are the same either way.
+
 ```rut
 use ink::{ Logger };
 
