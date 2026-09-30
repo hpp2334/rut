@@ -1,4 +1,4 @@
-// mandelbrot.js — must match workloads/mandelbrot.rut.
+// mandelbrot.js — the JS twin of mandelbrot/main.rut.
 function mandelbrot(x0, y0, x1, y1, w, h, maxIter) {
   let checksum = 0;
   for (let y = 0; y < h; y++) {

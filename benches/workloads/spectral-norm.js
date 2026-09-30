@@ -1,4 +1,4 @@
-// spectral-norm.js — must match workloads/spectral-norm.rut.
+// spectral-norm.js — the JS twin of spectral-norm/main.rut.
 function fsqrt(x) {
   if (x <= 0) return 0;
   let r = x;

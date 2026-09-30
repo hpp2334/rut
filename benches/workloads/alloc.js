@@ -1,4 +1,4 @@
-// alloc.js — must match alloc.rut.
+// alloc.js — the JS twin of alloc/main.rut.
 let s = 0;
 for (let i = 0; i < 2000000; i++) {
   const p = { x: i, y: (i + 1) | 0 };

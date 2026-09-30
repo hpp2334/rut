@@ -186,7 +186,14 @@ fn main() {
 
     for _ in 0..args.iters {
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+        // the logger's bodies (the host ink pkg) — mounted only when the
+        // workload's dep graph declares `ink` (a dir workload that logs
+        // must); the strict `verify_against` below trips on an install
+        // whose surface no mounted package declares (the `empty` dir
+        // mounts nothing)
+        if ctx.is_mounted("ink_host") {
+            hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+        }
         hosts.install_host_pkg(&ctx, rut_std::math::pkg());
         // the nmap experiment's native key table (the mapset-host plan) —
         // installed only when the program's dep graph declares `nmap_host::`

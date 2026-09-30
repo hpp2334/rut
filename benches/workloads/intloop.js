@@ -1,4 +1,4 @@
-// intloop.js — must match intloop.rut.
+// intloop.js — the JS twin of intloop/main.rut.
 let s = 0;
 for (let i = 0; i < 5000000; i++) {
   s = (s + Math.imul(i, 3) - 1) | 0;

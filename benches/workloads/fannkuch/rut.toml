@@ -1,0 +1,10 @@
+# fannkuch/ — fannkuch-redux: pancake flips over all n! permutations
+# (n = 7), checksum folded with max-flips. A module dir because it
+# mounts `pouch`; `ink` is declared for the logger. The JS twin is
+# ../fannkuch.js.
+name = "fannkuch"
+entry.lib = "./main.rut"
+
+[deps]
+pouch = { path = "../../../rut/pouch" }
+ink = { path = "../../../rut/ink" }

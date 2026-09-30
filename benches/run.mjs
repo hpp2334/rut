@@ -40,7 +40,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { arch, cpus, platform, release, tmpdir, totalmem } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -155,10 +155,7 @@ function usage() {
 function discoverWorkloads() {
   const names = [];
   for (const f of readdirSync(WORKLOADS_DIR).sort()) {
-    if (f.endsWith(".rut")) {
-      const name = basename(f, ".rut");
-      if (!names.includes(name)) names.push(name);
-    } else if (existsSync(join(WORKLOADS_DIR, f, "rut.toml"))) {
+    if (existsSync(join(WORKLOADS_DIR, f, "rut.toml"))) {
       // dir-shaped workload: one module dir (rut.toml + main.rut) per
       // name — the rut side runs as `rut run <dir>` (the deps graph
       // resolves its packages, e.g. `nmapset` pulling `nmap`)
@@ -381,7 +378,7 @@ function pad(s, w, right = false) {
 /// exactly the cost that end-to-end wall time otherwise folds into every
 /// workload. `net = wall − startup` is reported alongside the raw wall.
 function measureBaselines(runtimes, opt) {
-  const rutFile = join(WORKLOADS_DIR, "empty.rut");
+  const rutFile = join(WORKLOADS_DIR, "empty");
   const jsFile = join(WORKLOADS_DIR, "empty.js");
   const out = {};
   for (const spec of runtimes) {
@@ -507,9 +504,9 @@ if (existsSync(EXPECTED_FILE)) {
 const baselines = measureBaselines(runtimes, opt);
 
 for (const name of workloadNames) {
-  const moduleDir = join(WORKLOADS_DIR, name);
-  const isModuleDir = existsSync(join(moduleDir, "rut.toml"));
-  const rutFile = isModuleDir ? moduleDir : join(WORKLOADS_DIR, `${name}.rut`);
+  // every workload is a module dir (rut.toml + main.rut) — the rut side
+  // runs as `rut run <dir>`, the JS side its ../<name>.js twin
+  const rutFile = join(WORKLOADS_DIR, name);
   const jsFile = join(WORKLOADS_DIR, `${name}.js`);
   const entry = { workload: name, runtimes: [], checksums: {} };
   const checked = [];

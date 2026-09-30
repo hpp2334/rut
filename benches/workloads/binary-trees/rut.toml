@@ -1,0 +1,9 @@
+# binary-trees/ — allocation churn: a depth-14 tree of recursive nodes
+# naming themselves through nullable fields (`?Node`), built bottom-up
+# and dropped whole at scope exit. A module dir like the rest of the
+# workloads; the JS twin is ../binary-trees.js.
+name = "binary_trees"
+entry.lib = "./main.rut"
+
+[deps]
+ink = { path = "../../../rut/ink" }

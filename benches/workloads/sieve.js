@@ -1,4 +1,4 @@
-// sieve.js — must match workloads/sieve.rut.
+// sieve.js — the JS twin of sieve/main.rut.
 const LIMIT = 500000;
 
 function sieve(limit) {

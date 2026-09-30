@@ -1,4 +1,4 @@
-// mathhost.js — must match mathhost.rut.
+// mathhost.js — the JS twin of mathhost/main.rut.
 let acc = 0.0;
 let x = 1.5;
 let y = 0.25;

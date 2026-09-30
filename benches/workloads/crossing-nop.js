@@ -1,4 +1,4 @@
-// crossing-nop.js — must match crossing-nop.rut: the same four loops
+// crossing-nop.js — the JS twin of crossing-nop/main.rut: the same four loops
 // (host nop / inline twin / 4-param pair) over plain JS fn calls. JS
 // has no host boundary, so both loops of each pair measure the same
 // plain-call work — the row places rut's crossing against the field's

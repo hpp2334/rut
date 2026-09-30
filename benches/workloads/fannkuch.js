@@ -1,4 +1,4 @@
-// fannkuch.js — must match workloads/fannkuch.rut.
+// fannkuch.js — the JS twin of fannkuch/main.rut.
 const N = 7;
 
 function fannkuch(n) {

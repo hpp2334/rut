@@ -1,4 +1,4 @@
-// nbody.js — must match workloads/nbody.rut (same Newton sqrt).
+// nbody.js — the JS twin of nbody/main.rut (same Newton sqrt).
 function fsqrt(x) {
   if (x <= 0) return 0;
   let r = x;

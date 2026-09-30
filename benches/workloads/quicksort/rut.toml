@@ -1,0 +1,10 @@
+# quicksort/ — deterministic LCG input, in-place Lomuto quicksort, rolled
+# checksum, n = 100_000. A module dir because it mounts `pouch` (`calc`
+# is ambient — the harness mounts std); `ink` is declared for the
+# logger. The JS twin is ../quicksort.js.
+name = "quicksort"
+entry.lib = "./main.rut"
+
+[deps]
+pouch = { path = "../../../rut/pouch" }
+ink = { path = "../../../rut/ink" }

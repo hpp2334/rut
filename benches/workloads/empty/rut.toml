@@ -1,0 +1,5 @@
+# empty/ — the startup floor: parse/compile/run of a trivial program.
+# Every runtime's baseline row folds into this one, so it mounts
+# nothing and needs no deps.
+name = "empty"
+entry.lib = "./main.rut"

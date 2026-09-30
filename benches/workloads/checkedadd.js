@@ -1,4 +1,4 @@
-// checkedadd.js — must match checkedadd.rut. The value lane is
+// checkedadd.js — the JS twin of checkedadd/main.rut. The value lane is
 // ±2^63-scale (b sits at i64::MAX - 1000), so the accumulation runs in
 // BigInt: exact i64 wrapping via BigInt.asIntN, identical bits to rut's.
 const B = 9223372036854774807n; // i64::MAX - 1000

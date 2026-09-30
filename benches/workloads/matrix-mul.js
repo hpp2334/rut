@@ -1,4 +1,4 @@
-// matrix-mul.js — must match workloads/matrix-mul.rut.
+// matrix-mul.js — the JS twin of matrix-mul/main.rut.
 const N = 64;
 
 const a = new Float64Array(N * N);

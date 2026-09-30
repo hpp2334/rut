@@ -1,4 +1,4 @@
-// binary-trees.js — must match workloads/binary-trees.rut.
+// binary-trees.js — the JS twin of binary-trees/main.rut.
 function make(depth) {
   if (depth <= 0) return { l: null, r: null };
   return { l: make(depth - 1), r: make(depth - 1) };

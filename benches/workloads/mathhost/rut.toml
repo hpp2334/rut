@@ -1,0 +1,9 @@
+# mathhost/ — calc's host-fn helpers (Math.abs/min/max/signum) in a hot
+# loop: every call crosses the FFI — the host-fn hot-path canary.
+# `calc` is ambient (the harness mounts std), so only `ink` is declared
+# (for the logger). The JS twin is ../mathhost.js.
+name = "mathhost"
+entry.lib = "./main.rut"
+
+[deps]
+ink = { path = "../../../rut/ink" }

@@ -1,0 +1,9 @@
+# u64loop/ — the u64 arithmetic gate: 64-bit wrapping mul/add and a
+# shift-xor mix in a hot loop, the widest-width math the VM ships
+# (intloop is the i32 sibling). A module dir like the rest of the
+# workloads; no JS twin — the row runs rut-only.
+name = "u64loop"
+entry.lib = "./main.rut"
+
+[deps]
+ink = { path = "../../../rut/ink" }

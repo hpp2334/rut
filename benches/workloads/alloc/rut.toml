@@ -1,0 +1,7 @@
+# alloc/ — record allocation/drop churn (RC heap): 2_000_000 records.
+# A module dir like the rest of the workloads; the JS twin is ../alloc.js.
+name = "alloc"
+entry.lib = "./main.rut"
+
+[deps]
+ink = { path = "../../../rut/ink" }

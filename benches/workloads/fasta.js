@@ -1,4 +1,4 @@
-// fasta.js — must match workloads/fasta.rut.
+// fasta.js — the JS twin of fasta/main.rut.
 function fasta(n) {
   const parts = [];
   const letters = "ACGT";
