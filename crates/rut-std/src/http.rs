@@ -744,6 +744,10 @@ entry fn boot_stream(url: str) -> nil {
         let sink2 = sink.clone();
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
+        // the http face's responses build through the strbuild pkg's
+        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // the bodies bind alongside the async set
+        crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, fixture);
         hosts.verify_against(&session.expected_host_fns()); // the decl ↔ the bodies
         let vm = rut_vm::interp::Vm::new(
@@ -911,6 +915,10 @@ entry fn boot(url: str) -> nil {
         let sink2 = sink.clone();
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
+        // the http face's responses build through the strbuild pkg's
+        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // the bodies bind alongside the async set
+        crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
             Ok(FixtureReply::failing(200, vec![b"xy".to_vec(), b"zw".to_vec()], 1, "eof in chunk"))
         });
@@ -1009,6 +1017,10 @@ entry fn boot(url: str) -> nil {
         let sink2 = sink.clone();
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
+        // the http face's responses build through the strbuild pkg's
+        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // the bodies bind alongside the async set
+        crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
             Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
         });
@@ -1094,6 +1106,10 @@ entry fn boot() -> nil {
         let sink2 = sink.clone();
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
+        // the http face's responses build through the strbuild pkg's
+        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // the bodies bind alongside the async set
+        crate::strbuild::install_std_strbuild(&mut hosts);
         let seen = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let seen2 = seen.clone();
         let fx = install_std_http_with(&mut hosts, move |method, url, headers, body| {
@@ -1219,6 +1235,10 @@ entry fn boot_stream(url: str) -> nil {
         let sink2 = sink.clone();
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
+        // the http face's responses build through the strbuild pkg's
+        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // the bodies bind alongside the async set
+        crate::strbuild::install_std_strbuild(&mut hosts);
         install_std_http(&mut hosts); // the reqwest lane
         hosts.verify_against(&session.expected_host_fns());
         let limits = rut_vm::interp::Limits {

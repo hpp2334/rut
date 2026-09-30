@@ -553,8 +553,10 @@ fn version_gate_rejects_stale_artifacts() {
     // `(owner pkg, decl, arguments)`), so link unifies one
     // instantiation program-wide and consumers resolve requests
     // against a packaged binary's ledger; v18 adds the exported
-    // generic fns' placeholder signatures
-    assert_eq!(VERSION, 18, "the exported-fn-generics section owns this VERSION bump");
+    // generic fns' placeholder signatures; v19 withdraws the builder's
+    // engine surface (kind tag 15, native-type tag 2, the five
+    // `Nat::StrBuf*` rows — every later nat's tag shifts down)
+    assert_eq!(VERSION, 19, "the builder's engine-surface withdrawal owns this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

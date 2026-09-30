@@ -1,10 +1,10 @@
-//! The general scan/classify + builder surface (json-perf batch phase
-//! 2): the `str` members `code_at`/`scan`/`starts_with` and the `StrBuf`
-//! builtin class. These are the tokenizer primitives ANY parser wants —
-//! the tests pin their semantics over ASCII and non-ASCII text, the
-//! packed `(stop << 8) | class` scan result, the `set[min(cp, len-1)]`
-//! table rule, the builder's byte-exact content across many appends,
-//! pre-sizing, and the class aliasing law (assignment shares the cell).
+//! The general scan/classify surface (json-perf batch phase 2): the
+//! `str` members `code_at`/`scan`/`starts_with`. These are the
+//! tokenizer primitives ANY parser wants — the tests pin their
+//! semantics over ASCII and non-ASCII text, the packed
+//! `(stop << 8) | class` scan result, and the `set[min(cp, len-1)]`
+//! table rule. (The builder half of the old phase's surface left core
+//! with the host strbuild pkg — `strbuild_pkg.rs` pins it now.)
 
 use rut_core::binary::Surface;
 use rut_parser::Mode;
@@ -171,84 +171,10 @@ fn starts_with_tests_a_prefix_at_a_codepoint_offset() {
 }
 
 #[test]
-fn builder_accumulates_bytes_and_codepoints_and_finishes_once() {
-    assert_ok(
-        "pub fn main() -> i32 {
-    let b = StrBuf(16);
-    b.push(\"ab\");
-    b.push_code(0x1F600); // an astral codepoint: 4 octets, 1 char
-    b.push(\"cd\");
-    b.push_code(0x7F);
-    if (b.len() != 6) { return 1; }
-    let s = b.finish();
-    if (s != \"ab\\u{1F600}cd\\u{7f}\") { return 2; }
-    if (s.len() != 6) { return 3; }
-    // the builder keeps its buffer: finish twice answers the same text
-    let s2 = b.finish();
-    if (s2 != s) { return 4; }
-    return 0;
-}",
-    );
-}
-
-#[test]
-fn builder_push_code_replaces_invalid_scalars_with_fffd() {
-    assert_ok(
-        "pub fn main() -> i32 {
-    let b = StrBuf(0);
-    b.push_code(0xD800); // a surrogate — never representable in a rut str
-    if (b.len() != 1) { return 1; }
-    let s = b.finish();
-    if (s.code() != 0xFFFD) { return 2; }
-    return 0;
-}",
-    );
-}
-
-#[test]
-fn builder_grows_amortized_over_many_appends_and_stays_exact() {
-    // 40k appends building a 200k-codepoint document: byte-exact against
-    // a reference and the tracked length — the amortized growth, not an
-    // O(n^2) prefix copy
-    assert_ok(
-        "pub fn main() -> i32 {
-    let b = StrBuf(0);
-    let mut i: i32 = 0;
-    while (i < 40000) {
-        b.push(\"abc\");
-        b.push_code(0x61 + (i % 26) as u32);
-        i += 1;
-    }
-    if (b.len() != 160000) { return 1; }
-    let s = b.finish();
-    if (s.len() != 160000) { return 2; }
-    if (!s.starts_with(0, \"abca\")) { return 3; }
-    if (s.code_at(s.len() - 1) != 0x61 + ((39999 % 26) as u32)) { return 4; }
-    return 0;
-}",
-    );
-}
-
-#[test]
-fn builder_shares_its_cell_like_every_class() {
-    // RFC 0044's aliasing law: assignment shares the cell, so appends
-    // through one name are visible through the other
-    assert_ok(
-        "pub fn main() -> i32 {
-    let a = StrBuf(0);
-    let c = a;
-    c.push(\"x\");
-    if (a.len() != 1) { return 1; }
-    if (a.finish() != \"x\") { return 2; }
-    return 0;
-}",
-    );
-}
-
-#[test]
-fn scan_and_builder_cross_check_round_trip() {
-    // scan finds where the digit run ends, the builder reassembles the
-    // pieces — the two halves of the phase's surface in one pass
+fn scan_cross_check_reassembles_through_the_fstring_accumulator() {
+    // scan finds where the digit run ends, the engine-optimized
+    // accumulator (`out = f"{out}{piece}"` — the in-place concat fast
+    // path) reassembles the pieces
     assert_ok(
         "pub fn main() -> i32 {
     let mut dig: [u8] = [1; 257];
@@ -258,11 +184,11 @@ fn scan_and_builder_cross_check_round_trip() {
     let r = s.scan(0, dig);
     let stop = (r >> 8) as i32;
     if (stop != 5 || (r & 255) != 1) { return 1; }
-    let b = StrBuf(0);
-    b.push(s.slice(stop, s.len()));
-    b.push(\"-\");
-    b.push(s.slice(0, stop));
-    if (b.finish() != \"abc-12345\") { return 2; }
+    let mut out = \"\";
+    out = f\"{out}{s.slice(stop, s.len())}\";
+    out = f\"{out}-\";
+    out = f\"{out}{s.slice(0, stop)}\";
+    if (out != \"abc-12345\") { return 2; }
     return 0;
 }",
     );

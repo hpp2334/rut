@@ -121,7 +121,6 @@ compiled-in table:
 | `BytesClone` | `bytes.clone()` — the one copy escape hatch |
 | `CaptureTrace`, `TraceLen/Name/Line/Col/Render` | the stack-trace surface ([Diagnostics](diagnostics.md)) |
 | `StrScan`, `StrStartsWith` | fused host-side scan/classify and prefix test |
-| `StrBufNew/Push/PushCode/Len/Finish` | the string builder's engine rows |
 | `StrFromCode` | `str.from_code(n)` — one codepoint to `str` |
 
 Everything else rut spells with a name is ordinary rut code (`Vec`'s

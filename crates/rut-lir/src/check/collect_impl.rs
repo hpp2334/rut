@@ -211,12 +211,6 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`StackTrace` takes no impl blocks — its members are engine builtins (`len`/`name(i)`/`line(i)`/`col(i)`/`render`)");
                     None
                 }
-                // the builder likewise: closed engine contract
-                // (json-perf phase 2)
-                (rut_core::binary::NativeTy::StrBuf, _) => {
-                    self.err(sp, "`StrBuf` takes no impl blocks — its members are engine builtins (`push(s)`/`push_code(c)`/`len()`/`finish()`)");
-                    None
-                }
                 // the weak box likewise: closed engine contract
                 // (RFC 0017 v1) — its one member is the upgrade native
                 (rut_core::binary::NativeTy::Weak, _) => {

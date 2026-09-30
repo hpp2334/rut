@@ -8,18 +8,19 @@ use strbuild::{ StringBuilder };
 // The pins:
 //   - append/len/build round trips (ASCII + astral + empty)
 //   - the codepoint rule: append_code counts astral as ONE codepoint;
-//     an invalid scalar (surrogate) mints U+FFFD at the nat — the
-//     str.from_code rule, decided BELOW the pkg
+//     an invalid scalar (surrogate) mints U+FFFD at the host fn — the
+//     str.from_code rule, decided BELOW the pkg (in rut-std)
 //   - the growth law: geometric growth is invisible to content —
 //     2^17 appends over a tiny hint cross ~16 class-rounded grows and
 //     answer byte-exact text
-//   - share/copy (RFC 0044): an alias appends through the ONE instance
-//     cell (visible through the original, through a param too); build
+//   - share/copy: an alias appends through the ONE instance cell
+//     (visible through the original, through a param too); build
 //     twice answers the same text; the built str is immune to later
 //     appends
 //   - with_cap: honored as the mint allocation, ADVISORY as behavior —
 //     every cap (0, small, huge) answers identical content and len;
-//     the negative cap is the nat's `Invalid` trap (pinned Rust-side)
+//     the negative cap is the host fn's `Invalid` trap (pinned
+//     Rust-side)
 
 fn check(got: str, want: str) -> str {
     if (got == want) { return "OK"; }
@@ -64,7 +65,7 @@ entry fn append_code_law() -> str {
 }
 
 entry fn append_code_surrogate_mints_fffd() -> str {
-    // invalid scalars mint U+FFFD — the nat's rule, not the pkg's
+    // invalid scalars mint U+FFFD — the host fn's rule, not the pkg's
     let mut c = StringBuilder.with_cap(4);
     c.append_code(0xD800);
     if (c.len() != 1) { return "BAD:len"; }
@@ -118,6 +119,19 @@ entry fn param_shares_the_cell() -> str {
     return check(b.build(), "a(sunk)");
 }
 
+entry fn finish_under_alias() -> str {
+    // finishing THROUGH an alias answers the shared buffer; the built
+    // str is immune to later appends through either name
+    let mut b = StringBuilder.new();
+    b.append("x");
+    let alias = b;                      // shares the ONE instance cell
+    let s = alias.build();              // the materialization, via the alias
+    if (s != "x") { return "BAD:alias-build"; }
+    b.append("y");
+    if (s != "x") { return "BAD:immune"; }
+    return check(alias.build(), "xy");  // the builder keeps its buffer
+}
+
 // ---- with_cap: honored as the mint, advisory as behavior ----
 
 entry fn cap_hint_is_advisory() -> str {
@@ -138,8 +152,8 @@ entry fn cap_hint_is_advisory() -> str {
     return "OK";
 }
 
-// the negative hint: the nat's `Invalid` trap, unchanged by the face
-// (asserted Rust-side — a trap cannot ride a str answer)
+// the negative hint: the host fn's `Invalid` trap, unchanged by the
+// face (asserted Rust-side — a trap cannot ride a str answer)
 entry fn neg_cap() -> nil {
     let _ = StringBuilder.with_cap(-1);
 }

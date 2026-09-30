@@ -177,10 +177,10 @@ fn short_stays_flat() {
 
 #[test]
 fn decl_mode_formats_bodiless_methods() {
-    let src = "prelude builtin class StrBuf {\nfn push(self, b: bytes);\nfn len(self) -> i32;\n}\n";
+    let src = "prelude builtin class Gauge {\nfn tick(self, n: i32);\nfn len(self) -> i32;\n}\n";
     assert_eq!(
         format(src, Mode::Decl, &Style::default()).unwrap(),
-        "prelude builtin class StrBuf {\n    fn push(self, b: bytes);\n    fn len(self) -> i32;\n}\n"
+        "prelude builtin class Gauge {\n    fn tick(self, n: i32);\n    fn len(self) -> i32;\n}\n"
     );
 }
 

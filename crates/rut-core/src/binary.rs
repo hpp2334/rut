@@ -232,12 +232,6 @@ pub enum NativeTy {
     /// (`len`/`name`/`line`/`col`/`render`); the decl is a pure
     /// signature contract (RFC 0025's `builtin class` row)
     StackTrace,
-    /// `StrBuf` — the growable string builder (json-perf phase 2): a
-    /// boot-table type whose members are the engine-builtins
-    /// (`push`/`push_code`/`len`/`finish`; constructed `StrBuf(cap)`),
-    /// the same `builtin class` row — a pure signature contract over an
-    /// engine-owned buffer
-    StrBuf,
     /// `Weak<T>` — the weak reference (RFC 0017 v1): a GENERIC builtin
     /// class (instantiated `Weak<T>` at use, the `Array { elem }` shape);
     /// its one member `upgrade()` is an engine builtin. Constructed by
@@ -403,7 +397,6 @@ impl Surface {
             native_types: vec![
                 (sym::OPAQUE, NativeTy::Opaque, true),
                 (sym::STACK_TRACE, NativeTy::StackTrace, true),
-                (sym::STRBUF, NativeTy::StrBuf, true),
                 (sym::WEAK, NativeTy::Weak, true),
                 // the disposal surface: `pub builtin` — the import-gated
                 // spellings (the binding loops gate on this bit: the
@@ -437,7 +430,6 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     match name {
         sym::OPAQUE => Some(NativeTy::Opaque),
         sym::STACK_TRACE => Some(NativeTy::StackTrace),
-        sym::STRBUF => Some(NativeTy::StrBuf),
         sym::WEAK => Some(NativeTy::Weak),
         sym::DISPOSAL_CONTEXT => Some(NativeTy::DisposalContext),
         _ => None,
@@ -484,6 +476,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
     ("on_drop", "`on_drop` was removed — implement `Disposal` for the type; the engine calls `dispose` at refcount zero"),
     ("assert", "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`"),
+    ("StrBuf", "`StrBuf` was removed — `use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` is engine-optimized"),
 ];
 
 /// The removal table keyed by [`IdentId`] — interned once per compiler
@@ -767,7 +760,15 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// the owner; the signature is what the call site typechecks against.
 /// Stale v17 artifacts carry no fn-generics section — refused with the
 /// standard version error.
-pub const VERSION: u32 = 18;
+/// v19: the builder leaves the engine (the host strbuild pkg) — the
+/// `TyKind::StrBuf` kind (tag 15) and `NativeTy::StrBuf` (tag 2) are
+/// WITHDRAWN, never re-meaninged, and the five `Nat::StrBuf*` rows
+/// (16–20) die with them — every later nat's tag shifts down (the
+/// tags are positional). An artifact compiled under v18 or earlier
+/// carries the withdrawn kind, the withdrawn native row, or the
+/// shifted nat tags, so stale artifacts are refused at the version
+/// byte, the v12 precedent.
+pub const VERSION: u32 = 19;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -1104,7 +1105,10 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u8(match k {
             NativeTy::Opaque => 0,
             NativeTy::StackTrace => 1,
-            NativeTy::StrBuf => 2,
+            // tag 2 (`NativeTy::StrBuf`) is WITHDRAWN — never
+            // re-meaninged: the builder left the engine surface, and a
+            // stale artifact carrying the tag fails at the version byte
+            // first anyway
             NativeTy::Weak => 3,
             NativeTy::DisposalContext => 4,
         });
@@ -1194,7 +1198,10 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u32(*elem);
         }
         TyKind::Trace => e.u8(14),
-        TyKind::StrBuf => e.u8(15),
+        // kind tag 15 (`TyKind::StrBuf`) is WITHDRAWN — the builder left
+        // the engine, and the tag is never re-meaninged (the char
+        // exorcism's opcode-48 precedent): a stale artifact fails at the
+        // version byte first, and one forced past it fails loudly here
         TyKind::Weak { elem } => {
             e.u8(16);
             e.u32(*elem);
@@ -1573,7 +1580,7 @@ fn decode_surface(
         let kind = match d.u8()? {
             0 => NativeTy::Opaque,
             1 => NativeTy::StackTrace,
-            2 => NativeTy::StrBuf,
+            // tag 2 withdrawn with `NativeTy::StrBuf` — never re-meaninged
             3 => NativeTy::Weak,
             4 => NativeTy::DisposalContext,
             t => return Err(format!("bad native type tag {t}")),
@@ -1745,7 +1752,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         }
         13 => TyKind::Opt { elem: d.u32()? },
         14 => TyKind::Trace,
-        15 => TyKind::StrBuf,
+        // 15 withdrawn with `TyKind::StrBuf` — never re-meaninged
         16 => TyKind::Weak { elem: d.u32()? },
         17 => TyKind::DisposalContext,
         t => return Err(format!("bad type kind tag {t}")),
@@ -1941,9 +1948,9 @@ fn nat(b: u8) -> Result<Nat, String> {
         8 => Nat::CaptureTrace, 9 => Nat::TraceLen, 10 => Nat::TraceName,
         11 => Nat::TraceLine, 12 => Nat::TraceCol, 13 => Nat::TraceRender,
         14 => Nat::StrScan, 15 => Nat::StrStartsWith,
-        16 => Nat::StrBufNew, 17 => Nat::StrBufPush, 18 => Nat::StrBufPushCode,
-        19 => Nat::StrBufLen, 20 => Nat::StrBufFinish,
-        21 => Nat::StrFromCode,
+        // 16..=20 were the `Nat::StrBuf*` builder rows — withdrawn with
+        // the builder's engine surface; every later tag shifted down
+        16 => Nat::StrFromCode,
         _ => return Err("bad nat tag".into()),
     })
 }

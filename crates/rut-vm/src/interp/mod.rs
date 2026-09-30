@@ -794,6 +794,15 @@ impl Vm {
         self.heap.alloc_bytes(b)
     }
 
+    /// The growth-charge hook for host-owned state: [`Heap::charge_public`]
+    /// flowed through the VM because the heap is crate-private. A host
+    /// package that grows its own buffer (the strbuild builder) consults
+    /// this BEFORE growing, so the wasm heap budget governs host growth
+    /// exactly as it governs engine cells.
+    pub fn charge_public(&mut self, bytes: u64) -> Result<(), Trap> {
+        self.heap.charge_public(bytes)
+    }
+
     /// The key payload inside an `Opaque` box, classified against the
     /// closed native-key set (the nmap host experiment). Host code cannot
     /// read a rut-side box itself — `Slot` is crate-private — so this is

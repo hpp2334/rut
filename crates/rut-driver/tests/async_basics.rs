@@ -182,7 +182,7 @@ use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn victim(cx: RunContext, log: opaque) -> nil {
-    let buf: ?StrBuf = StrBuf(8);
+    let buf: ?str = "held";
     logger_log(log, 2, "victim:park");
     await sleep(60);
     logger_log(log, 2, "victim:unreachable");

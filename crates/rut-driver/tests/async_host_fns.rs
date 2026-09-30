@@ -335,7 +335,7 @@ use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
 
 async fn victim(cx: RunContext, log: opaque) -> nil {
-    let buf: ?StrBuf = StrBuf(4);
+    let buf: ?str = "held";
     await hang("x");
     logger_log(log, 2, "unreachable");
 }

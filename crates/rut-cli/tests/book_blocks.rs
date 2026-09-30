@@ -171,6 +171,7 @@ fn book_blocks_compile_and_run() {
             rut_std::math::install_std_math(&mut hosts);
             rut_std::nmap::install_std_nmap(&mut hosts);
             rut_std::async_host::install_std_async(&mut hosts);
+            rut_std::strbuild::install_std_strbuild(&mut hosts);
             let mut vm = match rut_vm::interp::Vm::new(
                 Rc::new(prog),
                 &limits,

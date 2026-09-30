@@ -38,8 +38,12 @@ fn vm_at(dir: &str) -> Vm {
     };
     // the nmapset group drags nmap_host's declared surface — bind the
     // bodies (RFC 0025: declared host fns run only through the registry)
+    // json's writer rides the strbuild pkg — its `rt:strbuild` rows are
+    // in this closure's declared set, so the bodies bind through the
+    // same registry
     let mut hosts = HostRegistry::new();
     rut_std::nmap::install_std_nmap(&mut hosts);
+    rut_std::strbuild::install_std_strbuild(&mut hosts);
     rut_vm::interp::Vm::new(Rc::new(flat), &limits, HostHooks::default(), hosts).expect("vm")
 }
 

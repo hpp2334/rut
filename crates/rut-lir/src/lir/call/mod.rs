@@ -329,32 +329,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if name == sym::BYTES {
             return self.compile_bytes_alloc(args, sp);
         }
-        // the builder's type-call: `StrBuf(cap)` (json-perf phase 2) —
-        // one UTF-8 block pre-sized to `cap` octets, geometric growth
-        // from there; `finish` materializes the immutable str
-        if name == sym::STRBUF {
-            let cap = match args.len() {
-                0 => {
-                    let z = self.new_reg(TY_I32);
-                    self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
-                    z
-                }
-                1 => {
-                    let t = self.compile_expr(args[0], Some(TY_I32))?;
-                    if t != TY_I32 {
-                        self.ctx.err(sp, format!("StrBuf(cap) takes an `i32` capacity hint, found `{}`", self.ctx.type_name(t)));
-                    }
-                    self.last_reg
-                }
-                _ => {
-                    self.ctx.err(sp, "StrBuf() or StrBuf(cap)");
-                    return Err(());
-                }
-            };
-            let dst = self.new_reg(TY_STRBUF);
-            { let (argv_off, argc) = self.pool_args(&(vec![cap])); self.emit(Op::CallNat { nat: Nat::StrBufNew, recv: NOREG, argv_off, argc, dst }, sp.lo); }
-            return Ok(TY_STRBUF);
-        }
         // the weak box's retired type-call spelling: construction is a
         // class method now — `Weak.new(v)` (the Weak arm in
         // compile_static_call carries the semantics). The loud,

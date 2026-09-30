@@ -336,52 +336,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
             }
-            TyKind::StrBuf => {
-                // the StrBuf member contract (json-perf phase 2): the
-                // growable builder's engine-builtins — appends mutate the
-                // builder's own buffer in place (the amortized-O(1)
-                // accumulator), `finish` is the one materialization
-                match (name, args.len()) {
-                    (sym::PUSH, 1) => {
-                        let it = self.compile_expr(args[0], Some(TY_STR))?;
-                        if it != TY_STR {
-                            self.ctx.err(sp, "push(s) takes a `str`");
-                            return Err(());
-                        }
-                        let ar = self.last_reg;
-                        { let (argv_off, argc) = self.pool_args(&(vec![ar])); self.emit(Op::CallNat { nat: Nat::StrBufPush, recv: rreg, argv_off, argc, dst: NOREG }, sp.lo); }
-                        return Ok(TY_NIL);
-                    }
-                    (sym::PUSH_CODE, 1) => {
-                        let it = self.compile_expr(args[0], Some(TY_U32))?;
-                        if it != TY_U32 {
-                            self.ctx.err(sp, "push_code(c) takes a `u32` codepoint");
-                            return Err(());
-                        }
-                        let ar = self.last_reg;
-                        { let (argv_off, argc) = self.pool_args(&(vec![ar])); self.emit(Op::CallNat { nat: Nat::StrBufPushCode, recv: rreg, argv_off, argc, dst: NOREG }, sp.lo); }
-                        return Ok(TY_NIL);
-                    }
-                    (sym::LEN, 0) => {
-                        let dst = self.new_reg(TY_I32);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrBufLen, recv: rreg, argv_off, argc, dst }, sp.lo); }
-                        return Ok(TY_I32);
-                    }
-                    (sym::FINISH, 0) => {
-                        let dst = self.new_reg(TY_STR);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrBufFinish, recv: rreg, argv_off, argc, dst }, sp.lo); }
-                        return Ok(TY_STR);
-                    }
-                    _ => {
-                        self.ctx.err(sp, format!(
-                            "`StrBuf` has no method `{}` with {} argument(s) — its members are `push(s)`/`push_code(c)`/`len()`/`finish()`",
-                            self.ctx.name(name),
-                            args.len()
-                        ));
-                        return Err(());
-                    }
-                }
-            }
             TyKind::Weak { elem } => {
                 // the Weak member contract (RFC 0017 v1): one engine
                 // builtin — `upgrade()` answers the live referent as `?T`

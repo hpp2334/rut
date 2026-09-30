@@ -5,7 +5,6 @@
 use super::*;
 
 mod array;
-mod buf;
 mod bytes;
 mod str;
 mod trace;
@@ -20,7 +19,6 @@ impl Vm {
         match nat {
             Nat::ArrLen => self.nat_arr_len(recv, dst),
             Nat::Str | Nat::StrFromCode | Nat::Concat | Nat::StrLen | Nat::StrJoin | Nat::StrSlice | Nat::StrScan | Nat::StrStartsWith => self.call_str_nat(nat, recv, args, dst),
-            Nat::StrBufNew | Nat::StrBufPush | Nat::StrBufPushCode | Nat::StrBufLen | Nat::StrBufFinish => self.call_buf_nat(nat, recv, args, dst),
             Nat::ArrSlice => self.nat_arr_slice(recv, args, dst),
             Nat::BytesClone => self.nat_bytes_clone(recv, dst),
             Nat::CaptureTrace => self.nat_capture_trace(dst),

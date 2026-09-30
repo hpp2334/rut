@@ -1341,7 +1341,7 @@ msgstr ""
 #: src/tutorial/functions.md:220 src/tutorial/types.md:273
 #: src/tutorial/traits.md:318 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:244 src/tutorial/async.md:179
-#: src/tutorial/stdlib.md:319
+#: src/tutorial/stdlib.md:323
 msgid "Put it together"
 msgstr ""
 
@@ -4089,30 +4089,33 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/stdlib.md:123
-msgid "`StrBuf` — the raw growable builder"
+msgid "The builder is a package"
 msgstr ""
 
 #: src/tutorial/stdlib.md:125
 msgid ""
-"Prefer the package face below; the engine cell under it is `StrBuf(cap)` "
-"with `push`/`push_code`/`len`/`finish`."
+"Core has no string-building class: the growable builder lives in the "
+"`strbuild` package ([the stdlib "
+"reference](../reference/stdlib.md#strbuild-the-builder)) — `use strbuild::{ "
+"StringBuilder }`. For the common accumulator shape you need no builder at "
+"all: `out = f\"{out}{t}\"` appends in place, linear in the total output."
 msgstr ""
 
-#: src/tutorial/stdlib.md:128
+#: src/tutorial/stdlib.md:132
 msgid "One gated name"
 msgstr ""
 
-#: src/tutorial/stdlib.md:130
+#: src/tutorial/stdlib.md:134
 msgid ""
 "`NAN` is core's single constant, deliberately name-explicit: `use core::{ "
 "NAN };`. The float constants live in `calc`."
 msgstr ""
 
-#: src/tutorial/stdlib.md:133
+#: src/tutorial/stdlib.md:137
 msgid "`pouch` — the growable sequence"
 msgstr ""
 
-#: src/tutorial/stdlib.md:135
+#: src/tutorial/stdlib.md:139
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4140,7 +4143,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:161
+#: src/tutorial/stdlib.md:165
 msgid ""
 "`Vec<u8>` is the mutable byte builder: `push` bytes, then `freeze()` into "
 "the immutable `bytes`. `xs.as_array()` copies the live elements into a fixed "
@@ -4148,11 +4151,11 @@ msgid ""
 "writes through to the parent vector."
 msgstr ""
 
-#: src/tutorial/stdlib.md:166
+#: src/tutorial/stdlib.md:170
 msgid "`nmapset` — keyed collections"
 msgstr ""
 
-#: src/tutorial/stdlib.md:168
+#: src/tutorial/stdlib.md:172
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap, HashSet };\n"
@@ -4181,7 +4184,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:196
+#: src/tutorial/stdlib.md:200
 msgid ""
 "Keys come from a fixed set — integers, `bool`, `str`, `bytes` (no floats: "
 "they have no stable equality contract) — hashed by the host; a user-defined "
@@ -4190,11 +4193,11 @@ msgid ""
 "questions, they don't walk."
 msgstr ""
 
-#: src/tutorial/stdlib.md:202
+#: src/tutorial/stdlib.md:206
 msgid "`strbuild` — the string builder"
 msgstr ""
 
-#: src/tutorial/stdlib.md:204
+#: src/tutorial/stdlib.md:208
 msgid ""
 "```rut\n"
 "use strbuild::{ StringBuilder };\n"
@@ -4214,17 +4217,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:224
+#: src/tutorial/stdlib.md:228
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the "
 "builder appends into one growable cell and copies once, at `build()`."
 msgstr ""
 
-#: src/tutorial/stdlib.md:228
+#: src/tutorial/stdlib.md:232
 msgid "`calc` — float math"
 msgstr ""
 
-#: src/tutorial/stdlib.md:230
+#: src/tutorial/stdlib.md:234
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -4247,17 +4250,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:253
+#: src/tutorial/stdlib.md:257
 msgid ""
 "rut has no overloading, so the width lives in the name. The integer ladder "
 "is _not_ here — those are core's, always available."
 msgstr ""
 
-#: src/tutorial/stdlib.md:256
+#: src/tutorial/stdlib.md:260
 msgid "`json` — encode and decode"
 msgstr ""
 
-#: src/tutorial/stdlib.md:258
+#: src/tutorial/stdlib.md:262
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson };\n"
@@ -4277,7 +4280,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:277
+#: src/tutorial/stdlib.md:281
 msgid ""
 "Decode is direct and schema-driven: your type's `impl JsonDeserialize` reads "
 "exactly the fields it expects, no intermediate tree. Your types opt in with "
@@ -4287,15 +4290,15 @@ msgid ""
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:285
+#: src/tutorial/stdlib.md:289
 msgid "`ink` — logging"
 msgstr ""
 
-#: src/tutorial/stdlib.md:287
+#: src/tutorial/stdlib.md:291
 msgid "There is no `console`, no `print` — all output goes through a logger:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:289
+#: src/tutorial/stdlib.md:293
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4309,7 +4312,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:307
+#: src/tutorial/stdlib.md:311
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder "
 "chooses the sink (the `rut` CLI prints to stdout). The same pattern — "
@@ -4318,18 +4321,18 @@ msgid ""
 "modules](../reference/embedding.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:313
+#: src/tutorial/stdlib.md:317
 msgid "`http`"
 msgstr ""
 
-#: src/tutorial/stdlib.md:315
+#: src/tutorial/stdlib.md:319
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: tasks, workers, and channels](async.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:321
+#: src/tutorial/stdlib.md:325
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4375,7 +4378,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:372
+#: src/tutorial/stdlib.md:376
 msgid ""
 "That completes the tutorial. From here, the [core "
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
@@ -10497,7 +10500,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:306
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:313
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -11046,7 +11049,11 @@ msgstr ""
 msgid ""
 "The accumulator idiom `out = f\"{out}{chunk}\"` is recognized by the "
 "compiler and appends in place — amortized O(1) instead of copying the whole "
-"prefix per step."
+"prefix per step, linear in the total output. Core ships no string-builder "
+"class: when a reusable builder reads better (a tokenizer or encoder "
+"threading text through many calls), reach for the `strbuild` package's "
+"`StringBuilder` ([stdlib](stdlib.md)); when an accumulator binding reads "
+"better, the f-string shape IS the optimized path."
 msgstr ""
 
 #: src/reference/control-flow.md:3
@@ -13165,64 +13172,66 @@ msgid ""
 "gated to **owned, uniquely-referenced** cells. Concatenating a view copies "
 "its bytes out — `f\"{view}!\"` yields a fresh owned string, and the view "
 "(and its parent) are unchanged. No operation can ever mutate through a "
-"string view."
+"string view. The accumulator is linear in the total output — core ships no "
+"string-builder class; a long-lived builder is the `strbuild` package's "
+"`StringBuilder` ([stdlib](stdlib.md))."
 msgstr ""
 
-#: src/reference/string-views.md:79
+#: src/reference/string-views.md:81
 msgid "Cost model"
 msgstr ""
 
-#: src/reference/string-views.md:81
+#: src/reference/string-views.md:83
 msgid "Operation"
 msgstr ""
 
-#: src/reference/string-views.md:81
+#: src/reference/string-views.md:83
 msgid "Cost"
 msgstr ""
 
-#: src/reference/string-views.md:83
+#: src/reference/string-views.md:85
 msgid "`s.slice(a, b)`"
 msgstr ""
 
-#: src/reference/string-views.md:83
+#: src/reference/string-views.md:85
 msgid "O(1) — one small cell + one retain (UTF-8 walk only for non-ASCII bounds)"
 msgstr ""
 
-#: src/reference/string-views.md:84
+#: src/reference/string-views.md:86
 msgid "read/compare/render a view"
 msgstr ""
 
-#: src/reference/string-views.md:84
+#: src/reference/string-views.md:86
 msgid "O(window) — same as any str"
 msgstr ""
 
-#: src/reference/string-views.md:85
+#: src/reference/string-views.md:87
 msgid "concat out / the host crossing"
 msgstr ""
 
-#: src/reference/string-views.md:85
+#: src/reference/string-views.md:87
 msgid "O(window) — the materializing copy"
 msgstr ""
 
-#: src/reference/string-views.md:86
+#: src/reference/string-views.md:88
 msgid "parsing a 1 KiB line out of a 1 MiB buffer"
 msgstr ""
 
-#: src/reference/string-views.md:86
+#: src/reference/string-views.md:88
 msgid "one 32-byte cell, zero copies"
 msgstr ""
 
-#: src/reference/string-views.md:88
+#: src/reference/string-views.md:90
 msgid ""
 "Digest-style workloads (splitting, tokenizing, windowing) stop copying "
 "entirely; peak heap reports the buffer once instead of per-piece."
 msgstr ""
 
-#: src/reference/string-views.md:91
+#: src/reference/string-views.md:93
 msgid "`[T]` windows"
 msgstr ""
 
-#: src/reference/string-views.md:93
+#: src/reference/string-views.md:95
 msgid ""
 "`v.slice(from, to)` on a `Vec<T>` (and on `[T]`) mints a fixed-length window "
 "over the backing array, boxed as **`?Vec<T>`** (the `T → ?T` coercion — see "
@@ -13230,42 +13239,42 @@ msgid ""
 "shared cell:"
 msgstr ""
 
-#: src/reference/string-views.md:98
+#: src/reference/string-views.md:100
 msgid ""
 "reads: `w[i]`, `w.len()`, `for (x of w)` — auto-deref the nullable and go "
 "through the window (element `i` is `parent[off + i]`, bounds are the "
 "window's);"
 msgstr ""
 
-#: src/reference/string-views.md:101
+#: src/reference/string-views.md:103
 msgid "writes: `w[i] = x` (and compound assignment) **hit the parent**;"
 msgstr ""
 
-#: src/reference/string-views.md:102
+#: src/reference/string-views.md:104
 msgid ""
 "**fixed-length**: `push`/`pop` through a view trap — copy the elements out "
 "to grow (a `for`\\-push loop does it);"
 msgstr ""
 
-#: src/reference/string-views.md:104
+#: src/reference/string-views.md:106
 msgid "reslicing flattens onto the root backing (`w.slice(a, b)`);"
 msgstr ""
 
-#: src/reference/string-views.md:105
+#: src/reference/string-views.md:107
 msgid ""
 "parent growth **detaches**: `push` re-backs the `Vec` with a fresh array; "
 "the window keeps pinning the old backing — the same aliasing rule Go slices "
 "have;"
 msgstr ""
 
-#: src/reference/string-views.md:108
+#: src/reference/string-views.md:110
 msgid ""
 "iteration yields the stored elements as-is under the sharing law: a cell "
 "element shares its cell, so a write through the loop variable hits the "
 "parent; primitive elements copy out as slots always do."
 msgstr ""
 
-#: src/reference/string-views.md:112
+#: src/reference/string-views.md:114
 msgid ""
 "The asymmetry is deliberate: `str`/`bytes` are immutable, so their views "
 "carry no mutability law — purely an optimization plus a nicer parsing "
@@ -13733,7 +13742,7 @@ msgstr ""
 msgid "pass `x` directly — sharing needs no spelling"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:114
+#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:113
 msgid "`Option<T>` / `Result<T, E>`"
 msgstr ""
 
@@ -14190,7 +14199,7 @@ msgid ""
 "back-pointers) as well as through collections."
 msgstr ""
 
-#: src/reference/weak-refs.md:24 src/reference/stdlib.md:75
+#: src/reference/weak-refs.md:24 src/reference/stdlib.md:74
 msgid "`Weak<T>`"
 msgstr ""
 
@@ -16583,10 +16592,10 @@ msgstr ""
 #: src/reference/embedding.md:158
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
-"`str`/`bytes` members, the `f\"...\"` concatenation lowering, the `StrBuf` "
-"builder, array length/slice, and stack-trace capture. They are call slots "
-"fixed at boot, never IR-level special forms; hosts see them exactly like "
-"their own registered modules."
+"`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
+"length/slice, and stack-trace capture. They are call slots fixed at boot, "
+"never IR-level special forms; hosts see them exactly like their own "
+"registered modules."
 msgstr ""
 
 #: src/reference/embedding.md:164
@@ -16626,41 +16635,51 @@ msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
 #: src/reference/embedding.md:171
-msgid "`async_host::install_std_async`"
+msgid "`strbuild::install_std_strbuild`"
 msgstr ""
 
 #: src/reference/embedding.md:171
+msgid ""
+"the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
+"is charged against the embedder's heap budget"
+msgstr ""
+
+#: src/reference/embedding.md:172
+msgid "`async_host::install_std_async`"
+msgstr ""
+
+#: src/reference/embedding.md:172
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:173
 msgid "`http::install_std_http`"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:173
 msgid "the std HTTP lanes (reqwest; native builds only)"
 msgstr ""
 
-#: src/reference/embedding.md:173
+#: src/reference/embedding.md:174
 msgid "`bench_cross::install_std_bench_cross`"
 msgstr ""
 
-#: src/reference/embedding.md:173 src/reference/stdlib.md:139
+#: src/reference/embedding.md:174 src/reference/stdlib.md:139
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:175
+#: src/reference/embedding.md:176
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:177
+#: src/reference/embedding.md:178
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:180
+#: src/reference/embedding.md:181
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): mounts the "
 "std packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -17614,8 +17633,8 @@ msgstr ""
 msgid ""
 "**`prelude builtin`** — the **ambient** engine surface: the name binds in "
 "every compilation unit, no `use` needed. The primitives and their `builtin "
-"impl` methods, `opaque`, `Weak`, `StrBuf`, `StackTrace`, and "
-"`panic`/`string_join`/ `capture_stacktrace` are all ambient."
+"impl` methods, `opaque`, `Weak`, `StackTrace`, and `panic`/`string_join`/ "
+"`capture_stacktrace` are all ambient."
 msgstr ""
 
 #: src/reference/host-fns.md:97
@@ -17674,7 +17693,7 @@ msgstr ""
 msgid "allowed"
 msgstr ""
 
-#: src/reference/host-fns.md:132 src/reference/stdlib.md:80
+#: src/reference/host-fns.md:132 src/reference/stdlib.md:79
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr ""
@@ -17860,7 +17879,7 @@ msgstr ""
 
 #: src/reference/host-fns.md:235 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:300 src/reference/typed-bytecode.md:101
+#: src/reference/stdlib.md:307 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:30 src/reference/cli.md:125
 msgid "meaning"
 msgstr ""
@@ -19025,8 +19044,8 @@ msgstr ""
 #: src/reference/stdlib.md:65
 msgid ""
 "Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps "
-"(the class-method construction), `StrBuf(cap)` pre-sizes "
-"([opaque](opaque.md), [weak references](weak-refs.md))."
+"(the class-method construction) ([opaque](opaque.md), [weak "
+"references](weak-refs.md))."
 msgstr ""
 
 #: src/reference/stdlib.md:69
@@ -19052,108 +19071,97 @@ msgid ""
 msgstr ""
 
 #: src/reference/stdlib.md:74
-msgid "`StrBuf`"
-msgstr ""
-
-#: src/reference/stdlib.md:74
-msgid ""
-"`StrBuf(cap)`, `push(str)`, `push_code(u32)` (invalid scalars mint U+FFFD), "
-"`len() -> i32`, `finish() -> str` — the ONE materialization; the builder "
-"keeps its buffer"
-msgstr ""
-
-#: src/reference/stdlib.md:75
 msgid ""
 "`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — "
 "`nil` once the referent died"
 msgstr ""
 
-#: src/reference/stdlib.md:76
+#: src/reference/stdlib.md:75
 msgid "`DisposalContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:76
+#: src/reference/stdlib.md:75
 msgid ""
 "no members — the engine-minted parameter of a `dispose` body; it exists so "
 "the context can grow without touching the trait signature"
 msgstr ""
 
-#: src/reference/stdlib.md:78
+#: src/reference/stdlib.md:77
 msgid "Engine-woven traits"
 msgstr ""
 
-#: src/reference/stdlib.md:80
+#: src/reference/stdlib.md:79
 msgid "trait"
 msgstr ""
 
-#: src/reference/stdlib.md:80 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:300
+#: src/reference/stdlib.md:79 src/reference/stdlib.md:174
+#: src/reference/stdlib.md:307
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:81
 msgid "`Iterator<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:81
 msgid "`fn __iterate(self, emit: fn(E) -> bool)`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:81
 msgid ""
 "`for (x of it)` desugars to it; `emit` returning `false` stops. "
 "**import-gated** — `use core::{ Iterator }` (an `impl Iterator<E> for T` "
 "names it); the builtin sequences' fused loops never do"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:82
 msgid "`Future<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:82
 msgid "`fn yield(cx: RunContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:82
 msgid ""
 "every `async fn`'s hidden frame implements it; `await` consumes it. "
 "**import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: "
 "Future<T>`, `downcast<Future<..>>`)"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:83
 msgid "`RunContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:83
 msgid ""
 "`checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, "
 "`cancelled() -> bool`"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:83
 msgid ""
 "the async protocol's cx record ([async and await](async.md)); "
 "**import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield "
 "signature spells it)"
 msgstr ""
 
-#: src/reference/stdlib.md:85
+#: src/reference/stdlib.md:84
 msgid "`Disposal`"
 msgstr ""
 
-#: src/reference/stdlib.md:85
+#: src/reference/stdlib.md:84
 msgid "`fn dispose(mut self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:85
+#: src/reference/stdlib.md:84
 msgid ""
 "the cell-death contract: the engine calls it at refcount zero ([the Rc "
 "heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, "
 "DisposalContext }`"
 msgstr ""
 
-#: src/reference/stdlib.md:87
+#: src/reference/stdlib.md:86
 msgid ""
 "Users implement these with ordinary `impl` blocks; the engine has "
 "compiler-backed impls for its own types. All four are `pub builtin` (the "
@@ -19162,102 +19170,113 @@ msgid ""
 "builtins, awaits, and launches."
 msgstr ""
 
-#: src/reference/stdlib.md:93
+#: src/reference/stdlib.md:92
 msgid "Numeric methods (per integer width `i8`–`u64`)"
 msgstr ""
 
-#: src/reference/stdlib.md:102
+#: src/reference/stdlib.md:101
 msgid ""
 "Ambient like the primitives themselves: `x.wrapping_add(y)` needs no `use`. "
 "The trap-on-overflow `+`/`-`/`*`/`<<` stay the default operators."
 msgstr ""
 
-#: src/reference/stdlib.md:105
+#: src/reference/stdlib.md:104
 msgid "Constants"
 msgstr ""
 
-#: src/reference/stdlib.md:107
+#: src/reference/stdlib.md:106
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float "
 "constants are `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:110
+#: src/reference/stdlib.md:109
 msgid "What core does _not_ have"
 msgstr ""
 
-#: src/reference/stdlib.md:112
+#: src/reference/stdlib.md:111
 msgid "removed"
 msgstr ""
 
-#: src/reference/stdlib.md:112
+#: src/reference/stdlib.md:111
 msgid "replacement"
 msgstr ""
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:113
 msgid ""
 "`?T` with `nil` as absence; `(T, err)` tuples ([by-reference and "
 "nullable](by-reference-and-nullable.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:114
 msgid "`own` / `make_ptr`"
 msgstr ""
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:114
 msgid "`?T` bindings are the cell reference"
 msgstr ""
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:115
 msgid "`char`"
 msgstr ""
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:115
 msgid "`str` of one codepoint; `s.code()`/`str.from_code(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:116
 msgid "free `downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:116
 msgid "`opaque.downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:117
 msgid "`Array` as a name"
 msgstr ""
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:117
 msgid "the `[T]` grammar; `[v; n]` repeat construction"
 msgstr ""
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:118
 msgid "`on_drop(p, cleanup)`"
 msgstr ""
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:118
 msgid ""
 "implement `Disposal` for the type — the engine calls `dispose` at refcount "
 "zero ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:119
 msgid "output builtins (`print`, `console`)"
 msgstr ""
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:119
 msgid "a logger package (`ink`)"
 msgstr ""
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:120
 msgid "`assert(cond, msg?)`"
+msgstr ""
+
+#: src/reference/stdlib.md:120
+msgid ""
+"plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { "
+"panic(m); } }` — write the helper where you need it"
+msgstr ""
+
+#: src/reference/stdlib.md:121
+msgid "`StrBuf`"
 msgstr ""
 
 #: src/reference/stdlib.md:121
 msgid ""
-"plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { "
-"panic(m); } }` — write the helper where you need it"
+"`use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` "
+"is engine-optimized ([the builder package](#strbuild-the-builder), "
+"[f-strings](literals-and-inference.md))"
 msgstr ""
 
 #: src/reference/stdlib.md:123
@@ -19321,7 +19340,8 @@ msgstr ""
 msgid "`nmap_host` / `nmapset`"
 msgstr ""
 
-#: src/reference/stdlib.md:133 src/reference/stdlib.md:137
+#: src/reference/stdlib.md:133 src/reference/stdlib.md:135
+#: src/reference/stdlib.md:137
 msgid "host pkg + inline rut pkg"
 msgstr ""
 
@@ -19334,7 +19354,7 @@ msgid "`json`"
 msgstr ""
 
 #: src/reference/stdlib.md:134
-msgid "inline rut pkg, zero host fns"
+msgid "inline rut pkg (pulls `strbuild_host`)"
 msgstr ""
 
 #: src/reference/stdlib.md:134
@@ -19342,15 +19362,11 @@ msgid "`encodeJson` / `decodeJson` / `decodeJsonBytes` + traits"
 msgstr ""
 
 #: src/reference/stdlib.md:135
-msgid "`strbuild`"
+msgid "`strbuild_host` / `strbuild`"
 msgstr ""
 
 #: src/reference/stdlib.md:135
-msgid "inline rut pkg, zero deps"
-msgstr ""
-
-#: src/reference/stdlib.md:135
-msgid "the `StringBuilder` class"
+msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
 #: src/reference/stdlib.md:136 src/reference/project-structure.md:133
@@ -19652,6 +19668,16 @@ msgstr ""
 
 #: src/reference/stdlib.md:281
 msgid ""
+"The builder is a host package now (the `ink`/`Logger` pattern): the "
+"`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
+"`sb_push_code` / `sb_len` / `sb_finish`, registered under the `rt:strbuild` "
+"prefix), and the `strbuild` package wraps them in the `StringBuilder` class. "
+"Core ships no string-building machinery; a strbuild mount pairs with the "
+"bodies:"
+msgstr ""
+
+#: src/reference/stdlib.md:288
+msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "use strbuild::{ StringBuilder };\n"
@@ -19668,62 +19694,81 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:309
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:309
 msgid "grow from small"
 msgstr ""
 
-#: src/reference/stdlib.md:303
+#: src/reference/stdlib.md:310
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:303
-msgid "pre-size to an octet hint (negative traps)"
+#: src/reference/stdlib.md:310
+msgid ""
+"pre-size to an octet hint (negative traps; the hint is advisory — identical "
+"behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:304
+#: src/reference/stdlib.md:311
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:304
+#: src/reference/stdlib.md:311
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:312
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:312
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:306
+#: src/reference/stdlib.md:313
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:307
+#: src/reference/stdlib.md:314
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:307
+#: src/reference/stdlib.md:314
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:309
+#: src/reference/stdlib.md:316
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
-"`build`'s materialization and growth's prefix move."
+"`build`'s materialization and growth's prefix move. Growth consults the "
+"embedder's heap budget BEFORE growing (the geometric next-capacity is "
+"charged), so the wasm 4 MiB cap governs builder growth exactly as it governs "
+"engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:313
+#: src/reference/stdlib.md:323
+msgid ""
+"Embedder side: `rut_std::strbuild::install_std_strbuild(&mut hosts)`. "
+"Mounting `strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json` "
+"pulls both (its writer rides the builder)."
+msgstr ""
+
+#: src/reference/stdlib.md:328
+msgid ""
+"For the common accumulator shape no builder is needed at all: `out = "
+"f\"{out}{t}\"` appends in place, linear in the total output "
+"([f-strings](literals-and-inference.md))."
+msgstr ""
+
+#: src/reference/stdlib.md:332
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:315
+#: src/reference/stdlib.md:334
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
@@ -19734,14 +19779,14 @@ msgid ""
 "futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:341
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); "
 "`http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / "
 "`Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 
-#: src/reference/stdlib.md:327
+#: src/reference/stdlib.md:346
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -19756,18 +19801,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:358
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:362
 msgid "Mounting"
 msgstr ""
 
-#: src/reference/stdlib.md:345
+#: src/reference/stdlib.md:364
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. "
 "Swappable packages mount by directory or bundle ([module "
@@ -19775,7 +19820,7 @@ msgid ""
 "names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:368
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
 "are source-inlined into each consumer — required for class-method surfaces, "
@@ -19783,7 +19828,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:353
+#: src/reference/stdlib.md:372
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
@@ -20849,7 +20894,7 @@ msgid ""
 "against the example programs and the benchmark corpus."
 msgstr ""
 
-#: src/reference/compiler.md:169 src/reference/typed-bytecode.md:171
+#: src/reference/compiler.md:169 src/reference/typed-bytecode.md:170
 msgid "Async lowering"
 msgstr ""
 
@@ -21404,37 +21449,29 @@ msgid "fused host-side scan/classify and prefix test"
 msgstr ""
 
 #: src/reference/typed-bytecode.md:124
-msgid "`StrBufNew/Push/PushCode/Len/Finish`"
-msgstr ""
-
-#: src/reference/typed-bytecode.md:124
-msgid "the string builder's engine rows"
-msgstr ""
-
-#: src/reference/typed-bytecode.md:125
 msgid "`StrFromCode`"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:125
+#: src/reference/typed-bytecode.md:124
 msgid "`str.from_code(n)` — one codepoint to `str`"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:127
+#: src/reference/typed-bytecode.md:126
 msgid ""
 "Everything else rut spells with a name is ordinary rut code (`Vec`'s "
 "methods) or a bodyless host function. There is no `strcat` op and no "
 "template op."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:131
+#: src/reference/typed-bytecode.md:130
 msgid "What is not an op"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:133
+#: src/reference/typed-bytecode.md:132
 msgid "An op exists for exactly one of three reasons:"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:135
+#: src/reference/typed-bytecode.md:134
 msgid ""
 "**Nothing static.** What the type table answers is a constant, never an op: "
 "`type_id<T>()` folds at compile time; `Array<T, N>.len()` _is_ the constant "
@@ -21442,7 +21479,7 @@ msgid ""
 "op."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:139
+#: src/reference/typed-bytecode.md:138
 msgid ""
 "**Nothing polymorphic, nothing named.** A trait-typed receiver gets exactly "
 "one op (`CallI`) through its vtable. Slice-view indexing and `len` are "
@@ -21452,7 +21489,7 @@ msgid ""
 "ambient: no `use` gates them ([opaque — erasure and downcast](opaque.md))."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:147
+#: src/reference/typed-bytecode.md:146
 msgid ""
 "**Concrete memory + control + the type machine's two readbacks.** Ops touch "
 "memory only through compile-time-known layouts (inline blocks, cells with "
@@ -21460,24 +21497,24 @@ msgid ""
 "reification needs: `TidOf` (what is it?) and `Unbox` (the payload, guarded)."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:153
+#: src/reference/typed-bytecode.md:152
 msgid "`is` and `downcast` lowering"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:155
+#: src/reference/typed-bytecode.md:154
 msgid ""
 "`x is T` with concrete `T`: one `TidOf` + an integer compare. On an erasure "
 "box, `is` answers **by the box** — it misses for every payload type; "
 "`downcast` is the only see-through."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:158
+#: src/reference/typed-bytecode.md:157
 msgid ""
 "`x is I` with trait `I`: one `IsTrait` descriptor scan — pure in `(recv, "
 "want)`, so repeated probes CSE and invariant ones hoist."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:160
+#: src/reference/typed-bytecode.md:159
 msgid ""
 "`opaque.downcast<T>(o)` (yielding `?T`): `TidOf`; branch on the compare "
 "against `T`'s id; `Unbox` on the hit arm, a nil box on the miss. The check "
@@ -21488,38 +21525,38 @@ msgid ""
 "check."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:168
+#: src/reference/typed-bytecode.md:167
 msgid ""
 "Statically-answered `is` expressions never emit an op — the checker folded "
 "them ([The compiler pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:173
+#: src/reference/typed-bytecode.md:172
 msgid "`async fn` compiles to a state machine with **zero extra opcodes**:"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:175
+#: src/reference/typed-bytecode.md:174
 msgid ""
 "Each `await` is a checkpoint state — one enum-member-style singleton per "
 "suspension point, stored in the hidden frame's state field."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:177
+#: src/reference/typed-bytecode.md:176
 msgid "Resume dispatch is the existing `BrTable` over that state."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:178
+#: src/reference/typed-bytecode.md:177
 msgid ""
 "Locals live across suspension as cell-backed frame fields (`GetF`/`SetF`)."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:180
+#: src/reference/typed-bytecode.md:179
 msgid ""
 "The driven half is an ordinary `CallI` through the future's `yield` vtable "
 "row; suspension is a plain `Ret`."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:183
+#: src/reference/typed-bytecode.md:182
 msgid ""
 "The wire format is untouched by the async plan — bundles and binaries from "
 "the same compiler version stay compatible. The driving loop that wakes these "
@@ -21527,11 +21564,11 @@ msgid ""
 "[Async and await](async.md)."
 msgstr ""
 
-#: src/reference/typed-bytecode.md:188
+#: src/reference/typed-bytecode.md:187
 msgid "Budget hooks in the stream"
 msgstr ""
 
-#: src/reference/typed-bytecode.md:190
+#: src/reference/typed-bytecode.md:189
 msgid ""
 "The only budget artifacts in the op stream are `LoopHead` markers: loop "
 "back-edges are natural checkpoints where fuel is accounted ([Resource limits "

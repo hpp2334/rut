@@ -1,0 +1,10 @@
+# strbuild_host/ — the string builder's host rows (the ink/Logger
+# pattern): a pure declaration surface. The embedding Rust binds the
+# bodies (`rut_std::strbuild::install_std_strbuild`); the `strbuild`
+# package wraps them in the `StringBuilder` class.
+#
+# `host_scope` names the registration prefix; the use path spells the
+# bare package name (`use strbuild_host::{ sb_new, .. }`).
+name = "strbuild_host"
+entry.type = "./strbuild_host.d.rut"
+host_scope = "rt:strbuild"

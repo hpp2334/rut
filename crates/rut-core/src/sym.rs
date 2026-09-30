@@ -275,10 +275,13 @@ pub const RENDER: IdentId = IdentId(60);
 // Compiler-internal interner name only (never a wire surface).
 pub const OPT: IdentId = IdentId(61);
 // the json-perf batch phase 2's general scan/classify + builder surface:
-// the `str` members `code_at`/`scan`/`starts_with` and the `StrBuf`
-// builtin class with its member contract — well-known so every interner
-// agrees on the surface names (the tokenizer primitives ANY parser
-// wants; the engine never learns json)
+// the `str` members `code_at`/`scan`/`starts_with` — well-known so every
+// interner agrees on the surface names (the tokenizer primitives ANY
+// parser wants; the engine never learns json). `STRBUF` keeps its
+// well-known id after the builder's engine surface was withdrawn (the
+// host strbuild pkg owns the builder now): the removed-name lookup and
+// the reserved boot row still spell the name, and shifting the ids of
+// everything after it would renumber the wire for nothing.
 pub const CODE_AT: IdentId = IdentId(62);
 pub const SCAN: IdentId = IdentId(63);
 pub const STARTS_WITH: IdentId = IdentId(64);

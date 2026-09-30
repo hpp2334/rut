@@ -120,10 +120,14 @@ once the referent died) — the memory stories live in
 [the Rc heap and destructors](../reference/rc-heap.md) and
 [weak references](../reference/weak-refs.md).
 
-### `StrBuf` — the raw growable builder
+### The builder is a package
 
-Prefer the package face below; the engine cell under it is `StrBuf(cap)`
-with `push`/`push_code`/`len`/`finish`.
+Core has no string-building class: the growable builder lives in the
+`strbuild` package ([the stdlib
+reference](../reference/stdlib.md#strbuild--the-builder)) —
+`use strbuild::{ StringBuilder }`. For the common accumulator shape you
+need no builder at all: `out = f"{out}{t}"` appends in place, linear in
+the total output.
 
 ### One gated name
 

@@ -91,7 +91,7 @@ diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
 
 - **`prelude builtin`** — the **ambient** engine surface: the name
   binds in every compilation unit, no `use` needed. The primitives and
-  their `builtin impl` methods, `opaque`, `Weak`, `StrBuf`,
+  their `builtin impl` methods, `opaque`, `Weak`,
   `StackTrace`, and `panic`/`string_join`/
   `capture_stacktrace` are all ambient.
 - **`pub builtin`** — the **import-gated** engine surface: the name

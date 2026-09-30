@@ -57,23 +57,6 @@ prelude builtin class StackTrace {
     fn render(self) -> str;              // the RFC 0036 symbolication string
 }
 
-// The growable string builder (json-perf phase 2): the accumulator with
-// amortized-O(1) appends — the shape the `out = f"{out}{t}"` field
-// accumulator could never be (every append copied the whole prefix).
-// Construct `StrBuf(cap)` with an octet capacity hint (pre-sizing; `0`
-// grows from small). A cell like `StackTrace`: methods mutate through
-// it, assignment shares it. The general machinery any encoder/tokenizer
-// wants; the engine never learns what is being built.
-prelude builtin class StrBuf {
-    fn push(self, s: str);        // append a str's octets — amortized O(|s|)
-    fn push_code(self, c: u32);   // append one codepoint (invalid scalars
-                                  // mint U+FFFD — the from_code rule)
-    fn len(self) -> i32;          // codepoints so far (tracked, O(1))
-    fn finish(self) -> str;       // the ONE materialization: a fresh
-                                  // immutable str; the builder keeps its
-                                  // buffer (finish twice = same text)
-}
-
 // The weak reference (RFC 0017 v1): a WeakBox side cell holding an
 // UNRETAINED word to the referent — a weak never keeps anything alive.
 // Construction is the class-method form `Weak.new(v)` (compiler-lowered,

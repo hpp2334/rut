@@ -74,7 +74,9 @@ The in-place append fast path (the `out = f"{out}.."` accumulator) is
 gated to **owned, uniquely-referenced** cells. Concatenating a view
 copies its bytes out — `f"{view}!"` yields a fresh owned string, and
 the view (and its parent) are unchanged. No operation can ever mutate
-through a string view.
+through a string view. The accumulator is linear in the total output —
+core ships no string-builder class; a long-lived builder is the
+`strbuild` package's `StringBuilder` ([stdlib](stdlib.md)).
 
 ## Cost model
 

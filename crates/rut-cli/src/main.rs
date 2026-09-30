@@ -193,6 +193,10 @@ fn run(path: &str, fuel: Option<u64>) {
     // `async_engine` rows — reached only by a program that mounts the
     // async packages (a `use async_host::` pulls the tree pkg)
     rut_std::async_host::install_std_async(&mut hosts);
+    // the string builder's bodies (the host strbuild pkg): reached only
+    // by a program that mounts the strbuild pkg (a `use strbuild::` /
+    // `use json::` pulls it — json's writer rides the builder)
+    rut_std::strbuild::install_std_strbuild(&mut hosts);
     // the std HTTP lane (the rut/http plan): get + the Response
     // readbacks — reached only by a program that mounts the http
     // packages (a `use http::` / `use http_host::` pulls the tree

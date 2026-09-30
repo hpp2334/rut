@@ -66,8 +66,8 @@
 //
 // THE WRITER (survey §2.3, reshaped by the json-perf batch: phase 1's
 // chunk buffer, finished by phase 2's growable builder): per-event
-// output appends into a StringBuilder — the std strbuild pkg's face
-// over the engine's growable cell, amortized O(1) per append with one
+// output appends into a StringBuilder — the std strbuild pkg's
+// growable builder, amortized O(1) per append with one
 // final materialization at build(). Phase 1's
 // intermediate shape composed events into a bounded chunk buffer that
 // drained into a str field accumulator; the builder deletes that
@@ -93,14 +93,12 @@
 //
 // THE WRITER'S ACCUMULATOR (strbuild batch phase 1): the builder rides
 // the std `strbuild` pkg — `StringBuilder`, the 10th std pkg's
-// class-method face over the same engine `StrBuf` cell this writer
-// pushed into directly before (docs/strbuild-survey.md §4 is the
-// mapping; `[deps] strbuild` below is the edge). Same nats, same
-// cells, same appends: `push` -> `append`, `push_code` ->
-// `append_code`, `finish` -> `build`, `len` stays `len`, and the three
-// mints go through `with_cap` (the pkg constructor is where a pre-size
-// is spelled). The exactly-one-nil laws, the sticky failure, the
-// offsets — all untouched.
+// class-method face over the host builder (`[deps] strbuild` below is
+// the edge). Same calls, same answers: `push` -> `append`,
+// `push_code` -> `append_code`, `finish` -> `build`, `len` stays
+// `len`, and the three mints go through `with_cap` (the pkg
+// constructor is where a pre-size is spelled). The exactly-one-nil
+// laws, the sticky failure, the offsets — all untouched.
 
 use strbuild::{ StringBuilder };
 
@@ -125,7 +123,7 @@ pub struct EncodeJsonError {
 // ---- the writer (survey §2.3) ----
 
 pub class JsonWriter {
-    out: StringBuilder; // THE accumulator — the strbuild face over the engine cell
+    out: StringBuilder; // THE accumulator — the std builder pkg's class
     depth: i32;         // open container count (the 128 cap)
     st_kind: [i32];     // per level: 1 object, 2 array — 128 slots, the cap
     st_key: [?str];     // per object level: the pending key (nil until key())
@@ -326,7 +324,7 @@ impl JsonWriter {
 
     // escape from `first` (the first escape site) on; the clean prefix
     // [0, first) appends as one piece. Builds through a StringBuilder
-    // (the strbuild face over the engine cell) — the
+    // (the std builder pkg's class) — the
     // local f-string accumulator it replaces was the one place the
     // slice-per-char disease could still reach an escaped doc.
     fn quote_slow(self, s: str, first: i32) -> str {

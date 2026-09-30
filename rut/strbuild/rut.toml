@@ -1,10 +1,14 @@
-# strbuild — the 10th std pkg (the strbuild batch, phase 1;
-# docs/strbuild-survey.md is the contract). A pure-rut face over the
-# engine's `StrBuf` builtin class: zero host fns, zero deps — the cell
-# is AMBIENT (RFC 0028 revised, builtin-surface), so this pkg compiles
-# against `mount_std_core` alone, exactly as json needs no host-fn dep.
-# No [peer-deps], no [dev-deps] — nothing to integrate with; pkg tests
-# ride the driver's program tests, json-style.
+# strbuild — the 10th std pkg: the growable string builder, a rut
+# class over the `strbuild_host` decl pkg's host fns (the ink/Logger
+# pattern; the bodies live in `rut-std`). One field, one forwarded
+# host call per member — no copy, no re-buffering, the share law rides
+# the host box.
+#
+# `[deps] strbuild_host` below is the edge: a strbuild mount pulls the
+# decl pkg, whose rows register under the `rt:strbuild` prefix —
+# mounting strbuild adds those `expected_host_fns` entries, so an
+# embedder pairs the mount with `install_std_strbuild` (exactly ink +
+# `install_std_log`).
 #
 # Publishes COMPILED (the linkable-classes phase): StringBuilder's
 # methods cross on the surface's inherent rows, so `b.append(...)`
@@ -12,3 +16,6 @@
 # boundary, no source ever crossing.
 name = "strbuild"
 entry.lib = "./strbuild.rut"
+
+[deps]
+strbuild_host = { path = "../strbuild_host" }

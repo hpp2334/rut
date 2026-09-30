@@ -62,16 +62,15 @@ builtin primitive opaque {
 }
 ```
 
-Construction keeps its builtin forms: `opaque(v)` seals,
-`Weak.new(v)` wraps (the class-method construction), `StrBuf(cap)`
-pre-sizes ([opaque](opaque.md), [weak references](weak-refs.md)).
+Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)`
+wraps (the class-method construction) ([opaque](opaque.md),
+[weak references](weak-refs.md)).
 
 ### Builtin classes
 
 | class | members |
 |---|---|
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
-| `StrBuf` | `StrBuf(cap)`, `push(str)`, `push_code(u32)` (invalid scalars mint U+FFFD), `len() -> i32`, `finish() -> str` — the ONE materialization; the builder keeps its buffer |
 | `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died |
 | `DisposalContext` | no members — the engine-minted parameter of a `dispose` body; it exists so the context can grow without touching the trait signature |
 
@@ -119,6 +118,7 @@ constants are `calc`'s.
 | `on_drop(p, cleanup)` | implement `Disposal` for the type — the engine calls `dispose` at refcount zero ([the Rc heap](rc-heap.md)) |
 | output builtins (`print`, `console`) | a logger package (`ink`) |
 | `assert(cond, msg?)` | plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }` — write the helper where you need it |
+| `StrBuf` | `use strbuild::{ StringBuilder }`, or just accumulate: `out = f"{out}{t}"` is engine-optimized ([the builder package](#strbuild--the-builder), [f-strings](literals-and-inference.md)) |
 
 No removed surface keeps compatibility routing: a removed head in an
 unresolvable position is an ordinary unknown-name error.
@@ -131,8 +131,8 @@ unresolvable position is an ordinary unknown-name error.
 | `ink` | inline rut pkg | the `Logger` class over `rt` |
 | `pouch` | inline rut pkg | the growable sequence `Vec<T>` |
 | `nmap_host` / `nmapset` | host pkg + inline rut pkg | the native key table; `HashMap`/`HashSet` |
-| `json` | inline rut pkg, zero host fns | `encodeJson` / `decodeJson` / `decodeJsonBytes` + traits |
-| `strbuild` | inline rut pkg, zero deps | the `StringBuilder` class |
+| `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + traits |
+| `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |
 | `calc` | host pkg | the `Math` namespace |
 | `async_engine` / `async_host` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
 | `http_host` / `http` | host pkg + rut pkg | the std HTTP lanes |
@@ -278,6 +278,13 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
 
 ### `strbuild` — the builder
 
+The builder is a host package now (the `ink`/`Logger` pattern): the
+`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` /
+`sb_push_code` / `sb_len` / `sb_finish`, registered under the
+`rt:strbuild` prefix), and the `strbuild` package wraps them in the
+`StringBuilder` class. Core ships no string-building machinery; a
+strbuild mount pairs with the bodies:
+
 ```rut
 use ink::{ Logger };
 use strbuild::{ StringBuilder };
@@ -300,7 +307,7 @@ name=!
 | member | meaning |
 |---|---|
 | `new()` | grow from small |
-| `with_cap(cap: i32)` | pre-size to an octet hint (negative traps) |
+| `with_cap(cap: i32)` | pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap) |
 | `append(mut self, value: str)` | amortized O(\|s\|), in place |
 | `append_code(mut self, cp: u32)` | one codepoint; invalid scalars mint U+FFFD |
 | `len() -> i32` | codepoints so far, O(1) |
@@ -308,7 +315,19 @@ name=!
 
 Sharing is the default: appends through an alias (or a `mut` parameter)
 land in the caller's document; copies happen at exactly two engineered
-points — `build`'s materialization and growth's prefix move.
+points — `build`'s materialization and growth's prefix move. Growth
+consults the embedder's heap budget BEFORE growing (the geometric
+next-capacity is charged), so the wasm 4 MiB cap governs builder growth
+exactly as it governs engine allocations.
+
+Embedder side:
+`rut_std::strbuild::install_std_strbuild(&mut hosts)`. Mounting
+`strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json`
+pulls both (its writer rides the builder).
+
+For the common accumulator shape no builder is needed at all:
+`out = f"{out}{t}"` appends in place, linear in the total output
+([f-strings](literals-and-inference.md)).
 
 ### `calc`'s company: `async` and `http`
 

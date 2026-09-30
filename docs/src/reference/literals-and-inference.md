@@ -150,4 +150,8 @@ package's `Logger.debug(f"...")`).
 
 The accumulator idiom `out = f"{out}{chunk}"` is recognized by the
 compiler and appends in place — amortized O(1) instead of copying the
-whole prefix per step.
+whole prefix per step, linear in the total output. Core ships no
+string-builder class: when a reusable builder reads better (a tokenizer
+or encoder threading text through many calls), reach for the `strbuild`
+package's `StringBuilder` ([stdlib](stdlib.md)); when an accumulator
+binding reads better, the f-string shape IS the optimized path.

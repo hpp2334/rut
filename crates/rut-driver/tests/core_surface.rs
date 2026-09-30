@@ -328,6 +328,53 @@ fn unresolved_assert_names_the_recipe() {
     assert!(out.program.is_none(), "the unresolved spelling must not compile");
 }
 
+/// The strbuild removal's twin of the assert pin: a module's OWN
+/// `StrBuf`-named class resolves, compiles, and works — the removal row
+/// fires only on otherwise-UNRESOLVED names, so a user type may take
+/// the retired name.
+#[test]
+fn own_strbuf_named_type_still_resolves() {
+    let out = compile_with_core(
+        "class StrBuf {\n    n: i32;\n}\n\
+         impl StrBuf {\n    pub fn new() -> Self { return Self { n: 0 }; }\n\
+         \x20   pub fn push(mut self, k: i32) { self.n += k; }\n\
+         \x20   pub fn len(self) -> i32 { return self.n; }\n}\n\
+         pub fn main() -> i32 { let b = StrBuf.new(); b.push(4); return b.len(); }\n",
+    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>());
+    let flat = rut_core::link::flatten(out.program.expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(flat),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 4);
+}
+
+/// The unresolved bare spelling — no local type — diagnoses with the
+/// removal row's exact recipe, never "unknown type".
+#[test]
+fn unresolved_strbuf_names_the_recipe() {
+    const REMOVED: &str = "`StrBuf` was removed — `use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` is engine-optimized";
+    let out = compile_with_core(
+        "pub fn main() -> str { let b = StrBuf(0); b.push(\"x\"); return b.finish(); }\n",
+    );
+    assert!(
+        out.diags.iter().any(|d| d.msg == REMOVED),
+        "the bare StrBuf miss carries the recipe: {:?}",
+        out.diags
+    );
+    assert!(out.program.is_none(), "the unresolved spelling must not compile");
+}
+
 /// VISIBILITY AGREEMENT, spelled out per row: each decl's
 /// `Linkage::Builtin { ambient }` matches the ambient bit on its
 /// `Surface::core()` row (checked set-wise by the lockstep above); this

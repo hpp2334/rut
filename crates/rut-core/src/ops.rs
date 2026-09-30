@@ -127,20 +127,6 @@ pub enum Nat {
     /// `s.starts_with(from, head)` (json-perf phase 2) — the prefix test
     /// at a codepoint offset, compared host-side (no per-char cells)
     StrStartsWith,
-    /// `StrBuf(cap)` — mint the builder: one UTF-8 block pre-sized to
-    /// `cap` octets (the pre-sizing the accumulator shapes could never
-    /// spell), geometric growth from there
-    StrBufNew,
-    /// `b.push(s)` — append a str's octets in place (amortized O(|s|),
-    /// no per-append copy of the grown prefix)
-    StrBufPush,
-    /// `b.push_code(c)` — append one codepoint
-    StrBufPushCode,
-    /// `b.len()` — the codepoint count so far (O(1): tracked, not scanned)
-    StrBufLen,
-    /// `b.finish()` — the ONE materialization: a fresh immutable `str`
-    /// cell holding the builder's octets (the builder keeps its buffer)
-    StrBufFinish,
     /// `str.from_code(n)` — the 1-codepoint `str` for codepoint `n`
     /// (the char exorcism: the old `Nat::Str` char arm keyed on the now
     /// dead `PrimTy::Char` static type; the codepoint rides a plain u32

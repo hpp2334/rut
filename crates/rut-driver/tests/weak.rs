@@ -1,5 +1,5 @@
 //! `Weak<T>` — the weak reference (RFC 0017 v1, the weak batch). The
-//! surface is the `builtin class` row beside `StackTrace`/`StrBuf`,
+//! surface is the `builtin class` row beside `StackTrace`,
 //! constructed by the class method `Weak.new(v)` with one
 //! member `upgrade() -> ?T`. The pins here:
 //!

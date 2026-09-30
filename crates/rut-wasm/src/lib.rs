@@ -186,6 +186,18 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // HTTP pair stays CLI-only by law: reqwest does not build on
     // wasm32-unknown-unknown (this crate's own dependency note), so a
     // `use http::` block fails to resolve here — loud, never silent.
+    // strbuild's rows ride the `strbuild_host` decl surface (the
+    // ink/rt pattern), lowered here exactly like `rt` above; the
+    // bodies bind in `rut_run` (`install_std_strbuild`)
+    let mut strbuild_host = rut_driver::lower_decl_module(
+        include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
+        "strbuild_host.d.rut",
+    )
+    .expect("the strbuild_host surface is valid");
+    strbuild_host.host_scope = Some("rt:strbuild".to_string()); // rut-std's registration prefix
+    session
+        .register_module("strbuild_host", strbuild_host)
+        .expect("mount strbuild_host");
     session
         .register_module(
             "strbuild",
@@ -375,6 +387,10 @@ pub extern "C" fn rut_run(
     // the async host set (RFC 0018): launch/abort/sleep bodies for the
     // `async_engine` rows the playground mounts in `compile_playground`
     rut_std::async_host::install_std_async(&mut hosts);
+    // the string builder's bodies (the host strbuild pkg): a program
+    // only reaches them when it declares `use strbuild::` (or `use
+    // json::` — json's writer rides the builder)
+    rut_std::strbuild::install_std_strbuild(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,

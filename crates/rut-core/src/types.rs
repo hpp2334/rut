@@ -203,14 +203,6 @@ pub enum TyKind {
     /// a `builtin class` and not a `builtin primitive`). The cell carries
     /// the RAW captured frames; symbolication is lazy, per member access.
     Trace,
-    /// the growable string builder (json-perf phase 2) — the `StrBuf`
-    /// builtin class's runtime type: a stateful engine-owned UTF-8 buffer
-    /// with amortized-O(1) appends (`push`/`push_code`), one final
-    /// `finish` -> str materialization, and a construction-time capacity
-    /// hint. The tokenizer/writer primitive ANY encoder wants; the engine
-    /// never learns what is being built. A cell like `Trace` — methods
-    /// mutate through it, assignment shares it.
-    StrBuf,
     /// the disposal drain's minted context cell — the `DisposalContext`
     /// builtin class's runtime type. The engine mints one per `dispose`
     /// call; a stateless engine cell today (empty surface), shaped to
@@ -283,8 +275,12 @@ pub const TY_BYTES: TypeId = 15;
 /// the `StackTrace` snapshot (RFC 0036, err-channel phase 2) — appended
 /// after `Bytes`; fixed ids are wire-stable and must never be reordered
 pub const TY_STACK_TRACE: TypeId = 16;
-/// the `StrBuf` growable builder (json-perf phase 2) — appended after
-/// `StackTrace`; fixed ids are wire-stable and must never be reordered
+/// RESERVED (the host strbuild pkg): the growable string builder's boot
+/// row — the engine surface is GONE (the builder is a host package over
+/// `rt:strbuild::*`), but the ROW stays so every id above it keeps its
+/// wire-stable boot position (the fixed ids must never be reordered);
+/// nothing reaches it — the resolver's removed-core check fires on the
+/// NAME long before any id could.
 pub const TY_STRBUF: TypeId = 17;
 /// the `?str` answer lane (the legal-host-returns phase): the boot row
 /// `Opt { elem: TY_STR }` a `.d.rut` `-> ?str` return maps to — the
@@ -345,7 +341,13 @@ impl TypeTable {
         push(sym::OPAQUE, TyKind::Opaque);
         push(sym::BYTES, TyKind::Bytes);
         push(sym::STACK_TRACE, TyKind::Trace);
-        push(sym::STRBUF, TyKind::StrBuf);
+        // RESERVED (the host strbuild pkg, the TY_CHAR convention): the
+        // builder's engine surface is GONE — the kind is deleted and the
+        // removed-core check diagnoses the NAME. The ROW stays so every
+        // id above it keeps its wire-stable boot position; nothing
+        // reaches it. The name keeps its well-known symbol (the
+        // removed-name lookup spells it).
+        push(sym::STRBUF, TyKind::Nil);
         // RESERVED (the any-lane removal, the TY_CHAR convention): the
         // `any` crossing row (nmap-hostvals P3) is GONE from the surface
         // — the lexer refuses the spelling in every mode, the decl

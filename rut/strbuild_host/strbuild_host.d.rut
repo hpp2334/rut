@@ -1,0 +1,12 @@
+// strbuild_host/strbuild_host.d.rut — the string builder's host rows
+// (the ink/Logger pattern): five host fns the embedding Rust
+// implements (`rut_std::strbuild::install_std_strbuild`); the
+// `strbuild` package wraps them in the `StringBuilder` class. The
+// builder's state is an `opaque` handle owning the host's buffer —
+// rut never sees the layout, only this surface.
+
+pub host fn sb_new(cap: i32) -> opaque;
+pub host fn sb_push(b: opaque, s: str);
+pub host fn sb_push_code(b: opaque, cp: u32);
+pub host fn sb_len(b: opaque) -> i32;
+pub host fn sb_finish(b: opaque) -> str;

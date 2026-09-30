@@ -9,3 +9,4 @@ pub mod http;
 pub mod logger;
 pub mod math;
 pub mod nmap;
+pub mod strbuild;

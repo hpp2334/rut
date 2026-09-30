@@ -339,11 +339,6 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`StackTrace` takes no generic arguments");
                             TY_I32
                         }
-                        (rut_core::binary::NativeTy::StrBuf, []) => TY_STRBUF,
-                        (rut_core::binary::NativeTy::StrBuf, _) => {
-                            self.err(sp, "`StrBuf` takes no generic arguments — pre-size with the capacity: `StrBuf(cap)`");
-                            TY_I32
-                        }
                         // the disposal drain's context cell: the engine mints
                         // it — the name resolves in type position (a
                         // `dispose` body's `cx` parameter), nothing

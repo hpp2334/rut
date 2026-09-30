@@ -373,10 +373,9 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
                 }
             }
         }
-        // a trace cell's frames are plain (func, pc) words, never handles;
-        // a builder's block-backed octets are likewise never handles
+        // a trace cell's frames are plain (func, pc) words, never handles
         CellData::Enum { .. } | CellData::Str(_)
-        | CellData::Trace { .. } | CellData::StrBuf { .. } => {}
+        | CellData::Trace { .. } => {}
     }
     out
 }
@@ -403,7 +402,7 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
     let children = unsafe {
         match (*p).data {
             CellData::Str(_) | CellData::Enum { .. }
-            | CellData::Trace { .. } | CellData::StrBuf { .. }
+            | CellData::Trace { .. }
             | CellData::WeakBox { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
         }
@@ -415,7 +414,6 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
         // out before its block goes.
         match &mut (*p).data {
             CellData::Str(sv) => arena.blocks.free(sv.block),
-            CellData::StrBuf { buf, .. } => arena.blocks.free(buf.block),
             CellData::Array { items, .. } => arena.blocks.free(items.borrow().block),
             _ => {}
         }

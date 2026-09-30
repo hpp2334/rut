@@ -209,6 +209,16 @@ fn main() {
         {
             rut_std::bench_cross::install_std_bench_cross(&mut hosts);
         }
+        // the string builder's bodies (the host strbuild pkg) — same
+        // exactness law: bound only when the dep graph declares
+        // `rt:strbuild::` (a `use strbuild::` / `use json::` pulls it)
+        if session
+            .expected_host_fns()
+            .keys()
+            .any(|name| name.starts_with("rt:strbuild::"))
+        {
+            rut_std::strbuild::install_std_strbuild(&mut hosts);
+        }
         hosts.verify_against(&session.expected_host_fns());
         let mut vm = Vm::new(
             Rc::clone(&prog),

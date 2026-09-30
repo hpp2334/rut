@@ -74,8 +74,8 @@ fn rut_source_cannot_name_any() {
 fn decl_types_must_still_be_crossing_types() {
     // with the `any` arm gone, a non-crossing spelling gets the
     // crossing-set diagnostic (the grammar is concrete, RFC 0023 §1)
-    let src = "pub host fn probe(m: opaque) -> StrBuf;\n";
-    let err = lower_decl_module(src, "hmap.d.rut").expect_err("StrBuf is not a crossing type");
+    let src = "pub host fn probe(m: opaque) -> Widget;\n";
+    let err = lower_decl_module(src, "hmap.d.rut").expect_err("Widget is not a crossing type");
     assert!(err.contains("is not a crossing type"), "{err}");
 }
 

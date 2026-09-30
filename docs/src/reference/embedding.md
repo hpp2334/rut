@@ -156,8 +156,8 @@ op; `vm.resume::<R>()` re-runs the turn.
 ## The engine's own natives
 
 The VM boots with internal native calls in the same dispatch family — the
-`str`/`bytes` members, the `f"..."` concatenation lowering, the `StrBuf`
-builder, array length/slice, and stack-trace capture. They are call slots
+`str`/`bytes` members, the `f"..."` concatenation lowering, array
+length/slice, and stack-trace capture. They are call slots
 fixed at boot, never IR-level special forms; hosts see them exactly like
 their own registered modules.
 
@@ -168,6 +168,7 @@ their own registered modules.
 | `math::install_std_math` | `calc`'s float functions, both widths |
 | `logger::install_std_log(&mut hosts, sink)` | `rt:log`'s two rows, routed to a `FnMut(&str)` sink |
 | `nmap::install_std_nmap` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
+| `strbuild::install_std_strbuild` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
 | `async_host::install_std_async` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |
 | `http::install_std_http` | the std HTTP lanes (reqwest; native builds only) |
 | `bench_cross::install_std_bench_cross` | the crossing-tax benchmark rows |
