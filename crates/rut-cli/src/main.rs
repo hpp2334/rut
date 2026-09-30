@@ -191,6 +191,19 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
                 std::process::exit(2);
             }
         };
+        // a v6 host bundle: nothing to run — its root is a declaration
+        // surface the embedding Rust binds, never a program
+        if matches!(
+            session.resolve(&root).map(|m| &m.body),
+            Ok(rut_driver::ModuleBody::Host { .. })
+        ) {
+            eprintln!(
+                "run: {path} packs the host pkg `{root}` — a host bundle carries a \
+                 declaration surface, nothing to run; bind its rows from the embedder \
+                 (`install_host_pkg` over the mounted rows)"
+            );
+            std::process::exit(2);
+        }
         // the symbol table restores BEFORE the graph compiles, so
         // linking and the VM both see the real names and positions
         if let Some(sym) = &symbols {
@@ -358,11 +371,13 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
 }
 
 /// `rut pack <dir> [-o out.rutbundle] [--strip]` — pack a module
-/// directory into a deterministic v5 **compiled** `.rutbundle`
-/// (linkable pkgs ride as `.rutc` binaries, splice-needed deps as
-/// source). `--strip` writes the sidecar symbol table at the sibling
-/// path `<out-without-ext>.rutsym` — the PRIVATE half, never an entry
-/// inside the bundle.
+/// directory into a deterministic `.rutbundle`: a **v5 compiled** root
+/// for a lib pkg (linkable pkgs ride as `.rutc` binaries, splice-needed
+/// deps as source), a **v6 decl** root for a `type = "host"` pkg (the
+/// surface rides as source, single-package). `--strip` writes the
+/// sidecar symbol table at the sibling path `<out-without-ext>.rutsym`
+/// — the PRIVATE half, never an entry inside the bundle (refused on a
+/// host root: no programs, no sidecar).
 fn pack(dir: &str, out: Option<&str>, strip: bool) {
     let p = std::path::Path::new(dir);
     let fetch = match CacheFetch::new() {

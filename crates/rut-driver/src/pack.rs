@@ -1,7 +1,12 @@
-//! The v5 packer: a module directory (+ its whole `[deps]` closure) →
-//! one deterministic **compiled** `.rutbundle`. The root and every
-//! source dep ride as `.rutc` binaries (bodies + surface — the
-//! linking truth); host/decl pkgs ride as their declaration file sets.
+//! The packer: a module directory (+ its whole `[deps]` closure) →
+//! one deterministic `.rutbundle`. TWO root kinds, paired with the
+//! format version: a **lib** root packs **compiled** (v5 — the root and
+//! every source dep ride as `.rutc` binaries (bodies + surface — the
+//! linking truth); host/decl pkgs ride as their declaration file sets),
+//! and a **host** root packs as a **v6 decl root** (single-package: its
+//! `.d.rut` surface rides as source, nothing to compile — the surface
+//! verifies at pack time by parsing + lowering once, then the module
+//! is discarded).
 //! Instantiation is owner-anchored (a generic export links, its
 //! consumers request), class methods cross on the surface's inherent
 //! rows, and the pack-time scope ledger lets a loader rebase every
@@ -40,9 +45,14 @@ use crate::loader::{
 };
 use crate::session::ModuleBody;
 
-/// The v5 bundle layout version — the only one this toolchain packs or
-/// loads.
+/// The v5 bundle layout version — a **compiled** root (a lib pkg).
 pub const FORMAT_VERSION: u64 = 5;
+
+/// The v6 bundle layout version — a **decl** root (a `type = "host"`
+/// pkg: its `.d.rut` surface rides as source, single-package). Writers
+/// emit 6 ONLY for decl roots; readers accept 5|6 — the pairing is
+/// total, both directions refused at the gate.
+pub const FORMAT_VERSION_DECL: u64 = 6;
 
 /// The `rut.scopes` ledger: one `<scope> = "<spec>"` row per linked
 /// module of the packed closure (engine mounts included), ascending by
@@ -56,7 +66,8 @@ fn ledger_text(rows: &[(rut_core::id::ScopeId, String)]) -> String {
     out
 }
 
-/// Pack a module directory into a deterministic v5 `.rutbundle`.
+/// Pack a lib directory into a deterministic v5 `.rutbundle` (compiled
+/// root), or a `type = "host"` directory into a v6 decl root.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     Ok(pack_dir_opts(dir, &PackOpts::default())?.0)
 }
@@ -108,13 +119,31 @@ pub fn pack_dir_opts_fetched(
     // the packed rut.toml is the directory's rut.toml byte-for-byte, so
     // the bundle keys must already be there — directory loading ignores
     // them, but a bundle loader refuses without them (refuse, never
-    // guess): v5 since the compiled-bundle batch.
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(FORMAT_VERSION)
+    // guess): v5 since the compiled-bundle batch, v6 for a host root
+    // (its surface rides as source — there is nothing to compile)
+    let want_version = match manifest.pkg_type {
+        rut_bundle::PkgType::Host => FORMAT_VERSION_DECL,
+        rut_bundle::PkgType::Lib => FORMAT_VERSION,
+    };
+    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
     {
         return Err(format!(
-            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = {FORMAT_VERSION}`",
+            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = {want_version}`",
             dir.join("rut.toml").display()
         ));
+    }
+    // the host-root arm: no closure (the grammar refuses a host
+    // manifest's deps tables), no compile walk — the surface verifies
+    // by parsing + lowering once, then rides as source
+    if manifest.pkg_type == rut_bundle::PkgType::Host {
+        if opts.strip {
+            return Err(
+                "a host bundle has no symbols to strip — its root is a declaration surface, \
+                 not a program; there is no binary and no sidecar"
+                    .into(),
+            );
+        }
+        return pack_host_root(dir, &manifest, manifest_bytes).map(|bytes| (bytes, None));
     }
     // the closure's session: the [deps] walk + the dev pass + the peer
     // gate, then the engine mounts the closure's code needs (the
@@ -349,6 +378,38 @@ pub fn pack_dir_opts_fetched(
     }
     let bundle = write_bundle(&entries).map_err(|e| e.to_string())?;
     Ok((bundle, symtab))
+}
+
+/// Pack a `type = "host"` directory as a **v6 decl root** —
+/// single-package, byte-deterministic: the manifest byte-for-byte plus
+/// its declaration surface file(s) (the same file-set shape a host
+/// group rides inside a v5 bundle). The pack-time VERIFICATION is the
+/// surface's own parse + lower (the exact lane a mount runs) — the
+/// lowered module is discarded; decls ride as source and the embedding
+/// Rust binds the bodies. A host pkg has no deps, no programs, no
+/// ledger — nothing else to emit.
+fn pack_host_root(
+    dir: &Path,
+    manifest: &rut_bundle::Manifest,
+    manifest_bytes: Vec<u8>,
+) -> Result<Vec<u8>, String> {
+    let rel = manifest.entry.type_path.as_deref().ok_or_else(|| {
+        format!("{} is a host pkg with no `entry.type`", dir.join("rut.toml").display())
+    })?;
+    let rel = rel.strip_prefix("./").unwrap_or(rel);
+    let src_path = dir.join(rel);
+    let src = std::fs::read_to_string(&src_path)
+        .map_err(|e| format!("cannot read {}: {e}", src_path.display()))?;
+    // the verification: the surface parses and lowers into host rows —
+    // a broken `.d.rut` refuses to pack (discard the output)
+    crate::decl::lower_decl_module(&src, &src_path.display().to_string())?;
+    // entries = rut.toml + the surface (the root file set, prefix "") —
+    // the exact shape `bundle_entry_module` reads back at load
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    entries.push(("rut.toml".into(), manifest_bytes));
+    let key = bundle_key(rel)?;
+    entries.push((key, src.into_bytes()));
+    write_bundle(&entries).map_err(|e| e.to_string())
 }
 
 /// The `.rutc`-or-source classifier — the packer's ONE group-kind

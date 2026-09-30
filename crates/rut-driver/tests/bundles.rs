@@ -90,7 +90,7 @@ fn refusals() {
     // v1–v4 layouts are refused by the one-line version gate — the
     // same refusal an OLDER loader applies to a version it does not
     // know, before reading anything else (refuse, never guess)
-    for v in [1u8, 2, 3, 4, 99] {
+    for v in [1u8, 2, 3, 4, 7, 99] {
         let manifest = format!(
             "format = \"rutbundle\"\nformat_version = {v}\nname = \"x\"\nentry.lib = \"./x.rut\"\n"
         );
@@ -101,7 +101,7 @@ fn refusals() {
         .unwrap();
         let err = rut_driver::load_bundle_bytes(&old, Path::new("b")).unwrap_err();
         assert!(err.contains("format_version"), "{err}");
-        assert!(err.contains("reads bundle format_version 5 only"), "{err}");
+        assert!(err.contains("reads bundle format_version 5 (compiled) and 6 (decl) only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
     }
 

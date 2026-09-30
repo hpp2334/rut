@@ -344,15 +344,17 @@ fn bundle_entry_module(
     })
 }
 
-/// Mount a `.rutbundle` — a v5 **compiled** bundle: the
-/// root's `.rutc` binary, its pack-time scope ledger, and each dep
-/// group as a compiled `.rutc` or a source file set. The gate order is
-/// the law: container CRC ([`Bundle::parse`]), manifest + exact
-/// `format_version = 5` ([`Layout::parse`]), per-group decode and
-/// verification (inside the layout parse) — then, and only then, the
-/// mount. Older layouts are refused with the one-line version error:
-/// refuse, never guess. Source sharing stays what it always was outside
-/// bundles: a directory.
+/// Mount a `.rutbundle` — a **v5 compiled** bundle (the root's `.rutc`
+/// binary, its pack-time scope ledger, and each dep group as a compiled
+/// `.rutc` or a source file set) or a **v6 decl** bundle (a host root:
+/// the declaration surface mounts as the pkg's host rows — the same
+/// lane a host group rides). The gate order is the law: container CRC
+/// ([`Bundle::parse`]), manifest + exact `format_version` 5|6
+/// ([`Layout::parse`]), then each kind's payload checks (compiled:
+/// per-group decode and verification; decl: the single-package law) —
+/// then, and only then, the mount. Older layouts are refused with the
+/// one-line version error: refuse, never guess. Source sharing stays
+/// what it always was outside bundles: a directory.
 pub fn load_bundle_session(path: &Path) -> Result<(Session, String), String> {
     let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     load_bundle_bytes(&bytes, path)
@@ -367,7 +369,28 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     // verification — the layout parse refuses anything it cannot
     // decode, so a bad binary never reaches the session
     let layout = Layout::parse(&bundle).map_err(|e| format!("{}: {e}", origin.display()))?;
-    let Layout::Compiled { manifest, root, scopes, groups } = layout;
+    let (manifest, root, scopes, groups) = match layout {
+        Layout::Compiled { manifest, root, scopes, groups } => (manifest, root, scopes, groups),
+        Layout::Decl { manifest, .. } => {
+            // the decl root: a host pkg — the surface mounts as the
+            // pkg's host rows through `bundle_entry_module` (the lane a
+            // host group rides inside a v5 bundle). Single-package: no
+            // groups, no ledger, no closure — a LEAF, done.
+            let entries = bundle.entries();
+            let root_spec = manifest
+                .name
+                .clone()
+                .ok_or_else(|| format!("{}: rut.toml has no `name`", origin.display()))?;
+            let mut session = Session::new();
+            let module = bundle_entry_module(entries, "", &manifest)
+                .map_err(|e| format!("{}: {e}", origin.display()))?;
+            session
+                .register_module(&root_spec, module)
+                .map_err(|e| e.to_string())?;
+            record_peers(&mut session, &root_spec, &manifest);
+            return Ok((session, root_spec));
+        }
+    };
     let entries = bundle.entries();
     let root_spec = manifest
         .name
@@ -852,20 +875,23 @@ fn resolve_table(
 ///    by grammar law) — a mismatch names the dep, the url, and BOTH
 ///    hashes;
 /// 1. the container (every entry CRC-verified) — origin is the url;
-/// 2. the layout: manifest + exact `format_version = 5`, every group
-///    decode + verified;
+/// 2. the layout: manifest + exact `format_version` 5|6 (compiled or
+///    decl root), every group decode + verified;
 /// 3. name-vs-key: the bundle's `name` must equal the `[deps]` key
 ///    (the path flavor's twin);
 /// 4. the scope-ledger MERGE: rows record; a row colliding with a
 ///    DIFFERENT spec is a corrupt or doctored closure — refuse;
-/// 5. the root mounts Compiled (first-mount-wins); `record_peers`;
+/// 5. the root mounts (first-mount-wins) — compiled for a v5 bundle,
+///    the decl-surface host rows for a v6 bundle
+///    (`bundle_entry_module`, the group lane); `record_peers`;
 /// 6. the group loop = `load_bundle_bytes`'s (first-mount-wins,
 ///    own-scope vs ledger consistency for compiled groups,
 ///    `bundle_entry_module` for source groups) — no peer gate inline:
 ///    archives record for the ONE pass-3 gate;
 /// 7. the closure check against the COMBINED session — bundles are
 ///    closed: every declared dep rides in-archive (or mounted earlier).
-///    No fetching at bundle load, ever.
+///    No fetching at bundle load, ever. A v6 host bundle is a LEAF:
+///    single-package, no groups, the closure check trivially true.
 fn mount_url_dep(
     session: &mut Session,
     spec: &str,
@@ -890,7 +916,37 @@ fn mount_url_dep(
     let bundle = Bundle::parse(bytes).map_err(|e| format!("{url}: {e}"))?;
     // gate 2 — the layout: manifest, exact version, every group decoded
     let layout = Layout::parse(&bundle).map_err(|e| format!("{url}: {e}"))?;
-    let Layout::Compiled { manifest, root, scopes, groups } = layout;
+    let (manifest, root, scopes, groups) = match layout {
+        Layout::Compiled { manifest, root, scopes, groups } => (manifest, root, scopes, groups),
+        Layout::Decl { manifest, .. } => {
+            // the decl root: a host pkg — the surface mounts as the
+            // pkg's host rows (`bundle_entry_module`, the group lane);
+            // single-package, no ledger, no groups. The LEAF law: no
+            // fetch walk, the closure check below is trivially true.
+            let entries = bundle.entries().to_vec();
+            let root_spec = manifest
+                .name
+                .clone()
+                .ok_or_else(|| format!("{url}: rut.toml has no `name`"))?;
+            if root_spec != spec {
+                return Err(format!(
+                    "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
+                ));
+            }
+            let module = bundle_entry_module(&entries, "", &manifest)
+                .map_err(|e| format!("{url}: {e}"))?;
+            session
+                .register_module(&root_spec, module)
+                .map_err(|e| e.to_string())?;
+            record_peers(session, &root_spec, &manifest);
+            let slot = archives.len();
+            let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
+            prefixes.insert(root_spec.clone(), String::new());
+            session.record_archive_mounts(&prefixes, slot);
+            archives.push(Archive { origin: url.to_string(), entries });
+            return Ok(());
+        }
+    };
     // gate 3 — name-vs-key
     let root_spec = manifest
         .name

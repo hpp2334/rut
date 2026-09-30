@@ -279,9 +279,12 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     }
     // The declared kind's rules. Host-pkg-ness is DECLARED (`type =
     // "host"`), never inferred: a host pkg is pure surface, so deps of
-    // any kind, a body, and the bundle-root keys are all refused; the
-    // no-inference law makes an `entry.type`-only lib spelling an error —
-    // spell the kind, either way.
+    // any kind and a body are refused; the no-inference law makes an
+    // `entry.type`-only lib spelling an error — spell the kind, either
+    // way. The bundle-root keys (`format`/`format_version`) are LEGAL on
+    // a host manifest: a host pkg packs as a v6 decl root (its root is
+    // the declaration surface itself). Directory loading ignores the
+    // keys either way.
     match m.pkg_type {
         PkgType::Host => {
             // deps of any kind — name the table AND the row (D4 style):
@@ -311,13 +314,6 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 return Err(ManifestError(
                     "a `type = \"host\"` pkg needs `entry.type` — the declaration surface \
                      is the whole pkg"
-                        .into(),
-                ));
-            }
-            if m.format.is_some() || m.format_version.is_some() {
-                return Err(ManifestError(
-                    "a `type = \"host\"` pkg cannot be a bundle root — `format`/`format_version` \
-                     belong to a compiled lib pkg"
                         .into(),
                 ));
             }
@@ -782,12 +778,48 @@ entry.lib = "./pouch.rut"
     }
 
     #[test]
-    fn host_pkg_refuses_the_bundle_root_keys() {
+    fn host_pkg_takes_the_bundle_root_keys() {
+        // the v6 grammar: `format`/`format_version` are LEGAL on a
+        // `type = "host"` manifest — a host pkg packs as a decl root
+        let m = parse_manifest(
+            "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Host);
+        assert_eq!(m.format.as_deref(), Some("rutbundle"));
+        assert_eq!(m.format_version, Some(6));
+    }
+
+    #[test]
+    fn host_bundle_manifest_still_refuses_its_other_laws() {
+        // the bundle keys change nothing else: the deps tables, the body
+        // refusal, the `entry.type` requirement all still hold WITH the
+        // keys present
+        for table in ["deps", "peer-deps", "dev-deps"] {
+            let err = parse_manifest(&format!(
+                "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n[{table}]\nink = {{ path = \"../ink\" }}\n"
+            ))
+            .unwrap_err();
+            assert!(err.to_string().contains("a host pkg is pure surface"), "[{table}]: {err}");
+        }
         let err = parse_manifest(
-            "format = \"rutbundle\"\nformat_version = 5\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+            "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.lib = \"./h.rut\"\n",
         )
         .unwrap_err();
-        assert!(err.to_string().contains("bundle root"), "{err}");
+        assert!(err.to_string().contains("no body"), "{err}");
+        let err = parse_manifest("format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\n")
+            .unwrap_err();
+        assert!(err.to_string().contains("needs `entry.type`"), "{err}");
+    }
+
+    #[test]
+    fn format_version_must_be_an_integer() {
+        let err = parse_manifest(
+            "format = \"rutbundle\"\nformat_version = six\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("line 2"), "{err}");
+        assert!(err.to_string().contains("expected an integer"), "{err}");
     }
 
     #[test]

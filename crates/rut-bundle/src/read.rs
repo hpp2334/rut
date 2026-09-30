@@ -1,9 +1,12 @@
 //! The bundle reader: parse the bytes once, then read. [`Bundle`] is
 //! the entry-level view (CRC-verified at parse, entries by name); the
-//! v5 [`Layout`] is the structured view — the compiled root program,
-//! the pack-time scope ledger, and each dep group as compiled `.rutc`
-//! or source file set. Parsing a layout decodes and verifies every
-//! group binary, so a bad archive never reaches the session.
+//! [`Layout`] is the structured view, ONE of two root kinds: a
+//! **v5 compiled** root (the decoded root program, the pack-time scope
+//! ledger, and each dep group as compiled `.rutc` or source file set)
+//! or a **v6 decl** root (a `type = "host"` pkg whose root IS its
+//! declaration surface — single-package, nothing to decode). Parsing a
+//! layout verifies what each kind carries, so a bad archive never
+//! reaches the session.
 
 use crate::container::{parse_bundle, BundleError};
 use crate::manifest::{parse_manifest, Manifest};
@@ -54,11 +57,10 @@ pub enum GroupKind {
     Source,
 }
 
-/// The one bundle layout — v5, compiled. The root rides `<pkg>.rutc`
-/// (a linkable root is the packer's law); `scopes` is the pack-time
-/// scope ledger (every scope the closure's programs reference, mapped
-/// to the spec that owned it — engine mounts included); `groups` lists
-/// each dep group by its archive prefix.
+/// The one bundle layout — the root kind pairs with the version:
+/// **v5 ⇔ compiled** (a lib root; `<pkg>.rutc` + ledger + groups),
+/// **v6 ⇔ decl** (a host root; the manifest + its surface, nothing
+/// else). The pairing is total, both directions refused at the gate.
 #[derive(Clone, Debug)]
 pub enum Layout {
     Compiled {
@@ -71,15 +73,26 @@ pub enum Layout {
         /// `(archive prefix, payload)` per dep group, archive order
         groups: Vec<(String, GroupKind)>,
     },
+    /// a v6 host root: the pkg's declaration surface rides as its own
+    /// source — a single-package bundle, no ledger, no groups, nothing
+    /// to decode
+    Decl {
+        /// the root manifest (byte-for-byte `rut.toml`, parsed)
+        manifest: Manifest,
+        /// the surface text (the manifest's `entry.type` file) —
+        /// presence- and UTF-8-checked here
+        surface: String,
+    },
 }
 
 impl Layout {
-    /// Parse a v5 compiled bundle: manifest + version gate first
-    /// (`format_version` must be exactly 5 — refuse, never guess),
-    /// then the scope ledger, then the root and every group's binary
-    /// decode + verification. The load order is: container CRC (the
-    /// [`Bundle::parse`] this takes), manifest/version, per-group
-    /// decode+verify — the mount is the caller's.
+    /// Parse a bundle: manifest + version gate first (`format_version`
+    /// must be exactly 5 or 6 — refuse, never guess), then the
+    /// kind's own checks (v5: the scope ledger, the root and every
+    /// group's binary decode + verification; v6: the single-package
+    /// law and the surface read). The load order is: container CRC
+    /// (the [`Bundle::parse`] this takes), manifest/version, then the
+    /// kind's payloads — the mount is the caller's.
     pub fn parse(bundle: &Bundle) -> Result<Layout, String> {
         let toml = bundle
             .read("rut.toml")
@@ -89,12 +102,23 @@ impl Layout {
             return Err("rut.toml has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
-            Some(5) => {}
-            other => {
-                return Err(format!(
-                    "this toolchain reads bundle format_version 5 only (found {other:?}) — re-pack the directory"
-                ));
-            }
+            Some(5) => Self::parse_compiled(bundle, manifest),
+            Some(6) => Self::parse_decl(bundle, manifest),
+            other => Err(format!(
+                "this toolchain reads bundle format_version 5 (compiled) and 6 (decl) only (found {other:?}) — re-pack the directory"
+            )),
+        }
+    }
+
+    /// The v5 arm: a lib root, compiled. A host manifest here is the
+    /// broken pairing (v5's root must be a `.rutc` a host pkg cannot
+    /// have) — refuse, never guess.
+    fn parse_compiled(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
+        if manifest.pkg_type == crate::manifest::PkgType::Host {
+            return Err(
+                "a `type = \"host\"` root packs at format_version 6 — a v5 bundle's root is compiled, and a host pkg has nothing to compile; re-pack the directory"
+                    .into(),
+            );
         }
         let name = manifest
             .name
@@ -165,5 +189,50 @@ impl Layout {
             groups.push((p, kind));
         }
         Ok(Layout::Compiled { manifest, root, scopes, groups })
+    }
+
+    /// The v6 arm: a host root, its surface riding as source. A lib
+    /// manifest here is the broken pairing (lib roots stay v5
+    /// compiled) — refuse; so does anything compiled-shaped the archive
+    /// cannot legally carry: a root `.rutc` (a host bundle's root is its
+    /// surface), a scope ledger (no programs, no ledger), any dep group
+    /// (a host bundle is single-package — the grammar refuses a host
+    /// manifest's deps tables, so there is nothing for a group to be).
+    fn parse_decl(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
+        if manifest.pkg_type != crate::manifest::PkgType::Host {
+            return Err(
+                "format_version 6 is the decl-root layout — a lib root packs at 5, compiled; re-pack the directory"
+                    .into(),
+            );
+        }
+        let name = manifest
+            .name
+            .clone()
+            .ok_or_else(|| "rut.toml has no `name`".to_string())?;
+        if bundle.bytes(&format!("{name}.rutc")).is_some() {
+            return Err(format!(
+                "a host bundle's root is its surface, not a compiled unit — found a `{name}.rutc` entry"
+            ));
+        }
+        if bundle.bytes("rut.scopes").is_some() {
+            return Err(
+                "a host bundle carries no programs — found a `rut.scopes` ledger entry".into()
+            );
+        }
+        for (n, _) in bundle.entries() {
+            if n.contains('/') {
+                return Err(format!(
+                    "a host bundle is single-package — found group entry `{n}`"
+                ));
+            }
+        }
+        let Some(rel) = &manifest.entry.type_path else {
+            return Err("rut.toml has no `entry.type` — a host bundle's root is its surface".into());
+        };
+        let rel = rel.strip_prefix("./").unwrap_or(rel);
+        let surface = bundle
+            .read(rel)
+            .map_err(|e| format!("{e} — a host bundle's root is its surface"))?;
+        Ok(Layout::Decl { manifest, surface })
     }
 }
