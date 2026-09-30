@@ -40,8 +40,9 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
          register exactly rut/biz/rut.toml's closure (minus the ABI root)"
     );
 
-    // same host surface: the `.d.rut` pkg and its scope ride the
-    // manifest's host_scope, and the mirror states the same value
+    // same host surface: the `.d.rut` pkg rides the manifest (its
+    // registration scope IS the pkg name), and the mirror states the
+    // same rows
     assert_eq!(
         manifest.expected_host_fns(),
         mirror.expected_host_fns(),

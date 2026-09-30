@@ -38,7 +38,7 @@ fn vm_at(dir: &str) -> Vm {
     };
     // the nmapset group drags nmap_host's declared surface — bind the
     // bodies (declared host fns run only through the registry)
-    // json's writer rides the strbuild pkg — its `rt:strbuild` rows are
+    // json's writer rides the strbuild pkg — its `strbuild_host` rows are
     // in this closure's declared set, so the bodies bind through the
     // same registry
     let mut hosts = HostRegistry::new();

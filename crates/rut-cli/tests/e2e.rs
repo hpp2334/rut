@@ -9,10 +9,10 @@ use rut_core::ops::{Nat, Op};
 
 /// The toolchain libs a single-file case declares by use (`ink`,
 /// `pouch`) — mounted from the tree as real packages (the driver does
-/// not know their names): mounting `ink` pulls its `rt` dep along.
+/// not know their names): mounting `ink` pulls its `ink_host` dep along.
 fn mount_case_libs(s: &mut rut_driver::Session) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."); // repo root
-    rut_driver::mount_dir(s, &root.join("rut/ink")).expect("mount ink (+rt)");
+    rut_driver::mount_dir(s, &root.join("rut/ink")).expect("mount ink (+ink_host)");
     rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
 }
 
@@ -828,7 +828,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the compiled program carries calc's and rt:log's thunks (mount =
+    // the compiled program carries calc's and ink_host's thunks (mount =
     // declare) — bind them, sink discarded
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::logger::install_std_log(&mut hosts, |_msg| {});
@@ -1230,12 +1230,12 @@ pub fn main() -> nil {
 fn pouch_vec_via_module_loader_runs() {
     // the real rut/pouch source, mounted as a package (manifest + deps)
     // and used by a consumer; generic Vec is inlined and monomorphized,
-    // then linked and executed — ink rides the same mount (with its rt).
+    // then linked and executed — ink rides the same mount (with its ink_host).
     // mount_std (not just core): the run installs calc's bodies too, and
     // the load-time contract requires mount ↔ bindings to agree
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s); // ink (+rt) and pouch, from the tree
+    mount_case_libs(&mut s); // ink (+ink_host) and pouch, from the tree
     s.register_module(
         "app_main",
         rut_driver::Module {
@@ -1293,7 +1293,7 @@ fn std_collection_via_module_loader_runs() {
     // so this exercises the rut-source module loader end to end
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s); // pouch + ink (+rt), from the tree
+    mount_case_libs(&mut s); // pouch + ink (+ink_host), from the tree
     s.register_module(
         "app_main",
         rut_driver::Module {

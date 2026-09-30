@@ -95,7 +95,6 @@ fn bundle_entry_module(
         let rel = manifest.entry.type_path.as_ref().unwrap();
         let src = read(rel)?;
         let mut m = crate::decl::lower_decl_module(&src, &format!("{prefix}{rel}"))?;
-        m.host_scope = manifest.host_scope.clone();
         m.entry = manifest.entry.clone();
         return Ok(m);
     }
@@ -112,7 +111,6 @@ fn bundle_entry_module(
     Ok(Module {
         body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
-        host_scope: manifest.host_scope.clone(),
         ..Default::default()
     })
 }
@@ -159,7 +157,6 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             Module {
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
-                host_scope: manifest.host_scope.clone(),
                 ..Default::default()
             },
         )
@@ -211,7 +208,6 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                 Module {
                     body: ModuleBody::Compiled(program.clone()),
                     entry: dm.entry.clone(),
-                    host_scope: dm.host_scope.clone(),
                     ..Default::default()
                 }
             }
@@ -325,16 +321,14 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
 ///   body compiles; the surface derives from its exports.
 /// - `entry.type` ALONE — a **host pkg**: a pure declaration surface.
 ///   The `.d.rut` parses in declaration mode and lowers into the
-///   module's host fns; `host_scope` rides the
-///   manifest. No body exists — the embedding Rust binds it at run
-///   time.
+///   module's host fns. No body exists — the embedding Rust binds it
+///   at run time.
 fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> {
     if manifest.entry.lib.is_none() && manifest.entry.type_path.is_some() {
         let rel = manifest.entry.type_path.as_ref().unwrap();
         let origin = format!("{}/{}", dir.display(), rel);
         let src = load_module_source(&dir.join(rel))?;
         let mut m = crate::decl::lower_decl_module(&src, &origin)?;
-        m.host_scope = manifest.host_scope.clone();
         m.entry = manifest.entry.clone();
         return Ok(m);
     }
@@ -354,7 +348,6 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
     Ok(Module {
         body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
-        host_scope: manifest.host_scope.clone(),
         ..Default::default()
     })
 }

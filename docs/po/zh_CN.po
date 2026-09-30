@@ -4733,11 +4733,11 @@ msgstr ""
 "```"
 
 #: src/tutorial/modules.md:140
-msgid ""
-"The app names its dependencies in `[deps]`, by path — each package pulls its "
-"own dependencies along (`ink` brings the host surface `rt`; you never spell "
-"it):"
-msgstr "应用在 `[deps]` 里按路径写出自己的依赖——每个包把自己的依赖一路带上（`ink` 会带来宿主表面 `rt`；你从不需要写出它）："
+msgid "The app names its dependencies in `[deps]`, by path — each package"
+"pulls its own dependencies along (`ink` brings the host surface"
+"`ink_host`; you never spell it):"
+msgstr "应用在 `[deps]` 里按路径写出自己的依赖——每个包把自己的依赖一路带上（`ink` 会带来宿主表面"
+"`ink_host`；你从不需要写出它）："
 
 #: src/tutorial/modules.md:144
 msgid ""
@@ -19763,8 +19763,8 @@ msgid "`logger::install_std_log(&mut hosts, sink)`"
 msgstr "`logger::install_std_log(&mut hosts, sink)`"
 
 #: src/reference/embedding.md:169
-msgid "`rt:log`'s two rows, routed to a `FnMut(&str)` sink"
-msgstr "`rt:log` 的两行，路由到一个 `FnMut(&str)` 汇点"
+msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
+msgstr "`ink_host` 的两行，路由到一个 `FnMut(&str)` 汇点"
 
 #: src/reference/embedding.md:170
 msgid "`nmap::install_std_nmap`"
@@ -20670,16 +20670,12 @@ msgid ""
 "# server/rut.toml\n"
 "name = \"server\"\n"
 "entry.type = \"./server.d.rut\"\n"
-"host_scope = \"server\"        # optional registration prefix; default: the "
-"name\n"
 "```"
 msgstr ""
 "```toml\n"
 "# server/rut.toml\n"
 "name = \"server\"\n"
 "entry.type = \"./server.d.rut\"\n"
-"host_scope = \"server\"        # optional registration prefix; default: the "
-"name\n"
 "```"
 
 #: src/reference/host-fns.md:30
@@ -21484,10 +21480,10 @@ msgid "In-tree consumers"
 msgstr "树内消费方"
 
 #: src/reference/native-containers.md:133
-msgid ""
-"**the logger** — `rt`'s two host fns behind `ink`'s `Logger` wrapper class "
-"([core and the swappable packages](stdlib.md))."
-msgstr "**logger**——`ink` 的 `Logger` 包装类背后的 `rt` 两个宿主函数（[core 与可换包](stdlib.md)）。"
+msgid "**the logger** — `ink_host`'s two host fns behind `ink`'s `Logger`"
+"wrapper class ([core and the swappable packages](stdlib.md))."
+msgstr "**logger**——`ink` 的 `Logger` 包装类背后的 `ink_host` 两个宿主函数（[core"
+"与可换包](stdlib.md)）。"
 
 #: src/reference/native-containers.md:135
 msgid ""
@@ -22606,8 +22602,8 @@ msgid "surface"
 msgstr "表面"
 
 #: src/reference/stdlib.md:130
-msgid "`rt`"
-msgstr "`rt`"
+msgid "`ink_host`"
+msgstr "`ink_host`"
 
 #: src/reference/stdlib.md:130 src/reference/stdlib.md:136
 #: src/reference/stdlib.md:139
@@ -22631,8 +22627,8 @@ msgid "inline rut pkg"
 msgstr "内联 rut 包"
 
 #: src/reference/stdlib.md:131
-msgid "the `Logger` class over `rt`"
-msgstr "架在 `rt` 之上的 `Logger` 类"
+msgid "the `Logger` class over `ink_host`"
+msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 #: src/reference/stdlib.md:132 src/reference/project-structure.md:136
 msgid "`pouch`"
@@ -22708,8 +22704,8 @@ msgid "`bench-cross`"
 msgstr "`bench-cross`"
 
 #: src/reference/stdlib.md:141
-msgid "`rt` and `ink` — logging"
-msgstr "`rt` 与 `ink`——日志"
+msgid "`ink_host` and `ink` — logging"
+msgstr "`ink_host` 与 `ink`——日志"
 
 #: src/reference/stdlib.md:143
 msgid ""
@@ -22743,8 +22739,8 @@ msgid "method"
 msgstr "方法"
 
 #: src/reference/stdlib.md:160
-msgid "level passed to `rt`"
-msgstr "传给 `rt` 的级别"
+msgid "level passed to `ink_host`"
+msgstr "传给 `ink_host` 的级别"
 
 #: src/reference/stdlib.md:162
 msgid "`debug(msg)`"
@@ -22784,8 +22780,8 @@ msgstr "3"
 #: src/reference/stdlib.md:167
 msgid ""
 "Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| "
-"println!(\"{s}\"))`. Mounting `ink` pulls `rt` along (`[deps]`)."
-msgstr "嵌入方一侧：`rut_std::logger::install_std_log(&mut hosts, |s| println!(\"{s}\"))`。挂载 `ink` 会顺手拉来 `rt`（`[deps]`）。"
+"println!(\"{s}\"))`. Mounting `ink` pulls `ink_host` along (`[deps]`)."
+msgstr "嵌入方一侧：`rut_std::logger::install_std_log(&mut hosts, |s| println!(\"{s}\"))`。挂载 `ink` 会顺手拉来 `ink_host`（`[deps]`）。"
 
 #: src/reference/stdlib.md:170
 msgid "`pouch` — `Vec<T>`"
@@ -23011,14 +23007,16 @@ msgid "`strbuild` — the builder"
 msgstr "`strbuild`——构建器"
 
 #: src/reference/stdlib.md:281
-msgid ""
-"The builder is a host package now (the `ink`/`Logger` pattern): the "
-"`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
-"`sb_push_code` / `sb_len` / `sb_finish`, registered under the `rt:strbuild` "
-"prefix), and the `strbuild` package wraps them in the `StringBuilder` class. "
-"Core ships no string-building machinery; a strbuild mount pairs with the "
-"bodies:"
-msgstr "构建器如今是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` 声明包声明那五行（`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，注册在 `rt:strbuild` 前缀之下），`strbuild` 包把它们包成 `StringBuilder` 类。core 不内置任何字符串构建机制；挂载 strbuild 时要配好函数体："
+msgid "The builder is a host package now (the `ink`/`Logger` pattern): the"
+"`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` /"
+"`sb_push_code` / `sb_len` / `sb_finish`, registered under the pkg-name"
+"scope), and the `strbuild` package wraps them in the `StringBuilder`"
+"class. Core ships no string-building machinery; a strbuild mount pairs"
+"with the bodies:"
+msgstr "构建器如今是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` 声明包声明那五行（`sb_new` /"
+"`sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，注册在"
+"包名作用域之下），`strbuild` 包把它们包成 `StringBuilder` 类。core 不内置任何字符串构建机制；挂载"
+"strbuild 时要配好函数体："
 
 #: src/reference/stdlib.md:288
 msgid ""
@@ -26397,12 +26395,11 @@ msgid ""
 msgstr "目录加载**忽略** `format`/`format_version`——目录不是捆绑包——这正是今天把这些键安全写进每个模块清单的原因：`examples/03-plugin/plugin` 是一个工作目录，同时也能原封不动地打包。"
 
 #: src/reference/bundles.md:89
-msgid ""
-"The rest of the manifest grammar — deps tables, `host_scope`, `inline`, "
-"`[style]` — is defined in [Project structure and "
-"rut.toml](project-structure.md); the dependency semantics are [Dependency "
-"kinds](dependency-kinds.md)."
-msgstr "清单文法的其余部分——deps 表、`host_scope`、`inline`、`[style]`——定义在[项目结构与 rut.toml](project-structure.md)；依赖语义见[依赖种类](dependency-kinds.md)。"
+msgid "The rest of the manifest grammar — deps tables, `inline`, `[style]` —"
+"is defined in [Project structure and rut.toml](project-structure.md); the"
+"dependency semantics are [Dependency kinds](dependency-kinds.md)."
+msgstr "清单文法的其余部分——deps 表、`inline`、`[style]`——定义在[项目结构与"
+"rut.toml](project-structure.md)；依赖语义见[依赖种类](dependency-kinds.md)。"
 
 #: src/reference/bundles.md:94
 msgid "The layout ledger"
@@ -26790,16 +26787,6 @@ msgstr "`[dev-deps]`"
 msgid "mounted only while building/testing this pkg itself"
 msgstr "仅在构建/测试本包自身时挂载"
 
-#: src/reference/project-structure.md:39
-msgid "`host_scope`"
-msgstr "`host_scope`"
-
-#: src/reference/project-structure.md:39
-msgid ""
-"the host-fn registration prefix when it must differ from the package name "
-"(`rt` keeps its historical `rt:log` scope)"
-msgstr "宿主函数注册前缀（当它必须与包名不同时；`rt` 保留它历史性的 `rt:log` 作用域）"
-
 #: src/reference/project-structure.md:40
 msgid "`inline`"
 msgstr "`inline`"
@@ -26955,8 +26942,8 @@ msgid "host pkg: math surface (`mount_calc`)"
 msgstr "宿主包：数学表面（`mount_calc`）"
 
 #: src/reference/project-structure.md:134
-msgid "`rt`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
-msgstr "`rt`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
+msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
+msgstr "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
 
 #: src/reference/project-structure.md:134
 msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
@@ -27534,15 +27521,17 @@ msgid "every 1024 ops"
 msgstr "每 1024 个操作"
 
 #: src/reference/cli.md:35
-msgid ""
-"Single-file convenience: a loose file that declares `use ink::` (or any tree "
-"package) gets that package mounted automatically — the CLI scans the source "
-"for `use <name>::` across `rt`, `ink`, `pouch`, `nmapset`, `json`, "
-"`strbuild`, `async_engine`, `async_host`, `http_host`, and `http`, then "
-"assembles peer groups, so a loose file gets json's peer-gated container "
-"impls exactly like a module-directory program ([dependency "
-"kinds](dependency-kinds.md))."
-msgstr "单文件便利：声明了 `use ink::`（或任何树内包）的散文件会自动挂载该包——CLI 在源码里扫描 `use <name>::`，覆盖 `rt`、`ink`、`pouch`、`nmapset`、`json`、`strbuild`、`async_engine`、`async_host`、`http_host` 与 `http`，然后组装 peer 分组，因此散文件获得 json 的 peer 门控容器 impl 的方式与模块目录程序完全一样（[依赖种类](dependency-kinds.md)）。"
+msgid "Single-file convenience: a loose file that declares `use ink::` (or any"
+"tree package) gets that package mounted automatically — the CLI scans the"
+"source for `use <name>::` across `ink_host`, `ink`, `pouch`, `nmapset`,"
+"`json`, `strbuild`, `async_engine`, `async_host`, `http_host`, and"
+"`http`, then assembles peer groups, so a loose file gets json's"
+"peer-gated container impls exactly like a module-directory program"
+"([dependency kinds](dependency-kinds.md))."
+msgstr "单文件便利：声明了 `use ink::`（或任何树内包）的散文件会自动挂载该包——CLI 在源码里扫描 `use <name>::`，覆盖"
+"`ink_host`、`ink`、`pouch`、`nmapset`、`json`、`strbuild`、`async_engine`、`async"
+"_host`、`http_host` 与 `http`，然后组装 peer 分组，因此散文件获得 json 的 peer 门控容器 impl"
+"的方式与模块目录程序完全一样（[依赖种类](dependency-kinds.md)）。"
 
 #: src/reference/cli.md:43
 msgid "Bodies bound by `run`:"

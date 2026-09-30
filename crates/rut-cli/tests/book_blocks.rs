@@ -111,7 +111,7 @@ fn book_blocks_compile_and_run() {
             rut_driver::mount_std(&mut s);
             let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
             for (name, dir) in [
-                ("rt", "rut/rt"),
+                ("ink_host", "rut/ink_host"),
                 ("ink", "rut/ink"),
                 ("pouch", "rut/pouch"),
                 ("nmapset", "rut/nmapset"),

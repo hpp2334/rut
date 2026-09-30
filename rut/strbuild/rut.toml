@@ -5,7 +5,7 @@
 # the host box.
 #
 # `[deps] strbuild_host` below is the edge: a strbuild mount pulls the
-# decl pkg, whose rows register under the `rt:strbuild` prefix —
+# decl pkg, whose rows register under the pkg-name scope —
 # mounting strbuild adds those `expected_host_fns` entries, so an
 # embedder pairs the mount with `install_std_strbuild` (exactly ink +
 # `install_std_log`).

@@ -223,10 +223,9 @@ impl<'a> GraphCompiler<'a> {
         };
         {
             use rut_core::binary::{FuncCode, Program};
-            // the host-fn registration scope defaults to the package
-            // name; `rt` overrides it to keep its internal `rt:log`
-            // registration naming
-            let host_scope = module.host_scope.as_deref().unwrap_or(spec);
+            // the host-fn registration scope IS the package name (the
+            // registration naming has no override)
+            let host_scope = spec;
             // host functions obey the same crossing rule as `entry fn`
             //
             let boot_tt = rut_core::types::TypeTable::boot();

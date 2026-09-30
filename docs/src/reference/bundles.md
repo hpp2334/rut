@@ -86,7 +86,7 @@ not a bundle — which is why the keys are safe to write into every module
 manifest today: `examples/03-plugin/plugin` is a working directory that
 also packs unchanged.
 
-The rest of the manifest grammar — deps tables, `host_scope`, `inline`,
+The rest of the manifest grammar — deps tables, `inline`,
 `[style]` — is defined in [Project structure and
 rut.toml](project-structure.md); the dependency semantics are
 [Dependency kinds](dependency-kinds.md).

@@ -647,7 +647,7 @@ use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use http_host::{ http_status, http_err, http_read_err };
 use async_host::launch_future;
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
     let client = HttpClient.new();
@@ -710,8 +710,8 @@ entry fn boot_stream(url: str) -> nil {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
-        rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("rt"))
-            .expect("mount rt");
+        rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("ink_host"))
+            .expect("mount ink_host");
         rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("http_host"))
             .expect("mount http_host");
         rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("http"))
@@ -745,7 +745,7 @@ entry fn boot_stream(url: str) -> nil {
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
         // the http face's responses build through the strbuild pkg's
-        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, fixture);
@@ -880,7 +880,7 @@ entry fn boot_stream(url: str) -> nil {
 use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
     let client = HttpClient.new();
@@ -900,7 +900,7 @@ entry fn boot(url: str) -> nil {
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
         let pkg = std::path::Path::new(PKG_DIR);
-        for d in ["rt", "http_host", "http"] {
+        for d in ["ink_host", "http_host", "http"] {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
@@ -916,7 +916,7 @@ entry fn boot(url: str) -> nil {
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
         // the http face's responses build through the strbuild pkg's
-        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
@@ -950,7 +950,7 @@ entry fn boot(url: str) -> nil {
 use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
     let client = HttpClient.new();
@@ -1002,7 +1002,7 @@ entry fn boot(url: str) -> nil {
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
         let pkg = std::path::Path::new(PKG_DIR);
-        for d in ["rt", "http_host", "http"] {
+        for d in ["ink_host", "http_host", "http"] {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
@@ -1018,7 +1018,7 @@ entry fn boot(url: str) -> nil {
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
         // the http face's responses build through the strbuild pkg's
-        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         crate::strbuild::install_std_strbuild(&mut hosts);
         let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
@@ -1062,7 +1062,7 @@ entry fn boot(url: str) -> nil {
 use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use async_host::launch_future;
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 async fn probe(cx: RunContext, log: opaque) -> nil {
     let client = HttpClient.new();
@@ -1091,7 +1091,7 @@ entry fn boot() -> nil {
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
         let pkg = std::path::Path::new(PKG_DIR);
-        for d in ["rt", "http_host", "http"] {
+        for d in ["ink_host", "http_host", "http"] {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
@@ -1107,7 +1107,7 @@ entry fn boot() -> nil {
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
         // the http face's responses build through the strbuild pkg's
-        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         crate::strbuild::install_std_strbuild(&mut hosts);
         let seen = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
@@ -1188,14 +1188,14 @@ entry fn boot() -> nil {
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
         let pkg = std::path::Path::new(PKG_DIR);
-        for d in ["rt", "http_host", "http"] {
+        for d in ["ink_host", "http_host", "http"] {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         let stream_src = r#"
 use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 async fn streamed(cx: RunContext, log: opaque, url: str) -> nil {
     let client = HttpClient.new();
@@ -1236,7 +1236,7 @@ entry fn boot_stream(url: str) -> nil {
         crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
         crate::async_host::install_std_async(&mut hosts);
         // the http face's responses build through the strbuild pkg's
-        // StringBuilder — its `rt:strbuild` rows are declared here, so
+        // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         crate::strbuild::install_std_strbuild(&mut hosts);
         install_std_http(&mut hosts); // the reqwest lane

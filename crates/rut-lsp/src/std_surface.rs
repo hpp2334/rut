@@ -6,7 +6,7 @@
 //!
 //! ALL ELEVEN stdlib packages are embedded (the `rut.toml` `name`
 //! fields — what a `use` path spells): the six `entry.type` declaration
-//! surfaces (`core`, `calc`, `nmap_host`, `rt`, `bench_cross`,
+//! surfaces (`core`, `calc`, `nmap_host`, `ink_host`, `bench_cross`,
 //! `strbuild_host`) and the five `entry.lib` sources (`pouch`,
 //! `nmapset`, `json`, `ink`, `strbuild`) — the latter indexed in impl
 //! mode like the open document, so their class methods complete.
@@ -22,7 +22,7 @@ use crate::hover::{self, DefIndex};
 pub const CORE: &str = include_str!("../../../rut/core/core.d.rut");
 pub const CALC: &str = include_str!("../../../rut/calc/calc.d.rut");
 pub const NMAP_HOST: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
-pub const RT: &str = include_str!("../../../rut/rt/rt.d.rut");
+pub const INK_HOST: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/bench_cross.d.rut");
 pub const STRBUILD_HOST: &str = include_str!("../../../rut/strbuild_host/strbuild_host.d.rut");
 pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
@@ -43,7 +43,7 @@ pub fn indexes() -> Vec<DefIndex> {
         (CORE_LABEL, CORE, rut_parser::Mode::Decl, "rut/core/core.d.rut"),
         ("calc", CALC, rut_parser::Mode::Decl, "rut/calc/calc.d.rut"),
         ("nmap_host", NMAP_HOST, rut_parser::Mode::Decl, "rut/nmap_host/nmap.d.rut"),
-        ("rt", RT, rut_parser::Mode::Decl, "rut/rt/rt.d.rut"),
+        ("ink_host", INK_HOST, rut_parser::Mode::Decl, "rut/ink_host/ink_host.d.rut"),
         ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut"),
         ("strbuild_host", STRBUILD_HOST, rut_parser::Mode::Decl, "rut/strbuild_host/strbuild_host.d.rut"),
         ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/pouch.rut"),
@@ -86,7 +86,7 @@ mod tests {
             assert!(!i.types.is_empty() || !i.fns.is_empty(), "{}: empty index", i.origin);
         }
         let origins: Vec<&str> = idxs.iter().map(|i| i.origin.as_str()).collect();
-        for want in ["core", "calc", "nmap_host", "rt", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild"] {
+        for want in ["core", "calc", "nmap_host", "ink_host", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild"] {
             assert!(origins.contains(&want), "missing pkg `{want}`: {origins:?}");
         }
     }

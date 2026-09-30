@@ -36,7 +36,6 @@ The keys, all of them:
 | `[deps]` | the transitively mounted dependencies — string-valued descriptors: `pkg = { path = "..." }`, relative to this manifest. `optional` is rejected here. |
 | `[peer-deps]` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `[dev-deps]` | mounted only while building/testing this pkg itself |
-| `host_scope` | the host-fn registration prefix when it must differ from the package name (`rt` keeps its historical `rt:log` scope) |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `[style]` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
@@ -131,7 +130,7 @@ demand:
 |---|---|
 | `core` | the only standard package — the builtin surface, mounted unconditionally |
 | `calc` | host pkg: math surface (`mount_calc`) |
-| `rt`, `http_host`, `nmap_host`, `async_engine`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
+| `ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
 | `ink`, `http`, `strbuild`, `async_host` | inline rut wrappers over host rows (`inline = true`) |
 | `pouch` | the sequence library (plain linked package) |
 | `json` | the base pkg with `[peer-deps]`/`[dev-deps]` — the reference consumer of [Dependency kinds](dependency-kinds.md) |

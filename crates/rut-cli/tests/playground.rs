@@ -31,14 +31,14 @@ fn classics_run_clean() {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
         let src = std::fs::read_to_string(path).unwrap();
 
-        // the classics use the toolchain libs (`ink`+`rt`, `pouch`) —
+        // the classics use the toolchain libs (`ink`+`ink_host`, `pouch`) —
         // third-party pkgs mounted from the tree (the driver doesn't
         // know them); `nmapset` is the map lane (survey D6: it pulls
         // `nmap_host` through its `[deps]`)
         let mut s = rut_driver::Session::new();
         rut_driver::mount_std(&mut s);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        rut_driver::mount_dir(&mut s, &tree.join("rut/ink")).expect("mount ink (+rt)");
+        rut_driver::mount_dir(&mut s, &tree.join("rut/ink")).expect("mount ink (+ink_host)");
         rut_driver::mount_dir(&mut s, &tree.join("rut/pouch")).expect("mount pouch");
         rut_driver::mount_dir(&mut s, &tree.join("rut/nmapset")).expect("mount nmapset (+nmap_host)");
         let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "main");
@@ -70,7 +70,7 @@ fn classics_run_clean() {
             interrupt_every: 1024,
         };
         // the bindings BEFORE the Vm: the compiled program
-        // carries calc's and rt:log's thunks (mount = declare = bind);
+        // carries calc's and ink_host's thunks (mount = declare = bind);
         // `install_std_nmap` rides like the CLI's — reached only by a
         // program that declares the nmap lane. The log sink discards:
         // the run's truth here is the trap channel, not the bytes.

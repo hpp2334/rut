@@ -23,7 +23,7 @@ decision: `web.d.rut` sits FLAT at
 the example root, outside any package directory (its pre-restructure
 placement, kept — the two-package law counts manifests, and the host
 crossing is not a rut package). Both lanes register it by hand
-(`src/mount.rs`), the `rt` precedent.
+(`src/mount.rs`), the `ink_host` precedent.
 
 ## What it teaches
 
@@ -319,8 +319,8 @@ examples/05-todolist-web/
 * **both lanes, one closure.** The wasm lane keeps the `Session`
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
   the same packages BY HAND — one `register_module` per package, the
-  same `inline`/`host_scope` values the manifests state, everything
-  `include_str!`. The mirror is `rut/biz/rut.toml`'s mirror and
+  same `inline` values the manifests state (the registration scope is
+  the pkg name), everything `include_str!`. The mirror is `rut/biz/rut.toml`'s mirror and
   nothing more; `tests/mount_lane.rs` (the P3 proof) pins both lanes
   to the same mounted-name set, host surface, and compiled binary.
   `web.d.rut` rides NO manifest path — both lanes register it by hand
@@ -414,7 +414,7 @@ retired; freshness is the read's job now.
 |---|---|
 | `rut/biz/rut.toml` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
 | `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
-| `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
+| `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), scope = the pkg name) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
 | `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
 | `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |

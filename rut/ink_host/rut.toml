@@ -1,0 +1,9 @@
+# ink_host/ — the logger host pkg: a pure
+# declaration surface. The embedding Rust binds the bodies
+# (`rut_std::logger::install_std_log` → `ink_host::create_logger` /
+# `ink_host::logger_log`); `ink` wraps them in the `Logger` class.
+#
+# The registration scope IS the package name; the use path spells it
+# too (`use ink_host::{create_logger}`).
+name = "ink_host"
+entry.type = "./ink_host.d.rut"

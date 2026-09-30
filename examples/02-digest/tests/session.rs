@@ -47,7 +47,7 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::math::install_std_math(&mut hosts);
-    // json's writer rides the strbuild pkg — its `rt:strbuild` rows are
+    // json's writer rides the strbuild pkg — its `strbuild_host` rows are
     // in this closure's declared set, so the bodies bind here too
     rut_std::strbuild::install_std_strbuild(&mut hosts);
     hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies

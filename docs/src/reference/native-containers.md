@@ -130,7 +130,7 @@ Guards live on the store entry and clear on return; to keep data, copy
 
 ## In-tree consumers
 
-- **the logger** — `rt`'s two host fns behind `ink`'s `Logger` wrapper
+- **the logger** — `ink_host`'s two host fns behind `ink`'s `Logger` wrapper
   class ([core and the swappable packages](stdlib.md)).
 - **`nmapset`** — `HashMap`/`HashSet` over a native key table: every
   method is one host call, keys are the closed typed set, values are

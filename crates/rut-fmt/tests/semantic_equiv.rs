@@ -1,7 +1,7 @@
 //! VM-verified equivalence — the user's third ruling: reformatting must
 //! never change program behavior. Each probe runs the FULL pipeline
 //! (compile → link → `Vm::call`) on the original and on its formatted
-//! text; both must log IDENTICAL lines through `rt:log`. This is the
+//! text; both must log IDENTICAL lines through `ink_host`. This is the
 //! honest compensation for the AST's absent paren nodes: only the VM
 //! can prove the re-paren table preserved meaning.
 

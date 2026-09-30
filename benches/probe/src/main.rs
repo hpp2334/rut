@@ -120,7 +120,7 @@ fn main() {
     let path = std::path::Path::new(&args.workload);
 
     // ---- compile (frontend + LIR + binary emit) ----
-    // A loose `.rut` workload uses the toolchain libs (`ink`+`rt`,
+    // A loose `.rut` workload uses the toolchain libs (`ink`+`ink_host`,
     // `pouch`) — third-party pkgs mounted from the tree, plus the
     // engine's core/calc. A module-DIR workload (`rut.toml`, the
     // `nmapset` bench dirs) loads its own `[deps]` graph instead and
@@ -149,7 +149,7 @@ fn main() {
         // slots after pouch and nmapset; strbuild is 10th, after json
         // (RFC 0028's amendment — though json's `[deps]` pulls it
         // regardless, so the mount here is idempotent by first-wins)
-        rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+rt)");
+        rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+ink_host)");
         rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
         rut_driver::mount_dir(&mut session, &tree.join("rut/nmapset")).expect("mount nmapset");
         rut_driver::mount_dir(&mut session, &tree.join("rut/json")).expect("mount json");
@@ -211,11 +211,11 @@ fn main() {
         }
         // the string builder's bodies (the host strbuild pkg) — same
         // exactness law: bound only when the dep graph declares
-        // `rt:strbuild::` (a `use strbuild::` / `use json::` pulls it)
+        // `strbuild_host::` (a `use strbuild::` / `use json::` pulls it)
         if session
             .expected_host_fns()
             .keys()
-            .any(|name| name.starts_with("rt:strbuild::"))
+            .any(|name| name.starts_with("strbuild_host::"))
         {
             rut_std::strbuild::install_std_strbuild(&mut hosts);
         }
@@ -227,7 +227,7 @@ fn main() {
             hosts,
         )
         .unwrap_or_else(|t| fail(format!("boot: {}", t.msg)));
-        // the workloads log their final checksum through `rt:log`; the
+        // the workloads log their final checksum through `ink_host`; the
         // probe discards it (like the old `print: None`) so stdout stays a
         // single JSON object. Bindings + contract happened pre-Vm above.
         let t = Instant::now();

@@ -276,7 +276,7 @@ pub const TY_BYTES: TypeId = 15;
 pub const TY_STACK_TRACE: TypeId = 16;
 /// RESERVED (the host strbuild pkg): the growable string builder's boot
 /// row — the engine surface is GONE (the builder is a host package over
-/// `rt:strbuild::*`), but the ROW stays so every id above it keeps its
+/// `strbuild_host::*`), but the ROW stays so every id above it keeps its
 /// wire-stable boot position (the fixed ids must never be reordered);
 /// nothing reaches it — the resolver's removed-core check fires on the
 /// NAME long before any id could.

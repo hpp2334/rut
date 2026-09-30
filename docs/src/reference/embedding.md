@@ -166,7 +166,7 @@ their own registered modules.
 | installer | binds |
 |---|---|
 | `math::install_std_math` | `calc`'s float functions, both widths |
-| `logger::install_std_log(&mut hosts, sink)` | `rt:log`'s two rows, routed to a `FnMut(&str)` sink |
+| `logger::install_std_log(&mut hosts, sink)` | `ink_host`'s two rows, routed to a `FnMut(&str)` sink |
 | `nmap::install_std_nmap` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
 | `strbuild::install_std_strbuild` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
 | `async_host::install_std_async` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |

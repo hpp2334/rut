@@ -16,7 +16,7 @@ use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 use rut_vm::Completer;
 
-const RT_DECL: &str = include_str!("../../../rut/rt/rt.d.rut");
+const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
 // The fixture surface: three async rows whose virtual behavior is
 // spelled in the argument — `key:ms` completes at +ms (`probe`),
@@ -122,9 +122,8 @@ impl Fixture {
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let mut s = Session::new();
     mount_std_core(&mut s);
-    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("the rt surface is valid");
-    rt.host_scope = Some("rt:log".to_string());
-    s.register_module("rt", rt).expect("mount rt");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("the ink_host surface is valid");
+    s.register_module("ink_host", ink_host).expect("mount ink_host");
     mount_std_async(&mut s);
     let fixture =
         lower_decl_module(FIXTURE_DECL, "fixture.d.rut").expect("the fixture surface is valid");
@@ -199,7 +198,7 @@ fn run_loop(vm: &mut Vm, fx: &Fixture, cap: usize) {
 fn await_orders_after_completion() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
@@ -231,7 +230,7 @@ pub fn main() -> nil {
 fn two_awaits_run_concurrently_and_settle_by_deadline() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
@@ -263,7 +262,7 @@ pub fn main() -> nil {
 #[test]
 fn a_launched_host_future_settles_without_an_awaiter() {
     let src = r#"
-use rt::create_logger;
+use ink_host::create_logger;
 use async_host::launch_future;
 use fixture::probe;
 
@@ -285,7 +284,7 @@ pub fn main() -> nil {
 fn a_failed_completer_traps_with_its_message() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::boom;
 
@@ -330,7 +329,7 @@ pub fn main() -> nil {
 fn cancel_maps_the_data_path_to_the_arm_and_discards_late_results() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
 
@@ -399,7 +398,7 @@ pub fn main() -> nil {
 fn await_delivers_the_host_answer() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
@@ -429,7 +428,7 @@ fn await_delivers_through_user_frames_and_type_checks() {
     // body awaits the HOST row — the value crosses two answer lanes
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
@@ -545,9 +544,8 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     // rut-vm touches atomics + the Mutex slot.
     let mut s = Session::new();
     mount_std_core(&mut s);
-    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("rt");
-    rt.host_scope = Some("rt:log".to_string());
-    s.register_module("rt", rt).expect("mount rt");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("ink_host");
+    s.register_module("ink_host", ink_host).expect("mount ink_host");
     mount_std_async(&mut s);
     let fixture = lower_decl_module(
         &format!("{FIXTURE_DECL}pub host async fn wall(u: str) -> str;\n"),
@@ -557,7 +555,7 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     s.register_module("fixture", fixture).expect("mount fixture");
     let app = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::wall;
 

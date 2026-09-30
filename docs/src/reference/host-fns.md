@@ -24,7 +24,6 @@ pkg** — pure surface, no rut source:
 # server/rut.toml
 name = "server"
 entry.type = "./server.d.rut"
-host_scope = "server"        # optional registration prefix; default: the name
 ```
 
 ```rut

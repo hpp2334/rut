@@ -1,8 +1,8 @@
 //! `strbuild`'s host half: the growable string builder's five native
-//! functions `rt:strbuild::sb_new` / `sb_push` / `sb_push_code` /
+//! functions `strbuild_host::sb_new` / `sb_push` / `sb_push_code` /
 //! `sb_len` / `sb_finish` (the ink/Logger pattern — the builder's state
 //! is an `opaque` handle owning Rust state rut never sees; the rows are
-//! declared in `rut/strbuild_host/` under the `rt:strbuild` prefix, the
+//! declared in `rut/strbuild_host/` under the pkg-name scope, the
 //! rut class over them lives in `rut/strbuild/`).
 //!
 //! Core ships ZERO string-building machinery: the engine's growable
@@ -113,12 +113,12 @@ impl BuilderBuf {
     }
 }
 
-/// Install `rt:strbuild`'s bodies. The bindings are TYPED: the derived
+/// Install `strbuild_host`'s bodies. The bindings are TYPED: the derived
 /// signatures match `rut/strbuild_host/strbuild_host.d.rut`, and the
 /// load-time join checks the contract before any rut code runs.
 pub fn install_std_strbuild(hosts: &mut HostRegistry) {
     hosts.register::<_, (i32,), OpaqueRef, _>(
-        "rt:strbuild::sb_new",
+        "strbuild_host::sb_new",
         |vm: &mut Vm, cap: i32| -> Result<OpaqueRef, Trap> {
             if cap < 0 {
                 return Err(Trap::new(
@@ -137,7 +137,7 @@ pub fn install_std_strbuild(hosts: &mut HostRegistry) {
         },
     );
     hosts.register::<_, (Opaque<RefCell<BuilderBuf>>, &str), (), _>(
-        "rt:strbuild::sb_push",
+        "strbuild_host::sb_push",
         |vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>, s: &str| -> Result<(), Trap> {
             // zero-copy: `s` borrows the block store for exactly this call
             let chars = if s.is_ascii() { s.len() as u32 } else { s.chars().count() as u32 };
@@ -145,7 +145,7 @@ pub fn install_std_strbuild(hosts: &mut HostRegistry) {
         },
     );
     hosts.register::<_, (Opaque<RefCell<BuilderBuf>>, u32), (), _>(
-        "rt:strbuild::sb_push_code",
+        "strbuild_host::sb_push_code",
         |vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>, cp: u32| -> Result<(), Trap> {
             // invalid scalars (surrogates) mint U+FFFD — the `str.from_code` rule
             let ch = char::from_u32(cp).unwrap_or('\u{FFFD}');
@@ -157,11 +157,11 @@ pub fn install_std_strbuild(hosts: &mut HostRegistry) {
         },
     );
     hosts.register::<_, (Opaque<RefCell<BuilderBuf>>,), i32, _>(
-        "rt:strbuild::sb_len",
+        "strbuild_host::sb_len",
         |_vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>| b.with(|buf| buf.borrow().chars as i32),
     );
     hosts.register::<_, (Opaque<RefCell<BuilderBuf>>,), String, _>(
-        "rt:strbuild::sb_finish",
+        "strbuild_host::sb_finish",
         |vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>| -> Result<String, Trap> {
             // the ONE materialization: the octets copy out to a fresh
             // immutable str (the boundary's `String` return allocates it);

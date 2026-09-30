@@ -191,7 +191,7 @@ The run recipe:
 `rut/strbuild/` is the tenth std pkg (after `json`) — a rut class over
 the HOST builder (the `ink`/`Logger` pattern): the `strbuild_host`
 decl pkg declares the five rows (`sb_new`/`sb_push`/`sb_push_code`/
-`sb_len`/`sb_finish`, registered under the `rt:strbuild` prefix), the
+`sb_len`/`sb_finish`, registered under the pkg-name scope), the
 bodies live in `rut-std` (`install_std_strbuild`), and core ships zero
 string-building machinery. The whole rut contract is one class:
 

@@ -98,11 +98,6 @@ pub struct Module {
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
     pub body: ModuleBody,
-    /// The host-fn registration scope — the `FuncCode` host-id prefix — when
-    /// it must differ from the package name. `rt` stays the logger host
-    /// module's use path while its internal registration naming remains
-    /// `rt:log` (`rt:log::create_logger`), untouched.
-    pub host_scope: Option<String>,
 }
 
 /// One recorded `[peer-deps]` declaration: the declaring
@@ -266,9 +261,9 @@ impl Session {
     }
 
     /// The host-fn table the mounted host pkgs declare:
-    /// `<scope>::<name>` → signature. The scope is the module's
-    /// `host_scope` override when set (`rt` → `rt:log`), else
-    /// the package name. The table feeds `Vm::verify_host_fns` — the
+    /// `<scope>::<name>` → signature. The scope IS the package name —
+    /// the registration naming has no override (`host_scope` is
+    /// retired). The table feeds `Vm::verify_host_fns` — the
     /// load-time half of the `.d.rut` ↔ host-impl contract (a mismatch
     /// panics before any rut code runs).
     ///
@@ -287,7 +282,7 @@ impl Session {
             let ModuleBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
-            let scope = m.host_scope.as_deref().unwrap_or(spec);
+            let scope = spec.as_str();
             for (name, params, ret, is_async) in host_funcs {
                 out.insert(format!("{scope}::{name}"), (params.clone(), *ret));
                 if !*is_async {
@@ -479,7 +474,7 @@ nmapset = { path = "../nmapset" }
     fn malformed_specifier() {
         let s = Session::new();
         assert!(matches!(s.resolve("just-a-name"), Err(ResolveError::BadSpec { .. })));
-        assert!(matches!(s.resolve("rt:log"), Err(ResolveError::BadSpec { .. })));
+        assert!(matches!(s.resolve("ink:host"), Err(ResolveError::BadSpec { .. })));
     }
 
     #[test]

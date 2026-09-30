@@ -127,8 +127,8 @@ unresolvable position is an ordinary unknown-name error.
 
 | package | kind | surface |
 |---|---|---|
-| `rt` | host pkg | `create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)` |
-| `ink` | inline rut pkg | the `Logger` class over `rt` |
+| `ink_host` | host pkg | `create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)` |
+| `ink` | inline rut pkg | the `Logger` class over `ink_host` |
 | `pouch` | inline rut pkg | the growable sequence `Vec<T>` |
 | `nmap_host` / `nmapset` | host pkg + inline rut pkg | the native key table; `HashMap`/`HashSet` |
 | `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + traits |
@@ -138,7 +138,7 @@ unresolvable position is an ordinary unknown-name error.
 | `http_host` / `http` | host pkg + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |
 
-### `rt` and `ink` — logging
+### `ink_host` and `ink` — logging
 
 There is no `print`, no global output builtin. All logging goes through a
 used logger; the host owns the sink, and an uninstalled sink is a silent
@@ -157,7 +157,7 @@ pub fn main() {
 started
 ```
 
-| method | level passed to `rt` |
+| method | level passed to `ink_host` |
 |---|---|
 | `debug(msg)` | 0 |
 | `info(msg)` / `log(msg)` | 1 |
@@ -165,7 +165,7 @@ started
 | `error(msg)` | 3 |
 
 Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| println!("{s}"))`.
-Mounting `ink` pulls `rt` along (`[deps]`).
+Mounting `ink` pulls `ink_host` along (`[deps]`).
 
 ### `pouch` — `Vec<T>`
 
@@ -281,7 +281,7 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
 The builder is a host package now (the `ink`/`Logger` pattern): the
 `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` /
 `sb_push_code` / `sb_len` / `sb_finish`, registered under the
-`rt:strbuild` prefix), and the `strbuild` package wraps them in the
+pkg-name scope), and the `strbuild` package wraps them in the
 `StringBuilder` class. Core ships no string-building machinery; a
 strbuild mount pairs with the bodies:
 

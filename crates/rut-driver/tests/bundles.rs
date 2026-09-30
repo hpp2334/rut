@@ -161,11 +161,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the dep's dep: a host pkg (declaration-only surface) → source
     let s = base.join("s");
     std::fs::create_dir_all(&s).unwrap();
-    std::fs::write(
-        s.join("rut.toml"),
-        "name = \"s\"\nentry.type = \"./s.d.rut\"\nhost_scope = \"s\"\n",
-    )
-    .unwrap();
+    std::fs::write(s.join("rut.toml"), "name = \"s\"\nentry.type = \"./s.d.rut\"\n").unwrap();
     std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
     // m uses s
     std::fs::write(
@@ -215,7 +211,6 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         matches!(sf.body, rut_driver::ModuleBody::Host { .. }),
         "the host pkg rode along as a host body"
     );
-    assert_eq!(sf.host_scope.as_deref(), Some("s"));
     let g = rut_driver::compile_graph(&session, "main");
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     assert!(g.program.is_some());

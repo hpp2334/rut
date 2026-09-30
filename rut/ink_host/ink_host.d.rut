@@ -1,4 +1,4 @@
-// rt/rt.d.rut — the logger host surface: two
+// ink_host/ink_host.d.rut — the logger host surface: two
 // host fns the embedding Rust implements; `ink`'s `Logger` class is the
 // rut wrapper over the returned `opaque` handle. Signatures are
 // concrete over the crossing set — a host pkg declares

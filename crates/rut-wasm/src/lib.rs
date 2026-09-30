@@ -102,24 +102,25 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 
 /// The playground's library mounts (§0.9 of the host-pkgs plan): wasm
 /// has no filesystem, so the toolchain libs this host ships are
-/// EMBEDDED — `rt`'s and `nmap_host`'s host surfaces lowered from their
-/// `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source. This
-/// host's choice, not the engine's: the driver knows none of these
+/// EMBEDDED — `ink_host`'s and `nmap_host`'s host surfaces lowered from
+/// their `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source.
+/// This host's choice, not the engine's: the driver knows none of these
 /// names. (`nmap_host` + `nmapset` are the survey D6 amendment — the
 /// demo's map lane; `install_std_nmap` binds the crossings in `rut_run`.)
 fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session); // core + calc
-    let mut rt = rut_driver::lower_decl_module(
-        include_str!("../../../rut/rt/rt.d.rut"),
-        "rt.d.rut",
+    let ink_host = rut_driver::lower_decl_module(
+        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        "ink_host.d.rut",
     )
-    .expect("the rt surface is valid");
-    rt.host_scope = Some("rt:log".to_string()); // rut-std's registration prefix
-    session.register_module("rt", rt).expect("mount rt");
+    .expect("the ink_host surface is valid");
+    session
+        .register_module("ink_host", ink_host)
+        .expect("mount ink_host");
     // the nmap lane (survey D6): the host surface lowers exactly like
-    // `rt` — its registration scope is the default (the module spec
-    // `nmap_host`), the prefix `install_std_nmap` registers under
+    // `ink_host` — its registration scope is the default (the module
+    // spec `nmap_host`), the prefix `install_std_nmap` registers under
     let nmap_host = rut_driver::lower_decl_module(
         include_str!("../../../rut/nmap_host/nmap.d.rut"),
         "nmap.d.rut",
@@ -187,14 +188,13 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // wasm32-unknown-unknown (this crate's own dependency note), so a
     // `use http::` block fails to resolve here — loud, never silent.
     // strbuild's rows ride the `strbuild_host` decl surface (the
-    // ink/rt pattern), lowered here exactly like `rt` above; the
-    // bodies bind in `rut_run` (`install_std_strbuild`)
-    let mut strbuild_host = rut_driver::lower_decl_module(
+    // ink/ink_host pattern), lowered here exactly like `ink_host`
+    // above; the bodies bind in `rut_run` (`install_std_strbuild`)
+    let strbuild_host = rut_driver::lower_decl_module(
         include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
         "strbuild_host.d.rut",
     )
     .expect("the strbuild_host surface is valid");
-    strbuild_host.host_scope = Some("rt:strbuild".to_string()); // rut-std's registration prefix
     session
         .register_module("strbuild_host", strbuild_host)
         .expect("mount strbuild_host");

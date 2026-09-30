@@ -4,8 +4,7 @@
 # `async_host` package wraps them in the typed surface
 # (`launch_future` / `LaunchedFutureHandle::abort` / `sleep`).
 #
-# `host_scope` names the registration prefix; the use path spells the
-# bare package name (`use async_engine::{ __launch, __abort, __sleep }`).
+# The registration scope IS the package name; the use path spells it
+# too (`use async_engine::{ __launch, __abort, __sleep }`).
 name = "async_engine"
 entry.type = "./engine.d.rut"
-host_scope = "async_engine"

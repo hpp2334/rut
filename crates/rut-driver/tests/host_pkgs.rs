@@ -1,27 +1,26 @@
 //! Host pkgs are real pkgs (the host-pkgs plan): a
 //! declaration-only module directory (`entry.type`, no `entry.lib`)
 //! lowers its `host fn`s into the mounted surface at load time —
-//! `rut/rt/` and 03-plugin's `server/` load from disk, and a consumer
-//! compiles against them with no hand-written Rust surface.
+//! `rut/ink_host/` and 03-plugin's `server/` load from disk, and a
+//! consumer compiles against them with no hand-written Rust surface.
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
 use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module};
 use rut_vm::OpaqueRef;
 
-const RT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/rt");
+const INK_HOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/ink_host");
 const SERVER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/03-plugin/server");
 
 #[test]
-fn rt_loads_from_disk_with_its_historical_scope() {
+fn ink_host_loads_from_disk_with_its_name_scope() {
     let (session, root) =
-        load_path_session(std::path::Path::new(RT_DIR)).expect("rut/rt loads");
-    assert_eq!(root, "rt");
-    let m = session.resolve("rt").expect("rt mounted");
+        load_path_session(std::path::Path::new(INK_HOST_DIR)).expect("rut/ink_host loads");
+    assert_eq!(root, "ink_host");
+    let m = session.resolve("ink_host").expect("ink_host mounted");
     assert!(
         matches!(m.body, ModuleBody::Host { .. }),
         "a host pkg is a host body — no rut source"
     );
-    assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
     let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,
@@ -38,7 +37,6 @@ fn server_loads_from_disk() {
         load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
     assert_eq!(root, "server");
     let m = session.resolve("server").expect("server mounted");
-    assert_eq!(m.host_scope, None, "the registration scope defaults to the name");
     let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,

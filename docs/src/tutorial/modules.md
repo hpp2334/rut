@@ -138,7 +138,7 @@ fn shout(msg: str) -> str {   // module-private: no `pub`, never importable
 ```
 
 The app names its dependencies in `[deps]`, by path — each package
-pulls its own dependencies along (`ink` brings the host surface `rt`;
+pulls its own dependencies along (`ink` brings the host surface `ink_host`;
 you never spell it):
 
 ```toml

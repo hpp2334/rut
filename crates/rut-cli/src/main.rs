@@ -147,7 +147,7 @@ fn run(path: &str, fuel: Option<u64>) {
         // the same law (http after its http_host dep; http's own
         // `[deps]` pulls http_host regardless)
         for (name, dir) in [
-            ("rt", "rut/rt"),
+            ("ink_host", "rut/ink_host"),
             ("ink", "rut/ink"),
             ("pouch", "rut/pouch"),
             ("nmapset", "rut/nmapset"),

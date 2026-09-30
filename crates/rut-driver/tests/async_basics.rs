@@ -3,7 +3,7 @@
 // probe → drop path), the driving loop (ready + timer queues,
 // drive / next_deadline / cancel), and the standard host set
 // (async_engine + async_host). Trigger→completion is observed through
-// the rt logger's recording native — the fmt batch's semantic-test
+// the ink_host logger's recording native — the fmt batch's semantic-test
 // pattern; diagnostics are pinned per message.
 
 use std::cell::RefCell;
@@ -14,14 +14,13 @@ use rut_std::async_host::install_std_async;
 use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
-const RT_DECL: &str = include_str!("../../../rut/rt/rt.d.rut");
+const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let mut s = Session::new();
     mount_std_core(&mut s);
-    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("the rt surface is valid");
-    rt.host_scope = Some("rt:log".to_string());
-    s.register_module("rt", rt).expect("mount rt");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("the ink_host surface is valid");
+    s.register_module("ink_host", ink_host).expect("mount ink_host");
     mount_std_async(&mut s);
     s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
@@ -67,9 +66,8 @@ fn run_loop(vm: &mut Vm, cap: usize) {
 fn diags_of(src: &str) -> Vec<String> {
     let mut s = Session::new();
     mount_std_core(&mut s);
-    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("rt");
-    rt.host_scope = Some("rt:log".to_string());
-    s.register_module("rt", rt).expect("mount rt");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("ink_host");
+    s.register_module("ink_host", ink_host).expect("mount ink_host");
     mount_std_async(&mut s);
     s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
@@ -82,7 +80,7 @@ fn diags_of(src: &str) -> Vec<String> {
 fn launch_runs_to_completion() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
 async fn work(cx: RunContext, log: opaque, n: u32) -> nil {
@@ -108,7 +106,7 @@ pub fn main() -> nil {
 fn park_and_resume_through_sleep() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
 async fn tick(cx: RunContext, log: opaque) -> nil {
@@ -138,7 +136,7 @@ pub fn main() -> nil {
 fn nested_awaits() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
 async fn inner(cx: RunContext, log: opaque, tag: str) -> nil {
@@ -178,7 +176,7 @@ pub fn main() -> nil {
 fn abort_after_park_runs_the_drop_path_then_reports_false() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn victim(cx: RunContext, log: opaque) -> nil {
@@ -226,7 +224,7 @@ pub fn main() -> nil {
 
 // ---- Disposal at the cancellation checkpoint ----
 
-/// A dispose-implementing local that logs through the rt logger when
+/// A dispose-implementing local that logs through the ink_host logger when
 /// the engine releases it — the Disposal analog of the old on_drop
 /// observation closures.
 const DROPLOG: &str = r#"
@@ -256,7 +254,7 @@ fn abort_after_park_disposes_locals_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
 use core::{{ Disposal, DisposalContext, RunContext }};
-use rt::{{ create_logger, logger_log }};
+use ink_host::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(cx: RunContext, log: opaque) -> nil {{
@@ -303,7 +301,7 @@ fn dispose_locals_fire_in_reverse_order_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
 use core::{{ Disposal, DisposalContext, RunContext }};
-use rt::{{ create_logger, logger_log }};
+use ink_host::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(cx: RunContext, log: opaque) -> nil {{
@@ -346,7 +344,7 @@ pub fn main() -> nil {{
 fn abort_before_first_drive_never_runs_the_body() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
 async fn job(cx: RunContext, log: opaque) -> nil {
@@ -379,7 +377,7 @@ fn vm_first_ready(vm: &mut Vm) -> rut_vm::Slot {
 fn the_cx_cancelled_probe_answers_in_a_live_body() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
 async fn work(cx: RunContext, log: opaque) -> nil {
@@ -407,7 +405,7 @@ pub fn main() -> nil {
 fn a_bound_sleep_future_drives_and_aborts_through_the_box() {
     let src = r#"
 use core::{ Future, RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn parker(cx: RunContext, log: opaque) -> nil {
@@ -452,7 +450,7 @@ pub fn main() -> nil {
 fn fuel_is_charged_per_drive_step() {
     let src = r#"
 use core::{ RunContext };
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
 async fn work(cx: RunContext, log: opaque) -> nil {

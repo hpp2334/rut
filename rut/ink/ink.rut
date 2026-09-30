@@ -1,11 +1,11 @@
 // ink/ink.rut — the logger.
 //
 // The primitives are the host functions `create_logger`/`logger_log` from
-// the host module `rt`: the host owns the logger's
+// the host module `ink_host`: the host owns the logger's
 // layout, so rut only ever holds an `opaque` handle. `Logger` is an
 // ordinary rut class over that handle; a host or user may mount their own
 // `ink` in its place.
-use rt::{ create_logger, logger_log };
+use ink_host::{ create_logger, logger_log };
 
 pub class Logger {
     internal: opaque;

@@ -1,7 +1,8 @@
 // web.d.rut — the DOM crossing for one page app (the `web` host pkg,
 // example-local by the phase-0 survey's decision:
-// `docs/todolist-web-survey.md` §4, mounted per the `rt` precedent —
-// `Session::register_module` with `host_scope = "web"`). Every signature
+// `docs/todolist-web-survey.md` §4, mounted per the `ink_host`
+// precedent — `Session::register_module`; the registration scope is
+// the pkg name). Every signature
 // is concrete over the crossing set: str, i32, i64, bool,
 // opaque. Elements cross as opaque handles — the one cell
 // shape an embedder may hand out; rut holds them across turns and the

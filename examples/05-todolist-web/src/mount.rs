@@ -10,8 +10,8 @@
 //! THE MIRROR (the wasm lane): the Session is I/O-free by law (wasm
 //! hosts mount in memory), so `mount_app_session` registers the same
 //! closure by hand — one `register_module` per package, the same
-//! `host_scope` values the manifests state, everything
-//! `include_str!` (the rut-wasm ink/rt precedent). Nothing here knows
+//! mount properties the manifests state, everything
+//! `include_str!` (the rut-wasm ink/ink_host precedent). Nothing here knows
 //! the app's SOURCE: the root's body crosses the ABI (loader.js hands
 //! over `rut/biz/biz.rut`) and [`compile_app`] compiles it as the
 //! root.
@@ -102,7 +102,7 @@ pub fn project_dir() -> std::path::PathBuf {
 /// the rut/biz project root — the four passes for real — plus
 /// the embedder half every lane owns: the `core` prelude AND the `web`
 /// host surface (the crossing is no package's dep; both lanes register
-/// it by hand, the same `host_scope` the crossing's ids carry).
+/// it by hand — the registration scope IS the pkg name (`web::*`).
 /// `tests/mount_lane.rs` pins the two lanes together.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
@@ -113,11 +113,10 @@ pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
 }
 
 /// Register the `web` DECL surface — the embedder half both lanes run.
-/// `host_scope = "web"`: the registration prefix every crossing's host
-/// id carries.
+/// The registration scope IS the package name (`web::*`: the prefix
+/// every crossing's host id carries).
 pub fn register_web_surface(session: &mut rut_driver::Session) -> Result<(), String> {
-    let mut web = rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?;
-    web.host_scope = Some("web".to_string());
+    let web = rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?;
     session.register_module("web", web).map_err(|e| e.to_string())
 }
 

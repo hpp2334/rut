@@ -134,7 +134,7 @@ fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
     rut_std::async_host::install_std_async(&mut hosts);
-    // json's writer rides the strbuild pkg — the `rt:strbuild` rows are
+    // json's writer rides the strbuild pkg — the `strbuild_host` rows are
     // in this closure's declared set, so the bodies bind here too
     rut_std::strbuild::install_std_strbuild(&mut hosts);
     let fx = rut_std::http::install_std_http_with(&mut hosts, fix);
@@ -649,7 +649,7 @@ fn the_one_shot_law_degrades_second_takers() {
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
     rut_std::async_host::install_std_async(&mut hosts);
-    // json's writer rides the strbuild pkg — the `rt:strbuild` rows are
+    // json's writer rides the strbuild pkg — the `strbuild_host` rows are
     // in this closure's declared set, so the bodies bind here too
     rut_std::strbuild::install_std_strbuild(&mut hosts);
     let fx = rut_std::http::install_std_http_with(&mut hosts, |_m, _u, _h, _b| {

@@ -34,7 +34,7 @@ Flags and defaults:
 
 Single-file convenience: a loose file that declares `use ink::` (or any
 tree package) gets that package mounted automatically — the CLI scans the
-source for `use <name>::` across `rt`, `ink`, `pouch`, `nmapset`, `json`,
+source for `use <name>::` across `ink_host`, `ink`, `pouch`, `nmapset`, `json`,
 `strbuild`, `async_engine`, `async_host`, `http_host`, and `http`, then
 assembles peer groups, so a loose file gets json's peer-gated container
 impls exactly like a module-directory program

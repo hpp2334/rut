@@ -1,6 +1,6 @@
 //! The strbuild pkg's gate (the strbuild batch; docs/strbuild-survey.md
 //! is the contract): the six-member class face over the HOST builder
-//! (`rt:strbuild::*` — the ink/Logger pattern; core ships zero
+//! (`strbuild_host::*` — the ink/Logger pattern; core ships zero
 //! string-building machinery), driven as a real `[deps]` pkg through
 //! the `strbuildpkg` fixture. json_pkg's conventions: canonical-string
 //! answers, plain VM, no DOM.
@@ -51,7 +51,7 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
         interrupt_every: 1024,
     };
     // the builder's bodies (the host strbuild pkg): the fixture's
-    // closure declares the `rt:strbuild` rows through the pkg's own dep
+    // closure declares the `strbuild_host` rows through the pkg's own dep
     let mut hosts = HostRegistry::new();
     rut_std::strbuild::install_std_strbuild(&mut hosts);
     let mut vm = Vm::new(

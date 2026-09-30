@@ -84,9 +84,6 @@ pub struct Manifest {
     /// ignored (the forward-compat rule); unknown VALUES trip the
     /// formatter tool, never the loader.
     pub style: BTreeMap<String, String>,
-    /// `host_scope` — the host-fn registration prefix when it must differ
-    /// from the package name (`rt` keeps its historical `rt:log` scope)
-    pub host_scope: Option<String>,
 }
 
 /// A malformed manifest — a load error, never a runtime trap.
@@ -156,8 +153,17 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 // bundle-shaped manifests
                 "format" => m.format = Some(parse_string(value, lineno)?),
                 "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
-                // the host-fn registration prefix override (`rt` → `rt:log`)
-                "host_scope" => m.host_scope = Some(parse_string(value, lineno)?),
+                // `host_scope` (the retired registration-prefix override)
+                // refuses LOUDLY: the key was load-bearing for
+                // registration names, so a silent ignore would surface as
+                // a confusing boot panic later — the error names the fix
+                // (the registration scope is the package name)
+                "host_scope" => {
+                    return Err(ManifestError(format!(
+                        "line {}: `host_scope` is retired — the registration scope is the package name; delete the key (rename the pkg if its scope must change)",
+                        lineno + 1
+                    )))
+                }
                 // `inline` (the retired source-inlining flag) rides as an
                 // unknown key: old manifests keep parsing
                 // dotted entry keys: `entry.type = "..."` etc.
@@ -540,16 +546,19 @@ entry.type = "./pouch.d.rut"
     }
 
     #[test]
-    fn host_scope_parses_and_inline_retires() {
-        // the host pkg's manifest keys:
-        // `host_scope` overrides the registration prefix. `inline` (the
-        // retired source-inlining flag) parses as an unknown key — old
-        // manifests keep loading, the flag does nothing.
-        let m = parse_manifest(
-            "name = \"rt\"\nentry.type = \"./rt.d.rut\"\nhost_scope = \"rt:log\"\n",
+    fn host_scope_retires_loudly_and_inline_rides() {
+        // `host_scope` (the retired registration-prefix override)
+        // refuses at parse, naming the fix — the registration scope is
+        // the package name. `inline` (the retired source-inlining flag)
+        // still parses as an unknown key: old manifests keep loading,
+        // the flag does nothing.
+        let err = parse_manifest(
+            "name = \"ink_host\"\nentry.type = \"./ink_host.d.rut\"\nhost_scope = \"ink_host\"\n",
         )
-        .unwrap();
-        assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
+        .unwrap_err();
+        assert!(err.to_string().contains("line 3"), "{err}");
+        assert!(err.to_string().contains("`host_scope` is retired"), "{err}");
+        assert!(err.to_string().contains("the registration scope is the package name"), "{err}");
         let m = parse_manifest("name = \"ink\"\nentry.lib = \"./ink.rut\"\ninline = true\n")
             .unwrap();
         assert_eq!(m.entry.lib.as_deref(), Some("./ink.rut"));
