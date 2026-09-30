@@ -121,6 +121,28 @@ pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
     Ok((session, root))
 }
 
+/// A probe's module dir — `tests/<probe>/`. Each probe under tests/ is
+/// its own rut program (its own `rut.toml`), the manifest lane's truth
+/// for the test suites exactly like `rut/` is for the app.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn probe_dir(probe: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(probe)
+}
+
+/// The PROBE lanes' mount (native only): `load_dir_session` over
+/// `tests/<probe>/` — the probe's own manifest names its deps (path
+/// rows; `web` rides no row) — plus the embedder half every lane owns:
+/// the `core` prelude AND the `web` host surface. The softfail fixture
+/// is the deliberate exception: no crossings is its point, so it loads
+/// its dir bare + `mount_std_core` (its test spells that shape).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_probe_session(probe: &str) -> Result<(rut_driver::Session, String), String> {
+    let (mut session, root) = rut_driver::load_dir_session(&probe_dir(probe))?;
+    rut_driver::mount_std_core(&mut session);
+    register_web_surface(&mut session)?;
+    Ok((session, root))
+}
+
 /// Register the `web` DECL surface — the embedder half both lanes run.
 /// The registration scope IS the package name (`web::*`: the prefix
 /// every crossing's host id carries).
@@ -207,19 +229,6 @@ pub fn limits() -> rut_vm::interp::Limits {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     }
-}
-
-/// core + pouch ONLY — the fixture session: `tests/todolist_app.rs`'s
-/// softfail fixture compiles with no web surface, no clock, no widgets.
-pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), String> {
-    rut_driver::mount_std_core(session);
-    session
-        .register_module(
-            "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 /// The app session — THE MIRROR of `rut/biz/rut.toml` (survey §2.4):

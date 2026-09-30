@@ -34,34 +34,33 @@
 //! Writable — `tests/app_law.rs` pins the vocabulary); there is no
 //! runtime test to write, and that is the point.
 //!
-//! The mount is the MANIFEST route: the biz pkg is the project root
-//! (`rut/biz/`, spec `app`); its closure is ui + pouch + nmapset +
-//! nmap_host. The session DECLARES the web crossings (ui's t1 does),
-//! and the contract is all-or-nothing — so the fake-DOM
-//! bodies bind below, and NO test fires one: the store world is bare
-//! (no t1_mount), every entry is a plain rut call.
+//! The mount is the MANIFEST route: the probe spec is its own module
+//! dir (`tests/store_probe/`, the root spec `store_probe`); its
+//! closure is ui + the app pkg (biz) + pouch, nmapset + nmap_host
+//! through ui's. The session DECLARES the web crossings (the embedder
+//! half registers the surface), and the contract is all-or-nothing —
+//! so the fake-DOM bodies bind below, and NO test fires one: the store
+//! world is bare (no t1_mount), every entry is a plain rut call.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::Session;
 use rut_vm::interp::{HostHooks, HostRegistry, Vm};
 use rut_vm::OpaqueRef;
 
 use todolist_web::fake_dom::FakeDom;
 use todolist_web::{hosts, mount, state, WebState};
 
-const STORE_PROBE: &str = include_str!("store_probe.rut");
-
-/// The store-probe spec (tests/store_probe.rut): its own root module
-/// over the project's imports — the app's ABI stays `main` + the event
-/// doors, so the DOM-free surface lives in a fixture, like the t1
-/// harness. ui + biz + pouch + nmapset + nmap_host, plus the web DECL
-/// — bodies bound below, never fired.
+/// The store-probe spec (`tests/store_probe/` — its own module dir,
+/// the manifest lane's root): the DOM-free surface as its own program.
+/// ui + app (the biz pkg) + pouch ride the manifest's path rows,
+/// nmapset/nmap_host come through ui's closure — plus the web DECL the
+/// embedder half registers — bodies bound below, never fired.
 fn vm() -> (Vm, OpaqueRef) {
-    let (mut session, _root) = mount::load_project_session().expect("the project mounts");
+    let (session, root) =
+        mount::load_probe_session("store_probe").expect("the store-probe mounts");
     let ctx = session.host_pkg_context();
-    let prog = mount::compile_root(&mut session, STORE_PROBE, "store_probe")
+    let prog = mount::compile_manifest(&session, &root)
         .expect("the store-probe spec compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();

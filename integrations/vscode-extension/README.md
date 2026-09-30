@@ -89,7 +89,7 @@ npm run test:host      # the Extension Host run (needs `code` on PATH and
                        # two other gates still ran
 ```
 
-`test/fixtures/symbols.rut` is a current-grammar sample (a
+`test/fixtures/symbols/` is a current-grammar sample module dir (a
 [struct](../../docs/src/reference/structs.md), a [type
 alias](../../docs/src/reference/type-aliases.md) + `requires` bound,
 a [nullable](../../docs/src/reference/by-reference-and-nullable.md) `?T`,

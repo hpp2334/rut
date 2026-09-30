@@ -1,9 +1,9 @@
 //! The t1 twin-gate support: boot the FRAMEWORK HARNESS
-//! (`tests/t1_harness.rut` over the mounted project) on the fake-DOM
-//! twin, and the read helpers every t1 test shares — snapshots, live
-//! handles as twin node ids, listener ids found through the host's own
-//! listener rows (§6's law: hooks become the tests' vocabulary, numeric
-//! ids stay plumbing).
+//! (`tests/t1_harness/` — its own module dir, the manifest lane) on the
+//! fake-DOM twin, and the read helpers every t1 test shares —
+//! snapshots, live handles as twin node ids, listener ids found through
+//! the host's own listener rows (§6's law: hooks become the tests'
+//! vocabulary, numeric ids stay plumbing).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,24 +15,22 @@ use todolist_web::fake_dom::{ FakeDom, Snapshot };
 use todolist_web::host::WebHost;
 use todolist_web::{ hosts, mount, state, WebState };
 
-pub const HARNESS: &str = include_str!("../t1_harness.rut");
-
 /// The booted twin host the tests pass around.
 pub type Host = WebHost<FakeDom>;
 
-/// Boot the harness on the twin: mount the MANIFEST (the rut/ project
-/// — t1 mounts `inline` per its own manifest, exactly the shape the
-/// probes need), compile the harness as its own root over the closure
-/// — the inline splice puts the framework's source in the harness
-/// unit, so the t1p_ probes read `root.els/regs/prev` same-unit —
+/// Boot the harness on the twin: mount the probe's own MANIFEST
+/// (`tests/t1_harness/` — the ui/nmapset/pouch path rows are the
+/// imports, mounted exactly the shape the probes need), compile the
+/// mounted root — the framework LINKS, its surface binds into the
+/// harness unit, so the t1p_ probes read `root.els/regs/prev` —
 /// bind BOTH body sets, `verify_against`, seed `#app`, run the boot
 /// turn. (The old second hand-registration of t1 is gone: the
-/// manifest's `inline = true` IS that statement now.)
+/// manifest's path rows ARE that statement now.)
 pub fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
-    let (mut session, _root) = mount::load_project_session().expect("the rut/ project mounts");
+    let (session, root) =
+        mount::load_probe_session("t1_harness").expect("the t1 harness probe mounts");
     let ctx = session.host_pkg_context();
-    let prog = mount::compile_root(&mut session, HARNESS, "t1_harness")
-        .expect("the harness compiles");
+    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));

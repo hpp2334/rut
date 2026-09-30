@@ -8,8 +8,9 @@ const { join } = require('node:path');
 
 const EXT_ID = 'rut.rut-vscode';
 // the symbol fixture the test asserts on (relative to the extension, so
-// the test runs on every machine)
-const FIXTURE = join(__dirname, 'fixtures', 'symbols.rut');
+// the test runs on every machine) — the fixture's own module dir, its
+// entry source is what the symbol assertions read
+const FIXTURE = join(__dirname, 'fixtures', 'symbols', 'symbols.rut');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function poll(what, fn, tries = 100, gap = 100) {

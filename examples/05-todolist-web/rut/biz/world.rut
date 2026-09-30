@@ -6,7 +6,7 @@
 /// Built ONCE at boot; the host re-passes it every turn.
 pub class World {
     // THE FIELDS ARE PUB: the world is the app's state home and the
-    // store-probe spec (tests/store_probe.rut) reads the same handles
+    // store-probe spec (tests/store_probe/) reads the same handles
     // the app does — one surface, no probe-only shape.
     pub store: Store;
     pub items$: Source<Vec<Todo>>; // the committed list — "the board"

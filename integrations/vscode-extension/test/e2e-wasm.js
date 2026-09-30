@@ -50,7 +50,7 @@ const EXT = path.join(__dirname, '..');
 const REPO = path.join(EXT, '..', '..');
 const WASM_PATH = path.join(EXT, 'bin', 'rut-lsp.wasm');
 const BINDING_PATH = path.join(EXT, 'out', 'wasm.js');
-const FIXTURE = path.join(__dirname, 'fixtures', 'symbols.rut');
+const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'symbols.rut');
 
 // corpus roots, mirroring crates/rut-lsp/tests/corpus.rs and
 // test/grammar-corpus.js

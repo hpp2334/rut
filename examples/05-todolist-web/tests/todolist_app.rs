@@ -32,15 +32,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::Session;
 use rut_vm::interp::{HostHooks, HostRegistry, Vm};
 use rut_vm::OpaqueRef;
 
 use todolist_web::fake_dom::{FakeDom, Snapshot};
 use todolist_web::host::WebHost;
 use todolist_web::{hosts, mount, state, DomBackend, WebState};
-
-const SOFTFAIL: &str = include_str!("softfail.rut");
 
 /// Boot the app on the twin: mount the MANIFEST (the rut/ project
 /// root — every package the survey §3 tree names, mounted as SEPARATE
@@ -439,13 +436,16 @@ fn an_event_without_a_door_traps_loud() {
 // two channels); the app's own rejected-add turn proves it on the real
 // page.
 
-/// The fixture host: `softfail.rut` on the plain store session — no web
-/// surface, no nmap, no widgets.
+/// The fixture host: `tests/softfail/` on the plain session — its own
+/// module dir, `core` the only mount: no web surface, no nmap, no
+/// widgets (no crossings declared or used is the fixture's point).
 fn make_fixture() -> WebHost<FakeDom> {
-    let mut session = Session::new();
-    mount::mount_store_session(&mut session).expect("the fixture session mounts");
+    let (mut session, root) =
+        rut_driver::load_dir_session(&mount::probe_dir("softfail"))
+            .expect("the fixture mounts");
+    rut_driver::mount_std_core(&mut session);
     let ctx = session.host_pkg_context();
-    let prog = mount::compile_app(&mut session, SOFTFAIL).expect("the fixture compiles");
+    let prog = mount::compile_manifest(&session, &root).expect("the fixture compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));

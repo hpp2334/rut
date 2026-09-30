@@ -45,8 +45,8 @@ page is nothing *but* async. The pattern that fills the gap:
   ```
 
 * **THE ABI IS THE PAGE: `main` + the doors — nothing else.** The
-  DOM-free store probes are their own root module
-  (`tests/store_probe.rut`, `use app::{World, world_boot, Todo}`);
+  DOM-free store probes are their own module dir
+  (`tests/store_probe/`, `use app::{World, world_boot, Todo}`);
   the law gate counts the module's exports and fails on a fourth.
 * **every asynchronous fact enters through a DOOR NAMED FOR ITS
   EVENT.** One door per class — `on_click`/`on_input` for DOM events
@@ -265,8 +265,8 @@ examples/05-todolist-web/
 ├── src/                            the Rust host: state/pump, hosts,
 │                                   backends (web + fake twin), mount
 ├── tests/                          the gates (95 tests, see Gates)
-│   ├── store_probe.rut             the DOM-free probe spec (its own
-│   │                               module: `use app::` — the app's
+│   ├── store_probe/                the DOM-free probe spec (its own
+│   │                               module dir: `use app::` — the app's
 │   │                               ABI stays main + the doors)
 └── rut/                            TWO packages, TWO manifests
     ├── ui/                         THE FRAMEWORK package
@@ -426,7 +426,7 @@ retired; freshness is the read's job now.
 | `src/mount.rs` | the session mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
 | `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's files (`BIZ_LIBS`, the manifest's mirror) and hand over the spliced source; the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
-| `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe.rut` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |
+| `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe/` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |
 | `tests/todolist_app.rs` | the twin gate: 18 scripted sessions asserting the tree AND the turn order on the lowered DOM |
 | `tests/t1_lowering.rs` / `tests/t1_diff.rs` | the framework's bed: 14 lowering snapshots + 18 diff/lifecycle/trap tests (32) |
 | `tests/app_law.rs` | **the grep gate**: reads the biz module (base + libs, spliced) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |

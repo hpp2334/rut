@@ -41,7 +41,7 @@
 /// The biz module's source — the module this gate exists to guard: the
 /// base plus `entry.libs`, spliced the manifest's way —
 /// the gate reads what the program actually compiles. The store/atom
-/// probes are NOT here: they are a test spec (tests/store_probe.rut),
+/// probes are NOT here: they are a test spec (tests/store_probe/),
 /// their own module over the same imports — the app's ABI is `main`
 /// plus the event doors, nothing else.
 static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -242,7 +242,7 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // door) and every write rides a mutation — the only reads and
     // writes are the ctx's own, inside derive/mutation closures. The
     // handle verbs belong to ui's resolver and the store-probe spec
-    // (tests/store_probe.rut); the module's own text has neither.
+    // (tests/store_probe/); the module's own text has neither.
     assert!(
         BIZ.contains(".text_of(") && BIZ.contains(".value_of("),
         "the view wires reactive props — deriveds, not pulled values"

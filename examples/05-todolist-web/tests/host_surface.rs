@@ -17,16 +17,15 @@ use todolist_web::fake_dom::FakeDom;
 use todolist_web::host::WebHost;
 use todolist_web::{hosts, mount, state, WebState};
 
-const HARNESS: &str = include_str!("harness.rut");
-
-/// Boot the harness on the twin: mount, compile, bind, `verify_against`
+/// Boot the harness on the twin: mount the probe's own MANIFEST
+/// (`tests/harness/` — the manifest lane, the same lane the project
+/// rides), compile the mounted root, bind, `verify_against`
 /// (the happy-path check), `Vm::new`, seed the static page,
 /// run the `main` turn. Every test's setup IS the boot contract.
 fn make_host() -> WebHost<FakeDom> {
-    let mut session = Session::new();
-    mount::mount_host_session(&mut session).expect("the host session mounts");
+    let (session, root) = mount::load_probe_session("harness").expect("the harness probe mounts");
     let expected = session.expected_host_fns();
-    let prog = mount::compile_app(&mut session, HARNESS).expect("the harness compiles");
+    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
@@ -246,9 +245,9 @@ fn guard_stale_listener_ids_are_host_drift() {
 // ---- the boot contract, both ways ----
 
 fn mounted_session() -> Session {
-    let mut s = Session::new();
-    mount::mount_host_session(&mut s).expect("the host session mounts");
-    s
+    mount::load_probe_session("harness")
+        .expect("the harness probe mounts")
+        .0
 }
 
 #[test]
@@ -274,8 +273,9 @@ fn rfc0025_declared_but_unbound_panics_at_verify() {
 
 #[test]
 fn rfc0025_declared_but_unbound_is_a_vm_construction_error() {
-    let mut session = mounted_session();
-    let prog = mount::compile_app(&mut session, HARNESS).expect("the harness compiles");
+    let (session, root) =
+        mount::load_probe_session("harness").expect("the harness probe mounts");
+    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
     let err = match Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), HostRegistry::new())
     {
         Ok(_) => panic!("the unbound registry must not boot"),
