@@ -84,6 +84,74 @@ The registry is consumed by `Vm::new`: every host thunk the program declares
 is resolved against it once, at boot. A declared-but-unbound fn is a
 **construction error**, never a mid-run trap.
 
+## Url deps without a filesystem — the seeded fetcher
+
+Embedders (and wasm hosts) own HOW bytes arrive, so an offline
+embedder answers the `DepFetch` contract from memory: parse the
+project's `rut.toml` with `rut_bundle::parse_manifest` (the manifest is
+the only url carrier — no duplicated url constants), read each url
+row's bytes from wherever they live (`std::fs::read` from the repo's
+`dist/std/` natively, `include_bytes!` on wasm), and hand the loader a
+map behind `std::future::ready`:
+
+```rust
+struct Table(BTreeMap<String, Vec<u8>>);
+
+impl rut_driver::DepFetch for Table {
+    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+        let r = match self.0.get(url) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(format!("no seeded bytes for {url}")),
+        };
+        std::future::ready(r)
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+// the manifest lane: the four passes run for real, the pin is law at
+// the mount door, and the root module registers with its source
+let (mut session, root) = block_on(
+    rut_driver::load_dir_session_with(project_dir, &Table(table))?,
+)?;
+// compile the loaded graph — the root is already mounted
+let g = rut_driver::compile_graph(&session, &root);
+```
+
+The seed IS the cache: an embedder that vendors the committed std
+artifacts never touches the network, and the sha256 pins still hold at
+the mount door. 06-github-viewer-cli's `main.rs` is the working
+example.
+
+**Mounting a bundle into an existing session** — the in-memory
+counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the
+compile owns presence) — is
+`rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`:
+both root kinds mount (a v5 compiled root with its groups, the ledger
+namespaced into the session; a v6 decl root as the pkg's host rows),
+first-mount-wins, and the bundle root's package name comes back. Wasm
+hosts `include_bytes!` the committed artifact and mount through this —
+05-todolist-web's mirror lane takes the `nmap_host` surface from the
+CDN artifact that way. For the url-dep *walk* (pins, closure checks,
+the peer gate over archive groups) stay on the load/pack lanes —
+`mount_bundle_bytes` is the offer, not the walk.
+
+**What to take from a url** is the engine's generic law, read from the
+embedding side: a compiled bundle serves host surfaces and
+concrete-class libs; consumer-spelled generic shapes
+(`Vec<MyTodo>`, `launch_future<T>`) are the directory lane
+(`mount_dir`/path rows), which compiles them on demand
+([module bundles](bundles.md) — the std-CDN section).
+
 ## Driver API (`rut-driver`)
 
 | API | Meaning |
@@ -103,9 +171,11 @@ is resolved against it once, at boot. A declared-but-unbound fn is a
 | `load_path_session_with(path, &fetch)` / `load_dir_session_with(dir, &fetch)` | the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
 | `mount_dir_with(&mut s, dir, &fetch)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
 | `pack_dir_with(dir, &fetch)` / `pack_dir_opts_with(dir, opts, fetch)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
-| `pack_dir(dir)` | pack a module directory into a deterministic v5 **compiled** `.rutbundle` — root + linkable deps as `.rutc` binaries, splice-needed deps as source groups; returns the bytes ([module bundles](bundles.md)) |
+| `pack_dir(dir)` | pack a module directory into a deterministic `.rutbundle` — a **v5 compiled** root for a lib pkg, a **v6 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
+| `mount_bundle_bytes(&mut s, &bytes)` | mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts) |
 
-The container, manifest grammar, and v5 reader live in the `rut-bundle`
+The container, manifest grammar, and reader (both root kinds) live in
+the `rut-bundle`
 crate — std-only, filesystem-free over a one-method `Source` trait.
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`

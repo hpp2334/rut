@@ -11,14 +11,33 @@ example:
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
 | [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up) | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
-| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless |
-| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival |
+| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.toml` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows |
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports
 them raw, and `crates/rut-cli/tests/playground.rs` compiles and runs
 every one against its `.expected` sidecar. The parser conformance suite
 ([the frontend](../docs/src/reference/frontend.md)) walks both trees.
+
+## Std from a CDN — what a url row delivers
+
+The std tree ships as committed per-package bundles
+(`dist/std/<pkg>.rutbundle`, packed + freshness-gated by
+`scripts/pack-std.cjs`), served by jsDelivr at an immutable
+`@std-vNN` tag and pinned by sha256 — the pin is law at the mount door
+on every load, offline or not (the committed artifact IS the cache; a
+project manifest is the only url carrier, and the embedder seeds the
+fetcher from it — [embedding](../docs/src/reference/embedding.md)).
+The boundary is the engine's owner-anchored instantiation law: a
+compiled bundle serves exactly what its own pack closure spelled, so
+the CDN delivers **host surfaces** (the v6 decl bundles) and
+**concrete-class libs** (`http` — 06 rides it), while the **generic
+owners** (`pouch`, `nmapset`, `json`, `async_host`) stay path rows —
+a consumer's `Vec<Todo>` or `launch_future<T>` shape compiles on
+demand from source and can never ride a binary
+([dependency kinds](../docs/src/reference/dependency-kinds.md),
+[module bundles](../docs/src/reference/bundles.md)).
 
 ## Packages and manifests — the three dep kinds
 

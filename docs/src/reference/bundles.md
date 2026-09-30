@@ -1,9 +1,12 @@
 # Module bundles
 
 `rut pack mod/` reads a module directory and emits **one file** —
-`mod.rutbundle` — a zip archive carrying the module **compiled**: the
-root's `.rutc` binary, its scope ledger, and each dependency as a
-compiled `.rutc` group or a source file set. A bundle is the same
+`mod.rutbundle` — a zip archive carrying the module in one of two root
+kinds, paired with the format version: a **lib** pkg packs **compiled**
+(v5 — the root's `.rutc` binary, its scope ledger, and each dependency
+as a compiled `.rutc` group or a source file set), and a `type = "host"`
+pkg packs as a **decl** root (v6 — its `.d.rut` surface rides as
+source; single-package). A bundle is the same
 contract as the directory it was packed from, in one file: the loader
 mounts it exactly like the directory, and the two compile to identical
 programs.
@@ -13,12 +16,14 @@ programs.
 - **Entry names are paths relative to the module root** — `rut.toml`,
   `<pkg>.rutc`, `<pkg>.d.rut`, `<dep>/…` group entries for deps. No
   directories otherwise, no metadata entries. Unknown extra entries are
-  ignored by loaders (forward compatibility).
+  ignored by loaders (forward compatibility) — except in a v6 decl
+  bundle, where a group entry, a root `.rutc`, or a ledger is a
+  contradiction and refuses (see [the v6 layout](#the-v6-layout)).
 - The manifest's `name` is the package name the bundle answers to — a
   bare `[a-zA-Z0-9_]+` name, the same law as directory manifests.
 - Includes and splices never escape the archive: there is no outside.
 
-## The v5 layout
+## The v5 layout — a compiled root
 
 ```text
 rut.toml                 byte-for-byte; format = "rutbundle", format_version = 5
@@ -61,7 +66,42 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   mislinks.
 - **The root must be linkable** — else `pack: <pkg> is inline — its
   source is its interface and it cannot be published compiled; share
-  the directory instead`.
+  the directory instead`. A root that has nothing to compile is not
+  this refusal: a `type = "host"` pkg packs as a v6 decl root, below.
+
+## The v6 layout — a host root
+
+A `type = "host"` pkg's root IS its declaration surface, so a host
+bundle is the manifest plus that surface, riding as source —
+single-package, no ledger, no groups, nothing to decode:
+
+```text
+rut.toml                 byte-for-byte; format = "rutbundle", format_version = 6
+<pkg>.d.rut              the declaration surface — the root itself
+```
+
+The pairing is **total**, both directions refused at the version gate:
+
+- **v5 ⇔ compiled.** A host manifest at v5 refuses — a v5 bundle's
+  root must be a `.rutc` a host pkg cannot have.
+- **v6 ⇔ decl.** A lib manifest at v6 refuses — lib roots stay v5,
+  compiled.
+- A v6 bundle carrying a root `.rutc` (`a host bundle's root is its
+  surface, not a compiled unit`), a `rut.scopes` ledger, or any group
+  entry (`a host bundle is single-package`) refuses: contradictions,
+  never guesses.
+- Writers emit 6 **only** for decl roots — every lib bundle stays
+  byte-identical v5, and old readers refuse a v6 bundle loudly at the
+  version gate.
+
+`rut pack <host-dir>` works (the surface verifies by parsing and
+lowering once — the exact lane a mount runs — then rides as source),
+`--strip` refuses on a host root (`no symbols to strip` — no programs,
+no sidecar), and `rut run <host.rutbundle>` refuses with intent: a
+host bundle carries a declaration surface — nothing to run; bind its
+rows from the embedder ([host fns](host-fns.md)). The mount is the
+same lane a host group rides inside a v5 bundle: the surface lowers
+into the pkg's host rows.
 
 ## The manifest — `rut.toml`
 
@@ -72,7 +112,8 @@ bundle-shaped directory pack unchanged:
 ```toml
 format = "rutbundle"
 format_version = 5          # the bundle LAYOUT version — independent of
-                            #   the module-binary version
+                            #   the module-binary version; a host root
+                            #   declares 6 instead (see the v6 layout)
 name = "plugin"             # the package this bundle answers to
 entry.lib = "./plugin.rut"  # directory-time; the compiled form rides
                             #   plugin.rutc instead
@@ -134,7 +175,8 @@ a newer bundle.
 | 2 | + the whole `[deps]` graph as `<pkg>/` groups | refused — re-pack the directory |
 | 3 | + each package's `[peer-deps]` `lib` group files | refused — re-pack the directory |
 | 4 | + each package's `entry.libs` files | refused — re-pack the directory |
-| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs | **the packer's output** — this toolchain reads 5 only |
+| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries — mixed source groups for `inline` deps and host pkgs | **the lib root's layout** |
+| 6 | decl: a `type = "host"` root — the manifest + its `.d.rut` surface, single-package | **the host root's layout** |
 
 Each historical extension existed because the added files were *part of
 the package*: a bundle that dropped peer groups or multi-lib files would
@@ -150,10 +192,22 @@ beside the entry — and the loader's peer gate appends by presence
 exactly as in a directory world ([Dependency
 kinds](dependency-kinds.md)).
 
+**The ledger namespaces per archive.** Each archive's scope rows shift
+into a fresh numeric range of the mounting session (boot passes
+through), and its binaries rebase with that same map **before**
+mounting — so two independently packed bundles can share one session
+without their pack-time numberings ever arguing. First-mount-wins
+still decides which body a shared group name keeps, and a group's
+ledger row must still be the scope its own binary carries (refuse,
+never guess — that check is per archive). The CDN lane below is the
+reason this exists: per-package bundles are packed independently, each
+numbering its own closure.
+
 ## The `rut-bundle` crate
 
 The container codec, the `rut.toml` grammar, the source file-set
-collector, and the v5 reader live in the `rut-bundle` crate — std-only
+collector, and the reader (both root kinds) live in the `rut-bundle`
+crate — std-only
 and **filesystem-free**. Every read goes through a one-method `Source`
 trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native
 hosts); an in-memory path→bytes map serves tests and wasm hosts. The
@@ -162,7 +216,8 @@ packer itself needs the compiler and lives in `rut-driver`
 output file stays with the caller. Mounting a bundle into a session
 stays in `rut-driver` ([Loading](loading.md)), over
 `rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the
-compiled root, the ledger, and each group's kind.
+compiled root and its ledger + groups, or the decl root and its
+surface.
 
 ## Deterministic packing
 
@@ -203,12 +258,56 @@ and version, then every group's decode, then the mount.
 |---|---|
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
 | `rut.toml` present, `format = "rutbundle"` | refuse — not a rut bundle |
-| `format_version` exactly 5 | refuse — "reads bundle format_version 5 only" |
-| `rut.scopes` present, every row a bare package name | refuse — not a v5 compiled bundle |
+| `format_version` exactly 5 or 6 | refuse — "reads bundle format_version 5 (compiled) and 6 (decl) only" |
+| v5 with a `type = "host"` root / v6 with a lib root | refuse — the pairing is total |
+| v6 carrying a root `.rutc`, a `rut.scopes` ledger, or a group entry | refuse — a host bundle is its surface, single-package |
+| `rut.scopes` present, every row a bare package name (v5) | refuse — not a v5 compiled bundle |
 | `<pkg>.rutc` decode: version, tables, surface ids | refuse — names the entry and the cause |
 | a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
 | a compiled group declaring `[peer-deps]` `lib` files | refuse — appending into a compiled pkg is impossible |
-| every declared dep satisfied by a group | refuse — names the missing group |
+| every declared dep satisfied by a group (v5) | refuse — names the missing group |
+
+## The std tree on a CDN — the per-package delivery
+
+The std tree (`rut/`) ships as **committed** per-package bundles at
+`dist/std/<pkg>.rutbundle` — one bundle per package a `[deps]` row can
+spell (15 today). jsDelivr's gh lane serves repo files at a ref, so the
+artifacts ARE the delivery and the publish act is a git tag:
+
+```toml
+[deps]
+http = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutbundle",
+        sha256 = "<64-hex>" }
+```
+
+`<tag>`/`<sha256>` are placeholders — real pins live in the examples
+(anti-rot: docs never rot pins). The laws:
+
+- **Committed artifacts, immutable tags.** `scripts/pack-std.cjs`
+  packs all 15 (deterministic — same input ⇒ byte-identical, so
+  freshness is a pure equality gate: `--check` repacks and
+  byte-compiles, no network); `--pins` rewrites the example manifests'
+  url/sha256 rows; `--tag` prints the publish commands. Tags advance
+  (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively.
+- **What a compiled bundle serves.** Instantiation is owner-anchored:
+  a compiled owner carries exactly the generic instantiations its own
+  pack closure spelled, and a consumer requesting a new shape refuses
+  loudly (`re-pack with the consumer in the closure`). So the CDN lane
+  serves **host surfaces** (v6 decl bundles — no generics) and
+  **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on
+  the surface's inherent rows, and the lib's whole closure rides
+  inside). The **generic owners** — `pouch`, `nmapset`, `json`,
+  `async_host` — are the DIRECTORY lane for consumers: consumer-spelled
+  shapes (`Vec<Todo>`, `Map<K,V>`, `launch_future<T>`) compile on
+  demand from source. This is why the examples mix the two dep kinds
+  per row, and why a compiled generic owner is not a consumer delivery
+  however fresh its pin.
+- **Duplicate mounts are safe.** Two archives may carry the same group
+  (`json`'s and `http`'s closures both carry `strbuild`):
+  first-mount-wins mounts one body, and the per-archive ledger
+  namespacing keeps every binary's ids resolving through its own
+  archive's rows. Pin sets stay minimal-top anyway — a closed bundle
+  carries the rest.
 
 ## Loading
 

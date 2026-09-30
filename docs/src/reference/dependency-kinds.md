@@ -100,6 +100,33 @@ directory:
   `rut fetch <dir>` warms the cache without running anything
   ([The rut CLI](cli.md)).
 
+### The std tree on jsDelivr
+
+The std tree ships as committed per-package bundles —
+`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`,
+pinned by sha256 (placeholders here by law: real pins live only in the
+examples, so docs never rot). Tags advance (`std-vNN`) and are never
+re-pointed — jsDelivr caches aggressively; the artifacts are committed
+at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate
+is a pure byte-equality repack — CI never touches the network).
+
+**What a url row can deliver** is the engine's owner-anchored
+instantiation law, read from the CDN side: a compiled bundle carries
+exactly the generic instantiations its own pack closure spelled, so
+
+- **host surfaces and concrete-class libs deliver** — a `type = "host"`
+  bundle is a declaration surface (no generics), and a lib of concrete
+  classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent
+  rows with its whole closure riding inside;
+- **generic owners do not** — `pouch`, `nmapset`, `json`,
+  `async_host` serve only the shapes their own pack spelled; a
+  consumer's `Vec<Todo>` or `launch_future<T>` refuses loudly
+  (`re-pack with the consumer in the closure`). Consumer-spelled
+  generic shapes are the **directory lane**: keep those rows `path`,
+  which compiles them on demand. The examples mix the kinds per row
+  exactly this way ([Module bundles](bundles.md) — the std-CDN
+  section).
+
 ## Semantics
 
 | table | who supplies it | transitive? | missing behavior |
