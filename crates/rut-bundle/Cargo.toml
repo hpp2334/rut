@@ -12,3 +12,8 @@ path = "src/lib.rs"
 [dependencies]
 rut-core = { path = "../rut-core" }
 toml_edit = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+# the golden-bytes guard: the writer's output pinned by its sha256
+sha2 = "0.10"

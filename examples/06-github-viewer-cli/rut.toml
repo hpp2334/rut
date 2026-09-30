@@ -31,4 +31,4 @@ pouch = { path = "../../rut/pouch" }
 nmapset = { path = "../../rut/nmapset" }
 json = { path = "../../rut/json" }
 async_host = { path = "../../rut/async_host" }
-http = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/http.rutbundle", sha256 = "0741c2a6c5b26c0068ab2951718e75877ef01980be4c0c43fff1cc8736105e53" }
+http = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/http.rutbundle", sha256 = "4867aeb6641b6e0c2269d4499682012395f317f9ce4ac35ade338c40469fd9cb" }

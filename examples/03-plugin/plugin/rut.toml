@@ -23,4 +23,4 @@ entry.lib = "./plugin.rut"
 
 [deps]
 server = { path = "../server" }
-pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "84b7fb2354d77bed9e3cb1c0e288d47cc8bba76bbb63630a0c83987626ad876f" }
+pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "6e70234d1dc2d9cbac7a033d2a35b795dcbd6883750ecd4785acd0dfc9d3763e" }

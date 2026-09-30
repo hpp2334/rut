@@ -24,7 +24,7 @@ name = "digests"
 entry.lib = "./digest.rut"
 
 [deps]
-pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "84b7fb2354d77bed9e3cb1c0e288d47cc8bba76bbb63630a0c83987626ad876f" }
-json = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/json.rutbundle", sha256 = "208fe028ba1899cac4da25b3efc1a3afc49ae83b8e7266135ce1b06ed3ff06a7" }
-nmapset = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/nmapset.rutbundle", sha256 = "47c3428d3a9b34389c58b8c329317a29601397598fb3f058ed67d7a4c694faf4" }
+pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "6e70234d1dc2d9cbac7a033d2a35b795dcbd6883750ecd4785acd0dfc9d3763e" }
+json = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/json.rutbundle", sha256 = "9f1edc6707acdb2b98a177bae85520ef69f2aa62e72a2391cee3224bf0db68a7" }
+nmapset = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/nmapset.rutbundle", sha256 = "1c75b131bb4837afafbebf79283e9fa421b0a7bc8e2267a82066dd2df3c38fd1" }
 

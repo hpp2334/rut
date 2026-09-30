@@ -21,6 +21,11 @@ pub mod manifest;
 pub mod pack;
 pub mod read;
 
+/// The archive mechanics layer — pure zip plumbing over the `zip`
+/// crate, no rut knowledge. Private: the public surface of this crate
+/// stays the format's policy (`write_bundle`/`parse_bundle`).
+mod zip;
+
 pub use container::{crc32, parse_bundle, write_bundle, BundleError};
 pub use manifest::{parse_manifest, valid_spec, Entry, Manifest, ManifestError, PkgType};
 pub use pack::{bundle_key, collect_source_group, default_out_path, entry_rel, read_entry, read_manifest};

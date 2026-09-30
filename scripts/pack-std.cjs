@@ -160,7 +160,7 @@ const EXAMPLES = [
   },
   {
     manifest: "examples/02-digest/rut.toml",
-    deps: ["pouch", "json"],
+    deps: ["pouch", "json", "nmapset"],
   },
   {
     manifest: "examples/03-plugin/plugin/rut.toml",
