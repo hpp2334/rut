@@ -5,15 +5,15 @@ The `rut` binary is the toolchain's command-line face. It is also a
 standard native bodies, and drives the async loop — the same contract an
 embedded host implements ([embedding and native modules](embedding.md)).
 
-It is the **temporary-run** lane: loose-file experiments, `fmt`,
-`dump`, `pack`. The intended consumption path is depending on the engine
+It is the **temporary-run** lane: running module directories and
+bundles, `fmt`, `dump`, `pack`. The intended consumption path is depending on the engine
 crates from your own project through a Cargo git dependency
 ([installation](../quick-start/installation.md)) and embedding the VM
 ([embedding and native modules](embedding.md)) — this page documents the
 binary itself.
 
 ```sh
-rut run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>]
+rut run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
 rut fetch <dir>
@@ -24,30 +24,27 @@ Running `rut` with no subcommand prints the usage line to stderr.
 
 ## `run`
 
-Compiles and executes. Three input forms:
+Compiles and executes. Two input forms — every rut program is a module
+directory ([project structure](project-structure.md)), so there is no
+loose-file shape:
 
 | input | pipeline |
 |---|---|
-| `file.rut` | one file is one module unit — compile it against the base mounts, then decode → verify → run `main` |
 | `dir` (a module directory with `rut.toml`) | load the whole graph, compile it, run the root's `main` ([project structure](project-structure.md)) |
 | `mod.rutbundle` | the packed form of the same contract ([module bundles](bundles.md)) |
+
+Anything else is refused at the door (exit 2): a loose `.rut` file is
+not a runnable unit — give the directory a `rut.toml` (`name = "…"` +
+`entry.lib = "./<file>.rut"`), or run a packed `.rutbundle`.
 
 Flags and defaults:
 
 | item | behavior |
 |---|---|
 | `--fuel N` | cap the op budget per turn. Fuel is opt-in: without the flag the run is uncapped; a missing or unparsable value is a loud error (exit 2) — no silent default |
-| `--symbols <file.rutsym>` | restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the source/dir lanes compile fresh and need no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn |
+| `--symbols <file.rutsym>` | restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the directory lane compiles fresh and needs no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn |
 | heap limit | fixed at 64 MiB |
 | interrupt check | every 1024 ops |
-
-Single-file convenience: a loose file that declares `use ink::` (or any
-tree package) gets that package mounted automatically — the CLI scans the
-source for `use <name>::` across `ink_host`, `ink`, `pouch`, `nmapset`, `json`,
-`strbuild`, `async_engine`, `async_host`, `http_host`, and `http`, then
-assembles peer groups, so a loose file gets json's peer-gated container
-impls exactly like a module-directory program
-([dependency kinds](dependency-kinds.md)).
 
 Bodies bound by `run`:
 
@@ -168,10 +165,9 @@ The file extension selects the parser mode:
 |---|---|
 | `0` | success |
 | `1` | compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; `pack` or output-write failure |
-| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted) |
+| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted) |
 
-Diagnostics go to stderr (`run` renders them with source spans on the
-single-file path); `pack`'s success line goes to stdout.
+Diagnostics go to stderr; `pack`'s success line goes to stdout.
 
 ## Notes
 

@@ -176,10 +176,7 @@ dear rut, hello from a package
 ```
 
 Resolution walks `[deps]` recursively (a dep's own `[deps]` mount with
-it), with a cycle guard and first-mount-wins. Single loose files get a
-convenience: the `rut` CLI mounts the toolchain's tree packages when
-your file says `use ink::` or `use pouch::` — see
-[the rut CLI](../reference/cli.md).
+it), with a cycle guard and first-mount-wins.
 
 ## One package, several files
 
@@ -235,10 +232,10 @@ conventional entry the `rut run` CLI calls. See
 ## Tooling
 
 ```sh
-rut run <file.rut | dir | mod.rutbundle> [--fuel N]  # compile + run
-rut fmt <file.rut | dir> [--check]                   # format in place
-rut pack <dir> [-o out.rutbundle]                    # a self-contained bundle
-rut dump <file.rut>                                  # dump module info
+rut run <dir | mod.rutbundle> [--fuel N]              # compile + run
+rut fmt <file.rut | dir> [--check]                    # format in place
+rut pack <dir> [-o out.rutbundle]                     # a self-contained bundle
+rut dump <file.rut>                                   # dump module info
 ```
 
 ## Put it together

@@ -266,7 +266,21 @@ it constantly.
 
 ## Put it together
 
-Save this as `literals.rut` and run `rut run literals.rut`:
+Put this in a module directory and run it: `literals/rut.toml` names
+the two packages the program uses, and the program is
+`literals/main.rut`:
+
+```toml
+# literals/rut.toml
+name = "literals"
+entry.lib = "./main.rut"
+
+[deps]
+pouch = { path = "../rut/pouch" }
+ink   = { path = "../rut/ink" }
+```
+
+Save the program as `literals/main.rut` and run `rut run literals`:
 
 ```rut
 use pouch::{ Vec };

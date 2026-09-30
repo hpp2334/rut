@@ -64,7 +64,7 @@ until nothing is pending. So a program launches work from `main` and
 the output simply appears:
 
 ```sh
-rut run countdown.rut
+rut run countdown/   # a module dir (rut.toml + main.rut); main launches the countdown
 ```
 
 ```text

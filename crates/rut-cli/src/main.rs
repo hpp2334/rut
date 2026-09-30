@@ -14,7 +14,7 @@ fn main() {
     match cmd {
         "run" => {
             let Some(path) = args.get(2) else {
-                eprintln!("run: missing <file.rut | dir | mod.rutbundle>");
+                eprintln!("run: missing <dir | mod.rutbundle>");
                 std::process::exit(2);
             };
             // fuel is opt-in and LOUD: absent → uncapped; a missing or
@@ -95,7 +95,7 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "rut — run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
+        "rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
     );
 }
 
@@ -165,8 +165,20 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
         eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
         std::process::exit(2);
     }
+    // the door is an EXPLICIT ALLOWLIST: a module directory (`rut.toml`)
+    // or a packed `.rutbundle` — every program is a manifest'd dir, so
+    // there is no loose-file shape to fall back to
     let p = std::path::Path::new(path);
-    let packed = p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle");
+    if !(p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle")) {
+        eprintln!(
+            "run: {path} is not a runnable unit — give the directory a `rut.toml` \
+             (`name = \"…\"` + `entry.lib = \"./<file>.rut\"`), or run a packed `.rutbundle`"
+        );
+        std::process::exit(2);
+    }
+    // the symbol table is opt-in against a compiled bundle: the
+    // source/dir lanes compile fresh and need no map — a
+    // mismatched input is a usage error, never a silent ignore
     if symbols.is_some()
         && !(p.is_file() && p.extension().map_or(false, |e| e == "rutbundle"))
     {
@@ -178,123 +190,65 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
     }
     // the program plus the mount snapshot the host installs against —
     // the ctx is OWNED (the session may die here; the installs below
-    // answer to the snapshot)
-    let (prog, ctx) = if packed {
-        // a module directory (`rut.toml`) or a `.rutbundle` — load the
-        // graph (url deps ride the cache-first fetcher), mount std,
-        // compile, link
-        let (mut session, root) = match load_with_cache(p) {
-            Ok(x) => x,
+    // answer to the snapshot). A module directory (`rut.toml`) or a
+    // `.rutbundle` — load the graph (url deps ride the cache-first
+    // fetcher), mount std, compile, link
+    let (mut session, root) = match load_with_cache(p) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("{e}");
+            evict_poisoned_cache(&e);
+            std::process::exit(2);
+        }
+    };
+    // a v6 host bundle: nothing to run — its root is a declaration
+    // surface the embedding Rust binds, never a program
+    if matches!(
+        session.resolve(&root).map(|m| &m.body),
+        Ok(rut_driver::ModuleBody::Host { .. })
+    ) {
+        eprintln!(
+            "run: {path} packs the host pkg `{root}` — a host bundle carries a \
+             declaration surface, nothing to run; bind its rows from the embedder \
+             (`install_host_pkg` over the mounted rows)"
+        );
+        std::process::exit(2);
+    }
+    // the symbol table restores BEFORE the graph compiles, so
+    // linking and the VM both see the real names and positions
+    if let Some(sym) = &symbols {
+        let bytes = match std::fs::read(sym) {
+            Ok(b) => b,
             Err(e) => {
-                eprintln!("{e}");
-                evict_poisoned_cache(&e);
+                eprintln!("run: cannot read {sym}: {e}");
                 std::process::exit(2);
             }
         };
-        // a v6 host bundle: nothing to run — its root is a declaration
-        // surface the embedding Rust binds, never a program
-        if matches!(
-            session.resolve(&root).map(|m| &m.body),
-            Ok(rut_driver::ModuleBody::Host { .. })
-        ) {
-            eprintln!(
-                "run: {path} packs the host pkg `{root}` — a host bundle carries a \
-                 declaration surface, nothing to run; bind its rows from the embedder \
-                 (`install_host_pkg` over the mounted rows)"
-            );
-            std::process::exit(2);
-        }
-        // the symbol table restores BEFORE the graph compiles, so
-        // linking and the VM both see the real names and positions
-        if let Some(sym) = &symbols {
-            let bytes = match std::fs::read(sym) {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("run: cannot read {sym}: {e}");
-                    std::process::exit(2);
-                }
-            };
-            let map = match rut_core::strip::SymbolMap::from_bytes(&bytes) {
-                Ok(m) => m,
-                Err(e) => {
-                    eprintln!("run: {sym}: {e}");
-                    std::process::exit(1);
-                }
-            };
-            for spec in rut_driver::apply_symbols_to_session(&mut session, &map) {
-                eprintln!("run: warning — the symbol table names `{spec}`, which this bundle does not carry");
-            }
-        }
-        rut_driver::mount_std(&mut session);
-        let g = rut_driver::compile_graph(&session, &root);
-        if !g.diags.is_empty() {
-            for d in &g.diags {
-                eprintln!("{}", d.msg);
-            }
-            std::process::exit(1);
-        }
-        let ctx = session.host_pkg_context();
-        match g.program {
-            Some(p) => (p, ctx),
-            None => {
-                eprintln!("no program emitted");
-                std::process::exit(1);
-            }
-        }
-    } else {
-        let src = load(path);
-        // single-file convenience: a `use ink::` / `use pouch::` pulls the
-        // toolchain's tree pkg — the driver does not know these names, and
-        // the demo cases + `benches/workloads` rely on the CLI being a
-        // full host (it binds math + the logger below)
-        let mut s = rut_driver::Session::new();
-        rut_driver::mount_std(&mut s);
-        let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        // the std mount order (the rut-json survey §1.2's ruling): ink
-        // is independent; json slots after pouch and nmapset — the dep
-        // graph's new edges (json -> pouch, json -> nmapset) make that
-        // the only graph-respecting position. strbuild is 10th, after
-        // json (the amendment): position-free for the graph —
-        // the row names the reading order, and json's own `[deps]`
-        // pulls the pkg regardless. The http pair closes the list on
-        // the same law (http after its http_host dep; http's own
-        // `[deps]` pulls http_host regardless)
-        for (name, dir) in [
-            ("ink_host", "rut/ink_host"),
-            ("ink", "rut/ink"),
-            ("pouch", "rut/pouch"),
-            ("nmapset", "rut/nmapset"),
-            ("json", "rut/json"),
-            ("strbuild", "rut/strbuild"),
-            ("async_engine", "rut/async_engine"),
-            ("async_host", "rut/async_host"),
-            ("http_host", "rut/http_host"),
-            ("http", "rut/http"),
-        ] {
-            if src.contains(&format!("use {name}::")) {
-                rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");
-            }
-        }
-        // the loose-file gate (the survey §1.2's decision): the CLI is a
-        // full host — a loose file that `use json::` gets the
-        // peer-gated container groups exactly like a module-dir program
-        rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
-        let out = rut_driver::compile_module_in(&mut s, &src, mode_of(path), "main");
-        if !out.diags.is_empty() {
-            print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
-            std::process::exit(1);
-        }
-        let ctx = s.host_pkg_context();
-        let Some(binary) = out.binary else {
-            eprintln!("no binary emitted");
-            std::process::exit(1);
-        };
-        match rut_core::binary::decode(&binary) {
-            Ok(p) => (p, ctx),
+        let map = match rut_core::strip::SymbolMap::from_bytes(&bytes) {
+            Ok(m) => m,
             Err(e) => {
-                eprintln!("decode: {e}");
+                eprintln!("run: {sym}: {e}");
                 std::process::exit(1);
             }
+        };
+        for spec in rut_driver::apply_symbols_to_session(&mut session, &map) {
+            eprintln!("run: warning — the symbol table names `{spec}`, which this bundle does not carry");
+        }
+    }
+    rut_driver::mount_std(&mut session);
+    let g = rut_driver::compile_graph(&session, &root);
+    if !g.diags.is_empty() {
+        for d in &g.diags {
+            eprintln!("{}", d.msg);
+        }
+        std::process::exit(1);
+    }
+    let ctx = session.host_pkg_context();
+    let prog = match g.program {
+        Some(p) => p,
+        None => {
+            eprintln!("no program emitted");
+            std::process::exit(1);
         }
     };
     if let Err(e) = rut_vm::verify::verify(&prog) {

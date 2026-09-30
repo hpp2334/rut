@@ -1,9 +1,9 @@
 //! Book code-block gate — every ```rut fenced block under docs/src whose
 //! content contains `pub fn main` compiles AND runs to completion, driven
-//! the same way `rut run` drives a loose file (the CLI is a full host:
-//! mount_std plus the tree packages the block's `use` lines name, peers
-//! assembled, math/logger/nmap/async host fns bound — the same set the
-//! wasm host mounts, which is what the book's ▶ Run buttons ride).
+//! the way the playground's wasm host drives them (mount_std plus the
+//! tree packages the block's `use` lines name, peers assembled,
+//! math/logger/nmap/async host fns bound — the same set the wasm host
+//! mounts, which is what the book's ▶ Run buttons ride).
 //!
 //! The gate is anti-rot: a book block that claims to be a whole program
 //! must stay a whole program. It passes on any block the language
@@ -106,7 +106,7 @@ fn book_blocks_compile_and_run() {
                 continue;
             }
 
-            // the CLI's loose-file host: mount what the block names
+            // the book's host lane: mount what the block names
             let mut s = rut_driver::Session::new();
             rut_driver::mount_std(&mut s);
             let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

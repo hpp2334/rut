@@ -1,7 +1,7 @@
 # Your first rut program
 
 rut feels like TypeScript on the surface and Rust underneath the hood.
-This page walks one file through the whole toolchain — running,
+This page walks one program through the whole toolchain — running,
 formatting, inspecting, and budgeting — so every later page can assume
 the workflow.
 
@@ -23,10 +23,22 @@ pub fn main() {
 }
 ```
 
-Save it as `hello.rut` and run it:
+Every rut program is a **module directory**: a `rut.toml` naming the
+package and its dependencies, plus the source file the manifest points
+at. Create it and run the directory:
 
 ```sh
-rut run hello.rut
+mkdir hello
+cat > hello/rut.toml <<'EOF'
+name = "hello"
+entry.lib = "./main.rut"
+
+[deps]
+# the vendored logger package, from a dir at the repo root
+ink = { path = "../rut/ink" }
+EOF
+# save the program above as hello/main.rut, then:
+rut run hello
 ```
 
 ```text
@@ -35,12 +47,15 @@ hello, rut!
 
 Three things to notice:
 
-- **One file is one module.** There is no include form; cross-module
+- **One directory with a `rut.toml` is one program.** The manifest is
+  the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the
+  only run lane. Inside the package, one file is one module; cross-module
   code is reached through `use` paths (see the
   [modules tutorial](../tutorial/modules.md)).
-- **`use ink::{ Logger };`** pulls `Logger` out of the `ink` package.
-  When you `rut run` a standalone file, the vendored packages mount
-  automatically — no manifest needed.
+- **`use ink::{ Logger };`** pulls `Logger` out of the `ink` package —
+  and the manifest's `[deps]` row is what mounts it: a `use` line says
+  *which* names the program wants, the manifest says *where* the package
+  lives ([project structure](../reference/project-structure.md)).
 - **`f"hello, {name}!"`** is a format literal: `{expr}` interpolates any
   expression, rendered through the value's display contract.
 
@@ -81,9 +96,9 @@ and the exact rules live in
 The formatter is the style — there is no configuration:
 
 ```sh
-rut fmt hello.rut            # rewrite in place
-rut fmt hello.rut --check    # verify only (note: --check goes AFTER the path)
-rut fmt .                    # walk a directory tree, every *.rut file
+rut fmt hello/main.rut         # rewrite in place
+rut fmt hello/main.rut --check # verify only (note: --check goes AFTER the path)
+rut fmt .                      # walk a directory tree, every *.rut file
 ```
 
 `--check` prints `unformatted: <file>` and exits `1` when a file needs
@@ -96,7 +111,7 @@ refused loudly rather than half-formatted.
 a snippet behaves differently than you expect:
 
 ```sh
-rut dump hello.rut
+rut dump hello/main.rut
 ```
 
 `dump` runs the lone module through the frontend *without* mounting the
@@ -110,7 +125,7 @@ to?") rather than whole-program runs. The playground's **AST** and
 Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:
 
 ```sh
-rut run hello.rut --fuel 1000
+rut run hello --fuel 1000
 ```
 
 A program that exhausts its fuel halts with a diagnostic naming the

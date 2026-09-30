@@ -205,10 +205,8 @@ The run recipe:
 - **A module dir** (the full world): `[deps]` json by path — add
   `pouch`/`nmapset` to the same table when you want the `Vec<T>` /
   map-set impls; they are peer groups, mounted only when the peer is
-  in your closure anyway. `rut run <dir>` runs it.
-- **A loose file**: `rut run file.rut` with `use json::` in the
-  source — the CLI mounts json and runs the peer gate
-  (`assemble_peers`), same gating rules.
+  in your closure anyway. `rut run <dir>` runs it, and the peer gate
+  (`assemble_peers`) applies the same gating rules.
 - **The worked example**: `cargo run -p digests`
   ([`02-digest/`](02-digest/)) — its encode half is the lib's
   `impl JsonSerialize for Json`, golden-tested against serde_json
@@ -281,8 +279,6 @@ the full entry + the optimization ledger).
 The run recipe:
 
 - **A module dir**: `[deps]` strbuild by path — `rut run <dir>`.
-- **A loose file**: `rut run file.rut` with `use strbuild::` in the
-  source — the CLI mounts strbuild by presence, same as json.
 - **A taste in ten lines**:
   `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
@@ -363,8 +359,6 @@ migration).
 Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
-- **A loose file**: `rut run file.rut` with `use nmapset::` in the
-  source — the CLI mounts nmapset by presence, same as json.
 - **A taste in ten lines**:
   `let mut m = HashMap<str, i64>.new(); m.put(k, v); let v = m.get(k);`
 - **The bench rows**: `node benches/run.mjs --workload
@@ -483,8 +477,6 @@ The run recipes:
   (the builder's header accumulator). The fetch sites `await`, so
   the program's entry runs under the launcher (`use async_host::
   launch_future`).
-- **A loose file**: `rut run file.rut` with `use http::` in the
-  source — the CLI mounts both pkgs by presence, same as json.
 - **The worked example**: [`06-github-viewer-cli/`](06-github-viewer-cli/)
   — `rgh` consumes the pair from an embedder (`http::pkg()`, the
   reqwest lane) plus example-local CLI-I/O rows, its brain an async

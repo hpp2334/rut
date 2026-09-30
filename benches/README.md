@@ -20,12 +20,10 @@ benches/
 │   └── build-quickjs.sh    # gcc build → benches/.tools/qjs
 ├── probe/                  # rut-bench-probe: in-process phase/heap probe
 ├── workloads/
-│   ├── NAME.rut            # the rut program (`std:*` imports; logs CHECKSUM)
+│   ├── NAME/               # the rut program: a module dir (`rut.toml` +
+│   │                       # `main.rut`; mounts its own deps when it has
+│   │                       # any), runs as `rut run <dir>`
 │   ├── NAME.js             # the identical program for node + qjs
-│   ├── NAME/               # dir-shaped rut side: `rut.toml` + `main.rut`,
-│   │                       # used when the workload mounts its own deps
-│   │                       # (the `nmapset` workloads); runs as
-│   │                       # `rut run <dir>`
 │   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
 ```
@@ -883,7 +881,7 @@ Repeated times are stable; treat the x-runtime gap as the baseline
 shape, not as saturation.
 
 - Each runtime is invoked the way it is normally used: `rut run
-  file.rut`, `node file.js`, `qjs file.js`. Wall time therefore
+  <dir>`, `node file.js`, `qjs file.js`. Wall time therefore
   **includes parse/compile/verification** for all three.
 - Wall time is the median over `--repeats` timed runs after `--warmup`
   discarded runs; `wall min` is also reported.

@@ -39,6 +39,7 @@ source text by design; a partially translated book is a valid book.
 | package | 包 | distinct from bundle |
 | manifest | 清单 | the manifest → 清单（`rut.toml` stays code） |
 | bundle | 捆绑包 | module bundle → 模块捆绑包（`mod.rutbundle` stays code） |
+| runnable unit | 可运行单元 | the manifest makes the directory THE runnable unit — `rut run` accepts dir-or-bundle only; a loose `.rut` file is not a program |
 | declaration file | 声明文件 | `.d.rut` stays code |
 | bytecode | 字节码 | typed bytecode → 类型化字节码 |
 | VM | VM | 保留不译；"virtual machine" spelled out → 虚拟机 |

@@ -4,10 +4,10 @@ The standard library splits in two. **`core`** is the only true
 standard — a prelude of builtin names that are *ambient*: in scope in
 every compilation unit, no `use` needed. Everything else is a set of
 **swappable packages** shipped in the toolchain tree — a program that
-wants one says so (a `use` line; the CLI mounts the tree packages for
-loose files automatically, and a package program lists them in its
-manifest). Any of them can be replaced wholesale; the engine knows none
-of their names.
+wants one says so: a `use` line in the source and the package's
+`[deps]` row in its `rut.toml` ([project
+structure](../reference/project-structure.md)). Any of them can be
+replaced wholesale; the engine knows none of their names.
 
 The reference page is [core and the swappable packages](../reference/stdlib.md).
 

@@ -80,6 +80,12 @@ let mut vm = rut_vm::interp::Vm::new(
 let answer: i64 = vm.call("compute", (41,))?;
 ```
 
+The compile step is the **embedder's string lane**: the host owns the
+source text — from its own config, a database, an editor buffer — and
+`compile_module_in` compiles it against the mounted surfaces. It is not
+a file-running lane: the CLI's `rut run` accepts only a module directory
+or a packed `.rutbundle` ([the rut CLI](cli.md)).
+
 The registry is consumed by `Vm::new`: every host thunk the program declares
 is resolved against it once, at boot. A declared-but-unbound fn is a
 **construction error**, never a mid-run trap.

@@ -319,8 +319,8 @@ msgstr "从检出构建 CLI 二进制："
 msgid "# the `rut` binary: run / fmt / pack / dump\n"
 msgstr "# the `rut` binary: run / fmt / pack / dump\n"
 
-msgid "That binary is the **temporary-run** lane — loose-file experiments, `fmt`, `dump`, `pack`. To _use_ rut in your own project, depend on the engine crates as a git dependency — the crates are not on crates.io ([Quick Start](quick-start/installation.md))."
-msgstr "这个二进制是**临时运行**车道——散文件实验、`fmt`、`dump`、`pack`。要在你自己的项目里_使用_ rut，请以 git 依赖的形式依赖引擎 crate——这些 crate 不在 crates.io 上（[快速开始](quick-start/installation.md)）。"
+msgid "That binary is the **temporary-run** lane — running module directories and bundles, `fmt`, `dump`, `pack`. To _use_ rut in your own project, depend on the engine crates as a git dependency — the crates are not on crates.io ([Quick Start](quick-start/installation.md))."
+msgstr "这个二进制是**临时运行**车道——运行模块目录与捆绑包，`fmt`、`dump`、`pack`。要在你自己的项目里_使用_ rut，请以 git 依赖的形式依赖引擎 crate——这些 crate 不在 crates.io 上（[快速开始](quick-start/installation.md)）。"
 
 msgid "License"
 msgstr "许可证"
@@ -334,8 +334,8 @@ msgstr "rut 以两种方式进入你的项目，按意图排序："
 msgid "**Depend on the engine crates** from your own Rust project through a Cargo git dependency. This is the intended path — your `Cargo.toml` names this repository and a commit, and the engine (lexer, parser, compiler, typed bytecode, VM) builds as part of _your_ build, ready to [embed](../reference/embedding.md)."
 msgstr "**依赖引擎 crate**——通过 Cargo git 依赖，从你自己的 Rust 项目。这是预期的路径——你的 `Cargo.toml` 写明这个仓库和一个提交，引擎（词法分析器、语法分析器、编译器、类型化字节码、VM）就作为_你的_构建的一部分编译出来，随时可以[嵌入](../reference/embedding.md)。"
 
-msgid "**Build the `rut` CLI** from a checkout of this repository — the **temporary-run** lane: loose-file experiments, `fmt`, `dump`, `pack`. The fastest way to poke at the language; not the way anyone ships."
-msgstr "**从这个仓库的检出构建 `rut` CLI**——**临时运行**车道：散文件实验、`fmt`、`dump`、`pack`。是把玩这门语言最快的路；不是用来交付软件的路。"
+msgid "**Build the `rut` CLI** from a checkout of this repository — the **temporary-run** lane: running module directories and bundles, `fmt`, `dump`, `pack`. The fastest way to poke at the language; not the way anyone ships."
+msgstr "**从这个仓库的检出构建 `rut` CLI**——**临时运行**车道：运行模块目录与捆绑包，`fmt`、`dump`、`pack`。是把玩这门语言最快的路；不是用来交付软件的路。"
 
 msgid "Both lanes build the same engine, and the crates are not published to crates.io — the git dependency is the only consumption path."
 msgstr "两条车道构建的是同一个引擎，而且这些 crate 没有发布到 crates.io——git 依赖是唯一的获取途径。"
@@ -427,8 +427,8 @@ msgstr "当程序用到 std 包（`ink`、`pouch`、`json` 等）时，以同样
 msgid "The rut CLI — temporary runs"
 msgstr "rut CLI——临时运行"
 
-msgid "For loose-file experiments the repo builds a standalone binary. Clone and build it:"
-msgstr "散文件实验用仓库构建的独立二进制。克隆并构建它："
+msgid "For temporary runs the repo builds a standalone binary. Clone and build it:"
+msgstr "临时运行用仓库构建的独立二进制。克隆并构建它："
 
 msgid "This produces the `rut` binary at `target/release/rut`. Put it on your `PATH` (or call it by path — the pages here use the bare name):"
 msgstr "这会在 `target/release/rut` 生成 `rut` 二进制。把它放进你的 `PATH`（或直接按路径调用——这里的页面都使用裸名称）："
@@ -436,20 +436,20 @@ msgstr "这会在 `target/release/rut` 生成 `rut` 二进制。把它放进你�
 msgid "\"$PWD/target/release:$PATH\""
 msgstr "\"$PWD/target/release:$PATH\""
 
-msgid "# usage: rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump <file.rut>\n"
-msgstr "# usage: rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump <file.rut>\n"
+msgid "# usage: rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>\n"
+msgstr "# usage: rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>\n"
 
-msgid "The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, and the VM. It also carries the vendored packages from the repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a standalone `hello.rut` that says `use ink::{ Logger };` just works, no manifest required."
-msgstr "这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。它还携带仓库 `rut/` 目录里自带的包（`core`、`pouch`、`ink`、`json` 等）——一个写着 `use ink::{ Logger };` 的独立 `hello.rut` 直接就能跑，不需要任何清单。"
+msgid "The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, and the VM. It also carries the vendored packages from the repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a program says `use ink::{ Logger };` and mounts the package through its manifest's `[deps]` row, since every rut program is a module directory ([your first rut program](first-program.md))."
+msgstr "这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。它还携带仓库 `rut/` 目录里自带的包（`core`、`pouch`、`ink`、`json` 等）——程序写一行 `use ink::{ Logger };`，再通过清单的 `[deps]` 行挂载这个包，因为每个 rut 程序都是一个模块目录（[你的第一个 rut 程序](first-program.md)）。"
 
 msgid "Try it:"
 msgstr "试一下："
 
-msgid "<<'EOF'\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    log.info(f\"hello, rut!\");\n}\nEOF\nrut run hello.rut\n"
-msgstr "<<'EOF'\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    log.info(f\"hello, rut!\");\n}\nEOF\nrut run hello.rut\n"
+msgid "<<'EOF'\nname = \"hello\"\nentry.lib = \"./main.rut\"\n\n[deps]\n# the vendored logger package, from a dir at the repo root\nink = { path = \"../rut/ink\" }\nEOF\ncat > hello/main.rut <<'EOF'\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    log.info(f\"hello, rut!\");\n}\nEOF\nrut run hello\n"
+msgstr "<<'EOF'\nname = \"hello\"\nentry.lib = \"./main.rut\"\n\n[deps]\n# the vendored logger package, from a dir at the repo root\nink = { path = \"../rut/ink\" }\nEOF\ncat > hello/main.rut <<'EOF'\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    log.info(f\"hello, rut!\");\n}\nEOF\nrut run hello\n"
 
-msgid "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (loose files, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
-msgstr "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（散文件、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
+msgid "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
+msgstr "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（`run`、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 msgid "Optional: the wasm playground"
 msgstr "可选：wasm Playground"
@@ -472,8 +472,8 @@ msgstr "# live-reload preview at http://localhost:3000\n"
 msgid "# static site in docs/book/\n"
 msgstr "# static site in docs/book/\n"
 
-msgid "rut feels like TypeScript on the surface and Rust underneath the hood. This page walks one file through the whole toolchain — running, formatting, inspecting, and budgeting — so every later page can assume the workflow."
-msgstr "rut 表面感觉像 TypeScript，引擎盖之下是 Rust。本页带着一个文件走完整条工具链——运行、格式化、检视、预算控制——之后的每一页都可以默认这套工作流。"
+msgid "rut feels like TypeScript on the surface and Rust underneath the hood. This page walks one program through the whole toolchain — running, formatting, inspecting, and budgeting — so every later page can assume the workflow."
+msgstr "rut 表面感觉像 TypeScript，引擎盖之下是 Rust。本页带着一个程序走完整条工具链——运行、格式化、检视、预算控制——之后的每一页都可以默认这套工作流。"
 
 msgid "Write and run"
 msgstr "编写并运行"
@@ -484,17 +484,20 @@ msgstr "本章的一切都通过临时运行的 `rut` CLI 驱动——这是学�
 msgid "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    let name = \"rut\";\n    log.info(f\"hello, {name}!\");\n}\n```"
 msgstr "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"hello\");\n    let name = \"rut\";\n    log.info(f\"hello, {name}!\");\n}\n```"
 
-msgid "Save it as `hello.rut` and run it:"
-msgstr "把它保存为 `hello.rut` 并运行："
+msgid "Every rut program is a **module directory**: a `rut.toml` naming the package and its dependencies, plus the source file the manifest points at. Create it and run the directory:"
+msgstr "每个 rut 程序都是一个**模块目录**：一个 `rut.toml` 指名包与它的依赖，外加清单指向的那个源文件。创建它并运行这个目录："
+
+msgid "<<'EOF'\nname = \"hello\"\nentry.lib = \"./main.rut\"\n\n[deps]\n# the vendored logger package, from a dir at the repo root\nink = { path = \"../rut/ink\" }\nEOF\n# save the program above as hello/main.rut, then:\nrut run hello\n"
+msgstr "<<'EOF'\nname = \"hello\"\nentry.lib = \"./main.rut\"\n\n[deps]\n# the vendored logger package, from a dir at the repo root\nink = { path = \"../rut/ink\" }\nEOF\n# save the program above as hello/main.rut, then:\nrut run hello\n"
 
 msgid "Three things to notice:"
 msgstr "三个值得注意的点："
 
-msgid "**One file is one module.** There is no include form; cross-module code is reached through `use` paths (see the [modules tutorial](../tutorial/modules.md))."
-msgstr "**一个文件就是一个模块。**没有 include 形式；跨模块代码经由 `use` 路径到达（参见[模块教程](../tutorial/modules.md)）。"
+msgid "**One directory with a `rut.toml` is one program.** The manifest is the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the only run lane. Inside the package, one file is one module; cross-module code is reached through `use` paths (see the [modules tutorial](../tutorial/modules.md))."
+msgstr "**一个带 `rut.toml` 的目录就是一个程序。**清单是可运行单元——`rut run <dir>`（或打包好的 `.rutbundle`）是唯一的车道。在包内，一个文件就是一个模块；跨模块代码经由 `use` 路径到达（参见[模块教程](../tutorial/modules.md)）。"
 
-msgid "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package. When you `rut run` a standalone file, the vendored packages mount automatically — no manifest needed."
-msgstr "**`use ink::{ Logger };`** 把 `Logger` 从 `ink` 包里取出来。当你 `rut run` 一个独立文件时，自带的包会自动挂载——不需要清单。"
+msgid "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package — and the manifest's `[deps]` row is what mounts it: a `use` line says _which_ names the program wants, the manifest says _where_ the package lives ([project structure](../reference/project-structure.md))."
+msgstr "**`use ink::{ Logger };`** 把 `Logger` 从 `ink` 包里取出来——而真正挂载它的是清单的 `[deps]` 行：一行 `use` 说明程序要_哪些_名字，清单说明包住在_哪里_（[项目结构](../reference/project-structure.md)）。"
 
 msgid "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any expression, rendered through the value's display contract."
 msgstr "**`f\"hello, {name}!\"`** 是格式化字面量：`{expr}` 插值任意表达式，并经由该值的 display 契约渲染。"
@@ -736,11 +739,11 @@ msgstr "文本：普通、原始与格式化字符串"
 msgid "Three literal forms. A plain string is always inert — no interpolation ever happens implicitly."
 msgstr "三种字面量形式。普通字符串永远是惰性的——绝不会隐式发生插值。"
 
-msgid "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    let name = \"rut\";\n    let s = \"hi\\\tname\";              // plain: escapes processed\n    let raw = r\"C:\\\temp\\log.txt\";    // raw: every byte is literal\n    let t = f\"hi {name}!\";           // format: placeholders evaluated\n    log.info(f\"{s} | {raw} | {t}\");\n}\n```"
-msgstr "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    let name = \"rut\";\n    let s = \"hi\\\tname\";              // plain: escapes processed\n    let raw = r\"C:\\\temp\\log.txt\";    // raw: every byte is literal\n    let t = f\"hi {name}!\";           // format: placeholders evaluated\n    log.info(f\"{s} | {raw} | {t}\");\n}\n```"
+msgid "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    let name = \"rut\";\n    let s = \"hi\\tname\";              // plain: escapes processed\n    let raw = r\"C:\\temp\\log.txt\";    // raw: every byte is literal\n    let t = f\"hi {name}!\";           // format: placeholders evaluated\n    log.info(f\"{s} | {raw} | {t}\");\n}\n```"
+msgstr "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    let name = \"rut\";\n    let s = \"hi\\tname\";              // plain: escapes processed\n    let raw = r\"C:\\temp\\log.txt\";    // raw: every byte is literal\n    let t = f\"hi {name}!\";           // format: placeholders evaluated\n    log.info(f\"{s} | {raw} | {t}\");\n}\n```"
 
-msgid "Plain and format strings share the same escapes (`\\\t \\\n \\r \\\\ \\\"` and `\\u{...}`). In an f-string, `{ expr }` splices any expression — identifiers, calls, arithmetic — except nested string literals (bind one to a variable first). `{{` and `}}` are literal braces:"
-msgstr "普通字符串与格式化字符串共享同一套转义（`\\\t \\\n \\r \\\\ \\\"` 和 `\\u{...}`）。在 f-string 里，`{ expr }` 可以拼进任何表达式——标识符、调用、算术——但不能嵌套字符串字面量（先把字符串绑定到一个变量）。`{{` 与 `}}` 是字面量的花括号："
+msgid "Plain and format strings share the same escapes (`\\t \\n \\r \\\\ \\\"` and `\\u{...}`). In an f-string, `{ expr }` splices any expression — identifiers, calls, arithmetic — except nested string literals (bind one to a variable first). `{{` and `}}` are literal braces:"
+msgstr "普通字符串与格式化字符串共享同一套转义（`\\t \\n \\r \\\\ \\\"` 和 `\\u{...}`）。在 f-string 里，`{ expr }` 可以拼进任何表达式——标识符、调用、算术——但不能嵌套字符串字面量（先把字符串绑定到一个变量）。`{{` 与 `}}` 是字面量的花括号："
 
 msgid "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    log.info(f\"open{{close}} braces\");   // prints: open{close} braces\n}\n```"
 msgstr "```rut\nuse ink::{ Logger };\n\npub fn main() {\n    let log = Logger.new(\"text\");\n    log.info(f\"open{{close}} braces\");   // prints: open{close} braces\n}\n```"
@@ -823,11 +826,17 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 msgid "Put it together"
 msgstr "综合运用"
 
-msgid "Save this as `literals.rut` and run `rut run literals.rut`:"
-msgstr "把它保存为 `literals.rut`，然后运行 `rut run literals.rut`："
+msgid "Put this in a module directory and run it: `literals/rut.toml` names the two packages the program uses, and the program is `literals/main.rut`:"
+msgstr "把它放进一个模块目录并运行：`literals/rut.toml` 指名程序用到的两个包，程序本体是 `literals/main.rut`："
 
-msgid "```rut\nuse pouch::{ Vec };\nuse ink::{ Logger };\n\nstruct Point { x: f32; y: f32 }\n\nfn literals(name: str) {\n    let log = Logger.new(\"literals\");\n    let a = 10;                      // i32 (default)\n    let b = 10u8;                    // u8 via suffix\n    let c: u64 = 10;                 // u64 via annotation — fits the default\n    let big = 18446744073709551615u64; // past the `i32` default: suffix REQUIRED\n    let cast = 300 as u8;            // 44 — `as` truncates\n    let d = 1.5;                     // f32 (default)\n    let e = 1.5f32;                  // f32 via suffix\n    let d64: f64 = 1.5;              // f64 via annotation\n    let s = \"hi\\\tname\";              // plain string: escapes processed\n    let raw = r\"C:\\\temp\\log.txt\";    // raw literal: NO escape processing\n    let t = f\"hi {name}!\";           // format literal\n    let ch = \"h\";                    // a 1-codepoint str\n    let mut arr = [1, 2, 3];         // [i32] — fixed array\n    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat\n    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable\n    arr[0] = 7;                      // element write needs `mut`\n    zero[0] = 9.0f32;\n    let bin = bytes(64);             // 64 zeroed octets\n    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n\n    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}\");\n}\n\npub fn main() {\n    literals(\"rut\");\n}\n```"
-msgstr "```rut\nuse pouch::{ Vec };\nuse ink::{ Logger };\n\nstruct Point { x: f32; y: f32 }\n\nfn literals(name: str) {\n    let log = Logger.new(\"literals\");\n    let a = 10;                      // i32 (default)\n    let b = 10u8;                    // u8 via suffix\n    let c: u64 = 10;                 // u64 via annotation — fits the default\n    let big = 18446744073709551615u64; // past the `i32` default: suffix REQUIRED\n    let cast = 300 as u8;            // 44 — `as` truncates\n    let d = 1.5;                     // f32 (default)\n    let e = 1.5f32;                  // f32 via suffix\n    let d64: f64 = 1.5;              // f64 via annotation\n    let s = \"hi\\\tname\";              // plain string: escapes processed\n    let raw = r\"C:\\\temp\\log.txt\";    // raw literal: NO escape processing\n    let t = f\"hi {name}!\";           // format literal\n    let ch = \"h\";                    // a 1-codepoint str\n    let mut arr = [1, 2, 3];         // [i32] — fixed array\n    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat\n    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable\n    arr[0] = 7;                      // element write needs `mut`\n    zero[0] = 9.0f32;\n    let bin = bytes(64);             // 64 zeroed octets\n    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n\n    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}\");\n}\n\npub fn main() {\n    literals(\"rut\");\n}\n```"
+msgid "```toml\n# literals/rut.toml\nname = \"literals\"\nentry.lib = \"./main.rut\"\n\n[deps]\npouch = { path = \"../rut/pouch\" }\nink   = { path = \"../rut/ink\" }\n```"
+msgstr "```toml\n# literals/rut.toml\nname = \"literals\"\nentry.lib = \"./main.rut\"\n\n[deps]\npouch = { path = \"../rut/pouch\" }\nink   = { path = \"../rut/ink\" }\n```"
+
+msgid "Save the program as `literals/main.rut` and run `rut run literals`:"
+msgstr "把程序保存为 `literals/main.rut`，然后运行 `rut run literals`："
+
+msgid "```rut\nuse pouch::{ Vec };\nuse ink::{ Logger };\n\nstruct Point { x: f32; y: f32 }\n\nfn literals(name: str) {\n    let log = Logger.new(\"literals\");\n    let a = 10;                      // i32 (default)\n    let b = 10u8;                    // u8 via suffix\n    let c: u64 = 10;                 // u64 via annotation — fits the default\n    let big = 18446744073709551615u64; // past the `i32` default: suffix REQUIRED\n    let cast = 300 as u8;            // 44 — `as` truncates\n    let d = 1.5;                     // f32 (default)\n    let e = 1.5f32;                  // f32 via suffix\n    let d64: f64 = 1.5;              // f64 via annotation\n    let s = \"hi\\tname\";              // plain string: escapes processed\n    let raw = r\"C:\\temp\\log.txt\";    // raw literal: NO escape processing\n    let t = f\"hi {name}!\";           // format literal\n    let ch = \"h\";                    // a 1-codepoint str\n    let mut arr = [1, 2, 3];         // [i32] — fixed array\n    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat\n    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable\n    arr[0] = 7;                      // element write needs `mut`\n    zero[0] = 9.0f32;\n    let bin = bytes(64);             // 64 zeroed octets\n    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n\n    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}\");\n}\n\npub fn main() {\n    literals(\"rut\");\n}\n```"
+msgstr "```rut\nuse pouch::{ Vec };\nuse ink::{ Logger };\n\nstruct Point { x: f32; y: f32 }\n\nfn literals(name: str) {\n    let log = Logger.new(\"literals\");\n    let a = 10;                      // i32 (default)\n    let b = 10u8;                    // u8 via suffix\n    let c: u64 = 10;                 // u64 via annotation — fits the default\n    let big = 18446744073709551615u64; // past the `i32` default: suffix REQUIRED\n    let cast = 300 as u8;            // 44 — `as` truncates\n    let d = 1.5;                     // f32 (default)\n    let e = 1.5f32;                  // f32 via suffix\n    let d64: f64 = 1.5;              // f64 via annotation\n    let s = \"hi\\tname\";              // plain string: escapes processed\n    let raw = r\"C:\\temp\\log.txt\";    // raw literal: NO escape processing\n    let t = f\"hi {name}!\";           // format literal\n    let ch = \"h\";                    // a 1-codepoint str\n    let mut arr = [1, 2, 3];         // [i32] — fixed array\n    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat\n    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable\n    arr[0] = 7;                      // element write needs `mut`\n    zero[0] = 9.0f32;\n    let bin = bytes(64);             // 64 zeroed octets\n    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n\n    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}\");\n}\n\npub fn main() {\n    literals(\"rut\");\n}\n```"
 
 msgid "Next: [control flow and `when`](control-flow.md)."
 msgstr "下一章：[控制流与 when](control-flow.md)。"
@@ -1474,8 +1483,8 @@ msgstr "```rut\n// greet/app/main.rut\nuse greet::{ Greeting };\nuse ink::{ Logg
 msgid "Run the app from its directory:"
 msgstr "在应用的目录里运行："
 
-msgid "Resolution walks `[deps]` recursively (a dep's own `[deps]` mount with it), with a cycle guard and first-mount-wins. Single loose files get a convenience: the `rut` CLI mounts the toolchain's tree packages when your file says `use ink::` or `use pouch::` — see [the rut CLI](../reference/cli.md)."
-msgstr "解析沿 `[deps]` 递归进行（依赖自己的 `[deps]` 随之一起挂载），带有环守卫与先挂载者优先。单个散文件则有一项便利：当你的文件写下 `use ink::` 或 `use pouch::` 时，`rut` CLI 会挂载工具链树里的包——参见 [rut CLI](../reference/cli.md)。"
+msgid "Resolution walks `[deps]` recursively (a dep's own `[deps]` mount with it), with a cycle guard and first-mount-wins."
+msgstr "解析沿 `[deps]` 递归进行（依赖自己的 `[deps]` 随之一起挂载），带有环守卫与先挂载者优先。"
 
 msgid "One package, several files"
 msgstr "一个包，多个文件"
@@ -1567,6 +1576,9 @@ msgstr "谁来驱动？"
 msgid "You never write a driving loop — the _embedder_ does. The `rut run` CLI is an embedder: after `main` returns it pumps the loop — drain ready frames, advance the virtual clock to the next timer deadline, repeat — until nothing is pending. So a program launches work from `main` and the output simply appears:"
 msgstr "你从不编写驱动循环——_嵌入方_来写。`rut run` CLI 就是一个嵌入方：`main` 返回后它泵动循环——排空就绪的帧，把虚拟时钟推进到下一个定时器期限，如此往复——直到没有任何待处理的东西。于是程序从 `main` 发起工作，输出自然就出现了："
 
+msgid "# a module dir (rut.toml + main.rut); main launches the countdown\n"
+msgstr "# a module dir (rut.toml + main.rut); main launches the countdown\n"
+
 msgid "Calling an async function and awaiting it in the same body is the straight-line case; launching is for concurrency — independent work that overlaps through the loop's interleaving."
 msgstr "在同一个体内调用异步函数并 await 它，是直线情形；launch 则用于并发——经由循环的交错而彼此重叠的独立工作。"
 
@@ -1627,8 +1639,8 @@ msgstr "```rutuse core::{ RunContext };use async_host::{ launch_future, sleep };
 msgid "Next: [the standard library](stdlib.md)."
 msgstr "下一章：[标准库](stdlib.md)。"
 
-msgid "The standard library splits in two. **`core`** is the only true standard — a prelude of builtin names that are _ambient_: in scope in every compilation unit, no `use` needed. Everything else is a set of **swappable packages** shipped in the toolchain tree — a program that wants one says so (a `use` line; the CLI mounts the tree packages for loose files automatically, and a package program lists them in its manifest). Any of them can be replaced wholesale; the engine knows none of their names."
-msgstr "标准库一分为二。**`core`** 是唯一真正的标准——一组_环境自带_的内置名字组成的前奏：在每个编译单元内都在作用域中，无需 `use`。其余则是一组随工具链树分发的**可换包**——想用某个包的程序要明说（一行 `use`；CLI 会为散文件自动挂载树内的包，而包程序则在清单里列出它们）。任何一个包都可以整体替换；引擎不知道它们任何一个的名字。"
+msgid "The standard library splits in two. **`core`** is the only true standard — a prelude of builtin names that are _ambient_: in scope in every compilation unit, no `use` needed. Everything else is a set of **swappable packages** shipped in the toolchain tree — a program that wants one says so: a `use` line in the source and the package's `[deps]` row in its `rut.toml` ([project structure](../reference/project-structure.md)). Any of them can be replaced wholesale; the engine knows none of their names."
+msgstr "标准库一分为二。**`core`** 是唯一真正的标准——一组_环境自带_的内置名字组成的前奏：在每个编译单元内都在作用域中，无需 `use`。其余则是一组随工具链树分发的**可换包**——想用某个包的程序要明说：源码里写一行 `use`，在它的 `rut.toml` 里加一条 `[deps]` 行（[项目结构](../reference/project-structure.md)）。任何一个包都可以整体替换；引擎不知道它们任何一个的名字。"
 
 msgid "The reference page is [core and the swappable packages](../reference/stdlib.md)."
 msgstr "参考页是 [core 与可换包](../reference/stdlib.md)。"
@@ -3472,8 +3484,8 @@ msgstr "尺寸阶梯在 1024 以下是 `N B`，之后是 KiB/MiB/GiB，只有余
 msgid "The brain is async; the host launches and pumps"
 msgstr "大脑是异步的；宿主启动并泵送"
 
-msgid "`rgh.rut` — the entry point is one `boot` fn: the host crosses argv in as a single `\\\n`\\-joined string (no arg lists in the crossing set), and `boot` launches the brain with the standard launcher ([Tasks](../reference/tasks.md)):"
-msgstr "`rgh.rut` ——入口是一个 `boot` fn：宿主把 argv 以单个 `\\\n`\\-连接的字符串跨越进来（可跨越集合里没有参数列表），`boot` 用标准启动器启动大脑（[任务](../reference/tasks.md)）："
+msgid "`rgh.rut` — the entry point is one `boot` fn: the host crosses argv in as a single `\\n`\\-joined string (no arg lists in the crossing set), and `boot` launches the brain with the standard launcher ([Tasks](../reference/tasks.md)):"
+msgstr "`rgh.rut` ——入口是一个 `boot` fn：宿主把 argv 以单个 `\\n`\\-连接的字符串跨越进来（可跨越集合里没有参数列表），`boot` 用标准启动器启动大脑（[任务](../reference/tasks.md)）："
 
 msgid "The embedder then pumps the driving loop to idle — real reqwest workers settle the completers from their threads, and the process's one-way `exit` row fires mid-pump:"
 msgstr "嵌入方接着把驱动循环泵送到空闲——真实的 reqwest worker 从各自的线程落定 completer，而进程的单向 `exit` 行在泵送中途触发："
@@ -4729,17 +4741,17 @@ msgstr "示例"
 msgid "plain"
 msgstr "普通"
 
-msgid "`\"hi\\\tname\"`"
-msgstr "`\"hi\\\tname\"`"
+msgid "`\"hi\\tname\"`"
+msgstr "`\"hi\\tname\"`"
 
-msgid "escapes processed: `\\\t \\\n \\r \\b \\f \\\\ \\\" \\u{...}`"
-msgstr "处理转义：`\\\t \\\n \\r \\b \\f \\\\ \\\" \\u{...}`"
+msgid "escapes processed: `\\t \\n \\r \\b \\f \\\\ \\\" \\u{...}`"
+msgstr "处理转义：`\\t \\n \\r \\b \\f \\\\ \\\" \\u{...}`"
 
 msgid "raw"
 msgstr "原始"
 
-msgid "`r\"C:\\\temp\\log.txt\"`"
-msgstr "`r\"C:\\\temp\\log.txt\"`"
+msgid "`r\"C:\\temp\\log.txt\"`"
+msgstr "`r\"C:\\temp\\log.txt\"`"
 
 msgid "**no** escape processing; every byte is literal"
 msgstr "**不**处理转义；每个字节都按字面意义对待"
@@ -7338,6 +7350,9 @@ msgstr "// 4. Boot and drive.\n"
 
 msgid "\"compute\""
 msgstr "\"compute\""
+
+msgid "The compile step is the **embedder's string lane**: the host owns the source text — from its own config, a database, an editor buffer — and `compile_module_in` compiles it against the mounted surfaces. It is not a file-running lane: the CLI's `rut run` accepts only a module directory or a packed `.rutbundle` ([the rut CLI](cli.md))."
+msgstr "编译步骤是**嵌入方的字符串车道**：宿主拥有源码文本——来自它自己的配置、数据库、编辑器缓冲——`compile_module_in` 对照已挂载的表面编译它。它不是文件运行车道：CLI 的 `rut run` 只接受模块目录或打包好的 `.rutbundle`（[rut CLI](cli.md)）。"
 
 msgid "The registry is consumed by `Vm::new`: every host thunk the program declares is resolved against it once, at boot. A declared-but-unbound fn is a **construction error**, never a mid-run trap."
 msgstr "注册表会被 `Vm::new` 消费：程序声明的每个宿主 thunk 都在启动时对照它解析一次。声明了却未绑定的 fn 是一个**构造错误**，绝不是运行中途的陷阱。"
@@ -11647,8 +11662,8 @@ msgstr "# default output: a sibling of the dir\n"
 msgid "The packed form and its directory compile to identical programs — pinned by tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
 
-msgid "One directory is one module; its `rut.toml` names the exact package it answers to and how to reach its surface and body. This page is the manifest grammar, the resolution laws, and where everything lives in the toolchain tree."
-msgstr "一个目录就是一个模块；它的 `rut.toml` 指名它所对应的确切包，以及如何抵达它的表面与函数体。本页是清单文法、解析法则，以及一切在工具链树中的位置。"
+msgid "One directory is one module; its `rut.toml` names the exact package it answers to and how to reach its surface and body. The manifest is what makes the directory **the runnable unit**: `rut run <dir>` (or its packed `.rutbundle`) is the only run lane — a loose `.rut` file is not a program ([the rut CLI](cli.md)). This page is the manifest grammar, the resolution laws, and where everything lives in the toolchain tree."
+msgstr "一个目录就是一个模块；它的 `rut.toml` 指名它所对应的确切包，以及如何抵达它的表面与函数体。清单让这个目录成为**可运行单元**：`rut run <dir>`（或其打包的 `.rutbundle`）是唯一的车道——散的 `.rut` 文件不是程序（[rut CLI](cli.md)）。本页是清单文法、解析法则，以及一切在工具链树中的位置。"
 
 msgid "The manifest"
 msgstr "清单"
@@ -12061,8 +12076,8 @@ msgstr "分组之所以挂载，是因为 `pouch` 出现在闭包的任何角落
 msgid "The `rut` binary is the toolchain's command-line face. It is also a **full host**: running a program mounts the base packages, binds the standard native bodies, and drives the async loop — the same contract an embedded host implements ([embedding and native modules](embedding.md))."
 msgstr "`rut` 二进制是工具链的命令行门面。它同时也是一个**完整宿主**：运行程序时会挂载基础包、绑定标准原生函数体，并驱动异步循环——与嵌入式宿主实现的是同一份契约（[嵌入与原生模块](embedding.md)）。"
 
-msgid "It is the **temporary-run** lane: loose-file experiments, `fmt`, `dump`, `pack`. The intended consumption path is depending on the engine crates from your own project through a Cargo git dependency ([installation](../quick-start/installation.md)) and embedding the VM ([embedding and native modules](embedding.md)) — this page documents the binary itself."
-msgstr "它是**临时运行**车道：散文件实验、`fmt`、`dump`、`pack`。预期的使用方式是通过 Cargo git 依赖，从你自己的项目依赖引擎 crate（[安装](../quick-start/installation.md)）并嵌入 VM（[嵌入与原生模块](embedding.md)）——本页只记录这个二进制本身。"
+msgid "It is the **temporary-run** lane: running module directories and bundles, `fmt`, `dump`, `pack`. The intended consumption path is depending on the engine crates from your own project through a Cargo git dependency ([installation](../quick-start/installation.md)) and embedding the VM ([embedding and native modules](embedding.md)) — this page documents the binary itself."
+msgstr "它是**临时运行**车道：运行模块目录与捆绑包，`fmt`、`dump`、`pack`。预期的使用方式是通过 Cargo git 依赖，从你自己的项目依赖引擎 crate（[安装](../quick-start/installation.md)）并嵌入 VM（[嵌入与原生模块](embedding.md)）——本页只记录这个二进制本身。"
 
 msgid "Running `rut` with no subcommand prints the usage line to stderr."
 msgstr "不带子命令运行 `rut` 会把用法行打印到 stderr。"
@@ -12070,20 +12085,14 @@ msgstr "不带子命令运行 `rut` 会把用法行打印到 stderr。"
 msgid "`run`"
 msgstr "`run`"
 
-msgid "Compiles and executes. Three input forms:"
-msgstr "编译并执行。三种输入形式："
+msgid "Compiles and executes. Two input forms — every rut program is a module directory ([project structure](project-structure.md)), so there is no loose-file shape:"
+msgstr "编译并执行。两种输入形式——每个 rut 程序都是模块目录（[项目结构](project-structure.md)），所以不存在散文件形态："
 
 msgid "input"
 msgstr "输入"
 
 msgid "pipeline"
 msgstr "流水线"
-
-msgid "`file.rut`"
-msgstr "`file.rut`"
-
-msgid "one file is one module unit — compile it against the base mounts, then decode → verify → run `main`"
-msgstr "一个文件是一个模块单元——对照基础挂载编译它，然后解码 → 校验 → 运行 `main`"
 
 msgid "`dir` (a module directory with `rut.toml`)"
 msgstr "`dir`（带 `rut.toml` 的模块目录）"
@@ -12096,6 +12105,9 @@ msgstr "`mod.rutbundle`"
 
 msgid "the packed form of the same contract ([module bundles](bundles.md))"
 msgstr "同一契约的打包形态（[模块捆绑包](bundles.md)）"
+
+msgid "Anything else is refused at the door (exit 2): a loose `.rut` file is not a runnable unit — give the directory a `rut.toml` (`name = \"…\"` + `entry.lib = \"./<file>.rut\"`), or run a packed `.rutbundle`."
+msgstr "其他任何输入都会在门口被拒绝（退出码 2）：散的 `.rut` 文件不是可运行单元——给目录一个 `rut.toml`（`name = \"…\"` + `entry.lib = \"./<file>.rut\"`），或运行打包好的 `.rutbundle`。"
 
 msgid "Flags and defaults:"
 msgstr "旗标与默认值："
@@ -12112,8 +12124,8 @@ msgstr "为每轮操作预算设上限。燃料需显式开启：不带该旗标
 msgid "`--symbols <file.rutsym>`"
 msgstr "`--symbols <file.rutsym>`"
 
-msgid "restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the source/dir lanes compile fresh and need no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn"
-msgstr "还原[已剥离产物](symbol-stripping.md)的私有符号表——只对编译的 `.rutbundle` 合法（源码/目录车道重新编译，不需要映射；其他任何输入都是用法错误，退出码 2）。符号表在图编译之前还原，所以链接与每条追踪看到的都是真实名字；命名了捆绑包未携带模块的分节会告警"
+msgid "restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the directory lane compiles fresh and needs no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn"
+msgstr "还原[已剥离产物](symbol-stripping.md)的私有符号表——只对编译的 `.rutbundle` 合法（目录车道重新编译，不需要映射；其他任何输入都是用法错误，退出码 2）。符号表在图编译之前还原，所以链接与每条追踪看到的都是真实名字；命名了捆绑包未携带模块的分节会告警"
 
 msgid "fixed at 64 MiB"
 msgstr "固定为 64 MiB"
@@ -12123,9 +12135,6 @@ msgstr "中断检查"
 
 msgid "every 1024 ops"
 msgstr "每 1024 个操作"
-
-msgid "Single-file convenience: a loose file that declares `use ink::` (or any tree package) gets that package mounted automatically — the CLI scans the source for `use <name>::` across `ink_host`, `ink`, `pouch`, `nmapset`, `json`, `strbuild`, `async_engine`, `async_host`, `http_host`, and `http`, then assembles peer groups, so a loose file gets json's peer-gated container impls exactly like a module-directory program ([dependency kinds](dependency-kinds.md))."
-msgstr ""
 
 msgid "Bodies bound by `run`:"
 msgstr "`run` 绑定的函数体："
@@ -12292,11 +12301,11 @@ msgstr "编译诊断；未发出二进制；二进制解码或校验失败；VM 
 msgid "`2`"
 msgstr "`2`"
 
-msgid "usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted)"
-msgstr "未命中"
+msgid "usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted)"
+msgstr "用法错误（缺参数）；输入文件不可读；对 `.d.rut` 运行 `run`；`run` 的输入既不是模块目录也不是 `.rutbundle`；`fmt` 在目录下找不到 `.rut` 文件；url 依赖的 `sha256` 固定值拒绝（中毒的缓存条目会被驱逐）"
 
-msgid "Diagnostics go to stderr (`run` renders them with source spans on the single-file path); `pack`'s success line goes to stdout."
-msgstr "诊断走 stderr（单文件路径上 `run` 会带源码 span 渲染它们）；`pack` 的成功行走 stdout。"
+msgid "Diagnostics go to stderr; `pack`'s success line goes to stdout."
+msgstr "诊断走 stderr；`pack` 的成功行走 stdout。"
 
 msgid "The CLI mounts and binds on behalf of the program, but it never injects names the program did not declare: a program that never spells `use ink::` gets no logger; one that never mounts the async packages has no launcher and `await` stays cold-poll inline ([core and the swappable packages](stdlib.md))."
 msgstr "CLI 代表程序挂载与绑定，但它绝不注入程序没有声明的名字：从未写出 `use ink::` 的程序得不到 logger；从不挂载异步包的程序没有启动器，`await` 保持内联的冷轮询（[core 与可换包](stdlib.md)）。"

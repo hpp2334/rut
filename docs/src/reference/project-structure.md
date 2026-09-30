@@ -1,7 +1,10 @@
 # Project structure and rut.toml
 
 One directory is one module; its `rut.toml` names the exact package it
-answers to and how to reach its surface and body. This page is the
+answers to and how to reach its surface and body. The manifest is what
+makes the directory **the runnable unit**: `rut run <dir>` (or its
+packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
+a program ([the rut CLI](cli.md)). This page is the
 manifest grammar, the resolution laws, and where everything lives in the
 toolchain tree.
 

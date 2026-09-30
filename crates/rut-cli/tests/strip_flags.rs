@@ -80,16 +80,25 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     let root = scratch("usage");
     let src = root.join("main.rut");
     write(&root, "main.rut", "pub fn main() -> i32 { return 4; }\n");
-    for input in [src.to_str().unwrap(), root.to_str().unwrap()] {
-        let out = Command::new(rut())
-            .args(["run", input, "--symbols", "x.rutsym"])
-            .output()
-            .expect("run rut");
-        assert_eq!(out.status.code(), Some(2), "usage error, exit 2");
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(stderr.contains("--symbols"), "{stderr}");
-        assert!(stderr.contains(".rutbundle"), "{stderr}");
-    }
+    // a directory input reaches the pairing check: `--symbols` is a
+    // compiled-bundle-only restore
+    let out = Command::new(rut())
+        .args(["run", root.to_str().unwrap(), "--symbols", "x.rutsym"])
+        .output()
+        .expect("run rut");
+    assert_eq!(out.status.code(), Some(2), "usage error, exit 2");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--symbols"), "{stderr}");
+    assert!(stderr.contains(".rutbundle"), "{stderr}");
+    // a loose file never reaches the pairing check — the run lane's
+    // allowlist door refuses it first (`run_lane.rs` pins that message)
+    let out = Command::new(rut())
+        .args(["run", src.to_str().unwrap(), "--symbols", "x.rutsym"])
+        .output()
+        .expect("run rut");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("not a runnable unit"), "{stderr}");
     // a dangling flag value is the same loud lane
     let out = Command::new(rut())
         .args(["run", src.to_str().unwrap(), "--symbols"])

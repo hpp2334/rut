@@ -8,9 +8,9 @@ rut reaches your project in two ways, ranked by intent:
    compiler, typed bytecode, VM) builds as part of *your* build, ready
    to [embed](../reference/embedding.md).
 2. **Build the `rut` CLI** from a checkout of this repository — the
-   **temporary-run** lane: loose-file experiments, `fmt`, `dump`,
-   `pack`. The fastest way to poke at the language; not the way anyone
-   ships.
+   **temporary-run** lane: running module directories and bundles,
+   `fmt`, `dump`, `pack`. The fastest way to poke at the language; not
+   the way anyone ships.
 
 Both lanes build the same engine, and the crates are not published to
 crates.io — the git dependency is the only consumption path.
@@ -123,7 +123,7 @@ the full contract.
 
 ## The rut CLI — temporary runs
 
-For loose-file experiments the repo builds a standalone binary. Clone
+For temporary runs the repo builds a standalone binary. Clone
 and build it:
 
 ```sh
@@ -139,19 +139,29 @@ This produces the `rut` binary at `target/release/rut`. Put it on your
 cargo build --release -p rut-cli
 export PATH="$PWD/target/release:$PATH"
 rut
-# usage: rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump <file.rut>
+# usage: rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
 ```
 
 The binary embeds the whole engine: lexer, parser, compiler, typed
 bytecode, and the VM. It also carries the vendored packages from the
-repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a
-standalone `hello.rut` that says `use ink::{ Logger };` just works,
-no manifest required.
+repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a program
+says `use ink::{ Logger };` and mounts the package through its
+manifest's `[deps]` row, since every rut program is a module directory
+([your first rut program](first-program.md)).
 
 Try it:
 
 ```sh
-cat > hello.rut <<'EOF'
+mkdir hello
+cat > hello/rut.toml <<'EOF'
+name = "hello"
+entry.lib = "./main.rut"
+
+[deps]
+# the vendored logger package, from a dir at the repo root
+ink = { path = "../rut/ink" }
+EOF
+cat > hello/main.rut <<'EOF'
 use ink::{ Logger };
 
 pub fn main() {
@@ -159,7 +169,7 @@ pub fn main() {
     log.info(f"hello, rut!");
 }
 EOF
-rut run hello.rut
+rut run hello
 ```
 
 ```text
@@ -168,7 +178,7 @@ hello, rut!
 
 If that printed, the CLI is ready. Continue to
 [your first rut program](first-program.md) — and keep the lane's role
-in mind: the CLI is for **temporary runs** (loose files, `fmt`,
+in mind: the CLI is for **temporary runs** (`run`, `fmt`,
 `dump`, `pack`), not a shipping path. Real projects depend on the
 crates and embed the engine; [the rut CLI](../reference/cli.md) is the
 binary's reference.
