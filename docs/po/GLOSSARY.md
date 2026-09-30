@@ -119,3 +119,10 @@ context; after that, use the zh-CN rendering alone.
 6. **Chapter/section titles follow the glossary** and stay short; the
    sidebar, search index, and anchors derive from them. Do not add the
    English in parentheses to titles.
+| seeded fetcher | 预置取回器 | seed/预置（the seed IS the cache → 预置就是缓存）；offline embedder 离线嵌入方 |
+| builder | 构建器 | `HostPkg` builder → `HostPkg` 构建器（`HostPkg` stays code） |
+| installer lane | 安装者车道 | 对照 the raw lane → 原生车道 |
+| mount snapshot | 挂载快照 | `session.host_pkg_context()` stays code |
+| first-mount-wins | 先挂载者胜 | |
+| inert merge | 惰性合并 | inert extras → 惰性额外物 |
+| decl root / compiled root | 声明根 / 编译根 | the v6/v5 pairing → 配对是完全的（the pairing is total） |

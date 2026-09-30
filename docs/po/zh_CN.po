@@ -1472,7 +1472,7 @@ msgid "```rut\n// greet/pkg/greet.rut\nuse pouch::{ Vec };\n\npub struct Greetin
 msgstr "```rut\n// greet/pkg/greet.rut\nuse pouch::{ Vec };\n\npub struct Greeting {\n    to: str;\n    lines: Vec<str>;\n}\n\nimpl Greeting {\n    pub fn new(to: str) -> Self {\n        return Self { to: to, lines: Vec.new() };\n    }\n\n    pub fn add(mut self, line: str) {\n        self.lines.push(line);\n    }\n\n    pub fn render(self) -> str {\n        let mut out = f\"dear {self.to},\";\n        for (let line of self.lines) {\n            out = f\"{out} {line}\";\n        }\n        return out;\n    }\n}\n\nfn shout(msg: str) -> str {   // module-private: no `pub`, never importable\n    return f\"{msg}!\";\n}\n```"
 
 msgid "The app names its dependencies in `[deps]`, by path — each package pulls its own dependencies along (`ink` brings the host surface `ink_host`; you never spell it):"
-msgstr ""
+msgstr "应用在 `[deps]` 里写明依赖，按路径——每个包把自己的依赖一并带入（`ink` 会带上宿主面 `ink_host`；你永远不用手写它）："
 
 msgid "```toml\n# greet/app/rut.toml\nname = \"app\"\nentry.lib = \"./main.rut\"\n\n[deps]\ngreet = { path = \"../pkg\" }\nink = { path = \"../../rut/ink\" }       # the logger package\n```"
 msgstr "```toml\n# greet/app/rut.toml\nname = \"app\"\nentry.lib = \"./main.rut\"\n\n[deps]\ngreet = { path = \"../pkg\" }\nink = { path = \"../../rut/ink\" }       # the logger package\n```"
@@ -3557,7 +3557,7 @@ msgid "\"rut/http\""
 msgstr "\"rut/http\""
 
 msgid "The HTTP bodies install through `http::pkg()` (the reqwest lane); the example's own rows are CLI I/O only — `out` (stdout; `print` is a removed core name), `eprint`, the file pair, and `exit` — declared in the example-local `rgh_host` decl package and verified against the bindings at boot ([Host fns and declaration files](../reference/host-fns.md)). One consequence: `rut run` cannot host rgh itself — its rows are example-local — but ordinary HTTP programs do run under `rut run`, which mounts the std http pair by presence."
-msgstr ""
+msgstr "HTTP 的函数体通过 `http::pkg()` 安装（reqwest 车道）；示例自己的行只有 CLI I/O——`out`（标准输出；`print` 是已移除的核心名）、`eprint`、文件对和 `exit`——在示例本地的 `rgh_host` 声明包里声明，并在启动时对照绑定校验（[宿主函数与声明文件](../reference/host-fns.md)）。一个后果：`rut run` 无法自己承载 rgh——它的行是示例本地的——但普通 HTTP 程序可以在 `rut run` 下运行，它按存在性挂载 std http 对。"
 
 msgid "**An async rut program in production shape**: the brain awaits at the fetch sites only; the embedder launches, pumps to idle, and exits with the brain's code."
 msgstr "**一个生产形态的异步 rut 程序**：大脑只在取数站点 await；嵌入方启动、泵送到空闲，然后带着大脑的退出码退出。"
@@ -7025,7 +7025,7 @@ msgid "Registering — `pkg_async_fn!`"
 msgstr "注册——`pkg_async_fn!`"
 
 msgid "One closure (plus an optional abort hook) expands into the five rows the weave drives. On the installer lane the row names are bare and the pkg's scope prefixes at the install; the raw `register_async!` twin (full `scope::name` strings on the bare registry) is the escape hatch — same emitter, same family:"
-msgstr ""
+msgstr "一个闭包（外加可选的 abort 钩子）展开为织入所驱动的五个行。在安装者车道上行名是裸名，包的作用域在安装时加前缀；裸注册表上的原生 `register_async!` 孪生（完整 `scope::name` 字符串）是逃生口——同一发射器，同一家族："
 
 msgid "\"mypkg\""
 msgstr ""
@@ -7358,10 +7358,10 @@ msgid "The registry is consumed by `Vm::new`: every host thunk the program decla
 msgstr "注册表会被 `Vm::new` 消费：程序声明的每个宿主 thunk 都在启动时对照它解析一次。声明了却未绑定的 fn 是一个**构造错误**，绝不是运行中途的陷阱。"
 
 msgid "Url deps without a filesystem — the seeded fetcher"
-msgstr ""
+msgstr "无文件系统的 url 依赖——预置取回器"
 
 msgid "Embedders (and wasm hosts) own HOW bytes arrive, so an offline embedder answers the `DepFetch` contract from memory: parse the project's `rut.toml` with `rut_bundle::parse_manifest` (the manifest is the only url carrier — no duplicated url constants), read each url row's bytes from wherever they live (`std::fs::read` from the repo's `dist/std/` natively, `include_bytes!` on wasm), and hand the loader a map behind `std::future::ready`:"
-msgstr ""
+msgstr "嵌入方（以及 wasm 宿主）拥有字节如何到达的决定权，因此离线嵌入方从内存回答 `DepFetch` 契约：用 `rut_bundle::parse_manifest` 解析工程的 `rut.toml`（清单是唯一的 url 载体——不重复 url 常量），从字节所在之处读出每条 url 行的字节（原生用 `std::fs::read` 读仓库的 `dist/std/`，wasm 用 `include_bytes!`），把映射藏在 `std::future::ready` 后交给加载器："
 
 msgid "\"no seeded bytes for {url}\""
 msgstr ""
@@ -7373,10 +7373,10 @@ msgid "// compile the loaded graph — the root is already mounted\n"
 msgstr ""
 
 msgid "The seed IS the cache: an embedder that vendors the committed std artifacts never touches the network, and the sha256 pins still hold at the mount door. 06-github-viewer-cli's `main.rs` is the working example."
-msgstr ""
+msgstr "预置就是缓存：自带已提交 std 工件的嵌入方永不触网，且 sha256 钉仍在挂载门口成立。06-github-viewer-cli 的 `main.rs` 是可运行的范例。"
 
 msgid "**Mounting a bundle into an existing session** — the in-memory counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the compile owns presence) — is `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`: both root kinds mount (a v5 compiled root with its groups, the ledger namespaced into the session; a v6 decl root as the pkg's host rows), first-mount-wins, and the bundle root's package name comes back. Wasm hosts `include_bytes!` the committed artifact and mount through this — 05-todolist-web's mirror lane takes the `nmap_host` surface from the CDN artifact that way. For the url-dep _walk_ (pins, closure checks, the peer gate over archive groups) stay on the load/pack lanes — `mount_bundle_bytes` is the offer, not the walk."
-msgstr ""
+msgstr "**把捆绑包挂载进既有会话**——`mount_dir` 的内存对应物（offer 法则：无 dev-deps、无门，编译拥有存在性）——是 `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`：两种根都可挂载（v5 编译根连同其组，作用域台账按会话命名空间化；v6 声明根作为该包的宿主行），先挂载者胜，捆绑包根的包名会返回。wasm 宿主 `include_bytes!` 已提交的工件并经此挂载——05-todolist-web 的镜像车道就是这样从 CDN 工件取来 `nmap_host` 面。至于 url 依赖的_行走_（钉、闭包检查、档案组上的对等门）请留在加载/打包车道——`mount_bundle_bytes` 是 offer，不是行走。"
 
 msgid "**What to take from a url** is the engine's instantiation law, read from the embedding side: a compiled bundle serves host surfaces, concrete-class libs, **and** — since the generic-source riding law — the generic owners: a request the pack-time ledger lacks lowers the ridden source in the consumer's session and compiles the monomorphized body under the declaring pkg's spec, at the link, nothing persisted (`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the std-CDN section). A legacy bundle without the riding refuses such a request loudly (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names."
 msgstr "**从一条 url 拿什么**是从嵌入一侧读到的引擎实例化法则：编译的包服务宿主表面、具体类库，**以及** —— 自泛型源码承载法则起 —— 泛型 owner：台账缺失的请求会在消费者的会话中降低被承载的源码，并以声明 pkg 的 spec 在链接处编译单态化代码体，不持久化（`Vec<MyTodo>`、`decodeJson<T>` —— [模块包](bundles.md) —— std-CDN 一节）。没有承载的旧式包会大声拒绝这类请求（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字。"
@@ -7439,7 +7439,7 @@ msgid "`s.host_pkg_context()`"
 msgstr "`s.host_pkg_context()`"
 
 msgid "the mounted surfaces' declared rows, partitioned per pkg — the declared side `install_host_pkg` checks against (build once per boot lane; owned)"
-msgstr ""
+msgstr "已挂载面声明的行，按包分区——声明侧 `install_host_pkg` 对照检查的对象（每条启动车道构建一次；自有）"
 
 msgid "`s.expected_host_fns()`"
 msgstr ""
@@ -7481,16 +7481,16 @@ msgid "`pack_dir(dir)`"
 msgstr "`pack_dir(dir)`"
 
 msgid "pack a module directory into a deterministic `.rutbundle` — a **v5 compiled** root for a lib pkg, a **v6 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md))"
-msgstr ""
+msgstr "把模块目录打包成确定性的 `.rutbundle`——lib 包为 **v5 编译**根，宿主包为 **v6 声明**根；返回字节（[模块捆绑包](bundles.md)）"
 
 msgid "`mount_bundle_bytes(&mut s, &bytes)`"
 msgstr ""
 
 msgid "mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts)"
-msgstr ""
+msgstr "把捆绑包的内容挂载进既有会话——字节之上的 offer 法则（wasm 宿主 `include_bytes!` 已提交的工件）"
 
 msgid "The container, manifest grammar, and reader (both root kinds) live in the `rut-bundle` crate — filesystem-free over a one-method `Source` trait."
-msgstr ""
+msgstr "容器、清单文法与读取器（两种根）都在 `rut-bundle` crate 里——经由单方法 `Source` trait 做到无文件系统。"
 
 msgid "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns and declaration files](host-fns.md))."
 msgstr "`mode` 为 `.rut` 取 `Mode::Impl`，为 `.d.rut` 取 `Mode::Decl`（[宿主函数与声明文件](host-fns.md)）。"
@@ -7508,19 +7508,19 @@ msgid "`HostPkg::new(scope)`"
 msgstr "`math::pkg()`"
 
 msgid "a pkg builder; rows register under bare names, the scope prefixes at the install"
-msgstr ""
+msgstr "一个包构建器；行以裸名注册，作用域在安装时加前缀"
 
 msgid "`pkg_fn!` / `pkg_async_fn!`"
 msgstr "`pkg_fn!` / `pkg_async_fn!`"
 
 msgid "the builder's sugar: one spelling → one row / the five-row async family"
-msgstr "构建器的糖：一个拼写 → 一行 / 五行异步行族"
+msgstr "构建器的糖——一次拼写 → 一行 / 五行异步家族（[嵌入与原生模块](embedding.md)）"
 
 msgid "`hosts.install_host_pkg(&ctx, pkg)`"
 msgstr "`nmap::pkg()`"
 
 msgid "install one built pkg: bind every row its mounted scope declares (drift/unbound ⇒ panic); an unmounted scope merges inert"
-msgstr ""
+msgstr "安装一个已构建的包：绑定其已挂载作用域声明的每一行（漂移/未绑定 ⇒ panic）；未挂载的作用域按惰性合并"
 
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr "`hosts.register::<_, (P…), R, _>(name, f)`"
@@ -7532,13 +7532,13 @@ msgid "`hosts.verify_against(&expected)`"
 msgstr "`hosts.verify_against(&expected)`"
 
 msgid "the raw lane's net: panic on declared-unbound / bound-undeclared / signature drift"
-msgstr ""
+msgstr "原生车道的保险网：声明未绑定 / 绑定未声明 / 签名漂移 ⇒ panic"
 
 msgid "`Vm::new(prog, &limits, hooks, hosts)`"
 msgstr "`Vm::new(prog, &limits, hooks, hosts)`"
 
 msgid "boot; joins every declared host thunk to its binding (a declared-but-unbound fn is a construction error)"
-msgstr ""
+msgstr "启动；把每条声明的宿主 thunk 连到其绑定（声明了却未绑定的函数是构造错误）"
 
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr "`vm.call::<A, R>(export, args)`"
@@ -7688,7 +7688,7 @@ msgid "Host-side helpers (`rut-std`)"
 msgstr "宿主侧辅助设施（`rut-std`）"
 
 msgid "One `pkg()` builder per module; each installs through `HostRegistry::install_host_pkg` against the session's mount snapshot (see [host fns](host-fns.md) for the asymmetric contract — an unmounted scope merges inert, so hosts blanket-install their subset):"
-msgstr ""
+msgstr "每个模块一个 `pkg()` 构建器；各自经 `HostRegistry::install_host_pkg` 对照会话的挂载快照安装（非对称契约见[宿主函数](host-fns.md)——未挂载的作用域按惰性合并，所以宿主可以整表安装自己的子集）："
 
 msgid "builder"
 msgstr ""
@@ -7730,7 +7730,7 @@ msgid "`http::pkg()`"
 msgstr "`http::pkg()`"
 
 msgid "the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`"
-msgstr ""
+msgstr "std HTTP 车道（reqwest；仅原生构建）；`http::pkg_with(f)` 是夹具孪生，返回 `(HostPkg, HttpFixture)`"
 
 msgid "`bench_cross::pkg()`"
 msgstr "`bench_cross::pkg()`"
@@ -8378,7 +8378,7 @@ msgid "Signatures are derived, not hand-written"
 msgstr "签名是推导的，不是手写的"
 
 msgid "The registered callable's Rust shape **is** the `.d.rut` row. The **installer lane** is a `HostPkg` builder per pkg — rows under bare names, the scope (the pkg's name) spelled once — installed through `HostRegistry::install_host_pkg`:"
-msgstr ""
+msgstr "注册可调用物的 Rust 形状**就是** `.d.rut` 行。**安装者车道**是每包一个 `HostPkg` 构建器——行用裸名，作用域（即包名）只拼写一次——经 `HostRegistry::install_host_pkg` 安装："
 
 msgid "// one builder per host pkg; the scope string appears exactly once\n"
 msgstr ""
@@ -8390,7 +8390,7 @@ msgid "// the session's mount snapshot — built once, owned, shared by every in
 msgstr ""
 
 msgid "`pkg_async_fn!` is the async twin: one row spelling emits the five-row family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap), the same expansion the ctx declares. The raw macros — `register!` / `register_async!` on the bare registry (see [embedding and native modules](embedding.md)) — remain the escape hatch (hand-spelled `<scope>::<name>` strings, the flat table's own responsibility); everything above them is the same derived-signature machinery:"
-msgstr ""
+msgstr "`pkg_async_fn!` 是异步孪生：一次行拼写发射五行家族（`__start`/`__yield`/`__take`/`__cancel` + 声明行陷阱），与 ctx 声明的展开相同。原生宏——裸注册表上的 `register!` / `register_async!`（见[嵌入与原生模块](embedding.md)）——仍是逃生口（手写 `<scope>::<name>` 字符串，扁平表自己负责）；它们之上的一切都是同一套派生签名机制："
 
 msgid "\"server::make\""
 msgstr "\"server::make\""
@@ -8405,25 +8405,25 @@ msgid "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call 
 msgstr "`&str` / `&[u8]` 参数是以恰好这一次调用为作用域的零复制借用（[值边界](value-boundary.md)）。"
 
 msgid "One installer per pkg: a duplicate row name inside a builder panics, a second `install_host_pkg` for the same scope panics, and a pkg cannot spell another pkg's rows — the scope comes solely from `HostPkg::new`."
-msgstr ""
+msgstr "每包一个安装者：构建器内重复的行名会 panic，对同一作用域第二次 `install_host_pkg` 会 panic，且一个包不能拼写另一个包的行——作用域只来自 `HostPkg::new`。"
 
 msgid "The load-time contract — asymmetric, by design"
 msgstr "加载期契约——非对称，有意为之"
 
 msgid "Mounting a host pkg **declares**; the embedding Rust **binds**. The `install_host_pkg` call checks the two sides against each other, per pkg, against the mount snapshot (`session.host_pkg_context()`):"
-msgstr ""
+msgstr "挂载宿主包是**声明**；嵌入的 Rust 是**绑定**。`install_host_pkg` 调用按包、对照挂载快照（`session.host_pkg_context()`）互查两侧："
 
 msgid "**scope mounted, a declared row never bound** — a panic naming the pkg (the installer left it out), and the `Vm` constructor refuses a boot naming it again when the installer never ran at all;"
-msgstr ""
+msgstr "**作用域已挂载，声明行从未绑定**——panic 并点名该包（安装者漏了它）；安装者从未运行时，`Vm` 构造器拒绝再次点名它的启动；"
 
 msgid "**signature drift** on a declared row — a panic; this is the only drift gate on the boot path;"
-msgstr ""
+msgstr "**已声明行上的签名漂移**——panic；这是启动路径上唯一的漂移门；"
 
 msgid "**scope NOT mounted** — the whole pkg merges **inert**: no panic, no gate. Blanket installs are legal (the CLI installs all of them; a program that mounts a subset carries the rest as dead bindings), and rows the decl does not name ride as inert extras."
-msgstr ""
+msgstr "**作用域未挂载**——整个包按**惰性**合并：不 panic，无门。整表安装是合法的（CLI 就全部安装；只挂载子集的程序把其余行作为死绑定携带），声明未点名的行作为惰性额外物随行。"
 
 msgid "The raw lane's `verify_against(&ctx.flatten())` — or `session.expected_host_fns()` — re-checks the whole flat table and panics on all three mismatch classes:"
-msgstr ""
+msgstr "原生车道的 `verify_against(&ctx.flatten())`——或 `session.expected_host_fns()`——重查整张扁平表，对全部三类不匹配 panic："
 
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr "**已声明未绑定**——rut 调用会在运行中途触发陷阱；"
@@ -8435,7 +8435,7 @@ msgid "**signature drift** — the decl says `(opaque, str, str) -> nil`, the bi
 msgstr "**签名漂移**——声明写的是 `(opaque, str, str) -> nil`，绑定收的却是 `(opaque, i64, str)`。"
 
 msgid "The law follows the mount: **mount what you bind** — with the asymmetry the mount law needs: rut-declares-but-host-never-binds is loud; host-binds-but-rut-never-declares rides inert."
-msgstr ""
+msgstr "法则随挂载：**绑定你所挂载的**——带着挂载法则需要的不对称：rut 声明了而宿主从不绑定，是响亮的错误；宿主绑定了而 rut 从未声明，按惰性随行。"
 
 msgid "Slots, not strings"
 msgstr "槽位，而不是字符串"
@@ -8450,7 +8450,7 @@ msgid "```rut\n// http_host.d.rut — an async row expands into a five-row famil
 msgstr "```rut\n// http_host.d.rut — an async row expands into a five-row family\npub host async fn http_send(c: opaque, method: str, url: str,\n                            headers: str, body: bytes) -> opaque;\n```"
 
 msgid "The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row names are bare and the scope prefixes at the install:"
-msgstr ""
+msgstr "嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上行名是裸名，作用域在安装时加前缀："
 
 msgid "\"http_host\""
 msgstr ""
@@ -8468,7 +8468,7 @@ msgid "// the raw lane (bare registry, full `scope::name` strings) — the\n// e
 msgstr ""
 
 msgid "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw twin `register_async!(hosts, …)`) emits the family the compiler's weave joins:"
-msgstr ""
+msgstr "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])`（及其原生孪生 `register_async!(hosts, …)`）发射编译器织入所连接的家族："
 
 msgid "emitted row"
 msgstr "生成行"
@@ -8723,7 +8723,7 @@ msgid "In-tree consumers"
 msgstr "树内消费方"
 
 msgid "**the logger** — `ink_host`'s two host fns behind `ink`'s `Logger` wrapper class ([core and the swappable packages](stdlib.md))."
-msgstr ""
+msgstr "**logger**——`ink_host` 的两个宿主函数藏在 `ink` 的 `Logger` 包装类之后（[核心与可换装包](stdlib.md)）。"
 
 msgid "**`nmapset`** — `HashMap`/`HashSet` over a native key table: every method is one host call, keys are the closed typed set, values are sealed boxes, and each key carries a stable host-side handle ([core and the swappable packages](stdlib.md))."
 msgstr "**`nmapset`**——架在原生键表之上的 `HashMap`/`HashSet`：每个方法一次宿主调用，键是封闭的类型化集合，值是封存的盒，每个键携带一个稳定的宿主侧句柄（[core 与可换包](stdlib.md)）。"
@@ -9386,7 +9386,7 @@ msgid "3"
 msgstr "3"
 
 msgid "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!(\"{s}\")))` (the ctx is `session.host_pkg_context()` — [embedding](embedding.md)). Mounting `ink` pulls `ink_host` along (`[deps]`)."
-msgstr ""
+msgstr "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!(\"{s}\")))`（ctx 即 `session.host_pkg_context()`——[嵌入](embedding.md)）。挂载 `ink` 会顺带拉来 `ink_host`（`[deps]`）。"
 
 msgid "`pouch` — `Vec<T>`"
 msgstr "`pouch`——`Vec<T>`"
@@ -9479,7 +9479,7 @@ msgid "`strbuild` — the builder"
 msgstr "`strbuild`——构建器"
 
 msgid "The builder is a host package now (the `ink`/`Logger` pattern): the `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`, registered under the pkg-name scope), and the `strbuild` package wraps them in the `StringBuilder` class. Core ships no string-building machinery; a strbuild mount pairs with the bodies:"
-msgstr ""
+msgstr "构建器现在是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` 声明包声明五个行（`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，以包名作用域注册），`strbuild` 包把它们包进 `StringBuilder` 类。核心不内置任何字符串构建机制；挂载 strbuild 即与函数体配对："
 
 msgid "```rut\nuse ink::{ Logger };\nuse strbuild::{ StringBuilder };\n\npub fn main() {\n    let log = Logger.new(\"t\");\n    let k = \"name\";\n    let mut b = StringBuilder.with_cap(1024);   // octet hint\n    b.append(f\"{k}=\");\n    b.append_code(0x21);\n    let s = b.build();                          // the ONE materialization\n    log.info(s);\n}\n```"
 msgstr "```rut\nuse ink::{ Logger };\nuse strbuild::{ StringBuilder };\n\npub fn main() {\n    let log = Logger.new(\"t\");\n    let k = \"name\";\n    let mut b = StringBuilder.with_cap(1024);   // octet hint\n    b.append(f\"{k}=\");\n    b.append_code(0x21);\n    let s = b.build();                          // the ONE materialization\n    log.info(s);\n}\n```"
@@ -9521,7 +9521,7 @@ msgid "Sharing is the default: appends through an alias (or a `mut` parameter) l
 msgstr "共享是默认：经由别名（或 `mut` 参数）做出的追加落进调用方的文档；复制恰好发生在两个刻意设计的位置——`build` 的实体化和增长时的前缀搬移。增长在发生之前先询问嵌入方的堆预算（几何下一容量按记账收取），因此 wasm 的 4 MiB 上限对构建器增长的约束与对引擎分配完全一致。"
 
 msgid "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting `strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json` pulls both (its writer rides the builder)."
-msgstr ""
+msgstr "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`。挂载 `strbuild` 顺带拉来 `strbuild_host`（`[deps]`）；挂载 `json` 则两个都来（它的 writer 骑在构建器上）。"
 
 msgid "For the common accumulator shape no builder is needed at all: `out = f\"{out}{t}\"` appends in place, linear in the total output ([f-strings](literals-and-inference.md))."
 msgstr "对常见的累加器形状，完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性（[f 字符串](literals-and-inference.md)）。"
@@ -9530,7 +9530,7 @@ msgid "`calc`'s company: `async` and `http`"
 msgstr "`calc` 的同伴：`async` 与 `http`"
 
 msgid "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
-msgstr ""
+msgstr "`async_engine` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`async_host` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[任务](tasks.md)、[宿主 future](host-futures.md)）。"
 
 msgid "`http_host` declares the transport rows (three async, five sync readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait:"
 msgstr "`http_host` 声明传输各行（三个异步，五个同步读回）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的："
@@ -10838,7 +10838,7 @@ msgid "export names"
 msgstr "导出名"
 
 msgid "hosts call by string (`vm.call(\"main\", …)`)"
-msgstr ""
+msgstr "宿主按字符串调用（`vm.call(\"main\", …)`）"
 
 msgid "package specs in instantiation rows"
 msgstr "实例化行里的包名"
@@ -11066,7 +11066,7 @@ msgid "3. compile the graph"
 msgstr "3. 编译图"
 
 msgid "Each module compiles (sources, in dependency post-order); `inline = true` packages splice into their consumers instead of linking; host packages synthesize bodyless thunks from their declared surfaces; a mounted bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md))."
-msgstr ""
+msgstr "每个模块各自编译（源码，按依赖后序）；`inline = true` 的包拼接进其消费者而非链接；宿主包从声明的面合成无体 thunk；已挂载捆绑包的编译包把解码后的二进制推入新鲜的、重定基的作用域（[编译器流水线](compiler.md)）。"
 
 msgid "4. link + flatten"
 msgstr "4. 链接 + 展平"
@@ -11111,7 +11111,7 @@ msgid "bind a host-fn body; signatures derived from the Rust shape"
 msgstr "绑定一个宿主函数体；签名从 Rust 形状推导"
 
 msgid "the installer lane: one built `HostPkg` per host pkg, checked against the mount snapshot (`session.host_pkg_context()`)"
-msgstr ""
+msgstr "安装者车道：每个宿主包一个构建好的 `HostPkg`，对照挂载快照检查（`session.host_pkg_context()`）"
 
 msgid "the builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md))"
 msgstr ""
@@ -11372,13 +11372,13 @@ msgid "The web runner surfaces the same data in its envelope: `\"trap\"` beside 
 msgstr "web 运行器在它的信封里呈现同样的数据：`\"trap\"` 在 `\"err\"` 旁边（[加载与嵌入循环](loading.md)）。"
 
 msgid "`rut pack mod/` reads a module directory and emits **one file** — `mod.rutbundle` — a zip archive carrying the module in one of two root kinds, paired with the format version: a **lib** pkg packs **compiled** (v5 — the root's `.rutc` binary, its scope ledger, and each dependency as a compiled `.rutc` group or a source file set), and a `type = \"host\"` pkg packs as a **decl** root (v6 — its `.d.rut` surface rides as source; single-package). A bundle is the same contract as the directory it was packed from, in one file: the loader mounts it exactly like the directory, and the two compile to identical programs."
-msgstr ""
+msgstr "`rut pack mod/` 读入模块目录并产出**一个文件**——`mod.rutbundle`——一个 zip 档案，以两种根之一携带模块，与格式版本配对：**lib** 包**编译**打包（v5——根的 `.rutc` 二进制、其作用域台账、每个依赖作为编译的 `.rutc` 组或源文件集），`type = \"host\"` 包打包为**声明**根（v6——其 `.d.rut` 面以源码承载；单包）。捆绑包与打包前的目录是同一契约，收进一个文件：加载器像挂载目录一样挂载它，两者编译出相同的程序。"
 
 msgid "Layout rules"
 msgstr "布局规则"
 
 msgid "**Entry names are paths relative to the module root** — `rut.toml`, `<pkg>.rutc`, `<pkg>.d.rut`, `<dep>/…` group entries for deps. No directories otherwise, no metadata entries. Unknown extra entries are ignored by loaders (forward compatibility) — except in a v6 decl bundle, where a group entry, a root `.rutc`, or a ledger is a contradiction and refuses (see [the v6 layout](#the-v6-layout))."
-msgstr ""
+msgstr "**入口名是相对模块根的路径**——`rut.toml`、`<pkg>.rutc`、`<pkg>.d.rut`、依赖的 `<dep>/…` 组条目。除此之外没有目录，也没有元数据条目。加载器忽略未知的额外条目（向前兼容）——但 v6 声明捆绑包例外：组条目、根 `.rutc` 或台账都是矛盾，会拒绝（见 [v6 布局](#the-v6-layout)）。"
 
 msgid "The manifest's `name` is the package name the bundle answers to — a bare `[a-zA-Z0-9_]+` name, the same law as directory manifests."
 msgstr "清单的 `name` 是捆绑包所对应的包名——一个裸的 `[a-zA-Z0-9_]+` 名字，与目录清单同一法则。"
@@ -11387,7 +11387,7 @@ msgid "Includes and splices never escape the archive: there is no outside."
 msgstr "包含与拼接绝不逃出归档：没有外部。"
 
 msgid "The v5 layout — a compiled root"
-msgstr ""
+msgstr "v5 布局——编译根"
 
 msgid "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\nrut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n<pkg>.rutc               the root's compiled binary — bodies + surface\n<pkg>.rut                the root's generic-bearing source, when its surface\n                           exports generics (the riding law, below)\n<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one\n<dep>/rut.toml           per dep group, mixed kinds:\n<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too);\n                           generic exports ride compiled — the binary carries\n                           the closure's instantiations in its ledger\n<dep>/<dep>.rut            the group's generic-bearing source, when its surface\n<dep>/group-*.rut …        exports generics (the entry + the [peer-deps] group\n                           files, verbatim — the riding law, below)\n<dep>/<dep>.d.rut          its surface text, when it declares one\n<leaf>/rut.toml            splice-needed dep (the `inline` flag) or a host\n<leaf>/<leaf>.rut           pkg → a source group: the source file set\n<leaf>/<leaf>.rut …         (entry, libs, peer groups)\n```"
 msgstr "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 5\nrut.scopes               打包期作用域台账（scope = \"spec\" 行）\n<pkg>.rutc               根的编译产物 —— 代码体 + 表面\n<pkg>.rut                根的承载泛型的源码，当其表面导出泛型时（承载法则，见下）\n<pkg>.d.rut              根的表面文本（给人与 LSP 用），当它声明了一个时\n<dep>/rut.toml           每个依赖组，混合类别：\n<dep>/<dep>.rutc           可链接依赖 → 编译组（其 rut.toml 一同承载）；泛型导出以编译形式跨越 —— 二进制在其台账中承载闭包的实例化\n<dep>/<dep>.rut            该组承载泛型的源码，当其表面导出泛型时\n<dep>/group-*.rut …        （入口 + [peer-deps] 组文件，逐字 —— 承载法则，见下）\n<dep>/<dep>.d.rut          其表面文本，当它声明了一个时\n<leaf>/rut.toml            需要拼接的依赖（`inline` 旗标）或宿主\n<leaf>/<leaf>.rut           pkg → 源码组：源码文件集\n<leaf>/<leaf>.rut …         （入口、libs、peer 组）\n```"
@@ -11405,34 +11405,34 @@ msgid "**Generics ride compiled — and their source rides beside them** (the ge
 msgstr "**泛型以编译形式跨越 —— 且其源码在旁承载**（泛型源码承载法则）：实例化由声明包持有，打包遍历以其消费者拼写的实例化种子化每个泛型依赖 —— 二进制的实例化台账命名每一行 `(owner, decl, arguments)`。表面导出开放泛型表面（泛型 fn、泛型类型导出、泛型方法、泛型目标 impl）的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：入口 lib、每个 `entry.libs` 文件、每个 `[peer-deps]` 组文件，逐字，就在二进制旁。入口 lib 的存在是加载器的分发标记；非泛型 pkg（`http`、`ink`、`strbuild`）保持无源码。在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以 owner = 该 pkg 的 spec 编译单态化代码体 —— 全程序一行，与打包期产生的无从分辨，不持久化任何东西。没有承载源码的包会大声拒绝这类请求（`this bundle predates generic-source riding — re-pack it`），绝不错误链接。`--strip` 拒绝该组合：被承载的文本会在被改名的二进制旁以干净名字重新编译。"
 
 msgid "**The root must be linkable** — else `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`. A root that has nothing to compile is not this refusal: a `type = \"host\"` pkg packs as a v6 decl root, below."
-msgstr ""
+msgstr "**根必须可链接**——否则 `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`。没有东西可编译的根不是这条拒绝：`type = \"host\"` 包按 v6 声明根打包，见下。"
 
 msgid "The v6 layout — a host root"
-msgstr ""
+msgstr "v6 布局——宿主根"
 
 msgid "A `type = \"host\"` pkg's root IS its declaration surface, so a host bundle is the manifest plus that surface, riding as source — single-package, no ledger, no groups, nothing to decode:"
-msgstr ""
+msgstr "`type = \"host\"` 包的根**就是**它的声明面，所以宿主捆绑包 = 清单 + 该面，以源码承载——单包，无台账，无组，无可解码之物："
 
 msgid "```text\nrut.toml                 byte-for-byte; format = \"rutbundle\", format_version = 6\n<pkg>.d.rut              the declaration surface — the root itself\n```"
 msgstr ""
 
 msgid "The pairing is **total**, both directions refused at the version gate:"
-msgstr ""
+msgstr "配对是**完全的**，两个方向都在版本门处拒绝："
 
 msgid "**v5 ⇔ compiled.** A host manifest at v5 refuses — a v5 bundle's root must be a `.rutc` a host pkg cannot have."
-msgstr ""
+msgstr "**v5 ⇔ 编译。** 宿主清单在 v5 拒绝——v5 捆绑包的根必须是 `.rutc`，宿主包给不出。"
 
 msgid "**v6 ⇔ decl.** A lib manifest at v6 refuses — lib roots stay v5, compiled."
-msgstr ""
+msgstr "**v6 ⇔ 声明。** lib 清单在 v6 拒绝——lib 根留在 v5，编译。"
 
 msgid "A v6 bundle carrying a root `.rutc` (`a host bundle's root is its surface, not a compiled unit`), a `rut.scopes` ledger, or any group entry (`a host bundle is single-package`) refuses: contradictions, never guesses."
-msgstr ""
+msgstr "携带根 `.rutc`（`a host bundle's root is its surface, not a compiled unit`）、`rut.scopes` 台账或任何组条目的 v6 捆绑包拒绝：只认矛盾，从不猜。"
 
 msgid "Writers emit 6 **only** for decl roots — every lib bundle stays byte-identical v5, and old readers refuse a v6 bundle loudly at the version gate."
-msgstr ""
+msgstr "写入器**只**为声明根发 6——每个 lib 捆绑包保持字节等同的 v5，旧读取器在版本门响亮地拒绝 v6 捆绑包。"
 
 msgid "`rut pack <host-dir>` works (the surface verifies by parsing and lowering once — the exact lane a mount runs — then rides as source), `--strip` refuses on a host root (`no symbols to strip` — no programs, no sidecar), and `rut run <host.rutbundle>` refuses with intent: a host bundle carries a declaration surface — nothing to run; bind its rows from the embedder ([host fns](host-fns.md)). The mount is the same lane a host group rides inside a v5 bundle: the surface lowers into the pkg's host rows."
-msgstr ""
+msgstr "`rut pack <host-dir>` 可用（该面以解析并 lowering 一次来验证——与挂载同一条车道——然后以源码承载），宿主根上 `--strip` 拒绝（`no symbols to strip`——没有程序，没有旁车），`rut run <host.rutbundle>` 带着意图拒绝：宿主捆绑包携带的是声明面——无物可运行；从嵌入方绑定它的行（[宿主函数](host-fns.md)）。挂载与 v5 捆绑包内宿主组承载的车道相同：面 lowering 成该包的宿主行。"
 
 msgid "The manifest — `rut.toml`"
 msgstr "清单——`rut.toml`"
@@ -11498,13 +11498,13 @@ msgid "compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports i
 msgstr "编译形式：每个可链接 pkg 一个 `.rutc`（v17）+ `.d.rut` —— 泛型导出在内，其实例化种子化进二进制，且拥有泛型的 pkg 的源码在其二进制旁承载 —— `inline` 依赖与宿主 pkg 用混合源码组"
 
 msgid "**the lib root's layout**"
-msgstr ""
+msgstr "**lib 根的布局**"
 
 msgid "decl: a `type = \"host\"` root — the manifest + its `.d.rut` surface, single-package"
-msgstr ""
+msgstr "decl：`type = \"host\"` 根——清单 + 其 `.d.rut` 面，单包"
 
 msgid "**the host root's layout**"
-msgstr ""
+msgstr "**宿主根的布局**"
 
 msgid "Each historical extension existed because the added files were _part of the package_: a bundle that dropped peer groups or multi-lib files would load base-only — semantically wrong. v5 replaced the source contract with the compiled one — one exception, the riding law above: a generic-owning compiled pkg's source rides beside its binary so consumer-spelled shapes stay servable. Source sharing as the general contract stays a directory (`rut run <dir>`), as it always was outside bundles."
 msgstr "每一代历史扩展都因新增文件是*包的一部分*而存在：一个丢掉 peer 组或多 lib 文件的包会只装载基座 —— 语义错误。v5 用编译契约替换了源码契约 —— 一条例外，即上面的承载法则：拥有泛型的编译 pkg 的源码在其二进制旁承载，使消费者拼写的形状保持可服务。作为一般契约的源码共享仍是目录（`rut run <dir>`），一如包外世界的惯例。\n\nPeer 门控的包以两种方式在 v5 内发布，依其组别类法则：非泛型的编译声明者，其 peer 组在打包期编译进其二进制（行随二进制跨越；组文件不随行）；需要拼接的声明者以源码组发布，其组文件在入口旁承载 —— 加载器的 peer 门按存在性追加，与目录世界完全一致（[依赖类别](dependency-kinds.md)）。拥有泛型的编译声明者也承载其组文件（承载法则），按需重编译只拼接 peer 在消费者闭包中的那些行。"
@@ -11513,13 +11513,13 @@ msgid "Peer-gated packages publish inside v5 two ways, per their group-kind law:
 msgstr "Peer 门控的包以两种方式在 v5 内发布，依其组别类法则：非泛型的编译声明者，其 peer 组在打包期编译进其二进制（行随二进制跨越；组文件不随行）；需要拼接的声明者以源码组发布，其组文件在入口旁承载 —— 加载器的 peer 门按存在性追加，与目录世界完全一致（[依赖类别](dependency-kinds.md)）。拥有泛型的编译声明者也承载其组文件（承载法则），按需重编译只拼接 peer 在消费者闭包中的那些行。"
 
 msgid "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the mounting session (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one session without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
-msgstr ""
+msgstr "**台账按档案命名空间化。** 每个档案的作用域行移入挂载会话的新数值区间（启动穿过其间），其二进制在挂载**前**用同一映射重定基——于是两个独立打包的捆绑包可共享一个会话，打包期编号永不争吵。先挂载者胜仍决定共享组名保留哪个体，组的台账行仍须是其二进制自带的作用域（拒绝，从不猜——该检查按档案进行）。下方的 CDN 车道就是它存在的理由：按包捆绑包独立打包，各自给自己的闭包编号。"
 
 msgid "The `rut-bundle` crate"
 msgstr "`rut-bundle` crate"
 
 msgid "The container codec, the `rut.toml` grammar, the source file-set collector, and the reader (both root kinds) live in the `rut-bundle` crate — **filesystem-free**. Every read goes through a one-method `Source` trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer itself needs the compiler and lives in `rut-driver` (`rut_driver::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Mounting a bundle into a session stays in `rut-driver` ([Loading](loading.md)), over `rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
-msgstr ""
+msgstr "容器编解码、`rut.toml` 文法、源文件集收集器与读取器（两种根）都住在 `rut-bundle` crate——**无文件系统**。每次读取都经过单方法 `Source` trait：`rut_bundle::FsSource` 是真实文件系统（CLI、原生宿主）；内存中的路径→字节映射服务测试与 wasm 宿主。打包器本身需要编译器，住在 `rut-driver`（`rut_driver::pack_dir`）——它返回捆绑包字节；写输出文件留给调用方。把捆绑包挂载进会话仍在 `rut-driver`（[加载](loading.md)），经 `rut_bundle::Bundle` 与其解析出的 `rut_bundle::Layout`——编译根及其台账 + 组，或声明根及其面。"
 
 msgid "Deterministic packing"
 msgstr "确定性打包"
@@ -11567,25 +11567,25 @@ msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
 msgid "`format_version` exactly 5 or 6"
-msgstr ""
+msgstr "`format_version` 恰为 5 或 6"
 
 msgid "refuse — \"reads bundle format_version 5 (compiled) and 6 (decl) only\""
-msgstr ""
+msgstr "拒绝——\"reads bundle format_version 5 (compiled) and 6 (decl) only\"（诊断原文）"
 
 msgid "v5 with a `type = \"host\"` root / v6 with a lib root"
-msgstr ""
+msgstr "v5 带 `type = \"host\"` 根 / v6 带 lib 根"
 
 msgid "refuse — the pairing is total"
-msgstr ""
+msgstr "拒绝——配对是完全的"
 
 msgid "v6 carrying a root `.rutc`, a `rut.scopes` ledger, or a group entry"
-msgstr ""
+msgstr "v6 携带根 `.rutc`、`rut.scopes` 台账或组条目"
 
 msgid "refuse — a host bundle is its surface, single-package"
-msgstr ""
+msgstr "拒绝——宿主捆绑包即其面，单包"
 
 msgid "`rut.scopes` present, every row a bare package name (v5)"
-msgstr ""
+msgstr "存在 `rut.scopes`，每行都是裸包名（v5）"
 
 msgid "refuse — not a v5 compiled bundle"
 msgstr "拒绝——不是 v5 编译捆绑包"
@@ -11609,31 +11609,31 @@ msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 msgid "every declared dep satisfied by a group (v5)"
-msgstr ""
+msgstr "每条声明的依赖都有组满足（v5）"
 
 msgid "refuse — names the missing group"
 msgstr "拒绝——点出缺失的组"
 
 msgid "The std tree on a CDN — the per-package delivery"
-msgstr ""
+msgstr "CDN 上的 std 树——按包交付"
 
 msgid "The std tree (`rut/`) ships as **committed** per-package bundles at `dist/std/<pkg>.rutbundle` — one bundle per package a `[deps]` row can spell (15 today). jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE the delivery and the publish act is a git tag:"
-msgstr ""
+msgstr "std 树（`rut/`）以**已提交**的按包捆绑包交付于 `dist/std/<pkg>.rutbundle`——`[deps]` 行能拼写的每个包一个捆绑包（今日 15 个）。jsDelivr 的 gh 车道按 ref 服务仓库文件，所以工件**就是**交付，发布动作是一次 git tag："
 
 msgid "```toml\n[deps]\nhttp = { url = \"https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutbundle\",\n        sha256 = \"<64-hex>\" }\n```"
 msgstr ""
 
 msgid "`<tag>`/`<sha256>` are placeholders — real pins live in the examples (anti-rot: docs never rot pins). The laws:"
-msgstr ""
+msgstr "`<tag>`/`<sha256>` 是占位符——真钉住在示例里（防腐：文档永不腐烂钉）。法则："
 
 msgid "**Committed artifacts, immutable tags.** `scripts/pack-std.cjs` packs all 15 (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate: `--check` repacks and byte-compiles, no network); `--pins` rewrites the example manifests' url/sha256 rows; `--tag` prints the publish commands. Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
-msgstr ""
+msgstr "**已提交工件，不可变标签。** `scripts/pack-std.cjs` 打包全部 15 个（确定性——同输入 ⇒ 同字节，新鲜度是纯等值门：`--check` 重打包并逐字节比较，不触网）；`--pins` 重写示例清单的 url/sha256 行；`--tag` 打印发布命令。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶。"
 
 msgid "**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (v6 decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). A bundle that predates the riding refuses a consumer-spelled shape loudly and says so (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr "**一个编译的包能服务什么。** 实例化由 owner 锚定：编译的 owner 在其台账中承载其打包期闭包拼写的泛型实例化 —— 加上泛型源码承载法则，表面导出泛型的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。因此 CDN 通道交付**宿主表面**（v6 decl 包）、**具体类库**（`http`、`ink`、`strbuild` —— 方法在表面的固有行上跨越），**以及泛型 owner**（`pouch`、`nmapset`、`json`、`async_host` —— `Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。早于承载法则的包会大声拒绝消费者拼写的形状并说明缘由（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 msgid "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): first-mount-wins mounts one body, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. Pin sets stay minimal-top anyway — a closed bundle carries the rest."
-msgstr ""
+msgstr "**重复挂载是安全的。** 两个档案可携带同一组（`json` 与 `http` 的闭包都带 `strbuild`）：先挂载者胜挂载一个体，按档案的台账命名空间化让每个二进制的 id 都经自己档案的行解析。钉集反正保持最小顶——闭合捆绑包会带上其余。"
 
 msgid "Loading"
 msgstr "加载"
@@ -11696,7 +11696,7 @@ msgid "ordered extra `.rut` files — the **multi-lib entry** (below)"
 msgstr "有序的额外 `.rut` 文件——**多库入口**（见下）"
 
 msgid "the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind is an error naming both fixes"
-msgstr ""
+msgstr "声明的种类：宿主**包**用 `type = \"host\"`——纯声明面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；`type = \"lib\"`（或缺省）是普通源码包。种类从不推断——只有 `entry.type` 而无种类的清单是错误，点名两种修法"
 
 msgid "`entry.type`"
 msgstr "`entry.type`"
@@ -11780,7 +11780,7 @@ msgid "The toolchain tree"
 msgstr "工具链树"
 
 msgid "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the vm's `HostPkgContext`/`HostRegistry` for the installer lane), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the frontend crates only — tokens, diagnostics, and symbols need no VM."
-msgstr ""
+msgstr "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后；驱动坐在 vm 的 `HostPkgContext`/`HostRegistry` 上支撑安装者车道），宿主（`rut-std`、`rut-wasm`）在上，`rut-cli`/`demo` 在最上。`rut-lsp` 只坐在前端 crate 上——token、诊断与符号不需要 VM。"
 
 msgid "The in-tree packages"
 msgstr "树内包"
@@ -11888,16 +11888,16 @@ msgid "The CLI lane: `rut run`/`rut pack` fetch through a cache-first fetcher (`
 msgstr "CLI 车道：`rut run`/`rut pack` 经缓存优先的拉取器拉取（`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`；命中则绝不触碰网络），固定值拒绝会驱逐被污染的缓存条目，让下一次运行自愈。`rut fetch <dir>` 只预热缓存，不运行任何东西（[rut CLI](cli.md)）。"
 
 msgid "The std tree on jsDelivr"
-msgstr ""
+msgstr "jsDelivr 上的 std 树"
 
 msgid "The std tree ships as committed per-package bundles — `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`, pinned by sha256 (placeholders here by law: real pins live only in the examples, so docs never rot). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively; the artifacts are committed at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality repack — CI never touches the network)."
-msgstr ""
+msgstr "std 树以已提交的按包捆绑包交付——`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`，以 sha256 钉住（此处按法则用占位符：真钉只住在示例里，文档永不腐烂）。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶；工件提交在 `dist/std/`，由 `scripts/pack-std.cjs` 打包（其 `--check` 门是纯字节等值的重打包——CI 永不触网）。"
 
 msgid "**What a url row can deliver** is the engine's instantiation law, read from the CDN side: a compiled bundle carries the generic instantiations its own pack closure spelled **in its ledger**, and — since the generic-source riding law — a compiled pkg whose surface exports generics **also rides the source that serves consumer-spelled shapes**:"
 msgstr "**一条 url 行能交付什么**是从 CDN 一侧读到的引擎实例化法则：编译的包在其台账中承载其打包期闭包拼写的泛型实例化，而且 —— 自泛型源码承载法则起 —— 表面导出泛型的编译 pkg **还会承载服务消费者拼写形状的源码**：\n\n- **宿主表面与具体类库交付** —— `type = \"host\"` 包是一个声明表面（无泛型），具体类的库（`http`、`ink`、`strbuild`）在其表面的固有行上跨越，整个闭包在内部承载；\n- **泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 msgid "**host surfaces and concrete-class libs deliver** — a `type = \"host\"` bundle is a declaration surface (no generics), and a lib of concrete classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent rows with its whole closure riding inside;"
-msgstr ""
+msgstr "**宿主面与具体类 lib 可交付**——`type = \"host\"` 捆绑包是声明面（无泛型），具体类的 lib（`http`、`ink`、`strbuild`）在其面的固有行上交叉，整个闭包随行在内；"
 
 msgid "**generic owners deliver too** — `pouch`, `nmapset`, `json`, `async_host` ride their entry + group source beside the binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden text lowers in the consumer's session, the monomorphized bodies register under the declaring pkg's spec (one row program-wide, identity by owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that predates the riding — no source beside the binary — refuses a consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json also names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr "**泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
@@ -12200,7 +12200,7 @@ msgid "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\
 msgstr "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 
 msgid "Packs a module directory into a **deterministic** `.rutbundle` — same input, same bytes. Without `-o`, the output is written beside the input as `<dir-name>.rutbundle`. A **lib** pkg packs **compiled** (format_version 5): the root and every linkable package ride as `.rutc` binaries (bodies + surface — the linking truth), splice-needed packages (generic exports, trait-object parameters, `inline`) and host pkgs ride as source groups, and a scope ledger lets any loader rebase the binaries onto its own numbering. A root that cannot link is refused — share the directory instead. A **`type = \"host\"` pkg packs as a v6 decl root** (its `.d.rut` surface riding as source, single-package), `--strip` refuses there (`no symbols to strip`), and `run` accepts either bundle directly — though running a host bundle refuses with intent: bind its rows from the embedder ([module bundles](bundles.md))."
-msgstr ""
+msgstr "把模块目录打包成**确定性的** `.rutbundle`——同输入，同字节。无 `-o` 时输出写在输入旁，名为 `<目录名>.rutbundle`。**lib** 包**编译**打包（format_version 5）：根与每个可链接包以 `.rutc` 二进制随行（函数体 + 面——链接的真相），需拼接的包（泛型导出、trait 对象参数、`inline`）与宿主包以源码组随行，作用域台账让任何加载器把二进制重定基到自己的编号。无法链接的根被拒绝——改为共享目录。**`type = \"host\"` 包打包为 v6 声明根**（其 `.d.rut` 面以源码承载，单包），`--strip` 在此拒绝（`no symbols to strip`），`run` 直接接受两种捆绑包——不过运行宿主捆绑包会带着意图拒绝：从嵌入方绑定它的行（[模块捆绑包](bundles.md)）。"
 
 msgid "`--strip` mangles every renameable name and strips the symbolication tables from the emitted binaries, writing the private symbol table at the sibling path `<out-without-ext>.rutsym` — the sidecar is never an entry inside the bundle. It needs a fully-compiled closure: a source group that could bind a compiled group's surface is a pointed refusal. See [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr "`--strip` 把每个可改名的名字改名，并从产出的二进制里剥离符号化表，把私有符号表写在旁边的路径 `<out-without-ext>.rutsym`——旁车绝不是捆绑包里的一个条目。它需要一个全编译的闭包：可能绑定某编译组表面的源码组会被明确拒绝。见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。"
