@@ -194,16 +194,17 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     assert!(units.program.is_some(), "the consumer links");
 }
 
-/// The real tree host pkgs, shim-packed: the std manifests gain their
-/// format keys in the std-cdn phase, so the test prepends them itself —
-/// the point is REAL surfaces (including `nmap_host`, whose surface is
-/// named `nmap.d.rut` — NOT `<name>.d.rut` — and `async_engine`,
-/// `engine.d.rut`: the entry's own rel path keys the archive).
+/// The real tree host pkgs, shim-packed: the std manifests already
+/// carry their format keys (the std-cdn phase added them), so the
+/// tree's `rut.toml` rides byte-for-byte — the point is REAL surfaces
+/// (including `nmap_host`, whose surface is named `nmap.d.rut` — NOT
+/// `<name>.d.rut` — and `async_engine`, `engine.d.rut`: the entry's
+/// own rel path keys the archive).
 fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(name);
     let dir = scratch(tag).join(name);
     let toml = std::fs::read_to_string(tree.join("rut.toml")).unwrap();
-    write(&dir, "rut.toml", &format!("format = \"rutbundle\"\nformat_version = 6\n{toml}"));
+    write(&dir, "rut.toml", &toml);
     write(&dir, surface, &std::fs::read_to_string(tree.join(surface)).unwrap());
     dir
 }

@@ -3,7 +3,7 @@ name = "rut-bundle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the .rutbundle container: deterministic zip subset, rut.toml manifest grammar, source file sets, the v5 reader — std-only, filesystem-free (one-method Source trait)"
+description = "the .rutbundle container: deterministic zip subset, rut.toml manifest grammar, source file sets, the v5 reader — filesystem-free (one-method Source trait)"
 
 [lib]
 name = "rut_bundle"
@@ -11,3 +11,4 @@ path = "src/lib.rs"
 
 [dependencies]
 rut-core = { path = "../rut-core" }
+toml_edit = { workspace = true }

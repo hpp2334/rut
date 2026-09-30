@@ -44,11 +44,14 @@
 //! mount only while building the pkg itself (the loader's law — the
 //! Session never sees a dev table).
 //!
-//! The reader below parses only the TOML subset the format uses
-//! (comments, `key = "string"`, dotted keys, `[section]`, inline tables)
-//! so the crate stays dependency-free and wasm-compatible.
+//! The TOML text itself parses with `toml_edit` — standard TOML, every
+//! legal spelling (escapes, `'literal'` strings, multi-line strings,
+//! underscored integers) processed by the parser; the laws below are
+//! the manifest's value rules over the parsed document.
 
 use std::collections::BTreeMap;
+
+use toml_edit::{Document, Item, Table, TableLike, TomlError, Value};
 
 /// A module's entry points: where its surface and body live, relative to
 /// the module directory.
@@ -131,133 +134,48 @@ pub fn valid_spec(spec: &str) -> bool {
     !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Parse the `rut.toml` subset: top-level `name`, `type` (the declared
-/// kind), `entry.type` / `entry.lib` / `entry.libs` (bare or under
+/// Parse `rut.toml`: standard TOML (`toml_edit`), then this format's
+/// value laws — top-level `name`, `type` (the declared kind),
+/// `entry.type` / `entry.lib` / `entry.libs` (bare or under
 /// `[entry]`), and the dep tables `[deps]` / `[peer-deps]` /
 /// `[dev-deps]` whose values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
+    let doc = Document::parse(text).map_err(|e| syntax_error(text, &e))?;
     let mut m = Manifest::default();
-    let mut section = Section::Top;
     // was `type` spelled? (the no-inference law keys on it: an absent
     // kind with an `entry.type`-only pkg is the ambiguity)
     let mut declared_type = false;
+    let root = doc.as_table();
 
-    for (lineno, raw) in text.lines().enumerate() {
-        let line = strip_comment(raw).trim().to_string();
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(inner) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            section = match inner.trim() {
-                "entry" => Section::Entry,
-                "deps" => Section::Deps,
-                "peer-deps" => Section::PeerDeps,
-                "dev-deps" => Section::DevDeps,
-                "style" => Section::Style,
-                other => {
-                    return Err(ManifestError(format!(
-                        "line {}: unknown section `[{}]`",
-                        lineno + 1,
-                        other.trim()
-                    )))
-                }
-            };
-            continue;
-        }
-        let Some((key, value)) = split_eq(&line) else {
-            return Err(ManifestError(format!("line {}: expected `key = value`", lineno + 1)));
-        };
-        let key = unquote(key.trim()).to_string();
-        let value = value.trim();
-        match section {
-            Section::Top => match key.as_str() {
-                "name" => {
-                    let name = parse_string(value, lineno)?;
-                    if !valid_spec(&name) {
-                        return Err(ManifestError(format!(
-                            "line {}: module name `{name}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
-                            lineno + 1
-                        )));
-                    }
-                    m.name = Some(name);
-                }
-                // the declared kind: `lib` (the ordinary source package)
-                // or `host` (a pure declaration surface). Absent ⇒ lib —
-                // a host pkg SPELLS itself
-                "type" => {
-                    declared_type = true;
-                    match parse_string(value, lineno)?.as_str() {
-                        "lib" => m.pkg_type = PkgType::Lib,
-                        "host" => m.pkg_type = PkgType::Host,
-                        other => {
-                            return Err(ManifestError(format!(
-                                "line {}: `type` is `\"lib\"` or `\"host\"`, found `{other}`",
-                                lineno + 1
-                            )))
-                        }
-                    }
-                }
-                // bundle-shaped manifests
-                "format" => m.format = Some(parse_string(value, lineno)?),
-                "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
-                // `host_scope` (the retired registration-prefix override)
-                // refuses LOUDLY: the key was load-bearing for
-                // registration names, so a silent ignore would surface as
-                // a confusing boot panic later — the error names the fix
-                // (the registration scope is the package name)
-                "host_scope" => {
-                    return Err(ManifestError(format!(
-                        "line {}: `host_scope` is retired — the registration scope is the package name; delete the key (rename the pkg if its scope must change)",
-                        lineno + 1
-                    )))
-                }
-                // `inline` (the retired source-inlining flag) rides as an
-                // unknown key: old manifests keep parsing
-                // dotted entry keys: `entry.type = "..."` etc.
-                "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
-                "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
-                "entry.libs" => m.entry.libs = parse_string_array(value, lineno)?,
-                // `entry.ir` (the deleted DeclIr cache key) rides as an
-                // unknown key: old manifests keep parsing
-                "entry.ir" => {}
-                _ => {} // forward-compatible: ignore unknown top-level keys
+    for (key, item) in root.iter() {
+        match item {
+            // an explicit `[section]` header: the five known sections
+            // walk their laws; any other header — including sub-tables
+            // like `[deps.pouch]` — is the unknown-section refusal,
+            // named as the document spells it, at the header's line
+            Item::Table(t) if !t.is_dotted() => match key {
+                "entry" => walk_entry(text, t, &mut m)?,
+                "deps" => walk_deps(text, t, &mut m)?,
+                "peer-deps" => walk_peers(text, t, "peer-deps", &mut m)?,
+                "dev-deps" => walk_peers(text, t, "dev-deps", &mut m)?,
+                "style" => walk_style(text, t, &mut m)?,
+                other => return Err(unknown_section(text, root, other, other, t)),
             },
-            Section::Entry => match key.as_str() {
-                "type" => m.entry.type_path = Some(parse_string(value, lineno)?),
-                "lib" => m.entry.lib = Some(parse_string(value, lineno)?),
-                "libs" => m.entry.libs = parse_string_array(value, lineno)?,
-                // `ir` (the deleted DeclIr cache key) rides as an unknown
-                // key: old manifests keep parsing
-                "ir" => {}
-                other => {
-                    return Err(ManifestError(format!(
-                        "line {}: unknown `[entry]` key `{other}`",
-                        lineno + 1
-                    )))
-                }
-            },
-            Section::Deps => {
-                check_dep_key(&key, lineno)?;
-                let desc = parse_deps_descriptor(value, lineno)?;
-                m.deps.insert(key, desc);
+            // a dotted key's implicit table: `entry.type = "..."` spells
+            // the entry keys in place; other dotted keys ride (the
+            // forward-compat law covers them as it covers unknown
+            // scalar keys)
+            Item::Table(t) if key == "entry" => walk_entry(text, t, &mut m)?,
+            Item::Table(_) => {}
+            Item::Value(v) => walk_top(text, root, key, v, &mut declared_type, &mut m)?,
+            // `[[array-of-tables]]` — no rut.toml section takes the shape
+            Item::ArrayOfTables(_) => {
+                return Err(ManifestError(format!(
+                    "line {}: unknown section `[[{key}]]`",
+                    key_line(text, root, key)
+                )));
             }
-            Section::PeerDeps => {
-                check_dep_key(&key, lineno)?;
-                let desc = parse_peer_descriptor(value, lineno, "peer-deps")?;
-                m.peer_deps.insert(key, desc);
-            }
-            Section::DevDeps => {
-                check_dep_key(&key, lineno)?;
-                let desc = parse_peer_descriptor(value, lineno, "dev-deps")?;
-                m.dev_deps.insert(key, desc);
-            }
-            Section::Style => {
-                // `key = value` rows, string-typed, schema-free: the fmt
-                // crate validates keys and parses values (the manifest
-                // stays schema-free, the deps-table law); unknown keys
-                // ride, refused only by the tool that knows its schema
-                m.style.insert(key, parse_string(value, lineno)?);
-            }
+            Item::None => {}
         }
     }
     // D4: `[peer-deps]` + `[dev-deps]` is the sanctioned
@@ -365,112 +283,312 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     Ok(m)
 }
 
+// ---- the syntax boundary: toml_edit's diagnostics become the crate's
+// single-line `line N:` shape ----
+
+/// A TOML syntax error as one `line N: <message>` diagnostic — the
+/// error's span pins the line, the parser's own wording carries the
+/// rest.
+fn syntax_error(text: &str, err: &TomlError) -> ManifestError {
+    let line = err.span().map_or(1, |s| line_of(text, s.start));
+    let message = err
+        .message()
+        .split('\n')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    ManifestError(format!("line {line}: {message}"))
+}
+
+/// 1-based line of a byte offset — the `line N:` prefix convention.
+fn line_of(text: &str, at: usize) -> usize {
+    1 + text.as_bytes()[..at.min(text.len())]
+        .iter()
+        .filter(|&&b| b == b'\n')
+        .count()
+}
+
+/// The line a key sits on (its span's first line; 1 when absent).
+fn key_line(text: &str, container: &impl TableLike, key: &str) -> usize {
+    container
+        .key(key)
+        .and_then(|k| k.span())
+        .map_or(1, |s| line_of(text, s.start))
+}
+
+/// The value as spelled — the "found `X`" text of the type refusals.
+fn raw(value: &Value) -> String {
+    value.to_string().trim().to_string()
+}
+
+/// The unknown-section refusal: the header named as the document
+/// spells it (a `[a.b]` chain descends to its deepest header), at that
+/// header's line (`span_key` is the header's own first segment, for
+/// the span lookup in `parent`).
+fn unknown_section(
+    text: &str,
+    parent: &impl TableLike,
+    span_key: &str,
+    name: &str,
+    table: &Table,
+) -> ManifestError {
+    match table
+        .iter()
+        .find(|(_, i)| i.as_table().is_some_and(|t| !t.is_dotted()))
+    {
+        Some((k, item)) => {
+            let t = item.as_table().expect("found a table above");
+            unknown_section(text, table, k, &format!("{name}.{k}"), t)
+        }
+        _ => ManifestError(format!(
+            "line {}: unknown section `[{name}]`",
+            key_line(text, parent, span_key)
+        )),
+    }
+}
+
+/// A section's rows, dotted keys flattened to their leaf paths (`a.b`
+/// — the spelling the laws below match on), document order kept, each
+/// row carrying the line its first key sits on. An explicit sub-table
+/// header (`[deps.pouch]`) is nobody's row: the unknown-section
+/// refusal names it (`section` gives the header its full path).
+fn flatten<'a>(
+    text: &str,
+    container: &'a impl TableLike,
+    prefix: &str,
+    section: &str,
+    out: &mut Vec<(String, usize, &'a Item)>,
+) -> Result<(), ManifestError> {
+    for (key, item) in container.iter() {
+        let path = if prefix.is_empty() {
+            key.to_string()
+        } else {
+            format!("{prefix}.{key}")
+        };
+        match item {
+            Item::Table(t) if !t.is_dotted() => {
+                let header = if section.is_empty() {
+                    path.clone()
+                } else {
+                    format!("{section}.{path}")
+                };
+                return Err(unknown_section(text, container, key, &header, t));
+            }
+            Item::Table(t) => flatten(text, t, &path, section, out)?,
+            Item::ArrayOfTables(_) => {
+                let header = if section.is_empty() {
+                    path
+                } else {
+                    format!("{section}.{path}")
+                };
+                return Err(ManifestError(format!(
+                    "line {}: unknown section `[[{header}]]`",
+                    key_line(text, container, key)
+                )));
+            }
+            Item::None => {}
+            leaf => out.push((path, key_line(text, container, key), leaf)),
+        }
+    }
+    Ok(())
+}
+
+// ---- the sections ----
+
+/// Top-level scalar keys. Unknown keys ride (forward compatibility),
+/// `host_scope` refuses loudly (the retirement law).
+fn walk_top(
+    text: &str,
+    root: &Table,
+    key: &str,
+    value: &Value,
+    declared_type: &mut bool,
+    m: &mut Manifest,
+) -> Result<(), ManifestError> {
+    let line = key_line(text, root, key);
+    match key {
+        "name" => {
+            let name = expect_string(line, value)?;
+            if !valid_spec(&name) {
+                return Err(ManifestError(format!(
+                    "line {line}: module name `{name}` is not a bare package name — expected `[a-zA-Z0-9_]+`"
+                )));
+            }
+            m.name = Some(name);
+        }
+        // the declared kind: `lib` (the ordinary source package)
+        // or `host` (a pure declaration surface). Absent ⇒ lib —
+        // a host pkg SPELLS itself
+        "type" => {
+            *declared_type = true;
+            match expect_string(line, value)?.as_str() {
+                "lib" => m.pkg_type = PkgType::Lib,
+                "host" => m.pkg_type = PkgType::Host,
+                other => {
+                    return Err(ManifestError(format!(
+                        "line {line}: `type` is `\"lib\"` or `\"host\"`, found `{other}`"
+                    )));
+                }
+            }
+        }
+        // bundle-shaped manifests
+        "format" => m.format = Some(expect_string(line, value)?),
+        "format_version" => m.format_version = Some(expect_u64(line, value)?),
+        // `host_scope` (the retired registration-prefix override)
+        // refuses LOUDLY: the key was load-bearing for
+        // registration names, so a silent ignore would surface as
+        // a confusing boot panic later — the error names the fix
+        // (the registration scope is the package name)
+        "host_scope" => {
+            return Err(ManifestError(format!(
+                "line {line}: `host_scope` is retired — the registration scope is the package name; delete the key (rename the pkg if its scope must change)"
+            )));
+        }
+        _ => {} // forward-compatible: ignore unknown top-level keys
+    }
+    Ok(())
+}
+
+/// `[entry]` (or the dotted `entry.*` spelling): the entry keys plus
+/// the retired `entry.ir`, which rides; unknown keys are refused (the
+/// `[entry]` strictness).
+fn walk_entry(text: &str, table: &Table, m: &mut Manifest) -> Result<(), ManifestError> {
+    let mut rows = Vec::new();
+    flatten(text, table, "", "entry", &mut rows)?;
+    for (path, line, item) in rows {
+        let Item::Value(v) = item else { continue };
+        match path.as_str() {
+            "type" => m.entry.type_path = Some(expect_string(line, v)?),
+            "lib" => m.entry.lib = Some(expect_string(line, v)?),
+            "libs" => m.entry.libs = expect_string_array(text, line, v)?,
+            "ir" => {}
+            other => {
+                return Err(ManifestError(format!(
+                    "line {line}: unknown `[entry]` key `{other}`"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `[deps]`: exact specifier → descriptor; the descriptor laws are
+/// [`parse_deps_descriptor`]'s.
+fn walk_deps(text: &str, table: &Table, m: &mut Manifest) -> Result<(), ManifestError> {
+    let mut rows = Vec::new();
+    flatten(text, table, "", "deps", &mut rows)?;
+    for (spec, line, item) in rows {
+        check_dep_key(&spec, line)?;
+        let Item::Value(v) = item else { continue };
+        m.deps.insert(spec, parse_deps_descriptor(text, line, v)?);
+    }
+    Ok(())
+}
+
+/// `[peer-deps]` / `[dev-deps]`: same descriptor walk with the
+/// `optional` flag and the `lib` group key.
+fn walk_peers(
+    text: &str,
+    table: &Table,
+    kind: &str,
+    m: &mut Manifest,
+) -> Result<(), ManifestError> {
+    let mut rows = Vec::new();
+    flatten(text, table, "", kind, &mut rows)?;
+    for (spec, line, item) in rows {
+        check_dep_key(&spec, line)?;
+        let Item::Value(v) = item else { continue };
+        let desc = parse_peer_descriptor(text, line, kind, v)?;
+        match kind {
+            "peer-deps" => {
+                m.peer_deps.insert(spec, desc);
+            }
+            _ => {
+                m.dev_deps.insert(spec, desc);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `[style]`: `key = value` rows, string-typed, schema-free — the fmt
+/// crate validates keys and parses values (the manifest stays
+/// schema-free, the deps-table law); unknown keys ride, refused only
+/// by the tool that knows its schema.
+fn walk_style(text: &str, table: &Table, m: &mut Manifest) -> Result<(), ManifestError> {
+    let mut rows = Vec::new();
+    flatten(text, table, "", "style", &mut rows)?;
+    for (key, line, item) in rows {
+        let Item::Value(v) = item else { continue };
+        m.style.insert(key, expect_string(line, v)?);
+    }
+    Ok(())
+}
+
+// ---- the typed values: the laws the manifest itself owns. Type
+// mismatches keep today's refusals ("expected a quoted string, found
+// `X`", "expected an integer", ...); the TOML spellings are the
+// parser's business, not the laws'. ----
+
+/// A `key = "string"` value.
+fn expect_string(lineno: usize, value: &Value) -> Result<String, ManifestError> {
+    match value.as_str() {
+        Some(s) => Ok(s.to_string()),
+        None => Err(ManifestError(format!(
+            "line {lineno}: expected a quoted string, found `{}`",
+            raw(value)
+        ))),
+    }
+}
+
+/// A non-negative integer (`format_version`).
+fn expect_u64(lineno: usize, value: &Value) -> Result<u64, ManifestError> {
+    match value.as_integer().and_then(|i| u64::try_from(i).ok()) {
+        Some(v) => Ok(v),
+        None => Err(ManifestError(format!(
+            "line {lineno}: expected an integer, found `{}`",
+            raw(value)
+        ))),
+    }
+}
+
+/// The `entry.libs` string array. Strict: every element a string (the
+/// bare-word and non-string refusals fall out of the same check). An
+/// empty array is nobody's multi-lib entry — drop the key.
+fn expect_string_array(
+    text: &str,
+    lineno: usize,
+    value: &Value,
+) -> Result<Vec<String>, ManifestError> {
+    let Some(arr) = value.as_array() else {
+        return Err(ManifestError(format!(
+            "line {lineno}: expected a `[\"..\", ..]` string array, found `{}`",
+            raw(value)
+        )));
+    };
+    if arr.is_empty() {
+        return Err(ManifestError(format!(
+            "line {lineno}: `libs` cannot be empty — drop the key for a single-file module"
+        )));
+    }
+    let mut out = Vec::new();
+    for el in arr.iter() {
+        let eline = el.span().map_or(lineno, |s| line_of(text, s.start));
+        out.push(expect_string(eline, el)?);
+    }
+    Ok(out)
+}
+
 /// A dep-table key is a bare package name — the same charset law as the
 /// manifest `name`.
 fn check_dep_key(key: &str, lineno: usize) -> Result<(), ManifestError> {
     if !valid_spec(key) {
         return Err(ManifestError(format!(
-            "line {}: dep `{key}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
-            lineno + 1
+            "line {lineno}: dep `{key}` is not a bare package name — expected `[a-zA-Z0-9_]+`"
         )));
     }
     Ok(())
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Section {
-    Top,
-    Entry,
-    Deps,
-    PeerDeps,
-    DevDeps,
-    /// `[style]` — the pkg's formatter knobs (the rut-fmt batch): flat
-    /// `key = value` rows, string-typed and schema-free (the consumer
-    /// of the manifest — the fmt crate — validates keys and parses
-    /// values; unknown keys are ignored, the forward-compat rule).
-    Style,
-}
-
-fn parse_string(value: &str, lineno: usize) -> Result<String, ManifestError> {
-    let v = value.trim();
-    if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
-        Ok(v[1..v.len() - 1].to_string())
-    } else {
-        Err(ManifestError(format!("line {}: expected a quoted string, found `{v}`", lineno + 1)))
-    }
-}
-
-fn parse_u64(value: &str, lineno: usize) -> Result<u64, ManifestError> {
-    let v = value.trim();
-    v.parse::<u64>()
-        .map_err(|_| ManifestError(format!("line {}: expected an integer, found `{v}`", lineno + 1)))
-}
-
-/// Parse a single-line TOML string array — `["./a.rut", "./b.rut"]` —
-/// the value shape `entry.libs` takes. Strict: quoted
-/// strings, comma-separated, no trailing comma, nothing else.
-fn parse_string_array(value: &str, lineno: usize) -> Result<Vec<String>, ManifestError> {
-    let v = value.trim();
-    let Some(inner) = v.strip_prefix('[').and_then(|v| v.strip_suffix(']')) else {
-        return Err(ManifestError(format!(
-            "line {}: expected a `[\"..\", ..]` string array, found `{v}`",
-            lineno + 1
-        )));
-    };
-    let inner = inner.trim();
-    if inner.is_empty() {
-        return Err(ManifestError(format!(
-            "line {}: `libs` cannot be empty — drop the key for a single-file module",
-            lineno + 1
-        )));
-    }
-    let mut out = Vec::new();
-    for part in inner.split(',') {
-        let part = part.trim();
-        // every element must be a quoted string — the trailing-comma
-        // and bare-word refusals fall out of the same check
-        out.push(parse_string(part, lineno)?);
-    }
-    Ok(out)
-}
-
-/// Parse `true` / `false`.
-fn parse_bool(value: &str, lineno: usize) -> Result<bool, ManifestError> {
-    let v = value.trim();
-    match v {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(ManifestError(format!(
-            "line {}: expected `true` or `false`, found `{v}`",
-            lineno + 1
-        ))),
-    }
-}
-
-/// Split `{ k = v, k2 = v2 }` (single-line) into raw key/value pairs —
-/// values are NOT parsed here; each table's rules decide what a value
-/// may be (strings everywhere; `optional` is the one bool the grammar
-/// learns).
-fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)>, ManifestError> {
-    let v = value.trim();
-    let Some(inner) = v.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
-        return Err(ManifestError(format!(
-            "line {}: expected an inline table `{{ key = \"value\" }}`, found `{v}`",
-            lineno + 1
-        )));
-    };
-    let mut out = Vec::new();
-    for part in split_commas(inner) {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let Some((k, val)) = split_eq(part) else {
-            return Err(ManifestError(format!("line {}: bad table item `{part}`", lineno + 1)));
-        };
-        out.push((unquote(k.trim()).to_string(), val.trim().to_string()));
-    }
-    Ok(out)
 }
 
 /// A `[deps]` descriptor: exactly ONE source — `path` (a directory) or
@@ -479,33 +597,36 @@ fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)
 /// a `[peer-deps]` attribute); any other key is the `[entry]`
 /// strictness — a line-targeted error.
 fn parse_deps_descriptor(
-    value: &str,
+    text: &str,
     lineno: usize,
+    value: &Value,
 ) -> Result<BTreeMap<String, String>, ManifestError> {
+    let Some(inline) = value.as_inline_table() else {
+        return Err(ManifestError(format!(
+            "line {lineno}: expected an inline table `{{ key = \"value\" }}`, found `{}`",
+            raw(value)
+        )));
+    };
+    let mut rows = Vec::new();
+    flatten(text, inline, "", "", &mut rows)?;
     let mut out = BTreeMap::new();
-    for (k, val) in inline_table_parts(value, lineno)? {
+    for (k, vline, item) in rows {
+        let Item::Value(v) = item else { continue };
         match k.as_str() {
             "path" | "url" => {
-                if out.insert(k.clone(), parse_string(&val, lineno)?).is_some() {
-                    return Err(ManifestError(format!(
-                        "line {}: `{k}` appears twice — one descriptor names one source",
-                        lineno + 1
-                    )));
-                }
+                out.insert(k, expect_string(vline, v)?);
             }
             "sha256" => {
-                out.insert(k, parse_pin(&val, lineno)?);
+                out.insert(k, parse_pin(vline, v)?);
             }
             "optional" => {
                 return Err(ManifestError(format!(
-                    "line {}: `optional` is a `[peer-deps]` attribute — `[deps]` has no options",
-                    lineno + 1
+                    "line {vline}: `optional` is a `[peer-deps]` attribute — `[deps]` has no options"
                 )));
             }
             other => {
                 return Err(ManifestError(format!(
-                    "line {}: unknown `[deps]` key `{other}`",
-                    lineno + 1
+                    "line {vline}: unknown `[deps]` key `{other}`"
                 )));
             }
         }
@@ -513,14 +634,12 @@ fn parse_deps_descriptor(
     match (out.contains_key("path"), out.contains_key("url")) {
         (true, true) => {
             return Err(ManifestError(format!(
-                "line {}: `path` and `url` are both set — one descriptor, one source: a directory or a `.rutbundle` url, never both",
-                lineno + 1
+                "line {lineno}: `path` and `url` are both set — one descriptor, one source: a directory or a `.rutbundle` url, never both"
             )));
         }
         (false, false) => {
             return Err(ManifestError(format!(
-                "line {}: the descriptor has no source — `path = \"..\"` for a directory, or `url = \"https://…\"` for a packed bundle",
-                lineno + 1
+                "line {lineno}: the descriptor has no source — `path = \"..\"` for a directory, or `url = \"https://…\"` for a packed bundle"
             )));
         }
         _ => {}
@@ -528,14 +647,12 @@ fn parse_deps_descriptor(
     if let Some(url) = out.get("url") {
         if !(url.starts_with("https://") || url.starts_with("http://")) {
             return Err(ManifestError(format!(
-                "line {}: `url` must be an http(s) url — found `{url}`",
-                lineno + 1
+                "line {lineno}: `url` must be an http(s) url — found `{url}`"
             )));
         }
     } else if out.contains_key("sha256") {
         return Err(ManifestError(format!(
-            "line {}: `sha256` pins a url — beside `path` it has no meaning",
-            lineno + 1
+            "line {lineno}: `sha256` pins a url — beside `path` it has no meaning"
         )));
     }
     Ok(out)
@@ -544,12 +661,11 @@ fn parse_deps_descriptor(
 /// The sha256 pin: exactly 64 hex digits, stored LOWERCASE — the pin
 /// law compares the fetched bytes' hash against it, so the manifest
 /// normalizes first and the comparison is byte-exact.
-fn parse_pin(value: &str, lineno: usize) -> Result<String, ManifestError> {
-    let v = parse_string(value, lineno)?;
+fn parse_pin(lineno: usize, value: &Value) -> Result<String, ManifestError> {
+    let v = expect_string(lineno, value)?;
     if v.len() != 64 || !v.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(ManifestError(format!(
-            "line {}: `sha256` must be 64 hex digits, found `{v}`",
-            lineno + 1
+            "line {lineno}: `sha256` must be 64 hex digits, found `{v}`"
         )));
     }
     Ok(v.to_ascii_lowercase())
@@ -561,33 +677,41 @@ fn parse_pin(value: &str, lineno: usize) -> Result<String, ManifestError> {
 /// `optional` is the one bool, and any other key is the `[entry]`
 /// strictness — a line-targeted error.
 fn parse_peer_descriptor(
-    value: &str,
+    text: &str,
     lineno: usize,
     table: &str,
+    value: &Value,
 ) -> Result<BTreeMap<String, String>, ManifestError> {
+    let Some(inline) = value.as_inline_table() else {
+        return Err(ManifestError(format!(
+            "line {lineno}: expected an inline table `{{ key = \"value\" }}`, found `{}`",
+            raw(value)
+        )));
+    };
+    let mut rows = Vec::new();
+    flatten(text, inline, "", "", &mut rows)?;
     let mut out = BTreeMap::new();
-    for (k, val) in inline_table_parts(value, lineno)? {
+    for (k, vline, item) in rows {
+        let Item::Value(v) = item else { continue };
         match k.as_str() {
             "path" => {
-                out.insert(k, parse_string(&val, lineno)?);
+                out.insert(k, expect_string(vline, v)?);
             }
             "lib" => {
-                let v = parse_string(&val, lineno)?;
+                let v = expect_string(vline, v)?;
                 if v.ends_with(".d.rut") {
                     return Err(ManifestError(format!(
-                        "line {}: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate",
-                        lineno + 1
+                        "line {vline}: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate"
                     )));
                 }
                 out.insert(k, v);
             }
             "optional" => {
-                out.insert(k, parse_optional_flag(&val, lineno)?);
+                out.insert(k, expect_optional(vline, v)?);
             }
             other => {
                 return Err(ManifestError(format!(
-                    "line {}: unknown `[{table}]` key `{other}`",
-                    lineno + 1
+                    "line {vline}: unknown `[{table}]` key `{other}`"
                 )));
             }
         }
@@ -595,71 +719,15 @@ fn parse_peer_descriptor(
     Ok(out)
 }
 
-/// `optional` is the one bool the inline-table grammar learns;
+/// `optional` is the one bool the descriptor grammar learns;
 /// peers are REQUIRED by default, so the flag must say `true` or
-/// `false` exactly. Stored as its source spelling.
-fn parse_optional_flag(value: &str, lineno: usize) -> Result<String, ManifestError> {
-    match value.trim() {
-        "true" => Ok("true".to_string()),
-        "false" => Ok("false".to_string()),
-        _ => Err(ManifestError(format!(
-            "line {}: `optional` expects `true` or `false`",
-            lineno + 1
+/// `false` exactly. Stored as its canonical spelling.
+fn expect_optional(lineno: usize, value: &Value) -> Result<String, ManifestError> {
+    match value.as_bool() {
+        Some(b) => Ok(b.to_string()),
+        None => Err(ManifestError(format!(
+            "line {lineno}: `optional` expects `true` or `false`"
         ))),
-    }
-}
-
-/// Split at the first `=` outside a quoted string.
-fn split_eq(s: &str) -> Option<(&str, &str)> {
-    let mut in_str = false;
-    for (i, c) in s.char_indices() {
-        match c {
-            '"' => in_str = !in_str,
-            '=' if !in_str => return Some((&s[..i], &s[i + 1..])),
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Split at `,` outside quotes.
-fn split_commas(s: &str) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut in_str = false;
-    let mut start = 0;
-    for (i, c) in s.char_indices() {
-        match c {
-            '"' => in_str = !in_str,
-            ',' if !in_str => {
-                out.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    out.push(&s[start..]);
-    out
-}
-
-/// Strip a `# ...` comment, respecting quoted strings.
-fn strip_comment(line: &str) -> &str {
-    let mut in_str = false;
-    for (i, c) in line.char_indices() {
-        match c {
-            '"' => in_str = !in_str,
-            '#' if !in_str => return &line[..i],
-            _ => {}
-        }
-    }
-    line
-}
-
-fn unquote(s: &str) -> &str {
-    let b = s.as_bytes();
-    if b.len() >= 2 && b[0] == b'"' && b[b.len() - 1] == b'"' {
-        &s[1..s.len() - 1]
-    } else {
-        s
     }
 }
 
@@ -814,12 +882,65 @@ entry.lib = "./pouch.rut"
 
     #[test]
     fn format_version_must_be_an_integer() {
+        // a TOML-legal but non-integer value trips the value law
         let err = parse_manifest(
-            "format = \"rutbundle\"\nformat_version = six\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+            "format = \"rutbundle\"\nformat_version = \"1\"\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
         )
         .unwrap_err();
         assert!(err.to_string().contains("line 2"), "{err}");
         assert!(err.to_string().contains("expected an integer"), "{err}");
+    }
+
+    #[test]
+    fn syntax_errors_normalize_to_line_n() {
+        // `six` is not a TOML value — the syntax error carries the
+        // `line N:` prefix with the parser's own wording
+        let err = parse_manifest("name = \"x\"\nformat_version = six\n").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("line 2: "), "{msg}");
+        assert!(msg.contains("expected literal string"), "{msg}");
+    }
+
+    #[test]
+    fn full_toml_spellings_parse() {
+        // standard TOML now: 'literal' strings, \uXXXX escapes,
+        // underscored integers, multi-line strings — the parser
+        // processes them, the value laws are unchanged
+        let m = parse_manifest("name = 'pouch'\nentry.lib = \"./p\\u006Fuch.rut\"\n").unwrap();
+        assert_eq!(m.name.as_deref(), Some("pouch"));
+        assert_eq!(m.entry.lib.as_deref(), Some("./pouch.rut"));
+        let m = parse_manifest(
+            "name = \"x\"\nformat = \"rutbundle\"\nformat_version = 1_0\n",
+        )
+        .unwrap();
+        assert_eq!(m.format_version, Some(10));
+        let m = parse_manifest("name = \"x\"\nentry.lib = \"\"\"\n./a.rut\"\"\"\n").unwrap();
+        assert_eq!(m.entry.lib.as_deref(), Some("./a.rut"));
+    }
+
+    #[test]
+    fn name_type_mismatch_is_line_targeted() {
+        // an integer is not a string — the value law's wording, today's
+        let err = parse_manifest("name = 3\n").unwrap_err();
+        assert_eq!(err.to_string(), "line 1: expected a quoted string, found `3`");
+    }
+
+    #[test]
+    fn sub_tables_are_unknown_sections() {
+        // `[deps.pouch]` is nobody's row — the unknown-section refusal
+        // names the header, at the header's line
+        let err = parse_manifest("name = \"x\"\n[deps.pouch]\npath = \"p\"\n").unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown section `[deps.pouch]`");
+    }
+
+    #[test]
+    fn repeated_headers_are_toml_errors() {
+        // today's reader merged a repeated header silently (last wins);
+        // TOML refuses the duplicate
+        let err = parse_manifest("[deps]\n[deps]\n").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("line 2"), "{msg}");
+        assert!(msg.contains("duplicate key"), "{msg}");
     }
 
     #[test]
@@ -1038,10 +1159,12 @@ nmapset = { path = "../nmapset" }
             err.to_string(),
             "line 2: `url` must be an http(s) url — found `ftp://x/p.rutbundle`"
         );
-        // a duplicate source key is the same one-source refusal
+        // a duplicate source key is a TOML duplicate-key parse error now
         let err = parse_manifest("[deps]\npouch = { url = \"https://x/a\", url = \"https://x/b\" }\n")
             .unwrap_err();
-        assert!(err.to_string().contains("`url` appears twice"), "{err}");
+        let msg = err.to_string();
+        assert!(msg.contains("line 2"), "{msg}");
+        assert!(msg.contains("duplicate key"), "{msg}");
         // unknown keys keep the [entry] strictness
         let err = parse_manifest("[deps]\npouch = { url = \"https://x/p\", feats = \"x\" }\n")
             .unwrap_err();
