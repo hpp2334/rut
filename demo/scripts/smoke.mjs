@@ -8,9 +8,12 @@
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
 //   2. every prepared case (9 inline + 17 classics) REALLY compiles
-//      and runs through the wasm engine at the pinned default budget;
-//      the only traps admitted are the two cases whose LESSON is a
-//      trap (their blurbs say so);
+//      and runs through the wasm engine at the shipped default budget
+//      (fuel off — uncapped; fuel-demo's infinite-loop source is
+//      covered by the resume lane's explicit budgets); the only trap
+//      admitted here is the one case whose LESSON is a trap (its
+//      blurb says so), plus the uncapped-proof lane: >10M ops of
+//      bounded work completes at fuel 0 with fuelUsed still counted;
 //   3. the resume is REAL (survey D5): the parked frame continues —
 //      zero-budget resume re-traps at the parked pc, +16M resume
 //      carries tick 2000000 (a re-run would print tick 1000000
@@ -48,7 +51,6 @@ const DEMO = join(here, '..');
 const BUNDLE = join(DEMO, 'dist-smoke', 'rut-api.cjs');
 const ARTIFACT = join(DEMO, 'public', 'rut.wasm');
 const COMMAND = 'npm run build:wasm';
-const DEFAULT_BUDGET = { fuel: 10_000_000, heapBytes: 4 * 1024 * 1024 };
 
 let failures = 0;
 let passes = 0;
@@ -124,7 +126,7 @@ console.log('\n[1] the runner law: missing/invalid artifact => mode "error"');
 
 // ---- 2. the real artifact: every case REALLY compiles and runs ----
 
-console.log('\n[2] every prepared case: REAL compile + run at the default budget');
+console.log('\n[2] every prepared case: REAL compile + run at the shipped default (uncapped)');
 
 const bytes = exactAB(readFileSync(ARTIFACT));
 const runner = await api.Runner.boot(async () => bytes);
@@ -134,10 +136,12 @@ check(runner.isLive, 'the wasm runner is live');
 const all = [...api.CASES, ...api.EXAMPLES];
 check(all.length === 26, 'the full corpus is present (9 inline + 17 classics)', String(all.length));
 
-// the traps the corpus teaches BY DESIGN (each case's blurb says so) —
-// the only traps admitted at the default budget
+// the trap the corpus teaches BY DESIGN (the case's blurb says so) —
+// the only trap admitted in the uncapped default lane. fuel-demo is
+// not here: its source is an infinite loop and the shipped default is
+// uncapped, so its compile+run is pinned by the resume lane's
+// explicit budgets below.
 const TAUGHT_TRAPS = {
-  'fuel-demo': 'OutOfFuel',
   'stack-trace': 'IndexOutOfBounds',
 };
 
@@ -160,6 +164,10 @@ for (const c of all) {
       !compiled.irDump.includes('requires the wasm build'),
     `${c.id}: real IR dump (no placeholder)`,
   );
+  // fuel-demo's source is an infinite loop: uncapped (the shipped
+  // default) it would hang this gate — the resume lane below covers
+  // its compile+run at explicit budgets
+  if (c.id === 'fuel-demo') continue;
   const res = runner.run(compiled.binary, api.DEFAULT_BUDGET);
   const taught = TAUGHT_TRAPS[c.id];
   if (taught) {
@@ -177,16 +185,65 @@ for (const c of all) {
   }
 }
 
-// ---- 3. the resume is REAL ----
+// ---- 2b. the uncapped default is REALLY uncapped ----
+
+console.log('\n[2b] fuel off by default: >10M ops of bounded work, no cap');
+
+{
+  // ~10 ops/iteration (the fuel-demo shape), bounded: ~20M ops — more
+  // than any hidden default cap. At fuel 0 (the ABI's uncapped
+  // encoding) this MUST complete: no OutOfFuel, the expected output
+  // line, and fuelUsed still counted (the engine counts fuel_used
+  // unconditionally — observability survives the missing cap).
+  const src = [
+    'use ink::{Logger};',
+    '',
+    'pub fn main() {',
+    '    let log = Logger.new("case");',
+    '    let mut i = 0;',
+    '    while (i < 2000000) {',
+    '        i += 1;',
+    '    }',
+    '    log.info(f"done {i}");',
+    '}',
+  ].join('\n');
+  runner.dropFrame();
+  const compiled = runner.compile(src);
+  check(
+    compiled.diags.length === 0,
+    'the burn source compiles clean',
+    JSON.stringify(compiled.diags?.map((d) => d.msg)),
+  );
+  const res = runner.run(compiled.binary, { fuel: 0, heapBytes: api.DEFAULT_BUDGET.heapBytes });
+  check(
+    res.trap === undefined,
+    'fuel 0 does NOT cap the run (no OutOfFuel)',
+    JSON.stringify({ trap: res.trap, output: res.output }),
+  );
+  check(
+    linesEqual(res.output, ['done 2000000']),
+    'the uncapped run output is exact',
+    JSON.stringify(res.output),
+  );
+  check(
+    res.fuelUsed > 10_000_000,
+    `fuelUsed still counts when uncapped (${res.fuelUsed})`,
+  );
+}
+
+// ---- 3. the resume is REAL — and it IS the explicit-enable story ----
 
 console.log('\n[3] the resume: the parked frame CONTINUES — never a re-run');
 
+// every budget in this lane is EXPLICIT (12M / resume(0) / +16M):
+// with fuel off by default, this is the opt-in path — park on
+// OutOfFuel, re-fuel the SAME frame, continue
 const fuel = api.CASES.find((c) => c.id === 'fuel-demo');
 runner.dropFrame();
 {
   const compiled = runner.compile(fuel.source);
   // leg 1 at 12M: one tick (~10M ops to reach i=1M), then parked
-  const leg1 = runner.run(compiled.binary, { fuel: 12_000_000, heapBytes: DEFAULT_BUDGET.heapBytes });
+  const leg1 = runner.run(compiled.binary, { fuel: 12_000_000, heapBytes: api.DEFAULT_BUDGET.heapBytes });
   check(leg1.parked === true, 'the frame parks on OutOfFuel (parked:true in the envelope)');
   check(
     linesEqual(leg1.output, ['tick 1000000']),

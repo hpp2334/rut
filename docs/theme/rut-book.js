@@ -39,7 +39,11 @@
 (function () {
   "use strict";
 
-  // budgets mirror the playground's DEFAULT_BUDGET (demo/src/cases.ts)
+  // the mechanism default is OFF (engine Limits::default() is uncapped);
+  // THIS host explicitly opts into 10M fuel — freeze protection for the
+  // editable blocks (a reader-typed infinite loop must trap, not hang
+  // the tab), with no resume affordance here. The heap default (4 MiB)
+  // mirrors the playground's.
   var DEFAULT_FUEL = 10000000;
   var DEFAULT_HEAP_BYTES = 4 * 1024 * 1024;
 

@@ -813,9 +813,8 @@ msgid "Budget it"
 msgstr "设定预算"
 
 #: src/quick-start/first-program.md:104
-msgid ""
-"Every `rut run` is fuel-metered. Cap it with `--fuel N` (default 10,000,000):"
-msgstr "每次 `rut run` 都按燃料计量。用 `--fuel N` 设上限（默认 10,000,000）："
+msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
+msgstr "每次 `rut run` 默认不设上限——燃料通过 `--fuel N` 显式开启："
 
 #: src/quick-start/first-program.md:111
 msgid ""
@@ -883,12 +882,15 @@ msgstr "**输出 / AST / IR 面板**——每次运行都显示程序的真实�
 
 #: src/quick-start/playground.md:23
 msgid ""
-"**Budget control** — each run executes under an explicit fuel + heap budget "
-"(default 10,000,000 fuel / 4 MiB heap). A budget that bites is a feature, "
-"not a bug: one prepared case parks on the out-of-fuel trap on purpose, and "
-"the Resume control adds fuel and continues the _same_ frame — that is "
-"structured-concurrency-grade resumption, not a restart."
-msgstr "**预算控制**——每次运行都在一个明确的燃料 + 堆预算下执行（默认 10,000,000 燃料 / 4 MiB 堆）。预算真正咬人是特性，不是缺陷：一个预备用例故意停在燃料耗尽的陷阱上，而 Resume 控件会追加燃料并继续_同一个_帧——这是结构化并发级别的恢复，不是重启。"
+"**Budget control** — fuel is **off by default**: an explicit ▶ Run is "
+"uncapped, and a non-terminating program freezes the tab — that is what "
+"uncapped means. The checkbox arms the fuel box (seeded at 10,000,000; heap "
+"defaults to 4 MiB): a run that exhausts its fuel parks on the out-of-fuel "
+"trap, and the Resume control adds fuel and continues the _same_ frame — "
+"structured-concurrency-grade resumption, not a restart. Auto-runs (case "
+"selection, edits) keep an internal 1M watchdog slice so a stray loop parks "
+"instead of freezing the page."
+msgstr "**预算控制**——燃料**默认关闭**：显式的 ▶ Run 不设上限，不终止的程序会冻住标签页——不设上限就是这个意思。复选框启用燃料框（初始 10,000,000；堆默认 4 MiB）：耗尽燃料的运行会停在燃料耗尽的陷阱上，Resume 控件追加燃料并继续_同一个_帧——结构化并发级别的恢复，不是重启。自动运行（选择用例、编辑）保留内部 1M 燃料的看门狗份额，让迷失的循环停驻，而不是冻住页面。"
 
 #: src/quick-start/playground.md:30
 msgid "No silent fallback"
@@ -17762,16 +17764,18 @@ msgstr "燃料"
 
 #: src/reference/resource-limits.md:32
 msgid ""
-"One unit per executed op; `fuel` counts **down**. The counter is checked "
-"every `interrupt_every` ops (default `1024`) and at loop back-edges."
-msgstr "每执行一个操作计一个单位；`fuel` 向**下**计数。计数器每 `interrupt_every` 个操作（默认 `1024`）检查一次，也在循环回边检查。"
+"One unit per executed op; `fuel` counts **down**. The counter is decremented "
+"and checked on **every** op — `interrupt_every` meters the separate "
+"interrupt lane, not fuel."
+msgstr "每执行一个操作计一个单位；`fuel` 向**下**计数。计数器在**每个**操作上递减并检查——`interrupt_every` 计量的是独立的中断链路，不是燃料。"
 
 #: src/reference/resource-limits.md:35
 msgid ""
 "`Trap::OutOfFuel` parks the frame exactly like any resumable stop: nothing "
 "is unwound. Resumption is `vm.add_fuel(n)` then `vm.resume()` — the frame "
-"_is_ the loop state."
-msgstr "`Trap::OutOfFuel` 像任何可恢复停止一样停放帧：没有任何东西被展开。恢复是 `vm.add_fuel(n)` 然后 `vm.resume()` —— 帧 _就是_ 循环状态。"
+"_is_ the loop state. Fuel is chosen at construction: `add_fuel` is a no-op "
+"on an unbounded machine, and there is no `set_fuel` twin — by design."
+msgstr "`Trap::OutOfFuel` 像任何可恢复停止一样停放帧：没有任何东西被展开。恢复是 `vm.add_fuel(n)` 然后 `vm.resume()` —— 帧 _就是_ 循环状态。燃料在构造时选定：`add_fuel` 在无界机器上是空操作，也没有 `set_fuel` 这样的孪生方法——有意为之。"
 
 #: src/reference/resource-limits.md:38
 msgid ""
@@ -26996,11 +27000,12 @@ msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "
 "dump, and an optional binary; `run(binary, budget)` returning output lines, "
-"an optional trap, and used fuel/heap — with every run bounded (default 10M "
-"fuel / 4 MiB heap) so unbounded loops trap and resume instead of hanging the "
-"page. The served artifact is deployed at "
-"<https://playground.rut.hpp2334.com>."
-msgstr "`demo/` 是架在 wasm 构建之上的一个 React + rspack + TypeScript 页面。wasm ABI 是两次调用——`compile(src)` 返回诊断、AST 转储、IR 转储和可选的二进制；`run(binary, budget)` 返回输出行、可选的陷阱和已用的燃料/堆——每次运行都有界（默认 10M 燃料 / 4 MiB 堆），因此无界循环会触发陷阱并可恢复，而不是挂死页面。服务的产物部署在 <https://playground.rut.hpp2334.com>。"
+"an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the "
+"ABI's uncapped encoding) and opts in through the page's fuel box; the heap "
+"defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so "
+"unbounded loops park and resume instead of hanging the page. The served "
+"artifact is deployed at <https://playground.rut.hpp2334.com>."
+msgstr "`demo/` 是架在 wasm 构建之上的一个 React + rspack + TypeScript 页面。wasm ABI 是两次调用——`compile(src)` 返回诊断、AST 转储、IR 转储和可选的二进制；`run(binary, budget)` 返回输出行、可选的陷阱和已用的燃料/堆。燃料默认关闭（燃料 0 是 ABI 的无上限编码），通过页面的燃料框显式开启；堆默认 4 MiB，自动运行保留内部 1M 燃料的看门狗，让无界循环停驻并可恢复，而不是挂死页面。服务的产物部署在 <https://playground.rut.hpp2334.com>。"
 
 #: src/reference/dependency-kinds.md:3
 msgid ""
@@ -27511,9 +27516,10 @@ msgstr "`--fuel N`"
 
 #: src/reference/cli.md:31
 msgid ""
-"cap the op budget per turn. Without the flag the run is uncapped; an "
-"unparsable value falls back to `10_000_000`"
-msgstr "为每轮操作预算设上限。不带该旗标时运行不设上限；无法解析的值回退到 `10_000_000`"
+"cap the op budget per turn. Fuel is opt-in: without the flag the run is "
+"uncapped; a missing or unparsable value is a loud error (exit 2) — no silent "
+"default"
+msgstr "为每轮操作预算设上限。燃料需显式开启：不带该旗标时运行不设上限；缺少或无法解析的值是响亮的错误（退出码 2）——没有静默默认值"
 
 #: src/reference/cli.md:32
 msgid "fixed at 64 MiB"

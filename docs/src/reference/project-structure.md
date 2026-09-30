@@ -146,7 +146,9 @@ non-`core` set wholesale ([Embedding and native modules](embedding.md)).
 `demo/` is a React + rspack + TypeScript page over the wasm build. The
 wasm ABI is two calls — `compile(src)` returning diagnostics, an AST
 dump, an IR dump, and an optional binary; `run(binary, budget)`
-returning output lines, an optional trap, and used fuel/heap — with
-every run bounded (default 10M fuel / 4 MiB heap) so unbounded loops
-trap and resume instead of hanging the page. The served artifact is
-deployed at <https://playground.rut.hpp2334.com>.
+returning output lines, an optional trap, and used fuel/heap. Fuel is
+off by default (fuel 0 is the ABI's uncapped encoding) and opts in
+through the page's fuel box; the heap defaults to 4 MiB, and auto-runs
+keep an internal 1M fuel watchdog so unbounded loops park and resume
+instead of hanging the page. The served artifact is deployed at
+<https://playground.rut.hpp2334.com>.

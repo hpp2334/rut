@@ -101,8 +101,7 @@ to?") rather than whole-program runs. The playground's **AST** and
 
 ## Budget it
 
-Every `rut run` is fuel-metered. Cap it with `--fuel N` (default
-10,000,000):
+Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:
 
 ```sh
 rut run hello.rut --fuel 1000

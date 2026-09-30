@@ -750,11 +750,10 @@ msgid "Budget it"
 msgstr ""
 
 #: src/quick-start/first-program.md:104
-msgid ""
-"Every `rut run` is fuel-metered. Cap it with `--fuel N` (default 10,000,000):"
+msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr ""
 
-#: src/quick-start/first-program.md:111
+#: src/quick-start/first-program.md:110
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — "
 "the same contract the VM enforces for embedded hosts, along with heap "
@@ -762,23 +761,23 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:116
+#: src/quick-start/first-program.md:115
 msgid "Where next"
 msgstr ""
 
-#: src/quick-start/first-program.md:118
+#: src/quick-start/first-program.md:117
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
 msgstr ""
 
-#: src/quick-start/first-program.md:120
+#: src/quick-start/first-program.md:119
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
 msgstr ""
 
-#: src/quick-start/first-program.md:122
+#: src/quick-start/first-program.md:121
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
@@ -820,18 +819,21 @@ msgstr ""
 
 #: src/quick-start/playground.md:23
 msgid ""
-"**Budget control** — each run executes under an explicit fuel + heap budget "
-"(default 10,000,000 fuel / 4 MiB heap). A budget that bites is a feature, "
-"not a bug: one prepared case parks on the out-of-fuel trap on purpose, and "
-"the Resume control adds fuel and continues the _same_ frame — that is "
-"structured-concurrency-grade resumption, not a restart."
+"**Budget control** — fuel is **off by default**: an explicit ▶ Run is "
+"uncapped, and a non-terminating program freezes the tab — that is what "
+"uncapped means. The checkbox arms the fuel box (seeded at 10,000,000; heap "
+"defaults to 4 MiB): a run that exhausts its fuel parks on the out-of-fuel "
+"trap, and the Resume control adds fuel and continues the _same_ frame — "
+"structured-concurrency-grade resumption, not a restart. Auto-runs (case "
+"selection, edits) keep an internal 1M watchdog slice so a stray loop parks "
+"instead of freezing the page."
 msgstr ""
 
-#: src/quick-start/playground.md:30
+#: src/quick-start/playground.md:33
 msgid "No silent fallback"
 msgstr ""
 
-#: src/quick-start/playground.md:32
+#: src/quick-start/playground.md:35
 msgid ""
 "The page probes the wasm artifact at boot. If the engine or the "
 "syntax-highlighting module is missing or invalid, you get a full-page error "
@@ -841,35 +843,35 @@ msgid ""
 "playground."
 msgstr ""
 
-#: src/quick-start/playground.md:39
+#: src/quick-start/playground.md:42
 msgid "Running it locally"
 msgstr ""
 
-#: src/quick-start/playground.md:44
+#: src/quick-start/playground.md:47
 msgid "# builds rut.wasm + rut-lsp.wasm, copies to public/\n"
 msgstr ""
 
-#: src/quick-start/playground.md:45
+#: src/quick-start/playground.md:48
 msgid "# http://localhost:8080 with live reload\n"
 msgstr ""
 
-#: src/quick-start/playground.md:48
+#: src/quick-start/playground.md:51
 msgid "Other lanes:"
 msgstr ""
 
-#: src/quick-start/playground.md:51
+#: src/quick-start/playground.md:54
 msgid "# static build into dist/\n"
 msgstr ""
 
-#: src/quick-start/playground.md:52
+#: src/quick-start/playground.md:55
 msgid "# headless gate: every case really runs\n"
 msgstr ""
 
-#: src/quick-start/playground.md:53
+#: src/quick-start/playground.md:56
 msgid "# dev server + a throwaway public https URL for demos\n"
 msgstr ""
 
-#: src/quick-start/playground.md:56
+#: src/quick-start/playground.md:59
 msgid ""
 "The corpus itself is documented in [the playground "
 "corpus](../examples/playground-corpus.md), with the bigger end-to-end "
@@ -5721,7 +5723,7 @@ msgid "The VM owns the queues; the embedder owns the loop:"
 msgstr ""
 
 #: src/core-concepts/async-model.md:107 src/core-concepts/host-boundary.md:30
-#: src/reference/vm-heap.md:98 src/reference/resource-limits.md:58
+#: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
 #: src/reference/host-futures.md:111
 msgid "\"main\""
 msgstr ""
@@ -14709,173 +14711,175 @@ msgstr ""
 
 #: src/reference/resource-limits.md:32
 msgid ""
-"One unit per executed op; `fuel` counts **down**. The counter is checked "
-"every `interrupt_every` ops (default `1024`) and at loop back-edges."
+"One unit per executed op; `fuel` counts **down**. The counter is decremented "
+"and checked on **every** op — `interrupt_every` meters the separate "
+"interrupt lane, not fuel."
 msgstr ""
 
 #: src/reference/resource-limits.md:35
 msgid ""
 "`Trap::OutOfFuel` parks the frame exactly like any resumable stop: nothing "
 "is unwound. Resumption is `vm.add_fuel(n)` then `vm.resume()` — the frame "
-"_is_ the loop state."
+"_is_ the loop state. Fuel is chosen at construction: `add_fuel` is a no-op "
+"on an unbounded machine, and there is no `set_fuel` twin — by design."
 msgstr ""
 
-#: src/reference/resource-limits.md:38
+#: src/reference/resource-limits.md:40
 msgid ""
 "Fuel is the **deterministic** budget: the same program with the same fuel "
 "dies at the same op, every run — reproducible reports and hang proofs in "
 "tests."
 msgstr ""
 
-#: src/reference/resource-limits.md:41
+#: src/reference/resource-limits.md:43
 msgid ""
 "**Native fns run outside fuel.** A hanging native is a host bug: keep native "
 "bodies non-blocking, or push blocking work to a thread through the "
 "host-futures lane ([the host futures bridge](host-futures.md))."
 msgstr ""
 
-#: src/reference/resource-limits.md:45
+#: src/reference/resource-limits.md:47
 msgid "The trap contract"
 msgstr ""
 
-#: src/reference/resource-limits.md:47
+#: src/reference/resource-limits.md:49
 msgid "Trap"
 msgstr ""
 
-#: src/reference/resource-limits.md:47
+#: src/reference/resource-limits.md:49
 msgid "Raised by"
 msgstr ""
 
-#: src/reference/resource-limits.md:47
+#: src/reference/resource-limits.md:49
 msgid "Frame state"
 msgstr ""
 
-#: src/reference/resource-limits.md:47
+#: src/reference/resource-limits.md:49
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:49 src/reference/embedding.md:147
+#: src/reference/resource-limits.md:51 src/reference/embedding.md:147
 msgid "`OutOfMemory`"
 msgstr ""
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:51
 msgid "heap budget exceeded at an allocation check"
 msgstr ""
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:51
 msgid "parked before the write"
 msgstr ""
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:51
 msgid "raise limit / free refs → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:50 src/reference/embedding.md:146
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:146
 msgid "`OutOfFuel`"
 msgstr ""
 
-#: src/reference/resource-limits.md:50
+#: src/reference/resource-limits.md:52
 msgid "fuel reached 0 at a check point"
 msgstr ""
 
-#: src/reference/resource-limits.md:50
+#: src/reference/resource-limits.md:52
 msgid "parked at the exact `pc`"
 msgstr ""
 
-#: src/reference/resource-limits.md:50
+#: src/reference/resource-limits.md:52
 msgid "`add_fuel(n)` → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:59
+#: src/reference/resource-limits.md:61
 msgid "\"OutOfFuel\""
 msgstr ""
 
-#: src/reference/resource-limits.md:61
+#: src/reference/resource-limits.md:63
 msgid "// re-enters at the parked pc\n"
 msgstr ""
 
-#: src/reference/resource-limits.md:67
+#: src/reference/resource-limits.md:69
 msgid ""
 "The async layer's resume granularity is the **checkpoint**, not the op: a "
 "drive that runs out of fuel parks the future's frame, and a re-drive "
 "re-enters at the frame's checkpoint state ([async and await](async.md))."
 msgstr ""
 
-#: src/reference/resource-limits.md:72
+#: src/reference/resource-limits.md:74
 msgid "Hang detection"
 msgstr ""
 
-#: src/reference/resource-limits.md:74
+#: src/reference/resource-limits.md:76
 msgid "The host owns time; the recipes differ by embedder:"
 msgstr ""
 
-#: src/reference/resource-limits.md:76
+#: src/reference/resource-limits.md:78
 msgid "Host"
 msgstr ""
 
-#: src/reference/resource-limits.md:76
+#: src/reference/resource-limits.md:78
 msgid "Recipe"
 msgstr ""
 
-#: src/reference/resource-limits.md:78
+#: src/reference/resource-limits.md:80
 msgid "UI / game"
 msgstr ""
 
-#: src/reference/resource-limits.md:78
+#: src/reference/resource-limits.md:80
 msgid ""
 "drain the ready queue inside the frame loop; grant fuel per frame so a "
 "runaway script starves at the next check"
 msgstr ""
 
-#: src/reference/resource-limits.md:79
+#: src/reference/resource-limits.md:81
 msgid "wasm page"
 msgstr ""
 
-#: src/reference/resource-limits.md:79
+#: src/reference/resource-limits.md:81
 msgid ""
 "grant finite fuel; a watchdog stops refueling — the parked frame dies at its "
 "next check"
 msgstr ""
 
-#: src/reference/resource-limits.md:80
+#: src/reference/resource-limits.md:82
 msgid "desktop service"
 msgstr ""
 
-#: src/reference/resource-limits.md:80
+#: src/reference/resource-limits.md:82
 msgid ""
 "a watchdog thread flips a flag the host honors between `resume()` calls; no "
 "joins, no signals"
 msgstr ""
 
-#: src/reference/resource-limits.md:81
+#: src/reference/resource-limits.md:83
 msgid "tests"
 msgstr ""
 
-#: src/reference/resource-limits.md:81
+#: src/reference/resource-limits.md:83
 msgid ""
 "finite fuel + the virtual clock (`vm.set_now`) → fully deterministic hang "
 "proofs"
 msgstr ""
 
-#: src/reference/resource-limits.md:83
+#: src/reference/resource-limits.md:85
 msgid ""
 "Anything blocking that cannot be bounded by fuel (IO, locks) belongs on a "
 "worker thread answering a `Completer` — the VM thread never blocks on it "
 "([the host futures bridge](host-futures.md))."
 msgstr ""
 
-#: src/reference/resource-limits.md:87
+#: src/reference/resource-limits.md:89
 msgid "Workers"
 msgstr ""
 
-#: src/reference/resource-limits.md:89
+#: src/reference/resource-limits.md:91
 msgid ""
 "A worker VM is constructed with **its own `Limits`**; argument transfers are "
 "counted against the _child_ budget before the worker starts, so a worker "
 "cannot OOM its parent ([workers and channels](workers-and-channels.md))."
 msgstr ""
 
-#: src/reference/resource-limits.md:94
+#: src/reference/resource-limits.md:96
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future "
 "cannot starve the rest of a queue drain indefinitely — each frame runs to "
@@ -23520,10 +23524,11 @@ msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "
 "dump, and an optional binary; `run(binary, budget)` returning output lines, "
-"an optional trap, and used fuel/heap — with every run bounded (default 10M "
-"fuel / 4 MiB heap) so unbounded loops trap and resume instead of hanging the "
-"page. The served artifact is deployed at "
-"<https://playground.rut.hpp2334.com>."
+"an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the "
+"ABI's uncapped encoding) and opts in through the page's fuel box; the heap "
+"defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so "
+"unbounded loops park and resume instead of hanging the page. The served "
+"artifact is deployed at <https://playground.rut.hpp2334.com>."
 msgstr ""
 
 #: src/reference/dependency-kinds.md:3
@@ -24010,8 +24015,9 @@ msgstr ""
 
 #: src/reference/cli.md:31
 msgid ""
-"cap the op budget per turn. Without the flag the run is uncapped; an "
-"unparsable value falls back to `10_000_000`"
+"cap the op budget per turn. Fuel is opt-in: without the flag the run is "
+"uncapped; a missing or unparsable value is a loud error (exit 2) — no silent "
+"default"
 msgstr ""
 
 #: src/reference/cli.md:32

@@ -30,11 +30,13 @@ refunded (v1 overcounts rather than undercounts).
 ## Fuel
 
 - One unit per executed op; `fuel` counts **down**. The counter is
-  checked every `interrupt_every` ops (default `1024`) and at loop
-  back-edges.
+  decremented and checked on **every** op — `interrupt_every` meters
+  the separate interrupt lane, not fuel.
 - `Trap::OutOfFuel` parks the frame exactly like any resumable stop:
   nothing is unwound. Resumption is `vm.add_fuel(n)` then
-  `vm.resume()` — the frame *is* the loop state.
+  `vm.resume()` — the frame *is* the loop state. Fuel is chosen at
+  construction: `add_fuel` is a no-op on an unbounded machine, and
+  there is no `set_fuel` twin — by design.
 - Fuel is the **deterministic** budget: the same program with the same
   fuel dies at the same op, every run — reproducible reports and hang
   proofs in tests.

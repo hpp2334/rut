@@ -12,7 +12,24 @@ fn main() {
                 eprintln!("run: missing <file.rut | dir | mod.rutbundle>");
                 std::process::exit(2);
             };
-            let fuel: Option<u64> = arg_flag(&args, "--fuel").map(|v| v.parse().unwrap_or(10_000_000));
+            // fuel is opt-in and LOUD: absent → uncapped; a missing or
+            // unparsable value is a usage error — no silent default
+            let fuel: Option<u64> = match args.iter().position(|a| a == "--fuel") {
+                None => None,
+                Some(i) => match args.get(i + 1) {
+                    Some(v) => match v.parse() {
+                        Ok(n) => Some(n),
+                        Err(_) => {
+                            eprintln!("run: --fuel needs a number of ops (got `{v}`)");
+                            std::process::exit(2);
+                        }
+                    },
+                    None => {
+                        eprintln!("run: --fuel needs a number of ops (got nothing)");
+                        std::process::exit(2);
+                    }
+                },
+            };
             run(path, fuel);
         }
         "fmt" => {

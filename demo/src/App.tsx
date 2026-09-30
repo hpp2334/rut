@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CASES, DEFAULT_BUDGET, type RutCase } from "./cases";
+import { CASES, DEFAULT_BUDGET, ENABLED_FUEL_DEFAULT, type RutCase } from "./cases";
 import { EXAMPLES } from "./examples";
 import { BUILD_WASM_COMMAND, Runner } from "./runner";
 import { CaseList, type CaseGroup } from "./components/CaseList";
@@ -16,9 +16,12 @@ const EMPTY_PANES: PaneData = { output: [], irDump: "" };
  * auto-run. 120 ms: the analyze is 0.1 ms at case sizes, the budget is
  * all human patience; the number is the catch-up record, not a gate. */
 const ANALYZE_DEBOUNCE_MS = 120;
-/** the D-1 fuel stance: auto-runs (case switch + edit lane) execute at
- * a reduced budget so a stray long loop cannot eat the page; the fuel
- * box and the Run button keep the user's full budget untouched. */
+/** the D-1 auto-run stance: case switches and the edit lane run at the
+ * host's explicit WATCHDOG slice — the mechanism default is OFF, but
+ * `rut_run` is a synchronous main-thread wasm call, so an uncapped
+ * auto-run on a stray long loop is a hard tab freeze. This slice is
+ * the host's deliberate self-protection, NOT a user-facing default:
+ * the user's own ▶ Run is uncapped unless they enable the fuel box. */
 const AUTO_FUEL = 1_000_000;
 
 /** the full-page boot-error panel — THE RUNNER LAW (survey D1):
@@ -84,7 +87,14 @@ export function App(): JSX.Element {
   const [currentCase, setCurrentCase] = useState<RutCase>(CASES[0]);
   const [source, setSource] = useState(CASES[0].source);
   const [panes, setPanes] = useState<PaneData>(EMPTY_PANES);
-  const [budget, setBudget] = useState(DEFAULT_BUDGET);
+  // fuel is OFF by default: the box budget below is the REMEMBERED
+  // enabled budget (seeded on first enable); the runner only receives
+  // it when fuelEnabled is true — otherwise runs are uncapped (fuel 0)
+  const [fuelEnabled, setFuelEnabled] = useState(false);
+  const [budget, setBudget] = useState({
+    ...DEFAULT_BUDGET,
+    fuel: ENABLED_FUEL_DEFAULT,
+  });
   const [fuelUsed, setFuelUsed] = useState(0);
   const [heapUsed, setHeapUsed] = useState(0);
   const [parked, setParked] = useState(false);
@@ -203,10 +213,11 @@ export function App(): JSX.Element {
     [runner, budget, applyRun, applyCompileFailure],
   );
 
-  /** ▶ Run: the user's FULL box budget — auto-runs never touch it */
+  /** ▶ Run: uncapped (fuel 0) unless the user enabled the fuel box —
+   * auto-runs never touch this lane */
   const run = useCallback(() => {
-    executeRun(sourceRef.current, budget.fuel);
-  }, [executeRun, budget]);
+    executeRun(sourceRef.current, fuelEnabled ? budget.fuel : 0);
+  }, [executeRun, budget, fuelEnabled]);
 
   /** the D-1 auto-run: parked frames are DROPPED first (a Resume
    * pointing at a frame from a different source is a correctness trap —
@@ -358,6 +369,8 @@ export function App(): JSX.Element {
         running={running}
         budget={budget}
         onBudgetChange={setBudget}
+        fuelEnabled={fuelEnabled}
+        onFuelEnabledChange={setFuelEnabled}
         onRun={run}
         onResume={resume}
         canResume={parked && panes.trap === "OutOfFuel"}

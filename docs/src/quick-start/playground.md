@@ -20,12 +20,15 @@ static page. It is deployed at
   output plus the two compile views: the parsed AST and the typed IR
   the compiler lowers to. `rut dump <file>` prints the same structures
   from the CLI.
-- **Budget control** — each run executes under an explicit fuel + heap
-  budget (default 10,000,000 fuel / 4 MiB heap). A budget that bites is
-  a feature, not a bug: one prepared case parks on the out-of-fuel trap
-  on purpose, and the Resume control adds fuel and continues the *same*
-  frame — that is structured-concurrency-grade resumption, not a
-  restart.
+- **Budget control** — fuel is **off by default**: an explicit ▶ Run is
+  uncapped, and a non-terminating program freezes the tab — that is
+  what uncapped means. The checkbox arms the fuel box (seeded at
+  10,000,000; heap defaults to 4 MiB): a run that exhausts its fuel
+  parks on the out-of-fuel trap, and the Resume control adds fuel and
+  continues the *same* frame — structured-concurrency-grade
+  resumption, not a restart. Auto-runs (case selection, edits) keep an
+  internal 1M watchdog slice so a stray loop parks instead of freezing
+  the page.
 
 ## No silent fallback
 

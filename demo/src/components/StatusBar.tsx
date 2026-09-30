@@ -5,6 +5,8 @@ export const StatusBar = memo(function StatusBar(props: {
   running: boolean;
   budget: Budget;
   onBudgetChange: (b: Budget) => void;
+  fuelEnabled: boolean;
+  onFuelEnabledChange: (on: boolean) => void;
   onRun: () => void;
   onResume: () => void;
   canResume: boolean;
@@ -25,12 +27,20 @@ export const StatusBar = memo(function StatusBar(props: {
         ↻ Resume (+10M fuel)
       </button>
 
+      {/* fuel is opt-in: the checkbox arms the remembered budget; while
+          off, runs are uncapped and the number sits greyed */}
       <label className="budget">
+        <input
+          type="checkbox"
+          checked={props.fuelEnabled}
+          onChange={(e) => props.onFuelEnabledChange(e.target.checked)}
+        />
         fuel
         <input
           type="number"
           min={1}
           step={1_000_000}
+          disabled={!props.fuelEnabled}
           value={props.budget.fuel}
           onChange={(e) =>
             props.onBudgetChange({

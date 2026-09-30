@@ -126,7 +126,8 @@ export interface CompileResult {
 }
 
 export interface Budget {
-  /** ops the run may execute */
+  /** ops the run may execute; 0 = uncapped (fuel disabled — the
+   * mechanism default) */
   fuel: number;
   /** bytes the self-managed heap may carve */
   heapBytes: number;

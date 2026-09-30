@@ -66,8 +66,11 @@ acceptance):
   runs the block in-browser on the rut wasm engine. The artifact is
   built from `crates/rut-wasm` (`cargo build -p rut-wasm --target
   wasm32-unknown-unknown --release`) and must land at
-  `docs/wasm/rut.wasm`; budgets mirror the playground's
-  DEFAULT_BUDGET (10,000,000 fuel / 4 MiB heap).
+  `docs/wasm/rut.wasm`; the heap mirrors the default (4 MiB), while
+  the book host EXPLICITLY opts into 10M fuel — the mechanism default
+  is OFF (engine `Limits::default()` is uncapped) and the
+  playground's user-facing default is OFF too (opt-in via the fuel
+  box; `DEFAULT_BUDGET.fuel = 0` is the ABI's uncapped encoding).
 - `docs/wasm/` is gitignored build output (like `docs/book/`) — never
   commit the artifact; the `--book` deploy lane builds and copies it
   into the rendered book (mdbook 0.5 dropped

@@ -340,13 +340,14 @@ export const CASES: RutCase[] = [
   {
     id: "fuel-demo",
     name: "fuel demo (infinite loop)",
-    // the honest trap-at-default story: at the DEFAULT budget
-    // (10M fuel / 4 MiB) the lesson IS the trap — ~10 ops per
-    // iteration means zero tick lines fit before the budget bites,
-    // and the pane renders `Trap::<name>` last. At a raised budget
-    // (or after Resume, which accumulates) the SAME frame simply
-    // runs on and the ticks start appearing.
-    blurb: "budgets bite at the default: ~10 ops/iteration parks on Trap::OutOfFuel with zero ticks — Resume adds fuel and the SAME frame continues",
+    // the opt-in fuel story: fuel is OFF by default — ▶ Run on this
+    // source uncapped is an infinite loop that freezes the tab. Enable
+    // the fuel box and the run parks on Trap::OutOfFuel (~10 ops per
+    // iteration, so zero tick lines fit before 10M bites); Resume
+    // re-fuels the SAME frame and the ticks continue. Selecting the
+    // case parks at the auto-run watchdog's 1M slice — the lesson
+    // without the freeze.
+    blurb: "fuel is opt-in: enable the fuel box and this loop parks on Trap::OutOfFuel — Resume adds fuel and the SAME frame continues (▶ Run with fuel off is uncapped: do not run this source that way)",
     source: [
       "use ink::{Logger};",
       "",
@@ -364,4 +365,11 @@ export const CASES: RutCase[] = [
   },
 ];
 
-export const DEFAULT_BUDGET = { fuel: 10_000_000, heapBytes: 4 * 1024 * 1024 };
+/** the shipped default budget: fuel 0 is the ABI's uncapped encoding —
+ * the mechanism is OFF unless a host opts in (the user-facing opt-in is
+ * the fuel box, seeded with ENABLED_FUEL_DEFAULT on first enable). */
+export const DEFAULT_BUDGET = { fuel: 0, heapBytes: 4 * 1024 * 1024 };
+
+/** the fuel box's seed the first time the user enables fuel — the
+ * host's remembered enabled budget, not a default the run receives. */
+export const ENABLED_FUEL_DEFAULT = 10_000_000;

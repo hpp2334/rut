@@ -28,7 +28,7 @@ Flags and defaults:
 
 | item | behavior |
 |---|---|
-| `--fuel N` | cap the op budget per turn. Without the flag the run is uncapped; an unparsable value falls back to `10_000_000` |
+| `--fuel N` | cap the op budget per turn. Fuel is opt-in: without the flag the run is uncapped; a missing or unparsable value is a loud error (exit 2) — no silent default |
 | heap limit | fixed at 64 MiB |
 | interrupt check | every 1024 ops |
 

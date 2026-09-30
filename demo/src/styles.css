@@ -539,6 +539,19 @@ button {
   font: 12px var(--mono);
 }
 
+/* the fuel opt-in checkbox is not a number field */
+.budget input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.budget input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .stat {
   margin-left: auto;
   color: var(--fg-dim);
