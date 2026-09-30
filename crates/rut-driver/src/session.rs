@@ -383,12 +383,25 @@ impl Session {
         self.bundle_scopes.get(&scope).map(String::as_str)
     }
 
-    /// The spec a pack-time scope belonged to, OWNED — the ledger
-    /// merge's read-back: a second archive whose ledger row collides
-    /// with a DIFFERENT spec is refused at the mount door (corrupt or
-    /// doctored closure), never silently overwritten.
-    pub fn bundle_scope_row(&self, scope: rut_core::id::ScopeId) -> Option<String> {
-        self.bundle_scopes.get(&scope).cloned()
+    /// The first free scope number above every recorded ledger row — a
+    /// freshly mounted archive's namespace base (`None` when the
+    /// numbering space is exhausted). Boot owns 0 and passes through
+    /// every map; each archive's rows shift above everything recorded
+    /// so far, so two independently packed bundles can share one
+    /// session without their pack-time numberings ever arguing.
+    pub fn bundle_scope_next_base(&self) -> Option<rut_core::id::ScopeId> {
+        let max = self
+            .bundle_scopes
+            .keys()
+            .copied()
+            .max()
+            .unwrap_or(rut_core::id::BOOT_SCOPE);
+        let next = max.checked_add(1)?;
+        if next as u32 > rut_core::id::MAX_SCOPE {
+            None
+        } else {
+            Some(next)
+        }
     }
 
     /// Record where one archive's mounted pkgs live: every

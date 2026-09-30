@@ -169,6 +169,29 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     for im in &s.impls {
         id(im.target);
     }
+    for ih in &s.inherents {
+        id(ih.target);
+        for m in &ih.methods {
+            for &p in &m.params {
+                id(p);
+            }
+            id(m.ret);
+        }
+    }
+    for t in &s.traits {
+        for m in &t.methods {
+            for &p in &m.params {
+                id(p);
+            }
+            id(m.ret);
+        }
+    }
+    for g in &s.fn_generics {
+        for &a in &g.args {
+            id(a);
+        }
+        id(g.ret);
+    }
     for (t, _, _) in &s.native_impls {
         id(*t);
     }
@@ -323,11 +346,16 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
     for t in s.types.iter_mut() {
         t.kind = remap_kind(&t.kind, &rb_t, &nm, &tm);
     }
+    // the bookkeeping REBUILDS from the (remapped) blocks: clear any
+    // rows an earlier rebase left behind first — a program can rebase
+    // twice (a mount-time namespace shift, then the graph's load-time
+    // map), and a stale row above the final blocks would change the
+    // encoded shape without changing a single id
+    prog.types.scope_base.clear();
     for &(scope, off) in &s.scope_blocks {
         let mapped = if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) };
         set_scope_base(&mut prog.types, mapped, off);
-    }
-    // the surface's own block ids rewrite to the load-time scopes: a
+    }// the surface's own block ids rewrite to the load-time scopes: a
     // consumer registers the carried descriptors under THESE scopes and
     // binds exports at `(its dep scope, local)` — the halves must agree
     let remapped: Vec<(crate::id::ScopeId, u32)> = s
@@ -340,6 +368,34 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
     s.scope_blocks = remapped;
     for im in s.impls.iter_mut() {
         im.target = rb_t(im.target);
+    }
+    // the inherent rows rebase like the impl rows: targets and method
+    // signatures are scope-qualified ids — a decoded program's carried
+    // rows spell their PACK-time scopes, and an un-remapped target
+    // would densify against whatever program happens to own that
+    // number at load (the consumer's own block, most confusingly)
+    for ih in s.inherents.iter_mut() {
+        ih.target = rb_t(ih.target);
+        for m in ih.methods.iter_mut() {
+            m.params = m.params.iter().map(|&p| rb_t(p)).collect();
+            m.ret = rb_t(m.ret);
+        }
+    }
+    // trait decls and exported generic fns: same law — their carried
+    // signatures are scope-qualified ids the consumer's table must
+    // densify through THIS program's load-time scopes
+    for t in s.traits.iter_mut() {
+        for m in t.methods.iter_mut() {
+            m.params = m.params.iter().map(|&p| rb_t(p)).collect();
+            m.ret = rb_t(m.ret);
+        }
+    }
+    for g in s.fn_generics.iter_mut() {
+        g.args = g.args.iter().map(|&a| rb_t(a)).collect();
+        g.ret = rb_t(g.ret);
+    }
+    for t in s.type_exports.iter_mut() {
+        t.scope = t.scope.map(&map);
     }
     for (t, _, _) in s.native_impls.iter_mut() {
         *t = rb_t(*t);

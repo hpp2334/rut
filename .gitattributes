@@ -1,0 +1,4 @@
+# Binary delivery artifacts: jsDelivr serves these as repo files at a
+# tag — the artifact IS the delivery (unlike docs/wasm/, build output).
+# Never pollute diffs with the bytes; pack-std --check gates freshness.
+*.rutbundle -diff

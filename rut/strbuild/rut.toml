@@ -14,6 +14,8 @@
 # methods cross on the surface's inherent rows, so `b.append(...)`
 # binds in every consumer from this pkg's binary — the ordinary call
 # boundary, no source ever crossing.
+format = "rutbundle"
+format_version = 5
 name = "strbuild"
 entry.lib = "./strbuild.rut"
 

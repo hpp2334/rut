@@ -13,6 +13,8 @@
 #   diagnoses), not re-launchable (the argument type mismatches —
 #   ruling 6's compile-time law), one member: `abort`.
 
+format = "rutbundle"
+format_version = 5
 name = "async_host"
 entry.lib = "./async_host.rut"
 

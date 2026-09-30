@@ -469,13 +469,16 @@ fn mixed_dir_and_archive_peer_gate() {
 }
 
 #[test]
-fn ledger_collision_refuses() {
-    // two independently packed bundles agree on the engine rows
-    // (core/calc) but flip the same scope number to different specs —
-    // the merge refuses: rebasing through a flipped row would misroute
-    // every id (corrupt or doctored closure)
+fn colliding_pack_numberings_namespace_per_archive() {
+    // two independently packed bundles whose ledgers assign the SAME
+    // scope number to DIFFERENT specs — the normal CDN case (every
+    // per-package bundle numbers its own closure) — share one session:
+    // each archive's rows shift into a fresh range and its binaries
+    // rebase with that map, so neither argues about a number. The
+    // consumer compiles over both, each dep resolving through its OWN
+    // archive's rows.
     let a = leaf_world("leda", "util_a", UTIL_BODY);
-    let b = leaf_world("ledb", "util_b", UTIL_BODY);
+    let b = leaf_world("ledb", "util_b", "pub fn thrice(v: i64) -> i64 {\n    return v * 3;\n}\n");
     let bytes_a = pack_dir(&a.join("util_a")).expect("pack a");
     let bytes_b = pack_dir(&b.join("util_b")).expect("pack b");
 
@@ -492,18 +495,24 @@ fn ledger_collision_refuses() {
     write(
         &app,
         "app.rut",
-        "use util_a::{twice};\nuse util_b::{twice};\n\nentry fn go() -> i64 {\n    return twice(1);\n}\n",
+        "use util_a::{twice};\nuse util_b::{thrice};\n\nentry fn go() -> i64 {\n    return twice(1) + thrice(2);\n}\n",
     );
 
     let mut table = BTreeMap::new();
     table.insert("https://fixtures.test/a.rutbundle".to_string(), bytes_a);
     table.insert("https://fixtures.test/b.rutbundle".to_string(), bytes_b);
-    let err = block_on(rut_driver::load_dir_session_with(&app, &Table(table))).unwrap_err();
+    let (session, root) = block_on(rut_driver::load_dir_session_with(&app, &Table(table)))
+        .expect("colliding numberings namespace per archive");
+    assert!(matches!(session.resolve("util_a").unwrap().body, ModuleBody::Compiled(_)));
+    assert!(matches!(session.resolve("util_b").unwrap().body, ModuleBody::Compiled(_)));
+    let units = rut_driver::compile_units(&session, &root);
     assert!(
-        err.contains("the scope ledger maps"),
-        "{err}"
+        units.diags.is_empty() && units.ok,
+        "{}",
+        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
     );
-    assert!(err.contains("corrupt or doctored"), "{err}");
+    // and the value semantics survive both rebases: 2*1 + 3*2 = 8
+    assert_eq!(run_entry::<i64>(session, &root, "go"), 8);
 }
 
 #[test]

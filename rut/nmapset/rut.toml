@@ -17,6 +17,8 @@
 # (stdlib slim-down — a user-defined key escape-hatches to a `bytes`
 # encoding, or vendors the old source from git history; the historical
 # `[deps] mapset` splice-collision note lives in nmapset.rut's header).
+format = "rutbundle"
+format_version = 5
 name = "nmapset"
 entry.lib = "./nmapset.rut"
 

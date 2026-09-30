@@ -283,6 +283,37 @@ pub fn load_dir_session_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> 
     Ok(LoadedDir { session, root, archives })
 }
 
+/// Namespace one archive's scope ledger into `session`'s numbering and
+/// answer the map that rebases the archive's programs with it — the
+/// CDN law: per-package bundles are packed INDEPENDENTLY, so their
+/// pack-time numberings argue; each archive's rows shift above
+/// everything already recorded (boot passes through) and its binaries
+/// rebase BEFORE mounting, so every id resolves through its OWN
+/// archive's rows. Fails only when the numbering space itself is
+/// exhausted (4096 scopes; boot owns 0).
+fn namescope_ledger(
+    session: &Session,
+    scopes: &[(rut_core::id::ScopeId, String)],
+) -> Result<impl Fn(rut_core::id::ScopeId) -> rut_core::id::ScopeId, String> {
+    let base = session
+        .bundle_scope_next_base()
+        .ok_or_else(|| "the bundle scope numbering space is exhausted".to_string())?;
+    for &(s, _) in scopes {
+        if s != rut_core::id::BOOT_SCOPE && base as u32 + s as u32 > rut_core::id::MAX_SCOPE {
+            return Err(format!(
+                "the bundle's scope ledger reaches scope {s}, which does not fit above this program's {base} — the numbering space is exhausted"
+            ));
+        }
+    }
+    Ok(move |s: rut_core::id::ScopeId| {
+        if s == rut_core::id::BOOT_SCOPE {
+            s
+        } else {
+            base + s
+        }
+    })
+}
+
 /// Build a package's entry [`Module`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
 /// in-archive counterpart of `load_entry_module`: the declared kind
@@ -397,11 +428,17 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         .clone()
         .ok_or_else(|| format!("{}: rut.toml has no `name`", origin.display()))?;
     let mut session = Session::new();
-    // the scope ledger first: the graph's compiled-mount arm resolves
-    // every decoded foreign id through it
+    // the scope ledger first, namespaced: the rows shift into a fresh
+    // range of this session and the root's program rebases with the
+    // same map BEFORE mounting — the graph later resolves every
+    // decoded foreign id through these rows
+    let remap = namescope_ledger(&session, &scopes)?;
+    let scopes: Vec<(rut_core::id::ScopeId, String)> =
+        scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
     for (scope, spec) in &scopes {
         session.record_bundle_scope(*scope, spec);
     }
+    let root = rut_core::link::rebase(root, &remap);
     // the root: a compiled module (the packer refuses any other root)
     session
         .register_module(
@@ -432,10 +469,16 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         }
         let module = match kind {
             GroupKind::Compiled(program) => {
+                // rebase first, THEN check own-vs-ledger — both sides
+                // of the comparison shift by the same map, so the law
+                // (the row must be the scope the binary itself
+                // carries) is unchanged, and the stored binary is the
+                // namespaced one
+                let program = rut_core::link::rebase(program.clone(), &remap);
                 // the ledger must name the group, and the row must be
                 // the scope the binary itself carries (refuse, never
                 // guess — a mismatch is a corrupt or doctored bundle)
-                let Some(own) = rut_core::link::own_scope(program) else {
+                let Some(own) = rut_core::link::own_scope(&program) else {
                     return Err(format!(
                         "{}: {prefix}/{}: the program carries no scope blocks",
                         origin.display(),
@@ -458,7 +501,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                     }
                 }
                 Module {
-                    body: ModuleBody::Compiled(program.clone()),
+                    body: ModuleBody::Compiled(program),
                     entry: dm.entry.clone(),
                     ..Default::default()
                 }
@@ -879,8 +922,11 @@ fn resolve_table(
 ///    decl root), every group decode + verified;
 /// 3. name-vs-key: the bundle's `name` must equal the `[deps]` key
 ///    (the path flavor's twin);
-/// 4. the scope-ledger MERGE: rows record; a row colliding with a
-///    DIFFERENT spec is a corrupt or doctored closure — refuse;
+/// 4. the scope-ledger NAMESPACING: this archive's rows shift into a
+///    fresh range of the combined session (boot passes through) and
+///    its compiled programs rebase with the same map BEFORE mounting —
+///    two independently packed bundles never argue about a number
+///    (each binary's ids resolve through its own archive's rows);
 /// 5. the root mounts (first-mount-wins) — compiled for a v5 bundle,
 ///    the decl-surface host rows for a v6 bundle
 ///    (`bundle_entry_module`, the group lane); `record_peers`;
@@ -957,19 +1003,18 @@ fn mount_url_dep(
             "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
         ));
     }
-    // gate 4 — the ledger merge: two archives share one session; a
-    // scope row that flips owners mid-merge would misroute every id
-    // rebased through it — corrupt or doctored, refuse
+    // gate 4 — the ledger namespacing: this archive's rows shift into a
+    // fresh range of the COMBINED session (boot passes through) and its
+    // compiled programs rebase with the same map before mounting — two
+    // archives never argue about a number, each binary's ids resolve
+    // through its OWN archive's rows
+    let remap = namescope_ledger(session, &scopes)?;
+    let scopes: Vec<(rut_core::id::ScopeId, String)> =
+        scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
     for (scope, row_spec) in &scopes {
-        if let Some(existing) = session.bundle_scope_row(*scope) {
-            if existing != *row_spec {
-                return Err(format!(
-                    "{url}: the scope ledger maps {scope} to `{row_spec}`, but this program already maps it to `{existing}` — the closure is corrupt or doctored"
-                ));
-            }
-        }
         session.record_bundle_scope(*scope, row_spec);
     }
+    let root = rut_core::link::rebase(root, &remap);
     // gate 5 — the root: a compiled module (the packer refuses any other)
     session
         .register_module(
@@ -1000,10 +1045,15 @@ fn mount_url_dep(
         }
         let module = match kind {
             GroupKind::Compiled(program) => {
+                // rebase first, THEN check own-vs-ledger — both sides
+                // shift by the same map, so the law (the row must be
+                // the scope the binary itself carries) is unchanged,
+                // and the stored binary is the namespaced one
+                let program = rut_core::link::rebase(program.clone(), &remap);
                 // the ledger must name the group, and the row must be
                 // the scope the binary itself carries (refuse, never
                 // guess — a mismatch is a corrupt or doctored bundle)
-                let Some(own) = rut_core::link::own_scope(program) else {
+                let Some(own) = rut_core::link::own_scope(&program) else {
                     return Err(format!(
                         "{url}: {prefix}/{}: the program carries no scope blocks",
                         name
@@ -1023,7 +1073,7 @@ fn mount_url_dep(
                     }
                 }
                 Module {
-                    body: ModuleBody::Compiled(program.clone()),
+                    body: ModuleBody::Compiled(program),
                     entry: dm.entry.clone(),
                     ..Default::default()
                 }
@@ -1109,6 +1159,113 @@ pub(crate) fn mount_dir_fetched(
     };
     resolve_deps(session, dir, &manifest, &mut visiting, &mut mounted, &mut fetched)?;
     Ok(name)
+}
+
+/// Mount a `.rutbundle`'s contents into an EXISTING session — the
+/// in-memory counterpart of [`mount_dir`] (the offer law): the
+/// embedder's world grows incrementally, so no peer gate runs here and
+/// no closure check either (presence is the program's own compile's
+/// business; `assemble_peers` answers for the recorded declarations).
+/// Returns the bundle root's package name; a name already mounted
+/// wins. Both root kinds mount: a v5 compiled root (plus its groups,
+/// first-mount-wins, the scope ledger namespaced into this session) or
+/// a v6 decl root (the host rows). No archive locations are recorded —
+/// a declarer whose peer-gate group files would need reading from the
+/// archive wants the load/pack lanes, which own an archive list. Wasm
+/// hosts mount `include_bytes!`-d CDN artifacts through this.
+pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String, String> {
+    // gate 1 — the container: every entry's CRC-32 verified
+    let bundle = Bundle::parse(bytes).map_err(|e| format!("bundle: {e}"))?;
+    // gate 2 — the layout: manifest, exact version, the kind's payloads
+    let layout = Layout::parse(&bundle).map_err(|e| format!("bundle: {e}"))?;
+    let entries = bundle.entries();
+    let (root_spec, module, groups, manifest) = match layout {
+        Layout::Compiled { manifest, root, scopes, groups } => {
+            let root_spec = manifest
+                .name
+                .clone()
+                .ok_or_else(|| "bundle: rut.toml has no `name`".to_string())?;
+            // the ledger, namespaced into THIS session's numbering, and
+            // the root rebased with the same map before mounting
+            let remap = namescope_ledger(session, &scopes)?;
+            let scopes: Vec<(rut_core::id::ScopeId, String)> =
+                scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
+            for (scope, spec) in &scopes {
+                session.record_bundle_scope(*scope, spec);
+            }
+            let root = rut_core::link::rebase(root, &remap);
+            let module = Module {
+                body: ModuleBody::Compiled(root),
+                entry: manifest.entry.clone(),
+                ..Default::default()
+            };
+            (root_spec, module, Some((scopes, groups, remap)), manifest)
+        }
+        Layout::Decl { manifest, .. } => {
+            let root_spec = manifest
+                .name
+                .clone()
+                .ok_or_else(|| "bundle: rut.toml has no `name`".to_string())?;
+            let module = bundle_entry_module(entries, "", &manifest)?;
+            (root_spec, module, None, manifest)
+        }
+    };
+    // first mount wins — the embedder's mount outranks the bundle
+    if session.resolve(&root_spec).is_ok() {
+        return Ok(root_spec);
+    }
+    session
+        .register_module(&root_spec, module)
+        .map_err(|e| e.to_string())?;
+    record_peers(session, &root_spec, &manifest);
+    if let Some((scopes, groups, remap)) = groups {
+        // the group loop — load_bundle_bytes' law, minus the archive
+        // recording (see the doc comment)
+        for (prefix, kind) in &groups {
+            let dep_toml = read_entry(entries, &format!("{prefix}/rut.toml"))
+                .map_err(|e| format!("bundle: {e}"))?;
+            let dm = parse_manifest(&dep_toml).map_err(|e| format!("bundle: {prefix}/rut.toml: {e}"))?;
+            let name = dm
+                .name
+                .clone()
+                .ok_or_else(|| format!("bundle: {prefix}/rut.toml has no `name`"))?;
+            if session.resolve(&name).is_ok() {
+                continue; // first mount wins
+            }
+            let module = match kind {
+                GroupKind::Compiled(program) => {
+                    let program = rut_core::link::rebase(program.clone(), &remap);
+                    let Some(own) = rut_core::link::own_scope(&program) else {
+                        return Err(format!("bundle: {prefix}/{name}: the program carries no scope blocks"));
+                    };
+                    match scopes.iter().find(|(_, s)| s == &name) {
+                        Some(&(row, _)) if row == own => {}
+                        Some(&(row, _)) => {
+                            return Err(format!(
+                                "bundle: `{name}`'s ledger row says scope {row}, but its binary carries {own}"
+                            ));
+                        }
+                        None => {
+                            return Err(format!(
+                                "bundle: the scope ledger does not name `{name}` — the bundle is incomplete"
+                            ));
+                        }
+                    }
+                    Module {
+                        body: ModuleBody::Compiled(program),
+                        entry: dm.entry.clone(),
+                        ..Default::default()
+                    }
+                }
+                GroupKind::Source => bundle_entry_module(entries, &format!("{prefix}/"), &dm)?,
+            };
+            session
+                .register_module(&name, module)
+                .map_err(|e| e.to_string())?;
+            record_peers(session, &name, &dm);
+        }
+    }
+    Ok(root_spec)
 }
 
 /// The peer gate for sessions built mount-by-mount: runs

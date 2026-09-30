@@ -6,6 +6,8 @@
 #
 # The registration scope IS the package name; the use path spells it
 # too (`use async_engine::{ __launch, __abort, __sleep }`).
+format = "rutbundle"
+format_version = 6
 name = "async_engine"
 type = "host"
 entry.type = "./engine.d.rut"

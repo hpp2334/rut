@@ -5,5 +5,7 @@
 # consumer's `Vec<i64>` instantiates + requests the bodies from this
 # pkg (owner-anchored generics) — ONE row program-wide, identity by
 # owner. No source ever crosses.
+format = "rutbundle"
+format_version = 5
 name = "pouch"
 entry.lib = "./pouch.rut"

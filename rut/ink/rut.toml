@@ -3,6 +3,8 @@
 # linkable-classes phase): the class's methods cross on the surface's
 # inherent rows, so `Logger.new(..)` and `logger.log(..)` bind in every
 # consumer from this pkg's binary — no source ever crosses.
+format = "rutbundle"
+format_version = 5
 name = "ink"
 entry.lib = "./ink.rut"
 
