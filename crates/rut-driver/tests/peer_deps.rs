@@ -1,4 +1,4 @@
-//! The dep-kinds loader land (RFC 0045, phase 1): the three manifest
+//! The dep-kinds loader land: the three manifest
 //! tables, the `optional` attribute, the `lib` group key, the four
 //! mount passes, and the D1/D3/D4 diagnostics — pinned by the hermetic
 //! fixture pkgs under `tests/data/peers/` (tiny self-owned
@@ -135,7 +135,7 @@ fn t3_both_peers_mount_in_name_order() {
 
 #[test]
 fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
-    // matrix row 3 — D2 (RFC 0045 §4): the consumer REFERENCES pouch
+    // matrix row 3 — D2: the consumer REFERENCES pouch
     // while pouch is absent; the miss is a declared optional peer of a
     // mounted pkg, so `resolve` answers with the DEDICATED diagnostic —
     // pkg + peer + the integration it unlocks + the fix — never the
@@ -152,7 +152,7 @@ fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
     let err = s.resolve("pouch").unwrap_err();
     assert_eq!(
         err.to_string(),
-        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]` (RFC 0045 §4)",
+        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]`",
         "the dedicated diag, exact survey text"
     );
     // the same text surfaces at the reference site through the graph
@@ -162,7 +162,7 @@ fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
             .iter()
             .any(|d| d.msg.contains("cannot resolve `pouch`")
                 && d.msg.contains("`json`'s pouch integration is not mounted")
-                && d.msg.contains("(RFC 0045 §4)")),
+                && d.msg.contains("")),
         "the reference must miss with D2: {:?}",
         g.diags
     );
@@ -192,7 +192,7 @@ fn t5_required_peer_missing_is_loud_d1() {
         err.contains("add `nmapset = { path = \"..\" }` to your `rut.toml` `[deps]`"),
         "{err}"
     );
-    assert!(err.contains("(RFC 0045 §3)"), "{err}");
+    assert!(err.contains(""), "{err}");
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn t7_broken_peer_path_is_loud_d3_at_self_build() {
         "{err}"
     );
     assert!(
-        err.contains("cannot read a manifest there (a packaging bug in json_broken; RFC 0045 §3)"),
+        err.contains("cannot read a manifest there (a packaging bug in json_broken)"),
         "{err}"
     );
 }
@@ -307,7 +307,7 @@ fn t11_d4_through_the_loader() {
     let err = load("bad_d4").unwrap_err();
     assert_eq!(
         err,
-        "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both (RFC 0045 §2)"
+        "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
     );
 }
 

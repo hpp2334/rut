@@ -1,17 +1,17 @@
-//! Sequence lowering (RFC 0012 v1.1): `s.len()`, `s[i]`, `s[i] = v`,
+//! Sequence lowering: `s.len()`, `s[i]`, `s[i] = v`,
 //! and `for (x of s)` lower to the fused element ops — there is no
 //! `Index` trait and no accessor inlining.
 //!
 //! Recognized sequences:
-//! - `Array<T>` — fused `arrget`/`arrlen`/`arrset` (RFC 0032 §1.1 R2).
+//! - `Array<T>` — fused `arrget`/`arrlen`/`arrset`.
 //! - `str` / `bytes` — the primitive cells (`strcodeat`/`strlen`,
 //!   `bytesget`/`byteslen`).
 //! - `Vec<T>` — builtin by shape: a record with a `buf: Array<T>` field
-//!   and a `len: i32` field (RFC 0028; the pouch class). `len`
+//!   and a `len: i32` field (the pouch class). `len`
 //!   reads the live-length field; element ops go through the `buf`
 //!   cell, so they alias the vector.
 //!
-//! Elements are ordinary slots (RFC 0044): a `[?T]` backing stores the
+//! Elements are ordinary slots: a `[?T]` backing stores the
 //! nullable handles directly — loads yield the `?T` (uses auto-deref),
 //! stores take the boxed handle the `T → ?T` coercion minted. There is
 //! no deref-on-load/box-on-store special case.
@@ -49,7 +49,7 @@ impl SliceInfo {
     }
 
     /// The backing array's own type: `[elem]` (a `?T` element stays a
-    /// first-class nullable element — RFC 0044).
+    /// first-class nullable element).
     pub(crate) fn array_ty(&self, ctx: &mut Ctx) -> TypeId {
         ctx.mk_array(self.elem)
     }
@@ -63,9 +63,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR }),
             TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
             TyKind::Data { fields } => {
-                // the Vec shape (RFC 0012 v1.1): a `buf` field holding the
+                // the Vec shape: a `buf` field holding the
                 // array cell and a `len` field holding the live length.
-                // A nullable-element backing (`buf: [?T]`, RFC 0044 —
+                // A nullable-element backing (`buf: [?T]` —
                 // `[nil; cap]` is the only generic zero) is an ordinary
                 // ref-elem array: loads yield the `?T`, uses auto-deref.
                 let mut buf_field: Option<(u32, TypeId)> = None;
@@ -123,7 +123,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// `s[i]` — element read; the VM bounds-traps. The shared slot comes
-    /// out as-is (RFC 0044): a `?T` element yields its handle, and every
+    /// out as-is: a `?T` element yields its handle, and every
     /// use auto-derefs. A `[?prim]` backing carries the primitive-optional
     /// element repr (the raw payload + nil-tag store): the read mints a
     /// fresh opt value (value semantics), and the deref-fold peephole may

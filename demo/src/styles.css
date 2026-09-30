@@ -157,12 +157,6 @@ button {
   font-size: 13px;
 }
 
-.case-rfcs {
-  font-size: 11px;
-  color: var(--fg-dim);
-  font-family: var(--mono);
-}
-
 /* editor */
 
 .editor {
@@ -398,7 +392,7 @@ button {
   display: block;
 }
 
-/* AST tree (RFC 0041 §3 — structured tree, spans on every node) */
+/* AST tree (structured tree, spans on every node) */
 
 .ast-pane {
   white-space: normal;
@@ -690,11 +684,6 @@ button {
     gap: 6px;
     white-space: nowrap;
     padding: 7px 10px;
-  }
-
-  /* the small mono caption has no room in a chip strip */
-  .case-rfcs {
-    display: none;
   }
 
   /* editor + panes: the column separators become row separators */

@@ -1,7 +1,7 @@
 // rgh.rut — 06-github-viewer-cli's brain: a GitHub viewer CLI over the
 // jsDelivr CDN, now riding the REDESIGNED rut/http lane (the
 // async-only face). The host (src/main.rs) hands argv across as ONE
-// `\n`-joined `str` (the RFC 0023 §2 crossing set admits prims/str/
+// `\n`-joined `str` (the crossing set admits prims/str/
 // bytes/opaque only — no arg lists), this file carves it, talks HTTP,
 // decodes the tree JSON, and lands an i32 the host exits with:
 //
@@ -258,7 +258,7 @@ impl JsonDeserialize for Root {
 
 // human bytes, the plan's ladder: `N B` under 1024, then KiB/MiB/GiB —
 // one decimal only when the remainder is nonzero. The f-string hole is
-// a bare expression (RFC 0030 §1.1) with no format spec, so the tenth
+// a bare expression with no format spec, so the tenth
 // is integer math: `rem * 10 / unit`, floor — `1536` -> `1.5 KiB`,
 // `1024` -> `1 KiB`, `1048576` -> `1 MiB`.
 fn with_tenths(whole: i64, rem: i64, unit: i64, name: str) -> str {

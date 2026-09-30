@@ -3,7 +3,7 @@ name = "rut-parser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut parser — monotone cursor, no backtracking (RFC 0030 §4); flat-arena AST out"
+description = "the rut parser — monotone cursor, no backtracking; flat-arena AST out"
 
 [lib]
 name = "rut_parser"

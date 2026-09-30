@@ -1,4 +1,4 @@
-//! The typed host boundary (RFC 0023, revised): `Vm::call` in Rust
+//! The typed host boundary: `Vm::call` in Rust
 //! types — `Value`/`Slot` never leave the crate. Mirrors e2e's
 //! entry-driven shape but through the typed API.
 
@@ -35,7 +35,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the bindings, BEFORE the Vm (RFC 0025) — mount = declare = bind
+    // the bindings, BEFORE the Vm — mount = declare = bind
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::logger::install_std_log(&mut hosts, |_msg| {});
     rut_std::math::install_std_math(&mut hosts);
@@ -87,7 +87,7 @@ fn typed_prims_and_tuples() {
 #[test]
 fn typed_str_and_bytes() {
     let mut vm = entry_vm(SRC);
-    // an owned copy — the explicit "I keep this data" shape (RFC 0023 §2)
+    // an owned copy — the explicit "I keep this data" shape
     assert_eq!(vm.call::<_, String>("greet", ()).unwrap(), "hey");
     let back = vm
         .call::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],))
@@ -181,7 +181,7 @@ fn a_non_crossable_nullable_still_rejects() {
     );
 }
 
-// ---- host-fn payload boxes through the typed boundary (RFC 0026) ----
+// ---- host-fn payload boxes through the typed boundary ----
 
 #[test]
 fn typed_host_box_roundtrip() {

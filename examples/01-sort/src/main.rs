@@ -5,7 +5,7 @@
 //! `entry fn` dispatcher. This file is the embedder: compile, verify,
 //! then drive the library — the host owns the session, holds the opaque
 //! bank, and reads results back as one JSON array string (`serialize`);
-//! `Vec<i32>` itself never crosses (RFC 0023 §2).
+//! `Vec<i32>` itself never crosses.
 
 use std::rc::Rc;
 
@@ -50,7 +50,7 @@ fn main() {
     println!("after insertion: {}", ser(&mut vm));
 
     // the full sweep: same deterministic input, every algorithm, fuel
-    // per call (RFC 0040 — the session runs under budgets)
+    // per call (the session runs under budgets)
     println!("fill(16, seed=42), each algorithm:");
     for algo in ["insertion", "bubble", "selection", "quick", "merge"] {
         vm.call::<_, ()>("fill", (c.clone(), 16u32, 42u32)).unwrap();

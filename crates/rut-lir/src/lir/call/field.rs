@@ -7,8 +7,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         // `<namespace>.CONST` — a used namespace's constant (checked
-        // before the receiver is compiled, since the head is not a value;
-        // RFC 0028). Name-generic: routed by the bound head.
+        // before the receiver is compiled, since the head is not a value).
+        // Name-generic: routed by the bound head.
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
             if segs.len() == 1 && self.ctx.is_extern_namespace(segs[0].name) {
                 if let Some((ty, bits)) = self.ctx.extern_const(name) {
@@ -24,7 +24,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
-        // `p.x` auto-derefs (RFC 0005): load the pointee cell first, then
+        // `p.x` auto-derefs: load the pointee cell first, then
         // the field reads from it
         let (rreg, rt) = match self.ctx.types.kind(rt).clone() {
             TyKind::Opt { elem } if matches!(self.ctx.types.kind(elem), TyKind::Data { .. }) => {
@@ -45,7 +45,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if matches!(self.ctx.types.kind(rt), TyKind::TraitObj { .. }) {
-            self.ctx.err(sp, "trait objects have no fields —`d.x` on a trait-typed value is a compile error (RFC 0012 §2)");
+            self.ctx.err(sp, "trait objects have no fields —`d.x` on a trait-typed value is a compile error");
             return Err(());
         }
         self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
@@ -53,8 +53,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// The (generic, bound node) when a receiver expression's static type
-    /// is spelled from a union-bounded generic of this frame (RFC 0043
-    /// §3): a bare path bound from one (param, annotated let, a copy of
+    /// is spelled from a union-bounded generic of this frame:
+    /// a bare path bound from one (param, annotated let, a copy of
     /// either), or a direct data field whose declared type node spells
     /// the generic (`self.k` in a class body). Pure AST + declared-shape
     /// question — the receiver does not need compiling twice.
@@ -156,7 +156,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// The capability gate itself (RFC 0043 §3, native-fastpath phase 1):
+    /// The capability gate itself:
     /// a call `recv.name(..)` where the receiver is spelled from a
     /// union-bounded generic requires EVERY member of the bound to
     /// provide `name`. The union admits all its members at once, so a
@@ -174,7 +174,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let ty = self.ctx.type_name(c).to_string();
                 let union = crate::check::bound_ty_str(self.ctx, bnode);
                 self.ctx.err(sp, format!(
-                    "`{ty}` does not provide `{}` — `{}` requires `{union}` and a call on `{}` needs every member of the union to provide it (RFC 0043)",
+                    "`{ty}` does not provide `{}` — `{}` requires `{union}` and a call on `{}` needs every member of the union to provide it",
                     self.ctx.name(name), self.ctx.name(g), self.ctx.name(g)
                 ));
                 return;

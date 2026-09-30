@@ -1,10 +1,10 @@
-//! Generic user types (RFC 0013 monomorphization): one concrete type and
+//! Generic user types: one concrete type and
 //! one set of methods per instantiation.
 
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // the core surface bound as the one use (RFC 0028): these tests
+    // the core surface bound as the one use: these tests
     // exercise generic monomorphization, not use discipline — the
     // prelude is used, never ambient
     rut_driver::compile_program(
@@ -36,7 +36,7 @@ fn generic_class_monomorphizes_per_instantiation() {
     let boxes = p.types.types.iter().filter(|t| p.name_of(t.name) == "Box<i32>").count();
     assert_eq!(boxes, 1, "Box<i32> instantiated once");
     // body compiled: `new` (static) + `main`; `get` is a small instance
-    // method and inlines at its call site (RFC 0005 sequence lowering)
+    // method and inlines at its call site (sequence lowering)
     assert!(p.funcs.len() >= 2, "funcs: {:?}", p.funcs.iter().map(|f| p.name_of(f.name)).collect::<Vec<_>>());
     assert!(p.funcs.iter().any(|f| p.name_of(f.name) == "main"));
 }
@@ -103,9 +103,9 @@ fn explicit_generic_static_path() {
 
 #[test]
 fn vec_over_pointer_array_compiles() {
-    // the Vec shape over the nullable-array backing (RFC 0005 §9 + RFC 0044):
+    // the Vec shape over the nullable-array backing:
     // `[nil; cap]` is the only generic zero; stores share `v`, and the
-    // fused loads deref (RFC 0032 §1.1)
+    // fused loads deref
     let out = compile(
         "class Vec<T> {\n\
              buf: [?T];\n\

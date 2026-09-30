@@ -9,7 +9,7 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
         TyKind::Prim(PrimTy::Bool) => Value::Bool(v.as_bool()),
         TyKind::Prim(_) | TyKind::Nil => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
-        // bytes is the one sequence that crosses (RFC 0023 §2, RFC 0004)
+        // bytes is the one sequence that crosses
         TyKind::Bytes => Value::Bytes(cell_of(v).bytes_copy()),
         // an `opaque` box crosses as its handle: the handle owns a fresh
         // arena reference; the pending slot reference is released by do_ret
@@ -18,9 +18,9 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
             debug_assert!(!p.is_null(), "opaque slot without a cell");
             Value::Opaque(heap.opaque_handle(p))
         }
-        // `?T` crosses NIL-FLATTENED (RFC 0023 §1, err-channel phase 3):
+        // `?T` crosses NIL-FLATTENED:
         // the null slot IS absence (`Value::Nil` — nil is the one absence,
-        // RFC 0044's zero value for a nullable is `ConstRaw 0`), and a
+        // the zero value for a nullable is `ConstRaw 0`), and a
         // some-slot is the MakeOpt box: decode its payload as T. A
         // legitimately-absent value and a soft failure are told apart by
         // the err channel beside them, never by a second nil.
@@ -38,7 +38,7 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
                 Value::Nil
             }
         }
-        // tuples cross field-by-field (RFC 0007 v1.1)
+        // tuples cross field-by-field
         TyKind::Data { fields } => {
             let cell = cell_of(v);
             let mut out = Vec::with_capacity(fields.len());
@@ -76,7 +76,7 @@ pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap>
     }
     match &cell.data {
         // an array window: element i is parent[off + i], bounds vs the
-        // window (RFC 0042 §6)
+        // window
         CellData::ArrView { parent, off, len } => {
             if i as u32 >= *len {
                 return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
@@ -109,7 +109,7 @@ pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Sl
         ));
     }
     match &cell.data {
-        // WRITE-THROUGH: a window write hits the parent (RFC 0042 §6)
+        // WRITE-THROUGH: a window write hits the parent
         CellData::ArrView { parent, off, len } => {
             if i as u32 >= *len {
                 return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
@@ -129,7 +129,7 @@ pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Sl
 }
 
 
-/// The window intercept for `GetF`/`ArrGetF` (RFC 0042 §6): a scalar
+/// The window intercept for `GetF`/`ArrGetF`: a scalar
 /// field reads the window's own length; a ref field (the `buf` read)
 /// hands out THE WINDOW itself (retained), so the element ops through
 /// it stay window-relative and bounds-checked. `None` = not a window —
@@ -157,7 +157,7 @@ pub(super) fn window_setf_trap(cell: &crate::heap::CellVal) -> Option<Trap> {
     None
 }
 
-/// The window intercept for `ArrSetF` (RFC 0042 §6): writes go through —
+/// The window intercept for `ArrSetF`: writes go through —
 /// element `i` of the window is `parent[off + i]`. `None` = not a window.
 pub(super) fn window_sets(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Option<Result<Slot, Trap>> {
     if let CellData::ArrView { parent, off, len } = &cell.data {
@@ -193,7 +193,7 @@ pub(super) fn default_slot_repr(repr: Repr) -> Slot {
     }
 }
 
-// ---- the primitive-optional element store (RFC 0044 §5) ----------------
+// ---- the primitive-optional element store ----------------
 //
 // A `[?prim]` backing (`ArrKind::Opt`) holds each element as a raw payload
 // plus a nil tag — never a cell. The element ops route here by their baked
@@ -211,7 +211,7 @@ pub(super) fn default_slot_repr(repr: Repr) -> Slot {
 /// One element access resolved against the backing: the items run and the
 /// absolute element index, bounds-checked per shape (direct array: one
 /// unsigned compare folding negative + overflow, the `seq_get` shape;
-/// window: bounds vs the window, RFC 0042 §6). `None` = `cell` is not an
+/// window: bounds vs the window). `None` = `cell` is not an
 /// array/window at all (a miscompiled op — the caller traps).
 fn opt_lookup<'a>(cell: &'a CellVal, i: i64) -> Option<Result<(std::cell::Ref<'a, crate::heap::ArrData>, usize), Trap>> {
     match &cell.data {
@@ -350,7 +350,7 @@ pub(super) fn opt_elem_ty(cell: &CellVal) -> Option<TypeId> {
 }
 
 /// The backing-array cell of a fused field-array access: the record's
-/// array field, or the window object itself (RFC 0042 §6).
+/// array field, or the window object itself.
 pub(super) fn f_arr_cell(obj_cell: &CellVal, field: u32) -> Result<&CellVal, Trap> {
     match &obj_cell.data {
         CellData::Record { fields } => {

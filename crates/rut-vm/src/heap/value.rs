@@ -1,8 +1,8 @@
-//! The tagged `Value` for the host boundary (RFC 0023) and the untagged
-//! 8-byte `Slot` bytecode moves (RFC 0015 §5).
+//! The tagged `Value` for the host boundary and the untagged
+//! 8-byte `Slot` bytecode moves.
 use super::*;
 
-// ---- the tagged Value exists only at the host boundary (RFC 0023) ----
+// ---- the tagged Value exists only at the host boundary ----
 
 #[derive(Clone)]
 pub enum Value {
@@ -11,12 +11,12 @@ pub enum Value {
     F64(f64),
     Bool(bool),
     Str(String),
-    /// `Vec<u8>` buffer crossing (RFC 0023 §2)
+    /// `Vec<u8>` buffer crossing
     Bytes(Vec<u8>),
-    /// an `Opaque` box (RFC 0014) — the one cell the host may hold and
+    /// an `Opaque` box — the one cell the host may hold and
     /// pass back; the handle owns one arena reference
     Opaque(OpaqueRef),
-    /// a tuple crossing (RFC 0007 v1.1) — records with numeric fields
+    /// a tuple crossing — records with numeric fields
     Tuple(Vec<Value>),
 }
 
@@ -68,7 +68,7 @@ impl Value {
     }
 }
 
-// ---- slots (RFC 0015 §5): untagged 8 bytes; bytecode is typed ----
+// ---- slots: untagged 8 bytes; bytecode is typed ----
 
 #[derive(Clone, Copy)]
 pub union Slot {
@@ -90,7 +90,7 @@ impl Slot {
     }
     /// NOTE: every constructor writes the FULL 8 bytes — unions leave
     /// stale bytes otherwise, and ops must be able to read `.i` from any
-    /// slot (RFC 0015 §5 untagged discipline).
+    /// slot.
     pub fn bool(v: bool) -> Slot {
         Slot { i: v as i64 }
     }
@@ -98,8 +98,7 @@ impl Slot {
         unsafe { self.i != 0 }
     }
     /// Safe float read: sound whenever the slot holds an f64 — the
-    /// verifier guarantees registers hold their declared types (RFC 0015
-    /// §5), the same trust the float ops run on.
+    /// verifier guarantees registers hold their declared types, the same trust the float ops run on.
     pub fn as_f64(&self) -> f64 {
         unsafe { self.f }
     }
@@ -116,7 +115,7 @@ impl Slot {
         }
     }
     pub fn same_ref(a: Slot, b: Slot) -> bool {
-        unsafe { a.r == b.r } // cell identity (RFC 0012 §4)
+        unsafe { a.r == b.r } // cell identity
     }
 }
 
@@ -126,7 +125,7 @@ impl std::fmt::Debug for Slot {
     }
 }
 
-/// A slot is exactly one machine word (RFC 0015 §5). Guarded at compile
+/// A slot is exactly one machine word. Guarded at compile
 /// time: `Option<*const T>` has no null niche, so wrapping `r` in `Option`
 /// silently doubled every register file and cell payload.
 const _: () = assert!(std::mem::size_of::<Slot>() == 8);

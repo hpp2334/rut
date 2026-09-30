@@ -2,7 +2,7 @@
 // (ruling 8: launch_future / LaunchedFutureHandle / sleep are HOST
 // surface — ordinary code over the open Future surface, mounted by
 // each embedder by choice; users may write their own launchers the
-// same way). The engine rows cross the RFC 0014 erasure box (`opaque`);
+// same way). The engine rows cross the erasure box (`opaque`);
 // this package restores the typed arrow: `opaque(f)` seals the frame
 // on the way out, `opaque.downcast<Future<nil>>` recovers the sleep
 // mint on the way in.
@@ -16,7 +16,7 @@ use core::{ Future };
 use async_engine::{ __launch, __abort, __sleep };
 
 // The launched future's receipt: the frame held by its cell (`?T` is
-// the cell reference, RFC 0044 — here a one-slot box over the frame).
+// the cell reference — here a one-slot box over the frame).
 // NOT a Future — `await` diagnoses on this type — and not re-launchable
 // (`launch_future` takes a `Future<T>`; the receipt is not one — a type
 // error, never a runtime check: ruling 6). One member: `abort`.
@@ -36,7 +36,7 @@ impl LaunchedFutureHandle<T> {
             return false;
         }
         // read the cell reference through the box, then seal it: the
-        // engine row takes the frame as an RFC 0014 box and unboxes on
+        // engine row takes the frame as an opaque box and unboxes on
         // its side
         let g: Future<T> = f;
         return __abort(opaque(g));

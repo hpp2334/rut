@@ -1,9 +1,9 @@
 // the pouch integration group (the rut-json batch, phase 1): impl-ONLY
-// by law (RFC 0045 §3) — it declares no new public names, so the only
+// by law — it declares no new public names, so the only
 // way to reach it is trait dispatch on pouch's `Vec`. Appended to json's
 // own source by the peer gate when `pouch` is in the program's closure;
 // a consumer without pouch mounts json light and these rows simply never
-// exist (a reference then diagnoses D2, RFC 0045 §4).
+// exist (a reference then diagnoses D2).
 //
 // The survey §2.6 matrix rows: `Vec<T>` encodes an array, decodes an
 // array — elements through T's own impls, per instantiation (the

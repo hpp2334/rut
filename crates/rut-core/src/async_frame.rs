@@ -1,4 +1,4 @@
-//! The engine frame-cell convention (RFC 0018) — the ONE layout law the
+//! The engine frame-cell convention — the ONE layout law the
 //! compiler's weave (`rut-lir`) and the driving loop (`rut-vm`) share.
 //!
 //! An async fn compiles into a hidden `TyKind::Data` frame type whose

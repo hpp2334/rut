@@ -1,8 +1,8 @@
-//! `pub` visibility (RFC 0003 §2) on members: the scoped forms parse on
-//! class fields (RFC 0010 §2) and on inherent impl methods, dataclasses
-//! reject the dial (RFC 0009), and the dropped `private` keyword is a
-//! lexer hard error naming its replacement (RFC 0002 §4). Type bodies
-//! are FIELDS ONLY (RFC 0012) — methods live in `impl` blocks.
+//! `pub` visibility on members: the scoped forms parse on
+//! class fields and on inherent impl methods, dataclasses
+//! reject the dial, and the dropped `private` keyword is a
+//! lexer hard error naming its replacement. Type bodies
+//! are FIELDS ONLY — methods live in `impl` blocks.
 
 use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
@@ -83,7 +83,7 @@ impl Sink {
 
 #[test]
 fn dataclass_rejects_member_pub() {
-    // RFC 0009: struct members are always public — no visibility dial
+    // struct members are always public — no visibility dial
     let (_, diags) = parse("struct P { pub x: i32; }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("dataclasses have no member visibility")),
@@ -93,7 +93,7 @@ fn dataclass_rejects_member_pub() {
 
 #[test]
 fn private_is_a_dropped_word() {
-    // RFC 0002 §4: dropped keywords hard-error naming the replacement
+    // dropped keywords hard-error naming the replacement
     let (_, diags) = parse("class C { private n: i32; }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("members are private by default")),
@@ -104,7 +104,7 @@ fn private_is_a_dropped_word() {
 #[test]
 fn pub_scope_rejects_unknown_scope() {
     // the `fn` member itself is now a body error, but the scope
-    // diagnostic still fires first (RFC 0012: methods live in impls)
+    // diagnostic still fires first (methods live in impls)
     let (_, diags) = parse("class C { pub(crate) fn m(self) -> nil { } }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("expected `mod`, `super`, or `self` in pub")),
@@ -114,7 +114,7 @@ fn pub_scope_rejects_unknown_scope() {
 
 #[test]
 fn body_methods_are_a_hard_error() {
-    // RFC 0012: type bodies are fields-only — a `fn` member diagnoses
+    // type bodies are fields-only — a `fn` member diagnoses
     let (_, diags) = parse("class C { fn m(self) -> nil { } }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("methods live in `impl` blocks")),

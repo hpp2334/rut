@@ -1,4 +1,4 @@
-//! The 11 registry bindings (RFC 0025): the Rust shape IS the `.d.rut`
+//! The 11 registry bindings: the Rust shape IS the `.d.rut`
 //! row, written ONCE generic over the backend — the wasm32 half and the
 //! twin share every trap law. Fallible bodies (`Result<_, Trap>`) carry
 //! backend messages verbatim under `web::<fn>: `; the handle plumbing
@@ -53,7 +53,7 @@ fn backend_op2<T, El: 'static>(
 }
 
 /// Install `web`'s bodies. Registration is BEFORE `Vm::new` (the eager
-/// join, RFC 0025); `verify_against` against the mounting session's
+/// join); `verify_against` against the mounting session's
 /// `expected_host_fns` checks the contract both ways before any rut code
 /// runs.
 pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>) {
@@ -152,7 +152,7 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
     });
 
     // ---- tim_after(ms: i64, tag: str) ----
-    // A timer, not a scheduler: the host owns time (RFC 0018's own law),
+    // A timer, not a scheduler: the host owns time,
     // the request/response story is rut's.
     hosts.register::<_, (i64, &str), (), _>("web::tim_after", {
         let st = st.clone();

@@ -226,7 +226,7 @@ pub fn main() {
     let log = Logger.new("px");
     let xs = Vec<i32>.from([10, 20, 30]);
     let a = xs[1] + xs.len();            // index + method
-    let pair = pick(xs, 2);              // the (T, ok) record (RFC 0005 §10)
+    let pair = pick(xs, 2);              // the (T, ok) record
     if (pair.1) {
         log.info(f"{a} {pair.0}");
     }

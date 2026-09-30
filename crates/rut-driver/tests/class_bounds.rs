@@ -1,5 +1,5 @@
 //! Generic class bounds — `class HashMap<K requires Hashable, V>`
-//! (RFC 0043 §A5): the recorded bounds gate every instantiation
+//!: the recorded bounds gate every instantiation
 //! (union- and alias-aware, via the same `admit_bounds` helper the
 //! fn/method grammar uses), and the bound is what proves the
 //! parameter-value → trait-slot widening inside the class body. The
@@ -11,7 +11,7 @@
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // core bound as the one use (RFC 0028): these tests exercise class
+    // core bound as the one use: these tests exercise class
     // bound semantics, not use discipline
     rut_driver::compile_program(
         src,
@@ -106,7 +106,7 @@ fn bound_proves_the_widening_inside_the_class_body() {
 #[test]
 fn class_bound_expands_through_an_alias() {
     // `type Key = Hash;` — the bound member expands before trait-vs-
-    // concrete detection (RFC 0043 §A0.2), so the alias-spelled bound
+    // concrete detection, so the alias-spelled bound
     // admits the impl-registered key and rejects the rest
     let shape = "\
 trait Hash { fn hash(self) -> u64; }

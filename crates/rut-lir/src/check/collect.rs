@@ -1,6 +1,6 @@
-//! Collection (RFC 0031 SS1): pass 1 declares types (enums, dataclasses,
+//! Collection: pass 1 declares types (enums, dataclasses,
 //! classes, traits), pass 2 impls/fns/lets. Record payloads are slot arrays
-//! (RFC 0015 SS2); impl methods enter the instantiation queue eagerly.
+//!; impl methods enter the instantiation queue eagerly.
 
 use rut_core::binary::TraitDesc;
 use rut_core::types::*;
@@ -35,7 +35,7 @@ impl<'a> Ctx<'a> {
         // pass 1b: validate alias targets first (each member resolves as
         // type or trait — forward refs legal, cycles error), then resolve
         // field types & trait signatures — with the names declared,
-        // self/forward/mutual references are legal (RFC 0009 recursive
+        // self/forward/mutual references are legal (recursive
         // shapes)
         for it in &items {
             if let ItemKind::Alias(d) = self.ast.item(*it) {
@@ -69,7 +69,7 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                // the two impl forms (RFC 0012): inherent + trait impls
+                // the two impl forms: inherent + trait impls
                 ItemKind::Impl { trait_ref, target, methods } => {
                     let methods = methods.clone();
                     self.collect_impl(it.id(), *trait_ref, *target, &methods)
@@ -81,7 +81,7 @@ impl<'a> Ctx<'a> {
                     }
                     self.fn_index.push(f.name);
                     self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
-                    // `entry fn` — the host-callable surface (RFC 0035 §3);
+                    // `entry fn` — the host-callable surface;
                     // signature checked against the crossing rule below
                     if f.entry {
                         self.entries.push(f.name);
@@ -96,12 +96,12 @@ impl<'a> Ctx<'a> {
                 }
                 ItemKind::Use { names, .. } => {
                     // record what the module wrote — the binding gate for
-                    // used surfaces (RFC 0028: used, never ambient)
+                    // used surfaces (used, never ambient)
                     for n in names {
                         self.used.insert(*n);
                     }
                     // module loading is resolved by the driver before body
-                    // compilation (RFC 0035 §1); without it, use statements
+                    // compilation; without it, use statements
                     // are a compile error only when the names are used
                     if !self.allow_uses {
                         let sp = self.ast.span(it.id());
@@ -109,7 +109,7 @@ impl<'a> Ctx<'a> {
                             self.err(
                                 sp,
                                 format!(
-                                    "module loading is not available in this build (RFC 0035, M2) — cannot use `{}`",
+                                    "module loading is not available in this build — cannot use `{}`",
                                     self.name(*n)
                                 ),
                             );
@@ -127,7 +127,7 @@ impl<'a> Ctx<'a> {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
-        // member values: sequential from 0 or explicit (RFC 0006)
+        // member values: sequential from 0 or explicit
         let mut vals: Vec<(IdentId, i64)> = Vec::new();
         let mut next = 0i64;
         for (m, v) in members {
@@ -145,7 +145,7 @@ impl<'a> Ctx<'a> {
 
     /// Pass 1a — intern a struct/class placeholder and register its name.
     /// Fields are resolved later (pass 1b), so a field may name this type or
-    /// any type declared later in the module (RFC 0009 recursive shapes).
+    /// any type declared later in the module (recursive shapes).
     pub(crate) fn declare_data(
         &mut self,
         node: NodeId,
@@ -167,7 +167,7 @@ impl<'a> Ctx<'a> {
         self.decl_owner
             .insert(name, self.own_spec.clone());
         // generic records stay a template (empty fields) until instantiated;
-        // `Vec<T>` and RFC 0013 monomorphization enter at `mk_data_inst`
+        // `Vec<T>` and monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
             name,
             kind: TyKind::Data { fields: vec![] },
@@ -237,7 +237,7 @@ impl<'a> Ctx<'a> {
             if fd.is_static {
                 self.err(
                     self.ast.span(f.id()),
-                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `opaque` container the host passes back (RFC 0014)",
+                    "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",
                 );
             }
             let fty = self.resolve_type(fd.ty, &[]);
@@ -265,8 +265,8 @@ impl<'a> Ctx<'a> {
         self.datas[idx].1.fields = flds;
     }
 
-    /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias
-    /// (RFC 0043), plain and union forms — one name, one decl: the
+    /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias,
+    /// plain and union forms — one name, one decl: the
     /// alias head admits no members (a generic head is a parse error)
     /// and the duplicate-type-name check is the plain symmetric
     /// four-way, exactly like the enum/data/trait declare sites. The
@@ -311,7 +311,7 @@ impl<'a> Ctx<'a> {
             id
         } else {
             // a generic trait has no single id — `mk_trait_inst` allocates
-            // one per type-argument list (RFC 0013 monomorphization)
+            // one per type-argument list
             u32::MAX
         };
         self.trait_decls.push((name, TraitDeclInfo {
@@ -355,7 +355,7 @@ impl<'a> Ctx<'a> {
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
             tms.push((md.name, ptys, rty));
         }
-        // RFC 0012 §2: trait methods take `self` — except engine-contract
+        // trait methods take `self` — except engine-contract
         // members, which may spell plain parameters only (`fn yield(cx: ..)`).
         // Either way the binary desc's params exclude the receiver: the
         // compiler passes self as arg0 for receiver methods.
@@ -386,7 +386,7 @@ impl<'a> Ctx<'a> {
         self.resolve_sig_ty_deep(node, env, Some(tobj))
     }
 
-    /// Instantiate a generic trait for concrete type arguments (RFC 0013):
+    /// Instantiate a generic trait for concrete type arguments:
     /// one `TraitDesc` (and trait id) per type-argument list, cached.
     pub fn mk_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
         if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
@@ -476,11 +476,9 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Instantiate a generic record for concrete type arguments (RFC 0013
-    /// monomorphization). The id is interned and cached before fields resolve
+    /// Instantiate a generic record for concrete type arguments (monomorphization). The id is interned and cached before fields resolve
     /// so recursive shapes (`Node<T> { next: Option<Node<T>> }`) terminate.
-    /// The class's inline bounds gate the substitution here (RFC 0043 §A5,
-    /// admission-only) — once per concrete argument list, at the spelling
+    /// The class's inline bounds gate the substitution here (admission-only) — once per concrete argument list, at the spelling
     /// that created it.
     pub fn mk_data_inst(&mut self, data: IdentId, args: Vec<TypeId>, sp: Span) -> TypeId {
         if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
@@ -515,7 +513,7 @@ impl<'a> Ctx<'a> {
         self.inst_data.insert(ty, (data, args.clone()));
         let env: Vec<(IdentId, TypeId)> =
             decl.generics.iter().cloned().zip(args.iter().cloned()).collect();
-        // inline bounds gate the completed substitution (RFC 0043 §A5) —
+        // inline bounds gate the completed substitution —
         // the cache insert above keeps a bound-triggering instantiation of
         // the same record from recursing
         self.admit_bounds(&decl.requires, &env, sp);
@@ -529,7 +527,7 @@ impl<'a> Ctx<'a> {
             if fd.is_static {
                 self.err(
                     self.ast.span(f.id()),
-                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `opaque` container the host passes back (RFC 0014)",
+                    "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",
                 );
             }
             let fty = self.resolve_type(fd.ty, &env);

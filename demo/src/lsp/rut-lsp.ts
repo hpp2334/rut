@@ -1,6 +1,6 @@
 /**
  * The rut-lsp-wasm binding — the demo's typed twin of the extension's
- * `src/wasm.ts` (survey D3). Same raw ABI (RFC 0041 §2), same envelope:
+ * `src/wasm.ts` (survey D3). Same raw ABI, same envelope:
  * inputs land in the per-request arena via `rut_alloc`, answers come
  * back as `[u32 LE length][JSON bytes]` at the returned pointer, and
  * every request opens with `rut_begin()` (the arena is per-request; the

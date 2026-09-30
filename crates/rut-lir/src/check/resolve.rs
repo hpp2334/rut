@@ -26,8 +26,8 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                // a used core trait (RFC 0028) — the prelude's
-                // only builtin trait is the `Iterator<E>` protocol (RFC 0012 §6)
+                // a used core trait — the prelude's
+                // only builtin trait is the `Iterator<E>` protocol
                 let core_trait = self.extern_traits.get(&tname).copied();
                 if core_trait == Some(rut_core::binary::NativeTrait::Iterator) {
                     let args: Vec<TypeId> = segs[0]
@@ -37,14 +37,14 @@ impl<'a> Ctx<'a> {
                         .collect();
                     if args.len() != 1 {
                         self.err(self.ast.span(node.id()), format!(
-                            "`Iterator` takes 1 type parameter, {} given — `Iterator<E>` (RFC 0012 §6)",
+                            "`Iterator` takes 1 type parameter, {} given — `Iterator<E>`",
                             args.len()
                         ));
                         return None;
                     }
                     return Some(self.mk_iterator_inst(tname, args[0]));
                 }
-                // `impl Future<T> for ..` (RFC 0018) — the same engine-
+                // `impl Future<T> for ..` — the same engine-
                 // woven lane: the trait is built per type-argument list,
                 // the user's impl registers launcher-drivable
                 if core_trait == Some(rut_core::binary::NativeTrait::Future) {
@@ -55,7 +55,7 @@ impl<'a> Ctx<'a> {
                         .collect();
                     if args.len() != 1 {
                         self.err(self.ast.span(node.id()), format!(
-                            "`Future` takes 1 type parameter, {} given — `Future<T>` (RFC 0018)",
+                            "`Future` takes 1 type parameter, {} given — `Future<T>`",
                             args.len()
                         ));
                         return None;
@@ -102,7 +102,7 @@ impl<'a> Ctx<'a> {
                         }
                     }
                 } else if let Some(ext) = self.extern_trait(tname).cloned() {
-                    // a used module's exported trait (RFC 0012 §5)
+                    // a used module's exported trait
                     if !segs[0].generics.is_empty() || ext.generics > 0 {
                         self.err(self.ast.span(node.id()), format!(
                             "generic trait `{}` cannot be implemented across modules — implement it in its declaring module (v1)",
@@ -128,7 +128,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The `Iterator<E>` protocol contract (RFC 0012 §6): one trait per
+    /// The `Iterator<E>` protocol contract: one trait per
     /// type-argument list, its single method `__iterate(emit: fn(E) -> bool)`.
     /// Duck-typed satisfaction fills its vtable slot from the iterable's own
     /// member — the contract is engine-woven, not user-declarable.
@@ -164,7 +164,7 @@ impl<'a> Ctx<'a> {
         n
     }
 
-    /// The `Future<T>` protocol contract (RFC 0012 §7 / RFC 0018): one
+    /// The `Future<T>` protocol contract: one
     /// trait per type-argument list, its single member `yield(cx)`. The
     /// engine weaves impls for async fn frames; user impls register
     /// through the same trait (launcher-drivable). Mirrors
@@ -214,7 +214,7 @@ impl<'a> Ctx<'a> {
         id
     }
 
-    /// The engine-minted `RunContext` cx record (RFC 0018): one field —
+    /// The engine-minted `RunContext` cx record: one field —
     /// the frame edge — laid out per `rut_core::async_frame`. The NAME
     /// is the surface spelling, so `cx: RunContext` parameters and the
     /// trait's method signatures all land on this one type; its members
@@ -262,7 +262,7 @@ impl<'a> Ctx<'a> {
                 self.mk_opt(elem)
             }
             TypeKind::TyArray { elem } => {
-                // `[T]` — the array type (RFC 0005 §9): grammar-spelled,
+                // `[T]` — the array type: grammar-spelled,
                 // resolved directly, no surface name behind it
                 let elem = self.resolve_type(*elem, env);
                 self.mk_array(elem)
@@ -279,10 +279,10 @@ impl<'a> Ctx<'a> {
                 TY_I32
             }
             TypeKind::TyUnion { .. } => {
-                // a union in a value position (RFC 0043: bound-only)
+                // a union in a value position (bound-only)
                 self.err(
                     sp,
-                    "a union type is bound-only — unions are legal only in `requires` bounds and union aliases (RFC 0043)",
+                    "a union type is bound-only — unions are legal only in `requires` bounds and union aliases",
                 );
                 TY_I32
             }
@@ -312,11 +312,11 @@ impl<'a> Ctx<'a> {
                     }
                     return p;
                 }
-                // `Weak<T>` resolves like every builtin now (RFC 0017 v1) —
+                // `Weak<T>` resolves like every builtin now —
                 // the pre-weak M5 stub ("not supported in this build") that
                 // pre-reserved the name is gone; the `Weak` row reaches the
                 // `core_ty` match below through the same ambient surface.
-                // a used core builtin container (RFC 0028): the
+                // a used core builtin container: the
                 // prelude is used, never ambient — `Opaque`
                 // resolves only when the name was bound from the core
                 // surface (`[T]` never reaches here — it is `TyArray`)
@@ -348,7 +348,7 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`DisposalContext` takes no generic arguments");
                             TY_I32
                         }
-                        // RFC 0017 v1: the ONE generic builtin — `Weak<T>`
+                        // the ONE generic builtin — `Weak<T>`
                         // interns per instantiation (`mk_weak`, the
                         // `mk_array` law). Exactly one parameter.
                         (rut_core::binary::NativeTy::Weak, [g]) => {
@@ -392,7 +392,7 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
-                        // the `Iterator<E>` protocol (RFC 0012 §6):
+                        // the `Iterator<E>` protocol:
                         // engine-woven — its trait is built directly per
                         // type-argument list, before the AST-decl lookup
                         if self.extern_traits.get(&name).copied()
@@ -405,7 +405,7 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             if args.len() != 1 {
                                 self.err(sp, format!(
-                                    "`Iterator` takes 1 type parameter, {} given — `Iterator<E>` (RFC 0012 §6)",
+                                    "`Iterator` takes 1 type parameter, {} given — `Iterator<E>`",
                                     args.len()
                                 ));
                                 return TY_I32;
@@ -413,7 +413,7 @@ impl<'a> Ctx<'a> {
                             let id = self.mk_iterator_inst(name, args[0]);
                             return self.mk_trait_obj(id);
                         }
-                        // the `Future<T>` protocol (RFC 0012 §7 / RFC 0018):
+                        // the `Future<T>` protocol:
                         // engine-woven the same way — the trait is built per
                         // type-argument list; the object type is what async
                         // call results widen to and what `launch_future`
@@ -428,7 +428,7 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             if args.len() != 1 {
                                 self.err(sp, format!(
-                                    "`Future` takes 1 type parameter, {} given — `Future<T>` (RFC 0018)",
+                                    "`Future` takes 1 type parameter, {} given — `Future<T>`",
                                     args.len()
                                 ));
                                 return TY_I32;
@@ -436,7 +436,7 @@ impl<'a> Ctx<'a> {
                             let id = self.mk_future_inst(name, args[0]);
                             return self.mk_trait_obj(id);
                         }
-                        // the `RunContext` cx (RFC 0012 §7): the surface
+                        // the `RunContext` cx: the surface
                         // name IS the engine-minted record's name — the
                         // trait row is the frozen signature set, the
                         // record is the lowering (field ops, no calls)
@@ -444,14 +444,14 @@ impl<'a> Ctx<'a> {
                             == Some(rut_core::binary::NativeTrait::RunContext)
                         {
                             if !seg.generics.is_empty() {
-                                self.err(sp, "`RunContext` takes no generic arguments (RFC 0018)");
+                                self.err(sp, "`RunContext` takes no generic arguments");
                                 return TY_I32;
                             }
                             return self.run_context_ty();
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
                             // a trait name in type position IS the
-                            // object type (RFC 0012) — the bare name spells it
+                            // object type — the bare name spells it
                             if seg.generics.is_empty() {
                                 if t.id == u32::MAX {
                                     self.err(sp, format!(
@@ -478,7 +478,7 @@ impl<'a> Ctx<'a> {
                             let id = self.mk_trait_inst(name, args);
                             return self.mk_trait_obj(id);
                         }
-                        // a used module's exported trait (RFC 0012 §5):
+                        // a used module's exported trait:
                         // the object type here, exactly like a declared one
                         if let Some(ext) = self.extern_trait(name).cloned() {
                             if !seg.generics.is_empty() || ext.generics > 0 {
@@ -490,7 +490,7 @@ impl<'a> Ctx<'a> {
                             }
                             return self.mk_trait_obj(ext.id);
                         }
-                        // used type (RFC 0035 §1): the exporter's
+                        // used type: the exporter's
                         // scope-qualified id; link rebases it
                         if let Some(g) = self.extern_generics.get(&name).cloned() {
                             // a linked generic: the consumer spells the
@@ -519,20 +519,20 @@ impl<'a> Ctx<'a> {
                             }
                             return t;
                         }
-                        // a local type alias (RFC 0043): transparent — the
+                        // a local type alias: transparent — the
                         // name binds the target's id. A union alias errors
                         // here: unions are bound-only.
                         if self.find_alias(name).is_some() {
                             self.validate_alias(name);
                             let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
                             if !seg.generics.is_empty() {
-                                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic (RFC 0043)", self.name(name)));
+                                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
                             }
                             return match self.aliases[idx].resolved {
                                 Some(AliasTarget::Ty(t)) => t,
                                 Some(AliasTarget::Union) => {
                                     self.err(sp, format!(
-                                        "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds (RFC 0043)",
+                                        "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds",
                                         self.name(name)
                                     ));
                                     TY_I32
@@ -541,7 +541,7 @@ impl<'a> Ctx<'a> {
                             };
                         }
                         if name == sym::SELF_TY {
-                            self.err(sp, "`Self` is only valid inside a type body (RFC 0010 §1)");
+                            self.err(sp, "`Self` is only valid inside a type body");
                             return TY_I32;
                         }
                         let msg = self

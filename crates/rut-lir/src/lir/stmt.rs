@@ -41,11 +41,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ));
                     }
                     // concrete → slot widening boxes scalars (the slot
-                    // ABI, RFC 0012 §4): the binding always holds a cell
+                    // ABI): the binding always holds a cell
                     self.widen_to_slot(t, e, sp.lo);
                 }
                 let ty = expected.unwrap_or(t);
-                // origin counting (RFC 0012 §5): a trait-typed binding
+                // origin counting: a trait-typed binding
                 // remembers its concrete origins — a widening let names
                 // the origin; a copy of another trait-typed binding takes
                 // its origins; anything else stays unknown (vtable)
@@ -63,11 +63,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 match destructure {
                     None => {
-                        // the sharing law (RFC 0044): the binding takes the
+                        // the sharing law: the binding takes the
                         // initializer's cell handle — a share, never a copy
                         let reg = self.last_reg;
                         self.bind_local(name, reg, ty, is_mut, false, origins, sp.lo);
-                        // union provenance (RFC 0043 §3, native-fastpath
+                        // union provenance (native-fastpath
                         // phase 1): an annotation spelling a union-bounded
                         // generic carries it; a copy takes its
                         // initializer's; anything else clears
@@ -92,7 +92,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                     }
                     Some(names) => {
-                        // `let (a, b) = ..` (RFC 0007): each binding takes
+                        // `let (a, b) = ..`: each binding takes
                         // the matching tuple field
                         let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
                             self.ctx.err(sp, format!("destructuring needs a tuple —got `{}`", self.ctx.type_name(ty)));
@@ -169,7 +169,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             StmtKind::ForOf { var, iter, body } => self.compile_for_of(node.id(), var, iter, body, sp),
             StmtKind::ForC { var, init, cond, update, body } => {
-                // induction var is loop-owned (RFC 0008 §1); bind directly
+                // induction var is loop-owned; bind directly
                 // to the initializer's register
                 let t = self.compile_expr(init, None)?;
                 let reg = self.last_reg;
@@ -219,7 +219,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // ANSWER lane (the awaiting frame's resume arm reads it),
                 // then the frame retires exactly like the body-end
                 // completion — answer BEFORE state, or the woken awaiter
-                // reads a null (RFC 0018 §2's law, the value half)
+                // reads a null (the value half)
                 if let Some(f) = self.async_frame.clone() {
                     let ans_ty = match self.ctx.types.kind(f.frame_ty) {
                         TyKind::Data { fields } => fields
@@ -282,7 +282,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match value {
                     Some(v) => {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
-                        // implicit widening at the return (RFC 0012 §4):
+                        // implicit widening at the return:
                         // a concrete value coerces to a trait-typed return
                         if !self.widens(t, self.ret_ty) {
                             self.ctx.err(sp, format!(
@@ -307,7 +307,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::Break => {
-                // inside a desugared `for..of` emit closure (RFC 0012 §6),
+                // inside a desugared `for..of` emit closure,
                 // stopping the iteration IS returning `false`
                 if self.emit_closure {
                     let f = self.new_reg(TY_BOOL);
@@ -347,11 +347,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
-        // `for (v of p)` auto-derefs a pointer (RFC 0005)
+        // `for (v of p)` auto-derefs a pointer
         let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
         // the builtin sequences (Vec, Array, str, bytes) keep their fused
         // loops; a user type iterates through its registered
-        // `impl Iterator<E> for T` (nominal, RFC 0012 §6)
+        // `impl Iterator<E> for T` (nominal)
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
@@ -359,7 +359,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return self.compile_for_of_iterate(var, iter_reg, idx, env, elem_ty, body, sp);
                 }
                 self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterator<E> for {}` (RFC 0012 §6)",
+                    "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterator<E> for {}`",
                     self.ctx.type_name(it), self.ctx.type_name(it)
                 ));
                 return Err(());
@@ -392,7 +392,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_body);
         // var = iter[idx]; the dst register is the loop variable (one reg
         // reused every iteration, overwritten/released by the element op).
-        // The shared element yields as-is (RFC 0044): a `?T` element
+        // The shared element yields as-is: a `?T` element
         // (`Vec<T>`'s `[?T]` backing, `[?T]` arrays) binds its handle and
         // every use auto-derefs; scalars copy their slot.
         let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
@@ -414,8 +414,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
 
-    /// The registered `impl Iterator<E> for T` on `ty` (nominal, RFC 0012
-    /// §6): `(impl index, target substitution, element type)`. The element
+    /// The registered `impl Iterator<E> for T` on `ty` (nominal):
+    /// `(impl index, target substitution, element type)`. The element
     /// type is read off the impl's trait instantiation — the `__iterate`
     /// emit parameter. Built-in sequences never reach here (their fused
     /// loops lower first).
@@ -473,7 +473,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         None
     }
 
-    /// `for (v of xs)` over a user iterable (RFC 0012 §6) — desugars to
+    /// `for (v of xs)` over a user iterable — desugars to
     /// `xs.__iterate(emit)` on the registered impl, where `emit` is a
     /// synthetic closure carrying the loop body: `break` returns `false`,
     /// `continue` and the fall-through return `true`. The loop variable is
@@ -491,7 +491,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<()> {
         // captures: the body's enclosing locals, copied by value (the
         // closure law); the capture inherits the binding's mutability
-        // (RFC 0044 — writes through a captured `let mut` stay legal)
+        // (writes through a captured `let mut` stay legal)
         let mut referenced = Vec::new();
         self.scan_names(body.id(), &mut referenced);
         let mut caps: Vec<(IdentId, TypeId, bool, u16)> = Vec::new();
@@ -522,7 +522,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let clo = self.new_reg(fty);
         { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
         // `xs.__iterate(emit)` — the impl's method, statically bound to
-        // this impl (nominal registry, RFC 0012 §4)
+        // this impl (nominal registry)
         let mfid = self
             .ctx
             .ensure_inst(crate::check::Inst {
@@ -534,7 +534,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(())
     }
 
-    // ---- `when` (RFC 0008) ----
+    // ---- `when` ----
 
     pub(crate) fn compile_when(
         &mut self,
@@ -565,7 +565,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None
         };
         let l_end = self.new_label();
-        // exhaustiveness + duplicates (RFC 0008 §2)
+        // exhaustiveness + duplicates
         self.check_when_exhaustive(st, arms, sp)?;
         for arm in arms {
             let arm = *arm;
@@ -585,8 +585,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             self.bind(l_arm);
-            // nil arms may be statement blocks (`-> { a(); b(); }`,
-            // RFC 0008 §1) — blocks aren't value expressions in this
+            // nil arms may be statement blocks (`-> { a(); b(); }`)
+            // — blocks aren't value expressions in this
             // build, so compile them as scoped statement blocks
             let body_is_block = matches!(self.ctx.ast.expr(*body), ExprKind::Block { .. });
             let bt = if body_is_block && result_ty == TY_NIL {
@@ -667,7 +667,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         PatKind::PatWild => "_".to_string(),
                     };
                     if seen.contains(&key) && key != "else" {
-                        self.ctx.err(self.ctx.ast.span(p.id()), format!("duplicate pattern `{key}` (RFC 0008 §2)"));
+                        self.ctx.err(self.ctx.ast.span(p.id()), format!("duplicate pattern `{key}`"));
                     }
                     seen.push(key);
                 }
@@ -681,7 +681,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(
                             sp,
                             format!(
-                                "`when` over an enum must be exhaustive —`{mtext}` is not covered and there is no `else` arm (RFC 0008 §2)"
+                                "`when` over an enum must be exhaustive —`{mtext}` is not covered and there is no `else` arm"
                             ),
                         );
                         return Err(());
@@ -691,7 +691,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     format!(
-                        "`when` over `{}` needs an `else` arm —only enums are enumerable (RFC 0008 §2)",
+                        "`when` over `{}` needs an `else` arm —only enums are enumerable",
                         self.ctx.type_name(scrut_ty)
                     ),
                 );
@@ -699,7 +699,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             } else {
                 // bool: covered iff true and false appear
                 if !(seen.contains(&"Bool(true)".to_string()) && seen.contains(&"Bool(false)".to_string())) {
-                    self.ctx.err(sp, "`when` over `bool` must cover `true` and `false` (RFC 0008 §2)");
+                    self.ctx.err(sp, "`when` over `bool` must cover `true` and `false`");
                     return Err(());
                 }
             }
@@ -740,7 +740,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(r)
             }
             PatKind::PatPath { segs } => {
-                // enum member (RFC 0008 §2)
+                // enum member
                 if segs.len() == 2 {
                     let ename = segs[0].name;
                     let mname = segs[1].name;
@@ -785,7 +785,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Err(())
             }
             PatKind::PatCtor { .. } => {
-                self.ctx.err(sp, "constructor patterns (Ok(x), Some(y)) are not supported in this build (RFC 0008 OQ-2)");
+                self.ctx.err(sp, "constructor patterns (Ok(x), Some(y)) are not supported in this build");
                 Err(())
             }
         }

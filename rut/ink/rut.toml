@@ -1,4 +1,4 @@
-# ink/ — the logger package (RFC 0028): rut source wrapping the `rt`
+# ink/ — the logger package: rut source wrapping the `rt`
 # host surface in the `Logger` class. Publishes COMPILED (the
 # linkable-classes phase): the class's methods cross on the surface's
 # inherent rows, so `Logger.new(..)` and `logger.log(..)` bind in every

@@ -1,4 +1,4 @@
-//! The `run_loop` driver (RFC 0034 §3).
+//! The `run_loop` driver.
 //!
 //! `rut-vm-threaded` runs stretches of threaded (scalar) ops with a
 //! tail-call dispatcher that carries the frame state in arguments. When it
@@ -115,7 +115,7 @@ impl Vm {
                 let table = &self.prog.funcs[self.cur_func as usize].labels
                     [*table_off as usize..*table_off as usize + *count as usize];
                 let raw = self.cur_regs[*idx as usize];
-                // null names no member: the default arm (RFC 0018)
+                // null names no member: the default arm
                 let m = if unsafe { raw.r.is_null() } {
                     u32::MAX as usize
                 } else {
@@ -142,7 +142,7 @@ impl Vm {
         if is_ref {
             self.heap.retain(val);
         }
-        // release the active frame's registers (destructors, RFC 0016 §3)
+        // release the active frame's registers (destructors)
         let regs = std::mem::take(&mut self.cur_regs);
         for &i in &self.ref_regs[func as usize] {
             self.heap.release(regs[i as usize]);

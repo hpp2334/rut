@@ -1,5 +1,5 @@
-//! Module mounts & resolution — the compile-time half of RFC 0035 §1,
-//! shaped by RFC 0029 §5 and RFC 0003 (§2).
+//! Module mounts & resolution — the compile-time half
+//! (loading model: `docs/src/reference/loading.md`).
 //!
 //! **One directory is one module.** Its `rut.toml` names the exact
 //! package it answers to and how to reach its surface and body; the
@@ -18,7 +18,7 @@
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
 //! consumer manifest (`[deps]`).
 //!
-//! The dep kinds (RFC 0045): `[deps]` is today's transitively-mounted
+//! The dep kinds: `[deps]` is today's transitively-mounted
 //! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
 //! the peer) with `optional = true` marking the presence-mounted kind
 //! whose integration group is the descriptor's `lib` file; `[dev-deps]`
@@ -40,7 +40,7 @@ use rut_bundle::{parse_manifest, valid_spec, Entry, ManifestError};
 #[derive(Clone, Debug)]
 pub enum ModuleBody {
     /// a `.rut` body — compile it. `is_decl` marks a declaration-mode
-    /// module (a `.d.rut` surface parsed as its own unit, RFC 0029):
+    /// module (a `.d.rut` surface parsed as its own unit):
     /// nothing to compile or run, but `rut dump` shows the AST.
     Source { text: String, is_decl: bool },
     /// a decoded `.rutc` program (a v5 compiled bundle's payload): the
@@ -48,7 +48,7 @@ pub enum ModuleBody {
     /// rebases its packed ids, and pushes it. The loader's decode gate
     /// (version + surface verification) has passed.
     Compiled(rut_core::binary::Program),
-    /// a native/host module (RFC 0022/0026): no rut body — bodyless
+    /// a native/host module: no rut body — bodyless
     /// functions the embedder binds at run time, exported constants,
     /// and the builtin rows (`core`'s prelude, `calc`'s `Math`). The
     /// graph synthesizes a placeholder program from these rows.
@@ -70,7 +70,7 @@ pub enum ModuleBody {
         /// bodies; rut-lir lowers them. Each row carries its ambient
         /// bit (same law)
         native_fns: Vec<(String, bool)>,
-        /// Builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the
+        /// Builtin-impl methods (`core` only): the
         /// integer primitives' numeric methods — `(receiver prim, name,
         /// lowering id)`. Bodyless and hostless — rut-lir expands the
         /// method call inline, ambient on the primitive.
@@ -93,7 +93,7 @@ pub struct Module {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
     /// The namespace head for qualified member access (`Math.sqrt`) —
-    /// `None` when the module has no namespace form (RFC 0028).
+    /// `None` when the module has no namespace form.
     pub namespace: Option<String>,
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
@@ -101,11 +101,11 @@ pub struct Module {
     /// The host-fn registration scope — the `FuncCode` host-id prefix — when
     /// it must differ from the package name. `rt` stays the logger host
     /// module's use path while its internal registration naming remains
-    /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
+    /// `rt:log` (`rt:log::create_logger`), untouched.
     pub host_scope: Option<String>,
 }
 
-/// One recorded `[peer-deps]` declaration (RFC 0045 §2): the declaring
+/// One recorded `[peer-deps]` declaration: the declaring
 /// pkg's claim about a peer. Peers are REQUIRED by default; `optional`
 /// marks the presence-mounted kind. `lib` names the peer-gated
 /// integration file — an impl-only `.rut` source, relative to the
@@ -135,7 +135,7 @@ impl PeerDecl {
 /// Why a use path did not resolve. A miss points at the consumer
 /// manifest — the `[deps]` table (or the host) decides what exists —
 /// unless the missed name is a declared optional peer of a mounted pkg
-/// (RFC 0045 §4): then the dedicated missing-peer error answers, never
+///: then the dedicated missing-peer error answers, never
 /// the bare text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolveError {
@@ -143,7 +143,7 @@ pub enum ResolveError {
     BadSpec { spec: String },
     /// no module with that exact name is mounted
     NoModule { spec: String },
-    /// D2 (RFC 0045 §4): the name is an OPTIONAL peer some mounted pkg
+    /// D2: the name is an OPTIONAL peer some mounted pkg
     /// declared, and the peer is absent — its integration group never
     /// mounted. Names the pkg, the peer, the integration it unlocks,
     /// and the fix. (A REQUIRED peer's absence is louder still: D1 at
@@ -164,7 +164,7 @@ impl std::fmt::Display for ResolveError {
             ),
             ResolveError::PeerMissing { spec, pkg } => write!(
                 f,
-                "cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §4)"
+                "cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`"
             ),
         }
     }
@@ -173,12 +173,12 @@ impl std::error::Error for ResolveError {}
 
 /// The business-owned mount table. The host decides what exists; the
 /// resolver maps exact specifiers. Mirrors the runtime
-/// `vm.register_module` (RFC 0035 §3).
+/// `vm.register_module`.
 #[derive(Clone, Debug, Default)]
 pub struct Session {
     modules: BTreeMap<String, Module>,
     deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// The `[peer-deps]` declarations the loader recorded (RFC 0045):
+    /// The `[peer-deps]` declarations the loader recorded:
     /// declaring pkg → peer spec → declaration. The loader's peer gate
     /// reads it post-closure; the reference-site missing-peer
     /// diagnostic (the D2 upgrade) resolves against it.
@@ -199,7 +199,7 @@ pub struct Session {
     /// through this table to the module to ensure — a reference with no
     /// row is a load error (refuse, never guess).
     bundle_scopes: BTreeMap<rut_core::id::ScopeId, String>,
-    /// Presence-gated peer-integration groups (RFC 0045 §3): declaring
+    /// Presence-gated peer-integration groups: declaring
     /// pkg → the group texts whose optional peers are in the program's
     /// closure, in the declarer's peer-table order. The graph compiles
     /// them INTO the declarer's unit (after its own source) — the
@@ -234,10 +234,10 @@ impl Session {
 
     /// Exact resolution: the package name must be mounted as-is. A miss
     /// that is a declared optional peer of some mounted pkg answers D2
-    /// (RFC 0045 §4) instead of the bare text — `resolve` is the ONE
+    /// instead of the bare text — `resolve` is the ONE
     /// path every reference-site miss flows through, so the dedicated
     /// diagnostic holds by construction (item-level misses can never be
-    /// peer-gated: groups are impl-only, RFC 0045 §3).
+    /// peer-gated: groups are impl-only).
     pub fn resolve(&self, spec: &str) -> Result<&Module, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
@@ -265,9 +265,9 @@ impl Session {
         ResolveError::NoModule { spec: spec.to_string() }
     }
 
-    /// The host-fn table the mounted host pkgs declare (RFC 0025):
+    /// The host-fn table the mounted host pkgs declare:
     /// `<scope>::<name>` → signature. The scope is the module's
-    /// `host_scope` override when set (`rt` → `rt:log`, RFC 0022), else
+    /// `host_scope` override when set (`rt` → `rt:log`), else
     /// the package name. The table feeds `Vm::verify_host_fns` — the
     /// load-time half of the `.d.rut` ↔ host-impl contract (a mismatch
     /// panics before any rut code runs).
@@ -275,7 +275,7 @@ impl Session {
     /// An `async` host row expands into its row family: the decl spells
     /// one name but the embedder registers five bodies (the base name —
     /// a trap, the weave never dispatches it — plus
-    /// `__start`/`__yield`/`__take`/`__cancel`), so the RFC 0025
+    /// `__start`/`__yield`/`__take`/`__cancel`), so the
     /// "bound but undeclared" direction stays total for
     /// `register_async!` registrations.
     pub fn expected_host_fns(
@@ -311,7 +311,7 @@ impl Session {
         out
     }
 
-    /// Record a `[peer-deps]` declaration for `pkg` (RFC 0045). The
+    /// Record a `[peer-deps]` declaration for `pkg`. The
     /// loader calls this while walking — it reads every mounted pkg's
     /// manifest anyway, so the registry costs no extra I/O.
     pub fn record_peer(&mut self, pkg: &str, peer: &str, decl: PeerDecl) {
@@ -360,7 +360,7 @@ impl Session {
     }
 
     /// Record one presence-gated peer-integration group for `pkg`
-    /// (RFC 0045 §3): the gate read the descriptor's `lib` file because
+    ///: the gate read the descriptor's `lib` file because
     /// the peer is in the closure. The graph compiles recorded groups
     /// into the declarer's own unit, after its source — a mounted
     /// module's body is never mutated.
@@ -450,7 +450,7 @@ nmapset = { path = "../nmapset" }
 
     #[test]
     fn d2_optional_peer_miss_names_pkg_peer_and_fix() {
-        // RFC 0045 §4 (D2): with json's registry entry recorded, a miss
+        // (D2): with json's registry entry recorded, a miss
         // on the peer's name is the DEDICATED diagnostic — pkg + peer +
         // the integration it unlocks + the fix — never the bare
         // NoModule text. The pinned survey text, verbatim.
@@ -459,7 +459,7 @@ nmapset = { path = "../nmapset" }
         let err = s.resolve("pouch").unwrap_err();
         assert_eq!(
             err.to_string(),
-            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]` (RFC 0045 §4)"
+            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]`"
         );
         // a name NO pkg declares as a peer stays the bare miss
         let err = s.resolve("stranger").unwrap_err();

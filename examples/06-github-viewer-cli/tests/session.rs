@@ -101,7 +101,6 @@ impl Sinks {
 /// math + nmap + the async engine + the fixture HTTP lane + the
 /// rgh_host rows over the sinks (exit RECORDS — the one-way door is
 /// the embedder's), and checks the decl ↔ bodies contract pre-boot
-/// (RFC 0025).
 fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static) -> (Vm, Sinks, HttpFixture) {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
@@ -669,7 +668,7 @@ fn the_one_shot_law_degrades_second_takers() {
             Ok(())
         });
     // the probe never touches the files or the exit row, but the decl
-    // contract is TOTAL — every mounted row binds something (RFC 0025)
+    // contract is TOTAL — every mounted row binds something
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
         move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
@@ -790,7 +789,7 @@ fn live_smoke_over_the_real_cdn() {
             Ok(())
         });
     // the list smoke never touches the files, but the decl contract is
-    // total (RFC 0025)
+    // total
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
         move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {

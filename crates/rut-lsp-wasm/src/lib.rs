@@ -1,5 +1,5 @@
 //! rut-lsp-wasm — the language core as an in-process wasm module
-//! (RFC 0041 §2). The VS Code extension instantiates this and registers
+//!. The VS Code extension instantiates this and registers
 //! its providers directly — no server process, no per-platform binaries.
 //! The native `rut-lsp` stdio server remains the face for editors that
 //! speak LSP; both run the *same* queries from `rut_lsp::analysis`, so

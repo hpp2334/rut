@@ -1,5 +1,5 @@
 //! Type aliases, union bounds, and inline `requires` end to end
-//! (RFC 0043): transparency through params/fields/chains, the
+//!: transparency through params/fields/chains, the
 //! recursion and bound-only diagnostics, admission at the call site
 //! (concrete by id, traits via the impl registry, trait objects satisfy
 //! nothing), and cross-module `pub type` export.
@@ -9,7 +9,7 @@ use rut_parser::Mode;
 use rut_core::types::TY_I64;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // core bound as the one use (RFC 0028): these tests exercise alias
+    // core bound as the one use: these tests exercise alias
     // and bound semantics, not use discipline
     rut_driver::compile_program(
         src,
@@ -91,7 +91,7 @@ fn self_alias_diagnoses() {
 #[test]
 fn unions_are_bound_only() {
     // a union alias in a value position errors (`pub` so the signature
-    // is compiled — the library surface, RFC 0029)
+    // is compiled — the library surface)
     let ds = diags_of(
         "type Num = i32 | str;\n\
          pub fn f(x: Num) -> i32 { return 0; }\n\
@@ -167,7 +167,7 @@ fn main() -> i32 { let t: Token = Token { v: 1 }; return seal(t); }\n\
 
 #[test]
 fn trait_object_satisfies_nothing() {
-    // RFC 0013 §2: a trait-object instantiation satisfies no bound —
+    // a trait-object instantiation satisfies no bound —
     // only a concrete type with a registered impl does
     let ds = diags_of(
         "trait Enc { fn enc(self) -> bytes; }\n\
@@ -214,7 +214,7 @@ fn bound_may_reference_another_generic() {
 #[test]
 fn method_bounds_parse_and_collect() {
     // a bounded method parses, collects, and compiles when uncalled —
-    // the bound rides the method declaration (RFC 0043)
+    // the bound rides the method declaration
     let out = compile(
         "trait Enc { fn enc(self) -> bytes; }\n\
          struct Token { v: i32 }\n\

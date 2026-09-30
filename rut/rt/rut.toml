@@ -1,4 +1,4 @@
-# rt/ — the logger host pkg (RFC 0022 §1 / RFC 0028): a pure
+# rt/ — the logger host pkg: a pure
 # declaration surface. The embedding Rust binds the bodies
 # (`rut_std::logger::install` → `rt:log::create_logger` /
 # `rt:log::logger_log`); `ink` wraps them in the `Logger` class.

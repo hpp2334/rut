@@ -1,4 +1,4 @@
-//! Multi-lib entries (RFC 0041 §5): a package authored as several
+//! Multi-lib entries: a package authored as several
 //! `.rut` files — the base `entry.lib` plus an ordered `entry.libs`
 //! tail — spliced into ONE module: one namespace, one visibility
 //! scope, manifest array order as the canonical splice order.

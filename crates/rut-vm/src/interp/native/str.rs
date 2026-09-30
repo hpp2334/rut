@@ -1,5 +1,5 @@
-//! String natives (RFC 0032 §1.1 R2): `str`/`concat` (the `f""`
-//! desugaring, RFC 0007 §2), `string_len` (the char count, RFC 0008), the
+//! String natives: `str`/`concat` (the `f""`
+//! desugaring), `string_len` (the char count), the
 //! host print sink, and per-type `render`.
 use super::*;
 
@@ -63,7 +63,7 @@ impl Vm {
                         && !tref.is_null()
                         && cell_of(target).refs.get() == 1
                         // an owned cell only: appending through a VIEW
-                        // would write into its parent (RFC 0042)
+                        // would write into its parent
                         && matches!(&cell_of(target).data, CellData::Str(_))
                         && !args[1..].iter().any(|a| unsafe { self.reg(*a).r } == tref)
                     {
@@ -197,7 +197,7 @@ impl Vm {
                 }
             }
             Nat::StrSlice => {
-                // s.slice(from, to) — an O(1) window (RFC 0042): codepoint
+                // s.slice(from, to) — an O(1) window: codepoint
                 // bounds here, byte offsets inside. The view retains the
                 // root owned str; view-of-view flattens onto the root.
                 let s = self.reg(recv.unwrap());
@@ -249,7 +249,7 @@ impl Vm {
             }
             Nat::StrJoin => {
                 // join every element of an `Array<str>`: one sizing pass,
-                // then one copy into a single allocation (RFC 0032 §1.1 R2).
+                // then one copy into a single allocation.
                 let arr = self.reg(args[0]);
                 let total = match &cell_of(arr).data {
                     crate::heap::CellData::Array { items, .. } => {
@@ -281,7 +281,7 @@ impl Vm {
         Ok(())
     }
 
-    /// Per-type formatting — the RFC 0007 §2 table. The register's static
+    /// Per-type formatting — the table. The register's static
     /// type says how to read the slot.
     pub(super) fn render(&self, v: Slot, reg: Reg) -> Result<String, Trap> {
         let ty = self.regs_ty(reg);
@@ -307,7 +307,7 @@ impl Vm {
             }
             _ => Err(Trap::new(
                 TrapKind::Invalid,
-                "this type is not formattable inside f\"...\" (RFC 0007 §2)",
+                "this type is not formattable inside f\"...\"",
             )),
         }
     }

@@ -635,7 +635,7 @@ mod tests {
     use std::rc::Rc;
 
     /// this test's host pkgs — the mounted decl surface the bodies must
-    /// match (RFC 0025)
+    /// match
     const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut");
 
     /// the probe: the FACE (the `rut/http` classes), driven as an async

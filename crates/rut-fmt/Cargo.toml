@@ -3,7 +3,7 @@ name = "rut-fmt"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut source formatter (RFC 0030 §7): `rut fmt`"
+description = "the rut source formatter: `rut fmt`"
 
 [dependencies]
 rut-lexer = { path = "../rut-lexer" }

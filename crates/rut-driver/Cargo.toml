@@ -3,7 +3,7 @@ name = "rut-driver"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the pipeline driver — compile_module: parse → check/LIR → binary (RFC 0031→0033); the CLI and wasm entry point"
+description = "the pipeline driver — compile_module: parse → check/LIR → binary; the CLI and wasm entry point"
 
 [lib]
 name = "rut_driver"

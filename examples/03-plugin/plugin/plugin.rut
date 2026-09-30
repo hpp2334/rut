@@ -2,16 +2,16 @@
 //
 // One file is one module unit: the business logic (`Moderator`, below)
 // and the ADAPTER (the `entry fn` surface) share one scope. The
-// adapter is the entire host-visible surface (RFC 0035 §3).
+// adapter is the entire host-visible surface.
 //
-// Callbacks cannot cross the boundary as values (RFC 0023 §2), so
+// Callbacks cannot cross the boundary as values, so
 // registration is BY NAME: the plugin hands the host the export names
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
 use server::{ subscribe, emit };
 
-// The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
+// The type body is FIELDS ONLY — methods live in the inherent
 // `impl Moderator` block below. The muted list is a fixed cell (the
 // n_muted prefix is the fill): the plugin stays free of generic
 // packages, so it publishes as a v5 COMPILED bundle (`rut pack`).
@@ -127,7 +127,7 @@ entry fn on_tick(c: opaque, n: i64) {
 }
 
 /// The wire formatter — the host calls this NESTED, from inside `emit`,
-/// while the handler that emitted is still parked mid-op (RFC 0022 §1).
+/// while the handler that emitted is still parked mid-op.
 entry fn render_line(topic: str, payload: str) -> str {
     return f"[{topic}] {payload}";
 }

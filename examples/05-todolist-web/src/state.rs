@@ -27,8 +27,7 @@ pub enum WebEvent {
 }
 
 /// What fired: a DOM listener (by id) or a timer (by tag). The sink's
-/// currency — closures push these, never callables (the closure law,
-/// RFC 0025).
+/// currency — closures push these, never callables (the closure law).
 pub enum Ev {
     Dom(i64),
     Timer(String),
@@ -46,14 +45,14 @@ pub struct ListenerRow<El> {
 
 /// The host's whole page state: the backend, the queue, the listener
 /// registry, the re-entrancy guard, and the app container. Single thread
-/// (RFC 0034) — the guard is a plain bool.
+/// — the guard is a plain bool.
 pub struct WebState<D: DomBackend> {
     pub dom: D,
     pub queue: VecDeque<WebEvent>,
     pub listeners: HashMap<i64, ListenerRow<D::El>>,
     /// The app container: the ONE opaque the boot turn returned, handed
-    /// back on every event turn (phase 2's shape — RFC 0003 §1's
-    /// own law: rut has no mutable module state, so the store lives in
+    /// back on every event turn (phase 2's shape —
+    /// rut has no mutable module state, so the store lives in
     /// the container the host passes back, the 00-todolist pattern).
     pub app: Option<OpaqueRef>,
     /// The pump's report surface (err-channel phase 3): every event
@@ -90,7 +89,7 @@ impl<D: DomBackend> WebState<D> {
     /// A DOM listener fired: classify the row, attach the listened
     /// input's current value when the element IS an input, enqueue. A
     /// stale id is listener drift — a host-side internal error, panic,
-    /// never a rut diagnostic (the same class as the RFC 0025 boot
+    /// never a rut diagnostic (the same class as the boot
     /// panics).
     pub fn push_dom_event(&mut self, listener: i64) {
         let (el, event) = match self.listeners.get(&listener) {
@@ -167,7 +166,7 @@ pub fn drain_queue<D: DomBackend>(
         let app = state.borrow().app.clone().ok_or_else(|| {
             Trap::new(
                 TrapKind::Invalid,
-                "web: no app container — the boot turn must return one (RFC 0003 §1: the state crosses, the host re-passes it)",
+                "web: no app container — the boot turn must return one (the state crosses, the host re-passes it)",
             )
         })?;
         state.borrow_mut().begin_turn();
@@ -221,7 +220,7 @@ pub fn bind_weak_sink<D: DomBackend>(
 
 /// Box a backend element as the opaque rut holds — `Opaque<El>`: the
 /// payload is invisible to rut (`o is opaque` holds, `downcast` misses),
-/// released deterministically at rc 0 (RFC 0014/0016 §3).
+/// released deterministically at rc 0.
 pub fn box_element<D: DomBackend>(
     vm: &mut Vm,
     el: D::El,

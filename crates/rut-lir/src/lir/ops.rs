@@ -1,5 +1,5 @@
-//! Operators (RFC 0004 SS3: equal widths, traps by default; the wrapping
-//! &op family) and assignment: the mut-binding law (RFC 0003 SS1),
+//! Operators (equal widths, traps by default; the wrapping
+//! &op family) and assignment: the mut-binding law,
 //! compound forms, field/index targets.
 
 use crate::check::TcResult;
@@ -9,7 +9,7 @@ use super::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
 
-    // ---- operators (RFC 0004 §3: equal widths; traps by default) ----
+    // ---- operators (equal widths; traps by default) ----
 
     pub(crate) fn compile_binary(
         &mut self,
@@ -24,7 +24,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if matches!(op, And | Or) {
             return self.compile_shortcircuit(op, lhs, rhs, sp);
         }
-        // bidirectional unification (RFC 0007 §1): an expected type from the
+        // bidirectional unification: an expected type from the
         // enclosing position (return/assignment/argument) seeds the lhs, then
         // rhs adapts to the lhs. Without it, `1.0 / x as f64` and unannotated
         // `4.0 * pi` would default the lhs to f32 and mismatch.
@@ -37,7 +37,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let lt = self.compile_expr(lhs, seed)?;
         let lhs_reg = self.last_reg;
         // arithmetic/ordinal: a scalar-pointee pointer on the left reads
-        // its pointee (RFC 0012 §6); the right side derefs through the
+        // its pointee; the right side derefs through the
         // compile_expr funnel. `==`/`!=` keep pointer identity and decide
         // after both sides are typed.
         let (lt, lhs_reg) = if !matches!(op, Eq | Ne) {
@@ -49,7 +49,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut lhs_reg = lhs_reg;
         // the rhs hint: an expected `?T` boxes values at let/arg/return/
         // field-store positions, but a `==` operand is NOT such a position
-        // (RFC 0012 §4 — pointer-vs-pointee compares stay). Against a
+        // (pointer-vs-pointee compares stay). Against a
         // nullable lhs the rhs takes the PAYLEE type (the lhs derefs in
         // the mirror below); only the `nil` literal takes the nullable
         // hint, typing as `?T` for the identity null-slot compare.
@@ -63,7 +63,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let rhs_reg = self.last_reg;
         // `==`/`!=`: a pointer against its own pointee type compares the
         // VALUE (the funnel already deref'd the right-hand side); pointer-
-        // vs-pointer — including `nil` — stays identity (RFC 0012 §4)
+        // vs-pointer — including `nil` — stays identity
         if matches!(op, Eq | Ne) && rt_ != lt {
             if let TyKind::Opt { elem } = self.ctx.types.kind(lt).clone() {
                 if rt_ == elem {
@@ -75,7 +75,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if lt != rt_ {
             self.ctx.err(sp, format!(
-                "operands must have equal width (RFC 0004 §3): `{}` vs `{}` —convert first (RFC 0007 §1)",
+                "operands must have equal width: `{}` vs `{}` —convert first",
                 self.ctx.type_name(lt), self.ctx.type_name(rt_)
             ));
             return Err(());
@@ -83,7 +83,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ty = lt;
         match op {
             Eq | Ne => {
-                // the `==` law (RFC 0044): primitives by value, string and
+                // the `==` law: primitives by value, string and
                 // bytes by content, everything else CELL IDENTITY (the raw
                 // slot compare — by-reference sharing makes structural
                 // equality unobservable); Option/Result is a compile error
@@ -196,7 +196,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(TY_BOOL)
     }
 
-    // ---- assignment (mut-binding law —RFC 0003 §1) ----
+    // ---- assignment (mut-binding law) ----
 
     pub(crate) fn compile_assign(
         &mut self,
@@ -212,13 +212,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // assign the last field
                 if segs[0].generics.is_empty() {
                     if let Some(l) = self.lookup(segs[0].name).cloned() {
-                        // the mut-binding law (RFC 0003 §1) is uniform under
-                        // the by-reference regime (RFC 0044): a `?T` head
+                        // the mut-binding law is uniform under
+                        // the by-reference regime: a `?T` head
                         // derefs, then writes through the shared cell — the
                         // head binding itself must be `let mut`
                         if !l.is_mut && !l.loop_var {
                             self.ctx.err(sp, format!(
-                                "assignment through `{}` requires a `let mut` binding (the mut-binding law, RFC 0003 §1)",
+                                "assignment through `{}` requires a `let mut` binding (the mut-binding law)",
                                 self.ctx.name(segs[0].name)
                             ));
                             return Err(());
@@ -272,7 +272,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Some(bin) => {
                                 let cur_v = self.new_reg(fty);
                                 self.emit(Op::GetF { dst: cur_v, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
-                                // a `?T` field computes at T (RFC 0044): the
+                                // a `?T` field computes at T: the
                                 // accumulator derefs, the result re-boxes
                                 let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
                                 let t = self.compile_expr(value, Some(cty))?;
@@ -300,7 +300,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 if !l.is_mut && !l.loop_var {
                     self.ctx.err(sp, format!(
-                        "assignment to `{}` requires a `let mut` binding (the mut-binding law, RFC 0003 §1)",
+                        "assignment to `{}` requires a `let mut` binding (the mut-binding law)",
                         self.ctx.name(name)
                     ));
                     return Err(());
@@ -314,7 +314,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             return Ok(());
                         }
                         let t = self.compile_expr(value, Some(l.ty))?;
-                        // implicit widening at the assignment (RFC 0012 §4):
+                        // implicit widening at the assignment:
                         // a concrete value coerces to a trait-typed binding
                         if !self.widens(t, l.ty) {
                             self.ctx.err(sp, format!(
@@ -323,12 +323,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             ));
                         }
                         // concrete → slot widening boxes scalars (the slot
-                        // ABI, RFC 0012 §4): the binding always holds a cell
+                        // ABI): the binding always holds a cell
                         self.widen_to_slot(t, l.ty, sp.lo);
-                        // the sharing law (RFC 0044): the binding takes the
+                        // the sharing law: the binding takes the
                         // value's cell handle — a share, never a copy
                         self.mov_slot(l.reg, self.last_reg, l.ty, sp.lo);
-                        // origin counting (RFC 0012 §5): a concrete value
+                        // origin counting: a concrete value
                         // re-pins the origin; anything else erases it —
                         // a stale origin could statically bind the WRONG
                         // impl, which must be unrepresentable
@@ -340,7 +340,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Vec::new()
                         };
                         self.set_origins(name, origins);
-                        // async weave (RFC 0018): mirror the write into
+                        // async weave: mirror the write into
                         // the frame cell — the park's ret releases
                         // registers, the fields are what survive
                         self.mirror_local(name, sp.lo);
@@ -364,7 +364,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         } else {
                             self.emit(Op::Mov { dst: l.reg, src: res }, sp.lo);
                         }
-                        // async weave (RFC 0018): mirror the write (above)
+                        // async weave: mirror the write (above)
                         self.mirror_local(name, sp.lo);
                     }
                 }
@@ -375,7 +375,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p.f = ..` through a nullable auto-derefs (RFC 0005) —
+                // `p.f = ..` through a nullable auto-derefs —
                 // so does `arr[i].f = ..` when the elements are `?T`
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
@@ -398,7 +398,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Some(bin) => {
                         let cur = self.new_reg(fty);
                         self.emit(Op::GetF { dst: cur, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
-                        // a `?T` field computes at T (RFC 0044): the
+                        // a `?T` field computes at T: the
                         // accumulator derefs, the result re-boxes
                         let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
                         let t = self.compile_expr(value, Some(cty))?;
@@ -420,7 +420,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `xs[i] = ..` through a pointer auto-derefs (RFC 0005)
+                // `xs[i] = ..` through a pointer auto-derefs
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let Some(info) = self.slice_info(rt) else {
                     self.ctx.err(sp, "index assignment needs a sequence (Vec or Array)");
@@ -443,7 +443,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     Some(bin) => {
                         let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
-                        // a `?T` element computes at T (RFC 0044): the
+                        // a `?T` element computes at T: the
                         // accumulator derefs, the result re-boxes
                         let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
                         let t = self.compile_expr(value, Some(cty))?;
@@ -515,12 +515,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn check_formattable(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
-        // RFC 0007 §2 table: ints, floats, bool, char, string, enum
+        // Table: ints, floats, bool, char, string, enum
         match self.ctx.types.kind(ty) {
             TyKind::Prim(_) | TyKind::Str | TyKind::Enum { .. } => Ok(()),
             _ => {
                 self.ctx.err(sp, format!(
-                    "`{}` is not formattable inside f\"...\" —use `debug.str(x)` or a `to_string()` method (RFC 0007 §2)",
+                    "`{}` is not formattable inside f\"...\" —use `debug.str(x)` or a `to_string()` method",
                     self.ctx.type_name(ty)
                 ));
                 Err(())

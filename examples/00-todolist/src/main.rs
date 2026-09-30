@@ -4,7 +4,7 @@
 //! This file is the embedder: compile, verify, then drive the library
 //! through its `entry fn` surface — the host owns the session, holds the
 //! opaque container and the list handles, and every call crosses with
-//! plain values only (RFC 0023 §2).
+//! plain values only.
 
 use std::rc::Rc;
 

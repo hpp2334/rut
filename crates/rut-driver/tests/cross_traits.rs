@@ -1,4 +1,4 @@
-//! Cross-module traits & the impl registry (RFC 0012 §2/§2a/§5/§6): a
+//! Cross-module traits & the impl registry: a
 //! trait impl lives where a side of the pair is owned — a trait
 //! declared in one module, a type in another, the impl in a module of
 //! either. Per-module compiles cannot see each other's registrations,
@@ -31,7 +31,7 @@ pub fn make_point() -> Point { return Point { x: 3.0 }; }
 ";
 
 /// The trait + impl module: the trait is extras' own, the type is USED
-/// from shapes — the trait-local side of RFC 0012 §2a. The impl lives
+/// from shapes — the trait-local side. The impl lives
 /// outside the type's module, so the registration crosses modules and
 /// the link merges it.
 const EXTRAS: &str = "\
@@ -47,7 +47,7 @@ pub fn describe() -> f64 {
 ";
 
 /// A duplicate-writing module: `impl ForeignTrait for ForeignType` —
-/// both sides foreign to it (RFC 0012 §2a's orphan), re-registering a
+/// both sides foreign to it (the orphan), re-registering a
 /// pair `shapes` already provides.
 const EXTRAS_DUP: &str = "\
 use shapes::{Shape, Point};
@@ -123,7 +123,7 @@ fn main() -> i32 {
     ]);
     let dump = ir(&p);
     // the impl lives in `shapes`; the call binds to its compiled fn
-    // directly — static dispatch, no vtable hop (RFC 0012 §5)
+    // directly — static dispatch, no vtable hop
     assert!(dump.contains("callm"), "static bind through the foreign impl:\n{dump}");
     assert!(!dump.contains("calli"), "no vtable hop for a single concrete origin:\n{dump}");
 }
@@ -165,8 +165,7 @@ fn main() -> i32 {
 #[test]
 fn trait_local_impl_for_a_used_type_dispatches() {
     // `Point` is declared in `shapes`; the trait AND the impl live in
-    // `extras`, which uses the type — the trait-local side of RFC 0012
-    // §2a (the json-group shape): the impl lives outside the type's
+    // `extras`, which uses the type — the trait-local side (the json-group shape): the impl lives outside the type's
     // module, and the consumer calls through the module that registered
     // it.
     let p = linked(&[
@@ -199,7 +198,7 @@ fn main() -> i32 {
 
 #[test]
 fn third_party_impl_is_the_orphan_error() {
-    // RFC 0012 §2a: a module owning NEITHER side of the pair cannot
+    // a module owning NEITHER side of the pair cannot
     // write the impl — the old any-module placement (both sides foreign
     // to the writer) is exactly what the orphan rule rejects. The gate
     // fires in the impl module's own compile, before anything links.
@@ -241,7 +240,7 @@ fn main() -> i32 {
 #[test]
 fn duplicate_impl_pair_reports_the_orphan_before_the_link() {
     // `shapes` registers (Shape, Point) itself; `extras` writes the same
-    // pair owning NEITHER side. RFC 0012 §2a's ordering — placement
+    // pair owning NEITHER side. The ordering — placement
     // precedes registration — fires the orphan gate in extras' own
     // compile, so the collision never reaches §5's link check (which
     // keeps its surface-level test in rut-core's link.rs).
@@ -274,8 +273,7 @@ fn main() -> i32 { return 0; }
 #[test]
 fn unused_but_implemented_trait_gives_the_use_gate_diagnostic() {
     // `Point` is used, `Shape` is not in any `use` — the impl exists,
-    // but the use-both gate keeps its methods uncallable and says so
-    // (RFC 0012 §6).
+    // but the use-both gate keeps its methods uncallable and says so.
     let g = graph(&[
         ("shapes", SHAPES),
         ("app", "\

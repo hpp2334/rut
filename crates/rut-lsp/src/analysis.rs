@@ -29,7 +29,7 @@ pub struct Analysis {
     pub index: hover::DefIndex,
 }
 
-/// `.d.rut` parses in declaration mode (RFC 0030 §3); everything else is
+/// `.d.rut` parses in declaration mode; everything else is
 /// full `Mode::Impl`.
 pub fn mode_of(path: &str) -> Mode {
     if path.ends_with(".d.rut") {

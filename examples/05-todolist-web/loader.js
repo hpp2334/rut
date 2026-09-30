@@ -47,7 +47,7 @@ const w = glue.initSync();
 const enc = new TextEncoder();
 // The app source is the biz MODULE: the base plus its `entry.libs`
 // tail, fetched and concatenated in rut/biz/rut.toml's array order —
-// the loader's splice law (RFC 0041 §5), restated for the wasm lane
+// the loader's splice law, restated for the wasm lane
 // (the browser has no manifest reader; this list IS the manifest's
 // mirror, the same duty src/mount.rs's mirror lane carries natively).
 const BIZ_LIBS = [

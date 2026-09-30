@@ -1,9 +1,9 @@
-//! The core lockstep gate (RFC 0028): `rut/core/core.d.rut` is the
+//! The core lockstep gate: `rut/core/core.d.rut` is the
 //! declarative form of the compiler's prelude surface
 //! (`rut_core::binary::Surface::core`), and the two must agree — same
 //! engine builtin types, same engine-woven traits, same
 //! compiler-lowered functions. The whole prelude is `builtin` (the
-//! engine implements it, RFC 0025 revised): core declares NO `host`
+//! engine implements it): core declares NO `host`
 //! surface — that is exclusively the embedder's. The file's own contract
 //! says the surface is kept TRUE to the implementation; this test makes
 //! it enforced, not aspirational.
@@ -42,14 +42,14 @@ fn declared_names() -> (
                 );
                 assert!(
                     generics.is_empty() || !matches!(linkage, Linkage::Host),
-                    "crossing signatures are concrete (RFC 0023 §1)"
+                    "crossing signatures are concrete"
                 );
                 let ambient = matches!(*linkage, Linkage::Builtin { ambient: true });
                 builtin_fns.push((ast.name(*name).to_string(), ambient));
             }
             ItemKind::BuiltinTy { name, ambient, .. } => {
                 let n = ast.name(*name).to_string();
-                // `str`/`bytes` are language primitives (RFC 0004) — their
+                // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if !rut_parser::is_primitive_ty(&n) {
                     builtin_types.push((n, *ambient));
@@ -57,7 +57,7 @@ fn declared_names() -> (
             }
             ItemKind::BuiltinPrimitive { name, ambient, .. } => {
                 let n = ast.name(*name).to_string();
-                // `str`/`bytes` are language primitives (RFC 0004) — their
+                // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if rut_parser::is_primitive_ty(&n) {
                     continue;
@@ -125,7 +125,7 @@ fn core_decl_matches_the_compilers_surface() {
 
     // builtin impls: the decl's `builtin impl <prim>` blocks are exactly
     // the numeric-method table — same prims, same method names per prim
-    // (RFC 0032 §1.1 R2)
+    //
     let prim_name = |t: rut_core::types::TypeId| -> String {
         use rut_core::types::*;
         match t {
@@ -169,8 +169,7 @@ fn core_decl_matches_the_compilers_surface() {
 #[test]
 fn removed_names_self_diagnose_with_or_without_use() {
     // `Option` is a v1.1 removal: use-sites diagnose with the removal and
-    // its replacement — with or without the use statement (RFC 0028
-    // v1.1). (The LIVE builtin names are ambient now — RFC 0028 revised,
+    // its replacement — with or without the use statement. (The LIVE builtin names are ambient now —
     // builtin-surface — so the removals are the only names a `use` still
     // has anything to say about; see tests/ambient.rs.)
     let mut s = rut_driver::Session::new();
@@ -217,7 +216,7 @@ fn removed_names_self_diagnose_with_or_without_use() {
 }
 
 /// The char exorcism's type-position pin (nmap-hostvals P1, §0.8 l): the
-/// surface died at RFC 0004 v1.1 and the enumerated kind is now GONE from
+/// surface died at v1.1 and the enumerated kind is now GONE from
 /// the IR (`PrimTy::Char` deleted) — but `char` in a type position must
 /// still diagnose with the dedicated removal message, never "unknown type".
 /// The resolver consults `removed_core` BEFORE the primitive table, so the
@@ -241,7 +240,7 @@ fn removed_char_type_positions_diagnose_without_the_kind() {
         let out = rut_driver::compile_graph(&s, "app_main");
         assert!(
             out.diags.iter().any(|d| d.msg.contains(
-                "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"
+                "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one"
             )),
             "src: {src}\ndiags: {:?}",
             out.diags

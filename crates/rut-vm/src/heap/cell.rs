@@ -1,4 +1,4 @@
-//! Heap cells (RFC 0016): `CellVal`/`CellData`, the inline `Slots` buffer,
+//! Heap cells: `CellVal`/`CellData`, the inline `Slots` buffer,
 //! the packed element store, and the raw `cell`/`cell_of` accessors.
 use super::*;
 
@@ -7,7 +7,7 @@ use super::*;
 pub struct CellVal {
     pub ty: TypeId,
     pub data: CellData,
-    /// intrusive strong count (RFC 0039 self-managed arena); `u32::MAX`
+    /// intrusive strong count; `u32::MAX`
     /// marks an immortal enum singleton
     pub(crate) refs: Cell<u32>,
     /// accounted bytes, refunded on release
@@ -15,7 +15,7 @@ pub struct CellVal {
 }
 
 /// Payload slots for a record/array cell: small payloads live inline in
-/// the cell (RFC 0015 §4), larger ones spill to the heap.
+/// the cell, larger ones spill to the heap.
 /// This removes the per-record `Vec` allocation for the common small
 /// struct.
 const INLINE_SLOTS: usize = 4;
@@ -96,24 +96,24 @@ impl Slots {
     }
 }
 
-/// Compact element storage for a sequence cell (RFC 0015 §4: "flat for
+/// Compact element storage for a sequence cell ("flat for
 /// primitive elem"). Sub-slot-width primitives pack to their machine
 /// width — a `Vec<u8>` costs one byte per element instead of eight —
 /// while 8-byte primitives and every reference-typed element keep an
 /// 8-byte slot.
 ///
-/// The elements live in a VM-owned block (`heap::blocks`, RFC 0039) at
+/// The elements live in a VM-owned block (`heap::blocks`) at
 /// `width`-byte stride; the `kind` says how a stored element reads back
 /// into a `Slot`. One fixed-size cell field replaces the ten typed
 /// `Vec` variants the enum used to have — the kind tag is what varied,
 /// the storage was Rust's.
 ///
-/// `Opt(p)` is the primitive-optional store (RFC 0044 §5): a `[?p]`
+/// `Opt(p)` is the primitive-optional store: a `[?p]`
 /// backing holds each element as the raw `p` payload plus a one-byte nil
 /// tag — stride `p.width() + 1`, the tag byte last, so one fixed-stride
 /// region serves payload and tags and every block-size computation rides
 /// `width()` unchanged. No element is a cell handle: nil is the tag (a
-/// zeroed block is all-nil, cohering with RFC 0015 §5's nil-is-the-zero
+/// zeroed block is all-nil, cohering with the nil-is-the-zero
 /// word), and a nil store also zeroes the payload so raw-byte views of
 /// the block stay deterministic. The release walk contributes no
 /// children for these arrays, and reads mint a fresh opt VALUE
@@ -352,7 +352,7 @@ impl ArrData {
         Some(old)
     }
 
-    // ---- the primitive-optional store (`ArrKind::Opt`, RFC 0044 §5) ----
+    // ---- the primitive-optional store (`ArrKind::Opt`) ----
     //
     // The element ops decode/encode through these; the displaced value of a
     // write is raw bits and is intentionally NOT returned as a Slot — a raw
@@ -448,7 +448,7 @@ impl ArrData {
 /// cached once at allocation. `str` is a `char` sequence, but the common
 /// case is all-ASCII — and then the char index equals the byte index, so
 /// `s[i]` / `for..of` is O(1) instead of re-decoding the UTF-8 prefix
-/// every step (RFC 0008).
+/// every step.
 ///
 /// The engine owns the UTF-8 invariant rather than a type: the octets are
 /// valid UTF-8 by construction (every source is a `&str`, a literal, or a
@@ -456,10 +456,10 @@ impl ArrData {
 /// `as_str` asserts the invariant instead of re-checking it, and the
 /// byte-level accessors (`as_bytes`, `char_len`) are the primary path.
 ///
-/// The octets live in a VM-owned block (`heap::blocks`, RFC 0039): the
+/// The octets live in a VM-owned block (`heap::blocks`): the
 /// cell's slot in the arena stays fixed-size; the variable part is a
-/// block the release path frees with the cell. Blocks never move
-/// (RFC 0016 OQ-1), so `as_bytes` can hand out `&[u8]` into the store.
+/// block the release path frees with the cell. Blocks never move,
+/// so `as_bytes` can hand out `&[u8]` into the store.
 pub struct StrVal {
     /// the payload block — `len` octets valid, `cap` octets usable; freed
     /// by the release path (never by `Drop` glue: freeing needs the
@@ -495,13 +495,13 @@ impl StrVal {
 pub enum CellData {
     Str(StrVal),
     Array { elem: TypeId, items: RefCell<ArrData> },
-    /// str slice view (RFC 0042): a window into an OWNED str cell,
+    /// str slice view: a window into an OWNED str cell,
     /// retained by `parent`. `off`/`len` are byte offsets into the
     /// parent's block; codepoint bounds were resolved to bytes at
     /// creation, and view-of-view flattens onto the root, so `parent`
     /// is always an owned `Str`.
     StrView { parent: Slot, off: u32, len: u32, ascii: bool },
-    /// array window (RFC 0042 §6): a fixed-length view over a backing
+    /// array window: a fixed-length view over a backing
     /// `Array` cell, retained by `parent`. Element `i` of the window is
     /// element `off + i` of the parent — WRITES GO THROUGH (the `*T`
     /// aliasing law): the window is a pointer, not a copy. Fixed-length
@@ -511,15 +511,15 @@ pub enum CellData {
     Enum { member: u32 },
     /// struct/class instance — the payload as one slot per field
     Record { fields: RefCell<Slots> },
-    /// closure value (RFC 0013) — v1 captures by value. The callee's
+    /// closure value — v1 captures by value. The callee's
     /// signature (`params`/`ret`/capture types) is static program data in
     /// `prog.funcs[func]`; the cell carries only the function id and the
-    /// per-instance captured values, so it stays small (RFC 0039).
+    /// per-instance captured values, so it stays small.
     Closure {
         func: u32,
         captures: Vec<Slot>,
     },
-    /// engine stack-trace snapshot (RFC 0036 §2, err-channel phase 2) —
+    /// engine stack-trace snapshot —
     /// the `StackTrace` builtin class's payload: the RAW captured frames,
     /// innermost first, nothing else. No symbolication data lives in the
     /// cell: `name`/`line`/`col`/`render` resolve lazily, per access,
@@ -527,7 +527,7 @@ pub enum CellData {
     /// One frame is one call site — `(func, pc)`:
     /// 8 bytes, so `len(frames) * 8` is the whole heap charge.
     Trace { frames: Vec<TraceFrame> },
-    /// weak reference (RFC 0017 v1) — the `Weak<T>` builtin class's
+    /// weak reference — the `Weak<T>` builtin class's
     /// payload: the referent's raw slot word (tagged for store entries),
     /// UNRETAINED — a weak never keeps its referent alive. `Cell` for
     /// interior mutability: referent death nulls every box in its weak
@@ -538,7 +538,7 @@ pub enum CellData {
     WeakBox { referent: std::cell::Cell<Slot> },
 }
 
-/// One captured frame — RFC 0036 §2's `RawFrame`, rut-only shape: the
+/// One captured frame — the `RawFrame`, rut-only shape: the
 /// frame's function id and the CALL-SITE pc (the op that pushed the
 /// frame; for the innermost frame, the `CallNat` capture op itself).
 /// No name, no source position — capture is a raw walk of `vm.frames`
@@ -596,11 +596,11 @@ impl CellVal {
         }
     }
     /// The raw octets of a `bytes` cell — `bytes` is a `u8` array at the
-    /// engine level (RFC 0004); empty for any other shape.
+    /// engine level; empty for any other shape.
     pub fn bytes_copy(&self) -> Vec<u8> {
         self.seq_bytes_copy().unwrap_or_default()
     }
-    /// Content equality of two sequences (RFC 0012 §4: `bytes` compares by
+    /// Content equality of two sequences (`bytes` compares by
     /// content — it is a `u8` array). Element-wise, shallow.
     pub fn array_eq(&self, other: &CellVal) -> bool {
         let (a, b) = match (&self.data, &other.data) {
@@ -718,6 +718,6 @@ pub fn cell_of(s: Slot) -> &'static CellVal {
 
 /// Every cell is one fixed-size record, so its size is set by the largest
 /// `CellData` variant. Guard it at compile time: a bulky variant silently
-/// taxes every allocation in the arena (RFC 0039). `Closure` is deliberately
+/// taxes every allocation in the arena. `Closure` is deliberately
 /// minimal — its signature lives in `prog.funcs`, not the cell.
 const _: () = assert!(std::mem::size_of::<CellVal>() <= 72);

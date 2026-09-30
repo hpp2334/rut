@@ -1,8 +1,8 @@
-//! Typed bytecode ops — RFC 0032 (LIR). Registers are u16 indices into a
+//! Typed bytecode ops. Registers are u16 indices into a
 //! per-frame `Vec<Slot>`; every register has a static type in the function
-//! signature; the verifier re-checks at load (RFC 0033 §2).
+//! signature; the verifier re-checks at load.
 //!
-//! ## Operand pools (RFC 0032 §"narrow ops")
+//! ## Operand pools
 //!
 //! Ops are exactly 24 bytes (a deliberate pin — see `Op::Pad`): no
 //! variant owns a heap allocation, and the stride stays off the pow2
@@ -21,7 +21,7 @@
 //! float) in the opcode and the width in the `prim` operand — `addf`/`addi`,
 //! not a generic `arith{op, ty}` the VM has to switch on. The frontend
 //! resolves `prim`, so there is no `specialize` pass and no runtime `op`
-//! selector (RFC 0032 "the opcode selects the type").
+//! selector ("the opcode selects the type").
 
 use crate::types::{PrimTy, Repr, TypeId};
 
@@ -58,12 +58,12 @@ pub enum CmpOp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitOp {
     And, Or, Xor, Shl, Shr,
-    /// wrapping `calc::wrapping_shl` (RFC 0004 §3): left shift
+    /// wrapping `calc::wrapping_shl`: left shift
     /// truncated to the operand width — never traps, unlike `Shl`
     WrapShl,
 }
 
-/// Compiler-lowered native methods (RFC 0032 §1.1 R2): the operations
+/// Compiler-lowered native methods: the operations
 /// `core`'s `builtin impl <int>` blocks declare and the frontend expands
 /// inline at the method call (`x.wrapping_add(y)`) instead of calling —
 /// wrapping, saturating and checked integer arithmetic. The id travels in
@@ -76,12 +76,12 @@ pub enum Intrinsic {
     CheckedAdd, CheckedSub, CheckedMul,
 }
 
-/// Internal natives reached via `CallNat` — RFC 0032 §1.1 R2: things rut
+/// Internal natives reached via `CallNat` — things rut
 /// spells with a name are natives, never ops (str/concat, Vec's named API,
 /// the host print sink).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Nat {
-    /// per-type formatting (the `f""` desugaring, RFC 0007 §2)
+    /// per-type formatting (the `f""` desugaring)
     Str,
     /// str.concat(parts...)
     Concat,
@@ -89,17 +89,17 @@ pub enum Nat {
     ArrLen,    // Array<T>.len()/bytes.len() — the heap sequence's runtime length
     /// join every element of an `Array<str>` (one sizing pass, one alloc)
     StrJoin,
-    /// `s.slice(from, to)` — an O(1) view into the string's octets
-    /// (RFC 0042): codepoint-indexed bounds, byte offsets inside
+    /// `s.slice(from, to)` — an O(1) view into the string's octets:
+    /// codepoint-indexed bounds, byte offsets inside
     StrSlice,
-    /// `v.slice(from, to)` — an O(1) array window (RFC 0042 §6):
+    /// `v.slice(from, to)` — an O(1) array window:
     /// recv = the backing array, args = [from, to, live_len]; the result
-    /// is an `ArrView` cell the caller boxes as the `?Vec<T>` (RFC 0044)
+    /// is an `ArrView` cell the caller boxes as the `?Vec<T>`
     ArrSlice,
-    /// `b.clone()` — a one-shot buffer copy (RFC 0044): the ONLY copy
+    /// `b.clone()` — a one-shot buffer copy: the ONLY copy
     /// escape hatch; recv = the bytes, no args, dst = the fresh buffer
     BytesClone,
-    /// `capture_stacktrace()` (RFC 0036 §2, err-channel phase 2): the
+    /// `capture_stacktrace()`: the
     /// frame walk — RAW frames into a fresh `StackTrace` cell at dst,
     /// no recv, no args
     CaptureTrace,
@@ -114,7 +114,7 @@ pub enum Nat {
     /// `StackTrace.col(self, i)` — frame i's call-site column (0 when
     /// stripped)
     TraceCol,
-    /// `StackTrace.render(self)` — the RFC 0036 symbolication string,
+    /// `StackTrace.render(self)` — the symbolication string,
     /// one whole-trace pass
     TraceRender,
     /// `s.scan(from, set)` (json-perf phase 2) — the fused host-side
@@ -139,7 +139,7 @@ pub enum Nat {
 pub enum Op {
     /// untyped move (verifier: non-ref type)
     Mov { dst: Reg, src: Reg },
-    /// ref move: retain new, release old (RFC 0016 §5)
+    /// ref move: retain new, release old
     MovRef { dst: Reg, src: Reg },
     /// const-pool load
     Const { dst: Reg, k: u32 },
@@ -149,7 +149,7 @@ pub enum Op {
     Not { dst: Reg, a: Reg },          // bool !
     /// Scalar arithmetic/bitwise/compare are one opcode *per operation*,
     /// with the kind (int vs float) in the opcode and the width in `prim`
-    /// (RFC 0032 "the opcode selects the type"). The VM never consults the
+    /// ("the opcode selects the type"). The VM never consults the
     /// type table, and there is no runtime `op` selector.
     AddF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     SubF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
@@ -186,16 +186,16 @@ pub enum Op {
     LeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     GeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     NegI { prim: PrimTy, dst: Reg, a: Reg },
-    /// string content compare (RFC 0012 §4) — used for ==/!= on string
+    /// string content compare — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
-    /// bytes content compare (RFC 0004) — used for ==/!= on bytes
+    /// bytes content compare — used for ==/!= on bytes
     ArrayCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
-    /// cell identity compare (RFC 0012 §4) — used for ==/!= on ref types
+    /// cell identity compare — used for ==/!= on ref types
     RefEq { eq: bool, dst: Reg, a: Reg, b: Reg },
 
     Jmp { target: Label },
     Br { cond: Reg, then_t: Label, else_t: Label },
-    /// `when` on enums / downcast chains (RFC 0032 §1) — arms in the
+    /// `when` on enums / downcast chains — arms in the
     /// function's `labels` pool: `labels[table_off..table_off + count]`
     BrTable { idx: Reg, table_off: u32, count: u16, default: Label },
 
@@ -207,42 +207,42 @@ pub enum Op {
     /// callee's param 0, so the pool entry is exactly the callee's
     /// parameter list (a uniform copy loop, no special-cased slot)
     CallM { func: u32, argv_off: u32, argc: u16, dst: Reg },
-    /// trait vtable call — the vtable form of the two-rule dispatch law
-    /// (RFC 0012 §1): origins multiple, the call consults the value's
+    /// trait vtable call — the vtable form of the two-rule dispatch law:
+    /// origins multiple, the call consults the value's
     /// descriptor; `slot` is a global trait-method
-    /// slot id (RFC 0015 §6); the receiver is `argv[0]`
+    /// slot id; the receiver is `argv[0]`
     CallI { slot: u32, argv_off: u32, argc: u16, dst: Reg },
-    /// native module call (RFC 0032 §1.1 R2) — `recv == NOREG` for free
+    /// native module call — `recv == NOREG` for free
     /// functions
     CallNat { nat: Nat, recv: Reg, argv_off: u32, argc: u16, dst: Reg },
-    /// call through an fn-typed value (closures — RFC 0013)
+    /// call through an fn-typed value (closures)
     CallFn { fval: Reg, argv_off: u32, argc: u16, dst: Reg },
     Ret { val: Option<Reg> },
 
-    /// mint a value cell (the `Self { .. }` / struct literal;
-    /// RFC 0032 §1) — fields follow via SetF
+    /// mint a value cell (the `Self { .. }` / struct literal)
+    /// — fields follow via SetF
     NewCell { dst: Reg, ty: TypeId },
     /// fused record literal: allocate and initialize every field in one op
     /// (`argv[argv_off + i]` is field `i`, in declaration order). Replaces
-    /// the `NewCell` + N×`SetF` + `MovRef` sequence (RFC 0009).
+    /// the `NewCell` + N×`SetF` + `MovRef` sequence.
     MakeRecord { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 },
     /// `repr` is the field's baked representation (removes the runtime
     /// field-type lookup + `is_ref`); `field` is the declaration index.
     GetF { dst: Reg, obj: Reg, field: u32, repr: Repr },
     SetF { obj: Reg, field: u32, val: Reg, repr: Repr },
-    /// `own(x)` payload copy (RFC 0011 §1): data payload memcpy with
+    /// `own(x)` payload copy: data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
-    /// `T → ?T` (RFC 0044): box `v` into a fresh one-slot cell — the
+    /// `T → ?T`: box `v` into a fresh one-slot cell — the
     /// result is a nil-able `?T` (`ty` is the nullable's own type). The
     /// box ALIASES `v`'s cell (share, never copy); primitives copy bits.
     MakeOpt { dst: Reg, src: Reg, ty: TypeId },
-    /// `Weak.new(v)` (RFC 0017 v1): mint a WeakBox side cell holding an
+    /// `Weak.new(v)`: mint a WeakBox side cell holding an
     /// UNRETAINED slot word to `v`'s cell. `ty` is the instantiated
     /// `Weak<elem>` id (the MakeOpt law: the op carries its type — the
     /// natives' CallNat form cannot). Traps on a nil `v` ("weak on nil").
     WeakNew { dst: Reg, src: Reg, ty: TypeId },
-    /// `w.upgrade()` (RFC 0017 v1): the live referent retained into a
+    /// `w.upgrade()`: the live referent retained into a
     /// fresh `?elem` box (`ty` is the `?elem` id), or the NULL SLOT when
     /// the referent died — a true `nil`, never a box containing nil.
     WeakUpgrade { recv: Reg, dst: Reg, ty: TypeId },
@@ -259,24 +259,24 @@ pub enum Op {
     ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
     ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
 
-    /// enum member value (immortal singleton cell, RFC 0016 §1)
+    /// enum member value (immortal singleton cell)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },
 
-    /// read a handle's runtime TypeId → u32 (pure load; RFC 0032 §1)
+    /// read a handle's runtime TypeId → u32 (pure load)
     TidOf { dst: Reg, obj: Reg },
-    /// `x is T` — exact test; sees through Opaque boxes (RFC 0014)
+    /// `x is T` — exact test; sees through Opaque boxes
     IsType { dst: Reg, obj: Reg, want: TypeId },
-    /// `x is I` — capability probe: descriptor impls scan (RFC 0015 §6)
+    /// `x is I` — capability probe: descriptor impls scan
     IsTrait { dst: Reg, obj: Reg, want: u32 },
     /// extract an Opaque box's payload as the statically known T — traps
-    /// on TypeId mismatch; the compiler guards (RFC 0032 §1.1)
+    /// on TypeId mismatch; the compiler guards
     Unbox { dst: Reg, box_: Reg, ty: TypeId },
     /// opaque(v) — box mint (internal native in RFC terms; an op here
     /// because it needs no name resolution)
     Box { dst: Reg, val: Reg, ty: TypeId },
 
-    /// closure literal: { func, captures } (RFC 0013 §1 — v1 captures by
-    /// value; by-ref capture lands with coroutine frames, RFC 0018 §4) —
+    /// closure literal: { func, captures } (v1 captures by
+    /// value; by-ref capture lands with coroutine frames) —
     /// capture registers in the function's `argv` pool
     MakeClosure { dst: Reg, func: u32, argv_off: u32, argc: u16 },
 
@@ -284,7 +284,7 @@ pub enum Op {
     Panic { msg: Reg },
 
     /// explicit numeric conversion `i32(x)` etc — always a call, never an
-    /// operator (RFC 0007 §1); narrowing traps when the value doesn't fit
+    /// operator; narrowing traps when the value doesn't fit
     Conv { dst: Reg, src: Reg, from: PrimTy, to: PrimTy },
     /// string codepoint read (the char exorcism's re-spell of the old
     /// `StrCharAt`, which moved the wire at VERSION 12): answers the u32
@@ -294,7 +294,7 @@ pub enum Op {
     /// the encode walker, and str indexing.
     StrCodeAt { dst: Reg, s: Reg, idx: Reg },
 
-    /// fuel-check no-op back-edge marker (RFC 0040 §2: loop back-edges are
+    /// fuel-check no-op back-edge marker (loop back-edges are
     /// natural checkpoints) — emitted at loop heads
     LoopHead,
     /// Layout pin — never constructed. The enum is deliberately 24 bytes,
@@ -308,7 +308,7 @@ pub enum Op {
     Pad { p: [u32; 5] },
 }
 
-// ---- specialized scalar-op constructors (RFC 0032) ----
+// ---- specialized scalar-op constructors ----
 //
 // The frontend resolves `prim` before emitting, so it names the exact opcode
 // directly — no separate `specialize` pass and no runtime `op` selector.
@@ -345,7 +345,7 @@ pub fn wrap_arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
         ArithOp::Add => Op::WAddI { prim, dst, a, b },
         ArithOp::Sub => Op::WSubI { prim, dst, a, b },
         ArithOp::Mul => Op::WMulI { prim, dst, a, b },
-        ArithOp::Div | ArithOp::Mod => unreachable!("no wrapping division (RFC 0004 §3)"),
+        ArithOp::Div | ArithOp::Mod => unreachable!("no wrapping division"),
     }
 }
 
@@ -437,7 +437,7 @@ impl Op {
 }
 
 /// The narrow-op law: no variant owns a heap allocation, so the dispatch
-/// stream stays dense (RFC 0032).
+/// stream stays dense.
 /// The narrow-op law: pooled operands, no per-op heap allocation, and a
 /// stride that measures clean in the dispatch loop (see `Op::Pad`).
 const _: () = assert!(std::mem::size_of::<Op>() == 24, "Op must stay 24 bytes");

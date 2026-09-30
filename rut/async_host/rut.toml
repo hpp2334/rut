@@ -1,4 +1,4 @@
-# async_host/ — the standard launcher surface, in rut (RFC 0018): the
+# async_host/ — the standard launcher surface, in rut: the
 # typed half of the embedder's async set. Publishes COMPILED (the
 # linkable-classes phase): the generic `launch_future<T>` and the
 # generic handle class link like any other export — a consumer

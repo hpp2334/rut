@@ -1,4 +1,4 @@
-//! `calc`'s host half (RFC 0028): the native-module functions behind
+//! `calc`'s host half: the native-module functions behind
 //! the float math surface — `f64` members and their `f32` twins
 //! (`sqrt_f` …; the `_f` suffix carries the width, rut has no
 //! overloading) — the float primitives and the float
@@ -6,7 +6,7 @@
 //! core's `builtin impl` methods, compiler-lowered — no host body).
 //!
 //! The `calc` module is mounted by the driver (`rut-driver`); a host
-//! installs the bodies. Bindings are the MAGIC shape (RFC 0023/0025):
+//! installs the bodies. Bindings are the MAGIC shape:
 //! the closure's Rust parameter types ARE the `.d.rut` row — the
 //! signature is derived and checked against `calc.d.rut` at load time.
 //! These are the crossing-hot bindings: the adapter inlines to one

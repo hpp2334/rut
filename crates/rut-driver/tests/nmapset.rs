@@ -50,7 +50,7 @@ fn diags_of(app_src: &str) -> Vec<String> {
 
 /// Compile, verify, and build the Vm with the host bindings the graph
 /// declares — `install_std_nmap`, checked against the mounted `rut/nmap`
-/// surface (the RFC 0025 contract).
+/// surface (the contract).
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let session = session_with(app_src);
     let expected = session.expected_host_fns();

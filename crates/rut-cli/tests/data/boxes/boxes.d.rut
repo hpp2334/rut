@@ -1,6 +1,6 @@
-// boxes/boxes.d.rut — the host-owned store (RFC 0026): an `opaque` box
+// boxes/boxes.d.rut — the host-owned store: an `opaque` box
 // whose state lives Rust-side; rut holds only the handle. Field access
-// crosses by value through these fns (RFC 0023 §2).
+// crosses by value through these fns.
 
 pub host fn store_new() -> opaque;
 

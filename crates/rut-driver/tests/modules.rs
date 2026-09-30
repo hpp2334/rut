@@ -1,5 +1,5 @@
 //! Module loading: compile a library, use one of its functions, link
-//! (RFC 0029 surface / RFC 0035 §1).
+//!.
 
 use rut_parser::Mode;
 use rut_driver::{Module, ModuleBody, Session};
@@ -282,7 +282,7 @@ fn pouch_module_source_compiles() {
         Mode::Impl,
         "pouch",
         1,
-        // the prelude surface as the unit's one use (RFC 0028): the
+        // the prelude surface as the unit's one use: the
         // pouch source itself uses core
         &[(2, rut_core::binary::Surface::core(), "core".to_string())],
     );

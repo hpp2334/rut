@@ -1,5 +1,5 @@
-//! The monomorphization driver (RFC 0031 SS2): the instantiation queue,
-//! vtable construction (RFC 0012 SS1 - trait members never devirtualize),
+//! The monomorphization driver: the instantiation queue,
+//! vtable construction (trait members never devirtualize),
 //! exports, and module-let emission.
 
 use crate::lir::FnCompiler;
@@ -8,7 +8,7 @@ use rut_core::types::*;
 use super::*;
 
 impl<'a> Ctx<'a> {
-    // ---- monomorphization driver (RFC 0031 §2: generic calls enter the
+    // ---- monomorphization driver (generic calls enter the
     // queue; HIR contains no generic code) ----
 
     pub fn ensure_inst(&mut self, inst: Inst) -> u32 {
@@ -246,7 +246,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// after all instantiations: fill per-(type × trait) vtables from the
-    /// registered impls (nominal satisfaction, RFC 0012 §4 — a slot is
+    /// registered impls (nominal satisfaction — a slot is
     /// filled exactly when an impl exists). Engine-named contracts
     /// (`Iterator`) flow through the same registry. Each slot's method
     /// compiles here (with its transitive calls) so every reachable slot
@@ -369,7 +369,7 @@ impl<'a> Ctx<'a> {
                 vt[self.types.dense(ty) as usize][slot as usize] = Some(fid);
             }
         }
-        // the async weave's engine-minted impls (RFC 0018): the hidden
+        // the async weave's engine-minted impls: the hidden
         // frame's `Future::yield` row and the sleep future's engine-
         // backed row — no AST method nodes, so the walk above can't
         // see them; their (type, slot, fid) fills were recorded at mint.
@@ -385,7 +385,7 @@ impl<'a> Ctx<'a> {
         vt
     }
 
-    // ---- module lets (RFC 0003 §1: load-time expressions only) ----
+    // ---- module lets (load-time expressions only) ----
 
     /// The per-type disposal rows (the cell-death dispatch): entry per
     /// (dense) type — `Some(dispose func id)` when the type has an
@@ -426,7 +426,7 @@ impl<'a> Ctx<'a> {
                 _ => {
                     self.err(
                         sp,
-                        "module `let` initializers must be load-time expressions — literals only in this build (RFC 0003 §1, RFC 0033 §3)",
+                        "module `let` initializers must be load-time expressions — literals only in this build",
                     );
                 }
             }

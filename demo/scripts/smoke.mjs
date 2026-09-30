@@ -260,11 +260,11 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   // never trip it.
   const DEAD_SHAPES = [
     ['dataclass (the dead record keyword — records are spelled `struct`)', /\bdataclass/],
-    ['`where` clause (removed by RFC 0043 — inline `requires`)', /\bwhere\b/],
+    ['`where` clause (removed — inline `requires`)', /\bwhere\b/],
     ['`Ptr<` (the removed pointer type — the shape is the nullable `?T`)', /Ptr</],
     ['`Hashable` (the removed trait — keys are admitted by the union bound)', /\bHashable\b/],
     ['`mapset` (the removed pkg — the lane is the mounted nmapset)', /\bmapset\b/],
-    ['postfix `?T` (the nullable is prefix-only, RFC 0044 §2)', /[A-Za-z0-9_\]]\?(?=[;,=>)]|\s*$)/],
+    ['postfix `?T` (the nullable is prefix-only)', /[A-Za-z0-9_\]]\?(?=[;,=>)]|\s*$)/],
   ];
 
   function walk(dir) {

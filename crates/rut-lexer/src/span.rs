@@ -1,5 +1,5 @@
 //! Spans — byte ranges into the normalized source; the shared nesting
-//! budget (RFC 0030 OQ-3).
+//! budget.
 
 /// Byte range into the (normalized) source.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +21,6 @@ impl Span {
 }
 
 /// Nesting budget shared by the lexer's bracket depth and the parser's
-/// frame depth (RFC 0030 OQ-3: single NEST_MAX = 1024). Exceeding it is a
+/// frame depth (single NEST_MAX = 1024). Exceeding it is a
 /// normal Diag, never a host stack overflow (contract C3).
 pub const NEST_MAX: u32 = 1024;

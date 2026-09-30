@@ -1,15 +1,15 @@
-//! Lexer — RFC 0030 §1: mode-stack tokenizer. Pure function `&str ->
+//! Lexer — mode-stack tokenizer. Pure function `&str ->
 //! (Vec<Token>, Vec<Diag>)`. Handles `f"..."` interpolation holes (fully
-//! lexed token streams, brace-balanced — §1.1), `r"..."` raw strings,
+//! lexed token streams, brace-balanced), `r"..."` raw strings,
 //! maximal munch with a longest-match table, reserved-word rejection with
-//! rut-specific messages (RFC 0002 §4), and the bracket depth budget
+//! rut-specific messages, and the bracket depth budget
 //! (C3 — exceeding it is a Diag, never a host crash).
 
 use crate::diag::Diag;
 use crate::span::{Span, NEST_MAX};
 use crate::token::{FPart, FStrTok, FloatSuffix, IntSuffix, Tok, Token};
 
-/// CRLF -> LF normalization (RFC 0002 §1). Spans index the normalized text,
+/// CRLF -> LF normalization. Spans index the normalized text,
 /// so every consumer that maps spans back to positions (the LSP's line
 /// index, diag renderers) must run the source through THIS function —
 /// parity with `lex` by construction.
@@ -25,9 +25,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
     lex_mode(src)
 }
 
-/// Decl-mode lexing (RFC 0030 §3): a `.d.rut` surface parses the same
-/// token vocabulary as `.rut` source — the reserved-word law (RFC 0002
-/// §4, `any` included since the any-lane removal) is mode-independent.
+/// Decl-mode lexing: a `.d.rut` surface parses the same
+/// token vocabulary as `.rut` source — the reserved-word law (`any` included since the any-lane removal) is mode-independent.
 pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let normalized = normalize(src);
     let mut lx = Lexer::new(&normalized);
@@ -54,7 +53,7 @@ impl<'a> Lexer<'a> {
             depth: 0,
             depth_reported: false,
         };
-        // skip BOM (RFC 0002 §1)
+        // skip BOM
         if lx.src.starts_with(&[0xEF, 0xBB, 0xBF]) {
             lx.pos = 3;
         }
@@ -209,7 +208,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// `'x'` — removed in v1.1 (RFC 0004): consume the literal, diagnose,
+    /// `'x'` — removed in v1.1: consume the literal, diagnose,
     /// push nothing. Codepoints are `u32` (`s.code()`, `str.from_code`).
     fn lex_removed_char_lit(&mut self, lo: usize) {
         self.pos += 1; // opening '
@@ -225,7 +224,7 @@ impl<'a> Lexer<'a> {
         if self.peek() == b'\'' {
             self.pos += 1;
         }
-        self.err(self.span(lo), "`char` literals were removed (RFC 0004 v1.1) —use a one-character str (\"x\"); `s.code()` reads a codepoint, `str.from_code(n)` builds one");
+        self.err(self.span(lo), "`char` literals were removed —use a one-character str (\"x\"); `s.code()` reads a codepoint, `str.from_code(n)` builds one");
     }
 
     fn lex_number(&mut self, lo: usize) {
@@ -378,7 +377,7 @@ impl<'a> Lexer<'a> {
             "true" => self.push(Tok::Bool(true), lo),
             "false" => self.push(Tok::Bool(false), lo),
             w => {
-                // the reservation is UNIVERSAL (RFC 0012, RFC 0014): `any`
+                // the reservation is UNIVERSAL: `any`
                 // draws the diagnostic in every mode — `.rut` source and
                 // `.d.rut` decls alike (the erasure box `opaque` is the
                 // only value lane)
@@ -391,7 +390,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_raw_string_body(&mut self, lo: usize) -> String {
-        // RFC 0007 §2: every byte is literal; `\"` does NOT close the string.
+        // every byte is literal; `\"` does NOT close the string.
         let mut out = Vec::new();
         loop {
             if self.at_end() || self.peek() == b'\n' {
@@ -407,8 +406,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// `f"..."` — literal chunks with `{{`/`}}` escapes, holes fully lexed
-    /// (RFC 0030 §1.1). The lexer mode-stacks into hole lexing.
+    /// `f"..."` — literal chunks with `{{`/`}}` escapes, holes fully lexed.
+    /// The lexer mode-stacks into hole lexing.
     fn lex_fstring(&mut self, lo: usize) -> FStrTok {
         let mut parts: Vec<FPart> = Vec::new();
         let mut lit = String::new();
@@ -460,7 +459,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Hole body: lex a balanced-brace token stream through the closing `}`.
-    /// A string literal inside a hole is a lex error (RFC 0007 §2): "bind it
+    /// A string literal inside a hole is a lex error: "bind it
     /// to a name first".
     fn lex_hole(&mut self, lo: usize) -> Vec<Token> {
         let mut toks = Vec::new();
@@ -494,9 +493,9 @@ impl<'a> Lexer<'a> {
                     continue;
                 }
                 b'"' => {} // string literal — allowed (hole termination is
-                          // brace-based; the RFC 0007 §2 note stays as a
+                          // brace-based; the every-byte-literal rule stays as a
                           // style rule, not a lexer error)
-                b'\'' => {} // char literal — legal in holes (RFC 0007 §2)
+                b'\'' => {} // char literal — legal in holes
                 _ => {}
             }
             // lex one token into the hole
@@ -586,7 +585,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// Longest-match table (RFC 0030 §1): 4+ char ops first.
+/// Longest-match table: 4+ char ops first.
 const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"&&=", Tok::AmpAmpEq),
     (b"||=", Tok::PipePipeEq),
@@ -638,31 +637,31 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"@", Tok::At),
 ];
 
-/// Reserved words (RFC 0002 §4): hard errors naming the rut replacement.
-/// NOTE: `super` and `as` are NOT here — they are contextual (`pub(super)`,
-/// RFC 0003 §2; `as` binds select arms, RFC 0019 §3); the parser rejects
+/// Reserved words: hard errors naming the rut replacement.
+/// NOTE: `super` and `as` are NOT here — they are contextual (`pub(super)`;
+/// `as` binds select arms); the parser rejects
 /// them in every other position.
 fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "switch" => "rut does not have `switch`; use `when`",
         "case" => "rut does not have `case`; `when` arms are `pattern -> body`",
         "void" => "rut spells the empty type `nil`",
-        "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
+        "extends" => "rut has no inheritance (`extends`); compose instead",
         "interface" => "rut spells this `trait`",
-        "dataclass" => "`dataclass` was removed —spell it `struct` (RFC 0009 v1.1)",
+        "dataclass" => "`dataclass` was removed —spell it `struct`",
         "match" => "rut does not have `match`; use `when`",
-        "null" => "rut has no `null`; absence is `nil` on a `?T` (RFC 0044)",
-        "undefined" => "rut has no `undefined`; absence is `nil` (RFC 0005)",
-        "any" => "rut has no `any`; use a trait type or `opaque` (RFC 0012, RFC 0014)",
+        "null" => "rut has no `null`; absence is `nil` on a `?T`",
+        "undefined" => "rut has no `undefined`; absence is `nil`",
+        "any" => "rut has no `any`; use a trait type or `opaque`",
         "typeof" => "rut has no `typeof`; types are static — `x is T` tests at runtime",
         "instanceof" => "rut has no `instanceof`; use `is`",
         "delete" => "rut has no `delete`; there are no dynamic properties",
         "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
         "with" => "rut does not have `with`",
-        "var" => "rut does not have `var`; use `let` / `let mut` (RFC 0003 §1)",
-        "const" => "rut does not have `const`; use `let` (RFC 0003 §1)",
+        "var" => "rut does not have `var`; use `let` / `let mut`",
+        "const" => "rut does not have `const`; use `let`",
         "private" => {
-            "members are private by default —add `pub` (RFC 0003 §2, RFC 0010 §2)"
+            "members are private by default —add `pub`"
         }
         _ => return None,
     };

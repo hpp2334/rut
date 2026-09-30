@@ -1,5 +1,5 @@
-//! Tokens — RFC 0030 §1: one flat exhaustive enum. Keywords are `Ident`s
-//! (the parser matches them by interner text — RFC 0002 §4/§5); reserved
+//! Tokens — one flat exhaustive enum. Keywords are `Ident`s
+//! (the parser matches them by interner text); reserved
 //! words are rejected by the LEXER with a "rut does not have X" message.
 
 use crate::span::Span;
@@ -11,7 +11,7 @@ pub enum Tok {
     Float(u64 /*f64 bits*/, Option<FloatSuffix>),
     Str(String),           // decoded UTF-8, escapes resolved
     RawStr(String),        // no escape processing
-    FStr(FStrTok),         // RFC 0030 §1.1 — parts + lexed holes
+    FStr(FStrTok),         // parts + lexed holes
     Bool(bool),
     Ident(String),         // includes keywords after the reservation check
 
@@ -41,7 +41,7 @@ pub enum FloatSuffix {
 }
 
 /// `f"..."` — interleaved chunks and holes; holes are FULLY LEXED token
-/// streams (RFC 0030 §1.1), `}`-terminated, with real spans inside the
+/// streams, `}`-terminated, with real spans inside the
 /// literal's span.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FStrTok {

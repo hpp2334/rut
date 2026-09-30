@@ -1,4 +1,4 @@
-//! `host`/`builtin` surface decls (RFC 0029 §2): `.d.rut` declares the
+//! `host`/`builtin` surface decls: `.d.rut` declares the
 //! host functions/dataclasses the runtime binds and the engine builtin
 //! contracts — `host fn string_len(s: str) -> i32;`, `prelude builtin
 //! primitive opaque { .. }`. Parses in declaration mode only; the
@@ -83,7 +83,7 @@ fn builtin_ty_parses() {
 #[test]
 fn builtin_requires_a_kind_word() {
     // builtin decls spell their kind — `prelude builtin primitive` /
-    // `prelude builtin class` / `prelude builtin trait` (RFC 0025); a
+    // `prelude builtin class` / `prelude builtin trait`; a
     // bare `builtin Name { .. }` is diagnosed
     let (_, diags) = parse("prelude builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
     assert!(
@@ -139,7 +139,7 @@ fn host_dataclass_parses() {
 #[test]
 fn host_dataclass_members_are_fields_only() {
     // methods and initializers are rejected: the shape is the whole
-    // surface, the host constructs the record (RFC 0025)
+    // surface, the host constructs the record
     let (_, diags) = parse("host struct L { fn f(self) -> i32; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("fields only")),
@@ -154,7 +154,7 @@ fn host_dataclass_members_are_fields_only() {
 
 #[test]
 fn host_fn_generics_are_rejected() {
-    // RFC 0023 §1: host fn signatures are concrete — a generic parameter
+    // host fn signatures are concrete — a generic parameter
     // has no shape the boundary could check
     let (_, diags) = parse("pub host fn downcast<T>(o: opaque) -> Option<T>;", Mode::Decl);
     assert!(
@@ -195,10 +195,10 @@ fn host_async_fn_parses() {
 #[test]
 fn host_async_fn_generics_are_rejected_with_the_same_words() {
     // the async lane crosses concretely like its sync twin — the
-    // generic refusal is the same RFC 0023 §1 diagnostic
+    // generic refusal is the same diagnostic
     let (_, diags) = parse("pub host async fn fetch<T>(u: T) -> T;", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("concrete") && d.msg.contains("RFC 0023")),
+        diags.iter().any(|d| d.msg.contains("concrete") && d.msg.contains("generic parameters")),
         "generic async host fn must be diagnosed: {diags:?}"
     );
 }
@@ -230,7 +230,7 @@ fn host_async_fn_terminates_on_malformed() {
 
 #[test]
 fn builtin_impl_decl() {
-    // RFC 0032 §1.1 R2: `builtin impl <prim> { .. }` — the integer
+    // `builtin impl <prim> { .. }` — the integer
     // primitives' numeric methods, bodiless `self` receivers, tuple
     // returns allowed (`checked_*`)
     let src = "prelude builtin impl i32 {\n\
@@ -265,7 +265,7 @@ prelude builtin primitive opaque {
 fn builtin_primitive_parses() {
     // builtin-surface phase 1: the boot primitives' surface statement —
     // `builtin primitive <name> { .. }`, never a class. BOTH statics on
-    // the erasure primitive live on it (RFC 0014).
+    // the erasure primitive live on it.
     let (ast, diags) = parse(BUILTIN_PRIMITIVE, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
@@ -377,15 +377,15 @@ fn removed_forms_are_rejected() {
 
 #[test]
 fn host_fn_is_decl_only() {
-    // RFC 0029 §2: `host`/`builtin` belong to `.d.rut`
+    // `host`/`builtin` belong to `.d.rut`
     let (_, diags) = parse("host fn string_len(s: str) -> i32;", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("RFC 0029")),
+        diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
         "impl mode must reject the surface keyword: {diags:?}"
     );
     let (_, diags) = parse("prelude builtin fn own<T>(x: T) -> T;", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("RFC 0029")),
+        diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
         "impl mode must reject the surface keyword: {diags:?}"
     );
 }

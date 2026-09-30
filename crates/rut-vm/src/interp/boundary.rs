@@ -1,4 +1,4 @@
-//! The typed host boundary (RFC 0023, revised): Rust types are the
+//! The typed host boundary: Rust types are the
 //! currency of `Vm::call`/`Vm::resume` and (Phase 2) of host-fn bodies;
 //! `Value`/`Slot` are the internal marshaling formats, invisible outside
 //! the crate. Owned impls (`String`, `Vec<u8>`) are the explicit "I keep
@@ -198,11 +198,11 @@ impl Ret for () {
     }
     #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
-        Ok(Slot::int(0)) // nil is the zero word (RFC 0015 §5)
+        Ok(Slot::int(0)) // nil is the zero word
     }
 }
 
-/// owned copy — the explicit "I keep this data" (RFC 0023 §2)
+/// owned copy — the explicit "I keep this data"
 impl Ret for String {
     fn rust_name() -> &'static str { "String" }
     const TY: TypeId = TY_STR;
@@ -217,7 +217,7 @@ impl Ret for String {
     }
 }
 
-/// owned copy — the explicit "I keep this data" (RFC 0023 §2)
+/// owned copy — the explicit "I keep this data"
 impl Ret for Vec<u8> {
     fn rust_name() -> &'static str { "Vec<u8>" }
     const TY: TypeId = TY_BYTES;
@@ -272,7 +272,7 @@ impl<T: 'static> Ret for Opaque<T> {
     }
 }
 
-/// A crossing `?T` read NIL-FLATTENED (err-channel phase 3, RFC 0023 §1):
+/// A crossing `?T` read NIL-FLATTENED (err-channel phase 3):
 /// the null slot is `None`, a some-slot is the MakeOpt box — its payload
 /// decodes as `T` under the element's own type. This is the typed twin of
 /// `slot_to_value`'s `TyKind::Opt` arm, so `(?T, err)` entry returns
@@ -284,8 +284,8 @@ impl<T: 'static> Ret for Opaque<T> {
 /// `String`/`Vec<u8>`/the opaque handles). A Some mints the one-slot opt
 /// box under the boot `?T` row — the payload's own reference transfers
 /// into field 0 (`alloc_opt_value` stores the raw word), the box's rc
-/// becomes the register's — and a None is the flat nil, the zero word
-/// (RFC 0044). A type without a lane traps: only `?str`/`?bytes`/
+/// becomes the register's — and a None is the flat nil, the zero word.
+/// A type without a lane traps: only `?str`/`?bytes`/
 /// `?opaque` cross back.
 impl<T: Ret> Ret for Option<T> {
     const TY: TypeId = T::OPT_TY;
@@ -298,7 +298,7 @@ impl<T: Ret> Ret for Option<T> {
             ));
         };
         if unsafe { slot.r.is_null() } {
-            return Ok(None); // the flat nil: zero bits, no box (RFC 0044)
+            return Ok(None); // the flat nil: zero bits, no box
         }
         let cell = cell_of(slot);
         let CellData::Record { fields } = &cell.data else {
@@ -316,13 +316,13 @@ impl<T: Ret> Ret for Option<T> {
             return Err(Trap::new(
                 TrapKind::Invalid,
                 format!(
-                    "`Option<{}>` does not cross as a host-fn answer — only `?str`/`?bytes`/`?opaque` have answer lanes (RFC 0023 §1)",
+                    "`Option<{}>` does not cross as a host-fn answer — only `?str`/`?bytes`/`?opaque` have answer lanes",
                     T::rust_name()
                 ),
             ));
         }
         match self {
-            None => Ok(Slot::int(0)), // the miss: the flat nil (RFC 0044's zero)
+            None => Ok(Slot::int(0)), // the miss: the flat nil (the zero)
             Some(v) => {
                 let raw = v.into_slot(vm)?;
                 vm.heap.alloc_opt_value(ty, raw)
@@ -331,7 +331,7 @@ impl<T: Ret> Ret for Option<T> {
     }
 }
 
-/// tuples cross field-by-field (RFC 0007 v1.1) — the record cell's own
+/// tuples cross field-by-field — the record cell's own
 /// field types drive each element's conversion
 macro_rules! tuple_ret {
     ($($n:ident),+) => {
@@ -497,7 +497,7 @@ call_args!(A1, A2, A3, A4, A5, A6);
 call_args!(A1, A2, A3, A4, A5, A6, A7);
 call_args!(A1, A2, A3, A4, A5, A6, A7, A8);
 
-// ---- the magic handler (RFC 0023 revised §3): the fn's Rust shape IS
+// ---- the magic handler: the fn's Rust shape IS
 // the .d.rut row — params/ret derive the signature, the adapter IS the
 // dispatch-table entry ----
 
@@ -505,8 +505,7 @@ call_args!(A1, A2, A3, A4, A5, A6, A7, A8);
 /// itself out of a slot. `Repr<'a>` is what the registered callable's
 /// parameter IS — the type itself for Copy values and handles, `&'a str`
 /// for borrows — and the handler bound is HRTB over `'a`, so a borrowed
-/// param cannot outlive its call: the type system blocks smuggling
-/// (RFC 0023 §2).
+/// param cannot outlive its call: the type system blocks smuggling.
 ///
 /// The read is SPLIT (the crossing-fastpath plan, phase 1):
 ///
@@ -527,12 +526,12 @@ call_args!(A1, A2, A3, A4, A5, A6, A7, A8);
 /// ONCE, upstream of every call:
 ///
 /// - the join verified the binding's `TY` against the mounted `.d.rut`
-///   row before the Vm boots (`HostRegistry::verify_against`, RFC 0025 —
+///   row before the Vm boots (`HostRegistry::verify_against` —
 ///   a panic, so a host fn can only be dispatched under the row its own
 ///   Rust shape derived);
 /// - the checker typed every rut call site against that same row, so
 ///   each argument slot holds the declared repr — the same trust
-///   `Slot::as_f64` runs on (RFC 0015 §5, "the verifier guarantees
+///   `Slot::as_f64` runs on ("the verifier guarantees
 ///   registers hold their declared types");
 /// - embedder-shaped input never reaches the slots unchecked: `Vm::call`
 ///   runs `value_in` (kind + range) before the slots exist.
@@ -547,7 +546,7 @@ pub(crate) trait HostParam {
     /// SAFETY (per impl): the returned value is valid for the whole
     /// host-call scope — the snapshot slots are copies of the call's arg
     /// registers (which own their references), the arena never moves
-    /// cells (RFC 0016 OQ-1), and the borrowable crossing types are
+    /// cells, and the borrowable crossing types are
     /// immutable. Nothing else may outlive the call. See the trait doc
     /// for the checked-once contract that lets the adapters skip
     /// re-verification.
@@ -612,7 +611,7 @@ impl HostParam for f64 {
     type Repr<'a> = f64;
     #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        Ok(slot.as_f64()) // the raw union read (RFC 0015 §5 trust)
+        Ok(slot.as_f64()) // the raw union read
     }
     unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_F64, "f64")?;
@@ -708,7 +707,7 @@ impl HostParam for &str {
     }
 }
 
-/// zero-copy borrow (RFC 0004 bytes)
+/// zero-copy borrow
 impl HostParam for &[u8] {
     const TY: TypeId = TY_BYTES;
     type Repr<'a> = &'a [u8];
@@ -783,12 +782,12 @@ macro_rules! handler_fallible {
                 crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
             fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
                 // SAFETY: ctx is Box<F>, owned by vm.host_keep for the
-                // machine's lifetime; single thread (RFC 0034)
+                // machine's lifetime; single thread
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let mut run = || -> Result<R, Trap> {
                     let mut i = 0usize;
                     // params through the unchecked fast lane (`read`):
-                    // the join verified the sig (RFC 0025), the checker
+                    // the join verified the sig, the checker
                     // typed the site — no per-call re-verification
                     $( let $n = unsafe { $n::read(vm, slots[i]) }?; i += 1; )*
                     f(vm, $($n,)*)
@@ -1121,7 +1120,7 @@ mod return_lane_tests {
 
     #[test]
     fn the_answer_lanes_bind_by_identity() {
-        // the RFC 0025 join compares ids: the registry's Option SIG and
+        // the boot join compares ids: the registry's Option SIG and
         // the decl row's boot CONST must be the SAME word per lane
         assert_eq!(<Option<String> as Ret>::TY, TY_OPT_STR);
         assert_eq!(<Option<Vec<u8>> as Ret>::TY, TY_OPT_BYTES);

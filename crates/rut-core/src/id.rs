@@ -1,4 +1,4 @@
-//! Scope-qualified ids (RFC 0035 §1).
+//! Scope-qualified ids.
 //!
 //! Every module numbers its own types/functions/traits from 0. To link
 //! independently-compiled modules without rewriting each id by hand, an id

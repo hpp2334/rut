@@ -3,7 +3,7 @@ name = "rut-std"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "host-side runtime helpers (RFC 0022/0026/0028) — implementations of native-module functions that embedders install"
+description = "host-side runtime helpers — implementations of native-module functions that embedders install"
 
 [lib]
 name = "rut_std"
@@ -36,7 +36,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 http = ["dep:reqwest"]
 
 [dev-dependencies]
-# the decl↔body contract tests (RFC 0025): mount `rut/http_host`,
+# the decl↔body contract tests: mount `rut/http_host`,
 # compile a probe, `verify_against` — dev-deps never propagate
 rut-driver = { path = "../rut-driver" }
 rut-parser = { path = "../rut-parser" }

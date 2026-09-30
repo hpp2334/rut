@@ -1,4 +1,4 @@
-// pouch — the hermetic stand-in (RFC 0045 fixtures): a generic class
+// pouch — the hermetic stand-in: a generic class
 // with one method. Its generic export makes it an inline unit — the
 // world the real pouch lives in.
 use base::{base_tag};

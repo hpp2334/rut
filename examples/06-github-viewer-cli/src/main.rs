@@ -2,7 +2,7 @@
 //! pump, exit. The BRAIN is `rgh.rut` (an async free fn over the
 //! redesigned rut/http lane); this file owns only I/O:
 //!
-//! - argv crosses in as ONE `\n`-joined `str` (the RFC 0023 §2 crossing
+//! - argv crosses in as ONE `\n`-joined `str` (the crossing
 //!   set admits prims/str/bytes/opaque only — no arg lists);
 //! - the std HTTP lane is bound reqwest-side (`install_std_http` — the
 //!   feature is native-only by law; rgh never builds for wasm32);
@@ -12,7 +12,7 @@
 //!   (the process exits with the brain's i32);
 //! - `boot` launches the brain (`launch_future` — the async_host
 //!   standard launcher); this file then pumps the driving loop to
-//!   idle (the RFC 0035 §4 run lane): `run_ready` + a short wall-clock
+//!   idle (the run lane): `run_ready` + a short wall-clock
 //!   sleep per spin until `pending_tasks()` hits zero. The `exit` row
 //!   fires INSIDE the pump and never returns. A trap surfaces here as
 //!   exit 1 with the trap name.
@@ -97,7 +97,7 @@ fn main() {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     // calc's rows (mount_std mounts the Math surface) and the nmap
     // table's rows (nmapset rides the plan's mount list — a mounted
-    // decl pkg's rows demand bodies, RFC 0025)
+    // decl pkg's rows demand bodies)
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
     // the async engine's rows (the launcher set boot drives)
@@ -147,7 +147,7 @@ fn main() {
             // code it carried
             std::process::exit(code);
         });
-    // the decl ↔ the bodies, loudly (RFC 0025): every mounted pkg's
+    // the decl ↔ the bodies, loudly: every mounted pkg's
     // host rows must have a binding with the declared signature
     hosts.verify_against(&session.expected_host_fns());
 

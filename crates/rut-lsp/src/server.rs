@@ -5,7 +5,7 @@
 //! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs / Sublime
 //! configs in `integrations/README.md`). Hover/completion resolve against
 //! the open document first, then the embedded std surface
-//! (`std_surface`, RFC 0028/0029), then the workspace's rut files. The
+//! (`std_surface`), then the workspace's rut files. The
 //! wasm shim (`rut-lsp-wasm`) drives the same queries without this
 //! process.
 
@@ -351,7 +351,7 @@ impl Backend {
 /// a definition target string -> a URI: a real URI passes through, an
 /// absolute path becomes one, a relative path needs the workspace root
 fn resolve_target_uri(raw: &str, root: Option<&Path>) -> Option<Uri> {
-    // scheme = a letter/letter-digit run followed by `:` (RFC 3986) —
+    // scheme = a letter/letter-digit run followed by `:` —
     // checked on the raw string; ls-types' parser is strict about the rest
     let has_scheme = raw
         .split(':')

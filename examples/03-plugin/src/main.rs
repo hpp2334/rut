@@ -3,11 +3,11 @@
 //! The host fires events (`join`/`msg`/`leave`/`tick`) into the exports
 //! the plugin subscribed; the plugin's decisions come back through the
 //! host's bus box — each `emit` re-entering rut to format the wire line
-//! while the emitting handler is still parked mid-op (RFC 0022 §1).
+//! while the emitting handler is still parked mid-op.
 //!
 //! The plugin loads twice from the same source: as a module **directory**
 //! (`plugin/rut.toml`) and as a packed **`.rutbundle`** produced by
-//! `rut_driver::pack_dir` — the two forms of one contract (RFC 0038).
+//! `rut_driver::pack_dir` — the two forms of one contract.
 //! Both run the identical scripted session; the transcript printed at
 //! the end is what `tests/session.rs` asserts.
 
@@ -53,7 +53,7 @@ fn main() {
         p.transcript()
     };
 
-    // form 2: the same directory, packed — deterministically (RFC 0038 §3)
+    // form 2: the same directory, packed — deterministically
     let bytes = rut_driver::pack_dir(dir).unwrap();
     let bundle = std::env::temp_dir().join("rut-03-plugin-demo.rutbundle");
     std::fs::write(&bundle, &bytes).unwrap();

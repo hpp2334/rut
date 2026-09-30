@@ -1,7 +1,7 @@
 // biz.rut — THE BIZ PACKAGE (the two-package law): the todolist's
 // domain and app — the sources, the derived counts line, the machine
 // as MUTATIONS, the two view builders, and the app shell. ONE module,
-// SEVERAL files (RFC 0041 §5, the multi-lib entry: this base +
+// SEVERAL files (the multi-lib entry: this base +
 // `entry.libs`, spliced in manifest order — a name in any file is
 // module-visible in every file, so the sections stay one namespace).
 //

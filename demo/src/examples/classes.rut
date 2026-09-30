@@ -1,12 +1,12 @@
-// RFC 0010 — classes: sealed VALUE records, class-method construction.
+// classes: sealed VALUE records, class-method construction.
 // Classes construct through their OWN class methods — Rect.new(3, 4),
 // Counter.new(), Version.parse("1.2"); no `constructor` keyword, no
 // type-calls. A class method is just a function without a `self`
 // receiver; it builds the instance with the class-private `Self { .. }`
 // literal. Instance methods spell `self` explicitly; a method
 // without `self` is a class method — no separate "static" form.
-// Type bodies are FIELDS ONLY (RFC 0012); every method lives in the
-// type's inherent `impl` block. Members follow RFC 0003 §2 visibility:
+// Type bodies are FIELDS ONLY; every method lives in the
+// type's inherent `impl` block. Members follow the visibility rules:
 // unannotated = module-private, `pub` (optionally scoped: `pub(mod)`,
 // `pub(super)`, `pub(self)`) exposes them.
 
@@ -21,7 +21,7 @@ impl Counter {
     pub fn new() -> Self {                 // the construction surface — a
         return Self { };               // class method (no self); free to
     }                                   // run logic. `new` is a convention,
-                                        // not syntax (RFC 0002 §4)
+                                        // not syntax
 
     pub fn press(mut self) {         // instance method: explicit receiver,
         self.n = self.n.wrapping_add(1);                // wrapping add (§8) — or `+=` to trap

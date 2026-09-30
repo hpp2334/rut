@@ -1,4 +1,4 @@
-//! Expressions (RFC 0030 §4): the embedded Pratt engine — an operator
+//! Expressions: the embedded Pratt engine — an operator
 //! stack plus an operand stack of `NodeId`s, reductions popping two
 //! operands and pushing one node, bottom-up (C1). Binding powers follow
 //! the §4 table: assignment right (1), `||` (3), `&&` (4), `== !=` (5),
@@ -21,9 +21,9 @@ use crate::ty::TypeFrame;
 use crate::{is_reserved_kw, Parser, EXPR_MAX};
 
 /// The ten numeric primitive names — the only spellings an `as` cast
-/// accepts as its right-hand side (RFC 0007 §1). When the word after
+/// accepts as its right-hand side. When the word after
 /// `as` is anything else, the keyword belongs to the select-arm bind
-/// (`fut as name`, RFC 0019 §3), which shares it.
+/// (`fut as name`), which shares it.
 fn is_numeric_prim(s: &str) -> bool {
     matches!(s, "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64")
 }
@@ -61,7 +61,7 @@ pub(crate) struct ExprFrame {
     /// prefix operators swept for the operand being fetched
     prefixes: Vec<(Pfx, Span)>,
     /// the binding level of the last <=6-level operator shifted — the
-    /// non-associativity scope for relational/`is` (RFC 0012 §3)
+    /// non-associativity scope for relational/`is`
     last_level: u8,
     pending_assign: Option<BinOp>,
 }
@@ -72,7 +72,7 @@ enum ExprStage {
     Operand,
     /// waiting for the `is` right-hand type
     IsTy,
-    /// waiting for the `as` right-hand type (the numeric cast, RFC 0007 §1)
+    /// waiting for the `as` right-hand type (the numeric cast)
     AsTy,
     /// waiting for the right-hand side of an assignment (a full
     /// expression — assignment is right-associative through recursion)
@@ -129,7 +129,7 @@ impl ExprFrame {
 
     /// sweep prefix operators (`-` `!` `~` `*` `&` `await`), then fetch an
     /// atom. `await select {..}` is the one prefix form that replaces its
-    /// operand outright (RFC 0019 §3).
+    /// operand outright.
     fn fetch_operand(&mut self, p: &mut Parser) -> Step {
         self.stage = ExprStage::Operand;
         if let Some(f) = self.sweep(p) {
@@ -143,10 +143,10 @@ impl ExprFrame {
             // the removed `*x` / `&x` prefix forms diagnose themselves and
             // are skipped (the Diag fails the compile; binary `*`/`&` are
             // unaffected — they shift in the oploop, never at operand
-            // starts). RFC 0044: bindings share by reference now.
+            // starts). Bindings share by reference now.
             match p.tok() {
                 Tok::Star | Tok::Amp => {
-                    p.err_here("`*x` / `&x` were removed — bindings share by reference now — pass `x` directly (RFC 0044)");
+                    p.err_here("`*x` / `&x` were removed — bindings share by reference now — pass `x` directly");
                     p.bump();
                     continue;
                 }
@@ -275,7 +275,7 @@ impl ExprFrame {
                 Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
                 _ if p.at_kw("is") => {
                     // `is` takes a TYPE as its right-hand side (naming
-                    // position, RFC 0012 §3) — non-associative at level 6
+                    // position) — non-associative at level 6
                     if self.last_level == 6 {
                         break;
                     }
@@ -286,13 +286,13 @@ impl ExprFrame {
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 _ if p.at_kw("as") && peek_is_numeric_prim(p) => {
-                    // `expr as T` — the numeric cast (RFC 0007 §1):
+                    // `expr as T` — the numeric cast:
                     // truncating like C/Rust. Left-associative at level 12,
                     // tighter than `*` (Rust placement), so `a * b as u32`
                     // casts `b` and `x as u32 as u64` chains. The RHS is a
                     // naming position type; when the next word is not one
                     // of the numeric primitives the keyword is left for the
-                    // select-arm bind (`fut as name`, RFC 0019 §3), which
+                    // select-arm bind (`fut as name`), which
                     // shares it.
                     p.bump(); // the `as` keyword
                     self.reduce_while(p, 12);
@@ -301,7 +301,7 @@ impl ExprFrame {
                 }
                 _ => break,
             };
-            // non-associativity scope (RFC 0012 §3): one relational per
+            // non-associativity scope: one relational per
             // context — a second level-6 op is left for the caller's
             // expect, exactly as v1's parse_rel did
             if level == 6 && self.last_level == 6 {
@@ -352,7 +352,7 @@ impl ExprFrame {
     }
 }
 
-// ---- atoms: primary + postfix (RFC 0030 §3, prec 12–13) ----
+// ---- atoms: primary + postfix (prec 12–13) ----
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AtomMode {
@@ -439,7 +439,7 @@ impl AtomFrame {
                 if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::When(WhenFrame::new()));
                 }
-                // `nil` — the empty value (RFC 0005 pointer null; v1.2:
+                // `nil` — the empty value (pointer null; v1.2:
                 // the `nil` type's own value as well)
                 if name == "nil" {
                     p.bump();
@@ -459,7 +459,7 @@ impl AtomFrame {
                 }
                 if name == "Self" {
                     p.bump();
-                    // `Self { .. }` — the class-private literal (RFC 0010 §1)
+                    // `Self { .. }` — the class-private literal
                     if matches!(p.tok(), Tok::LBrace) {
                         let ty_name = sym::SELF_TY;
                         return self.struct_enter(p, ty_name, true);
@@ -515,7 +515,7 @@ impl AtomFrame {
             match p.tok() {
                 Tok::Dot => {
                     p.bump();
-                    // `.0`/`.1` — tuple field access (RFC 0007)
+                    // `.0`/`.1` — tuple field access
                     let name = match p.tok().clone() {
                         Tok::Int(v, None) => {
                             p.bump();
@@ -564,7 +564,7 @@ impl AtomFrame {
         }
     }
 
-    // -- parenthesized expression: `( expr )` — no tuples (RFC 0009) --
+    // -- parenthesized expression: `( expr )` — no tuples --
 
     fn paren_top(&mut self, p: &mut Parser) -> Step {
         loop {
@@ -573,7 +573,7 @@ impl AtomFrame {
                     AtomStage::Paren { e, elems, .. } => (e.take(), std::mem::take(elems)),
                     _ => unreachable!(),
                 };
-                // `(a)` groups; `(a, b)` are tuples (RFC 0007); `()` is
+                // `(a)` groups; `(a, b)` are tuples; `()` is
                 // the nil value and must be spelled `nil` (v1.2)
                 if elems.is_empty() {
                     return match e {
@@ -599,7 +599,7 @@ impl AtomFrame {
                 _ => unreachable!(),
             };
             if !first && matches!(p.tok(), Tok::Comma) {
-                // tuple element separator (RFC 0007): fold the element,
+                // tuple element separator: fold the element,
                 // parse the next
                 if has_e {
                     if let AtomStage::Paren { e, elems, .. } = &mut self.stage {
@@ -693,7 +693,7 @@ impl AtomFrame {
                 let node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
                 return self.finish(p, node);
             }
-            // `.0` — a tuple field (RFC 0007): close the path so far and
+            // `.0` — a tuple field: close the path so far and
             // switch to a Field node; the postfix loop chains from there
             if let Tok::Int(v, None) = p.tok().clone() {
                 let segs = match &mut self.stage {
@@ -773,8 +773,8 @@ impl AtomFrame {
                 let args = std::mem::take(args);
                 let mut segs = std::mem::take(segs);
                 segs[0].generics = args;
-                // `Name<Ty> { .. }` — the generic record literal (RFC
-                // 0009): a single-segment head followed by `{` enters the
+                // `Name<Ty> { .. }` — the generic record literal:
+                // a single-segment head followed by `{` enters the
                 // literal with its arguments, the generic scan's commit
                 // already decided this was never a comparison
                 if segs.len() == 1 && matches!(p.tok(), Tok::LBrace) {
@@ -890,8 +890,8 @@ impl AtomFrame {
                 }
                 AtomStage::Array { elems } => {
                     elems.push(e);
-                    // `;` switches to the repeat form `[ v; n ]` (RFC
-                    // 0005 §9): the parsed element IS the fill value
+                    // `;` switches to the repeat form `[ v; n ]`:
+                    // the parsed element IS the fill value
                     if p.eat_punct(Tok::Semi) {
                         let value = elems.pop().expect("repeat value");
                         self.stage = AtomStage::Repeat { value };
@@ -926,7 +926,7 @@ impl AtomFrame {
                 AtomStage::PathGen { args, .. }
                 | AtomStage::PathDotGen { args, .. }
                 | AtomStage::PostDotGen { args, .. } => {
-                    // const-generic argument (RFC 0005): integer expression
+                    // const-generic argument: integer expression
                     args.push(p.typ(TypeKind::TyConst(e), p.span()));
                     self.genarg_after_arg(p)
                 }
@@ -988,7 +988,7 @@ impl AtomFrame {
     }
 }
 
-// ---- lambdas (RFC 0013 §1): `( params ) (-> Type)? => expr | block` ----
+// ---- lambdas: `( params ) (-> Type)? => expr | block` ----
 
 pub(crate) struct LambdaFrame {
     sp: Span,
@@ -1007,7 +1007,7 @@ impl LambdaFrame {
     pub(crate) fn single(sp: Span, params: Vec<NodeHandle<AnyParam>>) -> Self {
         LambdaFrame { sp, params: Some(params), ret: None, anon: false }
     }
-    /// `fn (params) -> T { .. }` (RFC 0013 §1) — the `(` was not consumed
+    /// `fn (params) -> T { .. }` — the `(` was not consumed
     pub(crate) fn anon(sp: Span) -> Self {
         LambdaFrame { sp, params: None, ret: None, anon: true }
     }
@@ -1033,7 +1033,7 @@ impl LambdaFrame {
         if self.anon {
             // anonymous closures are block-bodied: `fn (..) { .. }`
             if !matches!(p.tok(), Tok::LBrace) {
-                p.err_here("anonymous closures take a block —`fn (..) { .. }` (RFC 0013 §1)");
+                p.err_here("anonymous closures take a block —`fn (..) { .. }`");
             }
         }
         if matches!(p.tok(), Tok::LBrace) {
@@ -1069,7 +1069,7 @@ impl LambdaFrame {
     }
 }
 
-// ---- f-strings (RFC 0030 §1.1/§4.4): holes are sub-slice frames ----
+// ---- f-strings: holes are sub-slice frames ----
 
 pub(crate) struct FStrFrame {
     sp: Span,
@@ -1095,7 +1095,7 @@ impl FStrFrame {
                 }
                 FPart::Hole(hole_toks) => {
                     // sub-parse over the hole's token slice: the same
-                    // loop, a frame over the sub-slice (RFC 0030 §4.4)
+                    // loop, a frame over the sub-slice
                     self.idx += 1;
                     let mut toks = hole_toks;
                     toks.push(Token { tok: Tok::Eof, span: self.sp });
@@ -1123,7 +1123,7 @@ impl FStrFrame {
     }
 }
 
-// ---- `await select { .. }` (RFC 0019 §3) ----
+// ---- `await select { .. }` ----
 
 pub(crate) struct SelectFrame {
     sp: Span,
@@ -1157,7 +1157,7 @@ impl SelectFrame {
         match d {
             Done::Expr(e) => match self.cur.take() {
                 None => {
-                    // the future — `as name` binds it (RFC 0019 §3)
+                    // the future — `as name` binds it
                     let bind = if p.at_kw("as") {
                         p.bump();
                         let Some(id) = p.expect_ident("a binding name") else {

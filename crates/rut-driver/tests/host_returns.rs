@@ -63,7 +63,7 @@ fn nesting_beyond_the_answer_optionals_still_refuses() {
 
 #[test]
 fn verify_against_names_the_q_rows_on_drift() {
-    // the RFC 0025 join is by boot-id identity: a `-> ?str` row against
+    // the boot join is by boot-id identity: a `-> ?str` row against
     // a `-> f64` binding panics naming BOTH shapes, the `?` spelled
     let mut s = Session::new();
     let module = lower_decl_module("pub host fn pick() -> ?str;", "rets.d.rut").unwrap();
@@ -146,7 +146,7 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
         interrupt_every: 1024,
     };
     let hosts = registry(std::rc::Rc::new(std::cell::Cell::new(some)));
-    // the load-time contract (RFC 0025): the lanes verify by identity
+    // the load-time contract: the lanes verify by identity
     hosts.verify_against(&s.expected_host_fns());
     let mut vm = rut_vm::interp::Vm::new(
         std::rc::Rc::new(flat),

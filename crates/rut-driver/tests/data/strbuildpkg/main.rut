@@ -90,7 +90,7 @@ entry fn growth_is_invisible_to_content() -> str {
     return "OK";
 }
 
-// ---- the share/copy law (RFC 0044) ----
+// ---- the share/copy law ----
 
 entry fn share_copy_law() -> str {
     let mut b = StringBuilder.new();

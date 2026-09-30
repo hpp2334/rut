@@ -3,7 +3,7 @@ use json::{encodeJson, decodeJson};
 // the light consumer: json mounts with NO peers in the closure — the
 // base alone (traits, reader/writer, prims, ?T, [T], entries). The
 // peer-gated container rows never exist here; referencing them
-// diagnoses D2 (RFC 0045 §4). Answers use the same canonical-string
+// diagnoses D2. Answers use the same canonical-string
 // convention as the jsonpkg fixture.
 
 entry fn enc_i(v: i64) -> str {

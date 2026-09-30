@@ -3,7 +3,7 @@
 # auto-pulled.
 # The bundle keys are T12's: packed, the required peer is absent from
 # the archive's groups and D1 fires at bundle LOAD (directory loads
-# ignore the format keys, RFC 0038 §2).
+# ignore the format keys).
 format = "rutbundle"
 format_version = 4
 name = "cons_req"

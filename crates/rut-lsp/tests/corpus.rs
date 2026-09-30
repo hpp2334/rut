@@ -2,7 +2,7 @@
 //! playground classics (`demo/src/examples/`) classify cleanly:
 //! sorted, non-overlapping, in-file tokens; every reserved word keyword;
 //! every Impl file yields symbols; `.d.rut` parses in `Mode::Decl`.
-//! Mirrors rut-parser's corpus test (RFC 0030 §7) from the LSP side.
+//! Mirrors rut-parser's corpus test from the LSP side.
 
 use rut_lsp::line_index::LineIndex;
 use rut_lsp::semantic::{classify, symbols, TokenType};
@@ -97,7 +97,7 @@ fn corpus_parses_clean_lsp() {
     // the honest gate `corpus_classifies` lacks: it discards parse
     // diagnostics (`analyzed` drops them), so classification invariants
     // could pass over a corpus full of red squiggles. Mirrors
-    // rut-parser's `corpus_parses_clean` (RFC 0030 §7, lsp-align survey
+    // rut-parser's `corpus_parses_clean` (lsp-align survey
     // §6): every corpus file parses with ZERO diagnostics through the
     // same lex → parse(mode) pipeline the LSP serves.
     let files = corpus();

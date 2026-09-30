@@ -1,4 +1,4 @@
-//! The primitive-optional element store (RFC 0044 §5, the nmapset-round2
+//! The primitive-optional element store (the nmapset-round2
 //! phase-2 repr): a `[?prim]` backing — `pouch`'s `Vec<T>.buf` included —
 //! holds each element as a raw payload plus a one-byte nil tag instead of a
 //! boxed one-slot cell. The element ops lower to the `OptPrim` repr family
@@ -529,11 +529,11 @@ fn version_gate_rejects_stale_artifacts() {
     // surface (the json-perf
     // batch phase 2: the `StrScan`/`StrStartsWith`/`StrBuf*` natives +
     // the `StrBuf` boot type, the 7→8 declared-surface precedent); v9
-    // was the orphan rule (RFC 0012 §2a, the orphan-rule batch's
+    // was the orphan rule (the orphan-rule batch's
     // rejection addition, the 5→6 precedent); v8 was the err-channel
     // phase 2 declared-surface change (`capture_stacktrace()` + the
-    // `StackTrace` builtin class + the `pos` span table, RFC 0036);
-    // v13 is the weak batch (RFC 0017 v1: `TyKind::Weak` + the two
+    // `StackTrace` builtin class + the `pos` span table);
+    // v13 is the weak batch (`TyKind::Weak` + the two
     // Weak ops — new encoded vocabulary, the bump law); v14 is the
     // disposal surface (the `DisposalContext` boot type — id 22, kind
     // tag 17 — plus the `Disposal`/`DisposalContext` surface rows, the

@@ -1,8 +1,7 @@
-// server/server.d.rut — the host bus surface of 03-plugin (RFC 0035
-// §3): registration by NAME (callbacks cannot cross the boundary as
-// values, RFC 0023 §2) — `subscribe` hands the host a rut export name
+// server/server.d.rut — the host bus surface of 03-plugin: registration by NAME (callbacks cannot cross the boundary as
+// values) — `subscribe` hands the host a rut export name
 // per topic; `emit` reaches every subscriber of a topic, re-entering
-// rut (nested `vm.call`, RFC 0022 §1) to render the wire line.
+// rut (nested `vm.call`) to render the wire line.
 
 pub host fn subscribe(bus: opaque, topic: str, handler: str);
 

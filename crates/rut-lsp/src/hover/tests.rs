@@ -230,7 +230,7 @@ fn miss_is_none() {
 
 #[test]
 fn inherent_impl_block_method_hover() {
-    // methods live in `impl` blocks (RFC 0012 §4) — the call resolves
+    // methods live in `impl` blocks — the call resolves
     // through the block's owner, not a type body
     let src = "\
 struct Counter {
@@ -252,7 +252,7 @@ return c.bump();
 
 #[test]
 fn foreign_trait_method_requires_use() {
-    // the use-both gate (RFC 0012 §6): the trait lives in another module,
+    // the use-both gate: the trait lives in another module,
     // so the call resolves only once the document `use`s it
     let surf_src = "trait Greeter {\nfn greet(self) -> nil;\n}\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
@@ -475,7 +475,7 @@ return total;
 
 #[test]
 fn for_c_counter_binding_resolves() {
-    // the RFC 0007 §1 default: an unsuffixed `0` is `i32`
+    // the default: an unsuffixed `0` is `i32`
     let src = "\
 fn f(n: i32) -> i32 {
 let acc = 0;

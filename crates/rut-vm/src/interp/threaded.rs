@@ -104,7 +104,7 @@ macro_rules! cmpf {
 }
 
 impl Vm {
-    /// One op of fuel for the match path (RFC 0040): parks at `pc` on
+    /// One op of fuel for the match path: parks at `pc` on
     /// exhaustion so `resume()` re-executes it.
     pub(super) fn tick(&mut self, pc: u32) -> Result<(), Trap> {
         self.fuel_used += 1;
@@ -286,7 +286,7 @@ impl Machine for Vm {
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let cell = cell_of(unsafe { *regs.add(*arr as usize) });
-        // the primitive-optional store (RFC 0044 §5): decode; non-nil mints
+        // the primitive-optional store: decode; non-nil mints
         // a fresh opt VALUE whose reference dst takes over
         if let Repr::OptPrim(_) = repr {
             let Some(elem) = opt_elem_ty(cell) else {
@@ -372,7 +372,7 @@ impl Machine for Vm {
                 seq_get(cell_of(arr), i)?
             }
             // a window obj: an ELEMENT read through the window —
-            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_get(obj_cell, i)?,
             _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
         };
@@ -411,7 +411,7 @@ impl Machine for Vm {
                 seq_set(cell_of(arr), i, v)?
             }
             // a window obj: an ELEMENT write through the window —
-            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_set(obj_cell, i, v)?,
             _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
         };
@@ -430,7 +430,7 @@ impl Machine for Vm {
         if unsafe { s.r.is_null() } {
             return Err(Trap::new(TrapKind::NilDeref, "nil dereference"));
         }
-        // the downcast ALIAS handoff (RFC 0014, refval-round2): the `?T`
+        // the downcast ALIAS handoff (refval-round2): the `?T`
         // result IS the opaque box — the nullable deref (field 0) reads
         // its payload slot (mirror of the step-dispatch op_getf). A store
         // slot at P2 — the tag routes BEFORE any cell deref.
@@ -645,7 +645,7 @@ impl Machine for Vm {
         let table = &prog.funcs[self.cur_func as usize].labels
             [*table_off as usize..*table_off as usize + *count as usize];
         let raw = unsafe { *regs.add(*idx as usize) };
-        // null names no member: the default arm (RFC 0018)
+        // null names no member: the default arm
         let m = if unsafe { raw.r.is_null() } {
             u32::MAX as usize
         } else {
@@ -739,7 +739,7 @@ impl Machine for Vm {
         let Op::IsType { dst, obj, want } = op else {
             unreachable_op!("op_istype: unexpected op")
         };
-        // the `is` law (RFC 0014, 2026-09): `is` names the box, never
+        // the `is` law: `is` names the box, never
         // the payload — see the step.rs IsType body
         let ty = self.is_ty(unsafe { *regs.add(*obj as usize) });
         unsafe { *regs.add(*dst as usize) = Slot::bool(ty == *want) };

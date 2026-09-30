@@ -1,4 +1,4 @@
-//! Diagnostics — RFC 0030 §6: `Diag { span, msg, labels, notes }`,
+//! Diagnostics — `Diag { span, msg, labels, notes }`,
 //! one renderer for lexer/parser/resolve/typecheck, byte offsets.
 
 use crate::span::Span;

@@ -76,7 +76,7 @@ fn lcg(n: usize, seed: u32) -> Vec<u8> {
     out
 }
 
-// entry shorthands — typed crossings (RFC 0023 revised)
+// entry shorthands — typed crossings
 fn rut_digest(vm: &mut rut_vm::interp::Vm, algo: &str, data: &[u8]) -> String {
     let (v, _e): (Vec<u8>, String) = vm.call("digest", (algo, data.to_vec())).unwrap();
     hex(&v)
@@ -390,7 +390,7 @@ fn dispatcher_matches_direct_entries() {
 
 #[test]
 fn stress_8k_under_raised_budgets() {
-    // RFC 0040: budgets are the host's call — a real workload gets real
+    // budgets are the host's call — a real workload gets real
     // numbers, and the session still cannot exceed them. (Sized for the
     // debug-build interpreter; release is ~30x faster.)
     let mut vm = session(500_000_000, 256 * 1024 * 1024);

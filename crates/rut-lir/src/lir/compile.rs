@@ -11,11 +11,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Self::compile_lambda_fn(ctx, inst, fid, lambda_node);
         }
         // a desugared `for..of` emit closure carries its signature in
-        // ctx.for_of_sigs (RFC 0012 §6)
+        // ctx.for_of_sigs
         if let FnKey::ForOfEmit { body, var } = inst.key {
             return Self::compile_for_of_emit_fn(ctx, fid, body, var);
         }
-        // an engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+        // an engine-backed thunk: a bodyless FuncCode whose
         // host_id names the embedder's registered body
         if let FnKey::HostThunk(thunk_name) = inst.key {
             return super::asyncfn::compile_host_thunk(ctx, fid, thunk_name);
@@ -120,7 +120,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // and the prologue unboxes into the concrete working
                 // registers the body is typed against — this is the
                 // variant vtable rows bind (the box cell's own type
-                // reaches the vtable, RFC 0015 §6). CONCRETE ABI: params
+                // reaches the vtable). CONCRETE ABI: params
                 // cross raw and there is no prologue — body codegen
                 // identical to an inherent fn; bare-receiver static
                 // calls bind this variant. Ref targets
@@ -146,13 +146,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => return Ok(()),
         };
         if is_async {
-            // the landing (RFC 0018): free async fns weave into the
+            // the landing: free async fns weave into the
             // engine-backed Future impls; async METHODS diagnose (the
-            // loop's tasks are free fns in v1 — join lands with RFC 0019)
+            // loop's tasks are free fns in v1 — join lands later)
             if !matches!(inst.key, FnKey::Free(_)) {
                 ctx.err(
                     ctx.ast.span(node),
-                    "async methods are not woven in this build — the loop's tasks are async free fns; methods land with RFC 0019",
+                    "async methods are not woven in this build — the loop's tasks are async free fns",
                 );
                 return Err(());
             }
@@ -175,8 +175,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ),
             _ => return Ok(()),
         };
-        // Type-union bounds in scope for THIS instantiation (RFC 0043 §3,
-        // native-fastpath phase 1): the item's own bounds plus — for a
+        // Type-union bounds in scope for THIS instantiation (native-fastpath
+        // phase 1): the item's own bounds plus — for a
         // class method — the class's `requires`. Only union-SPELLED
         // bounds register: a trait bound stays admission-only, and its
         // method calls keep resolving per instantiation (the
@@ -306,13 +306,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let reg = c.new_reg(param_tys[i]);
                     // trait-typed parameters: the Inst carries this call's
                     // concrete origin (a trait parameter IS an implicit
-                    // generic bound, RFC 0012 §5) — single origin ⇒ static
+                    // generic bound) — single origin ⇒ static
                     let origins = if matches!(c.ctx.types.kind(param_tys[i]), TyKind::TraitObj { .. }) {
                         param_origins_iter.next().map(|t| vec![t]).unwrap_or_default()
                     } else {
                         Vec::new()
                     };
-                    // union-bound provenance (RFC 0043 §3): a param whose
+                    // union-bound provenance: a param whose
                     // declared type NODE spells a union-bounded generic
                     // records that generic — method calls on it gate on
                     // every member of the bound
@@ -334,8 +334,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // slot-ABI prologue (prim-target impl methods): each slot
         // parameter unboxes into the concrete working register the body
-        // was typed against — the box cell's own type reaches the vtable
-        // (RFC 0015 §6), the payload is the body's value
+        // was typed against — the box cell's own type reaches the vtable,
+        // the payload is the body's value
         if slot_self.is_some() {
             let concrete = self_ty.unwrap_or(TY_NIL);
             for (i, p) in params.iter().enumerate() {
@@ -381,7 +381,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             spans,
             // pc → (line, col) is filled by the DRIVER, while the module
             // source is in hand — the compiler's span table stays
-            // byte-offset-only (RFC 0036 §4)
+            // byte-offset-only
             pos: vec![],
             host_id: None,
         };
@@ -455,7 +455,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             param_tys.push(*t);
         }
         let n_caps = caps.len() as u32;
-        // body: block or single expression (RFC 0013 §1 arrows)
+        // body: block or single expression (arrows)
         if let Some(block) = c.ctx.ast.narrow_block(body) {
             if c.compile_block(block).is_err() {
                 return Err(());
@@ -489,7 +489,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             spans,
             // pc → (line, col) is filled by the DRIVER, while the module
             // source is in hand — the compiler's span table stays
-            // byte-offset-only (RFC 0036 §4)
+            // byte-offset-only
             pos: vec![],
             host_id: None,
         };
@@ -498,7 +498,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(())
     }
 
-    /// Compile a desugared `for..of` emit closure (RFC 0012 §6): one
+    /// Compile a desugared `for..of` emit closure: one
     /// parameter `v: E`, return `bool` — the body runs, then `true`;
     /// `break`/`continue` were translated to returns at their sites.
     fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
@@ -568,7 +568,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             spans,
             // pc → (line, col) is filled by the DRIVER, while the module
             // source is in hand — the compiler's span table stays
-            // byte-offset-only (RFC 0036 §4)
+            // byte-offset-only
             pos: vec![],
             host_id: None,
         };

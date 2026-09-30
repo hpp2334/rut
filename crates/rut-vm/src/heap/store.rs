@@ -4,9 +4,9 @@
 //! - [`OpaqueEntry::Host`] — a HOST payload (the Rust `TypeId` world):
 //!   [`HostOpaque`], a boxed `'static` value behind the
 //!   [`HostPayload`] release hook (one per map/logger, never per-op —
-//!   the Box is plain Rust malloc, RFC 0023/0026 relaxed call).
+//!   the Box is plain Rust malloc, relaxed call).
 //! - [`OpaqueEntry::Rut`] — a RUT value held host-side ([`RutOpaque`],
-//!   the RFC 0014 box shape): the payload slot moves into the entry and
+//!   the box shape): the payload slot moves into the entry and
 //!   its runtime type rides along, so `downcast<T>` reads the cell's
 //!   kind and never a Rust `TypeId`.
 //!
@@ -21,10 +21,10 @@
 //! store slots to the entry's own rc without knowing any types.
 //!
 //! `rc` and the borrow guard live ON the entry: the BORROW_MUT law
-//! (RFC 0023 §2) moved here from the old anchor cell — same guard
+//! moved here from the old anchor cell — same guard
 //! semantics, new home. Death is rc-0 inside the release walk: the
 //! Host payload's `finalize` hook runs BEFORE the Box's own Drop
-//! (RFC 0016 §3), the Rut entry's held slot releases with the
+//!, the Rut entry's held slot releases with the
 //! record-field pattern (children after the parent is freed).
 
 use super::*;
@@ -35,7 +35,7 @@ use std::mem;
 
 use crate::arena::OpaqueRef;
 
-/// Exclusive-borrow sentinel (RFC 0023 §2): 0 = free, `BORROW_MUT` = one
+/// Exclusive-borrow sentinel: 0 = free, `BORROW_MUT` = one
 /// exclusive borrow live, else the shared-borrow count.
 pub(crate) const BORROW_MUT: u32 = u32::MAX;
 
@@ -44,7 +44,7 @@ pub(crate) const BORROW_MUT: u32 = u32::MAX;
 /// release to the entry's rc; an untagged one stays a cell pointer.
 pub(crate) const STORE_TAG: usize = 1;
 
-/// The release hook (nmap-hostvals P2; RFC 0016 §3's finalizer arm).
+/// The release hook (nmap-hostvals P2; the finalizer arm).
 /// Runs at store-entry death — rc-0 inside the release walk — BEFORE the
 /// payload's own `Drop`. The no-op default is the P2 posture: payloads
 /// opt in. (P5's `NativeTable` fills it: release every held value cell.)
@@ -69,7 +69,7 @@ pub struct HostOpaque {
     pub(crate) finalize: Option<fn(&mut dyn Any, &Heap)>,
 }
 
-/// A RUT value held host-side (the RFC 0014 box): identity IS the held
+/// A RUT value held host-side (the box): identity IS the held
 /// slot; the rut-side downcast reads the cell's runtime kind via
 /// `val_ty` — never a Rust `TypeId`. `val_ty` rides the entry because a
 /// prim payload is raw bits in `slot` (the only type info there is).
@@ -82,13 +82,13 @@ pub struct RutOpaque {
 pub enum OpaqueEntry {
     /// a HOST payload — the Rust TypeId world
     Host(HostOpaque),
-    /// a RUT value held host-side — the RFC 0014 shape
+    /// a RUT value held host-side — the box shape
     Rut(RutOpaque),
 }
 
 /// The value-storage repr (nmap-hostvals P3): host-side storage for a rut
 /// value carries its own tag — the `[?V]` array repr moved host-side
-/// (`Slot` is UNTAGGED 8 bytes, RFC 0015 §5 — the bytecode types it, so
+/// (`Slot` is UNTAGGED 8 bytes — the bytecode types it, so
 /// stored values must tag themselves). NEVER boxed: the 8-byte slot moves.
 ///
 /// - `Empty` — the h-family placeholder: an entry that exists with no
@@ -134,7 +134,7 @@ impl PartialEq for ValSlot {
 impl Eq for ValSlot {}
 
 /// One slab element: the entry + its rc + the borrow guard. `bytes` is
-/// the RFC 0040 charge the mint made, refunded at death.
+/// the charge the mint made, refunded at death.
 pub(crate) struct EntryCell {
     pub(crate) e: OpaqueEntry,
     pub(crate) refs: Cell<u32>,
@@ -196,7 +196,7 @@ impl Store {
         }
     }
 
-    /// Insert an entry owning one reference. The caller did the RFC 0040
+    /// Insert an entry owning one reference. The caller did the
     /// charge (`bytes` rides the entry for the death refund).
     pub(crate) fn insert(&self, e: OpaqueEntry, bytes: u64) -> Slot {
         let p = {
@@ -294,7 +294,7 @@ impl Store {
     }
 }
 
-/// The host's typed view over a store entry (RFC 0023/0026): `alloc`
+/// The host's typed view over a store entry: `alloc`
 /// news any `'static` Rust value into the store (no finalize hook —
 /// the plain-embedder mint), `alloc_hosted` news a [`HostPayload`] and
 /// wires its hook, and `from_handle` re-decodes a handle with the
@@ -312,7 +312,7 @@ pub struct Opaque<T: 'static> {
 
 impl<T: 'static> Opaque<T> {
     /// News the box: `val` moves into the store immediately, its shallow
-    /// `size_of::<T>()` charged to the heap budget (RFC 0040). No
+    /// `size_of::<T>()` charged to the heap budget. No
     /// finalize hook — see [`Opaque::alloc_hosted`].
     pub fn alloc(vm: &mut crate::interp::Vm, val: T) -> Result<Opaque<T>, Trap> {
         let slot = vm.heap.alloc_host_box(val, None)?;
@@ -329,7 +329,7 @@ impl<T: 'static> Opaque<T> {
         let OpaqueEntry::Host(host) = &cell.e else {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                "the box holds a rut value, not a host payload — recover it with `downcast<T>` on the rut side (RFC 0014)",
+                "the box holds a rut value, not a host payload — recover it with `downcast<T>` on the rut side",
             ));
         };
         if !host.payload.is::<T>() {
@@ -352,7 +352,7 @@ impl<T: 'static> Opaque<T> {
         if borrows.get() == BORROW_MUT {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                "host box is `&mut`-borrowed by an outer host call (RFC 0023 §2)",
+                "host box is `&mut`-borrowed by an outer host call",
             ));
         }
         borrows.set(borrows.get() + 1);
@@ -365,7 +365,7 @@ impl<T: 'static> Opaque<T> {
 
     /// Exclusive borrow for the closure's duration. A re-entrant
     /// `vm.call` reaching another host fn that borrows the same box
-    /// traps `borrowed by host` instead of aliasing (RFC 0023 §2).
+    /// traps `borrowed by host` instead of aliasing.
     pub fn with_mut<R>(
         &self,
         vm: &mut crate::interp::Vm,
@@ -375,7 +375,7 @@ impl<T: 'static> Opaque<T> {
         if borrows.get() != 0 {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                "host box is borrowed by an outer host call (RFC 0023 §2)",
+                "host box is borrowed by an outer host call",
             ));
         }
         borrows.set(BORROW_MUT);
@@ -386,7 +386,7 @@ impl<T: 'static> Opaque<T> {
         Ok(out)
     }
 
-    /// The erased handle (RFC 0023): the box's `Opaque` identity, for
+    /// The erased handle: the box's `Opaque` identity, for
     /// passing the box through typed `call`/host-fn boundaries.
     pub fn handle(&self) -> &OpaqueRef {
         &self.handle
@@ -425,7 +425,7 @@ impl<T: 'static> Clone for Opaque<T> {
 impl<T: HostPayload> Opaque<T> {
     /// News a box whose payload opted into the release hook: `finalize`
     /// runs at entry death — rc-0 inside the release walk — before the
-    /// payload's own `Drop` (RFC 0016 §3). One per map/logger, never
+    /// payload's own `Drop`. One per map/logger, never
     /// per-op.
     pub fn alloc_hosted(vm: &mut crate::interp::Vm, val: T) -> Result<Opaque<T>, Trap> {
         fn finalize_thunk<P: HostPayload>(p: &mut dyn Any, heap: &Heap) {
@@ -469,7 +469,7 @@ mod tests {
     }
     impl Drop for Counted {
         fn drop(&mut self) {
-            // the ORDER law (RFC 0016 §3, §0.8 i): finalize ran first
+            // the ORDER law: finalize ran first
             assert!(self.fin.get(), "finalize must run before the Box's own Drop");
             self.dropped.set(true);
         }
@@ -525,7 +525,7 @@ mod tests {
         // a wrong T: the checked error naming what it holds and what was asked
         let err = Opaque::<u64>::from_handle(host.handle()).err().expect("wrong T rejected");
         assert!(err.msg.contains("i64") && err.msg.contains("u64"), "{}", err.msg);
-        // a rut-value entry answering a Host decode: the RFC 0014 recovery text
+        // a rut-value entry answering a Host decode: the recovery text
         let s = vm.heap.alloc_str("k".into()).unwrap();
         let rut = vm.heap.alloc_opaque(s, rut_core::types::TY_STR).unwrap();
         let h = vm.heap.opaque_handle_take(unsafe { rut.r });

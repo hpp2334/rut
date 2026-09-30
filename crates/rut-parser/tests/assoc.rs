@@ -1,6 +1,6 @@
 //! Associativity and precedence parity with v1's precedence climb
-//! (RFC 0030 §4 binding-power table): relational/`is` are
-//! non-associative (RFC 0012 §3), assignment is right-associative, and
+//! (the binding-power table): relational/`is` are
+//! non-associative, assignment is right-associative, and
 //! unary/postfix chains compose.
 
 use rut_ast::ast::*;

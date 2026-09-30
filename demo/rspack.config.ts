@@ -66,7 +66,7 @@ const config: RspackOptions = {
         test: /\.css$/,
         type: "css",
       },
-      // the classics (RFC 0041 §3): example sources imported as strings
+      // the classics: example sources imported as strings
       // by demo/src/examples/index.ts — rut-ONLY since the no-sidecars
       // batch (expected rides inline in the case entries), so a leftover
       // `.expected` import fails the build loudly
@@ -79,7 +79,7 @@ const config: RspackOptions = {
   plugins: [
     ...(isDevServe ? [new ReactRefreshRspackPlugin()] : []),
     new HtmlRspackPlugin({ template: "./src/index.html" }),
-    // ship rut.wasm with the bundle (RFC 0041 §3: the runner probes it)
+    // ship rut.wasm with the bundle (the runner probes it)
     new CopyRspackPlugin({
       patterns: [{ from: "public", to: "." }],
     }),

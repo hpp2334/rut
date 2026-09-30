@@ -1,5 +1,5 @@
 //! Expression compilation: the value-in-last_reg convention, literals with
-//! bidirectional inference (RFC 0007 SS1), path/field-chain reads,
+//! bidirectional inference, path/field-chain reads,
 //! enum members, and module-let loads.
 
 use crate::check::{float_suffix_ty, int_suffix_ty, numeric_prim, TcResult};
@@ -14,7 +14,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Compile an expression; the value lands in a fresh register (the
     /// last register). `expected` flows down for bidirectional literal
-    /// inference (RFC 0007 §1).
+    /// inference.
     pub(crate) fn compile_expr(&mut self, node: NodeHandle<AnyExpr>, expected: Option<TypeId>) -> TcResult<TypeId> {
         if !self.enter() {
             self.leave();
@@ -22,7 +22,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let mut r = self.compile_expr_inner(node, expected);
         self.leave();
-        // nullable coercion (RFC 0044): the mirror pair at value positions —
+        // nullable coercion: the mirror pair at value positions —
         // a `?T` where `T` is expected reads its payload (field 0, the old
         // `*p` deref), a `T` where `?T` is expected boxes into a fresh
         // one-slot cell (the old `&v`). The pair is TRANSITIVE: nesting is
@@ -61,7 +61,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // copy-by-value boundary (RFC 0009/0016 v1.1): every VALUE-typed
+        // copy-by-value boundary: every VALUE-typed
         // expression result is a fresh cell the consumer owns — records and
         // arrays deep-copy here, once, at the expression boundary. Receivers
         // and assignment-target chains bypass this wrapper and alias.
@@ -84,7 +84,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             ExprKind::Field { recv, name } => self.compile_field(recv, name, sp),
             ExprKind::Tuple { elems } => {
-                // `(a, b, ..)` (RFC 0007): a record with numeric fields.
+                // `(a, b, ..)`: a record with numeric fields.
                 // `()` no longer reaches here — the parser rejects it and
                 // points at `nil` (v1.2).
                 //
@@ -118,7 +118,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Index { recv, idx } => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p[i]` auto-derefs (RFC 0005)
+                // `p[i]` auto-derefs
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let it = self.compile_expr(idx, Some(TY_I32))?;
                 if it != TY_I32 {
@@ -135,7 +135,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Unary { op, expr } => {
                 use rut_ast::ast::UnOp::*;
                 let t = match op {
-                    // RFC 0044: `*p`/`&v` are gone — the parser diagnoses
+                    // `*p`/`&v` are gone — the parser diagnoses
                     // them; the coercions they performed are implicit at
                     // value positions (the compile_expr wrapper: `?T → T`
                     // reads the payload, `T → ?T` boxes).
@@ -143,7 +143,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // `-lit` in a typed position still adapts the literal
                     // (`-2.0` passed to an `f64` param), so forward
                     // `expected` — but see through one nullable layer
-                    // (RFC 0044): negation computes at the payload type,
+                    //: negation computes at the payload type,
                     // the funnel re-boxes the result
                     _ => self.compile_expr(expr, self.numeric_hint(expected))?,
                 };
@@ -182,19 +182,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.compile_lambda(node.id(), params, ret, body, expected, sp)
             }
             ExprKind::Try { .. } => {
-                // `?` was Result-syntax: removed with the sums (RFC 0005 §10)
-                self.ctx.err(sp, "`?` was removed — errors are `(T, err)` records; test the second element (RFC 0005 §10)");
+                // `?` was Result-syntax: removed with the sums
+                self.ctx.err(sp, "`?` was removed — errors are `(T, err)` records; test the second element");
                 Err(())
             }
             ExprKind::Await { expr } => {
-                // the landing (RFC 0018): the await expansion runs inside
+                // the landing: the await expansion runs inside
                 // an async body — elsewhere it diagnoses
                 crate::lir::asyncfn::compile_await(self, expr, sp)
             }
             ExprKind::Select { .. } => {
-                // `await select` keeps parsing (RFC 0019 §3); its
+                // `await select` keeps parsing; its
                 // semantics are the structured-competition batch
-                self.ctx.err(sp, "`await select` is not in this build — structured competition lands with RFC 0019");
+                self.ctx.err(sp, "`await select` is not in this build");
                 Err(())
             }
             ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
@@ -288,12 +288,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Err(())
             }
             ExprKind::Cast { expr, ty } => {
-                // `expr as T` (RFC 0007 §1): the numeric cast — truncating,
+                // `expr as T`: the numeric cast — truncating,
                 // C/Rust semantics, one `Op::Conv`. The RHS is a naming
                 // position restricted to the numeric primitives.
                 let mut from = self.compile_expr(expr, None)?;
                 let mut src = self.last_reg;
-                // a `?T` operand reads its payload first (RFC 0044 — the
+                // a `?T` operand reads its payload first (the
                 // old `*x` deref, now implicit at this value position)
                 if let TyKind::Opt { elem } = self.ctx.types.kind(from).clone() {
                     if let TyKind::Prim(p) = self.ctx.types.kind(elem) {
@@ -315,14 +315,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 }) else {
                     self.ctx.err(sp, format!(
-                        "`as` converts between numeric primitives —`{}` is not one (RFC 0007 §1)",
+                        "`as` converts between numeric primitives —`{}` is not one",
                         self.ctx.type_name(want)
                     ));
                     return Err(());
                 };
                 let TyKind::Prim(from_prim) = self.ctx.types.kind(from).clone() else {
                     self.ctx.err(sp, format!(
-                        "`as` converts between numeric primitives —found `{}` (RFC 0007 §1)",
+                        "`as` converts between numeric primitives —found `{}`",
                         self.ctx.type_name(from)
                     ));
                     return Err(());
@@ -341,10 +341,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     // last register allocated (the value produced by compile_expr)
     // NOTE: maintained by every producing helper via self.new_reg
 
-    /// Bidirectional inference (RFC 0007 §1) sees through one nullable
+    /// Bidirectional inference sees through one nullable
     /// layer: in an expected `?T` position an unsuffixed numeric literal
-    /// adapts to `T`, and the funnel's `T → ?T` coercion boxes it
-    /// (RFC 0044).
+    /// adapts to `T`, and the funnel's `T → ?T` coercion boxes it.
     fn numeric_hint(&self, expected: Option<TypeId>) -> Option<TypeId> {
         match expected {
             Some(e) => match self.ctx.types.kind(e).clone() {
@@ -361,7 +360,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let ty = match sfx {
                     Some(s) => int_suffix_ty(s),
                     None => {
-                        // RFC 0007 §1: an unsuffixed literal defaults to
+                        // an unsuffixed literal defaults to
                         // `i32` and adapts bidirectionally — but only while
                         // it FITS that default. Past it the literal must
                         // declare itself: `Vec<u64>.from([..])` no longer
@@ -376,11 +375,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 _ => String::new(),
                             };
                             self.ctx.err(sp, format!(
-                                "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`{hint} (RFC 0007 §1)"
+                                "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`{hint}"
                             ));
                         }
                         match self.numeric_hint(expected) {
-                            // bidirectional inference (RFC 0007 §1): an int
+                            // bidirectional inference: an int
                             // literal adapts to the expected numeric type — int
                             // widths AND float positions (`x: f32 = 1`)
                             Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_int()) => e,
@@ -403,7 +402,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                     }
                 };
-                // range check (RFC 0007 §1)
+                // range check
                 if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
                     let (min, max): (i128, i128) = match p {
                         PrimTy::U8 => (0, u8::MAX as i128),
@@ -418,7 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     };
                     if (v as i128) < min || (v as i128) > max {
                         self.ctx.err(sp, format!(
-                            "integer literal {v} does not fit `{}` (RFC 0007 §1)",
+                            "integer literal {v} does not fit `{}`",
                             self.ctx.type_name(ty)
                         ));
                     }
@@ -435,7 +434,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let x = f64::from_bits(bits);
                     if !x.is_finite() || x.abs() > f32::MAX as f64 {
                         self.ctx.err(sp, format!(
-                            "float literal {:e} exceeds the `f32` default —add an explicit `f64` suffix (RFC 0007 §1)",
+                            "float literal {:e} exceeds the `f32` default —add an explicit `f64` suffix",
                             x
                         ));
                     }
@@ -450,7 +449,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // The lexer stores literals as f64 bits. Narrow that payload
                 // to the register's width so an `f32` literal actually carries
                 // f32 precision in its slot — arithmetic and `str()` re-narrow,
-                // but float comparisons read the slot back as f64 (RFC 0004 §3).
+                // but float comparisons read the slot back as f64.
                 let bits = if ty == TY_F32 {
                     (f64::from_bits(bits) as f32 as f64).to_bits()
                 } else {
@@ -472,7 +471,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok((TY_BOOL, reg))
             }
             Lit::Nil => {
-                // `nil` (RFC 0005; v1.2): typed by the expected position —
+                // `nil`: typed by the expected position —
                 // `let p: *T = nil`, `p == nil` — and otherwise the `nil`
                 // type's own value. The null slot IS zero bits (Slot::null).
                 let ty = match expected {
@@ -492,7 +491,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let name = segs[0].name;
             if let Some(l) = self.lookup(name).cloned() {
                 // inlined `Slice` accessor: `self` is the receiver register
-                // itself — no copy (RFC 0005 sequence access)
+                // itself — no copy (sequence access)
                 if let Some((sid, reg)) = self.inline_self {
                     if sid == name {
                         self.last_reg = reg;
@@ -537,7 +536,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         // `<namespace>.CONST` — a used namespace's constants
-        // (`Math.PI`; RFC 0028). Name-generic: routed by the bound
+        // (`Math.PI`). Name-generic: routed by the bound
         // namespace head, never by a hardcoded string.
         if segs.len() == 2 && self.ctx.is_extern_namespace(segs[0].name) {
             if let Some((ty, bits)) = self.ctx.extern_const(segs[1].name) {
@@ -561,9 +560,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "generic arguments are not valid on a field");
                         return Err(());
                     }
-                    // `p.x` auto-deref through a nullable (RFC 0005): the
+                    // `p.x` auto-deref through a nullable: the
                     // payload slot at the payload's own repr, transitively
-                    // for `??T` (RFC 0044)
+                    // for `??T`
                     let (dty, dreg) = self.deref_for_use(cur_ty, cur, sp.lo);
                     cur = dreg;
                     cur_ty = dty;
@@ -619,7 +618,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.err(
             sp,
             format!(
-                "unknown name `{}` —module paths need use statements, which are not available in this build (RFC 0035)",
+                "unknown name `{}` —module paths need use statements, which are not available in this build",
                 segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
             ),
         );
@@ -630,10 +629,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match self.ctx.ast.expr(init).clone() {
             ExprKind::Lit(Lit::Int(v, sfx)) => {
                 // the same default-width law as `load_lit` — module scope
-                // gets no free pass (RFC 0007 §1)
+                // gets no free pass
                 if sfx.is_none() && v > i32::MAX as u64 {
                     self.ctx.err(sp, format!(
-                        "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64` (RFC 0007 §1)"
+                        "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`"
                     ));
                 }
                 let reg = self.new_reg(ty);
@@ -663,7 +662,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(reg)
             }
             _ => {
-                self.ctx.err(sp, "module `let` initializers must be literals in this build (RFC 0003 §1)");
+                self.ctx.err(sp, "module `let` initializers must be literals in this build");
                 Err(())
             }
         }

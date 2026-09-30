@@ -14,8 +14,8 @@
 //! rut_web_last_error() -> ptr                  [u32 le length][bytes], once
 //! ```
 //!
-//! The Vm and the page state live in thread-locals (single thread, RFC
-//! 0034): DOM callbacks and timer callbacks fire from JS tasks, push
+//! The Vm and the page state live in thread-locals (single thread):
+//! DOM callbacks and timer callbacks fire from JS tasks, push
 //! one event row through the sink, and pump only when no turn is up —
 //! an event firing mid-turn is absorbed by the queue and runs as the
 //! NEXT turn, never stacked.
@@ -36,7 +36,6 @@ use crate::state::{bind_weak_sink, drain_queue, Ev, EvSink, WebState};
 
 /// The boxed element handle rut holds — the web_sys handle itself, so
 /// its `Drop` at rc 0 releases the JS reference deterministically
-/// (RFC 0016 §3).
 #[derive(Clone)]
 pub struct El {
     pub el: web_sys::Element,
@@ -156,7 +155,7 @@ impl DomBackend for WebDom {
     }
 }
 
-// ---- the page's thread-locals (single thread, RFC 0034) ----
+// ---- the page's thread-locals (single thread) ----
 
 thread_local! {
     static VM: RefCell<Option<Vm>> = const { RefCell::new(None) };
@@ -223,7 +222,7 @@ fn boot_page(src: &str) -> Result<(), String> {
     let mut session = rut_driver::Session::new();
     // THE MIRROR (rut/rut.toml by hand — the Session is I/O-free):
     // every package the manifest names; the loader hands over the biz
-    // module's spliced source (base + entry.libs, RFC 0041 §5)
+    // module's spliced source (base + entry.libs)
     crate::mount::mount_app_session(&mut session)?;
     let prog = crate::mount::compile_app(&mut session, src)?;
     let expected = session.expected_host_fns();
@@ -245,7 +244,7 @@ fn boot_page(src: &str) -> Result<(), String> {
     )
     .map_err(|t| format!("vm boot: {}", t.msg))?;
     // the boot turn returns the app container; the pump re-passes it on
-    // every event turn (RFC 0003 §1 — no mutable module state)
+    // every event turn (no mutable module state)
     let app: OpaqueRef = vm
         .call::<_, OpaqueRef>("main", ())
         .map_err(|t| format!("the boot turn trapped: {}", t.msg))?;

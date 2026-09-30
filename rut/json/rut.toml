@@ -6,8 +6,7 @@
 # holds `nmapset` the map/set rows; the dev-deps guarantee both while
 # json builds itself (the peer gate's D3 path checks run on this very
 # manifest), so every group impl dispatches in json's own test runs.
-# RFC 0045 §2's own example, landed as the mechanism's first real
-# consumer.
+# Landed as the mechanism's first real consumer.
 #
 # Publishes COMPILED (the linkable-classes phase): the entries are
 # GENERIC FUNCTIONS, and instantiation is owner-anchored — a consumer

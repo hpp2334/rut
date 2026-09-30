@@ -2,7 +2,7 @@
 //! the fake DOM, driven end to end through real rut calls — every
 //! crossing, the full trap matrix (unknown id, kind mismatch, DOM
 //! exception carried, the re-entrancy guard, listener drift), the
-//! tim_after/on_timer round trip, and the RFC 0025 boot contract both
+//! tim_after/on_timer round trip, and the boot contract both
 //! ways. This is what keeps `cargo test --workspace` a meaningful gate
 //! for a web example.
 
@@ -20,7 +20,7 @@ use todolist_web::{hosts, mount, state, WebState};
 const HARNESS: &str = include_str!("harness.rut");
 
 /// Boot the harness on the twin: mount, compile, bind, `verify_against`
-/// (the happy-path RFC 0025 check), `Vm::new`, seed the static page,
+/// (the happy-path check), `Vm::new`, seed the static page,
 /// run the `main` turn. Every test's setup IS the boot contract.
 fn make_host() -> WebHost<FakeDom> {
     let mut session = Session::new();
@@ -243,7 +243,7 @@ fn guard_stale_listener_ids_are_host_drift() {
     host.fire_listener(99).unwrap();
 }
 
-// ---- the RFC 0025 boot contract, both ways ----
+// ---- the boot contract, both ways ----
 
 fn mounted_session() -> Session {
     let mut s = Session::new();

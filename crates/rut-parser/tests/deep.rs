@@ -1,4 +1,4 @@
-//! Depth budgets and the C2/C3 contracts (RFC 0030 §4/§7): deep input is
+//! Depth budgets and the C2/C3 contracts: deep input is
 //! one clean `Diag`, never a host crash; the iterative parser runs on a
 //! tiny thread stack that recursive descent would overflow.
 

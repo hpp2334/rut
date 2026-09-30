@@ -1,4 +1,4 @@
-//! Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
+//! Builtin names are AMBIENT: no
 //! `use` is needed for the engine's fns and containers — the erasure
 //! primitive's statics are `opaque(..)` / `opaque.downcast<T>`. The
 //! type-name string itself is `opaque` since phase 2 (interner/boot/
@@ -21,7 +21,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
     )
 }
 
-/// Compile, flatten (RFC 0035 §1), verify, and run a single-module
+/// Compile, flatten, verify, and run a single-module
 /// `main` returning i32.
 fn run_main(src: &str) -> i32 {
     let out = compile(src);
@@ -133,7 +133,7 @@ fn the_gated_traits_require_the_import() {
 
 #[test]
 fn opaque_downcast_member_carries_the_nullable_contract() {
-    // the member form yields the nullable (RFC 0014, refval-round2): a
+    // the member form yields the nullable (refval-round2): a
     // mismatch is `nil` — never a zero-value `.0` with a flag
     let v = run_main(
         "pub fn main() -> i32 {\n\

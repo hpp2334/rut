@@ -7,7 +7,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Static dispatch of a trait method through a registered impl: the
     /// receiver's concrete type names the impl, so the call binds to the
-    /// impl method directly (`CallM`) — no vtable hop (RFC 0012 §5).
+    /// impl method directly (`CallM`) — no vtable hop.
     /// Arguments type against the trait's declared signature (the impl's
     /// was checked to match at collection).
     ///
@@ -47,7 +47,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             },
             None => vec![],
         };
-        // inline bounds gate the completed substitution (RFC 0043):
+        // inline bounds gate the completed substitution:
         // the impl method's own bounds under the target substitution
         if let Some((_, mnode)) = im.methods.iter().find(|(n, _)| *n == tm.name) {
             let bounds = self.ctx.ast.method_decl(*mnode).bounds.clone();
@@ -88,7 +88,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             // a `Self`-typed trait parameter accepts the concrete
-            // receiver (nominal widening, RFC 0012 §4); under the
+            // receiver (nominal widening); under the
             // concrete ABI the types already match, so the check is
             // exact and NO box is emitted
             if !self.widens(t, ptys[i]) {
@@ -134,7 +134,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// A trait method called through a TYPE PARAMETER's name —
     /// `T.decode(r)` inside `fn decodeJson<T requires JsonDeserialize>`
-    /// (the rut-json batch phase 1's sanctioned checker gap 2; RFC 0012's
+    /// (the rut-json batch phase 1's sanctioned checker gap 2; the
     /// no-self trait method, the trait's Self param spelled by name).
     /// Generic bodies compile per instantiation, so `param` is already
     /// the substituted concrete type and the `(trait, type)` impl on it
@@ -152,7 +152,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         // the local registry first (the impl and the generic body usually
         // share a module — json's entries and its impls do), then another
-        // module's registration (RFC 0012 §2/§5)
+        // module's registration
         if let Some((idx, midx)) = self.find_trait_impl_method(param, name) {
             let im = self.ctx.impls[idx].clone();
             let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
@@ -294,7 +294,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Another module's registration of the `(trait, type)` impl
-    /// (RFC 0012 §2/§5): the method is already compiled in the exporter,
+    ///: the method is already compiled in the exporter,
     /// so the call binds to its scope-qualified fn id directly (`CallM`)
     /// — link rebases it. The signature comes from the trait's
     /// descriptor as registered from the surface.
@@ -407,11 +407,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// The extern registration of `(trait, type)` whose method set
     /// contains `name` — `(extern impl index, trait method index)`. The
     /// use-both gate lives here: an impl whose trait's name was never
-    /// used does not dispatch (RFC 0012 §6); `no_method_error` still
+    /// used does not dispatch; `no_method_error` still
     /// sees it for the "use `I` .." diagnostic.
     pub(crate) fn find_extern_trait_impl_method(&self, rt: TypeId, name: IdentId) -> Option<(usize, usize)> {
         for (eidx, im) in self.ctx.extern_impls.iter().enumerate() {
-            // the use-both gate (RFC 0012 §6): the trait's name must be
+            // the use-both gate: the trait's name must be
             // callable here — a bound foreign trait, or the owner's own
             // declaration (a seed impl re-registers a caller's impl of
             // the owner's own trait; the caller used the trait to spell
@@ -523,7 +523,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         // the vtable form is final — origins multiple, the call consults
-        // the descriptor (RFC 0012 §1, the two-rule dispatch law)
+        // the descriptor (the two-rule dispatch law)
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallI { slot: slot, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }

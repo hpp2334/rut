@@ -1,8 +1,8 @@
-//! Re-entrant `vm.call` (RFC 0022 §1): a host fn holds `&mut Vm` and may
+//! Re-entrant `vm.call`: a host fn holds `&mut Vm` and may
 //! call back into rut while the outer frame is mid-op. The nested call
 //! runs on a fresh frame stack under the same budget; the outer cursor is
 //! restored whether the callee returns or traps. This is what makes the
-//! RFC 0023 borrow guard load-bearing: a host `with_mut` held across a
+//! borrow guard load-bearing: a host `with_mut` held across a
 //! nested call blocks any other host borrow of the same box, even one
 //! taken from rut code that the nested call runs.
 
@@ -113,7 +113,7 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // bindings BEFORE the Vm (RFC 0025): install + contract + boot
+    // bindings BEFORE the Vm: install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, &invocations);
     hosts.verify_against(&expected); // tests/data/re/re.d.rut ↔ the bodies

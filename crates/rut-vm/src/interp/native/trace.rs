@@ -1,4 +1,4 @@
-//! The StackTrace natives (RFC 0036, err-channel phase 2): capture is a
+//! The StackTrace natives: capture is a
 //! RAW frame walk (§2 — no names, no source, no symbolication); the
 //! members symbolicate LAZILY, per index, against the loaded program
 //! (§3's in-VM path — the interner for names, the position table for
@@ -66,7 +66,7 @@ impl Vm {
         Ok(())
     }
 
-    /// The frame's call-site position — RFC 0036 §4: the position table
+    /// The frame's call-site position: the position table
     /// is parallel to the span table (pc == entry index), so this is one
     /// direct read. `(0, 0)` when stripped (the driver never filled it).
     fn trace_frame_pos(&self, f: TraceFrame) -> (u32, u32) {
@@ -93,7 +93,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `render()` — the RFC 0036 symbolication string, one whole-trace
+    /// `render()` — the symbolication string, one whole-trace
     /// pass, innermost first:
     ///   `at c (app_main:12:9)`          — names + positions restored
     ///   `at c (app_main #2 @ pc 41)`    — stripped: pc-only degradation

@@ -1,4 +1,4 @@
-//! End-to-end — the demo page's 8 cases (RFC 0041 §3 / demo/src/cases.ts)
+//! End-to-end — the demo page's 8 cases (demo/src/cases.ts)
 //! compiled AND executed through the full pipeline: parse → check → LIR →
 //! binary → decode → verify → interpret with budgets.
 
@@ -61,7 +61,7 @@ fn run_case_keep_vm(
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the bindings, BEFORE the Vm (RFC 0025); the contract check panics
+    // the bindings, BEFORE the Vm; the contract check panics
     // before any rut code runs
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::logger::install_std_log(&mut hosts, move |msg| {
@@ -115,7 +115,7 @@ pub fn main() -> nil {
 
 #[test]
 fn case2_sharing() {
-    // the by-reference law (RFC 0044): every binding shares its cell —
+    // the by-reference law: every binding shares its cell —
     // `let q = p` aliases p, so writes through either are visible through
     // both, and `==` is CELL IDENTITY (two aliases of one cell are equal)
     let src = r#"
@@ -137,11 +137,11 @@ pub fn main() -> nil {
 
 #[test]
 fn case3_opaque() {
-    // the opaque-is law (RFC 0014, 2026-09): an opaque answers `is X`
+    // the opaque-is law: an opaque answers `is X`
     // FALSE for every payload type X — it is JUST OPAQUE; `is` never
     // sees through the box; `downcast<T>() -> ?T` is the ONLY recovery
     // (its own TidOf keeps reading the payload). `is opaque` — and its
-    // RFC 0043 alias spelling — is the one check that names what it
+    // alias spelling — is the one check that names what it
     // is: TRUE. Every cell of the law table pinned below; the case
     // fails if ANY of them regresses. (The pre-law rows said
     // `box1 is Point: true` / `box1 is Hashable: true` — the see-through
@@ -192,7 +192,7 @@ fn case3b_opaque_downcast_nullable_laws() {
     // recovery are the source's, in both directions, through every
     // holder (the one-cell law). A prim payload reads the value copied
     // at `opaque(v)` construction. A mismatch is `nil` — the
-    // zero-value-on-false tuple semantics is gone (RFC 0014 amended).
+    // zero-value-on-false tuple semantics is gone.
     let src = r#"
 struct Point { x: i32; y: i32 }
 fn find(o: opaque) -> ?Point {
@@ -302,7 +302,7 @@ pub fn main() -> nil {
 
 #[test]
 fn reassigned_trait_binding_dispatches_as_the_new_type() {
-    // origin counting must re-derive at assignment (RFC 0012 §5): the
+    // origin counting must re-derive at assignment: the
     // call after `w = B { .. }` answers 20 (B's impl) — never 10, which
     // would mean A's statically-bound callee ran on a B
     let src = r#"
@@ -331,7 +331,7 @@ trait Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
 }
-// nominal satisfaction (RFC 0012): a Circle IS a Shape because the
+// nominal satisfaction: a Circle IS a Shape because the
 // `impl Shape for Circle` block is registered — not because the
 // shape happens to match
 struct Circle {
@@ -402,7 +402,7 @@ pub fn main() -> nil {
     }
 }
 "#;
-    // 10M fuel: bounded, resumable (RFC 0040 §2) — the frame parks
+    // 10M fuel: bounded, resumable — the frame parks
     let (lines, trap, fuel_used) = run_case(src, 10_000_000);
     assert_eq!(trap.as_deref(), Some("OutOfFuel"));
     assert!(fuel_used >= 9_999_000, "fuel consumed: {fuel_used}");
@@ -416,7 +416,7 @@ fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
 pub fn main() -> nil {
     let mut x = 2147483647;
-    x = x.wrapping_add(1);   // wrapping: fine (RFC 0004 §3)
+    x = x.wrapping_add(1);   // wrapping: fine
     Logger.new("app").info(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
     s = s.wrapping_shl(1);   // wrapping shl: bits shifted out are gone
@@ -436,7 +436,7 @@ pub fn main() -> nil {
 
 #[test]
 fn plain_shl_traps_when_bits_leave_the_width() {
-    // RFC 0004 §3: `<<` traps; only `x.wrapping_shl(n)` wraps. This was
+    // `<<` traps; only `x.wrapping_shl(n)` wraps. This was
     // silently a RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 pub fn main() -> nil {
@@ -452,7 +452,7 @@ pub fn main() -> nil {
 
 #[test]
 fn shr_follows_signedness() {
-    // RFC 0004 §1: `>>` is logical on unsigned (no sign-extension of the
+    // `>>` is logical on unsigned (no sign-extension of the
     // top bit — u64's bit 63 is magnitude, not sign), arithmetic on signed.
     let src = r#"
 pub fn main() -> nil {
@@ -494,7 +494,7 @@ pub fn main() -> nil {
 
 #[test]
 fn bare_vec_filled_with_a_value_reads_back() {
-    // RFC 0005 §9: `Vec<T>.filled(v, n)` — n slots of the repeat value
+    // `Vec<T>.filled(v, n)` — n slots of the repeat value
     // `[v; n]`. (The old `zeroed(n)` has no generic shape: the repeat
     // construction needs a VALUE, and a generic `T` has none. The form
     // used to emit ArrNew with a hardcoded ZERO length — the argument
@@ -542,13 +542,13 @@ pub fn main() -> nil {
     assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
-    // (the prelude use is present, so the static route engages — RFC 0028)
+    // (the prelude use is present, so the static route engages)
     let bad = "use core::{ Option };\npub fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     // no backward compat: a removed head is an unknown name, full stop
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
     // the plain (non-generic) spelling still reaches the removal diag —
-    // that one lives on the ordinary name-resolution path (RFC 0028 v1.1)
+    // that one lives on the ordinary name-resolution path
     let unused = "pub fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
     let out = rut_driver::compile_module(unused, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("`Option` was removed")));
@@ -556,7 +556,7 @@ pub fn main() -> nil {
 
 #[test]
 fn heap_budget_traps_before_the_write() {
-    // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
+    // OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly. `Vec<u8>` packs one byte
     // per element, so it takes 5M elements to exceed the 4 MB budget.
     let src = r#"
@@ -752,7 +752,7 @@ pub fn main() -> nil {
 #[test]
 fn when_statement_block_arms() {
     // `when` as a statement with block bodies was rejected ("unsupported
-    // expression in this build") — RFC 0008's statement form
+    // expression in this build") — the statement form
     let src = r#"
 enum Light { Green, Yellow, Red }
 pub fn main() -> nil {
@@ -812,7 +812,7 @@ pub fn main() -> nil {
     assert!(lines[3..].iter().all(|l| l == "sweet" || l == "salty"));
 }
 
-// ---- the entry surface (RFC 0035 §3): host-callable fns, no main ----
+// ---- the entry surface: host-callable fns, no main ----
 
 fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     let out = compile(src, "m");
@@ -829,7 +829,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         interrupt_every: 1024,
     };
     // the compiled program carries calc's and rt:log's thunks (mount =
-    // declare, RFC 0025) — bind them, sink discarded
+    // declare) — bind them, sink discarded
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::logger::install_std_log(&mut hosts, |_msg| {});
     rut_std::math::install_std_math(&mut hosts);
@@ -901,7 +901,7 @@ entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
     );
 
     // `Vec<u8>` is a mutable builder, not the binary type: it no longer
-    // crosses — `bytes` is what does (RFC 0004, RFC 0023 §2)
+    // crosses — `bytes` is what does
     let src = r#"
 use pouch::{ Vec };
 entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
@@ -926,7 +926,7 @@ entry fn generic<T>(v: T) -> T { return v; }
 
 #[test]
 fn bytes_are_an_immutable_primitive() {
-    // RFC 0004: bytes is the immutable binary primitive. Construction via
+    // bytes is the immutable binary primitive. Construction via
     // bytes(n)/bytes.from(..), a Vec<u8> builder freezes into one, and ==
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
@@ -1006,7 +1006,7 @@ pub fn main() -> nil {
 
 #[test]
 fn plain_pub_stays_unrestricted() {
-    // `pub` is use-visibility for rut modules (RFC 0003 §2), NOT
+    // `pub` is use-visibility for rut modules, NOT
     // the host surface: a Stack crosses fine between rut fns
     let src = r#"
 use pouch::{ Vec };
@@ -1033,7 +1033,7 @@ pub fn main() -> nil {
 
 #[test]
 fn member_pub_scopes_compile_and_run() {
-    // RFC 0003 §2 / 0010 §2: the pub scopes apply to class members —
+    // the pub scopes apply to class members —
     // parsing, the AST dump label, and the compiled call path
     let src = r#"
 pub class Gauge {
@@ -1065,7 +1065,7 @@ pub fn main() -> nil {
 
 #[test]
 fn recursive_dataclass_tree_runs() {
-    // RFC 0009 §"Representation": recursive shapes are legal; v1.1 spells
+    // recursive shapes are legal; v1.1 spells
     // the recursive edge as a pointer (`left: *Node`, nil = leaf). They
     // used to fail at resolve (`unknown type Node`) because the record was
     // registered only after its fields resolved, and the layout pass
@@ -1152,10 +1152,9 @@ pub fn main() -> nil {
 #[test]
 fn generic_vec_over_pointer_array_runs() {
     // pouch's Vec<T> shape: a generic class over the non-growable heap
-    // array `[T]`, monomorphized for i32 (RFC 0013 / RFC 0005 §9). The
+    // array `[T]`, monomorphized for i32. The
     // backing is a POINTER array — `[nil; cap]` is the only generic
-    // zero — so the fused `v[i]`/`pop` loads deref the stored `&v`
-    // (RFC 0032 §1.1 over `[*T]`).
+    // zero — so the fused `v[i]`/`pop` loads deref the stored `&v`.
     let src = r#"
 class Vec<T> {
     buf: [?T];
@@ -1208,7 +1207,7 @@ pub fn main() -> nil {
 #[test]
 fn vec_class_slice_syntax_runs() {
     // `Vec` is rut std-lib code; `v[i]`, `v[i] = x`, and `for (x of v)`
-    // lower through its `impl Slice<T> for Vec<T>` (RFC 0005)
+    // lower through its `impl Slice<T> for Vec<T>`
     let src = r#"
 use pouch::{ Vec };
 pub fn main() -> nil {
@@ -1349,7 +1348,7 @@ pub fn main() -> nil {
 #[test]
 fn fstring_single_part_needs_no_concat() {
     // `f"{s}"` is the identity on a string — the LIR elides the
-    // one-argument `Concat` this used to emit (RFC 0007 §2); the
+    // one-argument `Concat` this used to emit; the
     // observable result is unchanged.
     let src = r#"
 pub fn main() {
@@ -1531,7 +1530,7 @@ pub fn main() -> nil {
 
 #[test]
 fn as_casts_truncate_like_c_and_rust() {
-    // `expr as T` (RFC 0007 §1): conversions never trap. int→int keeps
+    // `expr as T`: conversions never trap. int→int keeps
     // the target's low bits (signed targets sign-extend), float→int
     // truncates toward zero and saturates at the bounds (NaN -> 0). The
     // cast binds tighter than `*` (Rust placement) and chains left.
@@ -1558,7 +1557,7 @@ pub fn main() -> nil {
 
     // the cast RHS is restricted to the numeric primitives at the parse
     // level — anything else leaves `as` for the select-arm bind
-    // (`fut as name`, RFC 0019 §3), so `1 as str` is a syntax error
+    // (`fut as name`), so `1 as str` is a syntax error
     let bad = "pub fn main() -> nil { let x = 1 as str; }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("expected")));
@@ -1566,7 +1565,7 @@ pub fn main() -> nil {
 
 #[test]
 fn unsuffixed_int_literals_must_fit_i32() {
-    // RFC 0007 §1: bidirectional inference absorbs an unsuffixed literal
+    // bidirectional inference absorbs an unsuffixed literal
     // only while it fits the `i32` default — past it the literal must
     // declare its width, even in a `u64` position, so a dropped or
     // doubled digit can't masquerade as a constant
@@ -1615,8 +1614,7 @@ fn unsuffixed_int_literals_must_fit_i32() {
 fn builtin_impl_numeric_methods_run() {
     // core's `builtin impl <int>` methods (ambient on the primitives,
     // compiler-lowered) + `calc`'s `Math` namespace: the float helpers
-    // and the f64 host functions/constants (RFC 0004 §3, RFC 0028,
-    // RFC 0032 §1.1 R2). The integer abs/min/max/signum forms are gone —
+    // and the f64 host functions/constants. The integer abs/min/max/signum forms are gone —
     // the float helpers are host fns now.
     let src = r#"
 use calc::{ Math };
@@ -1674,7 +1672,7 @@ pub fn main() -> nil {
 
 #[test]
 fn case_f32_math_surface() {
-    // the f32 twins of the calc surface (RFC 0028): same magic-lane
+    // the f32 twins of the calc surface: same magic-lane
     // host fns with `f32` params/returns — the derived sigs bind TY_F32,
     // and the `_f` suffix carries the width (rut has no overloading)
     let src = r#"
@@ -1705,7 +1703,7 @@ pub fn main() -> nil {
 
 #[test]
 fn core_nan_const_is_name_explicit() {
-    // `NAN` is core's one const (RFC 0028): name-explicit — `use
+    // `NAN` is core's one const: name-explicit — `use
     // core::{NAN}` — f64 bits materialized with `ConstRaw`; NaN
     // semantics hold (compares false against itself)
     let with = r#"
@@ -1736,7 +1734,7 @@ pub fn main() -> nil {
 #[test]
 fn generic_trait_dispatch() {
     // `Wrap<i32>` — one trait id per type-argument list, implemented
-    // with an ordinary impl block (nominal, RFC 0012)
+    // with an ordinary impl block (nominal)
     let src = r#"
 trait Wrap<T> {
     fn get(self) -> T;
@@ -1763,13 +1761,13 @@ pub fn main() -> nil {
 
 #[test]
 fn for_of_user_iterate_protocol() {
-    // RFC 0012 §6 — a type is iterable when it registers
+    // a type is iterable when it registers
     // `impl Iterator<E> for T`; `for (v of it)` desugars to
     // `it.__iterate(emit)` — the loop var is the emit closure's parameter
     // (fresh per iteration); `break` returns `false`, `continue` returns
     // `true`; captures are by value, so the accumulator is a shared cell
     // (`*Acc`). `total` takes the trait-typed parameter: it specializes
-    // per concrete argument (RFC 0012 §5), so its call binds statically.
+    // per concrete argument, so its call binds statically.
     let src = r#"
 use ink::{ Logger };
 use core::{ Iterator };
@@ -1815,8 +1813,8 @@ pub fn main() -> nil {
 
 #[test]
 fn for_of_vec_yields_element_references() {
-    // RFC 0012 §6 — Vec/`[T]` fused loops yield the shared `?T` element
-    // (RFC 0044). Ref-typed elements alias the stored slot — writes
+    // Vec/`[T]` fused loops yield the shared `?T` element.
+    // Ref-typed elements alias the stored slot — writes
     // through the loop var (`row.push`, `r.v = ..`) hit the sequence;
     // scalar/str uses deref automatically at value positions; `str`
     // itself keeps value yields.
@@ -1851,7 +1849,7 @@ pub fn main() -> nil {
 
 #[test]
 fn float_literal_defaults_to_f32() {
-    // an uncontextualized float literal is `f32` (RFC 0007 §1); the slot
+    // an uncontextualized float literal is `f32`; the slot
     // carries f32 precision, so a literal and a computed f32 agree.
     let src = r#"
 pub fn main() -> nil {
@@ -1870,7 +1868,7 @@ pub fn main() -> nil {
 #[test]
 fn float_literal_default_does_not_implicitly_widen() {
     // the default is f32, and there are no implicit numeric conversions:
-    // feeding it to `f64` is a width error (RFC 0007 §1)
+    // feeding it to `f64` is a width error
     let src = r#"
 use pouch::{ Vec };
 pub fn main() -> nil {
@@ -1892,7 +1890,7 @@ pub fn main() -> nil {
 #[test]
 fn literals_adapt_to_expected_float_in_unary_and_binary() {
     // `-2.0` as an `f64` argument and the lhs of `1.0 / 4.0` under an
-    // `f64` annotation both take the expected type (RFC 0007 §1)
+    // `f64` annotation both take the expected type
     let src = r#"
 fn offset(x: f64) -> f64 { return x + 0.5; }
 pub fn main() -> nil {
@@ -1906,12 +1904,12 @@ pub fn main() -> nil {
     assert_eq!(lines, vec!["-1.5 0.25"]);
 }
 
-// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, &x,
+// ---- A1 surface: nil + *T, &x,
 // tuples, anonymous closures, zero-value field defaults ----
 
 #[test]
 fn a9_repeat_fill_and_addr_of_roundtrip() {
-    // RFC 0005 §9 — `[v; n]` fills n slots with the value (scalars copy,
+    // `[v; n]` fills n slots with the value (scalars copy,
     // refs share the cell); `&x`/`*p` round-trip; `[*T]` slots read nil
     // before a store
     let src = r#"
@@ -2274,7 +2272,7 @@ pub fn main() -> nil {
 
 #[test]
 fn a2_sharing_semantics() {
-    // the by-reference law (RFC 0044): `let snap = o` shares o's cell —
+    // the by-reference law: `let snap = o` shares o's cell —
     // mutations through either binding are visible through both
     let src = r#"
 use pouch::{ Vec };
@@ -2346,7 +2344,7 @@ fn dbg_digest_diags() {
 
 #[test]
 fn str_slice_views_read_through_and_flatten() {
-    // RFC 0042 — `s.slice(from, to)` is an O(1) view: codepoint bounds,
+    // `s.slice(from, to)` is an O(1) view: codepoint bounds,
     // byte offsets inside; reads go through (len, ==, f-string holes,
     // for-of); view-of-view flattens onto the root; a view stored in a
     // Vec keeps its window alive; appending to a view's string copies
@@ -2387,7 +2385,7 @@ pub fn main() -> nil {
 
 #[test]
 fn str_slice_bounds_trap() {
-    // RFC 0042 — out-of-bounds slices are traps, reversed ranges are traps
+    // out-of-bounds slices are traps, reversed ranges are traps
     let src = r#"
 use ink::{ Logger };
 pub fn main() -> nil {
@@ -2402,7 +2400,7 @@ pub fn main() -> nil {
 
 #[test]
 fn array_views_are_write_through_pointers() {
-    // RFC 0042 §6 — `v.slice(from, to)` is `*Vec<T>`: an O(1) window
+    // `v.slice(from, to)` is `*Vec<T>`: an O(1) window
     // whose writes hit the parent (the `*T` aliasing law). Fixed-length:
     // parent growth detaches the window's backing (the window pins its
     // own array via retain); reslicing flattens; for-of walks the window.
@@ -2437,7 +2435,7 @@ pub fn main() -> nil {
 
 #[test]
 fn array_views_are_fixed_length_and_bounds_checked() {
-    // RFC 0042 §6 — push/pop/re-backing through a view traps; window
+    // push/pop/re-backing through a view traps; window
     // bounds are the window's, not the parent's.
     let src = r#"
 use pouch::{ Vec };

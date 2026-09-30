@@ -1,6 +1,6 @@
-# plugin/ — the moderator module (RFC 0035 §1: one directory is one module).
+# plugin/ — the moderator module (one directory is one module).
 #
-# The manifest is bundle-shaped (RFC 0038 §2, layout v5): directory
+# The manifest is bundle-shaped (layout v5): directory
 # loading ignores the format keys, and `rut pack plugin/` needs them —
 # so the same directory packs to a v5 compiled `.rutbundle` unchanged,
 # with linkable deps riding as `.rutc` groups and splice-needed deps

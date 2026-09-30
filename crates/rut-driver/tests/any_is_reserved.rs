@@ -1,15 +1,15 @@
 //! `any` is GONE (the any-lane removal): the reservation is universal —
-//! the RFC 0012 diagnostic fires in `.rut` source AND on the `.d.rut`
+//! the diagnostic fires in `.rut` source AND on the `.d.rut`
 //! decl surface, and the driver's crossing table has no `any` arm. The
-//! erasure box (`opaque(v)` + `downcast<T>`, RFC 0014) is the only
+//! erasure box (`opaque(v)` + `downcast<T>`) is the only
 //! value lane; these tests pin the refusal end to end.
 
 use rut_driver::{Module, ModuleBody, Session, lower_decl_module};
 use rut_lexer::lexer::lex_mode;
 use rut_parser::{parse, Mode};
 
-/// The RFC 0012 diagnostic, verbatim.
-const MSG: &str = "rut has no `any`; use a trait type or `opaque` (RFC 0012, RFC 0014)";
+/// The reserved-`any` diagnostic, verbatim.
+const MSG: &str = "rut has no `any`; use a trait type or `opaque`";
 
 #[test]
 fn a_decl_any_param_draws_the_diagnostic() {
@@ -19,7 +19,7 @@ fn a_decl_any_param_draws_the_diagnostic() {
     let (_, diags) = parse(src, Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg == MSG),
-        "the decl param spelling is the RFC 0012 diagnostic: {diags:?}"
+        "the decl param spelling is the reserved-`any` diagnostic: {diags:?}"
     );
     let err = lower_decl_module(src, "hmap.d.rut").expect_err("the any row refuses to load");
     assert!(err.contains(MSG), "{err}");
@@ -32,7 +32,7 @@ fn a_decl_any_answer_draws_the_diagnostic() {
     let (_, diags) = parse(src, Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg == MSG),
-        "the decl answer spelling is the RFC 0012 diagnostic: {diags:?}"
+        "the decl answer spelling is the reserved-`any` diagnostic: {diags:?}"
     );
 }
 
@@ -73,7 +73,7 @@ fn rut_source_cannot_name_any() {
 #[test]
 fn decl_types_must_still_be_crossing_types() {
     // with the `any` arm gone, a non-crossing spelling gets the
-    // crossing-set diagnostic (the grammar is concrete, RFC 0023 §1)
+    // crossing-set diagnostic (the grammar is concrete)
     let src = "pub host fn probe(m: opaque) -> Widget;\n";
     let err = lower_decl_module(src, "hmap.d.rut").expect_err("Widget is not a crossing type");
     assert!(err.contains("is not a crossing type"), "{err}");

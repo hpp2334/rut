@@ -1,15 +1,15 @@
-// core/core.d.rut — the prelude surface (RFC 0028): what the language
+// core/core.d.rut — the prelude surface: what the language
 // itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
 // lowered fns, and the engine-woven traits `Iterator` and `Disposal`
 // (the `Index` contract is gone, v1.1). The array `[T]` is pure
-// grammar — no decl carries it (RFC 0005 §9).
+// grammar — no decl carries it.
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
-// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1): the
+// compiler-lowered (ops and rut-lir lowering): the
 // primitives/fns below, and the `builtin impl <prim>` numeric
 // methods. core registers no host bodies at all; `host fn` is
-// exclusively the EMBEDDER'S surface (a registered NativeModule, RFC
-// 0025). The decls exist so users and the LSP see every signature — the
+// exclusively the EMBEDDER'S surface (a registered NativeModule).
+// The decls exist so users and the LSP see every signature — the
 // lockstep test keeps them true to rut-lir's lowering tables.
 //
 // Builtin decls spell `prelude builtin` or `pub builtin` — the two
@@ -20,15 +20,15 @@
 // — ink/pouch/calc — is a different mechanism and unaffected.) The
 // compiler's copy of this surface is `rut_core::binary::Surface::core`;
 // a driver test asserts the two stay in lockstep. Type-calls spelled
-// with the type name (`x as i32` casts — RFC 0007) are syntax, not
+// with the type name (the `x as i32` casts) are syntax, not
 // members.
 
 // ---- engine functions (compiler-lowered) ----
 
-// RFC 0034 §2 — abort with the message.
+// abort with the message.
 prelude builtin fn panic(msg: str) -> nil;
 
-// v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
+// v1.1 codepoint access (`char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
 // builds the 1-codepoint str. Compiler-lowered, no use needed for
 // the method form; the type-method spells `str.from_code(..)`.
@@ -36,16 +36,16 @@ prelude builtin fn panic(msg: str) -> nil;
 // pub method  s.code() -> u32
 // pub type-method  str.from_code(n: u32) -> str
 
-prelude builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
+prelude builtin fn string_join(parts: [str]) -> str;  // join in one pass
 
-// RFC 0036 (err-channel phase 2) — the opt-in stack snapshot:
+// err-channel phase 2 — the opt-in stack snapshot:
 // `capture_stacktrace()` walks the VM's frame chain and stores RAW
 // frames only — no names, no source access, no symbolication at
 // capture. Every member symbolicates LAZILY, per access, against the
 // loaded program; out-of-range `i` traps (the index is a bug, not
 // data). Opt-in at raise sites: the err-propagation path stays
 // zero-cost. Builtin CLASS, not a primitive: a trace is a stateful
-// engine snapshot with methods (RFC 0025's `builtin class` row — the
+// engine snapshot with methods (the `builtin class` row — the
 // decl is a pure signature contract).
 prelude builtin fn capture_stacktrace() -> StackTrace;
 
@@ -54,10 +54,10 @@ prelude builtin class StackTrace {
     fn name(self, i: i32) -> str;        // frame i's function name
     fn line(self, i: i32) -> i32;        // call-site line (0 when stripped)
     fn col(self, i: i32) -> i32;         // call-site column (0 when stripped)
-    fn render(self) -> str;              // the RFC 0036 symbolication string
+    fn render(self) -> str;              // the symbolication string
 }
 
-// The weak reference (RFC 0017 v1): a WeakBox side cell holding an
+// The weak reference: a WeakBox side cell holding an
 // UNRETAINED word to the referent — a weak never keeps anything alive.
 // Construction is the class-method form `Weak.new(v)` (compiler-lowered,
 // like the other builtin statics): it mints `Weak<T>` over v's cell and
@@ -67,7 +67,7 @@ prelude builtin class StackTrace {
 // `??U`). The referent's death nulls every box BEFORE any user code
 // runs — `upgrade()` answers `nil` deterministically from then on, even
 // from inside the dying cell's own cleanup. A weak edge closes no
-// cycle: strong cycles still leak to `Vm::drop` (RFC 0017 §2's stated
+// cycle: strong cycles still leak to `Vm::drop` (the stated
 // rule — this class is the first-class answer, not a collector).
 prelude builtin class Weak<T> {
     fn upgrade(self) -> ?T;       // the live referent retained into a
@@ -80,10 +80,10 @@ prelude builtin class Weak<T> {
 
 // ---- engine builtin primitives (compiler-lowered members) ----
 // The boot primitives declare their surface here — `builtin primitive`,
-// never a class (RFC 0002 §3, builtin-surface): the Rust-side
+// never a class: the Rust-side
 // representation is the boot table's, unchanged. v1.1: the primitive
 // members are declared per type — `str`/`bytes` carry their own member
-// contracts (RFC 0004 v1.1); `len` is the sequence member shared by
+// contracts; `len` is the sequence member shared by
 // every sequence.
 prelude builtin primitive str {
     fn len(self) -> i32;            // codepoints
@@ -92,7 +92,7 @@ prelude builtin primitive str {
                                      // (traps out of bounds — the index is
                                      // a bug, not data)
     fn encode(self) -> bytes;       // the UTF-8 octets
-    fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds (RFC 0042)
+    fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds
     // The fused host-side scan/classify (json-perf phase 2) — the
     // tokenizer primitive: walk codepoints from `from`, classify each
     // through the caller's `[u8]` table (`set[min(cp, set.len()-1)]`,
@@ -111,7 +111,7 @@ prelude builtin primitive bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
     fn clone(self) -> bytes;        // a one-shot buffer copy — the ONLY
-                                    // copy escape hatch (RFC 0044):
+                                    // copy escape hatch:
                                     // every binding shares its cell,
                                     // this member mints a fresh one
 }
@@ -120,36 +120,36 @@ prelude builtin primitive bytes {
 // `nil` on a `?T` or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.
 
-// The array `[T]` (RFC 0005 §9) declares NOTHING here: the type is
+// The array `[T]` declares NOTHING here: the type is
 // grammar (`[T]`), construction is the repeat `[v; n]` — a VALUE and a
-// count — and `a[i]`/`a.len()` are compiler-lowered (RFC 0032 §1.1).
+// count — and `a[i]`/`a.len()` are compiler-lowered.
 // The `Array` name itself is removed: use sites diagnose with the
 // removal and its replacement.
 
-// RFC 0014 — the erasure box: any value goes in via `opaque(v)`,
+// the erasure box: any value goes in via `opaque(v)`,
 // `opaque.downcast<T>(o)` recovers it (and `x is T` probes it). A
 // boot-table type whose member is the static on the primitive; the free
 // `downcast<T>` fn is gone — the member form is the one surface
 // (builtin-surface phase 2 deleted the engine alias too: a bare
 // `downcast<T>(o)` call diagnoses with the removal). Construction is a
 // CALL of the type name itself — `opaque.new(v)` was folded into
-// `opaque(v)` in the `?T` sweep (RFC 0044), there is no `new` static.
-// The recovery is the nullable (RFC 0044): a match IS the box's inner
+// `opaque(v)` in the `?T` sweep, there is no `new` static.
+// The recovery is the nullable: a match IS the box's inner
 // cell (the alias law — mutation through it is the source's; a prim
 // payload reads the copied value), a mismatch is `nil` — never a
-// zero-value/flag tuple (refval-round2; RFC 0014 amended).
+// zero-value/flag tuple (refval-round2).
 // (builtin-surface phase 2: the interner/boot name is spelled
 // `opaque` — the type name is part of every host `.d.rut` crossing.)
 prelude builtin primitive opaque {
     fn downcast<T>(o: Self) -> ?T;
 }
 
-// ---- numeric methods on the integer primitives (RFC 0032 §1.1 R2) ----
+// ---- numeric methods on the integer primitives ----
 // `builtin impl <prim>` — compiler-lowered methods ON the primitive,
 // ambient like the primitive itself: `x.wrapping_add(y)` needs no `use`
 // (primitives have none). One block per width; the wrapping/saturating/
-// checked ops replace the trap-on-overflow `+`/`-`/`*`/`<<` (RFC 0004
-// §3); `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
+// checked ops replace the trap-on-overflow `+`/`-`/`*`/`<<`;
+// `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
 // exactly when the mathematical result escaped the width.
 
 prelude builtin impl i8 {

@@ -1,4 +1,4 @@
-// RFC 0009 v1.1 — `struct`: the record keyword. By reference (RFC 0044):
+// `struct`: the record keyword. By reference:
 // every binding SHARES its cell — assignment is an O(1) handle move, and
 // a mutation through any binding is visible through all of them. All
 // fields public. Methods and impl blocks ARE allowed (see classes for
@@ -25,7 +25,7 @@ struct Style {
 
 fn nudge(mut pt: ?Point) {     // nullable param: mutation is shared —
     pt.x += 1;                 // writes through hit the caller's Point
-                               // (`mut` on the binding: RFC 0003 §1)
+                               // (`mut` on the binding)
 }
 
 fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
@@ -39,15 +39,15 @@ fn length(pt: Point) -> f64 {     // free function instead of a method
 fn structs() {
     let log = Logger.new("structs");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
-    p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
+    p.x = 3;                            // needs the `mut` binding
     let q = p;                          // SHARE: q and p name one cell (O(1))
     p.x = 4;                            // q.x is 4 now — sharing is the law
 
-    // a write through a `?T` head needs `mut` on the binding (RFC 0044):
+    // a write through a `?T` head needs `mut` on the binding:
     let mut rp: ?Point = p;             // rp: ?Point — shares p's cell
     rp.x = 9;                           // p.x is now 9 too
 
-    // `==` on records is CELL IDENTITY (RFC 0044): bindings of one cell
+    // `==` on records is CELL IDENTITY: bindings of one cell
     // are equal; separately-built records are not, whatever their fields
     let same_cell = q == p;                    // true — one shared cell
     let distinct = q == Point { x: 9, y: 2 };  // false — a different cell

@@ -1,4 +1,4 @@
-// the nmapset integration group (RFC 0045 §3): impl-only, like the
+// the nmapset integration group: impl-only, like the
 // pouch group. Mounted when `nmapset` is in the program's closure.
 use nmapset::{Map};
 

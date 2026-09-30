@@ -1,4 +1,4 @@
-//! Host pkgs are real pkgs (RFC 0025/0029, the host-pkgs plan §1): a
+//! Host pkgs are real pkgs (the host-pkgs plan): a
 //! declaration-only module directory (`entry.type`, no `entry.lib`)
 //! lowers its `host fn`s into the mounted surface at load time —
 //! `rut/rt/` and 03-plugin's `server/` load from disk, and a consumer
@@ -104,7 +104,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
 
 #[test]
 fn non_crossing_signatures_refuse_at_load() {
-    // the compiler-limitation rule (RFC 0023 §1) holds at load: a host
+    // the compiler-limitation rule holds at load: a host
     // signature over anything but the crossing set refuses, naming the
     // offender
     let err = lower_decl_module(
@@ -129,7 +129,7 @@ fn non_crossing_signatures_refuse_at_load() {
     assert!(err.contains("does not parse"), "parse failures refuse: {err}");
 }
 
-// ---- the load-time binding contract (RFC 0025): .d.rut ↔ host impl ----
+// ---- the load-time binding contract: .d.rut ↔ host impl ----
 // Registration is PRE-VM now: the registry is built, checked against the
 // session's declared surface, and handed to `Vm::new`, which joins it
 // against the program's host thunks.
@@ -226,7 +226,7 @@ fn an_undeclared_binding_panics_early() {
 #[test]
 fn the_vm_new_join_refuses_an_unbound_thunk() {
     // a program with ONE host thunk; an empty registry cannot boot it —
-    // the error names the fn (RFC 0025: declared ⊆ bound, at boot)
+    // the error names the fn (declared ⊆ bound, at boot)
     let mut prog = rut_core::binary::Program::default();
     let fname = prog.interner.intern("probe");
     let host_key = prog.interner.intern("server::probe");

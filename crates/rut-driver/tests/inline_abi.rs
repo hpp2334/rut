@@ -21,7 +21,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
     )
 }
 
-/// Compile, flatten (RFC 0035 §1), verify, and run a single-module
+/// Compile, flatten, verify, and run a single-module
 /// `main` returning i32.
 fn run_main(src: &str) -> i32 {
     let out = compile(src);

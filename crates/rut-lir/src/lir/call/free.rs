@@ -18,13 +18,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         };
         let fd = self.ctx.ast.fn_decl(fnode).clone();
-        // the async landing (RFC 0018): an async fn's call site mints
+        // the async landing: an async fn's call site mints
         // the frame — the cx is engine-minted like `self`, the call's
         // value IS the frame cell (widening to `Future<T>` through the
         // registered impl)
         if fd.is_async {
             if !generics.is_empty() {
-                self.ctx.err(sp, "generic async fns are not woven in this build (RFC 0018 v1)");
+                self.ctx.err(sp, "generic async fns are not woven in this build");
                 return Err(());
             }
             return crate::lir::asyncfn::compile_async_call(self, name, &fd, &args, expected, sp);
@@ -92,8 +92,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
-        // inline bounds gate the completed substitution (RFC 0043,
-        // admission-only)
+        // inline bounds gate the completed substitution (admission-only)
         self.ctx.admit_bounds(&fd.bounds, &subst, sp);
         // final param types under the completed substitution
         let ptys: Vec<TypeId> = params
@@ -173,7 +172,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
-        // inline bounds gate the completed substitution (RFC 0043)
+        // inline bounds gate the completed substitution
         self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
         let mut ptys = Vec::new();
         // the callee's signature may spell `Self`/`T` — resolve under the

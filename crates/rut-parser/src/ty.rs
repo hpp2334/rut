@@ -1,4 +1,4 @@
-//! Types (RFC 0030 §2) and the two far-decision balancing scans (§4.2):
+//! Types and the two far-decision balancing scans (§4.2):
 //! scan_is_lambda ( ( ... ) then => ) and scan_is_generic_args
 //! ( < ... > then ( or . ). Read-only lookahead; no backtracking.
 
@@ -13,7 +13,7 @@ use crate::Parser;
 
 pub(crate) struct TypeFrame {
     lo: Span,
-    /// RFC 0043: a completed type continues on `|` as a union bound —
+    /// A completed type continues on `|` as a union bound —
     /// only where unions are legal (the alias target and `requires`
     /// bounds); elsewhere `|` stays the binary operator (`x as u32 | y`)
     allow_union: bool,
@@ -22,7 +22,7 @@ pub(crate) struct TypeFrame {
 
 enum TyStage {
     Init,
-    /// `?T` — the nullable (RFC 0044): the ONE spelling, prefix-only,
+    /// `?T` — the nullable: the ONE spelling, prefix-only,
     /// binding the following type term (`[?T]` is an array of
     /// nullables, `??T` chains, `?[T]` a nullable array)
     Opt,
@@ -30,9 +30,9 @@ enum TyStage {
     /// diagnostic, the element type is the recovered result (the Diag
     /// already fails the compile)
     LegacyPtr,
-    /// `[T]` — the array type (RFC 0005)
+    /// `[T]` — the array type
     Bracket,
-    /// `(A, B)` / `(T)` — tuple, grouping (RFC 0007); `()` is rejected —
+    /// `(A, B)` / `(T)` — tuple, grouping; `()` is rejected —
     /// the empty type is spelled `nil` (v1.2)
     Tuple { elems: Vec<NodeHandle<AnyTy>> },
     /// `fn(...)`: collecting parameter types
@@ -43,7 +43,7 @@ enum TyStage {
     Path { segs: Vec<PathSeg> },
     /// inside a `<..>` after a segment name
     GenArgs { segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
-    /// `A | B` — a union bound (RFC 0043): members collected after a
+    /// `A | B` — a union bound: members collected after a
     /// completed type saw a `|`
     Union { elems: Vec<NodeHandle<AnyTy>> },
 }
@@ -53,7 +53,7 @@ impl TypeFrame {
         TypeFrame { lo: p.span(), allow_union: false, stage: TyStage::Init }
     }
 
-    /// A position where a union is legal (RFC 0043): the alias target
+    /// A position where a union is legal: the alias target
     /// (`type U = A | B;`) and a `requires` bound (`T requires A | B`).
     pub(crate) fn new_bound(p: &Parser) -> Self {
         TypeFrame { lo: p.span(), allow_union: true, stage: TyStage::Init }
@@ -62,7 +62,7 @@ impl TypeFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         match self.stage {
             TyStage::Init => {
-                // `?T` — the nullable type (RFC 0044): prefix, binds
+                // `?T` — the nullable type: prefix, binds
                 // tightest (replaces the old `*T` stage)
                 if p.eat_punct(Tok::Question) {
                     self.stage = TyStage::Opt;
@@ -72,17 +72,17 @@ impl TypeFrame {
                 // with the element type — the parser no longer ACCEPTS it
                 // (the Diag fails the compile), the sweep points at `?T`
                 if matches!(p.tok(), Tok::Star) {
-                    p.err_here("the pointer spelling `*T` was renamed — write `?T` (RFC 0044)");
+                    p.err_here("the pointer spelling `*T` was renamed — write `?T`");
                     p.bump();
                     self.stage = TyStage::LegacyPtr;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
-                // `[T]` — the array type (RFC 0005)
+                // `[T]` — the array type
                 if p.eat_punct(Tok::LBracket) {
                     self.stage = TyStage::Bracket;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
-                // tuple type `(A, B)` / grouping `(T)` (RFC 0007); `()`
+                // tuple type `(A, B)` / grouping `(T)`; `()`
                 // is the nil type and must be spelled `nil` (v1.2)
                 if p.eat_punct(Tok::LParen) {
                     self.stage = TyStage::Tuple { elems: Vec::new() };
@@ -96,7 +96,7 @@ impl TypeFrame {
                     return self.fnparams_top(p);
                 }
                 // a trait name in type position is the object type —
-                // the engine decides dispatch (RFC 0012 §3)
+                // the engine decides dispatch
                 self.stage = TyStage::Path { segs: Vec::new() };
                 self.path_run(p)
             }
@@ -149,13 +149,13 @@ impl TypeFrame {
     }
 
     /// A completed type either pops — or a `|` follows and it continues
-    /// as a union bound (`type U = A | B;`, `T requires A | B`, RFC
-    /// 0043). A single member never becomes a `TyUnion` node. A trailing
+    /// as a union bound (`type U = A | B;`, `T requires A | B`).
+    /// A single member never becomes a `TyUnion` node. A trailing
     /// postfix `?` is the removed spelling: diagnosed, then recovered
     /// with the bare type (the Diag already fails the compile).
     fn pop_or_union(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
         while matches!(p.tok(), Tok::Question) {
-            p.err_here("the postfix spelling `T?` was removed — write `?T` (RFC 0044)");
+            p.err_here("the postfix spelling `T?` was removed — write `?T`");
             p.bump();
         }
         if self.allow_union && p.eat_punct(Tok::Pipe) {
@@ -183,7 +183,7 @@ impl TypeFrame {
         if p.eat_punct(Tok::Gt) {
             return self.genargs_done(p);
         }
-        // const-generic arg: integer expression (RFC 0005)
+        // const-generic arg: integer expression
         if matches!(p.tok(), Tok::Int(..))
             || (matches!(p.tok(), Tok::Minus) && matches!(p.peek(1).tok, Tok::Int(..)))
         {
@@ -235,7 +235,7 @@ impl TypeFrame {
     }
 
     /// the parameter list closed (or failed): optional `->` then the
-    /// return type — an omitted return is `nil` (RFC 0013 §1, v1.2)
+    /// return type — an omitted return is `nil`
     fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
         let params = match &mut self.stage {
             TyStage::FnParams { params } => std::mem::take(params),
@@ -275,7 +275,7 @@ impl TypeFrame {
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);
-                    // `[T]` — the array type (RFC 0005 §9); resolved
+                    // `[T]` — the array type; resolved
                     // directly, with no surface name behind it
                     let t = p.typ(TypeKind::TyArray { elem: t }, self.lo.to(p.span()));
                     self.pop_or_union(p, t)
@@ -321,7 +321,7 @@ impl TypeFrame {
                 _ => unreachable!("type frame received a type at the wrong stage"),
             },
             Done::Expr(e) => {
-                // const-generic argument (RFC 0005)
+                // const-generic argument
                 match &mut self.stage {
                     TyStage::GenArgs { args, .. } => {
                         args.push(p.typ(TypeKind::TyConst(e), p.span()));
@@ -419,8 +419,8 @@ impl Parser {
                     }
                 }
                 // `(A, B)` and `fn(A) -> R` arguments nest the same way —
-                // the parens INSIDE a generic list are type syntax
-                // (RFC 0007 tuples, RFC 0013 fn types), tracked like the
+                // the parens INSIDE a generic list are type syntax,
+                // tracked like the
                 // brackets above; an unmatched `)` means the `<` was a
                 // comparison all along
                 Tok::LParen => depth += 1,
@@ -437,8 +437,7 @@ impl Parser {
             if depth == 0 {
                 // the commit followers: `(` (TypeScript's call rule),
                 // `.` (path continuation — `MyMap<K, V>.new`), and ` { `
-                // (the generic record literal — `Source<str> { .. }`,
-                // RFC 0009). A comparison never sees one of the three
+                // (the generic record literal — `Source<str> { .. }`). A comparison never sees one of the three
                 // directly after its `>`: the block brace trails a
                 // condition at depth 0 only when the `<` opened a type.
                 return matches!(

@@ -1,4 +1,4 @@
-//! The async weave (RFC 0018): an `async fn(cx: RunContext, ..)` compiles
+//! The async weave: an `async fn(cx: RunContext, ..)` compiles
 //! into the engine-woven `impl Future<T>` for a hidden frame type — the
 //! frame IS the coroutine, the body becomes its `yield`.
 //!
@@ -31,7 +31,7 @@
 //! cell — `bind_local`/`mirror_local` — so the park's `Ret` releases
 //! only staging registers), and cancellation as the context probe
 //! (abort flags the frame; the resumed probe at its checkpoint runs the
-//! drop path in RFC 0016 §3 order — reverse binding order).
+//! drop path in reverse binding order).
 
 use super::*;
 use crate::check::ImplDecl;
@@ -133,12 +133,12 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     let f = f.clone();
     let sp = ctx.ast.span(node.id());
     if !f.generics.is_empty() {
-        ctx.err(sp, "generic async fns are not woven in this build — RFC 0019's join generalizes the machinery (v1: monomorphic async fns)");
+        ctx.err(sp, "generic async fns are not woven in this build (v1: monomorphic async fns)");
         return Err(());
     }
-    // the frozen cx law (RFC 0012 §7): the first parameter IS the cx
+    // the frozen cx law: the first parameter IS the cx
     let Some(first) = f.params.first() else {
-        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter (RFC 0012 §7) — the engine mints it at call sites");
+        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter — the engine mints it at call sites");
         return Err(());
     };
     let cx_param = match ctx.ast.param(*first) {
@@ -146,13 +146,13 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         _ => None,
     };
     let Some((cx_ty_node, cx_name)) = cx_param else {
-        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter (RFC 0012 §7) — the engine mints it at call sites");
+        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter — the engine mints it at call sites");
         return Err(());
     };
     let cx_ty = ctx.resolve_type(cx_ty_node, &[]);
     if cx_ty != ctx.run_context_ty() {
         ctx.err(sp, format!(
-            "an async fn's first parameter is `{}` — `cx: RunContext` expected (RFC 0012 §7)",
+            "an async fn's first parameter is `{}` — `cx: RunContext` expected",
             ctx.type_name(cx_ty)
         ));
         return Err(());
@@ -299,7 +299,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         c.fixups.push((brt, l_retire, true));
         c.emit(Op::BrTable { idx: state_reg, table_off, count, default: 0 }, sp.lo);
     }
-    // well-formedness (RFC 0033 §2): the fn ends in Ret — the dispatch
+    // well-formedness: the fn ends in Ret — the dispatch
     // always jumps, this is the unreachable tail
     c.emit(Op::Ret { val: None }, sp.lo);
 
@@ -442,7 +442,7 @@ fn emit_drop_path(c: &mut FnCompiler, sp_lo: u32) {
     c.bind(l_done);
     // Release every ref-typed cell-backed local, in BINDING order: the
     // pending-drop drain runs LIFO, so the callbacks fire in reverse
-    // declaration order (RFC 0016 §3 — the later local's cleanup runs
+    // declaration order (the later local's cleanup runs
     // first). `SetF null` drops the refcount; the frame cell's own
     // release later finds nulls.
     let backs: Vec<(u32, TypeId)> = c
@@ -465,7 +465,7 @@ fn emit_drop_path(c: &mut FnCompiler, sp_lo: u32) {
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-    /// The cx protocol members, inlined as field ops (RFC 0018): the cx
+    /// The cx protocol members, inlined as field ops: the cx
     /// record's one field is the frame edge; `checkpoint` reads the frame's
     /// state, `cancelled` reads its flag. `next_checkpoint` stays
     /// weave-only in v1 — a checkpoint value is the checkpoint ENUM's
@@ -524,11 +524,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(TY_BOOL);
         }
         if name == sym::NEXT_CHECKPOINT {
-            self.ctx.err(sp, "`cx.next_checkpoint(v)` is the weave's own edge in this build — the weave records each await's resume state; user-written checkpoints land with RFC 0019");
+            self.ctx.err(sp, "`cx.next_checkpoint(v)` is the weave's own edge in this build — the weave records each await's resume state");
             return Err(());
         }
         self.ctx.err(sp, format!(
-            "`RunContext` has no member `{}` with {} argument(s) — its members are `checkpoint`/`next_checkpoint`/`cancelled` (RFC 0012 §7)",
+            "`RunContext` has no member `{}` with {} argument(s) — its members are `checkpoint`/`next_checkpoint`/`cancelled`",
             self.ctx.name(name),
             args.len()
         ));
@@ -548,7 +548,7 @@ pub(crate) fn compile_await(
         frame_reg: f.frame_reg,
         cx_reg: f.cx_reg,
     }) else {
-        c.ctx.err(sp, "`await` outside an async fn — async/await is the Future-only vocabulary (RFC 0018); drive futures from an async body or through a launcher");
+        c.ctx.err(sp, "`await` outside an async fn — async/await is the Future-only vocabulary; drive futures from an async body or through a launcher");
         return Err(());
     };
     let t = c.compile_expr(expr, None)?;
@@ -558,7 +558,7 @@ pub(crate) fn compile_await(
     // annotated binding, the sleep surface). A concrete non-engine type
     // diagnoses: the probe reads the engine-reserved state field, and a
     // user `impl Future` has nothing to read — launcher territory, and
-    // join lands with RFC 0019.
+    // join lands later.
     let ok = match c.ctx.types.kind(t) {
         TyKind::Data { .. } => {
             if c.ctx.engine_frames.contains(&t) {
@@ -566,10 +566,10 @@ pub(crate) fn compile_await(
             } else {
                 let tn = c.ctx.type_name(t).to_string();
                 if tn.starts_with("LaunchedFutureHandle") {
-                    c.ctx.err(sp, "cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched; join lands with RFC 0019");
+                    c.ctx.err(sp, "cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched");
                 } else {
                     c.ctx.err(sp, format!(
-                        "`await` targets engine-woven futures (async-fn results, `sleep`) — `{tn}` is not one; user `impl Future` types drive through launchers, and join lands with RFC 0019"
+                        "`await` targets engine-woven futures (async-fn results, `sleep`) — `{tn}` is not one; user `impl Future` types drive through launchers"
                     ));
                 }
                 false
@@ -585,7 +585,7 @@ pub(crate) fn compile_await(
         }
         _ => {
             c.ctx.err(sp, format!(
-                "`await` needs a Future — `{}` is not one (RFC 0018)",
+                "`await` needs a Future — `{}` is not one",
                 c.ctx.type_name(t)
             ));
             false
@@ -781,7 +781,7 @@ pub(crate) fn compile_async_call(
 ) -> TcResult<TypeId> {
     let sp_lo = sp.lo;
     if !fd.generics.is_empty() {
-        c.ctx.err(sp, "generic async fns are not woven in this build (RFC 0018 v1)");
+        c.ctx.err(sp, "generic async fns are not woven in this build");
         return Err(());
     }
     let inst = crate::check::Inst {
@@ -882,7 +882,7 @@ pub(crate) fn compile_async_call(
     Ok(layout.frame_ty)
 }
 
-/// Mint the engine-backed sleep future once (RFC 0018): the sleep
+/// Mint the engine-backed sleep future once: the sleep
 /// frame, its two-state checkpoint enum, the `Future<nil>` impl row,
 /// and the engine-thunk yield (`__sleep_yield` — arm_timer on the
 /// fresh arm, done on the resumed one). The host set's `sleep` wraps
@@ -946,7 +946,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     // ABI is engine-wide — recv = the raw frame, argv[1] = the raw cx
     // (every weaved async fn shares it) — while the host row crosses
     // `opaque`. The vtable fill points at this tiny compiler-minted fn,
-    // which seals both registers into RFC 0014 boxes and calls the host
+    // which seals both registers into erasure boxes and calls the host
     // thunk; the row's wire is then boxes, the shared ABI is untouched.
     let wrap_name = ctx.intern("async_engine::__sleep_yield.wrap");
     let wfid = ctx.ensure_inst(crate::check::Inst {
@@ -960,11 +960,11 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     Ok(())
 }
 
-/// The engine-backed sleep pair (RFC 0018): the host THUNK — bodyless,
+/// The engine-backed sleep pair: the host THUNK — bodyless,
 /// `host_id` names the embedder's registered body, params spell the row's
 /// `(opaque, opaque)` crossings — and the sealing WRAPPER the vtable fill
 /// binds (`ensure_sleep_future`): params spell the engine-wide yield ABI
-/// (the raw frame and cx), the code seals both into RFC 0014 boxes and
+/// (the raw frame and cx), the code seals both into erasure boxes and
 /// calls the thunk. The driving loop's call sites (await, drive) keep
 /// their raw (frame, cx) registers; the boxes live and die inside the
 /// wrapper's own frame (ref-typed locals release at exit).
@@ -1022,7 +1022,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
                 Op::Box { dst: 2, val: 0, ty: frame_ty },
                 Op::Box { dst: 3, val: 1, ty: cx_ty },
                 Op::Call { func: thunk_fid, argv_off: 0, argc: 2, dst: NOREG },
-                // well-formedness (RFC 0033 §2): the fn ends in Ret — the
+                // well-formedness: the fn ends in Ret — the
                 // threaded `Call` answers Next(pc+1), so without this the
                 // dispatch walks past the code
                 Op::Ret { val: None },
@@ -1062,7 +1062,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
 //
 // Calling a host async fn mints a COLD engine-woven Future frame whose
 // state field holds a HOST cell — the opaque box the `__start` row
-// answers (the embedder's `Completer`; RFC 0018 §2's law: `await`
+// answers (the embedder's `Completer`; the law: `await`
 // targets engine-woven futures via the engine-reserved state field).
 // There is no compiled body — the frame's `Future::yield` vtable fill
 // is the WRAPPER compiled below, which:
@@ -1104,7 +1104,7 @@ pub(crate) fn ensure_host_async(
         ctx.err(
             sp,
             format!(
-                "`{}` is an async host fn, but its surface carries no registration name — only `.d.rut` host rows can cross async (RFC 0025)",
+                "`{}` is an async host fn, but its surface carries no registration name — only `.d.rut` host rows can cross async",
                 ctx.name(name)
             ),
         );

@@ -1,23 +1,21 @@
 /**
- * Prepared cases (RFC 0041 §3). Each is self-contained — the host
+ * Prepared cases. Each is self-contained — the host
  * provides the bundled packages (`ink`, `core`, `calc`, `rt`, `pouch`,
  * plus the `nmapset` map lane), whose `info` lines stream back as
  * output.
  *
  * Sources reflect TODAY's
- * surface — RFC 0044: bindings share by reference (copy-by-value and
+ * surface — bindings share by reference (copy-by-value and
  * `own` are gone; `bytes.clone()` is the one copy), `==` is identity
  * for cells, the pointer shape is the nullable `?T` (prefix-only;
  * `*T`/`&v` diagnose), records are spelled `struct`, `char` literals
- * are 1-codepoint `str`, and RFC 0013 has no arrow form (block bodies).
+ * are 1-codepoint `str`, and there is no arrow form (block bodies).
  */
 
 export interface RutCase {
   id: string;
   name: string;
   blurb: string;
-  /** RFC the case demonstrates */
-  rfcs: string;
   source: string;
 }
 
@@ -26,7 +24,6 @@ export const CASES: RutCase[] = [
     id: "hello-format",
     name: "hello, format",
     blurb: "f-strings, escapes, when on enums",
-    rfcs: "0007 §2, 0008",
     source: [
       "use ink::{Logger};",
       "",
@@ -52,7 +49,6 @@ export const CASES: RutCase[] = [
     id: "values-and-pointers",
     name: "values & pointers",
     blurb: "bindings share by reference — identity == for cells, absence as ?T",
-    rfcs: "0044, 0016 §1, 0005 §8",
     source: [
       "use ink::{Logger};",
       "",
@@ -61,7 +57,7 @@ export const CASES: RutCase[] = [
       "pub fn main() {",
       "    let log = Logger.new(\"case\");",
       "    let mut p = Point { x: 1, y: 2 };",
-      "    let q = p;                  // share: q and p name ONE cell (RFC 0044)",
+      "    let q = p;                  // share: q and p name ONE cell",
       "    p.x = 4;                    // q.x is 4 now — sharing is the law",
       "    let same = Point { x: 1, y: 2 };",
       "    log.info(f\"q.x={q.x} p.x={p.x}\");",
@@ -78,7 +74,6 @@ export const CASES: RutCase[] = [
     id: "opaque",
     name: "opaque + downcast",
     blurb: "explicit erasure with checked recovery — downcast yields ?T (nil on a miss)",
-    rfcs: "0014",
     source: [
       "use ink::{Logger};",
       "",
@@ -102,7 +97,6 @@ export const CASES: RutCase[] = [
     id: "sieve",
     name: "sieve",
     blurb: "flat Vec<u8>/Vec<i32> primitive buffers, for loops",
-    rfcs: "0016 §4",
     source: [
       "use pouch::{Vec};",
       "use ink::{Logger};",
@@ -134,7 +128,6 @@ export const CASES: RutCase[] = [
     id: "when-exhaustive",
     name: "when & enums",
     blurb: "exhaustive pattern expressions over simple enums",
-    rfcs: "0006, 0008",
     source: [
       "use ink::{Logger};",
       "",
@@ -163,7 +156,6 @@ export const CASES: RutCase[] = [
     id: "tuple-errors",
     name: "errors as tuples",
     blurb: "the (T, err) convention — an empty err string is success",
-    rfcs: "0004",
     source: [
       "use ink::{Logger};",
       "",
@@ -212,7 +204,6 @@ export const CASES: RutCase[] = [
     id: "closures-generics",
     name: "closures & generics",
     blurb: "monomorphized generics, anonymous fns, capture",
-    rfcs: "0013",
     source: [
       "use pouch::{Vec};",
       "use ink::{Logger};",
@@ -236,11 +227,10 @@ export const CASES: RutCase[] = [
     id: "stack-trace",
     name: "stack trace",
     blurb: "the opt-in stack snapshot — raw frames innermost-first, lazy symbolication, the loud out-of-range trap",
-    rfcs: "0036",
     source: [
       "use ink::{Logger};",
       "",
-      "// RFC 0036: capture_stacktrace() is OPT-IN and cheap (a raw frame",
+      "// capture_stacktrace() is OPT-IN and cheap (a raw frame",
       "// walk, ~30 ns at depth 1): no names, no source at capture; the",
       "// members symbolicate lazily, per index, against the loaded program.",
       "//",
@@ -357,7 +347,6 @@ export const CASES: RutCase[] = [
     // (or after Resume, which accumulates) the SAME frame simply
     // runs on and the ticks start appearing.
     blurb: "budgets bite at the default: ~10 ops/iteration parks on Trap::OutOfFuel with zero ticks — Resume adds fuel and the SAME frame continues",
-    rfcs: "0040 §2, 0034 §4",
     source: [
       "use ink::{Logger};",
       "",

@@ -1,4 +1,4 @@
-//! The printer — the AST reprint (RFC 0030 §7's `pretty(ast)`).
+//! The printer — the AST reprint (`pretty(ast)`).
 //!
 //! Structure is source-order (the parser is monotone — §4.2 — so a
 //! clean traversal walks nodes in the order they were written); layout
@@ -290,7 +290,7 @@ impl<'a> P<'a> {
 
     /// the element's TRUE content end. The parser's node spans
     /// OVERSHOOT: span.hi is the NEXT token's hi (the parser absorbs at
-    /// the current token, RFC 0030's statement-span convention), so the
+    /// the current token), so the
     /// last token at-or-before span.hi may be the next element's
     /// opener. The law: walk back while a token ends EXACTLY at
     /// span.hi and starts after span.lo — those ride the overshoot;
@@ -1396,7 +1396,7 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    /// the arm list — ALWAYS one per line (the RFC 0008 shape): pattern
+    /// the arm list — ALWAYS one per line (the shape): pattern
     /// alternatives, `->`, the body (flat attempt with rollback to a
     /// broken block), trailing comma, then the line's own comments.
     fn arms(&mut self, arms: &[NodeHandle<AnyArm>], node: Span) {

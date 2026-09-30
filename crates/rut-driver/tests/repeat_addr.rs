@@ -1,4 +1,4 @@
-//! A6 surface migrations (RFC 0005 §9): the `[v; n]` repeat construction,
+//! A6 surface migrations: the `[v; n]` repeat construction,
 //! the `&x` address-of (the `make_ptr` spelling is gone), and the purge of
 //! the `Array` name — the type is `[T]`, and use sites diagnose with the
 //! removal and its replacement.
@@ -6,7 +6,7 @@
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // core + pouch bound as the uses (RFC 0028); these tests exercise the
+    // core + pouch bound as the uses; these tests exercise the
     // migrated surface, not use discipline
     let collection = rut_core::binary::Surface::default();
     rut_driver::compile_program(
@@ -64,7 +64,7 @@ fn nil_fill_lowers_to_arrnew_alone() {
 
 #[test]
 fn address_of_boxes_the_operand() {
-    // RFC 0044: a `T` widening into `?T` boxes (the old `make_ptr(v)`):
+    // a `T` widening into `?T` boxes (the old `make_ptr(v)`):
     // the box the deref-position read consumes
     let out = compile(
         "struct P { x: i32 = 0 }\n\
@@ -119,7 +119,7 @@ fn the_array_name_diagnoses_with_the_removal() {
 #[test]
 fn bracket_types_need_no_use_statement() {
     // `[T]` is grammar — a module that never named `Array` still spells it.
-    // Builtin fns are AMBIENT now (RFC 0028 revised, builtin-surface):
+    // Builtin fns are AMBIENT now:
     // `string_join` resolves without a `use` too.
     let out = compile(
         "pub fn join_all(parts: [str]) -> str { return string_join(parts); }\n\
@@ -143,7 +143,7 @@ fn bracket_types_need_no_use_statement() {
 #[test]
 fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
     // the DataBuf shape over `[?T]`: the fused index read/write treat the
-    // nullable handles as ordinary slots (RFC 0044) — loads yield the
+    // nullable handles as ordinary slots — loads yield the
     // `?T` (uses auto-deref), stores take the coerced box
     let out = compile(
         "class Box2<T> {\n\
@@ -168,7 +168,7 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
 
 #[test]
 fn nullable_widen_narrow_and_nil_typing() {
-    // RFC 0044 coercions: `T → ?T` boxes (the old `&v`), `?T → T` reads
+    // coercions: `T → ?T` boxes (the old `&v`), `?T → T` reads
     // the payload (the old `*p`) — at let, argument, and return positions;
     // `nil` types as the expected `?T`, and a nil-vs-primitive let is the
     // mismatch diagnostic
@@ -201,7 +201,7 @@ fn nullable_widen_narrow_and_nil_typing() {
 
 #[test]
 fn prefix_question_binds_the_following_type_term() {
-    // RFC 0044 pin (user ruling): `?` applies to the following type
+    // pin (user ruling): `?` applies to the following type
     // TERM — `[?i32]` is `[i32 | nil]` (the ELEMENT is nullable) while
     // `?[i32]` is `[i32] | nil` (the ARRAY is). The checker agrees with
     // the parser shapes: a nil ELEMENT stores into `[?i32]`, nil itself

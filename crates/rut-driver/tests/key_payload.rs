@@ -4,7 +4,7 @@
 //! copies, and anything else (floats, user records) reports
 //! `Unsupported` naming the type. This test drives it the way the `nmap_host`
 //! host fns will: the key box crosses as an `OpaqueRef` param of a
-//! registered host fn (the `boxes` pattern, RFC 0023/0026), the body
+//! registered host fn (the `boxes` pattern), the body
 //! reads the payload through the accessor, and rut sees only the tag.
 
 use std::rc::Rc;
@@ -68,7 +68,7 @@ fn vm_with_host() -> Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // bindings BEFORE the Vm (RFC 0025): the body is the nmap shape —
+    // bindings BEFORE the Vm: the body is the nmap shape —
     // an `OpaqueRef` param read through the payload accessor
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_vm::register!(hosts, "keypayload::key_class", (OpaqueRef,) -> i64, |vm: &mut Vm,

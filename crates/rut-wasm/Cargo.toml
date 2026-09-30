@@ -3,7 +3,7 @@ name = "rut-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "wasm shim exposing compile/run over a raw ABI (RFC 0041 §3) — no wasm-bindgen, plain exports"
+description = "wasm shim exposing compile/run over a raw ABI — no wasm-bindgen, plain exports"
 
 [lib]
 name = "rut_wasm"

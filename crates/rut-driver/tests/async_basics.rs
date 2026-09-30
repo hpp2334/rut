@@ -1,4 +1,4 @@
-// RFC 0018 — the async/await landing: the Future-only vocabulary.
+// the async/await landing: the Future-only vocabulary.
 // The weave (checkpoint brtable, the await expansion, the cancelled
 // probe → drop path), the driving loop (ready + timer queues,
 // drive / next_deadline / cancel), and the standard host set
@@ -46,7 +46,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     (vm, sink)
 }
 
-/// The host loop (RFC 0035 §4's columns): drain the ready queue, wake
+/// The host loop: drain the ready queue, wake
 /// timers by advancing the virtual clock. Capped, so a stalled loop
 /// fails instead of hanging.
 fn run_loop(vm: &mut Vm, cap: usize) {

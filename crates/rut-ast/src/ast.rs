@@ -1,4 +1,4 @@
-//! AST — flat arena with typed node handles (RFC 0030 §5, contract C1).
+//! AST — flat arena with typed node handles.
 //!
 //! Nodes are plain records in one arena; children are `NodeHandle<T>`s —
 //! typed indices into it, never `Box<Expr>`. Construction is bottom-up;
@@ -19,7 +19,7 @@ use std::marker::PhantomData;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub u32);
 
-/// An interned name — re-exported from rut-core (RFC 0030 §5): the AST's
+/// An interned name — re-exported from rut-core: the AST's
 /// interner and rut-core's are one type, so well-known symbol ids
 /// (`rut_core::sym::SELF` and friends) are valid in the AST's interner.
 pub use rut_core::IdentId;
@@ -213,12 +213,12 @@ impl Ast {
     }
 }
 
-/// String interner — names are indices, not `String` keys (RFC 0030 §5).
+/// String interner — names are indices, not `String` keys.
 /// Lives in rut-core so well-known symbols and every compiled artifact
 /// share one representation; re-exported here for the parser and the AST.
 pub use rut_core::Interner;
 
-// ---- visibility (RFC 0003 §2) ----
+// ---- visibility ----
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Vis {
@@ -233,7 +233,7 @@ pub enum Vis {
     Self_,
 }
 
-// ---- linkage (.d.rut surface decls, RFC 0029 §2 / RFC 0030 §3) ----
+// ---- linkage (.d.rut surface decls) ----
 
 /// Who implements a surface declaration. The `extern` kind (a linked rut
 /// package) is gone: rut→rut use statements go through the module loader and
@@ -284,24 +284,24 @@ pub struct Node {
 pub struct FnData {
     pub vis: Vis,
     pub is_async: bool,
-    /// `entry fn` — host-callable (RFC 0035 §3): lands in the binary's
-    /// entry table; its signature must satisfy the crossing rule
-    /// (RFC 0023 §2), checked at compile time
+    /// `entry fn` — host-callable: lands in the binary's
+    /// entry table; its signature must satisfy the crossing rule,
+    /// checked at compile time
     pub entry: bool,
     pub name: IdentId,
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>,
     pub ret: Option<NodeHandle<AnyTy>>,
-    /// RFC 0043 — inline admission-only bounds: `fn f<T requires A | B>(..)`
+    /// inline admission-only bounds: `fn f<T requires A | B>(..)`
     /// (the `where` clause is gone; bounds hang off the generic list)
     pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     pub body: NodeHandle<BlockNode>,
 }
 
-/// `pub(..)? type Name = Target;` — a transparent type alias (RFC 0043).
+/// `pub(..)? type Name = Target;` — a transparent type alias.
 /// `Target` may be a plain type (the name binds the target's id) or a
 /// `TyUnion` (`A | B` — a bound-only union alias, never a value type).
-/// Aliases are NON-GENERIC (RFC 0043 v1; the row form
+/// Aliases are NON-GENERIC (the row form
 /// `type Name<K, i64> = ..;` is repealed — one name, one decl).
 #[derive(Clone, Debug)]
 pub struct AliasData {
@@ -314,10 +314,10 @@ pub struct AliasData {
 pub enum ItemKind {
     Module { items: Vec<NodeHandle<AnyItem>> },
     /// `use <pkg>::{A, B};` / `use <pkg>::A;` — the package is a single
-    /// bare `[a-zA-Z0-9_]+` name, resolved by the driver (RFC 0029 §2).
+    /// bare `[a-zA-Z0-9_]+` name, resolved by the driver.
     Use { pkg: IdentId, names: Vec<IdentId> },
     /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
-    /// union alias (RFC 0043); aliases are non-generic (the row form is
+    /// union alias; aliases are non-generic (the row form is
     /// repealed — one name, one decl)
     Alias(AliasData),
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
@@ -333,7 +333,7 @@ pub enum ItemKind {
         vis: Vis,
         name: IdentId,
         generics: Vec<IdentId>,
-        /// RFC 0043 §A5 — admission-only bounds on the class's own
+        /// admission-only bounds on the class's own
         /// generics: `class HashMap<K requires Hashable, V>` (the class
         /// extension of the fn/method `requires` grammar; structs take
         /// none). Gates which instantiations compile — no method calls
@@ -349,7 +349,7 @@ pub enum ItemKind {
         requires: Vec<NodeHandle<AnyTy>>, // type nodes — naming position, bare
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
     },
-    /// The two impl forms (RFC 0012): `impl T { .. }` — inherent
+    /// The two impl forms: `impl T { .. }` — inherent
     /// (`trait_ref: None`, the type's module only) — and `impl I for T`
     /// { .. } — a trait impl (any module). Bodies are braced, methods only.
     Impl {
@@ -357,9 +357,9 @@ pub enum ItemKind {
         target: NodeHandle<AnyTy>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
-    /// `host fn` / `builtin fn` — .d.rut only (RFC 0030 §3). `host`:
-    /// embedding-Rust body, concrete signature over the crossing set
-    /// (RFC 0023 §1); `builtin`: engine-lowered (generics allowed —
+    /// `host fn` / `builtin fn` — .d.rut only. `host`:
+    /// embedding-Rust body, concrete signature over the crossing set;
+    /// `builtin`: engine-lowered (generics allowed —
     /// nothing crosses a boundary). `is_async`: the host future lane —
     /// calling one mints a cold engine-woven Future frame whose rows
     /// (`<name>__start`/`__yield`/`__take`/`__cancel`) the embedder
@@ -385,7 +385,7 @@ pub enum ItemKind {
     /// type's member contract (`Option`, `Result`, `Opaque`, `Array`).
     /// (The names are historical: the surface spells the erasure
     /// primitive `opaque` since builtin-surface phase 2.)
-    /// Members are compiler-lowered (ops, RFC 0032 §1.1) — the decl exists
+    /// Members are compiler-lowered — the decl exists
     /// so users and the LSP see every signature; no impl ever registers.
     BuiltinTy {
         vis: Vis,
@@ -426,7 +426,7 @@ pub enum ItemKind {
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
     /// `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }` —
-    /// .d.rut only, core only (RFC 0032 §1.1 R2): numeric methods ON a
+    /// .d.rut only, core only: numeric methods ON a
     /// primitive type, lowered inline at the call site
     /// (`x.wrapping_add(y)`). No impl ever registers — the decl is the
     /// signature contract the lockstep test keeps true to rut-lir's
@@ -443,7 +443,7 @@ pub enum ItemKind {
 // ---- members ----
 
 /// struct/class field: `pub(..)`? `static`? name: ty (= init)?
-/// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
+/// `vis: None` = unannotated — module-private, the default
 #[derive(Clone, Debug)]
 pub struct FieldDeclData {
     pub vis: Option<Vis>,
@@ -454,7 +454,7 @@ pub struct FieldDeclData {
 }
 
 /// `pub(..)`? `async`? fn name<..>(self, ..) -> T { .. }
-/// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
+/// `vis: None` = unannotated — module-private, the default
 #[derive(Clone, Debug)]
 pub struct MethodDeclData {
     pub vis: Option<Vis>,
@@ -463,7 +463,7 @@ pub struct MethodDeclData {
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>, // Param / SelfParam
     pub ret: Option<NodeHandle<AnyTy>>,
-    /// RFC 0043 — inline admission-only bounds on the method's own
+    /// inline admission-only bounds on the method's own
     /// generic parameters (`fn m<T requires A>(self, x: T)`)
     pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     pub body: Option<NodeHandle<BlockNode>>, // None in traits / surface classes
@@ -519,11 +519,11 @@ pub enum StmtKind {
 #[derive(Clone, Debug)]
 pub enum ArmKind {
     WhenArm { pats: Vec<NodeHandle<AnyPat>>, body: NodeHandle<AnyExpr> },
-    /// `fut -> body` / `fut as name -> body` (RFC 0019 §3)
+    /// `fut -> body` / `fut as name -> body`
     SelectArm { fut: NodeHandle<AnyExpr>, bind: Option<IdentId>, body: NodeHandle<AnyExpr> },
 }
 
-// ---- patterns (RFC 0008 §2; constructor/binding forms per corpus) ----
+// ---- patterns (constructor/binding forms per corpus) ----
 
 #[derive(Clone, Debug)]
 pub enum PatKind {
@@ -543,24 +543,24 @@ pub enum PatKind {
 /// `TypeKind` (not `TyKind`) — rut-core's type-table kind owns that name
 #[derive(Clone, Debug)]
 pub enum TypeKind {
-    /// path type — a trait name in type position is the object type
-    /// (RFC 0030 §2); the bare name spells it
+    /// path type — a trait name in type position is the object type;
+    /// the bare name spells it
     TyPath { segs: Vec<PathSeg> },
-    /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
+    /// fn type: `fn(Store, P) -> R` — params are bare types
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
-    /// nullable type `?T` (RFC 0005, RFC 0044) — the prefix `?` binds
+    /// nullable type `?T` — the prefix `?` binds
     /// the following type term: `[?T]` is an array of nullables,
     /// `?[T]` a nullable array, `??T` chains. The postfix `T?` spelling
     /// is removed (diagnosed at the parse).
     TyOpt { inner: NodeHandle<AnyTy> },
-    /// array type `[T]` (RFC 0005 §9) — the fixed-length heap array;
+    /// array type `[T]` — the fixed-length heap array;
     /// grammar-spelled, resolved directly (the `Array` name is gone)
     TyArray { elem: NodeHandle<AnyTy> },
-    /// tuple type `(A, B, ..)` — a record with numeric fields (RFC 0007)
+    /// tuple type `(A, B, ..)` — a record with numeric fields
     TyTuple { elems: Vec<NodeHandle<AnyTy>> },
     /// const-generic argument (the `N` in a const-generic param) — an expression
     TyConst(NodeHandle<AnyExpr>),
-    /// `A | B` — a bound-only union (RFC 0043): legal only in `requires`
+    /// `A | B` — a bound-only union: legal only in `requires`
     /// bounds and union aliases; a value position is a compile error
     TyUnion { elems: Vec<NodeHandle<AnyTy>> },
 }
@@ -589,23 +589,23 @@ pub enum ExprKind {
     /// struct / `Self { .. }` literal — classes have no instance literal
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
     /// tuple expression `(a, b, ..)` — a record with numeric fields
-    /// (RFC 0007; `()` is rejected — the empty value is `nil`, v1.2)
+    /// (`()` is rejected — the empty value is `nil`)
     Tuple { elems: Vec<NodeHandle<AnyExpr>> },
-    /// `[e1, .., en] : [T]` (RFC 0005 §9, RFC 0007 §1)
+    /// `[e1, .., en] : [T]`
     ArrayLit { elems: Vec<NodeHandle<AnyExpr>> },
-    /// `[v; n] : [T]` — the repeat construction (RFC 0005 §9): `n` slots
+    /// `[v; n] : [T]` — the repeat construction: `n` slots
     /// filled with the VALUE `v`. There is no type-in-expression form — a
     /// type is not a value.
     ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Await { expr: NodeHandle<AnyExpr> },
-    /// `select { ... }` — only reachable as `await select { .. }` (RFC 0019 §3)
+    /// `select { ... }` — only reachable as `await select { .. }`
     Select { arms: Vec<NodeHandle<AnyArm>> },
-    /// `expr is Type` — relational precedence, non-associative (RFC 0012 §3)
+    /// `expr is Type` — relational precedence, non-associative
     Is { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
     /// `expr as T` — the numeric cast, truncating like C/Rust; binds
     /// tighter than `*`, left-associative, RHS a naming position
-    /// restricted to the numeric primitives (RFC 0007 §1)
+    /// restricted to the numeric primitives
     Cast { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
 }
 
@@ -622,7 +622,7 @@ pub enum Lit {
     Str(String),
     RawStr(String),
     Bool(bool),
-    /// `nil` — the null pointer literal (RFC 0005)
+    /// `nil` — the null pointer literal
     Nil,
 }
 

@@ -1,4 +1,4 @@
-//! Module-graph compilation — the driver half of RFC 0035 §1.
+//! Module-graph compilation — the driver half.
 //!
 //! Walks a root module's `use` statements through a [`Session`]. Every
 //! module compiles under its own scope and LINKS: its `Surface` binds
@@ -209,11 +209,11 @@ impl<'a> GraphCompiler<'a> {
         }
     }
 
-    /// The native-module path (RFC 0022/0026): no rut body — synthesize
+    /// The native-module path: no rut body — synthesize
     /// a placeholder program whose bodyless funcs the embedder
     /// implements. Intrinsics (compiler-lowered) and constants ride the
     /// same surface. `core` rides it too: no funcs, just the native
-    /// type/trait/fn names of the prelude (RFC 0028).
+    /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
         let ModuleBody::Host { host_funcs, consts, native_types, native_traits, native_fns, native_impls } =
@@ -225,10 +225,10 @@ impl<'a> GraphCompiler<'a> {
             use rut_core::binary::{FuncCode, Program};
             // the host-fn registration scope defaults to the package
             // name; `rt` overrides it to keep its internal `rt:log`
-            // registration naming (RFC 0022)
+            // registration naming
             let host_scope = module.host_scope.as_deref().unwrap_or(spec);
             // host functions obey the same crossing rule as `entry fn`
-            // (RFC 0023 §2 / RFC 0035 §3)
+            //
             let boot_tt = rut_core::types::TypeTable::boot();
             for (name, params, ret, _is_async) in host_funcs {
                 let bad = params.iter().any(|p| !boot_tt.crosses_boundary(*p))
@@ -237,7 +237,7 @@ impl<'a> GraphCompiler<'a> {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
+                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary"
                         ),
                     ));
                     return None;
@@ -299,7 +299,7 @@ impl<'a> GraphCompiler<'a> {
                 .iter()
                 .map(|(n, a)| (surface.names.intern(n), *a))
                 .collect();
-            // the integer prims' numeric methods (RFC 0032 §1.1 R2) —
+            // the integer prims' numeric methods —
             // bound ambient on the receiver primitive, no use gate
             surface.native_impls = native_impls
                 .iter()
@@ -386,7 +386,7 @@ impl<'a> GraphCompiler<'a> {
 
     /// The compile path: parse the module's source, resolve its uses,
     /// compile the unit, link it. The unit's text is its own source
-    /// plus its peer-integration groups (RFC 0045 §3, presence-gated:
+    /// plus its peer-integration groups (presence-gated:
     /// the session recorded the group texts whose optional peers are
     /// in this closure) — every decl's origin IS this module, so no
     /// origin map exists. `scope` was assigned by the dispatcher
@@ -434,7 +434,7 @@ impl<'a> GraphCompiler<'a> {
         for dep in &uses {
             let dep_unit = self.ensure(dep)?;
             if bound_scopes.insert(dep_unit.scope) {
-                // the exporter's spec rides the binding (RFC 0012 §2a)
+                // the exporter's spec rides the binding
                 bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
             }
         }

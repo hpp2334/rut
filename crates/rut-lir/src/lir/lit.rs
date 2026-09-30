@@ -1,6 +1,6 @@
-//! Composite literals: f-strings (the concat desugaring, RFC 0007 SS2),
-//! struct literals (every field initialized, RFC 0009), array literals,
-//! and closures (by-value captures; RFC 0013 SS1 with the v1 capture
+//! Composite literals: f-strings (the concat desugaring),
+//! struct literals (every field initialized), array literals,
+//! and closures (by-value captures with the v1 capture
 //! scan).
 
 use crate::check::TcResult;
@@ -26,7 +26,7 @@ fn is_zero_fill(e: &ExprKind) -> bool {
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-    // ---- f-strings: the concat desugaring (RFC 0007 §2) ----
+    // ---- f-strings: the concat desugaring ----
 
     pub(crate) fn compile_fstr(&mut self, parts: Vec<FPartAst>, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         let part_regs = self.compile_fstr_parts(&parts, sp)?;
@@ -103,7 +103,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Compile f-string parts into registers: a literal becomes a `str`
     /// constant, a hole its value (converted through `Nat::Str` unless it is
-    /// already a `str`, RFC 0007 §2).
+    /// already a `str`).
     fn compile_fstr_parts(&mut self, parts: &[FPartAst], sp: rut_lexer::span::Span) -> TcResult<Vec<u16>> {
         let mut part_regs: Vec<u16> = Vec::new();
         for p in parts {
@@ -116,7 +116,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 FPartAst::Hole(e) => {
                     let mut t = self.compile_expr(*e, None)?;
-                    // `{p}` formats the pointee (RFC 0012 §6): deref the
+                    // `{p}` formats the pointee: deref the
                     // box before formatting — any element type
                     let lo = self.ctx.ast.span(e.id()).lo;
                     if let TyKind::Opt { elem } = self.ctx.types.kind(t).clone() {
@@ -128,7 +128,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.check_formattable(t, self.ctx.ast.span(e.id()))?;
                     let src = self.last_reg;
                     if t == TY_STR {
-                        // already a string: `Str` is a pure alias (RFC 0007 §2)
+                        // already a string: `Str` is a pure alias
                         // — skip the call and use the value directly.
                         part_regs.push(src);
                     } else {
@@ -145,7 +145,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- literals: struct / array ----
 
     pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `Self` binds inside class bodies (RFC 0010 §1). A generic head
+        // `Self` binds inside class bodies. A generic head
         // spelled WITHOUT its arguments (`M { .. }` where `M` is generic)
         // takes them from the expected instantiation — the literal types
         // against its annotation or return (`let m: M<i64, ?Item> = M { .. }`)
@@ -221,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         } else {
             return self.compile_struct_extern(sty, fields, sp);
         };
-        // classes have no outside literal (RFC 0010 §1) — RELAXED in the
+        // classes have no outside literal — RELAXED in the
         // two-pkg store batch: the store's and the app's boot turns
         // construct their containers directly (`World { .. }`, the spikes'
         // `Source<str> { .. }`), so the instance literal is the
@@ -229,8 +229,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // below still holds; dataclass vs class changes nothing at the
         // literal any more (`kind` stays for the extern path).
         let _ = kind;
-        // every field initialized (any order, by name) or has an initializer
-        // (RFC 0009); collect each field value in a register, then mint the
+        // every field initialized (any order, by name) or has an initializer;
+        // collect each field value in a register, then mint the
         // whole record with one MakeRecord (no NewCell/SetF/MovRef sequence)
         let mut val_regs: Vec<Option<u16>> = vec![None; field_list.len()];
         let mut set: Vec<bool> = vec![false; field_list.len()];
@@ -256,7 +256,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !set[fidx] {
                 match init {
                     None => {
-                        // zero-value defaults (RFC 0007): an omitted field
+                        // zero-value defaults: an omitted field
                         // takes its type's zero value
                         let z = self.zero_value(*fty, sp)?;
                         val_regs[fidx] = Some(z);
@@ -288,7 +288,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(sty)
     }
 
-    /// The zero value of a type (RFC 0007): `0`/`0.0`/`false`, the empty
+    /// The zero value of a type: `0`/`0.0`/`false`, the empty
     /// string, `nil` for pointers, member 0 for enums, the all-zero record
     /// for records.
     pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
@@ -313,7 +313,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {
                 self.ctx.err(sp, format!(
-                    "a literal must initialize `{}` —it has no zero value (RFC 0009)",
+                    "a literal must initialize `{}` —it has no zero value",
                     self.ctx.type_name(ty)
                 ));
                 return Err(());
@@ -322,7 +322,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(reg)
     }
 
-    /// Record literal for a USED struct (RFC 0035 §1): the layout is
+    /// Record literal for a USED struct: the layout is
     /// the copied type descriptor; field names compare by string (separate
     /// ASTs intern separately), and field defaults from other modules are not carried.
     fn compile_struct_extern(
@@ -337,7 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if self.ctx.extern_classes.contains(&sty) {
             self.ctx.err(sp, format!(
-                "classes have no instance literal — construct through a class method (`{}.new(..)`, RFC 0010 §1)",
+                "classes have no instance literal — construct through a class method (`{}.new(..)`)",
                 self.ctx.type_name(sty)
             ));
             return Err(());
@@ -368,7 +368,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .map(|(f, _)| f.name)
         {
             self.ctx.err(sp, format!(
-                "record `{}` from another module must initialize every field — `{}` is missing (cross-module field defaults are not carried, RFC 0035 §1)",
+                "record `{}` from another module must initialize every field — `{}` is missing (cross-module field defaults are not carried)",
                 self.ctx.type_name(sty), self.ctx.name(missing)
             ));
             return Err(());
@@ -380,7 +380,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeHandle<AnyExpr>>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `[e1, .., en] : [T]` (RFC 0005 §9, RFC 0007 §1); T from expected or the
+        // `[e1, .., en] : [T]`; T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
             Some(TyKind::Array { elem }) => Some(elem),
@@ -397,7 +397,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => Some(t),
                 };
             } else if let Some(u) = ety {
-                // RFC 0012 §2: heterogeneous elements unify through trait objects
+                // heterogeneous elements unify through trait objects
                 if self.widens(u, t) {
                     ety = Some(t);
                 } else if !self.widens(t, u) {
@@ -413,7 +413,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(aty)
     }
 
-    /// `[v; n]` — the repeat construction (RFC 0005 §9): `ArrNew` for n
+    /// `[v; n]` — the repeat construction: `ArrNew` for n
     /// slots, then a fill loop storing `v` into each. A scalar/nil fill is
     /// the memset-class op (the store is a plain slot move); a ref fill
     /// copies the cell handle n times — every slot aliases the one cell.
@@ -478,7 +478,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(aty)
     }
 
-    // ---- closures (RFC 0013 §1 —v1 captures by value) ----
+    // ---- closures (v1 captures by value) ----
 
     pub(crate) fn compile_lambda(
         &mut self,
@@ -533,7 +533,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(l) = self.lookup(n).cloned() {
                 // copy the CURRENT value into a capture register (by value);
                 // the capture inherits the binding's mutability so writes
-                // through a captured `let mut` stay legal (RFC 0044 — the
+                // through a captured `let mut` stay legal (the
                 // old pointer exception is gone)
                 let cap_reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {

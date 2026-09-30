@@ -1,7 +1,6 @@
-//! RutType descriptors — RFC 0015: every value's type exists at runtime;
+//! RutType descriptors — every value's type exists at runtime;
 //! kind + field tables drive `is`, dispatch, and serialization.
-//! Type ids are program-global (single-module link in v1; RFC 0035 §1
-//! rebase lands with multi-module linking).
+//! Type ids are program-global (single-module link in v1; rebase lands with multi-module linking).
 
 pub type TypeId = u32;
 
@@ -34,7 +33,7 @@ impl PrimTy {
             PrimTy::Bool => "bool",
         }
     }
-    /// Stable wire code for the typed bytecode (RFC 0032) — the VM no
+    /// Stable wire code for the typed bytecode — the VM no
     /// longer needs the type table to execute a scalar op.
     pub fn to_u8(self) -> u8 {
         match self {
@@ -55,7 +54,7 @@ impl PrimTy {
     }
 
     /// Machine payload width in bytes — the primitive-optional element
-    /// store's payload region rides this (RFC 0044 §5), as does the
+    /// store's payload region rides this, as does the
     /// packed-array kind table in the VM heap.
     pub fn width(self) -> usize {
         match self {
@@ -68,7 +67,7 @@ impl PrimTy {
 }
 
 /// Compact runtime representation of a value, resolved from its static
-/// type at compile time and baked into ops (RFC 0032 "the full table is
+/// type at compile time and baked into ops ("the full table is
 /// mechanical"). `Prim` carries the scalar machine kind, `Ref` marks a cell
 /// handle needing retain/release, and `Any` is the conservative fallback
 /// (untyped registers, nil, fn values).
@@ -83,13 +82,13 @@ pub enum Repr {
     /// value (a minted one-slot cell the destination register owns);
     /// `ArrSet` takes a proper `?prim` value (cell or null) and encodes it
     /// into the raw store. No slot of this repr is retained or released by
-    /// the element ops (RFC 0044 §5, the primitive-store tier).
+    /// the element ops (the primitive-store tier).
     OptPrim(PrimTy),
     /// `ArrSet` form after the MakeOpt elision: `val` holds the RAW payload
     /// (the some-tag is implied by the op). The peephole folds
     /// `MakeOpt + ArrSet{OptPrim}` into this when the box feeds only the
     /// store — the box's identity is unobservable for a primitive payload
-    /// (RFC 0044 §3: `?T == ?T` compares payloads).
+    /// (`?T == ?T` compares payloads).
     OptPrimRaw(PrimTy),
     /// `ArrGet` form after the deref fold: yields the RAW payload directly,
     /// with the nil tag trapping `NilDeref` — exactly the behavior of the
@@ -152,8 +151,8 @@ impl Repr {
     }
 }
 
-/// The element representation an ARRAY op bakes for `elem` (RFC 0044 §5,
-/// the primitive-store tier): a `[?prim]` backing stores raw payloads + nil
+/// The element representation an ARRAY op bakes for `elem` (the
+/// primitive-store tier): a `[?prim]` backing stores raw payloads + nil
 /// tags, so its element ops carry the `OptPrim` form; every other element
 /// keeps the plain `repr_of` (reference payloads stay cell-backed slots).
 /// The verifier checks array-op reprs against THIS resolution, and the
@@ -181,23 +180,23 @@ pub enum TyKind {
     Prim(PrimTy),
     /// immutable UTF-8 string cell
     Str,
-    /// immutable raw byte buffer cell (RFC 0004 — the language's binary
+    /// immutable raw byte buffer cell (the language's binary
     /// data type); contiguous, content-compared, COW-shared like `Str`
     Bytes,
-    /// heap array cell — runtime length, non-growable (RFC 0005). The
+    /// heap array cell — runtime length, non-growable. The
     /// growable `Vec<T>` is a rut class over it (`pouch`).
     Array { elem: TypeId },
-    /// named-int set (RFC 0006); members are immortal singleton cells
+    /// named-int set; members are immortal singleton cells
     Enum { members: Vec<(IdentId, i64)> },
-    /// struct or class record cell — fields stored as one slot each
-    /// (RFC 0009/0010); construction rules differ, representation does not
+    /// struct or class record cell — fields stored as one slot each;
+    /// construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
     /// trait object (`i: I`) — unsized object; the slot stores the cell handle and the
-    /// cell's own type reaches the vtable (RFC 0015 §6)
+    /// cell's own type reaches the vtable
     TraitObj { trait_id: u32 },
-    /// erasure box (RFC 0014)
+    /// erasure box
     Opaque,
-    /// engine stack-trace snapshot (RFC 0036, err-channel phase 2) — the
+    /// engine stack-trace snapshot — the
     /// `StackTrace` builtin class's runtime type: a stateful engine
     /// snapshot with methods, never a value spelling (that is why this is
     /// a `builtin class` and not a `builtin primitive`). The cell carries
@@ -209,11 +208,11 @@ pub enum TyKind {
     /// grow without touching the trait's signature. A ref-repr cell like
     /// `Trace`: assignment shares it.
     DisposalContext,
-    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell; `nil` is the null slot.
+    /// `?T` — a nil-able cell; `nil` is the null slot.
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
     Opt { elem: TypeId },
-    /// weak reference (RFC 0017 v1) — the `Weak<T>` builtin class's
+    /// weak reference — the `Weak<T>` builtin class's
     /// runtime type: a WeakBox side cell holding an UNRETAINED slot word
     /// to the referent, nulled when the referent dies. Generic like
     /// `Array { elem }`: interned per instantiation (`mk_weak`), no boot
@@ -269,10 +268,10 @@ pub const TY_BOOL: TypeId = 11;
 pub const TY_CHAR: TypeId = 12;
 pub const TY_STR: TypeId = 13;
 pub const TY_OPAQUE: TypeId = 14;
-/// immutable binary buffer (RFC 0004) — appended after `Opaque`; fixed ids
+/// immutable binary buffer — appended after `Opaque`; fixed ids
 /// are wire-stable and must never be reordered
 pub const TY_BYTES: TypeId = 15;
-/// the `StackTrace` snapshot (RFC 0036, err-channel phase 2) — appended
+/// the `StackTrace` snapshot — appended
 /// after `Bytes`; fixed ids are wire-stable and must never be reordered
 pub const TY_STACK_TRACE: TypeId = 16;
 /// RESERVED (the host strbuild pkg): the growable string builder's boot
@@ -296,10 +295,10 @@ pub const TY_OPT_OPAQUE: TypeId = 21;
 /// after the host-answer optionals; fixed ids are wire-stable and must
 /// never be reordered
 pub const TY_DISPOSAL_CONTEXT: TypeId = 22;
-/// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
+/// A host payload box's runtime type as `TidOf` reports it:
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
-/// compares false for every `T` and yields `nil`, never a trap (RFC 0014).
+/// compares false for every `T` and yields `nil`, never a trap.
 pub const HOST_BOX_TID: TypeId = u32::MAX;
 
 impl TypeTable {
@@ -331,7 +330,7 @@ impl TypeTable {
         push(sym::F32, TyKind::Prim(PrimTy::F32));
         push(sym::F64, TyKind::Prim(PrimTy::F64));
         push(sym::BOOL, TyKind::Prim(PrimTy::Bool));
-        // RESERVED (the char exorcism, RFC 0004 v1.1): `char` is gone — the
+        // RESERVED (the char exorcism): `char` is gone — the
         // enumerated kind died with `PrimTy::Char`. The ROW stays so every
         // id above it keeps its wire-stable boot position (the fixed ids
         // must never be reordered); nothing reaches it — the resolver's
@@ -358,10 +357,10 @@ impl TypeTable {
         push(sym::NIL, TyKind::Nil);
         // the host-answer optionals (the legal-host-returns phase): REAL
         // crossing rows — `?str`/`?bytes`/`?opaque` cross back
-        // nil-flattened (RFC 0023 §1's optionals law, the read direction
+        // nil-flattened (the optionals law, the read direction
         // always promised). The decl surface's `-> ?T` spellings map to
         // the CONSTS above (the driver's answer table), and the registry's
-        // `Option<T>` SIG shares them, so the RFC 0025 join verifies the
+        // `Option<T>` SIG shares them, so the boot join verifies the
         // pair by identity. The row names ride the shell convention (the
         // elem's own symbol — the reserved-row convention); a diagnostic
         // that needs the `?` shape names it from the CONST.
@@ -607,7 +606,7 @@ impl TypeTable {
             _ => None,
         }
     }
-    /// True when slots of this type are cell handles (RFC 0016 §1).
+    /// True when slots of this type are cell handles.
     pub fn is_ref(&self, id: TypeId) -> bool {
         !matches!(
             self.kind(id),
@@ -615,7 +614,7 @@ impl TypeTable {
         )
     }
 
-    /// True when the type is a MUTABLE VALUE. Nothing is (RFC 0044, the
+    /// True when the type is a MUTABLE VALUE. Nothing is (the
     /// by-reference regime): every cell type — records, arrays, enums,
     /// `str`/`bytes`, closures, `?T` — shares its cell on assignment and
     /// parameter passing; only primitives and `fn` values copy (immediate
@@ -636,20 +635,20 @@ impl TypeTable {
         }
     }
 
-    /// The crossing rule (RFC 0023 §2 / RFC 0035 §3): the value shapes a
+    /// The crossing rule: the value shapes a
     /// host may hold and pass back. `entry fn` is the host-callable surface,
     /// so **host functions obey the same rule** — primitives, `str`,
     /// `bytes`, `Opaque`, and `Option`/`Result` over those.
     pub fn crosses_boundary(&self, id: TypeId) -> bool {
         match self.kind(id) {
             TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
-            // `?T` crosses nil-flattened when T crosses (RFC 0023 §1's own
+            // `?T` crosses nil-flattened when T crosses (the
             // promise: optionals cross as the v1.1 tuples they were always
             // spelled as — the implementation only predates the text). The
             // err-channel entry shape `(?T, err)` is exactly this arm: no
             // err carve-out, the nullable's element answers the rule.
             TyKind::Opt { elem } => self.crosses_boundary(*elem),
-            // tuples cross field-by-field (RFC 0007 v1.1): `(bytes, str)`
+            // tuples cross field-by-field: `(bytes, str)`
             // is the error convention; named records still do not cross
             TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),
             _ => false,

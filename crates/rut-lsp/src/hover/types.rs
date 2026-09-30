@@ -21,7 +21,7 @@ pub enum TyForm {
     BuiltinTrait,
     /// `host struct Name { fields }` — a flat host-constructed record
     HostDataclass,
-    /// `type X = A;` — a transparent alias (RFC 0043)
+    /// `type X = A;` — a transparent alias
     Alias,
 }
 
@@ -104,7 +104,7 @@ pub struct TyDef {
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
-    /// `type X = A;` (RFC 0043) — the target as written; `None` otherwise
+    /// `type X = A;` — the target as written; `None` otherwise
     pub alias_target: Option<String>,
     pub doc: Vec<String>,
     pub span: Span,
@@ -183,7 +183,7 @@ pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             .first()
             .map(|s| ast.name(s.name).to_string())
             .unwrap_or_default(),
-        // `?Circle` binds like `Circle` for member lookup (RFC 0044) —
+        // `?Circle` binds like `Circle` for member lookup —
         // without this arm a nullable let-binding infers "" and its
         // receiver hover misses
         TypeKind::TyOpt { inner } => ty_head(ast, *inner),
@@ -192,7 +192,7 @@ pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
 }
 
 /// the lookup head of a rendered type text — what member lookup keys
-/// on: `?Circle` → `Circle` (the RFC 0044 bind-like law), `Vec<i32>` →
+/// on: `?Circle` → `Circle` (the bind-like law), `Vec<i32>` →
 /// `Vec`. Display keeps the full text; only lookups cut it down
 pub(crate) fn head_of_ty(text: &str) -> String {
     let t = text.trim_start_matches('?');

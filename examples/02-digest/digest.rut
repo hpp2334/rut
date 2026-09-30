@@ -5,9 +5,9 @@ use json::{ encodeJson, EncodeJsonError, JsonSerialize, JsonWriter };
 //
 // The second algorithmic example: everything here operates on `bytes`
 // (the immutable binary primitive, which crosses the host boundary
-// directly, RFC 0023 §2 / RFC 0004) and proves
+// directly) and proves
 // that the language's integer surface — hex literals, `u32`/`u64`,
-// `x.wrapping_add(y)`/`wrapping_mul`/`wrapping_shl` (RFC 0004 §3), and
+// `x.wrapping_add(y)`/`wrapping_mul`/`wrapping_shl`, and
 // the signedness rules for `>>` — is enough to write real, verifiable
 // algorithms:
 //
@@ -650,9 +650,9 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 
 // ---------------------------------------------------------------- JSON ---
 //
-// RFC 0006: enums carry no data, and recursive dataclasses are not
+// enums carry no data, and recursive dataclasses are not
 // expressible — so the tree is a tagged union by hand (JTag + Json),
-// with children boxed in `opaque` (RFC 0014) to break the recursion:
+// with children boxed in `opaque` to break the recursion:
 // `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
 //
 // Since the rut-json batch's phase 2, the ENCODE half rides the std
@@ -932,7 +932,7 @@ fn unwrap_box(r: (opaque, str)) -> opaque {
 /// writer. This is the rut-json batch's phase-2 migration (survey
 /// §2.10): the private `jencode`/`jquote` f-string economy is gone,
 /// and this impl drives `JsonWriter` exactly as a user type would —
-/// RFC 0012's orphan-legal direction (json owns the trait, `Json` is
+/// the orphan-legal direction (json owns the trait, `Json` is
 /// this file's). Byte-identical to the old encoder on every input the
 /// golden tests pin: same member order, same verbatim number lexemes,
 /// same minimal escapes. Two disclosed deltas: (1) the old per-char

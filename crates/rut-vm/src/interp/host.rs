@@ -1,4 +1,4 @@
-//! The embedder's host-fn binding table (RFC 0022/0025/0026) — built
+//! The embedder's host-fn binding table — built
 //! BEFORE the `Vm` exists. An embedder is a host: its bindings depend on
 //! nothing but itself (the closures capture their own state; the `&mut Vm`
 //! in the body's type is a call-time argument), so registration happens up
@@ -6,7 +6,7 @@
 //! program's host thunks eagerly — a declared-but-unbound fn is a
 //! construction error, never a mid-run trap.
 //!
-//! [`HostRegistry::verify_against`] is the RFC 0025 contract check, also
+//! [`HostRegistry::verify_against`] is the contract check, also
 //! pre-VM: the session's declared `.d.rut` surface vs the registry,
 //! panicking on the three mismatch classes before any rut code runs.
 
@@ -54,7 +54,7 @@ impl HostSig {
 /// What [`HostRegistry::register`] produced: the table entry plus the
 /// owner of its state word. `keep` moves into the Vm at the join and
 /// pins the boxed body for the machine's lifetime (single thread,
-/// RFC 0034 — the same trust the threaded loop's raw pointers run on).
+/// the same trust the threaded loop's raw pointers run on).
 pub(crate) struct HostBinding {
     pub code: HostCode,
     pub ctx: Ctx,
@@ -93,7 +93,7 @@ impl HostSlot {
     };
 }
 
-/// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →
+/// A host pkg's expected binding table: `<scope>::<name>` →
 /// `(params, ret)` — the `.d.rut` declarations a mounting session holds,
 /// checked against a registry by [`HostRegistry::verify_against`].
 pub type ExpectedHostFns = BTreeMap<String, (Vec<TypeId>, TypeId)>;
@@ -131,7 +131,7 @@ impl HostRegistry {
         );
     }
 
-    /// The `.d.rut` ↔ host-impl contract check (RFC 0025), PANICKING
+    /// The `.d.rut` ↔ host-impl contract check, PANICKING
     /// before the Vm boots on three mismatch classes:
     ///
     /// - declared but unbound — a rut call would trap mid-run;
@@ -177,12 +177,12 @@ impl HostRegistry {
         for (name, (params, ret)) in expected {
             match self.fns.get(name) {
                 None => panic!(
-                    "host fn `{name}` is declared by a mounted package but never bound — register the body before Vm::new (RFC 0025)"
+                    "host fn `{name}` is declared by a mounted package but never bound — register the body before Vm::new"
                 ),
                 Some(b) => {
                     if b.sigs.slice() != params.as_slice() || b.sigs.ret != *ret {
                         panic!(
-                            "host fn `{name}` signature drift: the pkg declares {}, the binding is {} (RFC 0025)",
+                            "host fn `{name}` signature drift: the pkg declares {}, the binding is {}",
                             sig(params, *ret),
                             sig(b.sigs.slice(), b.sigs.ret)
                         );
@@ -193,7 +193,7 @@ impl HostRegistry {
         for name in self.fns.keys() {
             if !expected.contains_key(name) {
                 panic!(
-                    "host fn `{name}` is bound but declared by no mounted package — the surface is missing (RFC 0025)"
+                    "host fn `{name}` is bound but declared by no mounted package — the surface is missing"
                 );
             }
         }
@@ -207,7 +207,7 @@ impl HostRegistry {
         // claim moves it into the Vm) but leave the entry: one binding
         // may legitimately back several FuncCodes — the decl row and
         // the compiler-minted thunk of the sleep yield are two bodies
-        // of the same host fn (RFC 0018)
+        // of the same host fn
         let b = self.fns.get_mut(name)?;
         let keep = b.keep.take();
         Some(HostBinding { code: b.code, ctx: b.ctx, sigs: b.sigs, keep })

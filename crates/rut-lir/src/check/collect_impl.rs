@@ -1,8 +1,8 @@
-//! The pass-2 impl-block walk (`collect_impl`, RFC 0012): `impl T { .. }` inherent / trait-impl registration with coverage checks, plus `TraitReq` — what a trait requires of an implementing method.
+//! The pass-2 impl-block walk (`collect_impl`): `impl T { .. }` inherent / trait-impl registration with coverage checks, plus `TraitReq` — what a trait requires of an implementing method.
 
 use super::*;
 
-/// What a trait requires of an implementing method (RFC 0012 §2):
+/// What a trait requires of an implementing method:
 /// name, `async`, receiver form, and the resolved signature.
 struct TraitReq {
     name: IdentId,
@@ -17,7 +17,7 @@ struct TraitReq {
 impl<'a> Ctx<'a> {
 
 
-    /// Pass 2 — an `impl` block (RFC 0012): `impl T { .. }` attaches
+    /// Pass 2 — an `impl` block: `impl T { .. }` attaches
     /// inherent methods to the target (the type's module only — a local
     /// struct/class, or a `builtin class` this module owns through its
     /// surface); `impl I for T { .. }` registers a trait impl (any
@@ -34,13 +34,13 @@ impl<'a> Ctx<'a> {
         // ---- the target (both forms): a local struct/class, a
         // module-owned `builtin class` resolved through the native-type
         // table (the `LaunchedTask<T>` pattern), or — trait impls only —
-        // a type this module USES (RFC 0012 §2: `impl ForeignTrait for
+        // a type this module USES (`impl ForeignTrait for
         // ForeignType` is legal; the pair's uniqueness is a link check).
         // A generic target (`impl .. for Vec<T>`) is a template: its
         // methods monomorphize per instantiation through `target_data`.
         // A bare primitive name (`impl T for i32`) is a trait-impl
         // target too — trait impls only: a primitive's inherent surface
-        // stays core's `builtin impl` (RFC 0012 §2 / RFC 0032 §1.1).
+        // stays core's `builtin impl`.
         let (target_ty, target_data, is_local, is_used, is_prim, spell) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
@@ -52,7 +52,7 @@ impl<'a> Ctx<'a> {
             }
             TypeKind::TyArray { elem } => {
                 // `impl [T] { .. }` — an inherent impl over the array
-                // type (RFC 0012 §2's `LaunchedTask<T>` pattern):
+                // type (`LaunchedTask<T>` pattern):
                 // generic through the element parameter, a template
                 // id for duplicate detection and inst keys
                 let Some(params) = self.ty_generic_idents(std::slice::from_ref(elem)) else {
@@ -92,7 +92,7 @@ impl<'a> Ctx<'a> {
             _ => {
                 self.err(
                     sp,
-                    "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
+                    "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module",
                 );
                 return;
             }
@@ -101,7 +101,7 @@ impl<'a> Ctx<'a> {
         for m in methods {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
-        // the orphan gate's target-side classification (RFC 0012 §2a) —
+        // the orphan gate's target-side classification —
         // every unresolvable shape already returned above
         let (ty_display, ty_origin) = self.classify_target_origin(target);
         // the impl block's owner — the instantiation ledger's owner
@@ -115,7 +115,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         sp,
                         format!(
-                            "a primitive takes trait impls only — `{pname}`'s inherent surface is core's `builtin impl` (RFC 0032 §1.1)"
+                            "a primitive takes trait impls only — `{pname}`'s inherent surface is core's `builtin impl`"
                         ),
                     );
                     return;
@@ -123,7 +123,7 @@ impl<'a> Ctx<'a> {
                 if is_used {
                     self.err(
                         sp,
-                        "inherent impls live in the type's module — only `impl Trait for UsedType` may name a used type (RFC 0012 §2)",
+                        "inherent impls live in the type's module — only `impl Trait for UsedType` may name a used type",
                     );
                     return;
                 }
@@ -132,7 +132,7 @@ impl<'a> Ctx<'a> {
             Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths, origin),
         }
     }
-    /// The TyPath impl target, resolved (RFC 0012 §2 plus the
+    /// The TyPath impl target, resolved (plus the
     /// hashmap-surface batch's seam (c)): the ROW form re-targets
     /// through the family's row first — `impl I for HashMap<K, i64>`
     /// registers on the row TARGET's class template, the same
@@ -206,13 +206,13 @@ impl<'a> Ctx<'a> {
                 }
                 // the trace snapshot takes no user impls: its
                 // members are engine-builtins, the contract is
-                // closed (RFC 0025's `builtin class` row)
+                // closed (`builtin class` row)
                 (rut_core::binary::NativeTy::StackTrace, _) => {
                     self.err(sp, "`StackTrace` takes no impl blocks — its members are engine builtins (`len`/`name(i)`/`line(i)`/`col(i)`/`render`)");
                     None
                 }
                 // the weak box likewise: closed engine contract
-                // (RFC 0017 v1) — its one member is the upgrade native
+                // — its one member is the upgrade native
                 (rut_core::binary::NativeTy::Weak, _) => {
                     self.err(sp, "`Weak` takes no impl blocks — its member is engine builtin (`upgrade()`)");
                     None
@@ -225,15 +225,15 @@ impl<'a> Ctx<'a> {
                 }
             }
         } else if generics.is_empty() && self.extern_types.contains_key(&name) {
-            // a USED type (RFC 0035 §1): legal as a TRAIT-impl
+            // a USED type: legal as a TRAIT-impl
             // target only — inherent impls stay in the type's
-            // module (RFC 0012 §2). The id is the exporter's
+            // module. The id is the exporter's
             // scope-qualified one; link rebases it.
             Some((self.extern_types[&name], None, false, true, false, name))
         } else if let Some(prim) = sym::primitive_ty(name) {
             // a primitive (integers, bool, str, bytes, …): trait
-            // impls only, any module (RFC 0012 §2's
-            // `impl ForeignTrait for ForeignType` pattern) — the
+            // impls only, any module (`impl ForeignTrait for
+            // ForeignType` pattern) — the
             // pair's uniqueness is a link check. Boot ids are
             // global, no rebase needed.
             if !generics.is_empty() {
@@ -245,7 +245,7 @@ impl<'a> Ctx<'a> {
             
             self.err(
                 sp,
-                "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
+                "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module",
             );
             None
         }
@@ -290,8 +290,8 @@ impl<'a> Ctx<'a> {
             || self.extern_types.contains_key(&n)
     }
 
-    /// The orphan classification of the impl TARGET as written (RFC 0012
-    /// §2a): the head's display text and the pkg whose source declares it
+    /// The orphan classification of the impl TARGET as written:
+    /// the head's display text and the pkg whose source declares it
     /// — `None` for a builtin, in no pkg. The doors mirror
     /// `collect_impl`'s target match, which has already rejected every
     /// unresolvable shape. Locality is of the HEAD: a generic head's type
@@ -340,7 +340,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The orphan classification of the impl's TRAIT name (RFC 0012 §2a):
+    /// The orphan classification of the impl's TRAIT name:
     /// the pkg whose source declares it. A builtin trait (`Iterator`,
     /// `Index`, `Disposal`) is core's decl like every prelude name (RFC
     /// 0012 §2) — its origin is `core`, never "no pkg". Every shape that
@@ -428,7 +428,7 @@ impl<'a> Ctx<'a> {
                     if self.ast.method_decl(*mnode).vis.is_some() {
                         self.err(
                             self.ast.span(mnode.id()),
-                            "dataclasses have no member visibility —all members are public (RFC 0009)",
+                            "dataclasses have no member visibility —all members are public",
                         );
                         break;
                     }
@@ -571,7 +571,7 @@ impl<'a> Ctx<'a> {
         let Some((trait_name, trait_arg_nodes)) = head else {
             return;
         };
-        // ---- the orphan gate (RFC 0012 §2a): at least one of the pair
+        // ---- the orphan gate: at least one of the pair
         // is defined in the pkg whose source DECLARED the block. The
         // block's origin — its span's leaf on the origin map — is the
         // law's "current pkg": the origin, not the compiling unit,
@@ -592,9 +592,9 @@ impl<'a> Ctx<'a> {
             };
             let tail = match ty_origin {
                 Some(_) => {
-                    "an `impl Trait for Type` needs at least one of the pair declared in its own pkg (RFC 0012 §2a)"
+                    "an `impl Trait for Type` needs at least one of the pair declared in its own pkg"
                 }
-                None => "only a trait of this pkg may be implemented for a builtin (RFC 0012 §2a)",
+                None => "only a trait of this pkg may be implemented for a builtin",
             };
             self.err(
                 sp,
@@ -610,7 +610,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
-            self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
+            self.err(sp, "duplicate impl for the same (trait, type) pair");
             return;
         }
         // the disposal contract's target gate: a CONCRETE user record
@@ -731,7 +731,7 @@ impl<'a> Ctx<'a> {
                 );
             }
             // a descriptor-derived contract (engine/extern trait) spells
-            // no receiver form — the impl's own spelling stands (RFC 0012 §2)
+            // no receiver form — the impl's own spelling stands
             if has_ast && self_form != req.self_form {
                 let spell = |f: Option<bool>| match f {
                     Some(true) => "`mut self`".to_string(),
@@ -761,7 +761,7 @@ impl<'a> Ctx<'a> {
                 // `Self`-spelled trait parameters reach the descriptor as
                 // this trait's object type — the impl spells the concrete
                 // receiver, and any concrete type satisfies it there
-                // (RFC 0012 §4). Extern traits' descriptors are the only
+                //. Extern traits' descriptors are the only
                 // source of such reqs (local traits resolve `Self` to the
                 // target at the AST).
                 let self_obj = |t: &TypeId| {
@@ -774,7 +774,7 @@ impl<'a> Ctx<'a> {
                 // (`(?Self, ?DecodeJsonError)`); the impl's concrete sig
                 // satisfies it structurally — same shape, leaves equal,
                 // the trait-object leaf accepting any concrete spelling
-                // (RFC 0012 §4)
+                //
                 let ret_match = self.desc_sig_matches(ret, req.ret, trait_id);
                 if !ptys_match || !ret_match {
                     let fmt = |tys: &[TypeId]| tys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ");
@@ -797,7 +797,7 @@ impl<'a> Ctx<'a> {
                 self.err(
                     self.ast.span(mnode.id()),
                     format!(
-                        "`{}` is not a member of {} — inherent methods go in an `impl {} {{ .. }}` block (RFC 0012 §2)",
+                        "`{}` is not a member of {} — inherent methods go in an `impl {} {{ .. }}` block",
                         self.name(*n),
                         self.name(self.trait_by_id(trait_id).name),
                         self.type_name(target_ty)
@@ -822,7 +822,7 @@ impl<'a> Ctx<'a> {
             origin,
         });
         // every impl method enters the monomorphization queue — vtables
-        // need their bodies (RFC 0015 §6). Generic-target impls
+        // need their bodies. Generic-target impls
         // monomorphize per instantiation at their call sites instead.
         if is_generic {
             return;

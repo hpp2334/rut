@@ -1,7 +1,7 @@
 //! The example's gate: drive the moderator through the typed `Plugin`
 //! surface and assert the exact transcript — `cargo test --workspace`
 //! runs it. The plugin loads from a module directory (`plugin/rut.toml`)
-//! and from a packed `.rutbundle` (RFC 0038); both forms must behave
+//! and from a packed `.rutbundle`; both forms must behave
 //! identically.
 
 use std::path::Path;

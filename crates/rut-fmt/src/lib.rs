@@ -1,4 +1,4 @@
-//! rut-fmt — the rut source formatter (RFC 0030 §7, RFC 0001 M6). The
+//! rut-fmt — the rut source formatter. The
 //! language's own meaning-preserving pretty printer.
 //!
 //! The formatter is an **AST reprint** (the RFC's `pretty(ast)`), not a

@@ -1,4 +1,4 @@
-# pouch — the hermetic stand-in (RFC 0045 fixtures): a generic class
+# pouch — the hermetic stand-in: a generic class
 # with one method, shaped like the real pkg (a generic export splices
 # into consumers). Rides `base` so T8's peer-of-peer chain is real.
 name = "pouch"

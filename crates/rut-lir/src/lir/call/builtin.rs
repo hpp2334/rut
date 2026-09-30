@@ -6,7 +6,7 @@ use crate::lir::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
 
-    /// `bytes(n)` — a zeroed immutable buffer of `n` octets (RFC 0004).
+    /// `bytes(n)` — a zeroed immutable buffer of `n` octets.
     pub(crate) fn compile_bytes_alloc(&mut self, args: Vec<NodeHandle<AnyExpr>>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         let len_reg = match args.len() {
             0 => {
@@ -31,8 +31,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(TY_BYTES)
     }
 
-    /// The `?T` erasure-box recovery (RFC 0014, refval-round2): tidof +
-    /// icmp + br (the reified-type-id check, RFC 0015) + the ALIAS
+    /// The `?T` erasure-box recovery (refval-round2): tidof +
+    /// icmp + br (the reified-type-id check) + the ALIAS
     /// handoff. No allocation on EITHER branch — the `(T, bool)` tuple's
     /// `MakeRecord` mint (a record cell + field copy + bool + rc per
     /// call, ~175 ns/get in the round-1 attribution) is gone: a match
@@ -80,9 +80,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        // core builtin statics (RFC 0028): the erasure primitive's
+        // core builtin statics: the erasure primitive's
         // `new`/`downcast` statics and the `bytes`/`str` constructors —
-        // AMBIENT now (RFC 0028 revised, builtin-surface): the arms fire
+        // AMBIENT now: the arms fire
         // whenever core is mounted, no `use` required
         let core_ty = self.ctx.extern_native_types.get(&base).copied();
         // Explicit type args on a static head are meaningful only where the
@@ -100,7 +100,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ));
             return Err(());
         }
-        // a used namespace's members (`Math.sqrt`; RFC 0028) —
+        // a used namespace's members (`Math.sqrt`) —
         // routed by the bound head, name-generic
         if self.ctx.is_extern_namespace(base) {
             return self.compile_namespace_member(base, member, &args, expected, sp);
@@ -108,7 +108,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match (base, member) {
             (sym::BYTES, sym::FROM) => {
                 // bytes.from(a) — copy an Array<u8> into an immutable
-                // buffer (RFC 0004)
+                // buffer
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes.from(source) takes one `Array<u8>`");
                     return Err(());
@@ -128,7 +128,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_BYTES);
             }
             (sym::BYTES, sym::ZEROED) => {
-                // bytes.zeroed(n) — n zeroed octets (RFC 0004)
+                // bytes.zeroed(n) — n zeroed octets
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes.zeroed(n) takes one `i32`");
                     return Err(());
@@ -144,7 +144,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             (sym::STR, sym::FROM_CODE) => {
                 // str.from_code(n) -> str — the 1-codepoint str for the
-                // codepoint `n` (RFC 0004 v1.1: `char` is gone)
+                // codepoint `n` (`char` is gone)
                 if args.len() != 1 {
                     self.ctx.err(sp, "str.from_code(n) takes one `u32` codepoint");
                     return Err(());
@@ -162,8 +162,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_STR);
             }
             (sym::WEAK, sym::NEW) => {
-                // Weak.new(v) — the weak box's construction (RFC 0017
-                // v1): the class-method form of the old type-call.
+                // Weak.new(v) — the weak box's construction (v1):
+                // the class-method form of the old type-call.
                 // Exactly one argument; its type is the instantiation's
                 // elem and must be a reference type (every non-primitive
                 // is — the `Weak<i32>` admission diagnoses here, the
@@ -189,25 +189,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {}
         }
-        // the erasure primitive's member static (RFC 0014, builtin-
+        // the erasure primitive's member static (builtin-
         // surface phase 2): `opaque.downcast<T>(o)` — construction moved
-        // to the call form `opaque(v)` (RFC 0044 sweep). The lowercase
+        // to the call form `opaque(v)`. The lowercase
         // spelling IS the interner's own (`sym::OPAQUE`)
         if core_ty == Some(rut_core::binary::NativeTy::Opaque) && base == sym::OPAQUE {
             match member {
                 sym::DOWNCAST => {
                     if args.len() != 1 || member_generics.len() != 1 {
-                        self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
+                        self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value");
                         return Err(());
                     }
                     let want = self.resolve_type_now(member_generics[0]);
-                    // RFC 0014 recovers concrete types; the ONE trait-
+                    // The erasure box recovers concrete types; the ONE trait-
                     // object exception is the engine-woven Future (the
                     // async lane's crossings — phase 2b): the box stores
                     // the construction site's `Future<T>` object spelling,
                     // so `downcast<Future<nil>>` matches the sleep mint's
                     // seal by the same id. Every other trait object keeps
-                    // the refusal (the RFC 0014 amendment lands with the
+                    // the refusal (the amendment lands with the
                     // any-removal phase).
                     let downcastable = match self.ctx.types.kind(want) {
                         TyKind::TraitObj { trait_id } => {
@@ -222,12 +222,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         _ => true,
                     };
                     if !downcastable {
-                        self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path (RFC 0014)");
+                        self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path");
                         return Err(());
                     }
                     let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
                     if t != TY_OPAQUE {
-                        self.ctx.err(sp, "downcast takes an `opaque` box (RFC 0014)");
+                        self.ctx.err(sp, "downcast takes an `opaque` box");
                         return Err(());
                     }
                     let orecv = self.last_reg;
@@ -235,22 +235,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 _ => {
                     self.ctx.err(sp, format!(
-                        "`opaque` has no static `{}` — the primitive's member is `downcast<T>`; construct with `opaque(v)` (RFC 0014)",
+                        "`opaque` has no static `{}` — the primitive's member is `downcast<T>`; construct with `opaque(v)`",
                         self.ctx.name(member)
                     ));
                     return Err(());
                 }
             }
         }
-        // enum helpers: Color.to_int(c) (RFC 0006)
+        // enum helpers: Color.to_int(c)
         if self.ctx.name(member) == "to_int" {
             if let Some(e) = self.ctx.find_enum(base).cloned() {
                 let _ = e;
-                self.ctx.err(sp, "enum to_int/from_int are not supported in this build (RFC 0006)");
+                self.ctx.err(sp, "enum to_int/from_int are not supported in this build");
                 return Err(());
             }
         }
-        // class method call: `Circle.new(..)` (RFC 0010 §1) — resolve the
+        // class method call: `Circle.new(..)` — resolve the
         // class BY NAME first, then its member: searching for the first
         // class with a same-named method would shadow every later class
         // (two `new`s in one module made the second uncallable)

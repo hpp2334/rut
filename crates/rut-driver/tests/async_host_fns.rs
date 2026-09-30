@@ -117,7 +117,7 @@ impl Fixture {
 
 /// Mount the world, register the fixture rows through `register_async!`
 /// (both macro forms — `hang` carries the abort closure), and pass the
-/// RFC 0025 join: `expected_host_fns` must have EXPANDED the async
+/// boot join: `expected_host_fns` must have EXPANDED the async
 /// rows into their families, or the verify panics here.
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let mut s = Session::new();
@@ -153,7 +153,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     rut_vm::register_async!(hosts, "fixture::hang", (String,) -> String,
         move |u: String| -> Completer<String> { fx4.hang_start(u) },
         move |_c: Completer<String>| { fx5.bump_cancel() });
-    // the RFC 0025 join over the EXPANDED expectations — the decl
+    // the boot join over the EXPANDED expectations — the decl
     // grammar spells one row, the embedder binds five bodies
     hosts.verify_against(&s.expected_host_fns());
     let limits = Limits {
@@ -165,7 +165,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     (vm, sink, fx)
 }
 
-/// The host loop (RFC 0035 §4's columns) over the virtual clock: drain
+/// The host loop over the virtual clock: drain
 /// the ready queue, settle the fixture's due completions, advance to
 /// the next due/deadline. Capped, so a stalled loop fails instead of
 /// hanging.

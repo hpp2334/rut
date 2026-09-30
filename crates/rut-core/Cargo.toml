@@ -3,7 +3,7 @@ name = "rut-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "rut core vocabulary — RutType table (RFC 0015), typed bytecode ops (0032), module binary format (0033); shared by rut-lir/rut-driver and rut-vm"
+description = "rut core vocabulary — RutType table, typed bytecode ops, module binary format; shared by rut-lir/rut-driver and rut-vm"
 
 [lib]
 name = "rut_core"

@@ -1,9 +1,9 @@
-// str views — text as data (RFC 0042). `s.slice(from, to)` is an O(1)
+// str views — text as data. `s.slice(from, to)` is an O(1)
 // VIEW: no octets move or copy; the view cell records a window over the
 // parent (`from`/`to` are codepoint indices) and there is no separate
 // view type on the surface — a slice of a `str` IS a `str`: it prints,
 // compares by content, iterates, and `len()` counts its own codepoints.
-// Codepoints, not bytes: `char` is gone (RFC 0004 v1.1) — `s.code()`
+// Codepoints, not bytes: `char` is gone — `s.code()`
 // reads the FIRST codepoint as a `u32` and `str.from_code(n)` builds the
 // 1-codepoint str back. Slicing a view flattens onto the root, so views
 // never chain.

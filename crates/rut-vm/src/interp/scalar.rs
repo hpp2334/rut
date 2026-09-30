@@ -1,9 +1,9 @@
-//! Scalar arithmetic/bitwise/compare/convert bodies (RFC 0004 §3) and the
+//! Scalar arithmetic/bitwise/compare/convert bodies and the
 //! const-generic op codes the dispatch passes as const args.
 use super::*;
 
 impl Vm {
-    // ---- arithmetic (RFC 0004 §3) ----
+    // ---- arithmetic ----
 
     /// Integer arithmetic, monomorphic per (operation, wrapping) via const
     /// generics — each specialized `addi`/`wmuli`/... opcode instantiates its
@@ -36,7 +36,7 @@ impl Vm {
         if !WRAP && (o || !fits(r, p)) {
             return Err(Trap::new(
                 TrapKind::Overflow,
-                "arithmetic overflow — use `x.wrapping_add(y)`/`wrapping_sub`/`wrapping_mul` (RFC 0004 §3)",
+                "arithmetic overflow — use `x.wrapping_add(y)`/`wrapping_sub`/`wrapping_mul`",
             ));
         }
         Ok(Slot::int(trunc_to(r, p)))
@@ -97,7 +97,7 @@ impl Vm {
             BOP_XOR => (a ^ b, false),
             BOP_SHL => a.overflowing_shl((b & 63) as u32),
             // `>>` follows signedness: logical on unsigned (a u64 with its
-            // top bit set must not sign-extend — RFC 0004 §1), arithmetic
+            // top bit set must not sign-extend), arithmetic
             // on signed
             BOP_SHR => (
                 if matches!(p, U8 | U16 | U32 | U64) {
@@ -107,7 +107,7 @@ impl Vm {
                 },
                 false,
             ),
-            // wrapping `x.wrapping_shl(y)` (RFC 0004 §3): the shifted-out bits are simply
+            // wrapping `x.wrapping_shl(y)`: the shifted-out bits are simply
             // gone — truncate to the operand width, never trap
             BOP_WRAPSHL => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),
             _ => unreachable!("bad bitop code"),
@@ -121,10 +121,10 @@ impl Vm {
         Ok(Slot::int(r))
     }
 
-    /// Explicit numeric conversion (RFC 0007 §1): int↔int traps on
+    /// Explicit numeric conversion: int↔int traps on
     /// narrowing loss; float→int traps on fraction/range; int→float and
     /// float↔float always convert.
-    /// `expr as T` (RFC 0007 §1): the numeric cast, truncating like
+    /// `expr as T`: the numeric cast, truncating like
     /// C/Rust — conversions never trap. int→int keeps the target's low
     /// bits (signed targets sign-extend, `trunc_to`); float→int
     /// truncates toward zero and saturates at the target bounds, NaN → 0

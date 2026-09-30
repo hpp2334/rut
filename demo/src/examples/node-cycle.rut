@@ -1,9 +1,9 @@
-// RFC 0017 — strong cycles keep cells alive: every holder retains, so
+// strong cycles keep cells alive: every holder retains, so
 // `a -> b -> a` never reaches refcount 0. Today's pointer shape is the
-// nullable `?T` (prefix-only; RFC 0044) — the back-pointer field is
+// nullable `?T` (prefix-only) — the back-pointer field is
 // `next: ?Node`, and the cycle below is the program's responsibility:
-// no collector and no weak references exist yet (RFC 0017 is the
-// recorded plan). Break cycles by dropping a holder, or clear the
+// no collector and no weak references exist yet (a future batch
+// adds them). Break cycles by dropping a holder, or clear the
 // back-pointer (`b.next = nil`) before the holders leave scope.
 
 use ink::{ Logger };
@@ -34,7 +34,7 @@ pub fn main() {
     let head = make_cycle();
     log.info(f"head.next alive: {head.next != nil}");
     // the cycle stays live to the end of scope: both cells free only
-    // when the retained handles do. The weak/collector story is RFC
-    // 0017's future, not today's surface — this example shows the
+    // when the retained handles do. The weak/collector story is future
+    // work, not today's surface — this example shows the
     // shape honestly, leak and all.
 }

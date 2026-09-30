@@ -4,14 +4,14 @@ use calc::{ Math };
 //
 // The shape: the HOST owns the session. It asks for a bank (`create`),
 // gets back a handle it can hold and pass around (an `opaque` box —
-// RFC 0014, the one cell an embedder may keep), and drives FIVE
+// the one cell an embedder may keep), and drives FIVE
 // sorting algorithms through one `entry fn` dispatcher. The data never
-// leaves rut: `Vec<i32>` cannot cross the host boundary (RFC 0023 §2),
+// leaves rut: `Vec<i32>` cannot cross the host boundary,
 // so the host reads results back as a JSON array (`serialize`), one
 // element at a time (`get`), or as a verdict (`is_sorted`).
 //
-// The algorithms are free fns over `Vec<i32>` — vecs are handles
-// (RFC 0016 §1), so in-place mutation inside a call is shared with the
+// The algorithms are free fns over `Vec<i32>` — vecs are handles,
+// so in-place mutation inside a call is shared with the
 // bank. Three are loop-shaped (insertion / bubble / selection);
 // quicksort and merge sort add RECURSION — in-place partitioning vs.
 // out-of-place merging, the two classic shapes.
@@ -171,7 +171,7 @@ entry fn push(c: opaque, x: i32) {
 /// Numerical-Recipes LCG over `seed`, folded into 0..1000 — so one call
 /// sizes the whole input; no host round-trip per element. The wrapping
 /// `x.wrapping_mul(y)`/`wrapping_add` methods keep the u32 math in range
-/// (RFC 0004 §3: plain `*`
+/// (plain `*`
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: opaque, n: u32, seed: u32) {
     let mut b = opaque.downcast<?Bank>(c);
@@ -209,7 +209,7 @@ entry fn len(c: opaque) -> i32 {
     return b.data.len();
 }
 
-/// Element `i`, or `0` past the end — pair with `has` (RFC 0005).
+/// Element `i`, or `0` past the end — pair with `has`.
 entry fn get(c: opaque, i: i32) -> i32 {
     let b = opaque.downcast<?Bank>(c);
     if (i < 0 || i >= b.data.len()) {

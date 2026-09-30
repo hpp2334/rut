@@ -77,7 +77,7 @@ entry fn pair_enc_i64(v: i64) -> str {
 }
 
 entry fn pair_enc_cycle() -> str {
-    // the RFC 0017 story: a cyclic structure reaches the writer's depth
+    // a cyclic structure reaches the writer's depth
     // limit and answers (nil, Depth-err) — data, never a trap
     let mut w = JsonWriter.new();
     w.begin_array();

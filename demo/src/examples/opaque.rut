@@ -1,17 +1,17 @@
 use pouch::{ Vec };
-// RFC 0014 — opaque: explicit type erasure with checked recovery.
+// opaque: explicit type erasure with checked recovery.
 // opaque(v) forgets the static type, keeps the runtime type FOR
 // downcast; `is` names the BOX, never the payload. Recovery is
-// opaque.downcast<T> -> `?T` — the nullable (RFC 0044). A
+// opaque.downcast<T> -> `?T` — the nullable. A
 // match IS the box's inner cell (the alias law: writes through the
 // recovery are the source's, in both directions, through every holder);
 // a prim payload reads the copied value; a wrong type is `nil` — never
 // a trap, and never the old `(T, bool)` tuple (the zero-value-on-false
-// `.0`/`.1` spelling is gone: refval-round2, RFC 0014 amended). The
+// `.0`/`.1` spelling is gone: refval-round2). The
 // handoff allocates nothing — no per-call record mint.
 // `opaque` is the erased-storage CONCRETE type — it composes like any
 // class (`Vec<opaque>`, fixed `[opaque]`, fields, returns). Under the
-// all-cells regime (RFC 0016 §1) boxing is ZERO-COPY: the box stores
+// all-cells regime boxing is ZERO-COPY: the box stores
 // the cell handle, so the box shares identity with the original. The
 // only any-shaped value in rut — and it can do nothing until recovered.
 
@@ -66,7 +66,7 @@ fn share_vs_copy() {
     let o2 = opaque(s);    // a private copy, new identity
 
     log.info(f"same session: {opaque.downcast<Session>(o) != nil}");
-    log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
+    log.info(f"distinct boxes: {o == o2}");     // false — two cells
 }
 
 fn prim_value() {
@@ -86,7 +86,7 @@ fn prim_value() {
 fn nested() {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
-    // (RFC 0016 §1)
+    //
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];
     log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS and names the BOX — the payload misses; recover via `opaque.downcast<T>`
     let vec: Vec<opaque> = Vec.from([opaque(5)]);

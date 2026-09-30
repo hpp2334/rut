@@ -4,7 +4,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is mounted by
 //! [`crate::mount::project_dir`] + `rut_driver::load_dir_session`,
-//! RFC 0045's four passes run FOR REAL. The manifest, not a Rust fn,
+//! the four passes run FOR REAL. The manifest, not a Rust fn,
 //! is the module list.
 //!
 //! THE MIRROR (the wasm lane): the Session is I/O-free by law (wasm
@@ -64,7 +64,7 @@ const UI_LOWERING_RUT: &str = include_str!("../rut/ui/lowering.rut");
 const UI_DIFF_RUT: &str = include_str!("../rut/ui/diff.rut");
 const UI_COMPONENTS_RUT: &str = include_str!("../rut/ui/components.rut");
 
-/// ui's source, spliced the manifest's way (RFC 0041 §5): base first,
+/// ui's source, spliced the manifest's way: base first,
 /// then `entry.libs` in array order, '\n'-joined — ONE module.
 pub fn ui_source() -> String {
     let mut src = String::from(UI_RUT);
@@ -99,7 +99,7 @@ pub fn project_dir() -> std::path::PathBuf {
 }
 
 /// The MANIFEST LANE's mount (native only): `load_dir_session` over
-/// the rut/biz project root — RFC 0045's four passes for real — plus
+/// the rut/biz project root — the four passes for real — plus
 /// the embedder half every lane owns: the `core` prelude AND the `web`
 /// host surface (the crossing is no package's dep; both lanes register
 /// it by hand, the same `host_scope` the crossing's ids carry).
@@ -114,7 +114,7 @@ pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
 
 /// Register the `web` DECL surface — the embedder half both lanes run.
 /// `host_scope = "web"`: the registration prefix every crossing's host
-/// id carries (RFC 0025).
+/// id carries.
 pub fn register_web_surface(session: &mut rut_driver::Session) -> Result<(), String> {
     let mut web = rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?;
     web.host_scope = Some("web".to_string());
@@ -238,7 +238,7 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     // widget type, the lowering table, the keyed diff, the component
     // vocabulary — ONE module (the two-package law). The
     // multi-lib files ride through ui_source() — the manifest's
-    // `entry.libs`, spliced base-first in array order (RFC 0041 §5).
+    // `entry.libs`, spliced base-first in array order.
     session
         .register_module(
             "ui",

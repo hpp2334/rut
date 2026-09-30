@@ -4,7 +4,7 @@
 // counts them), so the probes live HERE, compiled over the project's
 // imports exactly like the t1 harness. No t1, no DOM; the suite binds
 // the fake-DOM bodies only because the session DECLARES the web
-// crossings and the RFC 0025 contract is all-or-nothing; NO test here
+// crossings and the contract is all-or-nothing; NO test here
 // fires a crossing. ----
 
 use ui::{Store, Source, Derived, Mutation};

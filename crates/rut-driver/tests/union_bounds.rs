@@ -1,4 +1,4 @@
-//! Type-union bounds (RFC 0043 §3, native-fastpath phase 1) end to end.
+//! Type-union bounds end to end.
 //!
 //! Three behaviors the phase pins down:
 //! - **type unions only** — a union bound takes type NAMES; a trait

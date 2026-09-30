@@ -1,13 +1,13 @@
-//! The symbol table (RFC 0030 §5): a string interner whose ids are the
+//! The symbol table: a string interner whose ids are the
 //! compiler's universal name representation.
 //!
 //! [`IdentId`] replaces name `String`s everywhere a name is *compared* or
 //! *keyed* — type names, field names, trait-method names, function names,
 //! exports. Text survives only at the boundaries: module specifiers, host
 //! binding names (`FuncCode.host`), string *values* (`ConstVal::Str`), and
-//! the serialized name table (RFC 0033 §1).
+//! the serialized name table.
 //!
-//! The interner pre-interns a fixed **well-known table** (RFC 0002 §4), so
+//! The interner pre-interns a fixed **well-known table**, so
 //! ids `0..WELL_KNOWN.len()` mean the same name in every interner instance.
 //! Special names (`self`, `Self`, `nil`, `main`, the builtin members, the
 //! primitives) compare as `IdentId` equality — never by text:
@@ -25,7 +25,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct IdentId(pub u32);
 
-/// String interner — names are indices, not `String` keys (RFC 0030 §5).
+/// String interner — names are indices, not `String` keys.
 /// Append-only: a [`&str`] borrowed from [`Interner::name`] stays valid
 /// for the interner's lifetime.
 #[derive(Clone, Debug, PartialEq)]
@@ -77,14 +77,14 @@ impl Interner {
     }
 
     /// The interned names, in id order. Ids below [`Interner::well_known_len`]
-    /// are the well-known table (never serialized — RFC 0033 §1).
+    /// are the well-known table (never serialized).
     pub fn names(&self) -> &[Box<str>] {
         &self.names
     }
 
     /// Restore the instance-local tail interned by [`Interner::intern`]
     /// after [`Interner::well_known_len`] — the decode side of the binary
-    /// name table (RFC 0033 §1).
+    /// name table.
     pub fn extend_tail<I: IntoIterator<Item = Box<str>>>(&mut self, tail: I) {
         for s in tail {
             self.intern(&s);
@@ -166,7 +166,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "finish",     // FINISH
     "Weak",       // WEAK
     "upgrade",    // UPGRADE
-    // RFC 0018 (the async batch) — the Future-only vocabulary: the two
+    // the Future-only vocabulary: the two
     // engine traits, the cx protocol members, and the standard host
     // set's names. Well-known so every interner agrees on the surface
     // names the weave and the driving loop share.
@@ -194,7 +194,7 @@ pub const WELL_KNOWN: &[&str] = &[
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
 /// every interner instance. Removed names (`Option`, `Result`)
 /// are deliberately absent: their diagnostics stay text-based. (`Weak`
-/// joined the table in the weak batch, RFC 0017 v1 — it was absent
+/// joined the table in the weak batch — it was absent
 /// while the M5 stub diagnosed it.)
 ///
 /// Used as `rut_core::SELF` etc.
@@ -238,8 +238,7 @@ pub const FROM: IdentId = IdentId(36);
 pub const ZEROED: IdentId = IdentId(37);
 pub const FROM_CODE: IdentId = IdentId(38);
 pub const BUF: IdentId = IdentId(39);
-// core's builtin-impl method names (`builtin impl i32 { .. }`, RFC 0032
-// §1.1 R2) + `NAN`, core's first const — well-known so every interner
+// core's builtin-impl method names (`builtin impl i32 { .. }`) + `NAN`, core's first const — well-known so every interner
 // agrees on the method-table keys
 pub const WRAPPING_ADD: IdentId = IdentId(40);
 pub const WRAPPING_SUB: IdentId = IdentId(41);
@@ -253,14 +252,14 @@ pub const CHECKED_SUB: IdentId = IdentId(48);
 pub const CHECKED_MUL: IdentId = IdentId(49);
 pub const NAN: IdentId = IdentId(50);
 // removed-surface names the compiler diagnoses by id — the removal
-// diagnostics compare symbols, never text (RFC 0028 v1.1)
+// diagnostics compare symbols, never text
 pub const PRINT: IdentId = IdentId(51);
 pub const SIZE_OF: IdentId = IdentId(52);
 pub const ALIGN_OF: IdentId = IdentId(53);
-// the one copy escape hatch — `bytes.clone()` (RFC 0044; every other
+// the one copy escape hatch — `bytes.clone()` (every other
 // binding shares its cell)
 pub const CLONE: IdentId = IdentId(54);
-// the StackTrace surface (RFC 0036, err-channel phase 2): the opt-in
+// the StackTrace surface: the opt-in
 // capture fn, the builtin class name, and its member contract —
 // well-known so every interner agrees on the surface names
 pub const CAPTURE_STACKTRACE: IdentId = IdentId(55);
@@ -290,14 +289,14 @@ pub const PUSH: IdentId = IdentId(66);
 pub const PUSH_CODE: IdentId = IdentId(67);
 pub const FINISH: IdentId = IdentId(68);
 
-// RFC 0017 v1 — the weak-reference surface: the `Weak<T>` builtin class
-// and its one member `upgrade()`. Well-known so every interner agrees
+// the weak-reference surface: the `Weak<T>` builtin class
+// and its one member `upgrade()` (`docs/src/reference/weak-refs.md`). Well-known so every interner agrees
 // (the Weak name was previously reserved-by-absence — the M5 stub
 // diagnosed it; the weak batch gives it its real surface).
 pub const WEAK: IdentId = IdentId(69);
 pub const UPGRADE: IdentId = IdentId(70);
 
-// RFC 0018 — the async vocabulary (the Future-only landing)
+// the async vocabulary (the Future-only landing)
 pub const FUTURE: IdentId = IdentId(71);
 pub const RUN_CONTEXT: IdentId = IdentId(72);
 pub const YIELD: IdentId = IdentId(73);
@@ -429,7 +428,7 @@ mod tests {
             ("finish", FINISH),
             ("Weak", WEAK),
             ("upgrade", UPGRADE),
-            // RFC 0018 — the async vocabulary
+            // the async vocabulary
             ("Future", FUTURE),
             ("RunContext", RUN_CONTEXT),
             ("yield", YIELD),

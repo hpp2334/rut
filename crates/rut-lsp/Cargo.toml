@@ -3,7 +3,7 @@ name = "rut-lsp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut language server — semantic tokens, diagnostics, document symbols (the M6 LSP slice, landed early; RFC 0041 §2)"
+description = "the rut language server — semantic tokens, diagnostics, document symbols (the M6 LSP slice, landed early)"
 
 [lib]
 name = "rut_lsp"

@@ -1,5 +1,4 @@
-//! rut-lsp — the rut language server (the M6 LSP slice, landed early —
-//! RFC 0041 §2): **semantic tokens** (grammar highlighting), pushed
+//! rut-lsp — the rut language server (the M6 LSP slice, landed early): **semantic tokens** (grammar highlighting), pushed
 //! **diagnostics** (lexer + parser), **document symbols**, **hover**,
 //! and **completions**, built on rut-lexer/rut-ast/rut-parser. One
 //! server, every editor that speaks LSP (VS Code via

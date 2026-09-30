@@ -1,4 +1,4 @@
-//! Generic instantiation by structural unification (RFC 0013 SS2):
+//! Generic instantiation by structural unification:
 //! explicit call-site arguments first, then inference from argument
 //! types through builtin containers (Vec/Array/Option/Result) and fn
 //! types. The completed substitution keys the Inst in the
@@ -117,7 +117,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(());
                 }
                 // non-generic: resolve and compare — a registered impl
-                // (nominal widening, RFC 0012 §4) counts as a match
+                // (nominal widening) counts as a match
                 let want = self.ctx.resolve_type(param_node, subst);
                 if !self.widens(arg_ty, want) {
                     self.ctx.err(sp, format!(
@@ -130,7 +130,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             TypeKind::TyArray { elem } => {
                 // `[T]` against an array argument — unify element-wise
-                // (RFC 0005 §9): `fn f<T>(xs: [T])`
+                //: `fn f<T>(xs: [T])`
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Array { elem: arg_elem } = arg_kind {
                     self.unify_generic(elem, arg_elem, decl_generics, subst, sp)
@@ -150,7 +150,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .find_trait(segs[0].name)
                         .map(|t| !t.generics.is_empty())
                         .unwrap_or(false)
-                        // the engine-woven `Future<T>` (RFC 0018): ambient,
+                        // the engine-woven `Future<T>`: ambient,
                         // not locally declared — its object arguments unify
                         // through their own instantiation's args exactly
                         // like a declared generic trait's
@@ -197,7 +197,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         Some(args) => args,
                         None => {
                             self.ctx.err(sp, format!(
-                                "no impl of `{}` for `{}` — a parameterized trait impl must cover the widening (RFC 0012 §4)",
+                                "no impl of `{}` for `{}` — a parameterized trait impl must cover the widening",
                                 self.ctx.name(tname),
                                 self.ctx.type_name(arg_ty)
                             ));

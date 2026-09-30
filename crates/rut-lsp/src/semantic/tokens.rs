@@ -37,7 +37,7 @@ pub fn token_type(tok: &Tok) -> Option<TokenType> {
         | Tok::Colon
         | Tok::Dot => None,
         // arrows, `?` `@` `~`, and the arithmetic/bitwise families
-        // (RFC 0004 §3)
+        //
         _ => Some(TokenType::Operator),
     }
 }
@@ -69,7 +69,7 @@ fn flatten_into(flat: &mut Vec<Token>, t: &Token) {
 
 /// One token; f-strings tile exactly — string for the literal gaps, then
 /// recursion into each hole's fully-lexed token stream (real spans inside
-/// the literal's span, RFC 0030 §1.1).
+/// the literal's span).
 pub(crate) fn classify_token(t: &Token, out: &mut Vec<(Span, TokenType)>) {
     if let Tok::FStr(f) = &t.tok {
         let mut cursor = t.span.lo;

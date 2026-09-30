@@ -1,5 +1,5 @@
-//! The bytes native (RFC 0032 §1.1 R2): `b.clone()` — the one copy
-//! escape hatch (RFC 0044). Every other cell type shares on binding;
+//! The bytes native: `b.clone()` — the one copy
+//! escape hatch. Every other cell type shares on binding;
 //! `clone` is the explicit, one-shot buffer copy.
 use super::*;
 

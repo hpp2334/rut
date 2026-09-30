@@ -3,14 +3,14 @@ use pouch::{ Vec };
 //
 // The shape: the HOST owns the session. It asks for an opaque container
 // (`createContainer`), gets back a handle it can hold and pass around
-// (an `opaque` box — RFC 0014, the one cell an embedder may keep), and
+// (an `opaque` box — the one cell an embedder may keep), and
 // drives CRUD through the `entry fn` surface below. All data — the
 // container, the lists, every row — lives in rut; only primitives,
-// `str`/`bytes`, and the container handle cross (RFC 0023 §2).
+// `str`/`bytes`, and the container handle cross.
 //
-// `entry fn` marks the host-callable surface (RFC 0035 §3); the checker
+// `entry fn` marks the host-callable surface; the checker
 // enforces the crossing rule on those signatures at compile time. Plain
-// `pub` is use-visibility for other rut modules (RFC 0003 §2) and
+// `pub` is use-visibility for other rut modules and
 // carries no such limit — `pub class TodoList` stays fully typed.
 
 struct Todo {
@@ -19,11 +19,11 @@ struct Todo {
     done: bool = false;      // field initializer — `done` may be omitted
 }
 
-// The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
+// The type body is FIELDS ONLY — methods live in the inherent
 // `impl TodoList` block below.
 pub class TodoList {
     items: Vec<Todo>;         // unannotated members = module-private
-    next_id: i32;             // (RFC 0003 §2 — the class's own business)
+    next_id: i32;             // (the class's own business)
 }
 
 impl TodoList {
@@ -47,7 +47,7 @@ impl TodoList {
     }
 
     /// First title matching `id`, or the empty string — check `has_title`
-    /// first when absence matters (RFC 0005: no `?.` sugar).
+    /// first when absence matters (no `?.` sugar).
     pub fn title_of(self, id: i32) -> str {
         for (let t of self.items) {
             if (t.id == id) {

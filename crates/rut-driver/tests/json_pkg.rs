@@ -37,7 +37,7 @@ fn vm_at(dir: &str) -> Vm {
         interrupt_every: 1024,
     };
     // the nmapset group drags nmap_host's declared surface — bind the
-    // bodies (RFC 0025: declared host fns run only through the registry)
+    // bodies (declared host fns run only through the registry)
     // json's writer rides the strbuild pkg — its `rt:strbuild` rows are
     // in this closure's declared set, so the bodies bind through the
     // same registry
@@ -571,7 +571,7 @@ fn every_decode_kind_reachable() {
 
 #[test]
 fn every_encode_kind_reachable() {
-    // Depth: the cyclic writer (RFC 0017's expected failure — data,
+    // Depth: the cyclic writer (the expected failure — data,
     // never a trap); NotFinite: inf. KeyUnsupported is DECLARED in the
     // finalized error set (survey §2.3) but DORMANT this phase, on
     // record: its only sanctioned fire site is inside the map ENCODE
@@ -594,7 +594,7 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // the same Vec-consuming source, both worlds. WITHOUT the peers the
     // container rows never exist and the reference diagnoses at the
     // reference site (D2 — the optional peer's miss names the pkg, the
-    // peer, and the fix, RFC 0045 §4); WITH them it compiles clean —
+    // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
     let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>.new();\n    v.push(1);\n}\n";
     let (mut light, _) = rut_driver::load_dir_session(Path::new(LIGHT)).expect("mount light");

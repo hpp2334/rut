@@ -1,4 +1,4 @@
-//! Parser — RFC 0030 §4: the explicit-frame machine (contract C2 — no
+//! Parser — the explicit-frame machine (contract C2 — no
 //! native recursion).
 //!
 //! One `run` loop (§4) drives two mechanisms: a **frame stack** for
@@ -118,7 +118,7 @@ impl Parser {
         t
     }
 
-    /// switch to an f-string hole's sub-slice (RFC 0030 §4.4) — the one
+    /// switch to an f-string hole's sub-slice — the one
     /// sanctioned `pos` reset: a different token stream, not backtracking.
     /// Returns the outer slice/position/budgets for the later restore.
     pub(crate) fn switch_to_hole(&mut self, toks: Vec<Token>) -> (Vec<Token>, usize, u32, u32) {
@@ -143,7 +143,7 @@ impl Parser {
         matches!(self.tok(), Tok::Eof)
     }
 
-    /// `at` a keyword (keywords are Idents — RFC 0030 §1)
+    /// `at` a keyword (keywords are Idents)
     pub(crate) fn at_kw(&self, kw: &str) -> bool {
         matches!(self.tok(), Tok::Ident(s) if s == kw)
     }
@@ -191,8 +191,8 @@ impl Parser {
         }
     }
 
-    /// Expect `>`, splitting a maximal-munch `>>` (span arithmetic — RFC
-    /// 0030 §4.2: `Vec<Vec<i32>>` needs no re-lexing and no glued tokens).
+    /// Expect `>`, splitting a maximal-munch `>>` (span arithmetic:
+    /// `Vec<Vec<i32>>` needs no re-lexing and no glued tokens).
     pub(crate) fn expect_gt(&mut self) -> bool {
         match self.tok().clone() {
             Tok::Gt => {
@@ -201,7 +201,7 @@ impl Parser {
             }
             Tok::Shr => {
                 let sp = self.peek(0).span;
-                // Shr becomes TWO Gt tokens (span arithmetic, RFC 0030 4.2):
+                // Shr becomes TWO Gt tokens (span arithmetic):
                 // `Vec<Vec<i32>>` closes both levels
                 self.toks[self.pos] = Token {
                     tok: Tok::Gt,
@@ -275,7 +275,7 @@ impl Parser {
         NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))
     }
 
-    // ---- the driver loop (RFC 0030 §4) ----
+    // ---- the driver loop ----
 
     fn run(&mut self) -> NodeHandle<ModuleNode> {
         self.frames.push(Frame::Module(ModuleFrame::new()));
@@ -399,7 +399,7 @@ impl Parser {
         }
     }
 
-    // ---- recovery (RFC 0030 §6): resync forward at `;` / `}` / balanced block
+    // ---- recovery: resync forward at `;` / `}` / balanced block
 
     pub(crate) fn sync_stmt(&mut self) {
         let mut brace = 0i32;
@@ -436,10 +436,10 @@ impl Parser {
     }
 }
 
-/// Reserved words of the grammar (RFC 0002 §4) — keywords are `Ident`s
-/// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
+/// Reserved words of the grammar — keywords are `Ident`s
+/// matched by interner text. Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
-/// `where` is gone (RFC 0043: bounds are inline); `type` is the
+/// `where` is gone (bounds are inline); `type` is the
 /// contextual alias introducer — an ordinary identifier elsewhere.
 pub const RESERVED_KW: &[&str] = &[
     "let", "mut", "if", "else", "while", "for", "of", "return", "when",
@@ -452,11 +452,11 @@ pub fn is_reserved_kw(s: &str) -> bool {
     RESERVED_KW.contains(&s)
 }
 
-/// The primitive types (RFC 0002 §3) — contextual type names, matched by
-/// interner text. Public and canonical: surface decls (RFC 0029 §2) and
+/// The primitive types — contextual type names, matched by
+/// interner text. Public and canonical: surface decls and
 /// the LSP classifier share this one table. `str` included — it is a
 /// primitive, not a class; its natives are the free `string_len`/
-/// `string_encode` host fns declared in core. `bytes` (RFC 0004) is
+/// `string_encode` host fns declared in core. `bytes` is
 /// the immutable binary primitive alongside `str`.
 pub fn is_primitive_ty(s: &str) -> bool {
     matches!(

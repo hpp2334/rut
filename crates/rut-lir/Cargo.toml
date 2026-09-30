@@ -3,7 +3,7 @@ name = "rut-lir"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the fused middle-end — resolve + typecheck with body compilation (RFC 0031 M1) producing LIR bytecode (0032)"
+description = "the fused middle-end — resolve + typecheck with body compilation producing LIR bytecode"
 
 [lib]
 name = "rut_lir"

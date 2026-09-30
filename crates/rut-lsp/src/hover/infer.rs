@@ -4,7 +4,7 @@
 //! (`Type.new(..)`, struct literals, string literals) extend to what
 //! the survey §4.1 names: field reads, unique fn-call results, chained
 //! method calls via ret types, indexing, casts, and the literal
-//! defaults (RFC 0007 §1: unsuffixed ints are `i32`, unsuffixed floats
+//! defaults (unsuffixed ints are `i32`, unsuffixed floats
 //! take the `f32` default). Names resolve through the binding pass.
 //! A miss is `None` — never wrong text.
 
@@ -23,7 +23,7 @@ pub(crate) fn expr_ty(
 ) -> Option<String> {
     let pos = ast.span(e.id()).lo;
     match ast.expr(e) {
-        // the literal defaults are the engine's own law (RFC 0007 §1)
+        // the literal defaults are the engine's own law
         ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => Some("str".to_string()),
         ExprKind::Lit(Lit::Bool(_)) => Some("bool".to_string()),
         ExprKind::Lit(Lit::Int(_, sfx)) => Some(sfx.map(int_suffix).unwrap_or("i32").to_string()),

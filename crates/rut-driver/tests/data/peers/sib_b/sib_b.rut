@@ -1,4 +1,4 @@
-// sib_b — T10's second sibling (RFC 0045 fixtures): the twin of sib_a
+// sib_b — T10's second sibling: the twin of sib_a
 // over the same shared pouch. Under dedup-by-origin pouch splices once
 // into the consumer's unit even though both siblings carry it.
 use pouch::{Vec};

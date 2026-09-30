@@ -1,7 +1,6 @@
-//! Semantic tokens + document symbols — the M1 classifier (RFC 0041 §2,
-//! rut-lsp). Pure rut-side, no LSP types: token-level classes come from the
-//! lexed stream (keywords by text — RFC 0002 §4/§5; literals; f-string
-//! tiling with fully-lexed holes — RFC 0030 §1.1), identifier classes from
+//! Semantic tokens + document symbols — the M1 classifier (rut-lsp). Pure rut-side, no LSP types: token-level classes come from the
+//! lexed stream (keywords by text; literals; f-string
+//! tiling with fully-lexed holes), identifier classes from
 //! a flat walk of the AST arena. Names are interner ids whose nodes carry
 //! whole-construct spans, so name positions are **recovered**: a bounded
 //! scan for the matching `Ident` token inside the node's span (the parser
@@ -37,7 +36,7 @@ pub fn classify(toks: &[Token], ast: &Ast) -> Vec<(Span, TokenType)> {
         classify_token(t, &mut out);
     }
     // name recovery runs over a FLAT token stream — f-string holes are
-    // fully lexed with real spans (RFC 0030 §1.1) but nested inside the
+    // fully lexed with real spans but nested inside the
     // FStr token; the AST's hole expressions recover their names against
     // the spliced view
     let flat = flatten_holes(toks);

@@ -1,5 +1,7 @@
-//! The async host set's bodies (RFC 0018) — the standard launcher
-//! surface the plan's ruling 8 assigns to the embedder:
+//! The async host set's bodies — the standard launcher
+//! surface the plan's ruling 8 assigns to the embedder
+//! (the async model: `docs/src/reference/async.md`;
+//! cancellation/tasks: `docs/src/reference/tasks.md`):
 //!
 //! ```rut
 //! pub host fn __launch(f: opaque);            // enqueue the frame
@@ -15,7 +17,7 @@
 //! — a session that mounts neither simply has no launcher, and `await`
 //! stays cold-poll inline.
 //!
-//! Every `opaque` crossing rides the RFC 0014 erasure box: the frames
+//! Every `opaque` crossing rides the erasure box: the frames
 //! are sealed rut values (`RutOpaque` store entries), so the bodies
 //! recover the raw frame slot through [`Vm::opaque_rut_value`] — the
 //! `Opaque<T>` host-payload machinery does NOT apply (a rut-side box

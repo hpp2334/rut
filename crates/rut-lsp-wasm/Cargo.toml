@@ -3,7 +3,7 @@ name = "rut-lsp-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "wasm shim exposing the language core over a raw ABI (RFC 0041 §2) — the VS Code extension runs it in-process, no server process"
+description = "wasm shim exposing the language core over a raw ABI — the VS Code extension runs it in-process, no server process"
 
 [lib]
 name = "rut_lsp_wasm"

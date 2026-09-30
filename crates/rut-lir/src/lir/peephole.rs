@@ -1,4 +1,4 @@
-//! LIR peephole — RFC 0032 follow-through (the planned `regalloc.rs`
+//! LIR peephole — follow-through (the planned `regalloc.rs`
 //! neighbourhood): remove the copy flood the tree-walking emitter leaves
 //! behind. Today every variable read materialises into a fresh register
 //! with `mov`, so straight-line code is full of single-use copies.
@@ -202,7 +202,7 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
 /// `f` is a fresh temp read exactly once by that consumer, becomes
 /// `arrgetf d, obj, k, i` / `arrsetf obj, k, i, …`. The field handle is then
 /// borrowed, not retained/released per element — this is the `Vec<T>` class's
-/// index path (RFC 0005 `Slice<T>`), so a pouch sequence costs one
+/// index path (`Slice<T>`), so a pouch sequence costs one
 /// op per element, not a field read plus an RC pair.
 fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
@@ -316,7 +316,7 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
     (new_code, new_spans, true)
 }
 
-/// The primitive-optional element folds (RFC 0044 §5, the primitive-store
+/// The primitive-optional element folds (the primitive-store
 /// tier): local rewrites on `[?prim]` backing stores that remove the box the
 /// `T → ?T` coercion and the auto-deref would otherwise mint per element
 /// access. Both folds are two-op local windows with the same safety shape as
@@ -326,7 +326,7 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
 /// 1. store elision — `makeopt d, v; arrset[a/f] .., d ..optprim` where `d`
 ///    feeds only the store becomes `arrset[a/f] .., v ..optprimraw`: the
 ///    store writes the raw payload, the box never exists. Sound because a
-///    primitive-optional box's identity is unobservable (RFC 0044 §3: `?T ==
+///    primitive-optional box's identity is unobservable (`?T ==
 ///    ?T` compares payloads, and the raw store is value semantics by law).
 /// 2. deref fold — `arrget[a/f] d, .. ..optprim; getf u, d, 0 ..prim` (the
 ///    exact pair the auto-deref emits) becomes one
@@ -410,7 +410,7 @@ fn opt_prim_once(mut code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -
             continue;
         }
         // the consumer must be the payload read (field 0, at the payload's
-        // own prim repr) — the RFC 0044 auto-deref shape
+        // own prim repr) — the auto-deref shape
         let ok = match &code[pc + 1] {
             Op::GetF { dst: _, obj, field: 0, repr: Repr::Prim(q) } => *obj == t && *q == p,
             _ => false,
@@ -747,7 +747,7 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             u.push(*src);
         }
         // WeakNew defs a fresh box and reads the referent; WeakUpgrade
-        // defs the answer and reads the box (RFC 0017)
+        // defs the answer and reads the box
         Op::WeakNew { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);

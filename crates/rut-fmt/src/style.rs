@@ -55,7 +55,7 @@ pub fn from_manifest(map: &BTreeMap<String, String>) -> Result<Style, String> {
                 }
                 s.max_width = n as usize;
             }
-            // forward-compat: unknown keys ride (RFC 0041 §5's rule)
+            // forward-compat: unknown keys ride
             _ => {}
         }
     }

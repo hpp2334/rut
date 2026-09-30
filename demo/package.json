@@ -2,7 +2,7 @@
   "name": "rut-demo",
   "version": "0.1.0",
   "private": true,
-  "description": "rut language playground — React + rspack + TypeScript; runs rut as wasm (RFC 0041 §3)",
+  "description": "rut language playground — React + rspack + TypeScript; runs rut as wasm",
   "scripts": {
     "dev": "node scripts/preflight-wasm.mjs && rspack serve",
     "dev:channel": "node scripts/preflight-wasm.mjs && node scripts/dev-channel.mjs",

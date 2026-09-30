@@ -93,7 +93,7 @@ pub fn main() -> i32 {
 #[test]
 fn type_local_impl_for_a_foreign_trait_runs() {
     // the impl lives in a second module: `Shape` is foreign to it, the
-    // type is its own (RFC 0012 §2a); the consumer uses both names and
+    // type is its own; the consumer uses both names and
     // the call resolves through the module that registered the impl
     let extras = "\
 use shapes::Shape;

@@ -1,9 +1,10 @@
-//! The `.rutbundle` container (RFC 0038) — a deterministic zip archive
-//! carrying a module's `rut.toml` and its rut sources. Hand-rolled, no
+//! The `.rutbundle` container — a deterministic zip archive
+//! carrying a module's `rut.toml` and its rut sources (the packaging
+//! reference lives at `docs/src/reference/bundles.md`). Hand-rolled, no
 //! dependencies: the format subset we need is small (STORE entries, no
 //! zip64, no compression) and the driver stays wasm-compatible.
 //!
-//! **Write** is deterministic (RFC 0038 §3): fixed entry order as given,
+//! **Write** is deterministic: fixed entry order as given,
 //! zeroed timestamps, no extra fields, no compression — same input ⇒
 //! byte-identical output, so bundles are content-cacheable.
 //!
@@ -122,7 +123,7 @@ fn get32(d: &[u8], at: usize) -> Option<u32> {
 
 /// Unpack a `.rutbundle`: all entries in archive order, each CRC-verified.
 /// Unknown extra entries are returned too — the loader picks what it
-/// knows (RFC 0038 §1, forward compatibility).
+/// knows (forward compatibility).
 pub fn parse_bundle(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, BundleError> {
     // locate the EOCD: scan back over a possible zip comment (≤ 64 KiB)
     let mut eocd = None;

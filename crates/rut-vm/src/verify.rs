@@ -1,4 +1,4 @@
-//! Load-time verification — RFC 0033 §2: corrupted binaries never execute.
+//! Load-time verification: corrupted binaries never execute.
 //! Structural re-checks per function: register indices vs the signature,
 //! jump targets in range, call arities vs callee signatures, native/type
 //! operands present. A failure is a load error naming the function.
@@ -10,7 +10,7 @@ use rut_core::types::{Repr, TY_U8, TyKind};
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
     for (fi, f) in prog.funcs.iter().enumerate() {
-        // bodyless host functions (RFC 0022/0026) have no code to verify
+        // bodyless host functions have no code to verify
         if f.host_id.is_some() {
             continue;
         }
@@ -24,7 +24,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     return Err(bad(format!("register r{r} out of range ({nregs} regs)")));
                 }
             }
-            // pooled operand spans must be in range (RFC 0032)
+            // pooled operand spans must be in range
             if let Some((off, argc)) = op.argv_span() {
                 if off as usize + argc as usize > f.argv.len() {
                     return Err(bad(format!("argv span {off}+{argc} out of range ({} entries)", f.argv.len())));
@@ -101,14 +101,14 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
                     let ty = f.regs[*obj as usize];
-                    // `p.x` auto-derefs (RFC 0005): a pointer register's
+                    // `p.x` auto-derefs: a pointer register's
                     // field 0 is the pointee cell (a ref slot); reads
                     // against a Data register index the record's fields
                     let fields = match prog.types.kind(ty) {
                         TyKind::Data { fields } => Some(fields),
                         TyKind::Opt { .. } => None,
                         // the async weave's driven-half field ops on a
-                        // trait-object-spelled future (RFC 0018): the
+                        // trait-object-spelled future: the
                         // register holds an engine frame record the
                         // static type erases; the repr law below is what
                         // protects RC, and the field index is checked at
@@ -122,7 +122,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                                 return Err(bad(format!("field index {field} out of range")));
                             };
                             // the baked repr must match the field's static type
-                            // (RFC 0033 §2) — a mismatch would mis-handle RC
+                            // — a mismatch would mis-handle RC
                             if prog.types.repr_of(fi.ty) != *repr {
                                 return Err(bad(
                                     "field access repr does not match the field type".into(),
@@ -133,7 +133,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             // pointer box: the only access is the payload
                             // slot (field 0) at the pointee's own repr —
                             // ref pointees share the cell, scalar pointees
-                            // read the boxed copy (RFC 0012 §6)
+                            // read the boxed copy
                             let elem_repr = match prog.types.kind(ty) {
                                 TyKind::Opt { elem } => prog.types.repr_of(*elem),
                                 TyKind::TraitObj { .. } => {

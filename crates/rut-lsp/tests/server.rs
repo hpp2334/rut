@@ -215,7 +215,7 @@ async fn broken_file_publishes_error_diags() {    let mut editor = spawn().await
 #[tokio::test]
 async fn decl_files_parse_in_decl_mode() {
     let mut editor = spawn().await;
-    // `host fn` is only legal in .d.rut (RFC 0030 §3) — the URI suffix
+    // `host fn` is only legal in .d.rut — the URI suffix
     // routes it to Mode::Decl
     let uri = "file:///w/plugin.d.rut";
     editor

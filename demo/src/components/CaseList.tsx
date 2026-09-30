@@ -28,7 +28,6 @@ export const CaseList = memo(function CaseList(props: {
                   title={c.blurb}
                 >
                   <span className="case-name">{c.name}</span>
-                  <span className="case-rfcs">{c.rfcs}</span>
                 </button>
               </li>
             ))}

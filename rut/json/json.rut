@@ -12,21 +12,21 @@
 // - (?T, ?E) with the EXACTLY-ONE-NIL invariant: success = (value, nil),
 //   failure = (nil, err). Never a non-nullable E. json polices the pair
 //   on ITSELF through the pkg test suite; the engine never does.
-// - JsonDeserialize uses `Self`, NOT a `<T>` param (RFC 0012): a type
+// - JsonDeserialize uses `Self`, NOT a `<T>` param: a type
 //   parameter would permit decoding an A-reader into B.
 // - Streams are NEVER nilable: `mut w: JsonWriter` / `mut r: JsonReader`
-//   (RFC 0044 sharing is the default; `?` only where absence is a
+//   (sharing is the default; `?` only where absence is a
 //   legitimate state). The survey's `w: mut JsonWriter` spells
 //   `mut w: JsonWriter` here — the tree's mut-on-binding form (a
 //   normalization, not a deviation).
 // - encode RETURNS `?EncodeJsonError` (not nil): the rc heap can be
-//   cyclic (RFC 0017) — a Depth failure is EXPECTED, data not trap.
+//   cyclic — a Depth failure is EXPECTED, data not trap.
 // - Error types: payloadless enum (kind) + fixed-field struct (details)
-//   — RFC 0006 has no data-carrying enums.
+//   — the language has no data-carrying enums.
 // - DEPENDENCY DIRECTION (the serde model): json owns the traits; ALL
 //   container impls live in json (the peer-gated group files beside this
 //   one); user types impl json's traits on their own types. No runtime
-//   reflection (RFC 0037, rejected), no engine-woven traits, no
+//   reflection, no engine-woven traits, no
 //   containers -> json.
 //
 // DECODE MODEL (survey §2.1): DIRECT — every type's `decode(r)` reads
@@ -47,7 +47,7 @@
 // THE DEPTH LIMIT (survey §2.5): 128 levels, BOTH directions, a
 // json-pkg limit — never an engine limit. Encode enforces it on
 // begin_object/begin_array: the rc heap leaks strong cycles by law, so
-// walking a cyclic structure answers (nil, Depth-err) — RFC 0017's
+// walking a cyclic structure answers (nil, Depth-err) — the
 // expected failure. Decode enforces it on container entry.
 //
 // THE READER (survey §2.2, reshaped by the json-perf batch phase 2): a
@@ -59,7 +59,7 @@
 // instead of one op per codepoint), single-codepoint reads ride
 // `code_at`, and literal prefixes ride `starts_with`. Cursor arithmetic
 // and offsets stay CODEPOINT-based exactly as before (`at`/`got`
-// semantics unchanged; token payloads still carve as RFC 0042 O(1)
+// semantics unchanged; token payloads still carve as O(1)
 // views of `src`). The strict UTF-8 DFA (§2.2) gates the bytes entry —
 // `bytes.decode()` is LOSSY, never trusted on unvalidated input;
 // invalid octets answer `InvalidUtf8`, never a silent U+FFFD.
@@ -860,7 +860,7 @@ impl JsonReader {
         return v;
     }
 
-    // read_str — verbatim docs carve as ONE RFC 0042 view; escaped docs
+    // read_str — verbatim docs carve as ONE view; escaped docs
     // build through a StringBuilder. The body scan is ONE host-side pass per
     // token piece: the stp table's classes are `"`->1, control->2,
     // `\`->3, content 0 (keep scanning) — the walk the phase-2 scan

@@ -1,9 +1,8 @@
 /**
- * The rut wasm contract (RFC 0041 §3).
+ * The rut wasm contract.
  *
- * `demo/public/rut.wasm` (built from `crates/rut-wasm`, RFC 0041 §2) must
- * export these. This file is the single source of truth mirrored by
- * RFC 0041 §3 — change both together.
+ * `demo/public/rut.wasm` (built from `crates/rut-wasm`) must
+ * export these. This file is the single source of truth — change both together.
  */
 
 export interface Diag {
@@ -120,16 +119,16 @@ export interface CompileResult {
   diags: Diag[];
   /** structured AST tree (source of truth — display strings are derived) */
   ast?: AstNode;
-  /** pretty-printed LIR / bytecode (RFC 0032) */
+  /** pretty-printed LIR / bytecode */
   irDump: string;
-  /** serialized module binary (RFC 0033) — absent when diags are fatal */
+  /** serialized module binary — absent when diags are fatal */
   binary?: Uint8Array;
 }
 
 export interface Budget {
-  /** ops the run may execute (RFC 0040 §2) */
+  /** ops the run may execute */
   fuel: number;
-  /** bytes the self-managed heap may carve (RFC 0039/0040 §1) */
+  /** bytes the self-managed heap may carve */
   heapBytes: number;
 }
 

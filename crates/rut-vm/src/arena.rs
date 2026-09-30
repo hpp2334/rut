@@ -1,4 +1,4 @@
-//! The self-managed cell arena — RFC 0039's later milestone.
+//! The self-managed cell arena (the VM heap: `docs/src/reference/vm-heap.md`).
 //!
 //! `heap.rs` used to mint every cell as its own `Rc<CellVal>`. This module
 //! replaces that allocator: cells are carved from fixed-size chunks and a
@@ -6,7 +6,7 @@
 //! `*const CellVal`, so `Slot` and `cell_of` are unchanged; references are
 //! counted intrusively on the cell (`CellVal::refs`).
 //!
-//! `OpaqueRef` is the host-facing handle (RFC 0014): it owns one arena
+//! `OpaqueRef` is the host-facing handle: it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
 use crate::heap::{Heap, blocks::Blocks, CellData, CellVal, HeapAcct, Slot};
@@ -20,7 +20,7 @@ use std::rc::Rc;
 
 const ARENA_CHUNK: usize = 1024;
 
-/// What a dying cell must release with itself (RFC 0016 §3: "fields are
+/// What a dying cell must release with itself ("fields are
 /// then released in declaration order (recursively)"). Precomputed from
 /// the program's type table + func signatures so the release path — a
 /// free fn with no VM access — can walk a cell's ref-typed children
@@ -51,7 +51,7 @@ impl ReleasePlan {
                     .filter(|(_, f)| of(&f.ty))
                     .map(|(i, _)| i as u16)
                     .collect(),
-                // `?T` (RFC 0044): the one payload slot dies with the nullable
+                // `?T`: the one payload slot dies with the nullable
                 TyKind::Opt { elem } => {
                     if of(elem) {
                         vec![0]
@@ -77,15 +77,15 @@ pub(crate) struct Arena {
     chunks: RefCell<Vec<Box<[MaybeUninit<CellVal>; ARENA_CHUNK]>>>,
     /// slots used in the last chunk
     bump: Cell<usize>,
-    /// which of a dying cell's children die with it (RFC 0016 §3)
+    /// which of a dying cell's children die with it
     pub(crate) plan: Rc<ReleasePlan>,
-    /// the VM-owned block store (RFC 0039): variable-size cell payloads.
+    /// the VM-owned block store: variable-size cell payloads.
     /// Living here — not on `Heap` — because the release path (a free fn
     /// holding only `&Arena`) is what frees a cell's blocks, and because
     /// `OpaqueRef` keeps the arena (hence the store) alive for cells that
     /// outlive the `Vm`.
     pub(crate) blocks: Blocks,
-    /// enum member singletons (RFC 0016 §1) — VM-owned state living on
+    /// enum member singletons — VM-owned state living on
     /// the arena so a `Heap` is a cheap two-`Rc` view (`Heap::view`),
     /// which the release walk builds to run a Host payload's finalize.
     pub(crate) singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
@@ -103,7 +103,7 @@ pub(crate) struct Arena {
     /// map's take-on-read semantics, per-cell). The pin keeps the
     /// address from being reused while the marker lives.
     disposal_armed: RefCell<HashSet<usize>>,
-    /// weak-reference lists (RFC 0017 v1): referent slot word -> the
+    /// weak-reference lists: referent slot word -> the
     /// WeakBox cells holding an unretained word to it. Lazy, uncharged
     /// engine bookkeeping living on the arena (the same two-`Rc` view
     /// argument). Referent death nulls every box in its list BEFORE
@@ -160,13 +160,13 @@ impl Arena {
         self.pending_drops.borrow_mut().pop()
     }
 
-    /// Register a fresh WeakBox into its referent's weak list (RFC 0017).
+    /// Register a fresh WeakBox into its referent's weak list.
     /// `word` is the referent's full slot word.
     pub(crate) fn weak_register(&self, word: usize, box_cell: *const CellVal) {
         self.weak_lists.borrow_mut().entry(word).or_default().push(box_cell);
     }
 
-    /// Referent death (RFC 0017): null every WeakBox in the referent's
+    /// Referent death: null every WeakBox in the referent's
     /// list and drop the entry. Runs BEFORE any payload teardown and
     /// everything that runs user code — a `dispose` body that calls
     /// `upgrade()` sees `nil`, deterministically, no window.
@@ -180,7 +180,7 @@ impl Arena {
         }
     }
 
-    /// Box death (RFC 0017): a dying WeakBox removes itself from its
+    /// Box death: a dying WeakBox removes itself from its
     /// referent's list (no-op when already dead — the list entry is
     /// gone). Keeps the later nulling walk off freed cells.
     pub(crate) fn weak_unregister(&self, word: usize, box_cell: *const CellVal) {
@@ -252,7 +252,7 @@ impl Drop for Arena {
 }
 
 /// One reference gone. At rc-0 the cell dies — and its ref-typed children
-/// die with it (RFC 0016 §3): `release_cell` collects them and recurses,
+/// die with it: `release_cell` collects them and recurses,
 /// so a record's `str`/`Opaque`/vec fields no longer pin their children
 /// until VM end. A store slot (the tagged word, nmap-hostvals P2) routes
 /// to the entry's own rc (`release_entry`) — the same law, new home.
@@ -268,7 +268,7 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
             let c = &*e;
             let n = c.refs.get();
             if n <= 1 {
-                // weak nulling first (RFC 0017): an opaque box's death
+                // weak nulling first: an opaque box's death
                 // nulls its weak list before the pin check and before
                 // `release_entry`'s finalize — nothing that runs user
                 // code observes a live weak to a dying entry
@@ -292,7 +292,7 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
             return; // immortal singleton
         }
         if n <= 1 {
-            // weak nulling first (RFC 0017): the referent's boxes go
+            // weak nulling first: the referent's boxes go
             // dead before dispose/user code can run
             arena.weak_null_list(p as usize);
             // Disposal: a type with an `impl ..: Disposal` pins the cell
@@ -352,17 +352,17 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
             }
         }
         // a user box stores the inner handle — its release is the box's
-        // own (RFC 0014: box death drops the boxed value's reference).
+        // own (box death drops the boxed value's reference).
         // That anchor cell is GONE at P2 (the rut-value box lives as a
         // store entry now — `release_entry` walks its held slot); a rut
         // `opaque` in a record field / array element is a store slot and
         // routes through `release_ref_slot`'s entry path by its tag.
-        // a str view retains the window's parent (RFC 0042)
+        // a str view retains the window's parent
         CellData::StrView { parent, .. } => out.push(*parent),
-        // a weak box holds an UNRETAINED referent word (RFC 0017) — never
+        // a weak box holds an UNRETAINED referent word — never
         // a child; its unregister runs in `release_cell` before this walk
         CellData::WeakBox { .. } => {}
-        // an array window retains its backing array (RFC 0042 §6)
+        // an array window retains its backing array
         CellData::ArrView { parent, .. } => out.push(*parent),
         CellData::Closure { func, captures } => {
             if let Some(flags) = plan.closure_capture_ref.get(*func as usize) {
@@ -389,7 +389,7 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
     // freed, so a release cascade can never observe the dying cell.
     // Childless kinds (the churn case: strs, singletons) never build
     // the child vec at all.
-    // box death (RFC 0017): a dying WeakBox removes itself from its
+    // box death: a dying WeakBox removes itself from its
     // referent's list before its slot is recycled — the later nulling
     // walk must never touch freed cells. (No block to free, no children:
     // the referent word is deliberately not a Slot child.)
@@ -432,7 +432,7 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
 /// Drop a store entry whose rc reached zero (nmap-hostvals P2): the
 /// payload is taken out first (the dying entry is dead memory the moment
 /// the slot is recycled), the charge refunded, the slot freed — and only
-/// THEN the nested work, the record-field pattern (RFC 0016 §3): the
+/// THEN the nested work, the record-field pattern: the
 /// Host payload's `finalize` hook runs before the Box's own Drop; a Rut
 /// entry's held slot releases through the same walk (an entry holding a
 /// rut record recurses through it).
@@ -473,7 +473,7 @@ pub(crate) fn release_entry(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut stor
     }
 }
 
-/// A host-held `Opaque` handle (RFC 0014; re-based on the Opaque store
+/// A host-held `Opaque` handle (re-based on the Opaque store
 /// at nmap-hostvals P2): owns one store-entry reference. `ptr` is the
 /// TAGGED slot word — the same word a rut `opaque` slot carries — so the
 /// handle round-trips through `Slot` and the generic rc web routes it.

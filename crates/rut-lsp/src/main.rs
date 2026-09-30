@@ -1,4 +1,4 @@
-//! the `rut-lsp` binary — the language server over stdio (RFC 0041 §2).
+//! the `rut-lsp` binary — the language server over stdio.
 //! Native only: stdio IS the transport, and tokio rejects `io-std` on
 //! wasm32 — there the language core ships as the `rut-lsp-wasm` module
 //! instead (the VS Code extension's in-process face).

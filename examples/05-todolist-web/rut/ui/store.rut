@@ -5,7 +5,7 @@
 // =====================================================================
 
 // ---- the store's eyes: MODULE-PRIVATE traits (biz cannot name them;
-// impl-trait methods ride the trait's visibility, RFC 0012) ----------
+// impl-trait methods ride the trait's visibility) ----------
 
 trait Readable<T> {
     fn atom_id(self) -> u32;
@@ -27,9 +27,9 @@ trait Writable<A, R> {
 // CANNOT spell them; the compiler enforces the surface, the grep gate
 // (tests/app_law.rs) only pins it.
 
-/// The writable cell: its id, its seed (RFC 0014 materialize-on-touch),
+/// The writable cell: its id, its seed (materialize-on-touch),
 /// and the store that minted it. The general lane never equality-skips
-/// (RFC 0044: a generic == is cell identity — a same-cell re-set would
+/// (a generic == is cell identity — a same-cell re-set would
 /// strand the deriveds; the recorded asymmetry).
 pub class Source<T> {
     id: u32 = 0;
@@ -138,8 +138,8 @@ impl MutCtx {
 
 // ---- the store -------------------------------------------------------
 
-/// The kernel: one generation rail (gens), one opaque-cell KV (RFC
-/// 0014's motivating pattern), the discovered-edge and seen-generation
+/// The kernel: one generation rail (gens), one opaque-cell KV (the
+/// motivating pattern), the discovered-edge and seen-generation
 /// tables, and the in-flight cycle guard. NOTHING here names a
 /// domain — the store is decoupled from biz by construction; the
 /// old TodoStore/ProbeStore containers are gone (their machinery was
@@ -266,7 +266,7 @@ impl Store {
                     // the lane's argument read back at the lane's own type:
                     // the box erases A, the downcast answers nil for a
                     // non-str write on this lane (a compile-valid body for
-                    // every A, RFC 0013 — a Source's R IS its A, but the
+                    // every A — a Source's R IS its A, but the
                     // body must compile for the general Writable<A, R>)
                     let cur = opaque.downcast<str>(opaque(arg));
                     // the compare rides a NAMED bool: the ?str compare

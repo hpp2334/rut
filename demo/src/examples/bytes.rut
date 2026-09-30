@@ -1,10 +1,10 @@
-// bytes — the binary primitive (RFC 0004 v1.1): a flat u8 buffer.
+// bytes — the binary primitive: a flat u8 buffer.
 // `str.encode()` mints one from text, `bytes.decode()` reads it back
 // (lossy UTF-8), and the type-methods build one directly (`bytes.from`
 // over a [u8], `bytes.zeroed(n)`). Bindings SHARE the buffer like every
-// cell (RFC 0044 §1) — assignment never copies — and `bytes.clone()` is
-// the ONE copy escape hatch (RFC 0044 §4): it mints a fresh buffer with
-// the same octets. `==` on bytes is CONTENT equality (RFC 0044 §3), so
+// cell — assignment never copies — and `bytes.clone()` is
+// the ONE copy escape hatch: it mints a fresh buffer with
+// the same octets. `==` on bytes is CONTENT equality, so
 // a buffer and its clone compare true — the copy is for OWNERSHIP
 // boundaries (a callee that must own its buffer), not for reading.
 // There is no `own(x)`, no `make_ptr(v)`, no other copy anywhere.

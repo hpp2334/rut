@@ -1,14 +1,14 @@
-//! Host-constructed `opaque` boxes (RFC 0023/0026): the embedder news any
+//! Host-constructed `opaque` boxes: the embedder news any
 //! `'static` Rust value behind an `opaque`, borrows it back typed, and rut
-//! sees only the box. RFC 0014 semantics must hold on the rut side —
+//! sees only the box. The erasure semantics must hold on the rut side —
 //! `o is opaque` is `true`, `opaque.downcast<T>` is `None` for every `T` (never a
 //! trap), `own` shares identity — and the payload's `Drop` runs when the
-//! box's rc hits 0 (RFC 0016 §3).
+//! box's rc hits 0.
 //!
 //! The drop-timing flow drives the box through a wrapper-class record as
 //! well as direct host calls — the record's field retain releases with the
 //! record at rc-0, so the payload's `Drop` runs with the last handle even
-//! with the wrapper in the mix (RFC 0016 §3's recursive field walk).
+//! with the wrapper in the mix (the recursive field walk).
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ use rut_vm::interp::Vm;
 const SRC: &str = r#"
 use boxes::{ store_new, store_set, store_get, store_size };
 
-// the wrapper class (the Logger pattern, RFC 0028): one opaque field,
+// the wrapper class (the Logger pattern): one opaque field,
 // one host fn call per method — the Rust payload never leaks into rut
 class Store {
     h: opaque;
@@ -43,7 +43,7 @@ entry fn wrap_get(c: opaque, k: str) -> i64 {
     return Store.adopt(c).get(k);
 }
 entry fn erase_laws(c: opaque) -> bool {
-    // RFC 0014 on a host payload box: it is an opaque and nothing more
+    // on a host payload box: it is an opaque and nothing more
     // specific — no rut type recovers from it, the recovery is `nil`,
     // never a trap
     let i64_hit = opaque.downcast<i64>(c) != nil;
@@ -111,7 +111,7 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // bindings BEFORE the Vm (RFC 0025): install + contract + boot
+    // bindings BEFORE the Vm: install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, dropped);
     hosts.verify_against(&expected); // tests/data/boxes/boxes.d.rut ↔ the bodies
@@ -172,7 +172,7 @@ fn host_boxes_hold_any_rust_type() {
     assert_eq!(vm.call::<_, i64>("size", (held.clone(),)).unwrap(), 3);
     assert_eq!(vm.call::<_, i64>("get", (held.clone(), "missing")).unwrap(), -1);
 
-    // RFC 0014 erasure laws on the rut side
+    // erasure laws on the rut side
     let erased: bool = vm.call("erase_laws", (held.clone(),)).unwrap();
     assert!(erased, "erase_laws");
 
@@ -191,7 +191,7 @@ fn host_boxes_hold_any_rust_type() {
     let err = Opaque::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
     assert!(err.msg.contains("host box holds") || err.msg.contains("opaque"), "{}", err.msg);
 
-    // the borrow guard (RFC 0023 §2): a nested exclusive borrow is a
+    // the borrow guard: a nested exclusive borrow is a
     // checked trap, and a shared borrow is excluded while `&mut` is out
     let b = Opaque::<Store>::from_handle(&held).unwrap();
     b.with_mut(&mut vm, |vm, _| {
@@ -202,7 +202,7 @@ fn host_boxes_hold_any_rust_type() {
     .unwrap();
     b.with(|_| {}).expect("the guard clears when the closure returns");
 
-    // rc-0 (RFC 0016 §3): the wrapper records are gone (their field
+    // rc-0: the wrapper records are gone (their field
     // retains released with them), so the box's only references are the
     // three handles — the payload's Drop runs with the last one
     drop(held);

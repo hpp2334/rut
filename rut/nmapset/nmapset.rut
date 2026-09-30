@@ -5,7 +5,7 @@
 // contract); a user-defined key type fails at instantiation (escape
 // hatch: encode it canonically to `bytes`). Values release host-side,
 // in-crossing on replace/remove and at the table's death (the
-// payload's `finalize` hook, RFC 0016 §3).
+// payload's `finalize` hook).
 //
 // THE ALIASING LAW: `get` answers the STORED cell, not a copy — two
 // gets of one key name one cell until a replace re-stores (held
@@ -13,7 +13,7 @@
 // slot but not an independently held pointer).
 //
 // THE SEAL LAW (phase 2a — no `any` in the crossings): values are
-// never inspected, so they cross as RFC 0014 erasure boxes — `put`
+// never inspected, so they cross as erasure boxes — `put`
 // seals at the edge (`opaque(v)`; the map retains the box cell), `get`
 // answers the stored box and recovers with `opaque.downcast<V>` (the
 // box IS the `?V`, its payload the inner cell — the aliasing law rides
@@ -136,7 +136,7 @@ impl KeyLane for bool {
     fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
-// `==` on `str`/`bytes` is CONTENT equality (RFC 0012 §4) — the key
+// `==` on `str`/`bytes` is CONTENT equality — the key
 // equality a hash table means; the host hashes content byte-wise
 // (FNV-1a 64). `bytes` is also the user-key escape hatch.
 impl KeyLane for str {
@@ -161,7 +161,7 @@ impl KeyLane for bytes {
 
 // `HashMap<K, V>` — the host table behind one `opaque` handle: keys,
 // hashes, handles, and the value cells all live host-side. Admission
-// is the union bound itself (RFC 0043 §A5).
+// is the union bound itself.
 pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {
     t: opaque;    // the host table — the whole state
 }
@@ -178,14 +178,14 @@ impl HashMap<K, V> {
 
     // `true` when the key was newly added, `false` when an existing
     // key's value was replaced (bit 0 of the packed answer). The value
-    // SEALS at this edge (the erasure box, RFC 0014) — the map never
+    // SEALS at this edge (the erasure box) — the map never
     // learns what V is.
     pub fn put(mut self, k: K, v: V) -> bool {
         let ans = k.hvput(self.t, opaque(v));
         return (ans & 1) == 1;
     }
 
-    // `nil` = absent (RFC 0005 §10); a hit answers the stored cell
+    // `nil` = absent; a hit answers the stored cell
     // (the aliasing law). The stored box IS the `?V` after the
     // downcast — its payload is the inner cell, so held results keep
     // reading the pre-replace value exactly as before.

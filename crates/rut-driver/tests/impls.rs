@@ -1,4 +1,4 @@
-//! Impl blocks and nominal trait semantics (RFC 0012): the two impl
+//! Impl blocks and nominal trait semantics: the two impl
 //! forms, coverage/placement checks, the use-both gate, and the two
 //! dispatch rules — static bind when the call site names exactly one
 //! concrete receiver type, vtable when origins merge.
@@ -7,7 +7,7 @@ use rut_parser::Mode;
 use rut_core::types::TY_I32;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // core + pouch bound as the uses (RFC 0028); these
+    // core + pouch bound as the uses; these
     // tests exercise impl semantics, not use discipline
     let collection = rut_core::binary::Surface::default();
     rut_driver::compile_program(
@@ -101,7 +101,7 @@ fn duplicate_trait_type_pair_is_an_error() {
 #[test]
 fn satisfaction_is_nominal_not_structural() {
     // S has the method `m` and NO impl — it is not an I, so the widening
-    // errors and the probe folds false (RFC 0012 §4)
+    // errors and the probe folds false
     let ds = diags_of(
         "trait I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
@@ -131,7 +131,7 @@ fn satisfaction_is_nominal_not_structural() {
 
 #[test]
 fn marker_impls_are_legal() {
-    // an empty body on a method-less trait (RFC 0037 markers)
+    // an empty body on a method-less trait
     let out = compile(
         "trait Mark { }\n\
          struct S { x: i32 }\n\
@@ -144,7 +144,7 @@ fn marker_impls_are_legal() {
 #[test]
 fn static_dispatch_when_the_origin_is_single() {
     // `w` is trait-typed with ONE concrete origin — the call binds
-    // statically to the impl method (no vtable hop, RFC 0012 §5)
+    // statically to the impl method (no vtable hop)
     let out = compile(
         "trait Get { fn get(self) -> i32; }\n\
          struct B { v: i32 }\n\
@@ -165,7 +165,7 @@ fn static_dispatch_when_the_origin_is_single() {
 #[test]
 fn vtable_dispatch_when_origins_merge() {
     // branch-merged origins: the compiler cannot name one concrete
-    // receiver, so the call consults the descriptor (CallI, RFC 0012 §5)
+    // receiver, so the call consults the descriptor (CallI)
     let out = compile(
         "trait Get { fn get(self) -> i32; }\n\
          struct A { v: i32 }\n\
@@ -241,7 +241,7 @@ fn reassignment_invalidates_a_stale_origin() {
     // B. The compiler must re-derive the origin at the assignment: the
     // later call must dispatch as B — statically re-bound to B's impl
     // (still a single known origin) or through the vtable — never run
-    // A's method on a B (RFC 0012 §5: a mis-analysis must not be able
+    // A's method on a B (a mis-analysis must not be able
     // to produce a wrong call). Runtime-checked in rut-cli's e2e
     // (`reassigned_trait_binding_dispatches_as_the_new_type`).
     let out = compile(
@@ -271,7 +271,7 @@ fn reassignment_invalidates_a_stale_origin() {
 #[test]
 fn builtin_class_inherent_impls_compile() {
     // the array type `[T]` takes an inherent impl (the
-    // `LaunchedTask<T>` pattern, RFC 0012 §2): generic through the
+    // `LaunchedTask<T>` pattern): generic through the
     // element parameter, dispatched statically through the shape
     let out = compile(
         "impl [T] {\n\
@@ -297,10 +297,10 @@ fn builtin_class_inherent_impls_compile() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
 
-// ---- primitive trait-impl targets (RFC 0012 §2; the inherent surface
-// stays core's `builtin impl`, RFC 0032 §1.1) ----
+// ---- primitive trait-impl targets (the inherent surface
+// stays core's `builtin impl`) ----
 
-/// Compile, flatten (RFC 0035 §1), verify, and run a single-module
+/// Compile, flatten, verify, and run a single-module
 /// `main` returning i32.
 fn run_main(src: &str) -> i32 {
     let out = compile(src);
@@ -342,7 +342,7 @@ fn prim_trait_impl_compiles_and_dispatches_statically() {
 
 #[test]
 fn prim_is_probe_answers_the_registered_impl() {
-    // `is` folds at the exact receiver (RFC 0012 §4 nominal): true where
+    // `is` folds at the exact receiver (nominal): true where
     // the impl is registered, false where it is not
     let src = "trait T { fn m(self) -> i32; }\n\
                trait U { fn n(self) -> i32; }\n\
@@ -434,7 +434,7 @@ fn foreign_trait_for_a_builtin_is_an_orphan() {
 
 #[test]
 fn duplicate_prim_pair_reports_the_orphan_before_the_link() {
-    // placement precedes registration (RFC 0012 §2a): the app's
+    // placement precedes registration: the app's
     // `impl T for i32` is foreign-trait × builtin — the orphan gate
     // fires at collect, so the (T, i32) pair never reaches §5's
     // duplicate link check (which keeps its own surface-level test in
@@ -534,7 +534,7 @@ fn prim_vtable_fill_survives_the_link() {
 
 #[test]
 fn widened_scalar_slots_survive_calls_and_vtable_dispatch() {
-    // the slot ABI (RFC 0012 §4/§6): a widened scalar is a BOXED slot —
+    // the slot ABI: a widened scalar is a BOXED slot —
     // it survives ref copies and call boundaries, a `Self`-spelled
     // parameter unboxes at the callee, and a merged-origin calli reads
     // the box cell's own type. Pre-slot-ABI, a scalar slot crashed on

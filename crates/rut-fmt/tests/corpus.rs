@@ -1,4 +1,4 @@
-//! Corpus conformance for the formatter — RFC 0030 §7's round-trip
+//! Corpus conformance for the formatter — the round-trip
 //! invariant realized over the four corpus trees (the parser's own
 //! enumerator): every corpus file formats, the formatted text REPARSES
 //! to a clean tree, and formatting is IDEMPOTENT

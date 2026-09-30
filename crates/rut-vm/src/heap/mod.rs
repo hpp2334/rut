@@ -1,8 +1,9 @@
-//! The RC heap — RFC 0016: everything except primitives is a heap cell;
+//! The RC heap: everything except primitives is a heap cell
+//! (full semantics: `docs/src/reference/rc-heap.md`);
 //! strong count 0 ⇒ immediate destruction; no collector. v1 implementation:
 //! cells are `Rc<CellVal>` with *manual* retain/release at the Slot level
 //! (the compiler emits ref-aware ops — §5), riding Rust's allocator with
-//! byte accounting and pre-alloc budget checks (RFC 0039's self-managed
+//! byte accounting and pre-alloc budget checks (the self-managed
 //! arena is a later milestone; the observable contract — deterministic
 //! destruction, identity, `Trap::OutOfMemory` before any write — holds).
 
@@ -25,11 +26,11 @@ pub use store::{HostPayload, Opaque, ValSlot};
 pub use trap::{Trap, TrapKind};
 pub use value::{Slot, Value};
 
-// ---- accounting (RFC 0040 §1: check BEFORE any write) ----
+// ---- accounting (check BEFORE any write) ----
 
 pub struct HeapAcct {
     pub used: Cell<u64>,
-    /// high-water mark of `used` (RFC 0039 accounting) — never decreases,
+    /// high-water mark of `used` — never decreases,
     /// so a host can read the peak live-heap after a run
     pub peak: Cell<u64>,
     pub limit: Cell<Option<u64>>,
@@ -85,7 +86,7 @@ impl Heap {
         self.acct.limit.set(limit);
     }
 
-    /// Public growth accounting (RFC 0040 §1) — Vec growth charges the
+    /// Public growth accounting — Vec growth charges the
     /// budget before the write; never refunded on shrink (v1 overcounts
     /// rather than undercounts).
     pub fn charge_public(&self, bytes: u64) -> Result<(), Trap> {
@@ -150,7 +151,7 @@ impl Heap {
         )
     }
 
-    /// An array window (RFC 0042 §6): `len` elements of `parent`'s run
+    /// An array window: `len` elements of `parent`'s run
     /// at element offset `off`, retained. O(1) — no elements move; the
     /// view cell charges only its own header. Writes through the window
     /// hit the parent (the `*T` aliasing law).
@@ -189,7 +190,7 @@ impl Heap {
         )
     }
 
-    /// A str slice view (RFC 0042): `len` octets of `parent`'s block at
+    /// A str slice view: `len` octets of `parent`'s block at
     /// `off`, retained. O(1) — no octets move. The view cell itself is
     /// tiny and accounted (`CELL_OVERHEAD` + fields); the parent's bytes
     /// stay alive as long as any view does.
@@ -264,7 +265,7 @@ impl Heap {
         Ok(())
     }
 
-    /// Immutable binary buffer (RFC 0004) — a `u8` array (the `bytes` type
+    /// Immutable binary buffer — a `u8` array (the `bytes` type
     /// is an array of octets at the engine level).
     pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {
         let n = b.len() as u64;
@@ -353,7 +354,7 @@ impl Heap {
     }
 
     pub fn alloc_opaque(&self, val: Slot, val_ty: TypeId) -> Result<Slot, Trap> {
-        // the RFC 0014 box: a rut value held host-side as a Rut store
+        // the box: a rut value held host-side as a Rut store
         // entry (nmap-hostvals P2) — the anchor cell is gone; the charge
         // matches the old anchor cell's, so the budget reads the same.
         let bytes = CELL_OVERHEAD + 8;
@@ -364,13 +365,12 @@ impl Heap {
         ))
     }
 
-    /// A host payload box (RFC 0023/0026): `val` — any `'static` Rust
+    /// A host payload box: `val` — any `'static` Rust
     /// value — moves into a `Host` store entry behind an `Opaque`
-    /// surface; the payload drops deterministically at rc-0 (RFC 0016
-    /// §3), after its `finalize` hook when it opted into [`HostPayload`]
+    /// surface; the payload drops deterministically at rc-0, after its `finalize` hook when it opted into [`HostPayload`]
     /// (`finalize` carries the monomorphized hook; `None` = the no-op
     /// default, the plain-embedder mint). The entry accounts the
-    /// payload's shallow `size_of::<T>()` (RFC 0040) — the same charge
+    /// payload's shallow `size_of::<T>()` — the same charge
     /// the old anchor cell made; interior allocations a `T` makes are
     /// the host's own business.
     pub fn alloc_host_box<T: 'static>(
@@ -396,7 +396,7 @@ impl Heap {
         self.mint(0, CellData::Closure { func, captures }, n * 8)
     }
 
-    /// A `StackTrace` cell (RFC 0036 §2, err-channel phase 2): the raw
+    /// A `StackTrace` cell: the raw
     /// frames move in — capture's whole cost is this Vec plus the cell
     /// header, depth-proportional, paid once per capture.
     pub fn alloc_trace(&self, frames: Vec<TraceFrame>) -> Result<Slot, Trap> {
@@ -416,7 +416,7 @@ impl Heap {
         )
     }
 
-    /// A `Weak<T>` box (RFC 0017 v1): a WeakBox side cell holding the
+    /// A `Weak<T>` box: a WeakBox side cell holding the
     /// referent's raw slot word — UNRETAINED (a weak never keeps its
     /// referent alive) — registered into the referent's weak list so
     /// referent death nulls it. `ty` is the instantiated `Weak<elem>`
@@ -435,8 +435,8 @@ impl Heap {
         r
     }
 
-    /// Enum member — the immortal singleton cell (RFC 0016 §1): the one
-    /// place identity quietly behaves as value (RFC 0012 §4).
+    /// Enum member — the immortal singleton cell: the one
+    /// place identity quietly behaves as value.
     pub fn enum_member(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
         if let Some(p) = self.arena.singletons.borrow().get(&(ty, member)) {
             return Ok(Slot { r: *p });
@@ -455,7 +455,7 @@ impl Heap {
         Ok(Slot { r: p as *const CellVal })
     }
 
-    // ---- ref discipline (RFC 0016 §5) ----
+    // ---- ref discipline ----
 
     /// rc += 1 (immortal singletons saturate at `u32::MAX`; store entries
     /// — the tagged words — carry their own rc on the entry).
@@ -479,7 +479,7 @@ impl Heap {
 
     /// rc -= 1; at zero the cell (or store entry — the tagged slot words)
     /// is dropped, its slot recycled, and its ref-typed children
-    /// collected and released recursively (RFC 0016 §3).
+    /// collected and released recursively.
     pub fn release(&self, s: Slot) {
         release_ref_slot(&self.arena, &self.acct, s);
     }
@@ -496,7 +496,7 @@ impl Heap {
         OpaqueRef::new(&self.arena, &self.acct, p)
     }
 
-    /// The owning variant for a slot minted this instant (RFC 0023/0026):
+    /// The owning variant for a slot minted this instant:
     /// the handle takes over the mint reference instead of adding one, so
     /// `mint -> handle -> Value` accounts exactly one reference. The
     /// embedder equivalent of `Opaque::alloc` — for host fns that
@@ -513,7 +513,7 @@ impl Heap {
         }
     }
 
-    /// Clone a value deeply (`own(x)`, RFC 0011 §1): shallow for handles —
+    /// Clone a value deeply (`own(x)`): shallow for handles —
     /// primitive fields copied, handle fields shared.
     pub fn own(&self, s: Slot, ty: TypeId, table: &TypeTable) -> Result<Slot, Trap> {
         match table.kind(ty).clone() {
@@ -578,8 +578,8 @@ impl Heap {
                 }
             }
             TyKind::Opaque => {
-                // box once, share the inner handle (RFC 0014). A host
-                // payload box has no inner rut value to re-box (RFC 0023):
+                // box once, share the inner handle. A host
+                // payload box has no inner rut value to re-box:
                 // own is a plain reference share — the box's identity and
                 // its payload Drop timing are unchanged. A rut-value box
                 // (a Rut store entry, P2) clones the inner and mints a
@@ -603,13 +603,13 @@ impl Heap {
             | TyKind::DisposalContext => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,
-                // so enums share (values, RFC 0006); trait objects have no
+                // so enums share (values); trait objects have no
                 // standalone own semantics in v1 beyond the cell handle.
                 // A trace is an immutable engine snapshot: the handle share
                 // IS the own — every holder sees the same captured frames.
                 // A weak box is identity state over an unretained referent:
                 // the share IS the own (two boxes of one referent stay
-                // distinct cells — RFC 0017).
+                // distinct cells).
                 // A disposal context is engine-minted per dispose call:
                 // the handle share IS the own (nothing else holds state).
                 Ok(s)

@@ -1,4 +1,4 @@
-//! the `rut` binary — run / dump (RFC 0041 §2).
+//! the `rut` binary — run / dump.
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -58,7 +58,7 @@ fn usage() {
 }
 
 fn load(path: &str) -> String {
-    // one file is one module unit — there is no include form (RFC 0035 §1:
+    // one file is one module unit — there is no include form (
     // use paths are inter-module), so loading is a plain read
     match rut_driver::load_module_source(std::path::Path::new(path)) {
         Ok(src) => src,
@@ -69,7 +69,7 @@ fn load(path: &str) -> String {
     }
 }
 
-/// `.d.rut` parses in declaration mode (RFC 0030 §3) — a surface, not a
+/// `.d.rut` parses in declaration mode — a surface, not a
 /// runnable module.
 fn mode_of(path: &str) -> rut_parser::Mode {
     if path.ends_with(".d.rut") {
@@ -88,7 +88,7 @@ fn run(path: &str, fuel: Option<u64>) {
     let packed = p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle");
     let prog = if packed {
         // a module directory (`rut.toml`) or a `.rutbundle` — load the
-        // graph, mount std, compile, link (RFC 0035 §1 / RFC 0038 §5)
+        // graph, mount std, compile, link
         let (mut session, root) = match rut_driver::load_path_session(p) {
             Ok(x) => x,
             Err(e) => {
@@ -124,7 +124,7 @@ fn run(path: &str, fuel: Option<u64>) {
         // is independent; json slots after pouch and nmapset — the dep
         // graph's new edges (json -> pouch, json -> nmapset) make that
         // the only graph-respecting position. strbuild is 10th, after
-        // json (RFC 0028's amendment): position-free for the graph —
+        // json (the amendment): position-free for the graph —
         // the row names the reading order, and json's own `[deps]`
         // pulls the pkg regardless. The http pair closes the list on
         // the same law (http after its http_host dep; http's own
@@ -189,7 +189,7 @@ fn run(path: &str, fuel: Option<u64>) {
     // phase 0) — reached only by a program that declares
     // `use bench_cross::{...}` (the bench row)
     rut_std::bench_cross::install_std_bench_cross(&mut hosts);
-    // the async host set (RFC 0018): launch/abort/sleep bodies for the
+    // the async host set: launch/abort/sleep bodies for the
     // `async_engine` rows — reached only by a program that mounts the
     // async packages (a `use async_host::` pulls the tree pkg)
     rut_std::async_host::install_std_async(&mut hosts);
@@ -217,7 +217,7 @@ fn run(path: &str, fuel: Option<u64>) {
             std::process::exit(1);
         }
     }
-    // the async driving loop (RFC 0018 / RFC 0035 §4): drain the ready
+    // the async driving loop: drain the ready
     // queue, advance the virtual clock to the next sleep deadline,
     // repeat — idle when no frames and no timers remain. Capped, so a
     // program that never idles fails loudly instead of hanging.
@@ -272,8 +272,7 @@ fn dump(path: &str) {
     print!("{}", out.ir_dump);
 }
 
-/// `rut fmt <file.rut | dir> [--check]` — the source formatter (RFC 0030
-/// §7): canonical house layout over the AST reprint, comments recovered
+/// `rut fmt <file.rut | dir> [--check]` — the source formatter: canonical house layout over the AST reprint, comments recovered
 /// and reattached verbatim, style from the nearest ancestor `rut.toml`'s
 /// `[style]` block. Default: rewrite in place. `--check`: write nothing,
 /// exit 1 when anything would change.

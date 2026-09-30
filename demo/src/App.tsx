@@ -39,7 +39,7 @@ function BootError(props: { banner: string }): JSX.Element {
         </pre>
         <p className="boot-error-note">
           (builds <code>crates/rut-wasm</code> for wasm32 and copies it to{" "}
-          <code>public/rut.wasm</code> — RFC 0041 §3)
+          <code>public/rut.wasm</code>)
         </p>
       </div>
     </div>
@@ -65,7 +65,7 @@ function LspError(props: { detail: string }): JSX.Element {
         </pre>
         <p className="boot-error-note">
           (builds <code>crates/rut-lsp-wasm</code> for wasm32 and copies
-          it to <code>public/rut-lsp.wasm</code> — RFC 0041 §3)
+          it to <code>public/rut-lsp.wasm</code>)
         </p>
       </div>
     </div>
@@ -328,10 +328,7 @@ export function App(): JSX.Element {
   if (lspMode === "error") {
     return (
       <LspError
-        detail={
-          `${lspDetail} — run \`${BUILD_WASM_COMMAND}\` in demo/ ` +
-          `(RFC 0041 §3)`
-        }
+        detail={`${lspDetail} — run \`${BUILD_WASM_COMMAND}\` in demo/`}
       />
     );
   }
@@ -341,7 +338,7 @@ export function App(): JSX.Element {
       <header className="app-header">
         <h1>rut playground</h1>
         <span className="app-sub">
-          React + rspack · rut as wasm · budgets per RFC 0040
+          React + rspack · rut as wasm · budgets enforced by the host
         </span>
       </header>
 

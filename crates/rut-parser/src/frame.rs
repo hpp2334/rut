@@ -1,4 +1,4 @@
-//! The frame stack (RFC 0030 §4): `Done` (a completed child's result,
+//! The frame stack: `Done` (a completed child's result,
 //! handed to the parent through the parser's inbox), `Step` (a frame's
 //! next action — push a child, or pop with a result), and `Frame` (one
 //! kind per grammar rule; each holds the children collected so far and
@@ -157,7 +157,7 @@ impl Frame {
     }
 }
 
-// ---- module (RFC 0003 §1: declarations only) ----
+// ---- module (declarations only) ----
 
 pub(crate) struct ModuleFrame {
     items: Vec<NodeHandle<AnyItem>>,
@@ -205,7 +205,7 @@ impl ModuleFrame {
     }
 }
 
-// ---- pub (RFC 0003 §2) ----
+// ---- pub ----
 
 pub(crate) struct PubFrame {
     vis: Vis,
@@ -233,9 +233,9 @@ impl PubFrame {
     }
 }
 
-/// The optional scope after `pub` (RFC 0003 §2): nothing = public,
+/// The optional scope after `pub`: nothing = public,
 /// `(mod|super|self)` = the package/parent/module scopes. Shared by
-/// module items and class members (RFC 0010 §2).
+/// module items and class members.
 pub(crate) fn pub_scope(p: &mut Parser) -> Vis {
     if p.eat_punct(Tok::LParen) {
         let v = match p.tok().clone() {

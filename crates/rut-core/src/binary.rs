@@ -1,6 +1,6 @@
-//! Module binary — RFC 0033 §1: versioned, deterministic, hash-stable
+//! Module binary — versioned, deterministic, hash-stable
 //! serialization of the linked module. v1 links a single module: type ids
-//! in the binary are program-global (link-time rebase, RFC 0035 §1, lands
+//! in the binary are program-global (link-time rebase, lands
 //! with multi-module).
 
 use crate::ops::*;
@@ -31,22 +31,21 @@ pub struct FuncCode {
     pub is_method: bool,
     pub n_captures: u32,
     pub regs: Vec<TypeId>,
-    /// operand pool (RFC 0032): the variadic `Reg` lists the ops address
+    /// operand pool: the variadic `Reg` lists the ops address
     /// by `(off, argc)` span — append-only, build-time deduplicated
     pub argv: Vec<Reg>,
     /// branch-table pool: `BrTable` arms, addressed by `(off, count)`
     pub labels: Vec<Label>,
     pub code: Vec<Op>,
-    /// pc → source byte offset (RFC 0036 — symbolication data)
+    /// pc → source byte offset (symbolication data)
     pub spans: Vec<(u32, u32)>,
-    /// pc → (line, col) — RFC 0036 §4's symbolication positions, PARALLEL
+    /// pc → (line, col) — the symbolication positions, PARALLEL
     /// to `spans` entry-for-entry (emit order = pc order; the passes
     /// preserve the pairing, and `pos` is filled AFTER them, at the
     /// driver, while the module source is in hand). Resolved 1-based;
-    /// `0`/empty = stripped — symbolication degrades to pc-only text
-    /// (RFC 0036 §3).
+    /// `0`/empty = stripped — symbolication degrades to pc-only text.
     pub pos: Vec<(u32, u32)>,
-    /// host-function binding (RFC 0022/0026/0029): `Some(id)` when the
+    /// host-function binding: `Some(id)` when the
     /// function has no rut body — `Op::Call` dispatches to the embedder's
     /// impl registered under `interner.name(id)` (the ONE name kind that
     /// is an id, like every other name in the program; the `Option` is
@@ -61,7 +60,7 @@ pub enum ConstVal {
     Bool(bool),
     Str(String),
     /// a `type_id<T>()` constant — a module-local `TypeId` at rest, rebased
-    /// to the global type table at link (RFC 0035 §1)
+    /// to the global type table at link
     TypeId(TypeId),
 }
 
@@ -120,17 +119,17 @@ pub struct SurfaceType {
     pub params: Vec<IdentId>,
     /// the id's scope: `None` — the exporter's own scope (ordinary rows);
     /// `Some(s)` — an explicit one. A transparent alias to a BOOT type
-    /// (`pub type Meters = i64;`, RFC 0043) points at the shared boot
+    /// (`pub type Meters = i64;`) points at the shared boot
     /// table: its id needs no rebase, so the row spells scope 0.
     pub scope: Option<crate::id::ScopeId>,
 }
 
-/// One exported trait declaration (RFC 0012 §5 — trait impls may live in
+/// One exported trait declaration (trait impls may live in
 /// any module, so every module publishes the traits it declares): the
 /// name, its generic parameter count, and the resolved method signatures.
 /// `local` is the trait's index in the exporter's own trait table — the
 /// key `TyKind::TraitObj` ids inside carried type descriptors resolve
-/// under (RFC 0015 §6).
+/// under.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceTrait {
     /// the exporter's trait-table index
@@ -143,10 +142,10 @@ pub struct SurfaceTrait {
     pub methods: Vec<TraitMethod>,
 }
 
-/// One exported trait impl registration (RFC 0012 §2): `(trait, target)`
+/// One exported trait impl registration: `(trait, target)`
 /// with each trait method bound to the exporter's module-local fn id.
 /// Duplicate `(trait, type)` pairs are detectable only at LINK time —
-/// per-module compiles cannot see each other (RFC 0012 §2).
+/// per-module compiles cannot see each other.
 ///
 /// Prim-target impls compile TWO ABI variants per method (the slot ABI
 /// for vtable rows, the concrete ABI for bare-receiver static calls):
@@ -166,7 +165,7 @@ pub struct SurfaceImpl {
     pub trait_name: IdentId,
     /// the target type id, as packed in the exporter's table — foreign
     /// targets (`impl ForeignTrait for ForeignType`) keep the scope they
-    /// were declared under (RFC 0035 §1)
+    /// were declared under
     pub target: TypeId,
     /// trait method name → the exporter's module-local fn id (slot ABI)
     pub methods: Vec<(IdentId, u32)>,
@@ -217,22 +216,22 @@ pub struct SurfaceMethod {
     pub generics: Vec<IdentId>,
 }
 
-/// A builtin container published by `core`'s native surface (RFC 0028):
+/// A builtin container published by `core`'s native surface:
 /// the type constructor is the compiler's own. Builtin names are
-/// AMBIENT (RFC 0028 revised, builtin-surface): they resolve without a
+/// AMBIENT: they resolve without a
 /// `use`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
-    /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose
+    /// `Opaque` — the erasure box; a boot-table type whose
     /// name is ambient like the other builtins (the `opaque` surface
     /// spelling aliases it until the phase-2 interner rename)
     Opaque,
-    /// `StackTrace` — the engine snapshot (RFC 0036, err-channel phase
+    /// `StackTrace` — the engine snapshot (err-channel phase
     /// 2): a boot-table type whose members are the engine-builtins
     /// (`len`/`name`/`line`/`col`/`render`); the decl is a pure
-    /// signature contract (RFC 0025's `builtin class` row)
+    /// signature contract (the `builtin class` row)
     StackTrace,
-    /// `Weak<T>` — the weak reference (RFC 0017 v1): a GENERIC builtin
+    /// `Weak<T>` — the weak reference: a GENERIC builtin
     /// class (instantiated `Weak<T>` at use, the `Array { elem }` shape);
     /// its one member `upgrade()` is an engine builtin. Constructed by
     /// the class method `Weak.new(v)`.
@@ -246,7 +245,7 @@ pub enum NativeTy {
     DisposalContext,
 }
 
-/// A builtin trait published by `core`'s native surface (RFC 0028):
+/// A builtin trait published by `core`'s native surface:
 /// registered on first reference, exactly like a declared trait — but only
 /// for modules that named it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -258,21 +257,21 @@ pub enum NativeTrait {
     /// engine-minted context cell ([`NativeTy::DisposalContext`]), one
     /// per call.
     Disposal,
-    /// `Index<T>` — the random-access contract (RFC 0012)
+    /// `Index<T>` — the random-access contract
     Index,
-    /// `Iterator<T>` — the cursor contract (RFC 0012)
+    /// `Iterator<T>` — the cursor contract
     Iterator,
     /// `Future<T> { fn yield(cx: RunContext) }` — the async protocol's
-    /// driven half (RFC 0012 §7 / RFC 0018). Engine-named, user-open:
+    /// driven half. Engine-named, user-open:
     /// the compiler weaves `impl Future<T>` for every async fn's hidden
     /// frame type; users may impl it for their own types (launcher-
     /// drivable; v1 await targets engine-woven futures only).
     Future,
     /// `RunContext { checkpoint / next_checkpoint / cancelled }` — the
-    /// cx protocol (RFC 0012 §7). The NAME also resolves in type
+    /// cx protocol. The NAME also resolves in type
     /// position to the engine-minted cx record (`TyKind::Data`, one
     /// frame-edge field), whose members inline as field ops — the trait
-    /// row is the frozen surface, the record is the lowering (RFC 0018).
+    /// row is the frozen surface, the record is the lowering.
     RunContext,
 }
 
@@ -310,7 +309,7 @@ pub struct Surface {
     /// exported constants (native modules: `calc`)
     pub consts: Vec<SurfaceConst>,
     /// the exporter's non-boot type descriptors, verbatim; ids inside are
-    /// packed with the exporter's scope (RFC 0035 §1)
+    /// packed with the exporter's scope
     pub types: Vec<crate::types::RutType>,
     /// scope -> local offset inside `types` for each block it carries
     pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
@@ -320,10 +319,10 @@ pub struct Surface {
     /// placeholder signatures — the bodies ride the owner-side request
     /// machinery
     pub fn_generics: Vec<SurfaceGenericFn>,
-    /// declared trait declarations (non-generic, RFC 0012 §5)
+    /// declared trait declarations (non-generic)
     pub traits: Vec<SurfaceTrait>,
     /// trait impl registrations `(trait, target, [method → fn ref])`
-    /// (RFC 0012 §2) — merged at link, where duplicate pairs error
+    /// — merged at link, where duplicate pairs error
     pub impls: Vec<SurfaceImpl>,
     /// inherent method surfaces (the linkable-classes phase): one row
     /// per class with methods — the wire's reserved table, populated
@@ -340,7 +339,7 @@ pub struct Surface {
     /// `FuncCode`; the bodies are rut-lir lowering. Each row carries its
     /// ambient bit (same law as [`Surface::native_types`])
     pub native_fns: Vec<(IdentId, bool)>,
-    /// builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
+    /// builtin-impl methods (`core` only): the integer
     /// primitives' `builtin impl` blocks — `(receiver prim, method name,
     /// lowering id)`. No `FuncCode`; rut-lir expands the method call
     /// inline. AMBIENT like the primitives themselves: a method call
@@ -348,7 +347,7 @@ pub struct Surface {
     pub native_impls: Vec<(crate::types::TypeId, IdentId, crate::ops::Intrinsic)>,
 }
 
-/// The core prelude function names (RFC 0028), in surface order —
+/// The core prelude function names, in surface order —
 /// well-known symbols, so the ids are meaningful in every interner.
 /// (`downcast` is no longer a declared prelude fn — builtin-surface
 /// phase 1 folded it into the `opaque` primitive's `downcast` member;
@@ -363,7 +362,7 @@ pub const CORE_FNS: &[IdentId] = &[
 ];
 
 impl Surface {
-    /// The core prelude surface (RFC 0028): the builtin containers,
+    /// The core prelude surface: the builtin containers,
     /// the builtin traits, the compiler-lowered functions, the integer
     /// primitives' `builtin impl` methods, and `NAN`. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
@@ -371,8 +370,8 @@ impl Surface {
     /// for the LSP (kept true to the implementation by test). Every name
     /// is a well-known symbol — the surface's interner is the table.
     pub fn core() -> Surface {
-        // the integer primitives' numeric-method table (RFC 0032 §1.1
-        // R2): one row per (prim × op); the method is ambient on the
+        // the integer primitives' numeric-method table
+        // one row per (prim × op); the method is ambient on the
         // primitive and lowers inline off the receiver's width
         use crate::ops::Intrinsic::*;
         use crate::types::{TY_I16, TY_I32, TY_I64, TY_I8, TY_U16, TY_U32, TY_U64, TY_U8};
@@ -457,22 +456,22 @@ pub fn is_core_name(name: IdentId) -> bool {
 
 /// core names removed from the surface, each with its replacement.
 /// Use sites diagnose with these instead of "unknown" — a removed surface
-/// explains itself (RFC 0028 v1.1; `unit` in v1.2).
+/// explains itself (`unit` in v1.2).
 pub const REMOVED_CORE: &[(&str, &str)] = &[
-    ("own", "`own` was removed — bindings share by reference now (RFC 0044); `bytes.clone()` is the one copy escape hatch"),
+    ("own", "`own` was removed — bindings share by reference now; `bytes.clone()` is the one copy escape hatch"),
     ("Option", "`Option` was removed — absence is `nil` on a `?T`, or a `(T, err)` tuple (v1.1)"),
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
-    ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
-    ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
-    ("string_len", "`string_len(s)` was removed — use `s.len()` (RFC 0004 v1.1)"),
-    ("string_encode", "`string_encode(s)` was removed — use `s.encode()` (RFC 0004 v1.1)"),
-    ("bytes_len", "`bytes_len(b)` was removed — use `b.len()` (RFC 0004 v1.1)"),
-    ("bytes_decode", "`bytes_decode(b)` was removed — use `b.decode()` (RFC 0004 v1.1)"),
-    ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)` (RFC 0004 v1.1)"),
-    ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)` (RFC 0004 v1.1)"),
+    ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one"),
+    ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape"),
+    ("string_len", "`string_len(s)` was removed — use `s.len()`"),
+    ("string_encode", "`string_encode(s)` was removed — use `s.encode()`"),
+    ("bytes_len", "`bytes_len(b)` was removed — use `b.len()`"),
+    ("bytes_decode", "`bytes_decode(b)` was removed — use `b.decode()`"),
+    ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)`"),
+    ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)`"),
     ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
-    ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]` (RFC 0005 §9)"),
-    ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null (RFC 0044)"),
+    ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]`"),
+    ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null"),
     ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
     ("on_drop", "`on_drop` was removed — implement `Disposal` for the type; the engine calls `dispose` at refcount zero"),
     ("assert", "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`"),
@@ -581,12 +580,12 @@ pub struct InstFn {
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub name: String,
-    /// the module's stable scope (RFC 0035 §1); `0` if unset
+    /// the module's stable scope; `0` if unset
     pub scope: crate::id::ScopeId,
     /// the name context for every [`IdentId`] in this program — type
     /// names, field names, trait/method names, function names, exports,
     /// and the in-memory [`Surface`](Surface). Self-contained: a decoded
-    /// program rebuilds it from the binary's name table (RFC 0033 §1).
+    /// program rebuilds it from the binary's name table.
     pub interner: Interner,
     /// exported surface, for using modules — on the wire since v16
     /// (names are ids into this program's interner, and a decoded
@@ -594,7 +593,7 @@ pub struct Program {
     pub surface: Surface,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
-    /// global trait-method slots: (trait id, method index) — RFC 0015 §6
+    /// global trait-method slots: (trait id, method index)
     pub trait_slots: Vec<(u32, u32)>,
     /// per-type vtables: entry per type, mapping slot → func id
     pub vtables: Vec<Vec<Option<u32>>>,
@@ -648,7 +647,7 @@ impl Program {
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
 /// v6: the primitive-optional element store (`[?prim]` arrays hold raw
-/// payloads + nil tags, RFC 0044 §5) — array element ops bake the new
+/// payloads + nil tags) — array element ops bake the new
 /// `OptPrim`/`OptPrimRaw`/`OptPrimLoad` repr codes; stale v5 artifacts carry
 /// Ref-repr element ops the new engines must not run on raw stores, and are
 /// rejected with the standard version error
@@ -656,9 +655,9 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// surface change (the 5→6 precedent): stale v6 artifacts carry the tuple
 /// shape's `(T, bool)` lowering and are rejected with the standard version
 /// error
-/// v8: the StackTrace surface (RFC 0036, err-channel phase 2) — the
+/// v8: the StackTrace surface — the
 /// `capture_stacktrace()` builtin fn + the `StackTrace` builtin class
-/// (the RFC 0025 member contract), a declared-surface change (the 6→7
+/// (the member contract), a declared-surface change (the 6→7
 /// precedent); the func table also serializes `pos` (pc → line/col)
 /// beside `spans`, so stale v7 artifacts are rejected with the standard
 /// version error
@@ -672,7 +671,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// source, so it can never emit such an artifact). The 6→7 and 7→8 bumps
 /// were both format-affecting; this is not, and a bump would burn every
 /// cached v8 artifact for zero protection.
-/// v9: the orphan rule (RFC 0012 §2a, orphan-rule batch phase 1) — a
+/// v9: the orphan rule — a
 /// REJECTION addition, the 5→6 precedent: a source whose `impl Trait for
 /// Type` names a trait and a type both defined outside its pkg compiles
 /// under 8 and is refused under 9. Codegen is invariant (the rule gates
@@ -777,7 +776,7 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     e.str(&prog.name);
 
     // the name table: only the instance-local tail of the interner — the
-    // well-known range is implied by the format itself (RFC 0033 §1)
+    // well-known range is implied by the format itself
     let wk = prog.interner.well_known_len() as usize;
     let tail = &prog.interner.names()[wk..];
     e.u32(tail.len() as u32);
@@ -1223,7 +1222,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     }
     let name = d.str()?;
     // the name table: rebuild the interner — well-known range implied,
-    // tail restored verbatim (RFC 0033 §1)
+    // tail restored verbatim
     let mut interner = Interner::new();
     let nnames = d.u32()? as usize;
     for _ in 0..nnames {
@@ -2159,7 +2158,7 @@ mod tests {
 
     #[test]
     fn encoding_is_deterministic() {
-        // RFC 0033 §1: same AST + same dependency versions → byte-identical
+        // same AST + same dependency versions → byte-identical
         // binary. Two independent compiles of the same shape must agree.
         let a = encode(&sample());
         let b = encode(&sample());

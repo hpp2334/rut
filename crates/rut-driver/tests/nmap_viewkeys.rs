@@ -16,7 +16,7 @@
 //! slice-then-put) answers the SAME pinned checksum; lane
 //! interchangeability both directions on ONE table (a range key and
 //! the equal-content slice key are THE SAME key, replace included); a
-//! slice VIEW as the parent (flattens to the root — the RFC 0042
+//! slice VIEW as the parent (flattens to the root — the
 //! read); the grow + `vals` drain through `put_range` (multi-grow
 //! sweep with remove / re-add churn, every val exact); the empty range
 //! key == the `""` key; and the host's UTF-8 boundary / past-end traps

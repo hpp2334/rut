@@ -1,4 +1,4 @@
-// RFC 0018 — the async/await landing: the legality diagnostics and the
+// the async/await landing: the legality diagnostics and the
 // open-surface story. Every pinned message is the contract; the
 // no-launcher mode proves ruling 8 (users may write their own
 // launchers — the engine knows none of these names).
@@ -92,7 +92,7 @@ pub fn main() -> nil {
 }
 "#);
     assert!(
-        msg.contains("cannot `await` a LaunchedFutureHandle") && msg.contains("RFC 0019"),
+        msg.contains("cannot `await` a LaunchedFutureHandle") && msg.contains("cannot be re-launched"),
         "got: {msg}"
     );
 }
@@ -133,7 +133,7 @@ pub fn main() -> nil {
     work();
 }
 "#);
-    assert!(msg.contains("`await select`") && msg.contains("RFC 0019"), "got: {msg}");
+    assert!(msg.contains("`await select`") && msg.contains("not in this build"), "got: {msg}");
 }
 
 #[test]
@@ -167,7 +167,7 @@ pub fn main() -> nil {
     );
 }
 
-// ---- the open surface (RFC 0012 §7): users may write their own launchers ----
+// ---- the open surface: users may write their own launchers ----
 
 #[test]
 fn a_user_launcher_over_the_same_future_surface() {

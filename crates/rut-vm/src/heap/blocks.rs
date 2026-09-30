@@ -1,4 +1,4 @@
-//! The VM-owned block store (RFC 0039's completion): variable-size payload
+//! The VM-owned block store: variable-size payload
 //! memory. A cell's slot in the arena stays one fixed-size record; every
 //! variable-size part of it — string octets, array element runs — lives in
 //! a *block* carved from size-classed pages.
@@ -15,7 +15,7 @@
 //!   class is what keeps append-accumulation loops linear (the fasta
 //!   contract).
 //! - **Large blocks**: dedicated boxed allocations, freed wholesale.
-//! - **Blocks never move** (RFC 0016 OQ-1): a block's address is stable
+//! - **Blocks never move**: a block's address is stable
 //!   for its lifetime, so raw `&[u8]`/`&mut [u8]` into the store stay
 //!   valid — the same non-moving guarantee the arena gives cell slots.
 //!

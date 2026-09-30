@@ -1,7 +1,7 @@
 // async_engine/engine.d.rut — the async host set's engine rows
-// (RFC 0018). The futures themselves never cross the boundary raw (the
+// The futures themselves never cross the boundary raw (the
 // survey's law: engine-minted, compiler-owned); these rows cross the
-// RFC 0014 erasure box — `opaque(f)` seals a frame, `downcast<T>`
+// erasure box — `opaque(f)` seals a frame, `downcast<T>`
 // recovers it — so the typed `Future<T> -> LaunchedFutureHandle<T>`
 // arrow lives in rut code (the `async_host` inline package), where the
 // type system can hold it.

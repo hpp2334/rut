@@ -1,7 +1,7 @@
-//! rut-lexer — the frontend base (RFC 0041 §2 layout): the mode-stack
-//! tokenizer (RFC 0030 §1) over the flat token enum (0002 §4), plus the
-//! vocabulary shared by every frontend stage — `Span`/`NEST_MAX` (0030
-//! OQ-3) and `Diag` + renderer (0030 §6).
+//! rut-lexer — the frontend base: the mode-stack
+//! tokenizer over the flat token enum, plus the
+//! vocabulary shared by every frontend stage — `Span`/`NEST_MAX` and
+//! `Diag` + renderer.
 
 pub mod diag;
 pub mod lexer;

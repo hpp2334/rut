@@ -2,8 +2,8 @@
 // biz code speaks THROUGH but never spells — the atom store machinery
 // (Store, Source, Derived, Mutation), the t1 widget framework (the
 // Widget type, the lowering table, the keyed diff), and the component
-// vocabulary. ONE directory, ONE module, SEVERAL files (RFC 0041 §5,
-// the multi-lib entry: this base + `entry.libs`, spliced in manifest
+// vocabulary. ONE directory, ONE module, SEVERAL files (the
+// multi-lib entry: this base + `entry.libs`, spliced in manifest
 // order): rut's landed visibility is `pub` or module-private
 // (t1/core's recorded reason), and ONE module keeps the framework's
 // private tables private for real — the splice preserves exactly that
@@ -55,7 +55,7 @@
 // the graph's origin dedup — NOT the retired appkit concatenation.
 //
 // PURE of biz: nothing here names a todo, a list, or an app — the
-// store is a DECOUPLED-BIZ design (RFC 0014's motivating pattern: the
+// store is a DECOUPLED-BIZ design (the motivating pattern: the
 // reactivity library over opaque cells).
 
 use pouch::{ Vec };

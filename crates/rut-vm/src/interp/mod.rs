@@ -1,7 +1,7 @@
-//! The interpreter loop — RFC 0034: one struct, one thread, one heap.
+//! The interpreter loop: one struct, one thread, one heap.
 //! Register frames, typed ops, traps as `Err(Trap)` (never Rust panics),
 //! fuel + heap budgets checked at loop back-edges and every allocation
-//! (RFC 0040). Traps are catchable only at the host boundary (RFC 0001 P4).
+//!. Traps are catchable only at the host boundary.
 //!
 //! The ACTIVE frame lives directly on the `Vm` (`cur_*`); calls push it
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
@@ -95,7 +95,7 @@ struct SavedFrame {
 }
 
 /// The full interpreter cursor, swappable for a re-entrant `vm.call`
-/// (RFC 0022 §1: a host fn may call back into rut). The outer frame's
+/// (a host fn may call back into rut). The outer frame's
 /// registers and frame stack are stashed while the nested call runs on a
 /// fresh stack; both Ok and Trap restore the outer cursor exactly, so a
 /// propagated nested trap leaves the outer frame resumable.
@@ -123,13 +123,13 @@ pub struct Vm {
     since_check: u32,
     pub hooks: HostHooks,
     /// the dispatch table, dense by func idx — the `Vm::new` join
-    /// (RFC 0025) built it from the registry; the hot path copies one
+    /// built it from the registry; the hot path copies one
     /// `HostSlot` (a code pointer, a state word, the declared return)
     /// and dispatches. No Rc, no name work, no allocation.
     host_slots: Vec<HostSlot>,
     /// the boxed host bodies — `host_slots[i].ctx` points into these;
     /// owning them keeps every ctx word valid for the machine's lifetime
-    /// (single thread, RFC 0034)
+    /// (single thread)
     host_keep: Vec<Box<dyn std::any::Any>>,
     /// the trap channel: a host body records its trap here instead of
     /// returning `Result`; `call_host` checks the flag the moment the
@@ -153,7 +153,7 @@ pub struct Vm {
     op_tags: Vec<Vec<u8>>,
     /// threaded handler table, built once and reused across bails
     thread_table: rut_vm_threaded::Table<Vm>,
-    // ---- the async driving loop (RFC 0018 / RFC 0035 §4) ----
+    // ---- the async driving loop ----
     /// launched/parked frames to (re)drive — plain cell handles, each
     /// queue entry owning one reference (retained on enqueue, released
     /// on pop)
@@ -180,7 +180,7 @@ pub struct Vm {
     cx_ty: Option<TypeId>,
 }
 
-/// Const-generic op codes for the scalar op bodies — RFC 0032: the opcode is
+/// Const-generic op codes for the scalar op bodies: the opcode is
 /// the operation, so each specialized `addi`/`andi`/`lti`/... instantiates a
 /// monomorphic body and the `match OP` folds without relying on inlining.
 /// (Enums can't be const generic params on stable, hence the `i32` codes.)
@@ -216,11 +216,11 @@ const TY_ANY: TypeId = u32::MAX;
 
 impl Vm {
     /// Boot the machine. `registry` is the embedder's host-fn binding
-    /// table (RFC 0022/0025) — built BEFORE the Vm (an embedder depends
+    /// table — built BEFORE the Vm (an embedder depends
     /// on nothing else) and consumed here: every host thunk the program
     /// declares is resolved against it, so a declared-but-unbound fn is
     /// a construction error, never a mid-run trap. Call
-    /// `HostRegistry::verify_against` first for the full RFC 0025
+    /// `HostRegistry::verify_against` first for the full
     /// contract (it also checks the bound-but-undeclared direction).
     pub fn new(
         prog: Rc<Program>,
@@ -228,7 +228,7 @@ impl Vm {
         hooks: HostHooks,
         mut registry: HostRegistry,
     ) -> Result<Vm, Trap> {
-        // ---- the host join (RFC 0025) ----
+        // ---- the host join ----
         // Resolve every host thunk's binding NOW; slots are dense by
         // func idx, one row each: the adapter code pointer, the boxed
         // body's ctx word, the declared return for the refcount law,
@@ -250,7 +250,7 @@ impl Vm {
                             TrapKind::Invalid,
                             format!(
                                 "host fn `{name}` is declared by the program but never bound — \
-                                 register the body in the HostRegistry before Vm::new (RFC 0025)"
+                                 register the body in the HostRegistry before Vm::new"
                             ),
                         )
                     })?;
@@ -306,7 +306,7 @@ impl Vm {
                     .filter(|(_, fd)| prog.types.repr_of(fd.ty).is_ref())
                     .map(|(i, _)| i as u16)
                     .collect(),
-                // `?T` (RFC 0044): a one-slot nullable box retains its payload
+                // `?T`: a one-slot nullable box retains its payload
                 TyKind::Opt { elem } => {
                     if prog.types.repr_of(*elem).is_ref() {
                         vec![0]
@@ -324,7 +324,7 @@ impl Vm {
             .map(|f| f.code.iter().map(rut_vm_threaded::tag_of).collect())
             .collect();
         let thread_table = rut_vm_threaded::build_table::<Vm>();
-        // the async driving loop's boot scan (RFC 0018): every trait
+        // the async driving loop's boot scan: every trait
         // named `Future<..>` contributes its `yield` slot, and the cx
         // record is the `RunContext`-named Data type — both minted by
         // the compiler; programs without async scan to empty
@@ -403,7 +403,7 @@ impl Vm {
         self.heap.used_bytes()
     }
 
-    /// The in-crossing rc (RFC 0023 §2): a host body storing a rut
+    /// The in-crossing rc: a host body storing a rut
     /// value takes its own reference (`retain` — the "retain on store"
     /// law) and releases it when the value leaves the store (`release`
     /// — "release on replace/remove"; §0.8 i's release-context
@@ -416,7 +416,7 @@ impl Vm {
         self.heap.release(s);
     }
 
-    /// VM-heap high-water mark (RFC 0039 accounting) — the peak live
+    /// VM-heap high-water mark — the peak live
     /// heap over the run, for embedding/benching hosts.
     pub fn heap_peak(&self) -> u64 {
         self.heap.peak_bytes()
@@ -467,8 +467,8 @@ impl Vm {
     }
 
     /// Call an exported function with host values — the host boundary
-    /// (RFC 0035 §3). Traps unwind here (RFC 0034 §2). Re-entrant: a host
-    /// fn holding `&mut Vm` may call back into rut (RFC 0022 §1) — the
+    ///. Traps unwind here. Re-entrant: a host
+    /// fn holding `&mut Vm` may call back into rut — the
     /// nested call runs on a fresh frame stack under the same budget, and
     /// the outer cursor is restored whether the callee returns or traps
     /// (a propagated nested trap keeps the outer frame resumable; resuming
@@ -584,11 +584,11 @@ impl Vm {
             | (Value::I64(0), TyKind::Nil) // `return;` crosses as a zero word
             | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
             // nil binds a `?T` parameter as the null slot (the flat
-            // representation; RFC 0044's zero — there is no `Value::Opt`,
+            // representation; the zero — there is no `Value::Opt`,
             // so nil is the one shape the flat arm needs).
             (Value::Nil, TyKind::Opt { .. }) => Slot::null(),
             // a non-nil payload re-enters BOXED under `?T` (the host-side
-            // `T → ?T` funnel, RFC 0044): `call` decodes the root ret
+            // `T → ?T` funnel): `call` decodes the root ret
             // through `slot_to_value` — which nil-flattens — and then
             // re-marshals that `Value` under the declared type, so a
             // `?T` component arrives unboxed and `alloc_opt_value` makes
@@ -670,14 +670,14 @@ impl Vm {
         // life, so the slice stays valid through the end of this call;
         // only immutable argv-table words are read through it (the
         // program is frozen after construction — the same trust the
-        // threaded loop's raw pointers run on, RFC 0034).
+        // threaded loop's raw pointers run on).
         let args: &[Reg] = unsafe {
             let prog = &*Rc::as_ptr(&self.prog);
             let f = self.cur_func as usize;
             &prog.funcs[f].argv[argv_off as usize..argv_off as usize + argc as usize]
         };
         // snapshot the args: the register file may swap inside the body
-        // (nested calls). `Slot` is Copy (one machine word, RFC 0015 §5).
+        // (nested calls). `Slot` is Copy (one machine word).
         const INLINE_ARITY: usize = 8;
         let mut inline = [Slot::null(); INLINE_ARITY];
         let mut spill: Vec<Slot> = Vec::new();
@@ -702,7 +702,7 @@ impl Vm {
             return Err(t);
         }
         // the returned slot's reference count IS the register's —
-        // transfer, not borrow (crossing-ownership law, RFC 0023 §2).
+        // transfer, not borrow (crossing-ownership law).
         // The is-ref verdict is the join's bit (phase 2) — no
         // `type_repr` lookup on the hot path.
         if let Some(d) = reg_opt(dst) {
@@ -730,7 +730,7 @@ impl Vm {
         Slot::int(0)
     }
 
-    /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).
+    /// Resume after a budget trap (the frame IS the loop state).
     pub(crate) fn resume_raw(&mut self) -> Result<Value, Trap> {
         if !self.running {
             return Err(Trap::new(TrapKind::Invalid, "nothing to resume"));
@@ -738,7 +738,7 @@ impl Vm {
         self.run_loop()
     }
 
-    /// The typed host boundary (RFC 0023, revised): call an export with
+    /// The typed host boundary: call an export with
     /// Rust values, get a Rust value back — `Value`/`Slot` are internal
     /// marshaling formats, never seen by the embedder. Re-entrancy,
     /// budgets, and trap semantics are exactly `call`'s.
@@ -772,7 +772,7 @@ impl Vm {
 
     /// Mint an `opaque` box owning a rut `str` — `opaque(str)` for
     /// hosts that hand rut a handle over host-built text (the logger's
-    /// named logger; RFC 0014/0026). The handle owns one reference.
+    /// named logger). The handle owns one reference.
     pub fn alloc_opaque_str(&mut self, s: String) -> Result<OpaqueRef, Trap> {
         let slot = self.heap.alloc_str(s)?;
         let p = self.heap.alloc_opaque(slot, rut_core::types::TY_STR)?;
@@ -808,7 +808,7 @@ impl Vm {
     /// read a rut-side box itself — `Slot` is crate-private — so this is
     /// the one pub reader: a Rut entry's payload classifies by its
     /// `val_ty` (ints/bool as raw bits, `str`/`bytes` as owned copies), a
-    /// Host payload entry (RFC 0023) has no rut value inside and is
+    /// Host payload entry has no rut value inside and is
     /// `Unsupported`, and any other `val_ty` — a user-defined key — is
     /// `Unsupported` naming the type.
     pub fn opaque_key_payload(&self, h: &OpaqueRef) -> Result<KeyPayload, Trap> {
@@ -836,7 +836,7 @@ impl Vm {
                 other => Ok(KeyPayload::Unsupported(other)),
             },
             // a host payload entry: the payload is the host's own Rust
-            // data (RFC 0023) — never a native key
+            // data — never a native key
             crate::heap::store::OpaqueEntry::Host(_) => {
                 Ok(KeyPayload::Unsupported(rut_core::types::TY_OPAQUE))
             }
@@ -913,11 +913,10 @@ impl Vm {
     }
 
     /// A scalar-repr vtable receiver's static type, if it is one
-    /// (RFC 0012 §2). A primitive trait-impl target widens as a raw
+    ///. A primitive trait-impl target widens as a raw
     /// word — the slot names no cell, so the static register type (the
-    /// verifier enforces registers hold their declared types, RFC 0015
-    /// §5) is the dispatch key. `None` = a ref-repr register: the cell
-    /// handle's own type reaches the vtable (RFC 0015 §6).
+    /// verifier enforces registers hold their declared types) is the dispatch key. `None` = a ref-repr register: the cell
+    /// handle's own type reaches the vtable.
     pub(crate) fn scalar_recv_ty(&self, recv: Reg) -> Option<TypeId> {
         let rty = self.regs_ty(recv);
         (rty != TY_ANY && !self.is_ref(rty)).then_some(rty)
@@ -936,7 +935,7 @@ impl Vm {
     }
 }
 
-/// The outcome of one drive step (RFC 0018): the driven frame either
+/// The outcome of one drive step: the driven frame either
 /// ran to completion (its state field retired to null) or suspended at
 /// a checkpoint (a non-null checkpoint singleton).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -946,8 +945,8 @@ pub enum Drive {
 }
 
 impl Vm {
-    // ---- the engine-half record API (RFC 0018) ----
-    // The host set's bodies receive `&mut Vm` (RFC 0022/0025) — launch,
+    // ---- the engine-half record API ----
+    // The host set's bodies receive `&mut Vm` — launch,
     // abort, and sleep live behind that crossing, so the frame-cell
     // surgery they perform goes through these focused helpers.
 
@@ -1002,7 +1001,7 @@ impl Vm {
         }
     }
 
-    /// The rut-value box's payload — the RFC 0014 erasure box's
+    /// The rut-value box's payload — the erasure box's
     /// engine-half recovery for host bodies (the async lane's `opaque`
     /// crossings): the held slot and its runtime type. `None` when the
     /// slot is not a box holding a rut value — a host-payload box
@@ -1018,7 +1017,7 @@ impl Vm {
         }
     }
 
-    /// Seal a freshly minted rut value into the RFC 0014 erasure box
+    /// Seal a freshly minted rut value into the erasure box
     /// (the async lane's `__sleep` mint): the entry OWNS `val`'s
     /// reference, and the returned owning handle carries the box's own
     /// reference straight to the host-fn return path
@@ -1030,8 +1029,9 @@ impl Vm {
         Ok(self.heap.opaque_handle_take(unsafe { boxed.r }))
     }
 
-    // ---- the async driving loop (RFC 0018; the host loop's engine
-    // half — RFC 0035 §4's run_until_idle / next_deadline columns) ----
+    // ---- the async driving loop (the host loop's engine
+    // half — the run_until_idle / next_deadline columns;
+    // the model: `docs/src/reference/async.md`) ----
 
     /// The virtual clock (deterministic tests: hosts advance it; the
     /// sleep future's yield arms deadlines against it).
@@ -1137,7 +1137,7 @@ impl Vm {
     }
 
     /// One drive step of a future: a re-entrant call of its `yield`
-    /// (the InterpCursor stash/restore — the RFC 0022 nested-entry
+    /// (the InterpCursor stash/restore — the nested-entry
     /// machinery), with a freshly minted cx over the frame edge. The
     /// answer reads off the state field: null → [`Drive::Done`] (and a
     /// registered awaiter, if any, re-enqueues), else [`Drive::Parked`].
@@ -1176,7 +1176,7 @@ impl Vm {
             fields.borrow_mut().set(0, fut);
         }
         let r = if self.prog.funcs[fid as usize].host_id.is_some() {
-            // the engine-backed thunk (RFC 0018): a bodyless FuncCode
+            // the engine-backed thunk: a bodyless FuncCode
             // whose host body implements `Future::yield` — the sleep
             // future's timer dance. Run the crossing directly on the
             // (frame, cx) pair: the crossing borrows both (the
@@ -1474,7 +1474,7 @@ mod tests {
     #[test]
     fn a_host_payload_box_is_unsupported() {
         let mut vm = empty_vm();
-        // the box's payload is Rust, not a rut value (RFC 0023) — there
+        // the box's payload is Rust, not a rut value — there
         // is no key to read, and the entry names Opaque for the trap
         let b = crate::heap::Opaque::alloc(&mut vm, 42i64).unwrap();
         assert_eq!(
@@ -1533,7 +1533,7 @@ mod tests {
         let b = vm.heap.alloc_bytes(vec![7, 8, 9]).unwrap();
         let c = clone_reg0_of(&mut vm, b);
         // equal content, DIFFERENT cell — the copy escape hatch, not an
-        // alias (the one `bytes.clone()` law, RFC 0044)
+        // alias (the one `bytes.clone()` law)
         assert_ne!(unsafe { b.r }, unsafe { c.r }, "the clone must be a fresh cell");
         assert_eq!(cell_of(c).bytes_copy(), vec![7, 8, 9]);
         assert_eq!(cell_of(b).bytes_copy(), vec![7, 8, 9], "the original is untouched");

@@ -1,4 +1,4 @@
-//! The orphan rule (RFC 0012 §2a, the orphan-rule batch phase 1): for
+//! The orphan rule (the orphan-rule batch phase 1): for
 //! every `impl Trait for Type` at least one of the pair is defined in
 //! the pkg whose source declared the block — tracked through the
 //! mount/splice model by the unit's origin map (a spliced leaf keeps its
@@ -186,7 +186,7 @@ fn main() -> i32 { return 0; }
         ds.contains(
             "orphan impl: neither `Mark` nor `Box` is defined in this pkg — \
              `Mark` is tr's, `Box` is fmt's; an `impl Trait for Type` needs \
-             at least one of the pair declared in its own pkg (RFC 0012 §2a)"
+             at least one of the pair declared in its own pkg"
         ),
         "{ds}"
     );
@@ -214,7 +214,7 @@ fn main() -> i32 { return 0; }
         ds.contains(
             "orphan impl: neither `Mark` nor `str` is defined in this pkg — \
              `Mark` is tr's, `str` is a builtin, in no pkg; only a trait of \
-             this pkg may be implemented for a builtin (RFC 0012 §2a)"
+             this pkg may be implemented for a builtin"
         ),
         "{ds}"
     );
@@ -406,7 +406,7 @@ entry fn main() -> nil {
         ds.contains(
             "orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — \
              `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` \
-             needs at least one of the pair declared in its own pkg (RFC 0012 §2a)"
+             needs at least one of the pair declared in its own pkg"
         ),
         "{ds}"
     );

@@ -1,24 +1,24 @@
-// pouch — the growable sequence package (RFC 0028): `Vec<T>` in rut over
-// the non-growable heap array `[T]` (RFC 0005 §9).
+// pouch — the growable sequence package: `Vec<T>` in rut over
+// the non-growable heap array `[T]`.
 //
 //   [v; n]           the repeat construction — n slots filled with v
 //   a[i] get/set     (ArrGet / ArrSet)
 //   a.len()          the allocated length — the capacity
 //
-// The backing is a nullable-handle array (`buf: [?T]`, `[nil; cap]`,
-// RFC 0044): the repeat needs a VALUE and a generic `T` has none —
+// The backing is a nullable-handle array (`buf: [?T]`, `[nil; cap]`):
+// the repeat needs a VALUE and a generic `T` has none —
 // `nil` is the slot's zero, and `push`/element stores take the value's
 // handle (a share — no copy). The fused `v[i]`/`for (x of v)` lowering
-// treats the `?T` handles as ordinary slots (RFC 0044): loads yield the
+// treats the `?T` handles as ordinary slots: loads yield the
 // `?T` (uses auto-deref), stores take the coerced handle, so reads and
 // writes alias the stored cells — binding an element copies nothing.
 //
 // Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
-// builtin `Iterator` contract (RFC 0012), which resolves the `buf`/`len`
-// backing fields directly — never a per-element method call (RFC 0032 §1.1).
+// builtin `Iterator` contract, which resolves the `buf`/`len`
+// backing fields directly — never a per-element method call.
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
-// The type body is FIELDS ONLY (RFC 0012) — every method lives in the
+// The type body is FIELDS ONLY — every method lives in the
 // inherent `impl Vec<T>` block below, the type's module only.
 pub class Vec<T> {
     buf: [?T];          // capacity == buf.len() == cap; nil = the slot's zero
@@ -36,7 +36,7 @@ impl Vec<T> {
         return Self { buf: [nil; cap], len: 0, cap: cap };
     }
 
-    // `filled(v, n)` — n slots of `v` (RFC 0005 §9's repeat, boxed for
+    // `filled(v, n)` — n slots of `v` (the repeat, boxed for
     // the caller): the value-carrying construction. A scalar fill is the
     // memset-class op; the old `zeroed(n)` cannot exist generically — a
     // generic `T` has no zero value to fill with.
@@ -48,9 +48,9 @@ impl Vec<T> {
         return Self { buf: buf, len: n, cap: n };
     }
 
-    // `slice(from, to) -> ?Vec<T>` is compiler-lowered (RFC 0042 §6):
+    // `slice(from, to) -> ?Vec<T>` is compiler-lowered:
     // an O(1) fixed-length window over this vector's backing array,
-    // boxed as the nullable (RFC 0044's `T → ?T`). Writes through the
+    // boxed as the nullable (the `T → ?T`). Writes through the
     // window hit this vector; the window is fixed-length and detaches
     // if this vector grows. (Not a rut method — declared here as the
     // surface contract.)
@@ -91,7 +91,7 @@ impl Vec<T> {
     }
 
     // `Vec<u8>` is the mutable binary builder; `freeze` copies exactly the
-    // live length (not the capacity) into the immutable `bytes` (RFC 0004).
+    // live length (not the capacity) into the immutable `bytes`.
     pub fn freeze(self) -> bytes {
         let n = self.len;
         let mut a: [u8] = [0u8; n];

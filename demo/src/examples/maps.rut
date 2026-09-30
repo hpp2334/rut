@@ -2,13 +2,13 @@
 // wrap the native key table (the `nmap_host` crossings): the key crosses
 // DIRECTLY on a typed lane and the host hashes it (FNV-1a for `str` /
 // `bytes`, mix64 for the integers) — there is no hashing trait to
-// implement. Admission is the compile-time union bound (RFC 0043 §A5):
+// implement. Admission is the compile-time union bound:
 // `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str |
 // bytes` — a key type outside the set fails AT the instantiation (the
 // escape hatch: encode it canonically to `bytes`). `get` answers `?V` —
-// `nil` is absent (RFC 0005 §10), so a miss is COMPARED, never rendered:
+// `nil` is absent, so a miss is COMPARED, never rendered:
 // `m.get(k) == nil`. A hit returns the STORED cell, not a copy (the
-// aliasing law, RFC 0044). Every map rides the `[?V]` sidecar (the
+// aliasing law). Every map rides the `[?V]` sidecar (the
 // type-name-law batch: the val-column alias rows are repealed — one
 // name, one decl). Float keys are absent by design: floats have no
 // stable equality contract.

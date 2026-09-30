@@ -506,7 +506,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// owner's compiled row carries), and link binds the call to the
     /// owner's fn. The trait's declared signature (registered from the
     /// surface) types the call; the receiver crosses bare (a
-    /// reference-repr target's ABIs coincide, RFC 0012 §5).
+    /// reference-repr target's ABIs coincide).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn compile_extern_impl_template_call(
         &mut self,

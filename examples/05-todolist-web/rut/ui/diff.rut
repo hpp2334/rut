@@ -51,7 +51,7 @@ pub fn ev_run(e: Ev, detail: str) -> opaque {
 }
 
 /// The patch state — plain rut data, a field of the app container
-/// (RFC 0003 §1: the state crosses, the host re-passes it).
+/// (the state crosses, the host re-passes it).
 pub struct T1Root {
     parent: opaque; // the mounted root element
     prev: ?Widget = nil; // the previous tree — the diff's left side

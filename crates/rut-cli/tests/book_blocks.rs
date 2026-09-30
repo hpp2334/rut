@@ -162,7 +162,7 @@ fn book_blocks_compile_and_run() {
                 heap_limit_bytes: Some(4 * 1024 * 1024),
                 interrupt_every: 1024,
             };
-            // the bindings BEFORE the Vm (RFC 0025): the same set the wasm
+            // the bindings BEFORE the Vm: the same set the wasm
             // host's rut_run installs — the buttons' answers are the truth
             let mut hosts = rut_vm::interp::HostRegistry::new();
             rut_std::logger::install_std_log(&mut hosts, move |msg| {

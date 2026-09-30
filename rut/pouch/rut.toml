@@ -1,4 +1,4 @@
-# pouch/ — the growable sequence package (RFC 0028): `Vec<T>` in rut.
+# pouch/ — the growable sequence package: `Vec<T>` in rut.
 # Publishes COMPILED (the linkable-classes phase): the class's methods
 # cross on the surface's inherent rows (generic — placeholder
 # signatures the consumer substitutes per instantiation), and a

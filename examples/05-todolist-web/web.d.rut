@@ -2,19 +2,19 @@
 // example-local by the phase-0 survey's decision:
 // `docs/todolist-web-survey.md` §4, mounted per the `rt` precedent —
 // `Session::register_module` with `host_scope = "web"`). Every signature
-// is concrete over the crossing set (RFC 0023 §1): str, i32, i64, bool,
-// opaque. Elements cross as opaque handles (RFC 0014) — the one cell
+// is concrete over the crossing set: str, i32, i64, bool,
+// opaque. Elements cross as opaque handles — the one cell
 // shape an embedder may hand out; rut holds them across turns and the
-// release at rc 0 is the handle's `Drop` (RFC 0016 §3).
+// release at rc 0 is the handle's `Drop`.
 //
-// The closure law (RFC 0025): closures never cross. Listeners register
+// The closure law: closures never cross. Listeners register
 // by id (`ui_listen` returns one) and every asynchronous fact re-enters
 // rut through the ONE entry fn the app declares:
 //
 //   entry fn on_event(c: opaque, kind: i32, subject: str, detail: str);
 //     c       = the app container — the ONE opaque `main` returned at
 //               boot; the pump re-passes it on every turn (phase 2's
-//               shape: RFC 0003 §1's own law — rut has no mutable
+//               shape — rut has no mutable
 //               module state, so the state lives in the container the
 //               host holds and passes back, the 00-todolist pattern)
 //     kind 1  = EV_DOM   (subject = listener id as str; detail = the
@@ -60,6 +60,6 @@ pub host fn ui_set_input_value(el: opaque, v: str);
 /// its Closure pushes one event row per fire into the host's queue.
 pub host fn ui_listen(el: opaque, event: str) -> i64;
 
-/// The simulated-latency primitive — the host owns time (RFC 0018's own
-/// law); the "server" answers after `ms` as an EV_TIMER turn.
+/// The simulated-latency primitive — the host owns time;
+/// the "server" answers after `ms` as an EV_TIMER turn.
 pub host fn tim_after(ms: i64, tag: str);

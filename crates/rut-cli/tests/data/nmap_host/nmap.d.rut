@@ -1,6 +1,6 @@
 // nmap_host/nmap.d.rut — the native key-table experiment's host surface:
 // `pub host fn` decls only — the bodies live in rut-std's
-// `install_std_nmap` (RFC 0023 §2). This file is mirrored BYTE-FOR-BYTE
+// `install_std_nmap`. This file is mirrored BYTE-FOR-BYTE
 // by the test fixture `crates/rut-cli/tests/data/nmap_host/nmap.d.rut` —
 // update BOTH when the surface changes.
 //
@@ -14,12 +14,12 @@
 // crossing for every integer primitive and `bool`, the sign/zero-
 // extension law riding the wrapper's casts exactly as the h-family's —
 // and `_y` is `bytes`; floats have no row at all now), and VALUES are
-// never inspected, so they SEAL: `v: opaque` is RFC 0014's erasure box
+// never inspected, so they SEAL: `v: opaque` is the erasure box
 // (`opaque(v)` at the wrapper's edge), the entry retains the box cell,
 // `-> ?opaque` answers the STORED box (nil = absent; the aliasing law
 // rides the box — two gets name one box, and `opaque.downcast<V>` IS
 // the box's inner cell), and `map_hvremove` releases the held box in-
-// crossing (the box's own release walks the payload — RFC 0016 §3).
+// crossing (the box's own release walks the payload).
 // Reading an `Empty` entry — an `hput` birth with no value — TRAPS
 // loudly (a caller bug, never a silent nil, §0.8 g), and so does a
 // `Bits` cell (a raw `map_val_set_*` store is not a seal box; read it
@@ -30,7 +30,7 @@
 // VALUE BOXES as `HashMap` entries — hashed with the pinned mapset
 // constants (mix64 / FNV-1a 64, bit-for-bit) through an identity
 // hasher, compared by CONTENT, released by the payload's `finalize`
-// hook at store-entry death (RFC 0016 §3).
+// hook at store-entry death.
 
 pub host fn map_new(cap: i64) -> opaque;
 
@@ -51,7 +51,7 @@ pub host fn map_len(m: opaque) -> i32;
 //
 // The f pair is the same storage through an `f64`-typed crossing:
 // `to_bits`/`from_bits` at the boundary, raw bits byte-for-byte both
-// directions (rut has no float bitcast — RFC 0007 §1).
+// directions (rut has no float bitcast).
 
 pub host fn map_val_set_u(m: opaque, handle: i32, v: u64);
 

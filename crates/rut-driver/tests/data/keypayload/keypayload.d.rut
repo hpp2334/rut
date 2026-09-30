@@ -1,4 +1,4 @@
-// keypayload.d.rut — the H1 probe surface (RFC 0026): the host
+// keypayload.d.rut — the H1 probe surface: the host
 // classifies an `opaque` box's payload against the closed native-key
 // set (ints/bool, str, bytes — everything else reports Unsupported so
 // the caller can trap naming the type).

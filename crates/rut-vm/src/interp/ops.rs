@@ -12,7 +12,7 @@ impl Vm {
         }
     }
 
-    /// The rut-visible type of a value slot (RFC 0014/0023): a rut-value
+    /// The rut-visible type of a value slot: a rut-value
     /// box answers its payload's runtime type, a host payload box the box
     /// itself (TY_OPAQUE — `o is opaque` true, `o is T` misses for every
     /// rut T), anything else its cell's own type. Store entries (the P2
@@ -27,7 +27,7 @@ impl Vm {
         cell_of(s).ty
     }
 
-    /// The `is` law's type (RFC 0014, 2026-09): `is` names the BOX, never
+    /// The `is` law's type: `is` names the BOX, never
     /// the payload — any opaque (host or rut) answers TY_OPAQUE, so
     /// `o is opaque` (or an alias) hits and `o is T` misses for every
     /// payload T; recovery is `downcast<T>` only (its own TidOf keeps
@@ -41,7 +41,7 @@ impl Vm {
 
     /// The TidOf/downcast law: a host payload box has no rut runtime type
     /// — report the sentinel so `downcast<T>` compares false for every T
-    /// and yields None — never a trap (RFC 0014).
+    /// and yields None — never a trap.
     pub(crate) fn tid_ty(&self, s: Slot) -> TypeId {
         if let Some(e) = crate::heap::store::store_entry(s) {
             if let crate::heap::store::OpaqueEntry::Host(_) = &e.e {
@@ -59,7 +59,7 @@ impl Vm {
     pub(super) fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
-        // the primitive-optional store (RFC 0044 §5): decode the raw
+        // the primitive-optional store: decode the raw
         // element; non-nil mints a fresh opt VALUE whose reference passes
         // to dst — release the displaced value, retain nothing.
         if let Repr::OptPrim(_) = repr {
@@ -159,7 +159,7 @@ impl Vm {
                 seq_get(cell_of(arr), i)?
             }
             // a window obj: an ELEMENT read through the window —
-            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_get(obj_cell, i)?,
             _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
         };
@@ -209,7 +209,7 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
         let raw = self.nil_checked(self.cur_regs[obj as usize])?;
-        // the downcast ALIAS handoff (RFC 0014, refval-round2): the `?T`
+        // the downcast ALIAS handoff (refval-round2): the `?T`
         // result IS the opaque box, so the nullable deref (field 0) reads
         // the box's payload slot at the payload's own repr — a store slot
         // at P2, so the tag routes BEFORE any cell deref. Cell-repr
@@ -284,7 +284,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `WeakNew` (RFC 0017 v1) — `Weak.new(v)`: a WeakBox side cell holding
+    /// `WeakNew` — `Weak.new(v)`: a WeakBox side cell holding
     /// the referent's UNRETAINED slot word, registered into the
     /// referent's weak list. `ty` is the instantiated `Weak<elem>` id.
     /// THE ONE CONSUMING OP: the incoming reference is released and the
@@ -307,7 +307,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `WeakUpgrade` (RFC 0017 v1) — `w.upgrade()`: the live referent
+    /// `WeakUpgrade` — `w.upgrade()`: the live referent
     /// retained into a fresh `?elem` box (`ty` is the `?elem` id — the
     /// MakeOpt mint minus the boxing of null), or the NULL SLOT when the
     /// referent died: a true `nil`, never a box containing nil. The
@@ -344,7 +344,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `MakeOpt` — box `v` into a fresh one-slot cell (RFC 0044, the
+    /// `MakeOpt` — box `v` into a fresh one-slot cell (the
     /// `T → ?T` coercion). The box ALIASES `v`'s cell — sharing, never a
     /// copy; primitives/`nil` copy the bits. `ty` is the nullable's own
     /// type.
@@ -355,10 +355,10 @@ impl Vm {
             TyKind::Opt { elem } => *elem,
             _ => unreachable!("MakeOpt on a non-nullable type"),
         };
-        // the box aliases the payload's cell (RFC 0044): a cell-repr
+        // the box aliases the payload's cell: a cell-repr
         // element (or an `fn` value, whose slot is the closure cell)
         // retains the handle — a window box references its window too
-        // (RFC 0042 §6). Primitives/`nil` copy the bits.
+        //. Primitives/`nil` copy the bits.
         let is_fn = matches!(self.prog.types.kind(elem), TyKind::Fn { .. });
         let is_cell_repr = self.prog.types.repr_of(elem).is_ref() || is_fn;
         let raw_null = unsafe { raw.r.is_null() };
@@ -380,7 +380,7 @@ impl Vm {
         Ok(())
     }
 
-    /// `nil` legality (RFC 0005): a null slot reaching a dereference is
+    /// `nil` legality: a null slot reaching a dereference is
     /// the `NilDeref` trap — never a silent read.
     #[inline]
     pub(super) fn nil_checked(&self, s: Slot) -> Result<Slot, Trap> {
@@ -391,7 +391,7 @@ impl Vm {
     }
 
     /// The op's operand span, sliced from the CURRENT function's pool —
-    /// ops address their argument lists by `(off, argc)` (RFC 0032).
+    /// ops address their argument lists by `(off, argc)`.
     #[inline(always)]
     pub(super) fn cur_argv<'p>(&self, prog: &'p Program, off: u32, argc: u16) -> &'p [Reg] {
         &prog.funcs[self.cur_func as usize].argv[off as usize..off as usize + argc as usize]
@@ -462,7 +462,7 @@ impl Vm {
                     ),
                 )
             })?;
-        // an engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+        // an engine-backed thunk: a bodyless FuncCode whose
         // `host_id` names the registered body — the sleep future's
         // `Future::yield`. Run the host crossing; there is no frame to
         // enter (the same law `Op::Call` applies to host fns).

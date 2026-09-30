@@ -21,7 +21,7 @@
 //!
 //! The consistency law: a type hint's text is the SAME string phase 1's
 //! hover shows for the binding — one source (`Binding::ty` /
-//! `LetDef::ty`, RFC 0007 literal defaults included) — and the tooltip
+//! `LetDef::ty`, literal defaults included) — and the tooltip
 //! IS the binding's hover markdown. Divergence would be a bug.
 
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position};
@@ -472,7 +472,7 @@ mod tests {
         .join("\n");
         let d = doc(&src);
         let hs = w(&d, &[]).all();
-        // the RFC 0007 float default types `total`, the [Point] element
+        // the float default types `total`, the [Point] element
         // types `p`, the literal default types `i`
         assert_eq!(labels(&hs), [": f32", ": Point", ": i32"], "{hs:?}");
         assert_eq!(pos(&hs[1]), end_of(&src, "for (let p", 1));
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn hint_and_hover_agree_on_the_type_text() {
         // the consistency law: the hint's type is the hover's type —
-        // one source (the binding pass), RFC 0007 defaults included
+        // one source (the binding pass), defaults included
         let src = [
             "class Circle {",
             "    r: f64;",

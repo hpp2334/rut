@@ -8,7 +8,7 @@
 //! ```toml
 //! # rut/pouch/rut.toml
 //! name = "pouch"
-//! entry.type = "./pouch.d.rut"        # the surface (RFC 0029)
+//! entry.type = "./pouch.d.rut"        # the surface
 //! entry.lib  = "./pouch.rut"          # the body (omitted while surface-only)
 //! ```
 //!
@@ -24,7 +24,7 @@
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
 //! consumer manifest (`[deps]`).
 //!
-//! The dep kinds (RFC 0045): `[deps]` is today's transitively-mounted
+//! The dep kinds: `[deps]` is today's transitively-mounted
 //! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
 //! the peer) with `optional = true` marking the presence-mounted kind
 //! whose integration group is the descriptor's `lib` file; `[dev-deps]`
@@ -41,14 +41,14 @@ use std::collections::BTreeMap;
 /// the module directory.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Entry {
-    /// `.d.rut` surface path — the declaration/type half (RFC 0029)
+    /// `.d.rut` surface path — the declaration/type half
     pub type_path: Option<String>,
     /// body path — a `.rut` source
     pub lib: Option<String>,
     /// additional `.rut` body files, spliced after `lib` in listed
-    /// order — ONE module, one namespace (RFC 0041 §5, the multi-lib
-    /// entry; contrast the presence-gated impl-only peer groups of
-    /// RFC 0045 §3, which ride `[peer-deps]` instead)
+    /// order — ONE module, one namespace (the multi-lib
+    /// entry; contrast the presence-gated impl-only peer groups, which
+    /// ride `[peer-deps]` instead)
     pub libs: Vec<String>,
 }
 
@@ -58,22 +58,22 @@ pub struct Entry {
 pub struct Manifest {
     pub name: Option<String>,
     pub entry: Entry,
-    /// `format = "rutbundle"` — bundle-shaped manifests (RFC 0038 §2);
+    /// `format = "rutbundle"` — bundle-shaped manifests;
     /// directory loading ignores it
     pub format: Option<String>,
     /// `format_version` — the bundle LAYOUT version, refused on load when
-    /// unknown (RFC 0038 §4)
+    /// unknown
     pub format_version: Option<u64>,
     /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
     /// the host to resolve; the Session does not read the filesystem.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `[peer-deps]` (RFC 0045 §2) — REQUIRED by default; the CONSUMER
+    /// `[peer-deps]` — REQUIRED by default; the CONSUMER
     /// supplies the peer, it is never pulled transitively. `optional =
     /// true` marks the presence-mounted kind whose integration group is
     /// the descriptor's `lib` file. Descriptors: `path` (string),
     /// `optional` (bool), `lib` (string) — nothing else.
     pub peer_deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `[dev-deps]` (RFC 0045 §2) — mounted ONLY when building/testing
+    /// `[dev-deps]` — mounted ONLY when building/testing
     /// the pkg itself (the program root), never in a consumer's world.
     /// Same descriptor shape as `[deps]`.
     pub dev_deps: BTreeMap<String, BTreeMap<String, String>>,
@@ -85,8 +85,7 @@ pub struct Manifest {
     /// formatter tool, never the loader.
     pub style: BTreeMap<String, String>,
     /// `host_scope` — the host-fn registration prefix when it must differ
-    /// from the package name (`rt` keeps its historical `rt:log` scope,
-    /// RFC 0022)
+    /// from the package name (`rt` keeps its historical `rt:log` scope)
     pub host_scope: Option<String>,
 }
 
@@ -110,7 +109,7 @@ pub fn valid_spec(spec: &str) -> bool {
 /// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
 /// `entry.lib` / `entry.libs` (bare or under `[entry]`),
 /// and the dep tables `[deps]` / `[peer-deps]` / `[dev-deps]`
-/// (RFC 0045) whose values are inline tables.
+/// whose values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     let mut m = Manifest::default();
     let mut section = Section::Top;
@@ -154,7 +153,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                     }
                     m.name = Some(name);
                 }
-                // bundle-shaped manifests (RFC 0038 §2)
+                // bundle-shaped manifests
                 "format" => m.format = Some(parse_string(value, lineno)?),
                 "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
                 // the host-fn registration prefix override (`rt` → `rt:log`)
@@ -208,7 +207,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
             }
         }
     }
-    // D4 (RFC 0045 §2): `[peer-deps]` + `[dev-deps]` is the sanctioned
+    // D4: `[peer-deps]` + `[dev-deps]` is the sanctioned
     // both-kinds pairing (the ruling); anything riding `[deps]` beside
     // either is a manifest error naming both rows — a pkg is either
     // pulled transitively or required of the consumer / held for
@@ -216,16 +215,16 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     for name in m.deps.keys() {
         if m.peer_deps.contains_key(name) {
             return Err(ManifestError(format!(
-                "`{name}` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both (RFC 0045 §2)"
+                "`{name}` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
             )));
         }
         if m.dev_deps.contains_key(name) {
             return Err(ManifestError(format!(
-                "`{name}` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both (RFC 0045 §2)"
+                "`{name}` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both"
             )));
         }
     }
-    // The multi-lib entry law (RFC 0041 §5): `libs` is an ordered tail
+    // The multi-lib entry law: `libs` is an ordered tail
     // on the base `lib`, so the base must exist; every element is a
     // `.rut` source (a `.d.rut` is a decl surface, not a body — the
     // same refusal `[peer-deps]` `lib` gets); and no file rides twice
@@ -233,7 +232,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     if !m.entry.libs.is_empty() {
         if m.entry.lib.is_none() {
             return Err(ManifestError(format!(
-                "`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail (RFC 0041 §5)"
+                "`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail"
             )));
         }
         let base = m.entry.lib.as_deref().expect("checked just above");
@@ -241,12 +240,12 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
         for lib in &m.entry.libs {
             if lib == base || seen.contains(lib) {
                 return Err(ManifestError(format!(
-                    "`entry.libs` names `{lib}` twice — the splice would duplicate every name in it (RFC 0041 §5)"
+                    "`entry.libs` names `{lib}` twice — the splice would duplicate every name in it"
                 )));
             }
             if lib.ends_with(".d.rut") || !lib.ends_with(".rut") {
                 return Err(ManifestError(format!(
-                    "`entry.libs` names `{lib}` — every lib is a `.rut` source (a `.d.rut` decl surface is not a body; RFC 0041 §5)"
+                    "`entry.libs` names `{lib}` — every lib is a `.rut` source (a `.d.rut` decl surface is not a body)"
                 )));
             }
             seen.push(lib.clone());
@@ -297,7 +296,7 @@ fn parse_u64(value: &str, lineno: usize) -> Result<u64, ManifestError> {
 }
 
 /// Parse a single-line TOML string array — `["./a.rut", "./b.rut"]` —
-/// the value shape `entry.libs` takes (RFC 0041 §5). Strict: quoted
+/// the value shape `entry.libs` takes. Strict: quoted
 /// strings, comma-separated, no trailing comma, nothing else.
 fn parse_string_array(value: &str, lineno: usize) -> Result<Vec<String>, ManifestError> {
     let v = value.trim();
@@ -310,7 +309,7 @@ fn parse_string_array(value: &str, lineno: usize) -> Result<Vec<String>, Manifes
     let inner = inner.trim();
     if inner.is_empty() {
         return Err(ManifestError(format!(
-            "line {}: `libs` cannot be empty — drop the key for a single-file module (RFC 0041 §5)",
+            "line {}: `libs` cannot be empty — drop the key for a single-file module",
             lineno + 1
         )));
     }
@@ -340,7 +339,7 @@ fn parse_bool(value: &str, lineno: usize) -> Result<bool, ManifestError> {
 /// Split `{ k = v, k2 = v2 }` (single-line) into raw key/value pairs —
 /// values are NOT parsed here; each table's rules decide what a value
 /// may be (strings everywhere; `optional` is the one bool the grammar
-/// learns, RFC 0045 §2).
+/// learns).
 fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)>, ManifestError> {
     let v = value.trim();
     let Some(inner) = v.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
@@ -364,7 +363,7 @@ fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)
 }
 
 /// A `[deps]` descriptor: string-only values, and `optional` is
-/// rejected — it is a `[peer-deps]` attribute (RFC 0045 §2).
+/// rejected — it is a `[peer-deps]` attribute.
 fn parse_deps_descriptor(
     value: &str,
     lineno: usize,
@@ -382,7 +381,7 @@ fn parse_deps_descriptor(
     Ok(out)
 }
 
-/// A `[peer-deps]`/`[dev-deps]` descriptor (RFC 0045 §2): `path` and
+/// A `[peer-deps]`/`[dev-deps]` descriptor: `path` and
 /// `lib` are strings (`lib` is the peer-gated integration file — an
 /// impl-only `.rut` source; a `.d.rut` decl surface does not gate),
 /// `optional` is the one bool, and any other key is the `[entry]`
@@ -402,7 +401,7 @@ fn parse_peer_descriptor(
                 let v = parse_string(&val, lineno)?;
                 if v.ends_with(".d.rut") {
                     return Err(ManifestError(format!(
-                        "line {}: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate (RFC 0045 §3)",
+                        "line {}: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate",
                         lineno + 1
                     )));
                 }
@@ -422,8 +421,8 @@ fn parse_peer_descriptor(
     Ok(out)
 }
 
-/// `optional` is the one bool the inline-table grammar learns (RFC 0045
-/// §2); peers are REQUIRED by default, so the flag must say `true` or
+/// `optional` is the one bool the inline-table grammar learns;
+/// peers are REQUIRED by default, so the flag must say `true` or
 /// `false` exactly. Stored as its source spelling.
 fn parse_optional_flag(value: &str, lineno: usize) -> Result<String, ManifestError> {
     match value.trim() {
@@ -542,7 +541,7 @@ entry.type = "./pouch.d.rut"
 
     #[test]
     fn host_scope_parses_and_inline_retires() {
-        // the host pkg's manifest keys (RFC 0022 / the host-pkgs plan):
+        // the host pkg's manifest keys:
         // `host_scope` overrides the registration prefix. `inline` (the
         // retired source-inlining flag) parses as an unknown key — old
         // manifests keep loading, the flag does nothing.
@@ -556,7 +555,7 @@ entry.type = "./pouch.d.rut"
         assert_eq!(m.entry.lib.as_deref(), Some("./ink.rut"));
     }
 
-    // ---- the dep kinds (RFC 0045): the three tables, `optional`, the
+    // ---- the dep kinds: the three tables, `optional`, the
     // `lib` group key, D4 — the T11 manifest-error shapes ----
 
     /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
@@ -625,7 +624,7 @@ nmapset = { path = "../nmapset" }
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate (RFC 0045 §3)"
+            "line 2: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate"
         );
     }
 
@@ -637,7 +636,7 @@ nmapset = { path = "../nmapset" }
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both (RFC 0045 §2)"
+            "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
         );
         let err = parse_manifest(
             "name = \"j\"\n[deps]\npouch = { path = \"../pouch\" }\n[dev-deps]\npouch = { path = \"../pouch\" }\n",
@@ -645,7 +644,7 @@ nmapset = { path = "../nmapset" }
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "`pouch` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both (RFC 0045 §2)"
+            "`pouch` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both"
         );
         // peer + dev together stays legal — the sanctioned pairing
         assert!(parse_manifest(JSON).is_ok());

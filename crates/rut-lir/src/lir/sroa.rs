@@ -1,4 +1,4 @@
-//! SROA — scalar replacement of non-escaping record literals (RFC 0009).
+//! SROA — scalar replacement of non-escaping record literals.
 //!
 //! A `MakeRecord` whose register is read only by `GetF` of non-reference
 //! fields is a pure local: no other value can observe its identity, no ref

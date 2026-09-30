@@ -8,7 +8,7 @@
 // Event kinds are the frozen numbers from web.d.rut: 1 = EV_DOM,
 // 2 = EV_TIMER. The entry shape is phase 2's: `main` RETURNS the app
 // container and `on_event` takes it back FIRST — rut has no mutable
-// module state (RFC 0003 §1), so the state crosses and the pump
+// module state, so the state crosses and the pump
 // re-passes it every turn. The harness keeps no state; its container is
 // the empty box.
 

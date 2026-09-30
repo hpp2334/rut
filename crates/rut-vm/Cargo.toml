@@ -3,7 +3,7 @@ name = "rut-vm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut VM — self-managed RC heap (RFC 0016/0039), load-time verifier (0033 §2), interpreter with fuel+heap budgets (0034/0040)"
+description = "the rut VM — self-managed RC heap, load-time verifier (0033 §2), interpreter with fuel+heap budgets (0034/0040)"
 
 [lib]
 name = "rut_vm"

@@ -1,5 +1,5 @@
-//! Sequence natives (RFC 0032 §1.1 R2): the heap array's runtime length
-//! (`Array<T>.len()` / `bytes_len`, RFC 0005/0004).
+//! Sequence natives: the heap array's runtime length
+//! (`Array<T>.len()` / `bytes_len`).
 use super::*;
 
 impl Vm {
@@ -16,7 +16,7 @@ impl Vm {
     }
 
     /// `v.slice(from, to)` — an O(1) window over the backing array
-    /// (RFC 0042 §6). recv = the backing array cell (or a box/window to
+    ///. recv = the backing array cell (or a box/window to
     /// flatten); args = [from, to, live_len]. Bounds are the caller's
     /// LIVE length, not the capacity. The result is an `ArrView` cell —
     /// the caller boxes it as `*Vec<T>`.

@@ -4,12 +4,12 @@
 //! (`Moderator`), the crossing protocol lives in ~15 lines of `entry fn`
 //! shims, and this side mirrors it — [`Plugin`] is the typed embedder
 //! surface; `vm.call` happens in exactly one place (`Plugin::fire`),
-//! plus the `emit` host fn's nested render call (RFC 0022 §1).
+//! plus the `emit` host fn's nested render call.
 //!
 //! Both opaque directions meet here: rut's `Moderator` state comes back
-//! as a rut-constructed `opaque` (RFC 0014), the host's event bus goes
+//! as a rut-constructed `opaque`, the host's event bus goes
 //! in as a host-constructed [`Opaque`]`<EventBus>` — `subscribe` and
-//! `emit` are that box's callbacks, reached only through the RFC 0023
+//! `emit` are that box's callbacks, reached only through the
 //! borrow guards.
 
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ pub struct Plugin {
 
 impl Plugin {
     /// Load the plugin module from a module directory (`rut.toml`) or a
-    /// packed `.rutbundle` (RFC 0038) — the two forms of the same
+    /// packed `.rutbundle` — the two forms of the same
     /// contract; the root spec comes from the manifest, not the caller.
     /// `init` registers the callback names; the table is frozen from
     /// then on.
@@ -65,7 +65,7 @@ impl Plugin {
             .program
             .ok_or_else(|| Trap::new(TrapKind::Invalid, "compile produced no program"))?;
         rut_vm::verify::verify(&prog).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
-        // bindings BEFORE the Vm (RFC 0025): the .d.rut surface and the
+        // bindings BEFORE the Vm: the .d.rut surface and the
         // bound bodies must agree — a mismatch panics HERE, never mid-run
         let mut hosts = rut_vm::interp::HostRegistry::new();
         install(&mut hosts);
@@ -185,7 +185,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
         (Opaque<EventBus>, &str, &str) -> (),
         |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
             // The bus stays MUTABLY BORROWED across the nested vm.call
-            // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs
+            // (re-entrancy + the borrow guard): `render_line` runs
             // on a fresh frame stack while the emitting handler is parked
             // mid-op, and a second `emit` fired from inside `render_line`
             // would trap on the guard instead of racing.

@@ -62,7 +62,7 @@ const OverlayLine = memo(function OverlayLine(props: {
  * synced like the gutter. Tab inserts two spaces — UNMODIFIED Tab only
  * (the H-3 un-trap: Shift+Tab/with-modifier Tab keep the browser's
  * focus walk, and Escape blurs, so Run/Resume/budget/the pane tabs
- * stay keyboard-reachable). No editor dependency (RFC 0041 §3 — a
+ * stay keyboard-reachable). No editor dependency (a
  * CodeMirror upgrade is a noted path, not taken).
  */
 export function Editor(props: {

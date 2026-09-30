@@ -1,4 +1,4 @@
-// nmapset — the hermetic stand-in (RFC 0045 fixtures): a two-param
+// nmapset — the hermetic stand-in: a two-param
 // generic class with one method.
 pub class Map<K, V> {
     keys: [K];

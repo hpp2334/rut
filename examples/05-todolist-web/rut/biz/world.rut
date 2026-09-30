@@ -3,11 +3,11 @@
 /// The state record: the store, the atoms, the derived, the machine's
 /// mutations. Fields are HANDLES — keys into the store — and the
 /// bundle owns no machinery: no rail, no flush, no recompute pass.
-/// Built ONCE at boot; the host re-passes it every turn (RFC 0003 §1).
+/// Built ONCE at boot; the host re-passes it every turn.
 pub class World {
     // THE FIELDS ARE PUB: the world is the app's state home and the
     // store-probe spec (tests/store_probe.rut) reads the same handles
-    // the app does — one surface, no probe-only shape (RFC 0003 §2).
+    // the app does — one surface, no probe-only shape.
     pub store: Store;
     pub items$: Source<Vec<Todo>>; // the committed list — "the board"
     pub reqs$: Source<Vec<Req>>; // the booked requests

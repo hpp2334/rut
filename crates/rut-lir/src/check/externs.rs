@@ -1,4 +1,4 @@
-//! The used-module/extern registry: `use`d fns, consts, types, traits, impls and namespaces, plus the `builtin impl` table — the surface bindings the use-both gate (RFC 0012) speaks through.
+//! The used-module/extern registry: `use`d fns, consts, types, traits, impls and namespaces, plus the `builtin impl` table — the surface bindings the use-both gate speaks through.
 
 use super::*;
 
@@ -35,8 +35,8 @@ impl<'a> Ctx<'a> {
             .insert(name, ExternFn { func, params, ret, is_async, host });
     }
 
-    /// Bind a `builtin impl` numeric method of a primitive (core only,
-    /// RFC 0032 §1.1 R2): `(method name → receiver prim, lowering id)`.
+    /// Bind a `builtin impl` numeric method of a primitive (core only):
+    /// `(method name → receiver prim, lowering id)`.
     /// AMBIENT — primitive receivers resolve their methods without a
     /// `use`; rut-lir expands the call inline.
     pub fn add_builtin_impl(
@@ -101,7 +101,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Bind a used core builtin container (`Array`/`Option`/
-    /// `Result`/`Opaque` — RFC 0028): the type constructor is the
+    /// `Result`/`Opaque`): the type constructor is the
     /// compiler's own; the binding gates the NAME.
     pub fn add_extern_native_type(&mut self, name: IdentId, kind: rut_core::binary::NativeTy) {
         self.extern_native_types.insert(name, kind);
@@ -114,11 +114,11 @@ impl<'a> Ctx<'a> {
         self.extern_traits.insert(name, native);
     }
 
-    /// Bind a trait from a used module's surface (RFC 0012 §5): the
+    /// Bind a trait from a used module's surface: the
     /// descriptor joins THIS module's trait table (so slot numbering,
     /// widening and vtables treat it like a declared trait). The name
     /// resolves only when the module used it — the use-both gate's
-    /// enforcement point (RFC 0012 §6). Method names re-intern from the
+    /// enforcement point. Method names re-intern from the
     /// surface's interner; parameter/ret ids pass through verbatim —
     /// they are packed with the scopes the surface's type blocks were
     /// registered under (`use_types`).
@@ -151,7 +151,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Bind a trait impl registered by a used module's surface
-    /// (RFC 0012 §2 — the impl may live in any module). `methods` pair
+    /// (the impl may live in any module). `methods` pair
     /// each trait method with the exporter's scope-qualified fn id
     /// (slot ABI); `methods_concrete` the concrete-ABI twin.
     pub fn add_extern_impl(
@@ -503,7 +503,7 @@ impl<'a> Ctx<'a> {
         self.extern_native_fns.insert(name);
     }
 
-    /// Bind a namespace head (RFC 0028): `use calc::{Math}`.
+    /// Bind a namespace head: `use calc::{Math}`.
     pub fn add_extern_namespace(&mut self, name: IdentId) {
         self.extern_namespaces.insert(name);
     }
@@ -515,7 +515,7 @@ impl<'a> Ctx<'a> {
 
 
     /// Extern impls on `target` whose method set contains `name`
-    /// (registered by any module, RFC 0012 §2) — the use-gate diagnostic
+    /// (registered by any module) — the use-gate diagnostic
     /// reads these even when the trait's name was never used.
     pub fn extern_impl_method(&self, target: TypeId, name: IdentId) -> Option<usize> {
         self.extern_impls.iter().position(|im| {

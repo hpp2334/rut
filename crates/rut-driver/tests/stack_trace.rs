@@ -1,5 +1,5 @@
-//! `capture_stacktrace()` + the `StackTrace` builtin class (RFC 0036,
-//! err-channel phase 2). The surface is RFC 0025's `builtin class` row —
+//! `capture_stacktrace()` + the `StackTrace` builtin class (
+//! err-channel phase 2). The surface is the `builtin class` row —
 //! a pure signature contract; the engine implements it. The pins here:
 //!
 //! - the frame walk: RAW frames, innermost first, `[c, b, a]` order at
@@ -7,7 +7,7 @@
 //! - the call-site line/col of every frame (1-based, the callee ident's
 //!   column — the compiler bakes pc → (line, col) while the module
 //!   source is in hand);
-//! - `render()` vs RFC 0036's symbolication shape
+//! - `render()` vs the symbolication shape
 //!   (`at name (module:line:col)`, degrading to `at name (module #f @
 //!   pc p)` when stripped);
 //! - out-of-range index = the LOUD trap (the index is a bug, not data);
@@ -313,7 +313,7 @@ fn recursion_pads_every_frame() {
 #[test]
 fn render_degrades_when_stripped() {
     // a stripped build carries no position table: line/col read 0 and
-    // render degrades to RFC 0036's pc-only shape
+    // render degrades to the pc-only shape
     let src = chain_src();
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
@@ -360,7 +360,7 @@ fn discarded_capture_releases_cleanly() {
 
 #[test]
 fn version_nine_rejects_stale_artifacts() {
-    // v13 is the weak batch (RFC 0017 v1: `TyKind::Weak` + the two Weak
+    // v13 is the weak batch (`TyKind::Weak` + the two Weak
     // ops — new encoded vocabulary, the bump law); v12 was the char
     // exorcism (the nmap-hostvals batch phase 1: the
     // enumerated `char` finishes dying — the char prim tag (11) withdrawn,
@@ -370,7 +370,7 @@ fn version_nine_rejects_stale_artifacts() {
     // policy-bump precedent: `is` answers by the box); v10 was the
     // general scan/classify + builder surface (the json-perf
     // batch phase 2, the 7→8 declared-surface precedent); v9 was the
-    // orphan rule (RFC 0012 §2a, the 5→6 rejection-addition precedent);
+    // orphan rule (the 5→6 rejection-addition precedent);
     // v8 was the declared-surface change (the 6→7 precedent): a v7
     // header is rejected with the standard version error
     let mut bytes = Vec::new();

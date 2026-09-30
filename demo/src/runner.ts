@@ -1,19 +1,19 @@
 /**
- * RutApi resolution — THE RUNNER LAW (RFC 0041 §3, survey D1): the page
+ * RutApi resolution — THE RUNNER LAW (survey D1): the page
  * runs REAL wasm or it shows the error. There is no preview fallback.
  * A missing/failing `rut.wasm` (404, network error, instantiate throw,
  * an export surface that doesn't match this contract) boots the page
  * into `mode: "error"` — a full-page panel naming the exact
  * `npm run build:wasm` command — and the panes never mount.
  *
- * The wasm module is the rut-wasm crate over a raw ABI (RFC 0041 §2):
+ * The wasm module is the rut-wasm crate over a raw ABI:
  *   exports: memory, rut_alloc(len) -> ptr,
  *            rut_compile(src_ptr, src_len) -> envelope,
  *            rut_run(bin_ptr, bin_len, fuel, heap) -> envelope,
  *            rut_resume(extra_fuel, heap) -> envelope,   (survey D5)
  *            rut_drop_frame() -> u32
  * An envelope is [u32 LE length][JSON bytes]; the compile envelope carries
- * the module binary base64-encoded (RFC 0033) — mirrored by rut-api.d.ts.
+ * the module binary base64-encoded — mirrored by rut-api.d.ts.
  */
 
 import type { CompileResult, RutApi, RunResult, Budget } from "./wasm/rut-api";
@@ -168,7 +168,7 @@ export class Runner {
         {
           mode: "wasm",
           banner:
-            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch, nmapset mounted (RFC 0041 §3)",
+            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch, nmapset mounted",
         },
         api,
       );
@@ -178,8 +178,7 @@ export class Runner {
         {
           mode: "error",
           banner:
-            `rut.wasm missing or invalid — run \`${BUILD_WASM_COMMAND}\` in demo/ ` +
-            `(RFC 0041 §3): ${detail}`,
+            `rut.wasm missing or invalid — run \`${BUILD_WASM_COMMAND}\` in demo/ — ${detail}`,
         },
         null,
       );

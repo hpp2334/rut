@@ -111,7 +111,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
-        // inline bounds gate the completed substitution (RFC 0043)
+        // inline bounds gate the completed substitution
         self.ctx.admit_bounds(&md.bounds, &subst, sp);
         // final param/ret types under the completed substitution —
         // through the FnCompiler resolver, so `Self` in the method's
@@ -156,7 +156,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // small instance methods inline at the call site: the class's
-        // `push`/`pop`/`freeze` are rut code (RFC 0005), so an interpreted
+        // `push`/`pop`/`freeze` are rut code, so an interpreted
         // frame per call is the cost of the design; inlining removes it
         // (generic methods never inline — the generic-method gate inside)
         if self.try_inline_method(
@@ -318,7 +318,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return false;
         }
         // a trait-obj parameter loses its per-call origin specialization
-        // in an inline (RFC 0012 §5: one clone per concrete argument,
+        // in an inline (one clone per concrete argument,
         // each binding statically) — that boundary can't splice, so the
         // call stays a call
         if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
@@ -416,7 +416,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return false;
         }
         // a trait-obj parameter loses its per-call origin specialization
-        // in an inline (RFC 0012 §5) — that boundary can't splice
+        // in an inline — that boundary can't splice
         if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
             return false;
         }
@@ -458,7 +458,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = ret_ty;
         let base = self.locals.len();
         // bind `self` (well-known symbol) for the inlined body — reads
-        // alias the receiver register (no copy, RFC 0005 accessor rule)
+        // alias the receiver register (no copy, the accessor rule)
         self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new(), field: NO_FIELD });
         self.inline_self = Some((sym::SELF, recv));
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();

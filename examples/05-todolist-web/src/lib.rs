@@ -13,7 +13,7 @@
 //!   gate on native.
 //!
 //! Shared, target-independent: the registry bindings
-//! ([`hosts`], RFC 0025), the turn law ([`state`]: one door per event
+//! ([`hosts`]), the turn law ([`state`]: one door per event
 //! fn, the queue, the re-entrancy guard), the session mount
 //! ([`mount`]). Thinness law: no app names, no data shipping, no
 //! scheduler — the host knows nothing about todos.

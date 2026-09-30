@@ -1,14 +1,14 @@
-//! Link — merge module binaries into one program (RFC 0035 §1).
+//! Link — merge module binaries into one program.
 //!
 //! At rest every module's `TypeId`s, function ids, trait ids and trait
 //! slots are module-local. Linking rebases them into the global tables:
 //! all modules share the same fixed **boot type prefix** (`TypeTable::boot`),
 //! and each module's remaining types are appended after it. Function ids
 //! and const-pool indices are offset; every `TypeId` reachable from a
-//! type, trait, const, function or op is remapped (RFC 0033 §1: "type_id<T>()
+//! type, trait, const, function or op is remapped ("type_id<T>()
 //! constants are re-based with everything else").
 //!
-//! **Trait ids are global, not offset** (RFC 0012 §5): a trait bound as an
+//! **Trait ids are global, not offset**: a trait bound as an
 //! extern in one module and declared in another is ONE trait — the merged
 //! table dedups by (mapped) name, so every module's `TraitObj` ids,
 //! `IsTrait` probes and trait-method slots land on the same global trait.
@@ -16,12 +16,12 @@
 //!
 //! Impl registrations (`surface.impls`) merge here too: a duplicate
 //! `(trait, type)` pair — unobservable per-module, since trait impls may
-//! live in any module (RFC 0012 §2) — is a link error. Vtable fills for
+//! live in any module — is a link error. Vtable fills for
 //! types a module merely *uses* merge into the owner module's row, so an
 //! impl registered in any module reaches every call site.
 //!
-//! This pass is pure data — nothing runs — and is the compile/link half of
-//! RFC 0035 §1; cyclic uses stay the loader's concern.
+//! This pass is pure data — nothing runs — and is the compile/link half;
+//! cyclic uses stay the loader's concern.
 
 use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, TraitDesc, TraitMethod};
 use crate::ops::Op;
@@ -702,7 +702,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     // the global trait table: mapped trait name -> global trait id. A
     // trait bound as an extern and declared in its owner are ONE trait —
     // dedup by name keeps every module's `TraitObj` ids, `IsTrait` wants
-    // and slots pointing at the same global trait (RFC 0012 §5).
+    // and slots pointing at the same global trait.
     let mut global_trait: std::collections::HashMap<IdentId, u32> =
         std::collections::HashMap::new();
     // global slot index: (global trait id, method) -> global slot
@@ -746,7 +746,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         };
 
         // names: merge this module's interner into the output's — the name
-        // rebase mirrors the type rebase (RFC 0035 §1). Well-known ids are
+        // rebase mirrors the type rebase. Well-known ids are
         // the same in every interner and pass through untouched.
         let m_interner = m.interner;
         let wk = m_interner.well_known_len() as usize;
@@ -927,7 +927,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                         .map(|t| out.interner.name(t.name).to_string())
                         .unwrap_or_else(|| "?".to_string());
                     return Err(LinkError(format!(
-                        "link: duplicate impl `({}, {})` — `{}` and `{}` both register it (RFC 0012 §2: one impl per (trait, type) pair per program)",
+                        "link: duplicate impl `({}, {})` — `{}` and `{}` both register it (one impl per (trait, type) pair per program)",
                         tname, target, owner, m.name
                     )));
                 }
@@ -990,7 +990,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // per-type vtables: keyed by type, slot-indexed, value = func id.
         // Rows for this module's OWN types are assigned; rows for types
         // this module only USES merge — an impl may live in a different
-        // module than the type (RFC 0012 §2), and its fills must reach
+        // module than the type, and its fills must reach
         // the global row the owner module laid down. A mirrored
         // instantiation row's fills land on the CLAIMING row.
         for (i, vt) in m.vtables.into_iter().enumerate() {
@@ -1163,7 +1163,7 @@ fn boot_len() -> usize {
 
 /// Remap the `TypeId`s and names inside a type descriptor. `tm` maps a
 /// module-local trait id to the global one (`TyKind::TraitObj` carries a
-/// trait id, not a `TypeId` — RFC 0015 §6).
+/// trait id, not a `TypeId`).
 fn remap_kind(
     kind: &TyKind,
     map: &impl Fn(TypeId) -> TypeId,
@@ -1396,7 +1396,7 @@ mod tests {
         // module `a` (scope 1) declares Point and registers (Shape, Point);
         // module `b` (scope 2) binds a's Point and registers the same pair.
         // Per-module compiles cannot see each other, so the collision is
-        // detectable only here (RFC 0012 §2).
+        // detectable only here.
         let boot = TypeTable::boot().types.len() as u32;
         let mut mk = |name: &str, scope: crate::id::ScopeId, target: TypeId| {
             let mut p = trait_module(name);

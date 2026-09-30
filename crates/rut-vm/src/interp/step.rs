@@ -23,7 +23,7 @@ impl Vm {
             Op::Const { dst, k } => {
                 let s = self.const_slots[k as usize];
                 // only string consts are heap cells; `type_id`/scalar consts
-                // are plain words (RFC 0033 §3)
+                // are plain words
                 let is_ref = matches!(self.prog.consts[k as usize], ConstVal::Str(_));
                 if is_ref {
                     self.heap.retain(s);
@@ -168,7 +168,7 @@ impl Vm {
                 let raw = r!(idx);
                 // a null slot names no member: the dispatch falls to the
                 // default arm (the async weave retires a frame by nulling
-                // its state field — a re-drive lands here, RFC 0018)
+                // its state field — a re-drive lands here)
                 let m = if unsafe { raw.r.is_null() } {
                     u32::MAX as usize
                 } else {
@@ -241,14 +241,14 @@ impl Vm {
                 self.heap.release(old);
             }
             Op::TidOf { dst, obj } => {
-                // a host payload box has no rut runtime type (RFC 0023):
+                // a host payload box has no rut runtime type:
                 // report the sentinel so `downcast<T>` compares false for
-                // every T and yields None — never a trap (RFC 0014)
+                // every T and yields None — never a trap
                 let ty = self.tid_ty(r!(obj));
                 self.cur_regs[dst as usize] = Slot::int(ty as i64);
             }
             Op::IsType { dst, obj, want } => {
-                // the `is` law (RFC 0014, 2026-09): `is` names the box,
+                // the `is` law: `is` names the box,
                 // never the payload — `o is X` misses for every payload
                 // X, `o is opaque` (or an alias) hits; recovery is
                 // `downcast<T>` only (its own TidOf keeps reading the

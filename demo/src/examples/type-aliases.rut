@@ -1,4 +1,4 @@
-// RFC 0043 — type aliases & inline `requires`: `type X = A;` is
+// type aliases & inline `requires`: `type X = A;` is
 // transparent — the alias name binds the TARGET's id everywhere (params,
 // fields, lets), chains expand, and there is no runtime union kind.
 // `type U = A | B;` unions are BOUND-ONLY: legal in `requires` bounds,

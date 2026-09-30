@@ -1,4 +1,4 @@
-// calc/calc.d.rut — `calc`, the `Math` namespace (RFC 0028): the float
+// calc/calc.d.rut — `calc`, the `Math` namespace: the float
 // members are host functions (f64 bodies in `rut-std`, each with an
 // f32 twin under a `_f` suffix — `Math.sqrt_f(x: f32) -> f32`; rut has
 // no overloading, so the width is in the name). No `host class`
@@ -13,7 +13,7 @@
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
 // `checked_*`) moved to core — `builtin impl` methods on the
 // primitives, ambient at the method call (`x.wrapping_add(y)`,
-// std/core.d.rut, RFC 0032 §1.1 R2). `NAN` is core's too
+// std/core.d.rut). `NAN` is core's too
 // (`use core::{NAN}`).
 //
 // Constants (f64, compiler-materialized — the surface grammar has no
@@ -60,7 +60,7 @@ pub host fn max(x: f64, y: f64) -> f64;
 pub host fn signum(x: f64) -> f64;
 
 // ---- f32 twins (same libm bodies on `f32`; the `_f` suffix carries
-// the width — RFC 0028's surface is kept true per-type) ----
+// the width — the surface is kept true per-type) ----
 
 pub host fn sqrt_f(x: f32) -> f32;
 pub host fn floor_f(x: f32) -> f32;

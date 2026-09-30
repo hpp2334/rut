@@ -448,7 +448,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 // methods surface through core's own hover data
             }
             ItemKind::Alias(d) => {
-                // `type X = A;` / `type X = A | B;` (RFC 0043) — the
+                // `type X = A;` / `type X = A | B;` — the
                 // target renders as written
                 let name = ast.name(d.name);
                 idx.types.push(TyDef {

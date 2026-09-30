@@ -3,7 +3,7 @@
 //! [`register_async!`](crate::register_async) sugar that turns one
 //! closure into the row family the weave drives.
 //!
-//! The arrangement (RFC 0018 §2's law, the host lane): calling a host
+//! The arrangement (the host lane): calling a host
 //! async fn mints a COLD engine-woven Future frame whose state field
 //! holds a HOST cell — the opaque box `<name>__start` answers, a
 //! [`Completer`] sealed by [`Ret`]'s into_slot. The frame's
@@ -150,7 +150,7 @@ impl<T: Ret> Completer<T> {
 /// The state cell's crossing: a host async fn's `__start` answers a
 /// `Completer` and it crosses boxed under `opaque` — the same boot id
 /// every host box carries, so the minted `__start` thunk's ret and the
-/// registered body's SIG join by identity (RFC 0025). `into_slot` news
+/// registered body's SIG join by identity. `into_slot` news
 /// the host box ON THE VM THREAD (the mint law); the rows recover it
 /// through `Opaque<Completer<T>>`'s typed read (the payload token
 /// checks the answer type).

@@ -1,7 +1,7 @@
-//! Body compilation —RFC 0031 §2/§3 fused into one walk (M1
+//! Body compilation — fused into one walk (M1
 //! simplification: bidirectional inference + emission together; the
-//! separate SSA-ish HIR of RFC 0031 §3 is a later pass). Output: typed
-//! register bytecode per function (RFC 0032), monomorphized (RFC 0013 §2).
+//! separate SSA-ish HIR is a later pass). Output: typed
+//! register bytecode per function, monomorphized.
 
 use rut_ast::ast::*;
 use crate::check::{Ctx, FnKey, Inst, TcResult};
@@ -28,7 +28,7 @@ mod utf8;
 
 const NEST_MAX: u32 = 1024;
 
-/// The per-function operand pools (RFC 0032): ops address their variadic
+/// The per-function operand pools: ops address their variadic
 /// `Reg` lists and `BrTable` arms by `(off, len)` span into these tables
 /// instead of owning a `Vec` — that is what keeps `Op` at 16 bytes. Lists
 /// are interned (deduplicated) at emission; rewriters that remap registers
@@ -92,15 +92,15 @@ pub(crate) struct Local {
     reg: u16,
     ty: TypeId,
     is_mut: bool,
-    /// for-c induction variables are loop-owned (RFC 0008 §1)
+    /// for-c induction variables are loop-owned
     loop_var: bool,
-    /// origin counting (RFC 0012 §5): the concrete types a trait-typed
+    /// origin counting: the concrete types a trait-typed
     /// binding is known to hold. Single origin ⇒ static dispatch;
     /// empty ⇒ unknown/multiple ⇒ vtable. Only direct constructions
     /// (a widening let, a copied binding, a specialized parameter)
     /// populate it — conservative by construction.
     origins: Vec<TypeId>,
-    /// the async frame-cell field backing this binding (RFC 0018) —
+    /// the async frame-cell field backing this binding —
     /// `NO_FIELD` outside an async body (plain register storage). The
     /// cx and the hidden frame edge stay `NO_FIELD` even inside one:
     /// the driving loop re-mints the cx per drive, so the argv pair is
@@ -112,7 +112,7 @@ pub(crate) struct Local {
 pub(crate) const NO_FIELD: u32 = u32::MAX;
 
 /// The async weave's per-function state, carried on the FnCompiler while
-/// an async fn's body compiles (RFC 0018).
+/// an async fn's body compiles.
 #[derive(Clone)]
 pub(crate) struct AsyncFrame {
     /// argv[0] — the hidden frame cell (register 0 by construction)
@@ -152,7 +152,7 @@ pub struct FnCompiler<'a, 'b> {
     span: u32,
     /// the register holding the value produced by the last compile_expr
     last_reg: u16,
-    /// while inlining a `Slice` accessor (RFC 0005), reads of this local
+    /// while inlining a `Slice` accessor, reads of this local
     /// (`self`) use the receiver register directly — no copy, so element
     /// access pays no per-access ref copy
     inline_self: Option<(IdentId, u16)>,
@@ -161,11 +161,11 @@ pub struct FnCompiler<'a, 'b> {
     inline_ret: Option<(u16, u32)>,
     /// class methods currently being inlined — a recursion guard
     inline_stack: Vec<(IdentId, IdentId)>,
-    /// inside a desugared `for..of` emit closure (RFC 0012 §6):
+    /// inside a desugared `for..of` emit closure:
     /// `break` → `return false`, `continue` → `return true`
     emit_closure: bool,
-    /// Type-union bounds in scope for THIS instantiation (RFC 0043 §3,
-    /// native-fastpath phase 1): fn/method bounds plus — for methods of a
+    /// Type-union bounds in scope for THIS instantiation (native-fastpath
+    /// phase 1): fn/method bounds plus — for methods of a
     /// generic class — the class's own `requires`, filtered to
     /// union-SPELLED bounds (trait bounds stay admission-only). Read by
     /// the method-call capability gate.
@@ -173,7 +173,7 @@ pub struct FnCompiler<'a, 'b> {
     /// locals bound from a union-bounded generic (param/let/field-copy
     /// provenance): local name → the bounded generic
     union_syms: HashMap<IdentId, IdentId>,
-    /// while an async fn's body compiles (RFC 0018): the frame edge,
+    /// while an async fn's body compiles: the frame edge,
     /// the cx edge, and the checkpoint/field allocation counters
     pub(crate) async_frame: Option<AsyncFrame>,
 }
@@ -192,7 +192,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         r
     }
 
-    /// Coerce a computed register into a slot's type (RFC 0044): a `?T`
+    /// Coerce a computed register into a slot's type: a `?T`
     /// slot takes the boxed handle — the mirror of the read-side deref.
     /// The register is returned unchanged when no coercion applies.
     pub(crate) fn coerce_to(&mut self, t: TypeId, to: TypeId, reg: u16, sp_lo: u32) -> u16 {
@@ -208,7 +208,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         reg
     }
 
-    /// Move a value into `dst` under the sharing law (RFC 0044): every
+    /// Move a value into `dst` under the sharing law: every
     /// cell type binds a reference (MovRef — retain new, release old);
     /// primitives and `fn` values copy their immediate slot (Mov).
     /// Binding is O(1) for records, arrays, `str`, `?T` — a share, never
@@ -221,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// Concrete → trait-slot widening at a value boundary (RFC 0012 §4).
+    /// Concrete → trait-slot widening at a value boundary.
     /// A by-value concrete (a scalar — records/`str`/`bytes` already are
     /// cell handles) is BOXED: `Op::Box` carries the concrete type, so the
     /// slot always holds a cell handle — every ref op on the slot is safe
@@ -240,10 +240,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a nullable used as a
+    /// `p.m(..)` / `p[i]` auto-deref: a nullable used as a
     /// receiver or indexee loads its payload cell first — at the
     /// payload's OWN repr (a scalar payload reads its bits, a cell
-    /// payload retains; RFC 0044). TRANSITIVE: a `??T` receiver derefs
+    /// payload retains). TRANSITIVE: a `??T` receiver derefs
     /// twice. Returns the (type, register) to continue from.
     pub(crate) fn deref_for_use(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
         let mut ty = ty;
@@ -293,7 +293,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Bind a local, mirroring it into the async frame cell when the
-    /// async weave is active (RFC 0018): the binding takes the next
+    /// async weave is active: the binding takes the next
     /// frame field and a `SetF` lands the value. Every body binding
     /// goes through here — cell-backed uniformly, no liveness analysis
     /// decides which locals survive a park.
@@ -399,7 +399,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.locals.iter().rev().find(|l| l.name == name)
     }
 
-    /// The origin set of a binding (origin counting, RFC 0012 §5): the
+    /// The origin set of a binding (origin counting): the
     /// concrete types a trait-typed local is known to hold. Empty =
     /// unknown/multiple.
     pub(crate) fn origins_of(&self, name: IdentId) -> Vec<TypeId> {

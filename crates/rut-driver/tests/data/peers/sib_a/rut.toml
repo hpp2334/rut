@@ -1,4 +1,4 @@
-# sib_a — T10's first sibling (RFC 0045 fixtures): a concrete class over
+# sib_a — T10's first sibling: a concrete class over
 # pouch's generic Vec. `inline = true` makes it an inline unit (the
 # splice path), so a consumer importing it splices pouch transitively —
 # the shape that, undeduped, collides with any OTHER pouch-riding use.

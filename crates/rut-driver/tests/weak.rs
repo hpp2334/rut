@@ -1,4 +1,4 @@
-//! `Weak<T>` — the weak reference (RFC 0017 v1, the weak batch). The
+//! `Weak<T>` — the weak reference. The
 //! surface is the `builtin class` row beside `StackTrace`,
 //! constructed by the class method `Weak.new(v)` with one
 //! member `upgrade() -> ?T`. The pins here:
@@ -454,7 +454,7 @@ fn weak_of_a_primitive_diagnoses_at_the_instantiation() {
 
 #[test]
 fn weak_of_a_fn_value_diagnoses() {
-    // RFC 0016 §1: "everything except primitives and fn values is a heap
+    // "everything except primitives and fn values is a heap
     // cell" — fn values are the one non-prim non-cell, so the admission
     // refuses them with the same law.
     let diags = compile_diags(

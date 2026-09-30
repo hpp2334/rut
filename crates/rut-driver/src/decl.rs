@@ -1,8 +1,8 @@
-//! `.d.rut` surface lowering (RFC 0029 §2 / RFC 0025): a declaration
+//! `.d.rut` surface lowering: a declaration
 //! file's `host fn`s become a mounted module's HOST surface, so a host
 //! pkg is a real package directory — `rut.toml` (`entry.type`, no
 //! `entry.lib`) plus the `.d.rut` itself. The compiler-limitation rule
-//! holds at LOAD time (RFC 0023 §1): every signature must be concrete
+//! holds at LOAD time: every signature must be concrete
 //! over the crossing set, or the load refuses naming the offender.
 //!
 //! What is NOT lowered (yet): `host struct` records and `builtin` decls
@@ -22,7 +22,7 @@ use rut_parser::{parse, Mode};
 
 use crate::session::{Module, ModuleBody};
 
-/// A crossing-set type name → its boot `TypeId` (RFC 0023 §1): the
+/// A crossing-set type name → its boot `TypeId`: the
 /// primitives, `str`/`bytes`, and `opaque`. Everything else a host
 /// signature may spell is a load error.
 fn crossing_ty(name: &str) -> Option<TypeId> {
@@ -48,7 +48,7 @@ fn crossing_ty(name: &str) -> Option<TypeId> {
 
 /// The ANSWER-position crossing table (the legal-host-returns phase):
 /// the plain crossing set plus the three answer optionals — `?str`,
-/// `?bytes`, `?opaque` cross back nil-flattened (RFC 0023 §1's
+/// `?bytes`, `?opaque` cross back nil-flattened (the
 /// optionals law), each mapped to its fixed boot `Opt` row so the
 /// registry's `Option<T>` SIG verifies against the same CONST (the RFC
 /// 0025 join compares ids by identity). Params stay on the plain table:
@@ -102,18 +102,18 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
         for &p in params {
             let MemberKind::Param(pd) = ast.param(p) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: a `self` receiver cannot cross the host boundary (RFC 0023 §1)"
+                    "{origin}: host fn `{fname}`: a `self` receiver cannot cross the host boundary"
                 ));
             };
             let Some(th) = pd.ty else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: a host signature is concrete — every parameter is typed (RFC 0023 §1)"
+                    "{origin}: host fn `{fname}`: a host signature is concrete — every parameter is typed"
                 ));
             };
             let tyname = ty_text(&ast, th);
             let Some(t) = crossing_ty(&tyname) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque` (RFC 0023 §1)"
+                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque`"
                 ));
             };
             ptys.push(t);
@@ -123,7 +123,7 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
                 let tyname = ty_text(&ast, *r);
                 crossing_ret_ty(&tyname).ok_or_else(|| {
                     format!(
-                        "{origin}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, and the answer optionals `?str`/`?bytes`/`?opaque` (RFC 0023 §1)"
+                        "{origin}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, and the answer optionals `?str`/`?bytes`/`?opaque`"
                     )
                 })?
             }

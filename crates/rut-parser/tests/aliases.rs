@@ -1,4 +1,4 @@
-//! Type aliases, union bounds, and inline `requires` (RFC 0043): parse
+//! Type aliases, union bounds, and inline `requires`: parse
 //! shapes, the `where` removal diagnostic, misplaced bounds rejected,
 //! dumper output, and `pub(..)` on `type`.
 
@@ -138,7 +138,7 @@ fn stray_where_diagnoses_with_inline_replacement() {
 #[test]
 fn misplaced_bounds_are_rejected() {
     // struct / trait / builtin generics reject `requires` — class
-    // generics TAKE them (RFC 0043 §A5)
+    // generics TAKE them
     let cases = [
         ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds"),
         ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds"),
@@ -159,7 +159,7 @@ fn misplaced_bounds_are_rejected() {
 
 #[test]
 fn class_requires_parses_into_the_class_frame() {
-    // RFC 0043 §A5: the bounded-gparam grammar extends to classes —
+    // the bounded-gparam grammar extends to classes —
     // bounds land on the class frame, the body still parses
     let src = "\
 trait D { fn d(self) -> u64; }
@@ -255,7 +255,7 @@ fn alias_in_decl_mode_parses_without_body() {
 
 #[test]
 fn where_is_no_longer_reserved() {
-    // `where` left the reserved table (RFC 0043) — it is an ordinary
+    // `where` left the reserved table — it is an ordinary
     // identifier again
     assert!(!rut_parser::is_reserved_kw("where"));
 }

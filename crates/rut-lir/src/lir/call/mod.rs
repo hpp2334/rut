@@ -1,5 +1,5 @@
 //! Calls and member resolution: builtin/free-fn/method/static dispatch,
-//! generic instantiation by unification (RFC 0013 SS2), the RFC 0012
+//! generic instantiation by unification, the
 //! vtable-always rule for trait members, trait-typed receivers, and field reads.
 
 use crate::check::TcResult;
@@ -39,7 +39,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_some() {
                 let ft = self.compile_expr(callee, None)?;
-                // the callee derefs (RFC 0044): `let f =
+                // the callee derefs: `let f =
                 // opaque.downcast<fn(..)>(..)` lands `?fn` — the erased
                 // program calls through its payload
                 let (ft, _) = self.deref_for_use(ft, self.last_reg, sp.lo);
@@ -125,12 +125,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return self.compile_static_call(base, base_generics, member, member_generics, args, expected, sp);
         }
         if segs.len() != 1 {
-            self.ctx.err(sp, "unsupported call path (module loading is not available in this build, RFC 0035)");
+            self.ctx.err(sp, "unsupported call path (module loading is not available in this build)");
             return Err(());
         }
         let name = segs[0].name;
         let generics = segs[0].generics.clone();
-        // core prelude functions (RFC 0028): compiler-lowered, visible
+        // core prelude functions: compiler-lowered, visible
         // only when the name was used from the core surface — the
         // prelude is used, never ambient. A local fn of the same name
         // wins when the use statement is absent (fallthrough below).
@@ -155,8 +155,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         match name {
             sym::OPAQUE => {
-                // `opaque(v)` (RFC 0014; the RFC 0044 surface swap renamed
-                // `opaque(v)`): the erasure box. The payload IS `v` —
+                // `opaque(v)`: the erasure box. The payload IS `v` —
                 // a record/str/bytes binding shares its cell, a primitive
                 // is copied, and a `?T` binding stores the nullable box
                 // (the old `&v`-then-box shape, one spelling shorter).
@@ -165,13 +164,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], None)?;
-                // RFC 0014 seals concrete values; the ONE trait-object
+                // The erasure box seals concrete values; the ONE trait-object
                 // exception is the engine-woven Future (the async lane's
                 // crossings — phase 2b): `launch_future` hands the frame
                 // to the driving loop through the erasure box, and the
                 // box records the `Future<T>` object spelling so the
                 // `downcast<Future<..>>` recovery matches. Every other
-                // trait object keeps the refusal (RFC 0014's amendment:
+                // trait object keeps the refusal (the amendment:
                 // with `any` gone, the erasure box is the only value
                 // lane — polymorphism crosses sealed).
                 let sealed = match self.ctx.types.kind(t) {
@@ -187,7 +186,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => true,
                 };
                 if !sealed {
-                    self.ctx.err(sp, "`opaque` rejects trait objects —they are never boxed (RFC 0014)");
+                    self.ctx.err(sp, "`opaque` rejects trait objects —they are never boxed");
                     return Err(());
                 }
                 let src = self.last_reg;
@@ -197,7 +196,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             sym::PANIC if core_fn => {
                 if args.len() != 1 {
-                    self.ctx.err(sp, "panic(msg) takes a message (RFC 0034 §2)");
+                    self.ctx.err(sp, "panic(msg) takes a message");
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], Some(TY_STR))?;
@@ -208,8 +207,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_NIL);
             }
             sym::CAPTURE_STACKTRACE if core_fn => {
-                // capture_stacktrace() -> StackTrace (RFC 0036 §2,
-                // err-channel phase 2): the frame walk is the VM's, at
+                // capture_stacktrace() -> StackTrace (err-channel
+                // phase 2): the frame walk is the VM's, at
                 // run time — the native mints the trace cell. Opt-in at
                 // the raise site: nothing here touches the hot path.
                 if !args.is_empty() {
@@ -222,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             sym::STRING_JOIN if core_fn => {
                 // join every element of an `Array<str>` in one pass: the
-                // native sizes once and allocates once (RFC 0032 §1.1 R2).
+                // native sizes once and allocates once.
                 if args.len() != 1 {
                     self.ctx.err(sp, "string_join(parts) takes one `Array<str>`");
                     return Err(());
@@ -242,7 +241,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_STR);
             }
             sym::TYPE_ID => {
-                // compile-time constant —never executed (RFC 0015 §3, 0033 §3)
+                // compile-time constant —never executed
                 if generics.len() != 1 || !args.is_empty() {
                     self.ctx.err(sp, format!("{}<T>() takes one explicit type argument", self.ctx.name(name)));
                     return Err(());
@@ -250,17 +249,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.resolve_type_now(generics[0]);
                 let dst = self.new_reg(TY_U32);
                 // a rebasable const-pool entry: link maps the module-local
-                // TypeId into the global table (RFC 0035 §1)
+                // TypeId into the global table
                 let k = self.konst(ConstVal::TypeId(t));
                 self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
                 return Ok(TY_U32);
             }
             sym::I8 | sym::I16 | sym::I32 | sym::I64 | sym::U8 | sym::U16 | sym::U32 | sym::U64
             | sym::F32 | sym::F64 => {
-                // removed when the `as` cast landed (RFC 0007 §1) — the
+                // removed when the `as` cast landed — the
                 // conversion family is spelled `x as T` now. The message
                 // mirrors the `size_of` removal above.
-                self.ctx.err(sp, format!("`{}(x)` was removed — use `x as {}` (RFC 0007 §1)", self.ctx.name(name), self.ctx.name(name)));
+                self.ctx.err(sp, format!("`{}(x)` was removed — use `x as {}`", self.ctx.name(name), self.ctx.name(name)));
                 return Err(());
             }
             sym::STR => {
@@ -277,19 +276,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {}
         }
-        // user free fn (monomorphized instantiation, RFC 0013 §2)
+        // user free fn (monomorphized instantiation)
         if self.ctx.find_free_fn(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
         // used function: signature from the surface, a direct call to the
-        // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
+        // exporter's scope-qualified id
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {            // the host future lane (phase 4): an async host fn's call
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
             if ef.is_async {
                 return crate::lir::asyncfn::compile_host_async_call(self, name, &ef, &args, expected, sp);
             }
-            // the engine-backed sleep future (RFC 0018): minting rides
+            // the engine-backed sleep future: minting rides
             // the first `__sleep` call — the host set's `sleep` wrapper
             // is the only intended caller
             if name == sym::SLEEP_RAW {
@@ -325,7 +324,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(gf) = self.ctx.extern_generic_fn(name).cloned() {
             return self.compile_extern_generic_fn_call(name, &gf, generics, args, expected, sp);
         }
-        // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
+        // builtin bytes type-call: `bytes(n)` zeroed
         if name == sym::BYTES {
             return self.compile_bytes_alloc(args, sp);
         }
@@ -342,7 +341,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
-                "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}` (RFC 0010 §1)",
+                "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}`",
                 self.ctx.name(name), self.ctx.name(name)
             ));
             return Err(());
@@ -356,12 +355,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
 
-    /// mut-binding law (RFC 0003 §1): writing through a handle requires the
+    /// mut-binding law: writing through a handle requires the
     /// head binding to be `let mut`
-    /// RFC 0012 §4: implicit widening — exact > trait-typed when an impl
+    /// Implicit widening — exact > trait-typed when an impl
     /// is REGISTERED for the (trait, type) pair. Nominal: no structural
     /// shape is ever consulted. Same-type always widens.
-    /// RFC 0043 §A5: a value of the enclosing class's generic parameter
+    /// A value of the enclosing class's generic parameter
     /// also widens through its recorded `requires` bound — the registry
     /// hit normally answers first (admission proved the impl at the
     /// instantiation), so this only carries a body whose impl is not
@@ -426,13 +425,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 if let Some(l) = self.lookup(segs[0].name) {
                     // the mut-binding law is uniform under the by-reference
-                    // regime (RFC 0044): every binding shares its cell, so
+                    // regime: every binding shares its cell, so
                     // ANY store through the binding — including through a
                     // `?T` head that derefs first — requires `let mut`
                     // (the old pointer exception is gone)
                     if !l.is_mut && !l.loop_var {
                         self.ctx.err(sp, format!(
-                            "{what} requires a `let mut` binding (the mut-binding law, RFC 0003 §1)"
+                            "{what} requires a `let mut` binding (the mut-binding law)"
                         ));
                         return false;
                     }

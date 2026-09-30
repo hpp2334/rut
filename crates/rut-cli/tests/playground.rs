@@ -1,4 +1,4 @@
-//! Playground classics gate (RFC 0041 §3) — every `demo/src/examples/*.rut`
+//! Playground classics gate — every `demo/src/examples/*.rut`
 //! compiles AND runs clean through the full pipeline: the demo reads the
 //! same sources raw, so what the page offers to run is exactly what the
 //! native engine accepts and executes — never a hand-written guess.
@@ -69,7 +69,7 @@ fn classics_run_clean() {
             heap_limit_bytes: Some(4 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        // the bindings BEFORE the Vm (RFC 0025): the compiled program
+        // the bindings BEFORE the Vm: the compiled program
         // carries calc's and rt:log's thunks (mount = declare = bind);
         // `install_std_nmap` rides like the CLI's — reached only by a
         // program that declares the nmap lane. The log sink discards:

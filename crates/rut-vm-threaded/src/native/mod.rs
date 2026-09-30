@@ -52,7 +52,7 @@ macro_rules! op_handler {
                 }
                 // the root `Ret`: the LAST writeback of the run — without
                 // it a clean exit drops the register-resident fuel
-                // counters and `fuel_used` reads 0 (RFC 0040)
+                // counters and `fuel_used` reads 0
                 Flow::Done(o) => {
                     unsafe { (*m).sync_fuel(next_fuel, used) };
                     return Ok(ThreadOut::Done(o));

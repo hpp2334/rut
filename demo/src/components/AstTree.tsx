@@ -1,5 +1,5 @@
 /**
- * The AST tree renderer (RFC 0041 §3). The wasm `ast` payload is source of
+ * The AST tree renderer. The wasm `ast` payload is source of
  * truth — no display strings on the wire. Every label shown here is
  * derived: names/linkages verbatim, `vis`/`op` through small tables,
  * literal values sliced out of `source` by span.

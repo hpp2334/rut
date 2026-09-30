@@ -1,4 +1,4 @@
-//! `string_encode` / `bytes_decode` (RFC 0004) lowered as a composition of
+//! `string_encode` / `bytes_decode` lowered as a composition of
 //! LIR ops — there is no VM native for either. `str` is a `CellData::Str`
 //! (a Rust `String`, UTF-8); `bytes` is a `u8` array. Both routines are
 //! loops over `StrCodeAt` (encode) / `ArrGet` (decode) with the UTF-8 bit

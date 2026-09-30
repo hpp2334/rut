@@ -1,4 +1,4 @@
-// json — the dep-kinds fixture base (RFC 0045): the trait and every
+// json — the dep-kinds fixture base: the trait and every
 // public name live HERE; the base is pouch-free by law (the extraction
 // constraint), so json mounts light when no peer is present. The
 // peer-gated integration files are the impl-only groups beside this

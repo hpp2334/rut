@@ -21,7 +21,7 @@
 //!   what the program reads; a stale declaration is impossible by
 //!   construction.
 //! * THE STR CONTENT-SKIP — an equal-content write marks nothing (the
-//!   RFC 0044 asymmetry, kept in the one write lane).
+//!   asymmetry, kept in the one write lane).
 //! * DERIVED-ON-DERIVED — the `probe_*` fixture (biz-side now: the
 //!   store layer is decoupled from biz, so the topo fixture lives
 //!   here): upstream recomputes before downstream, downstream sees the
@@ -37,7 +37,7 @@
 //! The mount is the MANIFEST route: the biz pkg is the project root
 //! (`rut/biz/`, spec `app`); its closure is ui + pouch + nmapset +
 //! nmap_host. The session DECLARES the web crossings (ui's t1 does),
-//! and the RFC 0025 contract is all-or-nothing — so the fake-DOM
+//! and the contract is all-or-nothing — so the fake-DOM
 //! bodies bind below, and NO test fires one: the store world is bare
 //! (no t1_mount), every entry is a plain rut call.
 

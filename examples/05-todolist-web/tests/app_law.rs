@@ -39,7 +39,7 @@
 //!      nowhere in `src/`.
 
 /// The biz module's source — the module this gate exists to guard: the
-/// base plus `entry.libs`, spliced the manifest's way (RFC 0041 §5) —
+/// base plus `entry.libs`, spliced the manifest's way —
 /// the gate reads what the program actually compiles. The store/atom
 /// probes are NOT here: they are a test spec (tests/store_probe.rut),
 /// their own module over the same imports — the app's ABI is `main`

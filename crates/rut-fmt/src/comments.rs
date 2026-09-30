@@ -1,7 +1,7 @@
 //! Comment recovery — the gap scan. Comments are NOT in the token
 //! stream (the lexer skips them at `lexer.rs:105-124` and again in
-//! f-string holes at `lexer.rs:515-525`); RFC 0030 §7 leaves comment
-//! fidelity to the formatter, so the formatter recovers them here.
+//! f-string holes at `lexer.rs:515-525`); comment fidelity is left to
+//! the formatter, so the formatter recovers them here.
 //!
 //! The scan is a byte sweep over the gaps BETWEEN consecutive token
 //! spans (plus the head gap before the first token and the tail gap

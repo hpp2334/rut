@@ -1,9 +1,9 @@
-//! `bytes.clone()` — the one copy escape hatch (RFC 0044). Every cell
+//! `bytes.clone()` — the one copy escape hatch. Every cell
 //! type shares on binding; the clone member is the ONE explicit,
 //! one-shot buffer copy. These tests pin the surface end-to-end: the
 //! member compiles, lowers to the `BytesClone` native (a fresh buffer,
 //! never an alias), runs, and `==` still CONTENT-compares a clone equal
-//! to its original (the str/bytes `==` law, RFC 0012 §4). The mutation
+//! to its original (the str/bytes `==` law). The mutation
 //! isolation proof — bytes are immutable in the language, so the
 //! original's storage is rewritten engine-side — lives beside the
 //! native in rut-vm's `interp::tests`.
@@ -68,7 +68,7 @@ fn clone_lowers_to_the_fresh_buffer_native() {
 
 #[test]
 fn clone_content_compares_equal_and_runs() {
-    // `==` on bytes is CONTENT equality (RFC 0012 §4): the fresh buffer
+    // `==` on bytes is CONTENT equality: the fresh buffer
     // is equal to its original, and a different buffer is not. The
     // clone decodes and lenses exactly like the original.
     let sum = run_main(

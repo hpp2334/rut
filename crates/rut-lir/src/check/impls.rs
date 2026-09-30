@@ -1,4 +1,4 @@
-//! Impl search and minting: the (trait, target) registry lookups (local + cross-module, RFC 0012), the parameterized-template dispatch half (RFC 0043 §A5), inline-bound admission, and impl-method ABI keying.
+//! Impl search and minting: the (trait, target) registry lookups (local + cross-module), the parameterized-template dispatch half, inline-bound admission, and impl-method ABI keying.
 
 use super::*;
 
@@ -39,7 +39,7 @@ impl<'a> Ctx<'a> {
     /// instantiation binds its class's template impl (`Vec<i64>` →
     /// `impl I for Vec<T>`), and a nullable/array receiver binds its
     /// element-generic impl (`?i64` → `impl I for ?T`, `[i64]` →
-    /// `impl I for [T]`). Admission (RFC 0043 bounds) and dispatch read
+    /// `impl I for [T]`). Admission (bounds) and dispatch read
     /// through this one law.
     pub fn find_impl_for(&self, trait_id: u32, target: TypeId) -> Option<usize> {
         self.impls
@@ -74,8 +74,8 @@ impl<'a> Ctx<'a> {
     }
 
     /// The impl satisfying `(trait, target)` wherever it lives: a local
-    /// impl block, or another module's surface registration (RFC 0012
-    /// §2/§5). Extern impls are gated on the trait's name having been
+    /// impl block, or another module's surface registration.
+    /// Extern impls are gated on the trait's name having been
     /// used — an unused trait's impl is invisible to dispatch. A used
     /// GENERIC-target impl (`impl JsonSerialize for Vec<T>` compiled in
     /// json) answers a receiver that instantiates the same used
@@ -218,7 +218,7 @@ impl<'a> Ctx<'a> {
         Some(args)
     }
 
-    /// The exact-match door for trait dispatch (RFC 0012 §4/§5): a
+    /// The exact-match door for trait dispatch: a
     /// CONCRETE impl wins unchanged (`find_impl` — also the mint cache);
     /// on a miss, a parameterized trait impl whose unification PRODUCES
     /// the requested trait instantiation is minted for the concrete
@@ -286,7 +286,7 @@ impl<'a> Ctx<'a> {
     }
 
 
-    // ---- inline generic bounds (RFC 0043, admission-only) ----
+    // ---- inline generic bounds (admission-only) ----
 
     /// Resolve one bound member — a `TyUnion` fans out; an alias expands
     /// (validated in pass 1b) before trait-vs-concrete detection.
@@ -300,10 +300,10 @@ impl<'a> Ctx<'a> {
 
     /// The recursive resolver. `in_union` marks members resolved THROUGH a
     /// union spelling — a `TyUnion` bound node, or a union alias in bound
-    /// position. Type-union bounds (RFC 0043 §3, native-fastpath phase 1):
+    /// position. Type-union bounds:
     /// a union bound takes type NAMES only — a trait member diagnoses and
     /// drops out. A trait bound must stand alone (`K requires Enc`), where
-    /// satisfaction is the one-trait fact the RFC 0012 registry answers;
+    /// satisfaction is the one-trait fact the registry answers;
     /// inside a union it would quietly turn capability resolution
     /// ("every named member has the method") into an any-impl fact.
     fn resolve_bound_members_in(
@@ -355,7 +355,7 @@ impl<'a> Ctx<'a> {
             self.err(
                 self.ast.span(node.id()),
                 format!(
-                    "`{tname}` is a trait — a union bound takes type names only; a trait bound must stand alone (RFC 0043)"
+                    "`{tname}` is a trait — a union bound takes type names only; a trait bound must stand alone"
                 ),
             );
             return vec![];
@@ -384,12 +384,12 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The capability probe behind union bounds (RFC 0043 §3,
-    /// native-fastpath phase 1): does `ty` provide `name` as a method?
+    /// The capability probe behind union bounds (native-fastpath
+    /// phase 1): does `ty` provide `name` as a method?
     /// Surfaces scanned: the str/bytes members, prim `builtin impl`s,
     /// inherent data methods (declared or `impl T` blocks), the `[T]`
     /// and `opaque` inherent impls, and trait impls — local and other
-    /// modules' registrations (RFC 0012 §2). Arity/signature stay the
+    /// modules' registrations. Arity/signature stay the
     /// call's business: this answers "a member can be called this way".
     pub(crate) fn member_has_method(&self, ty: TypeId, name: IdentId) -> bool {
         match self.types.kind(ty) {
@@ -449,7 +449,7 @@ impl<'a> Ctx<'a> {
                 .map_or(false, |(rd, _)| rd == d))
     }
 
-    /// A trait impl (local, or another module's registration — RFC 0012 §2)
+    /// A trait impl (local, or another module's registration)
     /// providing `name` on `target`.
     pub(crate) fn has_trait_impl_method(&self, target: TypeId, name: IdentId) -> bool {
         self.impls.iter().any(|im| {
@@ -464,10 +464,10 @@ impl<'a> Ctx<'a> {
     }
 
     /// Gate a completed substitution against the item's inline bounds
-    /// (RFC 0043): the concrete type must satisfy ANY union member —
+    ///: the concrete type must satisfy ANY union member —
     /// a concrete member by `TypeId` equality, a trait member via the
     /// impl registry. Trait-object instantiations satisfy nothing
-    /// (RFC 0013 §2). Admission-only: no IR, no dispatch change.
+    ///. Admission-only: no IR, no dispatch change.
     pub(crate) fn admit_bounds(
         &mut self,
         bounds: &[(IdentId, NodeHandle<AnyTy>)],
@@ -500,12 +500,12 @@ impl<'a> Ctx<'a> {
                         let tname = self.name(self.traits[*tid as usize].name).to_string();
                         let ty = self.type_name(concrete).to_string();
                         format!(
-                            "`{ty}` does not satisfy `{g}` requires `{tname}` — no impl `{tname}` for `{ty}` is registered (RFC 0043)",
+                            "`{ty}` does not satisfy `{g}` requires `{tname}` — no impl `{tname}` for `{ty}` is registered",
                             g = self.name(*g),
                         )
                     }
                     _ => format!(
-                        "`{}` does not satisfy `{}` requires `{}` — no matching type or impl is registered (RFC 0043)",
+                        "`{}` does not satisfy `{}` requires `{}` — no matching type or impl is registered",
                         self.type_name(concrete),
                         self.name(*g),
                         bound_ty_str(self, *bnode),

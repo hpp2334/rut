@@ -1,8 +1,8 @@
-//! Resolve + collect — RFC 0031 §1 over the flat arena: module symbols,
+//! Resolve + collect over the flat arena: module symbols,
 //! the type table, traits & impls (the requires-graph shape lives here),
 //! visibility. Body compilation (fused typecheck + codegen — see lir.rs)
 //! runs over what this pass collects. Errors are Diags; a module with any
-//! diag stops before emit (RFC 0030 §6).
+//! diag stops before emit.
 
 use rut_ast::ast::*;
 use rut_lexer::diag::Diag;
@@ -41,12 +41,12 @@ pub struct DataDecl {
     /// the declaration's AST node — re-read to instantiate generics
     pub node: NodeHandle<AnyItem>,
     /// (name, ty, initializer, member vis — None = the module-private
-    /// default, RFC 0003 §2; checked when modules load, M2) in decl order
+    /// default; checked when modules load, M2) in decl order
     pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)>,
     /// inherent methods (name → MethodDecl node)
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
-    /// RFC 0043 §A5 — the class's admission bounds
+    /// The class's admission bounds
     /// (`class HashMap<K requires i8 | … | bytes, V>`, the nmapset key
     /// union); checked at every
     /// `mk_data_inst`. Empty for structs and for classes without bounds.
@@ -61,7 +61,7 @@ pub struct TraitDeclInfo {
     pub generics: Vec<IdentId>,
 }
 
-/// What a validated type alias resolves to (RFC 0043). A single target
+/// What a validated type alias resolves to. A single target
 /// binds the target's `TypeId`; a union alias is bound-only and never
 /// becomes a value type. `Pending` marks an alias
 /// mid-validation — re-entering it is a cycle.
@@ -73,7 +73,7 @@ pub enum AliasTarget {
     Error,
 }
 
-/// `type X = A;` / `type X = A | B;` (RFC 0043) — declared in pass 1a,
+/// `type X = A;` / `type X = A | B;` — declared in pass 1a,
 /// target validated in pass 1b. Aliases are non-generic: one name, one
 /// decl (the row form is repealed).
 #[derive(Clone, Debug)]
@@ -186,16 +186,16 @@ pub enum FnKey {
     /// so one instantiation per node)
     Lambda(NodeId),
     /// the emit closure of a desugared `for (v of xs)` over the
-    /// `__iterate` protocol (RFC 0012 §6): `body` with `v: E` bound;
+    /// `__iterate` protocol: `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
     ForOfEmit { body: NodeId, var: IdentId },
-    /// An engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+    /// An engine-backed thunk: a bodyless FuncCode whose
     /// `host_id` names the embedder's registered body — the sleep
     /// future's `Future::yield`. The VM joins it like any host fn.
     HostThunk(IdentId),
 }
 
-/// The engine-minted async machinery of one compiled async fn (RFC 0018).
+/// The engine-minted async machinery of one compiled async fn.
 #[derive(Clone, Copy, Debug)]
 pub struct AsyncLayout {
     /// the hidden frame type (locals are its cell-backed fields)
@@ -210,7 +210,7 @@ pub struct AsyncLayout {
 
 /// A monomorphization instantiation: fn key + generic substitution.
 /// `trait_origins` specializes trait-typed parameters per concrete
-/// argument (a trait parameter IS an implicit generic bound, RFC 0012):
+/// argument (a trait parameter IS an implicit generic bound):
 /// one clone of the fn per distinct origin list, each body statically
 /// binding calls on those parameters.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -227,22 +227,22 @@ pub struct Ctx<'a> {
     /// the module's interner: a clone of the AST's at construction (so all
     /// source ids resolve), extended here with synthesized names — type
     /// instantiations (`Array<i32>`), trait instantiations. Moves into the
-    /// emitted `Program` (RFC 0030 §5).
+    /// emitted `Program`.
     pub interner: Interner,
     /// every name the module's `use` statements wrote — the binding
-    /// gate for used surfaces (RFC 0028: the prelude is used,
+    /// gate for used surfaces (the prelude is used,
     /// never ambient)
     pub used: std::collections::HashSet<IdentId>,
     pub diags: Vec<Diag>,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
     pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
-    /// type aliases (RFC 0043): `type X = A;` / `type X = A | B;`
+    /// type aliases: `type X = A;` / `type X = A | B;`
     pub aliases: Vec<AliasDecl>,
-    /// the sequence-contract trait id once referenced (RFC 0012 `Iter`) —
+    /// the sequence-contract trait id once referenced (`Iter`) —
     /// the sequence-lowering path keys on this, never on the trait's name
 
-    /// the iterator-contract trait id once referenced (RFC 0012 `Iterator`)
+    /// the iterator-contract trait id once referenced (`Iterator`)
     /// — `for..of` lowers to `next` when a type implements it and not `Iter`
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
@@ -258,14 +258,14 @@ pub struct Ctx<'a> {
     pub fn_nodes: Vec<(IdentId, NodeHandle<FnNode>)>,
     /// lambda capture lists, filled when the lambda is created:
     /// lambda node → (name, ty) per capture (by value — v1 deviation
-    /// from RFC 0013 §1's by-reference capture, documented)
+    /// from the by-reference capture, documented)
     pub lambda_info: std::collections::HashMap<NodeId, Vec<(IdentId, TypeId, bool)>>,
     /// lambda signatures: body node → (resolved param types incl.
     /// expected-type inference, ret type)
     pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
-    /// `entry fn` names (RFC 0035 §3): the host-callable surface
+    /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
-    /// used functions, bound before body compilation (RFC 0029 surface):
+    /// used functions, bound before body compilation:
     /// name -> signature + the exporter's scope-qualified function id
     pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
     /// The host future lane's minted machinery, one per async host fn
@@ -273,7 +273,7 @@ pub struct Ctx<'a> {
     /// `#hframe@` frame type, the `__start` thunk, the Future inst).
     /// Idempotent per fn — the mint runs at the first call site.
     pub host_async: std::collections::HashMap<IdentId, HostAsyncLayout>,
-    /// core's `builtin impl` numeric methods (RFC 0032 §1.1 R2): method
+    /// core's `builtin impl` numeric methods: method
     /// name → `(receiver prim, lowering id)` — ambient on primitives
     pub builtin_impls: std::collections::HashMap<IdentId, Vec<(TypeId, rut_core::ops::Intrinsic)>>,
     /// used constants (native modules: `calc`): name -> (type, bits)
@@ -282,18 +282,18 @@ pub struct Ctx<'a> {
     pub extern_types: std::collections::HashMap<IdentId, TypeId>,
     /// used types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
-    /// used core builtin containers (RFC 0028): name -> constructor.
+    /// used core builtin containers: name -> constructor.
     /// The prelude is used, never ambient — `Array`/`Opaque` resolve
     /// only through this map
     pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
     /// used core builtin traits: name -> contract
     /// (`Disposal`/`Index`/`Iterator`)
     pub extern_traits: std::collections::HashMap<IdentId, rut_core::binary::NativeTrait>,
-    /// traits exported by used modules' surfaces (RFC 0012 §5):
+    /// traits exported by used modules' surfaces:
     /// name -> the descriptor registered in this module's table. The
     /// name binds only when the module used it — the use-both gate.
     pub extern_trait_decls: std::collections::HashMap<IdentId, ExternTrait>,
-    /// trait impls registered by used modules' surfaces (RFC 0012 §2)
+    /// trait impls registered by used modules' surfaces
     pub extern_impls: Vec<ExternImpl>,
     /// used enums (the linkable-classes phase): name → (the enum's
     /// type id, its members as bound) — a used enum's member paths
@@ -308,7 +308,7 @@ pub struct Ctx<'a> {
     /// placeholder signature + parameter names. The call mints the
     /// mirror instantiation and requests the body from the owner.
     pub extern_generic_fns: std::collections::HashMap<IdentId, ExternGenericFn>,
-    /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
+    /// the emit-closure signature of each desugared `for..of`,
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures)
     pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId, bool)>)>,
@@ -317,7 +317,7 @@ pub struct Ctx<'a> {
     /// only when bound
     pub extern_native_fns: std::collections::HashSet<IdentId>,
     /// Bound namespace heads (`Math` for `calc`) — the qualified
-    /// access form `<namespace>.<member>` (RFC 0028). Name-generic: the
+    /// access form `<namespace>.<member>`. Name-generic: the
     /// LIR routes by membership here, never by a hardcoded string.
     pub extern_namespaces: std::collections::HashSet<IdentId>,
     /// instantiated generic types: id -> (decl, type args)
@@ -326,7 +326,7 @@ pub struct Ctx<'a> {
     pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
     /// generic-trait instantiation cache: (trait, type args) -> trait id
     pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
-    /// the async weave's engine-minted types (RFC 0018): the `RunContext`
+    /// the async weave's engine-minted types: the `RunContext`
     /// cx record (lazily interned once), and per-async-fn hidden frame
     /// types with their checkpoint enums. Engine frames are exactly the
     /// types `await` accepts in v1 — the probe reads the engine-reserved
@@ -360,7 +360,7 @@ pub struct Ctx<'a> {
     /// inputs are this spec and the bound names' exporters
     /// ([`Ctx::extern_origins`]).
     pub own_spec: String,
-    /// the origin pkg of every bound (used) name (RFC 0012 §2a): a used
+    /// the origin pkg of every bound (used) name: a used
     /// type's or trait's DECLARING pkg, recorded beside the binding —
     /// the origin map covers only spliced text, a linked dep contributes
     /// no text, so its names carry their exporter's spec here
@@ -432,11 +432,11 @@ pub struct HostAsyncLayout {
     pub fut_inst: u32,
 }
 
-/// A trait exported by a used module's surface (RFC 0012 §5): the id of
+/// A trait exported by a used module's surface: the id of
 /// the descriptor registered in THIS module's trait table, and the
 /// trait's generic parameter count. The NAME resolves only when the
-/// module used it — the gate is the use-both rule's enforcement point
-/// (RFC 0012 §6), so an impl whose trait was never `use`d stays
+/// module used it — the gate is the use-both rule's enforcement point,
+/// so an impl whose trait was never `use`d stays
 /// invisible to dispatch but visible to the "use `I` .." diagnostic.
 #[derive(Clone, Debug)]
 pub struct ExternTrait {
@@ -444,8 +444,8 @@ pub struct ExternTrait {
     pub generics: usize,
 }
 
-/// A trait impl registered by another module's surface (RFC 0012 §2:
-/// trait impls may live in any module). Dispatch and widening consult
+/// A trait impl registered by another module's surface.
+/// Dispatch and widening consult
 /// these exactly like local impls; the methods are the exporter's
 /// scope-qualified fn ids, called directly (static dispatch) and
 /// carried into vtable fills (link merges the rows). `methods` binds
@@ -492,7 +492,7 @@ pub struct ExternGenericFn {
     pub ret: TypeId,
 }
 
-/// Where a satisfying impl was found (RFC 0012 §4): a local impl block
+/// Where a satisfying impl was found: a local impl block
 /// (its methods monomorphize here) or another module's registration
 /// (its compiled fns are called through scope-qualified ids).
 #[derive(Clone, Copy, Debug)]
@@ -501,9 +501,9 @@ pub enum ImplHit {
     Extern(usize),
 }
 
-/// One `requires` member (RFC 0043): a concrete type (exact `TypeId`
+/// One `requires` member: a concrete type (exact `TypeId`
 /// equality) or a trait (any registered impl satisfies, via the
-/// RFC 0012 registry).
+/// registry).
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum BoundMember {
     Concrete(TypeId),
@@ -511,7 +511,7 @@ pub(crate) enum BoundMember {
 }
 
 /// Display text of a bound/target type node — `A`, `A | B`, `Array<T>`
-/// (diagnostics name the bound, RFC 0043).
+/// (diagnostics name the bound).
 pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
     match ctx.ast.ty(node) {
         TypeKind::TyPath { segs } => {
@@ -545,7 +545,7 @@ impl<'a> Ctx<'a> {
         Ctx::new_scoped(ast, 1)
     }
 
-    /// A module compiled under its own scope (RFC 0035 §1).
+    /// A module compiled under its own scope.
     pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
         // the interner clones the AST's — every source id resolves
         // identically; synthesized names intern here only. The removed-
@@ -636,7 +636,7 @@ impl<'a> Ctx<'a> {
         }
         rut_core::binary::is_core_name(n).then(|| {
             format!(
-                "`{text}` is not in scope — `use core::{{{text}}}` (RFC 0028: the prelude is used, never implicit)"
+                "`{text}` is not in scope — `use core::{{{text}}}` (the prelude is used, never implicit)"
             )
         })
     }
@@ -648,13 +648,13 @@ impl<'a> Ctx<'a> {
     }
 
     /// Use another module's type descriptors so `(scope, local)` ids
-    /// resolve for typechecking and layout (RFC 0035 §1). Descriptor and
+    /// resolve for typechecking and layout. Descriptor and
     /// field names re-intern from the exporter's interner into this
     /// module's — name ids are only comparable within one interner
     /// (well-known ids pass through: they mean the same name everywhere).
     /// `tmap` maps the exporter's trait-table indices to THIS module's
     /// trait ids: trait-typed descriptors (`[trait] Shape`) carried
-    /// across must name the trait here (RFC 0015 §6).
+    /// across must name the trait here.
     pub fn use_types(
         &mut self,
         descs: Vec<RutType>,
@@ -751,10 +751,10 @@ impl<'a> Ctx<'a> {
         self.diags.push(Diag::new(span, msg));
     }
 
-    /// The crossing rule (RFC 0023 §2): what an `entry fn` signature may
-    /// carry. Primitives, `str`, `nil`, `bytes` (the binary buffer,
-    /// RFC 0004), `Option`/`Result` over crossable types — and `Opaque`,
-    /// the host-held box (RFC 0014): the ONE cell shape an embedder may
+    /// The crossing rule: what an `entry fn` signature may
+    /// carry. Primitives, `str`, `nil`, `bytes` (the binary buffer),
+    /// `Option`/`Result` over crossable types — and `Opaque`,
+    /// the host-held box: the ONE cell shape an embedder may
     /// keep and pass back. Every other cell (`TodoList`, `Vec<Todo>`,
     /// a trait object, `Vec<u8>` itself, …) stays inside the VM.
     pub fn crosses_boundary(&self, ty: TypeId) -> bool {
@@ -762,7 +762,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Compile-time enforcement of the crossing rule on every `entry fn`
-    /// (RFC 0035 §3): a bad surface is a source diagnostic with span and
+    ///: a bad surface is a source diagnostic with span and
     /// parameter name — never a runtime "cannot call" surprise.
     pub fn check_entries(&mut self) {
         let entries = self.entries.clone();
@@ -776,7 +776,7 @@ impl<'a> Ctx<'a> {
                 self.err(
                     self.ast.span(node.id()),
                     format!(
-                        "`entry fn {fname}` cannot be generic — the published signature is one concrete shape (RFC 0023 §2)"
+                        "`entry fn {fname}` cannot be generic — the published signature is one concrete shape"
                     ),
                 );
                 continue;
@@ -789,7 +789,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(p.id()),
                         format!(
-                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary",
                             self.name(pd.name),
                             self.type_name(ty)
                         ),
@@ -802,7 +802,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(r.id()),
                         format!(
-                            "`entry fn {fname}` returns `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}` returns `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary",
                             self.type_name(ty)
                         ),
                     );
@@ -975,7 +975,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Settle an alias's target (RFC 0043 pass 1b): each member must
+    /// Settle an alias's target (pass 1b): each member must
     /// resolve as a type or trait — located early errors; forward refs
     /// are legal, a cycle (`type A = B; type B = A;`) diagnoses at the
     /// re-entered alias. The target resolves HERE, at the declaration —
@@ -992,7 +992,7 @@ impl<'a> Ctx<'a> {
                 self.err(
                     sp,
                     format!(
-                        "recursive type alias `{}` — an alias chain must end at a real type (RFC 0043)",
+                        "recursive type alias `{}` — an alias chain must end at a real type",
                         self.name(n)
                     ),
                 );
@@ -1024,7 +1024,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Single-target aliases as export rows (RFC 0043): the alias name
+    /// Single-target aliases as export rows: the alias name
     /// binds the TARGET's id, so importers need zero changes —
     /// cross-module transparency by construction. Union aliases are
     /// module-local, never exported.
@@ -1049,7 +1049,7 @@ impl<'a> Ctx<'a> {
         if let Some(t) = self.find_trait(name) {
             return (t.id != u32::MAX).then_some(t.id);
         }
-        // a used module's exported trait (RFC 0012 §5) — the name is
+        // a used module's exported trait — the name is
         // bound only when the module used it (the gate)
         self.extern_trait_decls.get(&name).map(|t| t.id)
     }
@@ -1117,7 +1117,7 @@ impl<'a> Ctx<'a> {
         self.resolve_type(node, env)
     }
 
-    /// global trait-method slot id (RFC 0015 §6: assigned per trait
+    /// global trait-method slot id (assigned per trait
     /// instantiation; v1 non-generic traits only)
     pub fn trait_slot(&self, trait_id: u32, method: u32) -> Option<u32> {
         let mut slot = 0;
@@ -1147,7 +1147,7 @@ impl<'a> Ctx<'a> {
         id
     }
     /// A trait-typed value (`i: I`) — the trait object type: a cell handle whose cell's own
-    /// type reaches the vtable (RFC 0015 §6)
+    /// type reaches the vtable
     pub fn mk_trait_obj(&mut self, trait_id: u32) -> TypeId {
         let tname = self.interner.name(self.traits[trait_id as usize].name).to_string();
         let name = self.intern(&format!("[trait] {tname}"));
@@ -1156,8 +1156,8 @@ impl<'a> Ctx<'a> {
             kind: TyKind::TraitObj { trait_id },
         })
     }
-    /// `?T` (RFC 0005, RFC 0044) — nil-able cell (the old `*T` pointer)
-    /// `Weak<T>` — the weak reference (RFC 0017 v1). Generic like
+    /// `?T` — nil-able cell (the old `*T` pointer)
+    /// `Weak<T>` — the weak reference. Generic like
     /// `Array { elem }`: interned per instantiation, no boot row.
     pub fn mk_weak(&mut self, elem: TypeId) -> TypeId {
         let name = self.intern(&format!("Weak<{}>", self.type_name(elem)));
@@ -1166,7 +1166,7 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Weak { elem },
         })
     }
-    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell (the `mk_array`
+    /// `?T` — a nil-able cell (the `mk_array`
     /// shape). The three crossing elems answer their BOOT rows (the
     /// legal-host-returns phase): a source-spelled `?str`/`?bytes`/
     /// `?opaque` and a `.d.rut` row's `-> ?T` are ONE type — the boot
@@ -1187,7 +1187,7 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Opt { elem },
         })
     }
-    /// `(A, B, ..)` (RFC 0007) — a record with numeric field names
+    /// `(A, B, ..)` — a record with numeric field names
     pub fn mk_tuple(&mut self, elems: Vec<TypeId>) -> TypeId {
         let name = self.intern(&format!(
             "({})",
@@ -1231,7 +1231,7 @@ pub fn int_suffix_ty(s: IntSuffix) -> TypeId {
 }
 
 /// The ten numeric primitives — the only `as` cast source/target kinds
-/// (`Bool` is excluded; RFC 0007 §1).
+/// (`Bool` is excluded).
 pub fn numeric_prim(p: PrimTy) -> bool {
     matches!(
         p,

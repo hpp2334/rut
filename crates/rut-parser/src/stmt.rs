@@ -1,4 +1,4 @@
-//! Statements, blocks, `when` heads, and patterns (RFC 0030 §2): frames
+//! Statements, blocks, `when` heads, and patterns: frames
 //! for the statement grammar — keyword-led dispatch (peek 1), shared
 //! when-heads for statement and expression positions, and the pattern
 //! grammar (literals, paths, constructors).
@@ -123,7 +123,7 @@ impl StmtFrame {
                         p.bump();
                         true
                     };
-                    // `let (a, b) = ..` — tuple destructuring (RFC 0007)
+                    // `let (a, b) = ..` — tuple destructuring
                     let destructure = if matches!(p.tok(), Tok::LParen) {
                         p.bump();
                         let mut names = Vec::new();
@@ -244,7 +244,7 @@ impl StmtFrame {
         let Some(var) = p.expect_ident("a loop variable") else {
             return Step::Pop(Done::Failed);
         };
-        // for-of vs for-c: peek `of` vs `=` (peek 4, RFC 0030 §4.1)
+        // for-of vs for-c: peek `of` vs `=` (peek 4)
         if p.at_kw("of") {
             p.bump();
             self.stage = StmtStage::ForIter { var };
@@ -328,7 +328,7 @@ impl StmtFrame {
     }
 }
 
-// ---- if / else-if chains (RFC 0008 §1) ----
+// ---- if / else-if chains ----
 
 pub(crate) struct IfFrame {
     lo: u32,
@@ -498,7 +498,7 @@ impl WhenFrame {
 
     fn to_body(&mut self, p: &mut Parser) -> Step {
         p.expect(Tok::Arrow);
-        // body: `{` ⇒ block arm (peek 1 — RFC 0030 §4.1); else expr arm
+        // body: `{` ⇒ block arm (peek 1); else expr arm
         self.arm_is_block = matches!(p.tok(), Tok::LBrace);
         self.stage = WhenStage::Body;
         if self.arm_is_block {
@@ -516,10 +516,10 @@ impl WhenFrame {
             _ => unreachable!("when arm body is an expression or block"),
         };
         // comma required between expression arms, optional after block
-        // arms (RFC 0008 §2 — the corpus uses `,` after both)
+        // arms (the corpus uses `,` after both)
         let had_comma = p.eat_punct(Tok::Comma);
         if !self.arm_is_block && !had_comma && !matches!(p.tok(), Tok::RBrace) {
-            p.err_here("expression arms must be comma-separated (RFC 0008 §2)");
+            p.err_here("expression arms must be comma-separated");
         }
         let node = p.arm(
             ArmKind::WhenArm { pats: std::mem::take(&mut self.arm_pats), body },
@@ -534,7 +534,7 @@ impl WhenFrame {
     }
 }
 
-// ---- patterns (RFC 0008 §2) ----
+// ---- patterns ----
 
 pub(crate) struct PatternFrame {
     sp: Span,
@@ -602,7 +602,7 @@ impl PatternFrame {
     /// dotted path segments; generic args pause at a child frame and
     /// resume through `genargs_done` — the loops are iterative (C2).
     /// `self.sp` extends as segments land so the node span covers the
-    /// whole path (RFC 0030 C1 — spans on every node).
+    /// whole path (spans on every node).
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
             let ident_sp = p.span();

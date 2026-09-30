@@ -2,7 +2,7 @@
 //! completion, over the same definition index hover uses. One rule for
 //! the member list (mirrors the compiler's): **members of `T` = T's own
 //! surface ∪ inherent `impl T { .. }` methods ∪ use-gated trait methods
-//! from impls targeting `T`** (RFC 0012 §4/§6). Heuristic, like hover: a
+//! from impls targeting `T`**. Heuristic, like hover: a
 //! miss is an empty list, never wrong text.
 
 use std::collections::HashSet;
@@ -69,7 +69,7 @@ fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
 /// Members of the receiver's type: fields, own methods (a trait receiver
 /// lists its declared methods — the annotation names the trait, so no
 /// gate), inherent impl-block methods, and trait methods through
-/// registered impls — the latter use-both gated (RFC 0012 §6).
+/// registered impls — the latter use-both gated.
 fn member_completions(
     idxs: &[&DefIndex],
     ast: &Ast,
@@ -106,7 +106,7 @@ fn member_completions(
         );
     }
     // inherent impl-block methods — where methods live since type bodies
-    // went fields-only (RFC 0012 §4)
+    // went fields-only
     let owner = format!("impl {ty_name}");
     for i in idxs {
         for f in &i.fns {
@@ -126,7 +126,7 @@ fn member_completions(
     // trait methods via impls targeting this type. The use-both gate
     // rides the trait's HOME module, wherever the impl block lives: a
     // trait declared in another module completes only when this document
-    // names it in a `use` (RFC 0012 §6)
+    // names it in a `use`
     let used = used_traits(ast);
     for i in idxs {
         for im in &i.impls {
@@ -159,7 +159,7 @@ fn member_completions(
     out
 }
 
-/// Bare position: the keyword table (RFC 0002 — the grammar's reserved
+/// Bare position: the keyword table (the grammar's reserved
 /// set, one canonical list), then the visible decls — the open document
 /// first, then the std surface and the workspace. Free fns and types
 /// only; methods are reached through a receiver, not named bare.

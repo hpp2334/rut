@@ -53,7 +53,7 @@ entry fn twins_agree(n: i64) -> i64 {
 "#;
 
 /// Mount ONE bench_cross surface (fixture or committed pkg), bind the
-/// bodies, boot the Vm. RFC 0025: bindings before the Vm, contract
+/// bodies, boot the Vm. Bindings before the Vm, contract
 /// checked by `verify_against` at boot.
 fn vm_with_surface(pkg_dir: &str) -> Vm {
     let mut session = Session::new();

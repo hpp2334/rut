@@ -1,7 +1,7 @@
-// RFC 0017 §1 — the cache/observer shape, shown with TODAY's strong
+// the cache/observer shape, shown with TODAY's strong
 // refs: the cache holds its entries, so a hit's cell lives as long as
 // the cache does, and a lookup that finds nothing answers `nil` — the
-// nullable's absence (RFC 0005) — never a trap.
+// nullable's absence — never a trap.
 
 use pouch::{ Vec };
 use ink::{ Logger };
@@ -40,7 +40,7 @@ pub fn main() {
     // `alive` is still a strong handle, and the cache holds a second:
     // dropping one would NOT free the cell — the other still retains it.
     // Breaking that coupling (a weak entry the cache does not retain) is
-    // exactly what RFC 0017 plans; today the strong-held cache IS the
+    // exactly what a future batch plans; today the strong-held cache IS the
     // story, and the memory law is the program's (see node-cycle).
 
     // and a lookup that finds nothing is just nil — no trap

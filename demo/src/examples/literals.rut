@@ -1,5 +1,5 @@
 use pouch::{ Vec };
-// RFC 0007 — literals & inference. Construction is a TYPE-CALL
+// literals & inference. Construction is a TYPE-CALL
 // (`Vec<f32>.filled(0.0, 1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`[T]`, non-growable);
 // growables are `Vec<T>`. Both carry the engine-woven iteration

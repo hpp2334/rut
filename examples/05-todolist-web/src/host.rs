@@ -2,7 +2,7 @@
 //! the pump (`drain_queue`), the fire/advance entries the tests drive,
 //! and the guard simulation for the re-entrancy test. wasm32 never
 //! compiles this module — the page's pump there is `web_dom::pump_page`
-//! over thread-locals (single thread, RFC 0034, both shapes legal).
+//! over thread-locals (single thread, both shapes legal).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -32,7 +32,7 @@ impl<D: DomBackend> WebHost<D> {
 
     /// The boot turn: `main` builds the static DOM, registers the
     /// listeners, and RETURNS the app container — the pump hands it back
-    /// on every turn (RFC 0003 §1: the state crosses). Afterwards the
+    /// on every turn (the state crosses). Afterwards the
     /// page is purely event-driven.
     pub fn boot(&mut self) -> Result<OpaqueRef, Trap> {
         let app: OpaqueRef = self.vm.call::<_, OpaqueRef>("main", ())?;

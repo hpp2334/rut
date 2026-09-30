@@ -1,5 +1,5 @@
 // custom_async.rut — a user-implemented future and a user-written
-// launcher (04-custom-async), in the Future-only vocabulary (RFC 0018).
+// launcher (04-custom-async), in the Future-only vocabulary.
 //
 // The async plan LANDED: `async fn(cx: RunContext, ..)` compiles into
 // the engine-woven `impl Future<T>` for its hidden frame, the driving
@@ -9,10 +9,10 @@
 // remains the user-impl-of-builtin-trait test: `Future<T>` is an
 // engine-named builtin trait, and `impl Future<nil> for CustomFuture`
 // registers through the ordinary nominal path — builtin traits are
-// engine-NAMED, not engine-CLOSED (RFC 0012 §7). A user future is
+// engine-NAMED, not engine-CLOSED. A user future is
 // LAUNCHER-DRIVABLE (the driving loop finds its `Future::yield` row in
 // the vtable); v1 `await` targets engine-woven futures only (async-fn
-// results and `sleep`), and join lands with RFC 0019.
+// results and `sleep`), and join lands later.
 //
 // The shape, in one paragraph: `CustomFuture` is a hand-written stage
 // machine — the same shape the `async fn` weave emits for a hidden
@@ -27,7 +27,7 @@
 
 // ---------------------------------------------------------------- audit --
 
-// The module-owned record every stat lands in. FIELDS ONLY (RFC 0012) —
+// The module-owned record every stat lands in. FIELDS ONLY —
 // the counters live in the inherent impl block below. The launcher takes
 // `?AuditLog`, so the embedder holds one cell and reads the whole run's
 // story out of it afterwards.
@@ -77,7 +77,7 @@ impl AuditLog {
 
 // The hand-written machine — what the `async fn` weave emits for a
 // hidden frame, spelled out: a stage counter, an audit label, the
-// payload the stages carry, and the done flag. FIELDS ONLY (RFC 0012) —
+// payload the stages carry, and the done flag. FIELDS ONLY —
 // the stage logic lives in the inherent impl block below.
 
 struct CustomFuture {
@@ -113,7 +113,7 @@ impl CustomFuture {
 
 // ----------------------------------------------------- the trait surface --
 
-// The nominal registration (RFC 0012): one impl block, one `(trait,
+// The nominal registration: one impl block, one `(trait,
 // type)` pair, duplicates are a link error. The trait is `builtin` —
 // the engine weaves it for every `async fn`'s hidden frame, invisibly;
 // a hand-written machine registers through the same registry and rides
@@ -121,11 +121,11 @@ impl CustomFuture {
 //
 // The resumption entry the driving loop drives — once per checkpoint,
 // with the cx whose one field is the frame edge. The receiver IS the
-// frame (the machine's fields are its state, RFC 0018); the context is
+// frame (the machine's fields are its state); the context is
 // the only handle a resumption needs. Inside, the frozen cx protocol
 // reads as data: `checkpoint` answers this frame's resume state,
 // `cancelled` answers the task's abort flag — cancellation is DATA the
-// frame reads, not an exception it catches (RFC 0018).
+// frame reads, not an exception it catches.
 impl Future<nil> for CustomFuture {
     fn yield(self, cx: RunContext) {
         // the ledger view: the frame's resume state, read as data
@@ -153,7 +153,7 @@ use core::{ Future, RunContext };
 use async_engine::{ __abort, __launch };
 
 struct CustomLaunched {
-    task: ?Future<nil>;  // the cell reference (RFC 0044) — the driven frame
+    task: ?Future<nil>;  // the cell reference — the driven frame
     log: ?AuditLog;      // shared with the embedder — the stats survive
     alive: bool;         // false once the audit saw the run end
 }
@@ -195,7 +195,7 @@ fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
 }
 
 /// The audit drive — the runnable twin of the engine loop's columns
-/// (RFC 0035 §4). The engine drives the TRAIT surface (the vtable's
+/// The engine drives the TRAIT surface (the vtable's
 /// `Future::yield`, the cx minted per drive); this walks the machine's
 /// own stages, one `advance` per booked checkpoint, and counts every
 /// resumption the audit would see. The shape is the drive law either

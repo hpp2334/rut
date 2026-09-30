@@ -1,6 +1,6 @@
 // --------------------------------------------------------------
 // the nmapset integration group (the rut-json batch, phase 1): impl-ONLY
-// by law (RFC 0045 §3) — no new public names; appended to json's own
+// by law — no new public names; appended to json's own
 // source by the peer gate when `nmapset` is in the program's closure.
 //
 // THE SURVEY §2.6 MATRIX, AS LANDED — the DECODE half:

@@ -1,10 +1,10 @@
 //! The `nmap_host` host experiment, driven end to end the way the
 //! `nmapset` wrapper drives it — rut code calls the host surface and the
-//! payload lives Rust-side in `Opaque<NativeTable>` (RFC 0023/0026).
+//! payload lives Rust-side in `Opaque<NativeTable>`.
 //! (nmap-hostvals P5: the table is a real `HashMap` and the VALUES live
 //! in the entries — the fused h-family keeps `HashSet` fed, and since
 //! the any-lane migration (2a) the valued `hv` family crosses
-//! CONCRETELY: typed keys per flavor, values SEALED as RFC 0014
+//! CONCRETELY: typed keys per flavor, values SEALED as
 //! erasure boxes, and `map_cap` is retired with the sidecar it
 //! pre-sized.)
 //!
@@ -152,7 +152,7 @@ entry fn bytes_keys() -> i64 {
 
 // the wrapper-record shape: each iteration mints a table behind an
 // opaque field and lets both die — the payload must Drop through the
-// record's field release (RFC 0016 §3)
+// record's field release
 class Bag {
     t: opaque;
 }
@@ -175,7 +175,7 @@ entry fn churn_tables(n: i64) -> nil {
 
 // the parity law end to end: sv keys and s keys of the same content
 // are THE SAME key — same handles, replaces/removes cross lanes, and a
-// slice VIEW (RFC 0042) reads as its range through the s lane
+// slice VIEW reads as its range through the s lane
 entry fn sv_parity() -> i64 {
     let t1 = map_new(8);
     let t2 = map_new(8);
@@ -329,7 +329,7 @@ fn vm_with_nmap() -> Vm {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // bindings BEFORE the Vm (RFC 0025): install + contract + boot
+    // bindings BEFORE the Vm: install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::nmap::install_std_nmap(&mut hosts);
     hosts.verify_against(&expected); // tests/data/nmap_host/nmap.d.rut ↔ the bodies
@@ -372,7 +372,7 @@ fn tables_release_at_rc0_including_through_wrapper_records() {
         "host boxes must charge their payload: {base} -> {held_usage}"
     );
 
-    // rc-0 (RFC 0016 §3): the last handle drop frees the cells and the
+    // rc-0: the last handle drop frees the cells and the
     // payloads — NativeTable is pure Rust data, nothing leaks
     drop(held);
     let after = vm.heap_usage();

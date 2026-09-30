@@ -1,5 +1,5 @@
-//! Pipeline driver — RFC 0031: Ast ─► resolve ─► typecheck (fused with
-//! body compilation, M1) ─► LIR ─► binary emit (RFC 0033). One entry point
+//! Pipeline driver: Ast ─► resolve ─► typecheck (fused with
+//! body compilation, M1) ─► LIR ─► binary emit. One entry point
 //! for the CLI and the wasm demo: `compile_module`.
 
 use rut_lir::check::{Ctx, FnKey, Inst};
@@ -131,7 +131,7 @@ impl<'a> Seeds<'a> {
 }
 
 /// A compiled module. `program` still carries scope-qualified ids — the
-/// driver links a graph and flattens once (RFC 0035 §1).
+/// driver links a graph and flattens once.
 pub struct ProgramOutput {
     pub diags: Vec<Diag>,
     pub ast_dump: String,
@@ -144,9 +144,9 @@ pub struct ProgramOutput {
     pub requests: Vec<rut_lir::check::InstRequest>,
 }
 
-/// Compile one module under `scope`, binding used function surfaces
-/// (RFC 0029 surface / RFC 0035 §1). Does not flatten or encode. Each
-/// bound use carries its exporter's spec (RFC 0012 §2a); no origin map —
+/// Compile one module under `scope`, binding used function surfaces.
+/// Does not flatten or encode. Each
+/// bound use carries its exporter's spec; no origin map —
 /// the single-file law, so the orphan check is inert here beyond the
 /// bound names' origins.
 pub fn compile_program(
@@ -190,7 +190,7 @@ pub fn compile_program_resolved(
     }
     // Intern every used surface name, so a namespace use (`Math`)
     // resolves its members by name even though the member name is never
-    // written in `use { .. }` (RFC 0029 surface). Surface names are
+    // written in `use { .. }`. Surface names are
     // ids in the exporter's interner (`surface.names`) — re-interned by
     // text into this module's.
     for (_, surface, _) in uses {
@@ -206,19 +206,19 @@ pub fn compile_program_resolved(
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_uses = allow_uses;
-    // the orphan rule's locality input (RFC 0012 §2a): this unit's own
+    // the orphan rule's locality input: this unit's own
     // pkg spec. Every decl's origin IS its module — no source crosses
     // a boundary, the origin map is gone.
     ctx.own_spec = module_name.to_string();
     // the binding gate: the names this module's `use` statements wrote
-    // (RFC 0028/0029) — read off the AST before any binding runs
+    // — read off the AST before any binding runs
     for it in ast.module_items(ast.root).to_vec() {
         if let rut_ast::ast::ItemKind::Use { names, .. } = ast.item(it) {
             ctx.used.extend(names.iter().copied());
         }
     }
     // trait names resolve across ALL uses (an impl may live in a
-    // different module than the trait it implements, RFC 0012 §2):
+    // different module than the trait it implements):
     // trait text -> this module's registered trait id
     let mut ext_trait: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut trait_maps: Vec<(
@@ -228,10 +228,9 @@ pub fn compile_program_resolved(
         String,
     )> = Vec::new();
     for (dep_scope, surface, origin) in uses {
-        // ---- pass 1: trait declarations from every surface (RFC 0012
-        // §5). A descriptor registers when its name was used, or when
+        // ---- pass 1: trait declarations from every surface. A descriptor registers when its name was used, or when
         // any bound impl names it (an unused trait's impl must stay
-        // visible to the use-gate diagnostic, RFC 0012 §6).
+        // visible to the use-gate diagnostic).
         let impl_trait_texts: std::collections::HashSet<&str> = surface
             .impls
             .iter()
@@ -253,7 +252,7 @@ pub fn compile_program_resolved(
             }
             let reg_name = if is_inst_desc { None } else { used_name };
             let cid = ctx.add_extern_trait_decl(reg_name, t, &surface.names);
-            // the trait's origin pkg rides the binding (RFC 0012 §2a)
+            // the trait's origin pkg rides the binding
             if let Some(n) = reg_name {
                 ctx.extern_origins.insert(n, origin.clone());
             }
@@ -316,14 +315,14 @@ pub fn compile_program_resolved(
             }
         }
         // the integer prims' numeric methods (core's `builtin impl`
-        // blocks, RFC 0032 §1.1 R2): bound AMBIENT — the method call
+        // blocks): bound AMBIENT — the method call
         // `x.wrapping_add(y)` needs no `use`, the primitives themselves
         // have none
         for (prim, n, i) in &surface.native_impls {
             let name = ctx.intern(surface.names.name(*n));
             ctx.add_builtin_impl(name, *prim, *i);
         }
-        // the prelude's const stays USE-GATED (RFC 0028): the builtin
+        // the prelude's const stays USE-GATED: the builtin
         // names ride ambient (builtin-surface phase 2 — `core` is bound
         // into every unit), its const does not — `NAN` is
         // `use core::{NAN}` explicit. Other pkgs' consts bind with their
@@ -339,8 +338,8 @@ pub fn compile_program_resolved(
         for t in &surface.type_exports {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(t.name)) {
                 // `scope: None` — the exporter's own scope (ordinary rows);
-                // `Some(s)` — an explicit one (a boot-targeted alias,
-                // RFC 0043: the shared boot table needs no rebase)
+                // `Some(s)` — an explicit one (a boot-targeted alias;
+                // the shared boot table needs no rebase)
                 let scope = t.scope.unwrap_or(dep_scope);
                 let ty_id = rut_core::pack(scope, t.local);
                 // a used enum: the member paths resolve through the
@@ -349,7 +348,7 @@ pub fn compile_program_resolved(
                     ctx.add_extern_enum(id, ty_id, members);
                 }
                 ctx.add_extern_type(id, ty_id, t.is_class);
-                // the type's origin pkg rides the binding (RFC 0012 §2a)
+                // the type's origin pkg rides the binding
                 ctx.extern_origins.insert(id, origin.clone());
                 // a linked generic: the template row (its placeholder
                 // fields came across in the carried block), the parameter
@@ -372,7 +371,7 @@ pub fn compile_program_resolved(
                 }
             }
         }
-        // impl registrations (RFC 0012 §2): `(trait, target, method → fn)`,
+        // impl registrations: `(trait, target, method → fn)`,
         // the fns scope-qualified with the exporter's scope. A trait the
         // module never used still binds its impls — dispatch stays gated
         // on the trait's name (`extern_trait_decls`), the diagnostic
@@ -522,18 +521,17 @@ pub fn compile_program_resolved(
     // intern attribute to THIS unit's own scope (the seed block sits
     // above the own block; the default greatest-base attribution would
     // steal the ids into the requester's space).
-    // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
-    // 0023 §2): bad signatures are source diagnostics, never call-time
+    // the entry surface's crossing contract is compile-time: bad signatures are source diagnostics, never call-time
     // surprises for the embedder
     ctx.check_entries();
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
         return fail(diags, ast_dump, ast_json);
     }
-    // module lets (load-time expression check, RFC 0003 §1)
+    // module lets (load-time expression check)
     ctx.compile_module_lets();
-    // compilation roots: the conventional `main` (RFC 0003 §1) and every
-    // `entry fn` — the host-callable surface (RFC 0035 §3). A module may
+    // compilation roots: the conventional `main` and every
+    // `entry fn` — the host-callable surface. A module may
     // have either, both, or neither (pure library shape).
     let mut roots: Vec<Inst> = Vec::new();
     if ctx.find_free_fn(sym::MAIN) {
@@ -542,7 +540,7 @@ pub fn compile_program_resolved(
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
             // an async fn is not host-callable (its woven body takes the
-            // (frame, cx) pair — RFC 0018): it compiles at its call sites
+            // (frame, cx) pair): it compiles at its call sites
             if ctx.ast.fn_decl(ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n).unwrap())
                 .is_async
             {
@@ -552,7 +550,7 @@ pub fn compile_program_resolved(
         }
     }
     // library surface: every non-generic `pub fn` is usable, so its body
-    // must be compiled even when nothing local calls it (RFC 0029 surface)
+    // must be compiled even when nothing local calls it
     for (name, node) in ctx.fn_nodes.clone() {
         let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
         if !is_pub {
@@ -561,7 +559,7 @@ pub fn compile_program_resolved(
         if !ctx.ast.fn_decl(node).generics.is_empty() {
             continue;
         }
-        // async fns ride the weave at their call sites (RFC 0018)
+        // async fns ride the weave at their call sites
         if ctx.ast.fn_decl(node).is_async {
             continue;
         }
@@ -619,7 +617,7 @@ pub fn compile_program_resolved(
         diags.append(&mut ctx.diags);
         return fail(diags, ast_dump, ast_json);
     }
-    // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
+    // finalize the entry table: `entry fn`s — plus the
     // conventional `main` when it is exported.
     let mut exports: Vec<(IdentId, u32)> = Vec::new();
     let mut names: Vec<IdentId> = ctx.entries.clone();
@@ -877,7 +875,7 @@ pub fn compile_program_resolved(
                 scope: None,
             });
         }
-        // type aliases (RFC 0043): a single-target alias adds a row keyed
+        // type aliases: a single-target alias adds a row keyed
         // by the TARGET's id — importers need zero changes, cross-module
         // transparency by construction; `is_class`/`is_generic` false
         // (aliases are non-generic). Union aliases stay module-local.
@@ -894,7 +892,7 @@ pub fn compile_program_resolved(
                 scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
             });
         }
-        // trait surface (RFC 0012 §5): declared traits with their
+        // trait surface: declared traits with their
         // resolved signatures, keyed by the exporter's trait-table
         // index (`local`) — the key the carried `[trait] ..` descriptors
         // reference. Generic traits instantiate per argument list where
@@ -922,7 +920,7 @@ pub fn compile_program_resolved(
                 methods: ctx.traits[info.id as usize].methods.clone(),
             });
         }
-        // impl registrations (RFC 0012 §2): `(trait, target, method → fn
+        // impl registrations: `(trait, target, method → fn
         // ref)` — link merges them and errors on a duplicate pair.
         // Concrete-target impls bind their compiled fns (both ABI
         // variants — identical ids for single-ABI impls, see
@@ -1440,7 +1438,7 @@ pub fn compile_program_resolved(
         );
     }
     let mut funcs = std::mem::take(&mut ctx.funcs);
-    // RFC 0036 §4 — resolve pc → (line, col) beside the byte-offset span
+    // resolve pc → (line, col) beside the byte-offset span
     // table, HERE while this module's source is in hand (the compiler's
     // lowering carries byte offsets only). 1-based both; parallel to
     // `spans` entry-for-entry, consumed lazily by the StackTrace members.
@@ -1527,7 +1525,7 @@ pub fn compile_program_resolved(
 /// host-pkgs plan moves it to a declared package and its rut-able
 /// helpers to source (deferred with the numeric-methods phase).
 
-/// Mount `core` — the prelude surface (RFC 0028): the erasure
+/// Mount `core` — the prelude surface: the erasure
 /// primitive (`opaque`), the builtin trait (`Iterator`), and
 /// the compiler-lowered functions (`panic`, the
 /// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
@@ -1583,7 +1581,7 @@ pub fn mount_std(session: &mut Session) {
     mount_calc(session);
 }
 
-/// Mount the standard async set (RFC 0018): the engine rows
+/// Mount the standard async set: the engine rows
 /// (`async_engine` — a decl module) and the typed launcher surface
 /// (`async_host` — an inline rut package). Pair with
 /// `rut_std::async_host::install_std_async` before `Vm::new`; a session
@@ -1598,12 +1596,12 @@ pub fn mount_std_async(session: &mut Session) {
     mount_dir(session, &root.join("async_host")).expect("mount async_host");
 }
 
-/// Mount `calc` — a native module (RFC 0028): `f64` host functions
+/// Mount `calc` — a native module: `f64` host functions
 /// (bodies in `rut-std`, including the float `abs`/`min`/`max`/`signum`)
 /// plus their `f32` twins (`Math.sqrt_f(x: f32) -> f32` — the `_f`
 /// suffix carries the width; rut has no overloading) and the `f64`
 /// constants. The integer intrinsics live in `core` now — `builtin
-/// impl` methods on the primitives (RFC 0032 §1.1 R2).
+/// impl` methods on the primitives.
 pub fn mount_calc(session: &mut Session) {
     let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64, false);
     let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64, false);
@@ -1707,7 +1705,7 @@ pub fn compile_module_in(
     CompileOutput { diags: g.diags, ast_dump, ast_json, ir_dump, binary }
 }
 
-/// irDump — the demo page's IR pane (RFC 0041 §3): per-function typed
+/// irDump — the demo page's IR pane: per-function typed
 /// register tables and op listings. Names resolve through the program's
 /// interner.
 pub fn ir_dump_of(funcs: &[rut_core::binary::FuncCode], interner: &rut_core::Interner) -> String {

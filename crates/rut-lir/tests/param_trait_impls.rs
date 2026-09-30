@@ -17,7 +17,7 @@ use rut_parser::Mode;
 use rut_driver::{Module, ModuleBody, Session};
 
 /// A compile-and-run harness: core + the std surfaces mounted, the test
-/// source compiled as the root module, encoded + decoded (RFC 0033) —
+/// source compiled as the root module, encoded + decoded —
 /// the same loop the example suites run.
 fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
     let mut session = Session::new();
@@ -60,7 +60,7 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
 }
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // the core surface bound as the one use (RFC 0028): these tests
+    // the core surface bound as the one use: these tests
     // exercise impl registration, not use discipline
     rut_driver::compile_program(
         src,

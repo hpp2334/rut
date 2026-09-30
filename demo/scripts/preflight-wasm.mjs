@@ -1,4 +1,4 @@
-// Preflight for dev/build (RFC 0041 §3): the demo only shows REAL runs
+// Preflight for dev/build: the demo only shows REAL runs
 // and REAL analyzer highlight, so BOTH artifacts must exist BEFORE the
 // bundler starts. A missing public/rut.wasm or public/rut-lsp.wasm is a
 // loud failure naming the exact build command — the gen-dir/lsp-align

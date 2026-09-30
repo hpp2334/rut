@@ -1,4 +1,4 @@
-# json — the dep-kinds fixture pkg: the PINNED grammar (RFC 0045 §2,
+# json — the dep-kinds fixture pkg: the PINNED grammar (
 # the survey's §0 shape) plus the §2.3 `lib` group keys. The optional
 # peers carry the impl-only integration files; the dev-deps guarantee
 # presence while building json itself — the sanctioned both-kinds

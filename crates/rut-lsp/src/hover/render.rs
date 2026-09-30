@@ -23,7 +23,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
     };
     match ty.form {
         TyForm::Alias => {
-            // `type X = A;` / `type X = A | B;` (RFC 0043)
+            // `type X = A;` / `type X = A | B;`
             out.push_str(&code_block(&format!(
                 "type {} = {};",
                 ty.name,
@@ -176,7 +176,7 @@ pub(crate) fn render_primitive(name: &str) -> Option<String> {
             ));
         }
         "f32" => format!(
-            "{}\n\nIEEE-754 binary32 — the unsuffixed float default (RFC 0007 §1)\n\nliterals `1.0`, `1.0f32`",
+            "{}\n\nIEEE-754 binary32 — the unsuffixed float default\n\nliterals `1.0`, `1.0f32`",
             code_block("f32")
         ),
         "f64" => format!(
@@ -198,7 +198,7 @@ pub(crate) fn render_primitive(name: &str) -> Option<String> {
 
 fn prim_line(name: &str, signedness: &str, bits: u32, range: &str) -> String {
     format!(
-        "{}\n\n{signedness} {bits}-bit integer — {range}\n\nliterals `0`, `0{name}`; the `wrapping_*` / `saturating_*` / `checked_*` members are compiler-lowered (core's `builtin impl {name}`, RFC 0032 §1.1)",
+        "{}\n\n{signedness} {bits}-bit integer — {range}\n\nliterals `0`, `0{name}`; the `wrapping_*` / `saturating_*` / `checked_*` members are compiler-lowered (core's `builtin impl {name}`)",
         code_block(name)
     )
 }

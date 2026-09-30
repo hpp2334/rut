@@ -28,19 +28,19 @@ fn read_manifest(dir: &Path) -> Result<Manifest, String> {
 }
 
 /// Read one module source file. The language has no include form to
-/// expand (RFC 0035 §1: use paths are inter-module) — but a module may
+/// expand (use paths are inter-module) — but a module may
 /// be AUTHORED as several files: the loader splices `entry.libs` into
-/// one source (RFC 0041 §5), which is assembly, not expansion.
+/// one source, which is assembly, not expansion.
 pub fn load_module_source(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
 }
 
 /// Mount a directory's consumer manifest: its own module (if named) and
 /// every `[deps]` module, reading each dep's `rut.toml` and entry source,
-/// then the RFC 0045 mount passes over the finished closure. Returns the
+/// then the mount passes over the finished closure. Returns the
 /// session and the root spec (the directory's own `name`).
 ///
-/// The mount order is the law (RFC 0045 §3):
+/// The mount order is the law:
 /// 1. the `[deps]` walk — unchanged;
 /// 2. the dev pass — the ROOT's `[dev-deps]` mount exactly like `[deps]`
 ///    (a dep's dev table is never walked, so a consumer's world never
@@ -102,7 +102,7 @@ fn bundle_entry_module(
     let rel = entry_rel(manifest)
         .ok_or_else(|| format!("module at bundle prefix `{prefix}` has no entry"))?;
     let mut src = read(rel)?;
-    // the multi-lib splice (RFC 0041 §5), the archive-side twin of
+    // the multi-lib splice, the archive-side twin of
     // `load_entry_module`'s: base first, then `libs` in manifest
     // order, '\n'-joined — ONE source string
     for lib in &manifest.entry.libs {
@@ -117,7 +117,7 @@ fn bundle_entry_module(
     })
 }
 
-/// Mount a `.rutbundle` (RFC 0038) — a v5 **compiled** bundle: the
+/// Mount a `.rutbundle` — a v5 **compiled** bundle: the
 /// root's `.rutc` binary, its pack-time scope ledger, and each dep
 /// group as a compiled `.rutc` or a source file set. The gate order is
 /// the law: container CRC ([`Bundle::parse`]), manifest + exact
@@ -237,7 +237,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     Ok((session, root_spec))
 }
 
-/// The RFC 0045 peer gate over a mounted bundle — pass 3 of the
+/// The peer gate over a mounted bundle — pass 3 of the
 /// mount order, in-archive flavor: every group is already mounted
 /// (presence is by NAME; first-mount-wins), so
 ///
@@ -271,9 +271,9 @@ fn run_bundle_peer_gate(
                 if decl.optional {
                     continue; // inert — the group simply never mounts
                 }
-                // D1 (RFC 0045 §3): loud at load, naming pkg + peer + fix
+                // D1: loud at load, naming pkg + peer + fix
                 return Err(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §3)"
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`"
                 ));
             }
             let Some(lib) = &decl.lib else {
@@ -319,13 +319,13 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
     ))
 }
 
-/// Build a directory's entry [`Module`] from its manifest (RFC 0029 §5):
+/// Build a directory's entry [`Module`] from its manifest:
 ///
 /// - `entry.lib` (with or without `entry.type`) — a SOURCE module: the
 ///   body compiles; the surface derives from its exports.
 /// - `entry.type` ALONE — a **host pkg**: a pure declaration surface.
 ///   The `.d.rut` parses in declaration mode and lowers into the
-///   module's host fns (RFC 0025); `host_scope` rides the
+///   module's host fns; `host_scope` rides the
 ///   manifest. No body exists — the embedding Rust binds it at run
 ///   time.
 fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> {
@@ -339,7 +339,7 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
         return Ok(m);
     }
     let mut src = load_entry(dir, &manifest.entry)?;
-    // The multi-lib splice (RFC 0041 §5): the base `lib` first, then
+    // The multi-lib splice: the base `lib` first, then
     // `libs` in manifest order, '\n'-joined exactly like the
     // peer-group append — the combined text stays ONE source string,
     // so every downstream consumer of the source body (the graph
@@ -391,7 +391,7 @@ pub fn mount_dev_table(
     resolve_table(session, dir, &manifest.dev_deps, &mut visiting, &mut mounted)
 }
 
-/// Resolve a manifest's `[deps]` recursively (RFC 0041 §3) — pass 1 of
+/// Resolve a manifest's `[deps]` recursively — pass 1 of
 /// the mount order.
 fn resolve_deps(
     session: &mut Session,
@@ -456,7 +456,7 @@ fn resolve_table(
     Ok(())
 }
 
-/// Pass 3 (RFC 0045 §3) — the peer gate, ONE post-closure pass over the
+/// Pass 3 — the peer gate, ONE post-closure pass over the
 /// recorded peer declarations:
 ///
 /// - required peer absent → the loud D1 mount error: names the pkg, the
@@ -503,14 +503,14 @@ fn run_peer_gate(
                     Ok(dm) if dm.name.as_deref() == Some(peer.as_str()) => {}
                     Ok(dm) => {
                         return Err(format!(
-                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — the manifest there names it `{actual}` (a packaging bug in {pkg}; RFC 0045 §3)",
+                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — the manifest there names it `{actual}` (a packaging bug in {pkg})",
                             path = decl.path,
                             actual = dm.name.as_deref().unwrap_or("<unnamed>"),
                         ));
                     }
                     Err(_) => {
                         return Err(format!(
-                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — cannot read a manifest there (a packaging bug in {pkg}; RFC 0045 §3)",
+                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — cannot read a manifest there (a packaging bug in {pkg})",
                             path = decl.path,
                         ));
                     }
@@ -520,9 +520,9 @@ fn run_peer_gate(
                 if decl.optional {
                     continue; // inert — the group simply never mounts
                 }
-                // D1 (RFC 0045 §3): loud at mount, naming pkg + peer + fix
+                // D1: loud at mount, naming pkg + peer + fix
                 return Err(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §3)"
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`"
                 ));
             }
             let Some(lib) = &decl.lib else {
@@ -531,7 +531,7 @@ fn run_peer_gate(
             let group_path = pkg_dir.join(lib);
             let text = std::fs::read_to_string(&group_path).map_err(|_| {
                 format!(
-                    "pkg `{pkg}`'s [peer-deps] entry `{peer}` names the group `{lib}` — cannot read it (a packaging bug in {pkg}; RFC 0045 §3)"
+                    "pkg `{pkg}`'s [peer-deps] entry `{peer}` names the group `{lib}` — cannot read it (a packaging bug in {pkg})"
                 )
             })?;
             appends.push((pkg.clone(), text));
@@ -550,13 +550,13 @@ fn run_peer_gate(
 /// Mount one package directory — and, recursively, its `[deps]` — into
 /// an EXISTING session: the programmatic counterpart of a manifest's
 /// dep walk (native hosts, tests, plugin loaders). Returns the
-/// package's own name. A name already mounted wins (RFC 0029 §4).
+/// package's own name. A name already mounted wins.
 ///
 /// This is an OFFER to someone else's program, not "building the pkg
 /// itself": no dev-deps are mounted (pass 2 is root-only) and the peer
 /// gate does not run here — the embedder's world grows incrementally,
 /// so presence is a program-closure property the program's own
-/// `load_dir_session`/compile owns (RFC 0045 §3). The pkg's peer
+/// `load_dir_session`/compile owns. The pkg's peer
 /// declarations are still recorded for the session's registry.
 pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, String> {
     let manifest = read_manifest(dir)?;
@@ -579,7 +579,7 @@ pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, String> {
     Ok(name)
 }
 
-/// The peer gate for sessions built mount-by-mount (RFC 0045 §3): runs
+/// The peer gate for sessions built mount-by-mount: runs
 /// the gate's append pass over the peer declarations every `mount_dir`/
 /// dep walk recorded, using the pkg→dir map those mounts left behind.
 /// The CLI's and the probe's single-file convenience lanes call this

@@ -2,7 +2,7 @@
 // CLI I/O the brain cannot reach): two writers, the file rows, and the
 // exit. The HTTP rows are NOT here — rgh rides the std lane
 // (`rut/http_host` + `rut/http`, bodies in rut-std); a host pkg is
-// example-local only when the surface is example-local (RFC 0023 §2).
+// example-local only when the surface is example-local.
 //
 // One naming disclosure: the stdout row is `out`, not `print` — `print`
 // is a REMOVED core name whose use sites diagnose by symbol

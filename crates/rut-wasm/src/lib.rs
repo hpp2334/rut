@@ -1,4 +1,4 @@
-//! rut-wasm — the demo page's compile/run surface (RFC 0041 §3), mirrored
+//! rut-wasm — the demo page's compile/run surface, mirrored
 //! by `demo/src/wasm/rut-api.d.ts`.
 //!
 //! Raw ABI over wasm32 linear memory (no wasm-bindgen glue):
@@ -159,7 +159,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount nmapset");
-    // the async set (RFC 0018): the engine rows lower from their decl,
+    // the async set: the engine rows lower from their decl,
     // the typed launcher surface mounts as a linked source module —
     // `install_std_async` binds the crossings in `rut_run`
     let async_engine = rut_driver::lower_decl_module(
@@ -256,10 +256,10 @@ static OUTPUT: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(Non
 
 /// The one parked frame (survey D5). `rut_run` parks its `Vm` here when
 /// the guest traps OutOfFuel with a live frame — `rut_resume` adds fuel
-/// and continues THAT frame (the engine's own park/resume, RFC 0034 §4:
+/// and continues THAT frame (the engine's own park/resume:
 /// the pc and locals ride in the Vm), never a restart. `rut_run`
 /// supersedes any parked frame (one Vm at a time; this module is
-/// single-threaded, RFC 0034) and `rut_drop_frame` retires it.
+/// single-threaded) and `rut_drop_frame` retires it.
 static mut PARKED: Option<rut_vm::interp::Vm> = None;
 
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
@@ -369,7 +369,7 @@ pub extern "C" fn rut_run(
         heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
         interrupt_every: 1024,
     };
-    // the playground host's bindings, BEFORE the Vm (RFC 0025): the
+    // the playground host's bindings, BEFORE the Vm: the
     // logger routes into the OUTPUT cell; calc's float fns ride rut-std
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::logger::install_std_log(&mut hosts, |s| {
@@ -384,7 +384,7 @@ pub extern "C" fn rut_run(
     // only reaches it when it declares `use nmap_host::{...}` or a pkg
     // that does (`nmapset`); the CLI mounts it the same way
     rut_std::nmap::install_std_nmap(&mut hosts);
-    // the async host set (RFC 0018): launch/abort/sleep bodies for the
+    // the async host set: launch/abort/sleep bodies for the
     // `async_engine` rows the playground mounts in `compile_playground`
     rut_std::async_host::install_std_async(&mut hosts);
     // the string builder's bodies (the host strbuild pkg): a program
@@ -404,7 +404,7 @@ pub extern "C" fn rut_run(
     // err here; every other shape (nil mains included) has none. A trap
     // NEVER fills err — the loud channel stays the loud channel.
     let out = vm.call::<_, RutValue>("main", ());
-    // the async driving loop (RFC 0018 / RFC 0035 §4): drain the ready
+    // the async driving loop: drain the ready
     // queue, advance the virtual clock to the next sleep deadline — the
     // CLI's own loop (`rut run`): run what's ready, then jump `now` to
     // the earliest armed timer so sleep futures fire. Idle for programs
@@ -444,7 +444,7 @@ pub extern "C" fn rut_run(
     run_envelope(&lines, trap.as_deref(), err.as_deref(), fuel_used, heap, parked)
 }
 
-/// demo utilities (RFC 0041 §3 OQ-1: base64 in/out keeps the ABI tiny)
+/// demo utilities (base64 in/out keeps the ABI tiny)
 #[no_mangle]
 pub extern "C" fn rut_run_b64(bin_b64_ptr: *const u8, bin_b64_len: usize, fuel: u64, heap: u64) -> *mut u8 {
     let s = unsafe { read_str(bin_b64_ptr, bin_b64_len) };

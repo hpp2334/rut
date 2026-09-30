@@ -1,4 +1,4 @@
-//! astDump — one mapping, two renderers (RFC 0041 §3: the demo page's AST
+//! astDump — one mapping, two renderers (the demo page's AST
 //! pane). `to_dump_tree` maps the typed arena to a labeled field tree once;
 //! `render_json` emits the flattened tagged objects the demo's tree UI
 //! consumes (no display strings on the wire — the demo derives every label
@@ -59,7 +59,7 @@ pub enum DumpVal {
     Flag(bool),
     Vis(Vis),
     /// member visibility — only pushed when annotated (None = the
-    /// unannotated module-private default, RFC 0003 §2)
+    /// unannotated module-private default)
     OptVis(Option<Vis>),
     Op(BinOp),
     UnOp(UnOp),

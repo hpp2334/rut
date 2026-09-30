@@ -1,5 +1,5 @@
-//! Traps (RFC 0034 §2) — `Err(Trap)`, never a Rust panic.
-// ---- traps (RFC 0034 §2) ----
+//! Traps — `Err(Trap)`, never a Rust panic.
+// ---- traps ----
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrapKind {

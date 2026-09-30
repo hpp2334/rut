@@ -1,4 +1,4 @@
-# sib_b — T10's second sibling (RFC 0045 fixtures): same shape as
+# sib_b — T10's second sibling: same shape as
 # sib_a, its own class over the SAME pouch. The consumer imports both
 # siblings separately — two uses whose splices both contain pouch.
 name = "sib_b"

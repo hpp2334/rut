@@ -1,4 +1,4 @@
-//! Compiler-lowered numeric methods (RFC 0032 §1.1 R2): the operations
+//! Compiler-lowered numeric methods: the operations
 //! `core`'s `builtin impl <int>` blocks declare and the frontend expands
 //! inline at the METHOD call — `x.wrapping_add(y)` — instead of calling:
 //! `wrapping_*`, `saturating_*`, `checked_*` integer arithmetic. Each
@@ -57,8 +57,8 @@ pub(crate) fn intrinsic_name(i: Intrinsic) -> &'static str {
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `x.wrapping_add(y)` — a builtin-impl method call on a primitive
-    /// receiver (core's `builtin impl i32 { .. }` table, RFC 0032 §1.1
-    /// R2). The receiver is ALREADY compiled (its register reused — a
+    /// receiver (core's `builtin impl i32 { .. }` table).
+    /// The receiver is ALREADY compiled (its register reused — a
     /// side-effecting receiver evaluates exactly once); the width comes
     /// from its primitive type.
     pub(crate) fn compile_intrinsic_method(
@@ -128,7 +128,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `f64` primitives (`Math.sqrt(x)`, `Math.abs(x)` — the float
     /// helpers are ordinary host fns).
     /// A namespace member call: an extern fn of the used module
-    /// (RFC 0028). The namespace head is passed only for diagnostics —
+    ///. The namespace head is passed only for diagnostics —
     /// routing is the caller's bound-namespace check, name-generic.
     pub(crate) fn compile_namespace_member(
         &mut self,

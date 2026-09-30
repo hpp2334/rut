@@ -1,7 +1,7 @@
-// checked & wrapping arithmetic (RFC 0032 §1.1, RFC 0004 §3): the plain
+// checked & wrapping arithmetic: the plain
 // `+`/`-`/`*` trap on overflow, so every integer width carries the
 // explicit ladder as compiler-lowered methods on the primitive —
-// ambient like the primitive itself (no `use`, RFC 0002 §3).
+// ambient like the primitive itself (no `use`).
 // `wrapping_*` wraps two's-complement (the pin/protocol shape);
 // `checked_*` answers the v1.1 `(T, bool)` tuple — `ok` (`.1`) is false
 // EXACTLY when the mathematical result escaped the width, and `.0` is

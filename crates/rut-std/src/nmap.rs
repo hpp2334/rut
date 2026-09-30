@@ -1,6 +1,6 @@
 //! `nmap_host` — the native key-table experiment's HOST half: a real
 //! `hashbrown::HashTable` whose entries live Rust-side behind an
-//! `opaque` payload (RFC 0023), so rut meets it only through the
+//! `opaque` payload, so rut meets it only through the
 //! `pub host fn` surface bound by [`install_std_nmap`]. (The pure-rut
 //! `mapset` package — the original reference and general-key
 //! implementation — was REMOVED from the tree in Sep 2026, stdlib
@@ -48,7 +48,7 @@
 //! - values: `Entry { handle, val: ValSlot }` — every entry's value
 //!   lives IN the entry ([`ValSlot::Empty`] until a valued lane fills
 //!   it). Since the any-lane migration (phase 2a) the valued lanes
-//!   SEAL: the `hv` family's value is RFC 0014's erasure box — the put
+//!   SEAL: the `hv` family's value is the erasure box — the put
 //!   takes over the `v: opaque` param's one reference and the entry
 //!   holds the BOX cell ([`ValSlot::Ref`]; released on replace/remove/
 //!   death — the copy/alloc laws), `map_hvget` answers the stored box
@@ -89,7 +89,7 @@ pub enum KeyKind {
     Unset,
     /// integer primitives and `bool` — equality is the payload bits
     Bits,
-    /// `str` — owned copy, equality is octet equality (RFC 0012 §4)
+    /// `str` — owned copy, equality is octet equality
     Str,
     /// `bytes` — owned copy, equality is octet equality
     Bytes,
@@ -186,13 +186,13 @@ impl<'a> From<&'a KeyVal> for KeyRef<'a> {
 
 /// One entry's value storage: a birth holds [`ValSlot::Empty`] until a
 /// value lane fills it; the valued `hv` lanes store the SEAL BOX (the
-/// RFC 0014 erasure box cell, [`ValSlot::Ref`] — taken over from the
+/// erasure box cell, [`ValSlot::Ref`] — taken over from the
 /// `v: opaque` param's handle) and the raw `map_val_set_*` lanes store
 /// [`ValSlot::Bits`] (the untagged 8-byte slot). Every release path —
 /// replace, remove, the raw lanes' overwrite, entry death
 /// (`finalize`) — frees the held cell through the Vm at hand, never a
 /// plain Drop (the release-context law, §0.8 i); releasing a box cell
-/// walks its payload with it (RFC 0016 §3). The tag is the
+/// walks its payload with it. The tag is the
 /// exact-arm-match law: a raw bits read TRAPS on `Empty`/`Ref`, never
 /// reinterprets, and a valued get TRAPS on `Bits` (bits are not a
 /// seal box).
@@ -461,7 +461,7 @@ impl NativeTable {
 
     /// The val read, f lane: `from_bits` over the stored word — the
     /// old column's exact shape, re-based (the wrapper cannot spell
-    /// the float reinterpret itself, RFC 0007 §1).
+    /// the float reinterpret itself).
     pub fn val_get_f(&self, handle: i32) -> Result<f64, Trap> {
         match &self.entry_by_handle(handle)?.val {
             ValSlot::Bits(s) => Ok(f64::from_bits(unsafe { s.i } as u64)),
@@ -541,7 +541,7 @@ impl NativeTable {
 
 /// The table is a HostOpaque payload (nmap-hostvals P2) whose release
 /// hook is REAL since P5: at store-entry death (rc-0 inside the release
-/// walk, BEFORE the payload's own Drop — RFC 0016 §3) every held value
+/// walk, BEFORE the payload's own Drop) every held value
 /// cell releases through the provided heap view — the record-field
 /// pattern, children through the same walk that frees the parent — and
 /// the map clears. Keys are pure Rust data: their Drop rides the
@@ -562,8 +562,7 @@ impl HostPayload for NativeTable {
 /// words (and the placeholder) with nothing to free. The displaced tag
 /// becomes `Empty` first, so the caller's store/overwrite/drop can
 /// never double-release. Since the seal law the `Ref` arm frees the
-/// erasure box — the box's own release walks its payload (RFC 0016
-/// §3), so the wrapper's V dies with its box exactly as it used to.
+/// erasure box — the box's own release walks its payload, so the wrapper's V dies with its box exactly as it used to.
 fn release_val(vm: &Vm, val: &mut ValSlot) {
     if let ValSlot::Ref(s) = std::mem::replace(val, ValSlot::Empty) {
         vm.release(s);
@@ -790,7 +789,7 @@ fn fused_remove_sv(vm: &Vm, t: &mut NativeTable, parent: &str, off: i32, len: i3
 }
 
 /// Install the `nmap_host` bodies under the `nmap_host` scope (the `calc`
-/// pattern, RFC 0023/0025): the callable's Rust shape IS the `.d.rut`
+/// pattern): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
 /// box carries the table; every other fn's first param borrows it typed
 /// (`Opaque<NativeTable>` — a wrong payload is a checked trap).
@@ -820,7 +819,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // traps (an hput birth holds no value; a valued read is a caller
     // bug, §0.8 g), and so does a `Ref` cell (never a reinterpret).
     // The f pair is the same storage through `to_bits`/`from_bits` at
-    // the boundary (rut has no float bitcast, RFC 0007 §1). Bounds are
+    // the boundary (rut has no float bitcast). Bounds are
     // the live births; a removed key's handle traps `no live entry`.
     rut_vm::register!(
         hosts,
@@ -1014,7 +1013,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // integer primitive and `bool` — the casts keep the bits, and bits
     // ARE the key identity — `_y` = `bytes`) plus the `_sv` range
     // twins. KEYS are INSPECTED (hashed, kind-admitted) so they stay
-    // TYPED; VALUES are never inspected, so they SEAL (RFC 0014): the
+    // TYPED; VALUES are never inspected, so they SEAL: the
     // put's `v: opaque` is the wrapper's `opaque(v)` erasure box, the
     // entry takes over the param handle's one reference
     // ([`seal_transfer`], after admission — the leak law), and the get
@@ -1478,7 +1477,7 @@ mod tests {
     // ---- the valued hv lanes (nmap-hostvals P5; the seal law, 2a) ------
 
     /// The valued lanes' storage law end to end: a stored box (the
-    /// RFC 0014 erasure box, `Ref`) round-trips by IDENTITY — `hvget`
+    /// erasure box, `Ref`) round-trips by IDENTITY — `hvget`
     /// answers the SAME cell, two gets name one box (the aliasing
     /// law) — a miss is `None`, replace releases-and-stores with the
     /// SAME handle and `newly = false`, `hremove` (the `map_hvremove`

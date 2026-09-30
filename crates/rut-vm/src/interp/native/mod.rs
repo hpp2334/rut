@@ -1,7 +1,7 @@
-//! `CallNat` natives (RFC 0032 §1.1 R2), split by domain: `str.rs` holds
+//! `CallNat` natives, split by domain: `str.rs` holds
 //! the string/formatting natives, `array.rs` the sequence length/window,
 //! `bytes.rs` the buffer copy, `trace.rs` the StackTrace snapshot
-//! (RFC 0036).
+//!.
 use super::*;
 
 mod array;
@@ -10,7 +10,7 @@ mod str;
 mod trace;
 
 impl Vm {
-    // ---- natives (RFC 0032 §1.1 R2: named things are natives, not ops) ----
+    // ---- natives (named things are natives, not ops) ----
 
     pub(super) fn call_nat(&mut self, nat: Nat, recv: Reg, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
         let prog = std::rc::Rc::clone(&self.prog);

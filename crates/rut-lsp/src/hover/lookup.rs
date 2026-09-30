@@ -50,7 +50,7 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<
 
     // member position: `recv.member`. A resolved receiver never falls
     // through to the name search: a miss there is a use-gated trait
-    // method (RFC 0012 §6) or a genuine miss — either way the member
+    // method or a genuine miss — either way the member
     // answer is final.
     if let Some(recv) = member_context(toks, t) {
         match member_hover(idxs, ast, &binds, pos, name, recv) {
@@ -114,8 +114,8 @@ pub(crate) fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String>
     }
 }
 
-/// trait names this document `use`s — the use-both gate's document side
-/// (RFC 0012 §6). A foreign trait's methods dispatch only when its name
+/// trait names this document `use`s — the use-both gate's document side:
+/// a foreign trait's methods dispatch only when its name
 /// appears here; a trait declared in this document is in scope natively.
 pub(crate) fn used_traits(ast: &Ast) -> HashSet<String> {
     let mut out = HashSet::new();
@@ -198,7 +198,7 @@ pub(crate) fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(
             }
         }
         for f in &i.fns {
-            // the impl target: `impl Circle` (inherent — RFC 0012 §4)
+            // the impl target: `impl Circle` (inherent)
             // or the tail of `impl Drawable for Circle`
             let Some(owner) = f.owner.as_deref() else { continue };
             let target = match owner.strip_prefix("impl ") {
@@ -277,7 +277,7 @@ pub(crate) fn member_target<'a>(
         return MemberHit::None;
     }
     // inherent impl-block methods — where methods live since type bodies
-    // went fields-only (RFC 0012 §4); one fn per `impl T { .. }` member
+    // went fields-only; one fn per `impl T { .. }` member
     let owner = format!("impl {ty_name}");
     for i in idxs {
         for f in &i.fns {
@@ -289,7 +289,7 @@ pub(crate) fn member_target<'a>(
     // trait methods from impls targeting this type (the unified rule).
     // The use-both gate rides the trait's HOME module, wherever the impl
     // block lives: a trait declared in another module dispatches only
-    // when this document names it in a `use` (RFC 0012 §6)
+    // when this document names it in a `use`
     let used = used_traits(ast);
     for i in idxs {
         for im in &i.impls {

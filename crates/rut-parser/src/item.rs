@@ -1,4 +1,4 @@
-//! Declarations (RFC 0030 §2): items, pub visibility, use statements, type
+//! Declarations: items, pub visibility, use statements, type
 //! bodies,
 //! fn/method signatures, surface stubs — as frames. `classify_item` is
 //! v1's `parse_item` dispatch (peek 1, keyword-led); the frames carry
@@ -29,20 +29,20 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
             "trait" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
-            // `async fn` — the async declaration (RFC 0018 §2)
+            // `async fn` — the async declaration
             "async" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
             }
             "fn" => Some(Frame::Fn(FnFrame::new(Vis::Self_, false, false))),
-            // `entry fn` — the host-callable surface (RFC 0035 §3):
+            // `entry fn` — the host-callable surface:
             // contextual; only special directly before `fn`
             "entry" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(Vis::Self_, false, true)))
             }
-            // `host` — the one native linkage left: the embedding Rust
-            // (RFC 0025). `extern` is removed — the loader + `entry fn`
+            // `host` — the one native linkage left: the embedding Rust.
+            // `extern` is removed — the loader + `entry fn`
             // cover it.
             "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
             // `prelude builtin` — the AMBIENT engine surface (core only,
@@ -64,15 +64,15 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "extern" => {
                 p.err(
                     sp,
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
                 );
                 None
             }
-            // statement keywords at module scope: RFC 0003 §1
+            // statement keywords at module scope
             "if" | "while" | "for" | "return" | "when" | "break" | "continue" | "await" => {
                 p.err(
                     sp,
-                    "statements are not allowed at module scope —modules contain declarations only (RFC 0003 §1)",
+                    "statements are not allowed at module scope —modules contain declarations only",
                 );
                 None
             }
@@ -100,7 +100,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
             "trait" => Some(Frame::Trait(TraitFrame::new(vis))),
-            // `async fn` — the async declaration (RFC 0018 §2)
+            // `async fn` — the async declaration
             "async" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(vis, true, false)))
@@ -113,7 +113,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: false }))),
             "extern" => {
                 p.err_here(
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
                 );
                 None
             }
@@ -132,7 +132,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 
 // ---- use ----
 
-/// `use <pkg>::{A, B};` / `use <pkg>::A;` (RFC 0029 §2): the package is
+/// `use <pkg>::{A, B};` / `use <pkg>::A;`: the package is
 /// one bare identifier, the names are one or more idents. There is no
 /// string specifier and no `from` clause — resolution is the driver's
 /// exact-match against mounted module names.
@@ -198,7 +198,7 @@ impl UseFrame {
 
 // ---- type alias ----
 
-/// `pub(..)? type Name = Target;` (RFC 0043): a transparent alias, or a
+/// `pub(..)? type Name = Target;`: a transparent alias, or a
 /// `Target` spelled `A | B` for the bound-only union. Aliases are
 /// NON-GENERIC — `type Name<K, ..>` is a parse error (`expected =`,
 /// the one-name-one-decl law; the row form is repealed). `vis` rides
@@ -366,7 +366,7 @@ impl EnumFrame {
 
 // ---- generic parameter list ----
 //
-// RFC 0043: fn/method generic parameters may carry inline admission
+// fn/method generic parameters may carry inline admission
 // bounds (`<T requires A | B>`), and so do CLASS generics (§A5 —
 // `class HashMap<K requires Hashable, V>`); struct/trait/surface
 // generics reject them. A bound suspends the enclosing frame at a
@@ -399,7 +399,7 @@ fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mu
                 return Some(n);
             }
             p.err_here(format!(
-                "`{owner}` generic parameters take no `requires` bounds — inline bounds bind fn/method/class generics only (RFC 0043)"
+                "`{owner}` generic parameters take no `requires` bounds — inline bounds bind fn/method/class generics only"
             ));
             // skip the rejected bound so the list continues cleanly
             while !matches!(
@@ -418,7 +418,7 @@ fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mu
 
 // ---- struct / class ----
 //
-// RFC 0043 §A5: class generics take inline admission bounds
+// Class generics take inline admission bounds
 // (`class HashMap<K requires Hashable, V>`); struct generics reject
 // them. A bound suspends the frame at a GenBound stage — the bound
 // itself is a child Type frame — exactly like the fn/method frames;
@@ -607,7 +607,7 @@ impl TraitFrame {
 
 // ---- impl ----
 //
-// The two impl forms (RFC 0012): `impl T { .. }` — inherent, the type's
+// The two impl forms: `impl T { .. }` — inherent, the type's
 // module only — and `impl I for T { .. }` — a trait impl, any module.
 // The first type IS the target unless `for` follows it; bodies are
 // braced, methods only.
@@ -639,7 +639,7 @@ impl ImplFrame {
         if p.mode == Mode::Decl {
             p.err(
                 Span::new(self.lo, self.lo + 4),
-                "implementation in a declaration file —`impl` blocks live in `.rut` (RFC 0029 §2)",
+                "implementation in a declaration file —`impl` blocks live in `.rut`",
             );
         }
         Step::Push(Frame::Type(TypeFrame::new(p)))
@@ -686,19 +686,19 @@ impl ImplFrame {
 
 pub(crate) enum BodyMode {
     /// struct/class body: FIELDS ONLY — methods live in `impl` blocks
-    /// (RFC 0012)
+    ///
     Class { allow_pub: bool, is_dataclass: bool },
     /// `host struct` body: fields only, no initializers — the host
-    /// constructs the record (RFC 0025)
+    /// constructs the record
     HostDataclass,
     /// trait body: bodiless method signatures (`async` and no-`self`
-    /// signatures legal — no bodies, RFC 0012)
+    /// signatures legal — no bodies)
     Trait,
     /// `impl I for T` body: method implementations — `async` where the
     /// trait says so; no `pub` (visibility rides the trait); no fields
     Impl,
     /// `impl T` body: inherent methods — `pub` and `async` legal
-    /// (checker restricts `pub` to classes, RFC 0009); no fields
+    /// (checker restricts `pub` to classes); no fields
     Inherent,
 }
 
@@ -783,11 +783,11 @@ impl TypeBodyFrame {
                             "pub" => {
                                 p.bump();
                                 let _ = pub_scope(p);
-                                p.err(lo, "host struct fields carry no visibility —all fields are public (RFC 0025)");
+                                p.err(lo, "host struct fields carry no visibility —all fields are public");
                             }
                             "static" | "async" => {
                                 p.bump();
-                                p.err(lo, format!("host struct fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
+                                p.err(lo, format!("host struct fields carry no modifiers —`{m}` is not declarable here"));
                             }
                             _ => break,
                         }
@@ -796,7 +796,7 @@ impl TypeBodyFrame {
                         // parse (bodiless) to stay in sync; the methods are
                         // dropped — SurfaceDataclass keeps fields only
                         Tok::Ident(kw) if kw == "fn" => {
-                            p.err(lo, "host dataclasses declare fields only —methods live in rut wrapper classes (RFC 0025)");
+                            p.err(lo, "host dataclasses declare fields only —methods live in rut wrapper classes");
                             self.stage = TbStage::Method;
                             return Step::Push(Frame::Method(MethodFrame::new(None, false, false, false)));
                         }
@@ -819,9 +819,9 @@ impl TypeBodyFrame {
                 }
                 BodyMode::Class { allow_pub, is_dataclass } => {
                     let lo = p.span();
-                    // RFC 0003 §2 — members default to module-private;
+                    // members default to module-private;
                     // `pub` (+ scopes) exposes them. FIELDS ONLY since the
-                    // impl blocks returned (RFC 0012): a `fn` member
+                    // impl blocks returned: a `fn` member
                     // diagnoses and is parsed (bodiless) to stay in sync.
                     let mut vis: Option<Vis> = None;
                     let mut is_static = false;
@@ -833,7 +833,7 @@ impl TypeBodyFrame {
                                 if !allow_pub {
                                     p.err(
                                         lo,
-                                        "dataclasses have no member visibility —all fields are public (RFC 0009)",
+                                        "dataclasses have no member visibility —all fields are public",
                                     );
                                 }
                             }
@@ -841,12 +841,12 @@ impl TypeBodyFrame {
                                 is_static = true;
                                 p.bump();
                                 if is_dataclass {
-                                    p.err(lo, "dataclasses have no `static` members (RFC 0009)");
+                                    p.err(lo, "dataclasses have no `static` members");
                                 }
                             }
                             "async" => {
                                 p.bump();
-                                p.err(lo, "unexpected `async` —type bodies declare fields only (RFC 0012)");
+                                p.err(lo, "unexpected `async` —type bodies declare fields only");
                             }
                             _ => break,
                         }
@@ -855,12 +855,12 @@ impl TypeBodyFrame {
                         Tok::Ident(kw) if kw == "fn" => {
                             p.err(
                                 lo,
-                                "methods live in `impl` blocks —type bodies declare fields only (RFC 0012)",
+                                "methods live in `impl` blocks —type bodies declare fields only",
                             );
                             if is_static {
                                 p.err(
                                     lo,
-                                    "there is no `static fn` —a method without `self` IS a class method (RFC 0010 §2)",
+                                    "there is no `static fn` —a method without `self` IS a class method",
                                 );
                             }
                             self.stage = TbStage::Method;
@@ -888,7 +888,7 @@ impl TypeBodyFrame {
                 BodyMode::Trait | BodyMode::Impl => {
                     // modifier loop: `pub` rejected here (a trait impl
                     // rides the trait's visibility); `async` accepted on
-                    // the method (RFC 0018 §2)
+                    // the method
                     let lo = p.span();
                     let mut is_async = false;
                     while let Tok::Ident(m) = p.tok().clone() {
@@ -897,8 +897,8 @@ impl TypeBodyFrame {
                                 p.bump();
                                 let _ = pub_scope(p);
                                 let why = match self.mode {
-                                    BodyMode::Impl => "trait impl methods carry no `pub` —they are as visible as the trait (RFC 0012)",
-                                    _ => "trait methods carry no `pub` —the trait's visibility rules (RFC 0003 §2)",
+                                    BodyMode::Impl => "trait impl methods carry no `pub` —they are as visible as the trait",
+                                    _ => "trait methods carry no `pub` —the trait's visibility rules",
                                 };
                                 p.err(lo, why);
                             }
@@ -923,8 +923,8 @@ impl TypeBodyFrame {
                 }
                 BodyMode::Inherent => {
                     // `impl T { .. }` — inherent methods: `pub`/`async`
-                    // legal (the checker restricts `pub` to classes,
-                    // RFC 0009); no fields
+                    // legal (the checker restricts `pub` to classes);
+                    // no fields
                     let lo = p.span();
                     let mut vis: Option<Vis> = None;
                     let mut is_async = false;
@@ -970,7 +970,7 @@ impl TypeBodyFrame {
                     if matches!(self.mode, BodyMode::HostDataclass) {
                         p.err(
                             p.span(),
-                            "host struct fields have no initializers —the host constructs the record (RFC 0025)",
+                            "host struct fields have no initializers —the host constructs the record",
                         );
                     }
                     self.stage = TbStage::FieldInit;
@@ -1029,7 +1029,7 @@ pub(crate) struct MethodFrame {
     vis: Option<Vis>,
     is_async: bool,
     with_body: bool,
-    /// RFC 0043: rut methods take inline bounds; surface (.d.rut) members
+    /// rut methods take inline bounds; surface (.d.rut) members
     /// do not
     allow_bounds: bool,
     stage: MeStage,
@@ -1105,13 +1105,13 @@ impl MethodFrame {
         }
     }
 
-    /// A `where` clause is gone (RFC 0043): diagnose with the inline
+    /// A `where` clause is gone: diagnose with the inline
     /// replacement and skip past the stray clause so the signature's
     /// tail (`;` or the body) still parses.
     fn stray_where(&mut self, p: &mut Parser) {
         if p.at_kw("where") {
             p.err_here(
-                "`where` clauses are removed — write the bound inline: `fn m<T requires B>(..)` (RFC 0043)",
+                "`where` clauses are removed — write the bound inline: `fn m<T requires B>(..)`",
             );
             while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
                 p.bump();
@@ -1218,7 +1218,7 @@ impl FnFrame {
             s
         };
         if p.mode == Mode::Decl {
-            p.err(Span::new(self.lo, self.lo + 2), "implementation in a declaration file (RFC 0029 §2)");
+            p.err(Span::new(self.lo, self.lo + 2), "implementation in a declaration file");
         }
         let Some(name) = p.expect_ident("a function name") else {
             return Step::Pop(Done::Failed);
@@ -1244,12 +1244,12 @@ impl FnFrame {
         self.body(p)
     }
 
-    /// The fn body — a stray `where` clause (removed, RFC 0043) diagnoses
+    /// The fn body — a stray `where` clause (removed) diagnoses
     /// with the inline replacement and is skipped so the `{` still parses.
     fn body(&mut self, p: &mut Parser) -> Step {
         if p.at_kw("where") {
             p.err_here(
-                "`where` clauses are removed — write the bound inline: `fn f<T requires B>(..)` (RFC 0043)",
+                "`where` clauses are removed — write the bound inline: `fn f<T requires B>(..)`",
             );
             while !matches!(p.tok(), Tok::LBrace | Tok::Eof) {
                 p.bump();
@@ -1306,9 +1306,9 @@ impl FnFrame {
     }
 }
 
-// ---- host/builtin surface declarations (.d.rut, RFC 0030 §3) ----
+// ---- host/builtin surface declarations (.d.rut) ----
 //
-// Two linkages (RFC 0025): `host` — the embedding Rust implements it;
+// Two linkages: `host` — the embedding Rust implements it;
 // `builtin` — the engine itself (compiler-lowered, core only). Builtin
 // decls spell ONE of two forms: `prelude builtin` (ambient — binds in
 // every unit, no `use`) or `pub builtin` (import-gated — resolves only
@@ -1316,7 +1316,7 @@ impl FnFrame {
 // may spell:
 //
 //     host fn name(params) -> T;        concrete signature over the
-//                                       crossing set (RFC 0023 §1)
+//                                       crossing set
 //     host async fn name(params) -> T;  the host future lane: calling
 //                                       mints a cold engine-woven
 //                                       Future frame; the embedder
@@ -1340,7 +1340,7 @@ impl FnFrame {
 //                                       (Index, Iterator, Disposal)
 //
 // `host class` and `extern` are gone: native state crosses as `opaque`
-// and rut wraps it in a class (the `Logger` pattern, RFC 0028).
+// and rut wraps it in a class (the `Logger` pattern).
 
 pub(crate) struct SurfaceFrame {
     linkage: Linkage,
@@ -1354,7 +1354,7 @@ pub(crate) struct SurfaceFrame {
     /// but emits the trait node
     is_trait: bool,
     /// `builtin impl i32 { .. }` — collects bodiless methods like
-    /// BuiltinTy but emits the builtin-impl node (RFC 0032 §1.1 R2)
+    /// BuiltinTy but emits the builtin-impl node
     is_impl: bool,
     /// `builtin primitive opaque { .. }` — collects bodiless methods
     /// like BuiltinTy but emits the builtin-primitive node (the boot
@@ -1397,7 +1397,7 @@ impl SurfaceFrame {
         if p.mode == Mode::Impl {
             p.err(
                 sp,
-                "declaration keyword in an implementation file —`host`/`builtin` belong in a `.d.rut` (RFC 0029 §2)",
+                "declaration keyword in an implementation file —`host`/`builtin` belong in a `.d.rut`",
             );
         }
         self.lo = p.bump().span.lo;
@@ -1441,7 +1441,7 @@ impl SurfaceFrame {
             Tok::Ident(k) if k == "class" => {
                 p.err(
                     p.span(),
-                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `opaque` (RFC 0025)",
+                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `opaque`",
                 );
                 Step::Pop(Done::Failed)
             }
@@ -1462,14 +1462,14 @@ impl SurfaceFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            // RFC 0023 §1: a host fn's parameters and returns are
+            // a host fn's parameters and returns are
             // built from the crossing set — a generic parameter
             // has no shape the boundary could check. The async lane
             // refuses with the same words: its answer type IS the
             // decl's return, so a generic would strand the weave.
             p.err(
                 p.span(),
-                "host fn signatures are concrete —generic parameters cannot cross the boundary (RFC 0023 §1)",
+                "host fn signatures are concrete —generic parameters cannot cross the boundary",
             );
             let (gens, pending) = generic_params(p, false, "host fn");
             self.generics = gens;
@@ -1500,7 +1500,7 @@ impl SurfaceFrame {
             Tok::Ident(k) if k == "class" || k == "trait" => {
                 // `builtin class Name<T> { .. }` — an engine builtin type's
                 // member contract; `builtin trait Name<T> { .. }` — an
-                // engine-woven contract (RFC 0025). Builtin decls spell
+                // engine-woven contract. Builtin decls spell
                 // their kind: a bare `builtin Name { .. }` is an error.
                 let is_trait = k == "trait";
                 p.bump();
@@ -1543,7 +1543,7 @@ impl SurfaceFrame {
             }
             Tok::Ident(k) if k == "impl" => {
                 // `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }`
-                // — numeric methods ON a primitive type (RFC 0032 §1.1 R2):
+                // — numeric methods ON a primitive type:
                 // lowered inline at the method call, ambient on the prim
                 p.bump();
                 let Some(prim) = p.expect_ident("a primitive type name") else {
@@ -1557,7 +1557,7 @@ impl SurfaceFrame {
             }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }` (RFC 0025/0032)",
+                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }`",
                 );
                 Step::Pop(Done::Failed)
             }

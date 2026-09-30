@@ -27,7 +27,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `Vec` is an ordinary class (pouch), so it routes
                 // here through `find_data`, like any other class; the
                 // core statics (`opaque`) route only
-                // when used (RFC 0028)
+                // when used
                 let is_type = matches!(base, sym::STR | sym::BYTES)
                     || self.ctx.extern_native_types.contains_key(&base)
                     || self.ctx.is_extern_namespace(base)
@@ -41,7 +41,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // an in-scope TYPE PARAMETER as the static receiver (the
                 // rut-json batch phase 1's sanctioned checker gap 2):
                 // `T.decode(r)` — the trait's Self param spelled by name
-                // (RFC 0012's no-self law). The body compiles per
+                // (the no-self law). The body compiles per
                 // instantiation, so the parameter names its substituted
                 // concrete type here; the trait impl on THAT type answers.
                 if segs[0].generics.is_empty() {
@@ -51,7 +51,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // receiver bypass (RFC 0009/0016 v1.1): a mutating method operates
+        // receiver bypass: a mutating method operates
         // on the ORIGINAL binding — a single-name receiver uses its register
         // raw instead of a boundary clone
         let recv_raw = match self.ctx.ast.expr(recv).clone() {
@@ -83,18 +83,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p.m(..)` auto-derefs (RFC 0005)
+                // `p.m(..)` auto-derefs
                 self.deref_for_use(rt, rreg, sp.lo)
             }
         };
-        // capability resolution through a union bound (RFC 0043 §3,
-        // native-fastpath phase 1): a method call on a value whose
+        // capability resolution through a union bound (native-fastpath
+        // phase 1): a method call on a value whose
         // declared type is a union-bounded `K` requires EVERY member of
         // the bound to provide the method — the union admits all of its
         // members at once, so each instantiation must typecheck. Dispatch
         // below stays per-instantiation (the concrete member's impl).
         self.check_union_capability(recv, name, sp);
-        // core's builtin-impl numeric methods (RFC 0032 §1.1 R2):
+        // core's builtin-impl numeric methods:
         // `x.wrapping_add(y)` on an integer receiver — ambient on the
         // primitive (no `use`), lowered inline off the receiver's width.
         // The receiver compiled once above; its register is reused, so a
@@ -111,10 +111,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             return self.compile_intrinsic_method(i, rt, rreg, *rhs, sp);
         }
-        // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
+        // primitives have no method syntax: `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
         // `bytes_len`, `bytes_decode`, `bytes_from`) — except `s.code()`,
-        // the v1.1 codepoint reader that replaced `char` (RFC 0004)
+        // the v1.1 codepoint reader that replaced `char`
         match self.ctx.types.kind(rt) {
             TyKind::Str => {
                 if name == sym::CODE && args.is_empty() {
@@ -129,13 +129,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(TY_U32);
                 }
                 if name == sym::ENCODE && args.is_empty() {
-                    // s.encode() -> bytes — the UTF-8 octets (RFC 0004)
+                    // s.encode() -> bytes — the UTF-8 octets
                     let dst = self.emit_string_encode(rreg, sp.lo);
                     self.last_reg = dst;
                     return Ok(TY_BYTES);
                 }
                 if name == sym::SLICE && args.len() == 2 {
-                    // s.slice(from, to) — an O(1) view (RFC 0042)
+                    // s.slice(from, to) — an O(1) view
                     let ft = self.compile_expr(args[0], Some(TY_I32))?;
                     if ft != TY_I32 {
                         self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
@@ -222,7 +222,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(TY_BOOL);
                 }
                 // a registered trait impl on the ref target dispatches
-                // statically on the bare receiver (RFC 0012 §2/§5) — the
+                // statically on the bare receiver — the
                 // concrete and slot ABIs coincide for ref targets (P1.1),
                 // so the raw register crosses as-is (`k.hash()` /
                 // `k.hash_eq(..)` in a monomorphized map body, P4)
@@ -241,7 +241,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             TyKind::Bytes => {
                 if name == sym::DECODE && args.is_empty() {
-                    // b.decode() -> str — UTF-8, lossy (RFC 0004)
+                    // b.decode() -> str — UTF-8, lossy
                     let dst = self.emit_bytes_decode(rreg, sp.lo);
                     self.last_reg = dst;
                     return Ok(TY_STR);
@@ -278,8 +278,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             TyKind::Trace => {
-                // the StackTrace member contract (RFC 0036 §3/§5,
-                // err-channel phase 2): engine-builtins on the snapshot,
+                // the StackTrace member contract (err-channel
+                // phase 2): engine-builtins on the snapshot,
                 // lowered to the trace natives — lazy symbolication lives
                 // in the VM, per access
                 match (name, args.len()) {
@@ -337,7 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             TyKind::Weak { elem } => {
-                // the Weak member contract (RFC 0017 v1): one engine
+                // the Weak member contract: one engine
                 // builtin — `upgrade()` answers the live referent as `?T`
                 // or nil. For `Weak<?U>` the answer is `??U` (MakeOpt
                 // wraps the box — the sticky-`?` law, no unguarded unwrap).
@@ -369,14 +369,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         // `s.len()` — the Slice surface member shared by every sequence;
-        // lowered fused (RFC 0032 §1.1 R1), including the `Vec<T>` class
+        // lowered fused, including the `Vec<T>` class
         if name == sym::LEN && args.is_empty() {
             if let Some(info) = self.slice_info(rt) {
                 self.emit_slice_len(rreg, &info, sp.lo)?;
                 return Ok(TY_I32);
             }
         }
-        // `v.slice(from, to)` — an O(1) array window (RFC 0042 §6): mints
+        // `v.slice(from, to)` — an O(1) array window: mints
         // an `ArrView` cell over the backing array and boxes it as
         // `*Vec<T>`/`*Array<T>`. Reads AND writes through the pointer go
         // to the parent (the `*T` aliasing law); the window is
@@ -438,9 +438,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // builtin members (RFC 0005 table): `opaque` rejects methods
+        // builtin members: `opaque` rejects methods
         // unless the module registered an inherent impl for it
-        // (RFC 0012 §2 — a module-owned `builtin class` takes impls)
+        // (a module-owned `builtin class` takes impls)
         match self.ctx.types.kind(rt).clone() {
             TyKind::Opaque => {
                 if let Some((idx, mname)) = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
@@ -451,7 +451,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }) {
                     return self.compile_native_static_call(idx, mname, vec![], rreg, args, expected, sp);
                 }
-                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque.downcast<T>(o)` (RFC 0014)");
+                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque.downcast<T>(o)`");
                 return Err(());
             }
             _ => {}
@@ -460,7 +460,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // — statically bound for this concrete receiver (nominal, RFC
         // 0012 §5: an impl is registered for exactly this (trait, type))
         if let TyKind::Data { .. } = self.ctx.types.kind(rt).clone() {
-            // the cx protocol members (RFC 0012 §7 / RFC 0018) inline as
+            // the cx protocol members inline as
             // FIELD OPS on the engine-minted record — no calls, the
             // frozen surface is the signature set, the lowering is the
             // compiler's (the state field holds the checkpoint enum's
@@ -508,7 +508,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // at the site (P1.3)
                 return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
             }
-            // another module's registration (RFC 0012 §2/§5): static
+            // another module's registration: static
             // dispatch through the exporter's compiled fn — the gate
             // (the trait's name was used here) is part of the lookup
             if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
@@ -517,8 +517,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.no_method_error(rt, name, sp);
             return Err(());
         }
-        // primitives take trait impls only (RFC 0012 §2; the inherent
-        // surface is core's `builtin impl`, RFC 0032 §1.1): a bare
+        // primitives take trait impls only (the inherent
+        // surface is core's `builtin impl`): a bare
         // concrete receiver dispatches the impl's CONCRETE-ABI variant —
         // the scalar crosses as an ordinary argument, no slot box (P1.2)
         if matches!(self.ctx.types.kind(rt), TyKind::Prim(_)) {
@@ -531,7 +531,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.no_method_error(rt, name, sp);
             return Err(());
         }
-        // the array type's inherent impl (`impl [T] { .. }`, RFC 0012 §2)
+        // the array type's inherent impl (`impl [T] { .. }`)
         // — static dispatch through the native shape
         if let TyKind::Array { elem } = self.ctx.types.kind(rt).clone() {
             let hit = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
@@ -557,7 +557,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
-            // trait-typed receiver: ONLY that trait's methods (RFC 0012 §2).
+            // trait-typed receiver: ONLY that trait's methods.
             // Single concrete origin ⇒ static bind; a merged/loaded/unknown
             // origin consults the value's descriptor (vtable)
             let tdesc = self.ctx.trait_by_id(trait_id).clone();
@@ -566,7 +566,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if segs.len() == 1 {
                         let origins = self.origins_of(segs[0].name);
                         if origins.len() == 1 {
-                            // the impl may live in any module (RFC 0012 §2):
+                            // the impl may live in any module:
                             // a local block binds here, another module's
                             // registration binds to its compiled fn. A
                             // parameterized trait impl mints on the miss
@@ -577,7 +577,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 Some(ImplHit::Local(idx)) => {
                                     // origin-pinned trait-object receiver: the box
                                     // is already materialized — call the SLOT
-                                    // variant (no new boxes, RFC 0012 §5)
+                                    // variant (no new boxes)
                                     return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp, true);
                                 }
                                 Some(ImplHit::Extern(eidx)) => {
@@ -596,7 +596,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
             self.ctx.err(sp, format!(
-                "`{}` values reach only `{}`'s methods —`{}` is not one of them (RFC 0012 §2)",
+                "`{}` values reach only `{}`'s methods —`{}` is not one of them",
                 self.ctx.name(tdesc.name), self.ctx.name(tdesc.name), self.ctx.name(name)
             ));
             return Err(());
@@ -607,9 +607,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The diagnostic for a missing method on a user type: when a
     /// matching impl exists under a trait this call site cannot name,
-    /// the message says which `use` unlocks it (RFC 0012 §6, the
-    /// use-both gate). Both local impls and other modules'
-    /// registrations (RFC 0012 §2) count as "exists".
+    /// the message says which `use` unlocks it
+    /// (the use-both gate). Both local impls and other modules'
+    /// registrations count as "exists".
     pub(crate) fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
         let target_matches = |ctx: &Ctx, im: &crate::check::ImplDecl| {
             im.target == rt
@@ -642,7 +642,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 });
                 let spelled = self.ctx.name(self.ctx.trait_by_id(tid).name);
                 self.ctx.err(sp, format!(
-                    "`{}` has no method `{}` — use `{}` to call its methods on `{}` (RFC 0012 §6)",
+                    "`{}` has no method `{}` — use `{}` to call its methods on `{}`",
                     self.ctx.type_name(rt),
                     self.ctx.name(name),
                     spelled,

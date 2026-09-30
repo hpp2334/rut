@@ -134,7 +134,7 @@ fn ast_wins_over_token_layer_at_equal_start() {
 
 #[test]
 fn cast_types_keep_their_type_color() {
-    // `x as f64` is the conversion family (RFC 0007 §1) — the
+    // `x as f64` is the conversion family — the
     // primitive after `as` stays a type, not a variable
     let src = "fn f(p: Point) -> f64 { return p.x as f64; }\n";
     let spans = classify_src(src);
