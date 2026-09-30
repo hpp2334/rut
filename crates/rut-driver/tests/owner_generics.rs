@@ -358,9 +358,10 @@ fn packaged_generic_owner_serves_consumer_requests() {
     assert_eq!(got, 6, "the packaged instantiation served the consumer");
     let _ = app_root;
 
-    // a request the binary does not carry refuses loudly (re-pack with
-    // the consumer in the closure), never mislinks: the lib packed
-    // ALONE carries no instantiation
+    // a request the binary does not carry used to refuse — now the
+    // generic-source riding law answers it: the lib packed ALONE rides
+    // its source, so the consumer-spelled shape compiles at the link
+    // and runs
     let standalone = pack_dir(&pairz).expect("the lib packs alone");
     let (mut lone, _pairz_root) = load_bundle_bytes(&standalone, Path::new("lone")).expect("load");
     mount_std(&mut lone);
@@ -382,8 +383,8 @@ fn packaged_generic_owner_serves_consumer_requests() {
     .unwrap();
     let g = compile_graph(&lone, "late");
     assert!(
-        g.diags.iter().any(|d| d.msg.contains("was not compiled into") && d.msg.contains("re-pack")),
-        "the missing instantiation refuses loudly: {:?}",
+        g.diags.is_empty(),
+        "the consumer-spelled shape compiles from the ridden source: {:?}",
         g.diags
     );
     let _ = std::fs::remove_dir_all(&root);

@@ -586,12 +586,15 @@ impl<'a> GraphCompiler<'a> {
     /// declaring package, and each request routes to its owner. A SOURCE
     /// owner recompiles with the seeds (the requesters' descriptors as
     /// sparse blocks — the locals match the requester's layout — plus
-    /// the instantiations to materialize before its compile roots); a
-    /// PACKAGED owner's binary must already carry the row, or the
-    /// consumer refuses loudly (re-pack with the consumer in the
-    /// closure). Seeds cascade — a seeded owner's compile may request
-    /// from further owners — until the queue drains; every round
-    /// processes in canonical (sorted) order.
+    /// the instantiations to materialize before its compile roots). A
+    /// PACKAGED owner grows the same way when its pkg RIDES generic
+    /// source: the ridden text lowers in this session and the
+    /// monomorphized bodies compile at the link, owner = the pkg's spec.
+    /// A LEGACY packaged owner's binary must already carry the row, or
+    /// the consumer refuses loudly (re-pack it). Seeds cascade — a
+    /// seeded owner's compile may request from further owners — until
+    /// the queue drains; every round processes in canonical (sorted)
+    /// order.
     fn resolve_requests(&mut self) {
         for _round in 0..32 {
             if self.requests.is_empty() {
@@ -617,7 +620,7 @@ impl<'a> GraphCompiler<'a> {
                 let Some(seeds) = self.seed_pool.get(&owner).cloned() else { continue };
                 match self.body_kind.get(&owner).copied() {
                     Some(0) => self.reseed_source_owner(&owner, &seeds),
-                    Some(1) => self.check_compiled_owner(&owner, &seeds),
+                    Some(1) => self.reseed_compiled_owner(&owner, &seeds),
                     _ => {
                         let first = &seeds[0].1;
                         let decl = first
@@ -665,102 +668,7 @@ impl<'a> GraphCompiler<'a> {
             return;
         };
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
-        // one seed group per requester: the descriptor closure of every
-        // request's arguments, sparse at the requester's locals — the
-        // attach side merges the groups into one padded run per scope
-        let mut per_requester: std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType>,
-        > = std::collections::BTreeMap::new();
-        for (requester, r) in seeds {
-            let Some((ridx, _)) = self.done.get(requester).map(|u| (u.idx, ())) else {
-                continue;
-            };
-            let entry = per_requester.entry(requester.clone()).or_default();
-            let owner_scope = self.done.get(owner).map(|u| u.scope).unwrap_or(0);
-            let closure = Self::desc_closure(&self.programs[ridx], &r.args, owner_scope);
-            for ((s, l), row) in closure {
-                entry.insert((s, l), row);
-            }
-        }
-        let mut groups: Vec<crate::SeedGroup> = Vec::new();
-        for (requester, rows) in &per_requester {
-            let Some((ridx, requester_scope)) = self.done.get(requester).map(|u| (u.idx, u.scope)) else { continue };
-            let prog = &self.programs[ridx];
-            let rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)> =
-                rows.iter().map(|(k, v)| (*k, v.clone())).collect();
-            let mine: Vec<_> = seeds.iter().filter(|(rq, _)| rq == requester).collect();
-            let insts = mine
-                .iter()
-                .filter(|(_, r)| !r.is_fn)
-                .map(|(_, r)| {
-                    (
-                        prog.interner.name(r.decl).to_string(),
-                        r.args.clone(),
-                        r.methods
-                            .iter()
-                            .map(|&m| prog.interner.name(m).to_string())
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .collect();
-            let fns = mine
-                .iter()
-                .filter(|(_, r)| r.is_fn)
-                .map(|(_, r)| (prog.interner.name(r.decl).to_string(), r.args.clone()))
-                .collect();
-            
-            let impl_methods = mine
-                .iter()
-                .filter(|(_, r)| r.is_impl)
-                .map(|(_, r)| {
-                    (
-                        prog.interner.name(r.decl).to_string(),
-                        r.impl_target,
-                        prog.interner.name(r.methods[0]).to_string(),
-                    )
-                })
-                .collect();
-            // the requester's own impls, fn ids scope-qualified into the
-            // requester's block. A target spelled under a THIRD scope
-            // (the owner's own block as this requester saw it, another
-            // pkg's) skips with the row drop in desc_closure: the owner
-            // re-derives its own types, and a foreign block it never
-            // bound has no locals to answer.
-            let impls: Vec<crate::SeedImpl> = prog
-                .surface
-                .impls
-                .iter()
-                .filter(|im| {
-                    let s = rut_core::id::scope_of(im.target);
-                    s == rut_core::id::BOOT_SCOPE || s == requester_scope
-                })
-                .map(|im| crate::SeedImpl {
-                    trait_name: prog.interner.name(im.trait_name).to_string(),
-                    target: im.target,
-                    methods: im
-                        .methods
-                        .iter()
-                        .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                        .collect(),
-                    methods_concrete: im
-                        .methods_concrete
-                        .iter()
-                        .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                        .collect(),
-                })
-                .collect();
-            
-            
-            groups.push(crate::SeedGroup {
-                rows,
-                names: &prog.interner,
-                insts,
-                fns,
-                impl_methods,
-                impls,
-            });
-        }
+        let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
         let out = compile_program_resolved(
             &text,
             if is_decl { Mode::Decl } else { Mode::Impl },
@@ -780,11 +688,92 @@ impl<'a> GraphCompiler<'a> {
         self.programs[idx] = out.program.expect("checked above");
     }
 
-    /// A packaged owner cannot grow: its binary carries exactly the
-    /// instantiations the pack-time closure requested. Each consumer
-    /// request must already have a ledger row — link unifies the
-    /// requester's mirror onto it — or the closure was packed without
-    /// this consumer, which is a loud refusal, never a guess.
+    /// A packaged owner whose pkg RIDES generic source grows at the
+    /// consumer's link: the request missed the pack-time ledger, so the
+    /// ridden source lowers in THIS session (the consumer's) — same
+    /// scope as the mounted unit, the same seeds a directory owner
+    /// would get — and the recompiled program replaces the mounted one
+    /// in place. Identity is the owner's spec (`compile_program_resolved`
+    /// under the owner's name), so the materialized rows are
+    /// indistinguishable in the ledger from pack-time ones: ONE row
+    /// program-wide, link unifies the mirrors onto it. Nothing persists:
+    /// this is per-load compilation, the `.rutc` caches stay pack-time.
+    /// A LEGACY bundle (the marker absent — no riding source) still
+    /// cannot grow: the loud refusal names the fix.
+    fn reseed_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
+        let Some((idx, scope)) = self.done.get(owner).map(|u| (u.idx, u.scope)) else {
+            return;
+        };
+        let Some(gen) = self
+            .session
+            .resolve(owner)
+            .ok()
+            .and_then(|m| m.gen_source.clone())
+        else {
+            // the legacy-refusal law: the ledger lacks the shape AND no
+            // source rides — this bundle predates generic-source riding
+            self.check_compiled_owner(owner, seeds);
+            return;
+        };
+        // the unit's text: the ridden source, then the peers' group
+        // files whose peers are in this program's closure (the presence
+        // law, peer-name order — the exact splice a directory owner's
+        // gate performs)
+        let mut text = gen.text.clone();
+        for (peer, group) in &gen.peers {
+            if self.session.resolve(peer).is_ok() {
+                text.push('\n');
+                text.push_str(group);
+            }
+        }
+        // parse + bind: the ridden source's uses resolve at their
+        // load-time scopes — every foreign scope the mounted binary
+        // references is already ensured (the compiled-mount arm ran
+        // them in ledger order before pushing this unit)
+        let (ast, d) = parse(&text, Mode::Impl);
+        if !d.is_empty() {
+            self.diags.extend(d);
+            return;
+        }
+        let mut uses = uses_of(&ast);
+        // the prelude ride, exactly as the source walk spells it
+        if owner != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core") {
+            uses.push("core".to_string());
+        }
+        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
+        let mut bound_scopes = HashSet::new();
+        for dep in &uses {
+            let Some(dep_unit) = self.ensure(dep) else { return };
+            if bound_scopes.insert(dep_unit.scope) {
+                bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
+            }
+        }
+        let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
+        let out = compile_program_resolved(
+            &text,
+            Mode::Impl,
+            owner,
+            scope,
+            &bound,
+            true,
+            &Seeds { groups: &groups },
+        );
+        for r in &out.requests {
+            self.requests.push((owner.to_string(), r.clone()));
+        }
+        if !out.diags.is_empty() || out.program.is_none() {
+            self.diags.extend(out.diags);
+            return;
+        }
+        self.programs[idx] = out.program.expect("checked above");
+    }
+
+    /// A legacy packaged owner cannot grow: its binary carries exactly
+    /// the instantiations the pack-time closure requested, and no
+    /// source rides to serve anything else. Each consumer request must
+    /// already have a ledger row — link unifies the requester's mirror
+    /// onto it — or the closure was packed without this consumer,
+    /// which is a loud refusal naming the re-pack fix, never a guess.
     fn check_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
         let Some((idx, _)) = self.done.get(owner).map(|u| (u.idx, ())) else { return };
         for (requester, r) in seeds {
@@ -814,7 +803,8 @@ impl<'a> GraphCompiler<'a> {
                 self.diags.push(Diag::new(
                     Span::new(0, 0),
                     format!(
-                        "instantiation `{}` was not compiled into `{owner}`'s binary — re-pack with the consumer in the closure",
+                        "instantiation `{}` was not compiled into `{owner}`'s binary and no generic source rides — \
+                         this bundle predates generic-source riding — re-pack it",
                         key
                     ),
                 ));
@@ -822,6 +812,112 @@ impl<'a> GraphCompiler<'a> {
             }
         }
     }
+}
+
+/// One seed group per requester: the descriptor closure of every
+/// request's arguments, sparse at the requester's locals — the attach
+/// side merges the groups into one padded run per scope. The owner-side
+/// input shared by both reseed arms (a directory owner and a
+/// source-riding compiled owner alike).
+fn build_seed_groups<'a>(
+    programs: &'a [Program],
+    done: &HashMap<String, Unit>,
+    owner: &str,
+    seeds: &'a [(String, rut_lir::check::InstRequest)],
+) -> Vec<crate::SeedGroup<'a>> {
+    // one seed group per requester: the descriptor closure of every
+    // request's arguments, sparse at the requester's locals
+    let mut per_requester: std::collections::BTreeMap<
+        String,
+        std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType>,
+    > = std::collections::BTreeMap::new();
+    for (requester, r) in seeds {
+        let Some((ridx, _)) = done.get(requester).map(|u| (u.idx, ())) else {
+            continue;
+        };
+        let entry = per_requester.entry(requester.clone()).or_default();
+        let owner_scope = done.get(owner).map(|u| u.scope).unwrap_or(0);
+        let closure = GraphCompiler::desc_closure(&programs[ridx], &r.args, owner_scope);
+        for ((s, l), row) in closure {
+            entry.insert((s, l), row);
+        }
+    }
+    let mut groups: Vec<crate::SeedGroup> = Vec::new();
+    for (requester, rows) in &per_requester {
+        let Some((ridx, requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else { continue };
+        let prog = &programs[ridx];
+        let rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)> =
+            rows.iter().map(|(k, v)| (*k, v.clone())).collect();
+        let mine: Vec<_> = seeds.iter().filter(|(rq, _)| rq == requester).collect();
+        let insts = mine
+            .iter()
+            .filter(|(_, r)| !r.is_fn)
+            .map(|(_, r)| {
+                (
+                    prog.interner.name(r.decl).to_string(),
+                    r.args.clone(),
+                    r.methods
+                        .iter()
+                        .map(|&m| prog.interner.name(m).to_string())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        let fns = mine
+            .iter()
+            .filter(|(_, r)| r.is_fn)
+            .map(|(_, r)| (prog.interner.name(r.decl).to_string(), r.args.clone()))
+            .collect();
+        let impl_methods = mine
+            .iter()
+            .filter(|(_, r)| r.is_impl)
+            .map(|(_, r)| {
+                (
+                    prog.interner.name(r.decl).to_string(),
+                    r.impl_target,
+                    prog.interner.name(r.methods[0]).to_string(),
+                )
+            })
+            .collect();
+        // the requester's own impls, fn ids scope-qualified into the
+        // requester's block. A target spelled under a THIRD scope
+        // (the owner's own block as this requester saw it, another
+        // pkg's) skips with the row drop in desc_closure: the owner
+        // re-derives its own types, and a foreign block it never
+        // bound has no locals to answer.
+        let impls: Vec<crate::SeedImpl> = prog
+            .surface
+            .impls
+            .iter()
+            .filter(|im| {
+                let s = rut_core::id::scope_of(im.target);
+                s == rut_core::id::BOOT_SCOPE || s == requester_scope
+            })
+            .map(|im| crate::SeedImpl {
+                trait_name: prog.interner.name(im.trait_name).to_string(),
+                target: im.target,
+                methods: im
+                    .methods
+                    .iter()
+                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
+                    .collect(),
+                methods_concrete: im
+                    .methods_concrete
+                    .iter()
+                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
+                    .collect(),
+            })
+            .collect();
+        groups.push(crate::SeedGroup {
+            rows,
+            names: &prog.interner,
+            insts,
+            fns,
+            impl_methods,
+            impls,
+        });
+    }
+    groups
 }
 
 /// The exact package names a module uses, in source order, deduped.

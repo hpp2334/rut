@@ -250,8 +250,11 @@ impl<'a> Ctx<'a> {
     /// filled exactly when an impl exists). Engine-named contracts
     /// (`Iterator`) flow through the same registry. Each slot's method
     /// compiles here (with its transitive calls) so every reachable slot
-    /// carries a real function id.
-    pub fn build_vtables(&mut self) -> Vec<Vec<Option<u32>>> {
+    /// carries a real function id. A fill body that cannot compile (a
+    /// nominal pair whose element type misses a member impl) is a unit
+    /// error — the diag is already in `ctx.diags`; swallowing it here
+    /// would ship the reserved empty fn and fail verification instead.
+    pub fn build_vtables(&mut self) -> TcResult<Vec<Vec<Option<u32>>>> {
         // (type, trait, method slot, inst) — collected first, compiled
         // after, so queue-driven interning cannot mutate what we walk.
         // Prim-target impl methods also queue their concrete-ABI twin
@@ -353,10 +356,10 @@ impl<'a> Ctx<'a> {
             }
         }
         for (_, _, inst) in &fills {
-            let _ = self.compile_queue(inst.clone());
+            self.compile_queue(inst.clone())?;
         }
         for inst in extra {
-            let _ = self.compile_queue(inst);
+            self.compile_queue(inst)?;
         }
 
         let total_slots: usize = self.traits.iter().map(|t| t.methods.len()).sum();
@@ -382,7 +385,7 @@ impl<'a> Ctx<'a> {
             vt[self.types.dense(*ty) as usize][*slot as usize] = Some(*fid);
         }
         self.extra_vtable_fills = pending;
-        vt
+        Ok(vt)
     }
 
     // ---- module lets (load-time expressions only) ----

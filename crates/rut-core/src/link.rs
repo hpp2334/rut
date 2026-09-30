@@ -998,7 +998,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 let en = m_interner.name(
                     m.types.types.get(*elem as usize).map(|e| e.name).unwrap_or(crate::sym::NIL),
                 );
-                if en == "nil" {
+                if en == "nil" && std::env::var("RUT_DEBUG_LINK").is_ok() {
                     eprintln!(
                         "DBG optnil module={} dense={} emits-at={} elem_dense={}",
                         m.name, di, out.types.types.len(), elem
@@ -1104,6 +1104,13 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         for (fi, f) in m.funcs.into_iter().enumerate() {
             if plan.skip_fns.contains(&(fi as u32)) {
                 continue;
+            }
+            if std::env::var("RUT_DEBUG_EMPTYFN").is_ok() && f.code.is_empty() && f.host_id.is_none() {
+                let fname = m_interner.name(f.name).to_string();
+                if fname.contains("JsonDeserialize") {
+                    let rows: usize = m.inst_fns.iter().filter(|r| r.fid as usize == fi).count();
+                    eprintln!("DBG empty-fn module={} local={fi} name={fname} ledger_rows={rows}", m.name);
+                }
             }
             out.funcs.push(FuncCode {
                 name: nm(f.name),

@@ -612,8 +612,12 @@ pub fn compile_program_resolved(
     }
     // vtable pass 1: collects the impl fills and queues their bodies
     // (they drain with the seeds below); the SHIPPED rows assemble at
-    // the tail, once the settle makes every fill resolve
-    let _ = ctx.build_vtables();
+    // the tail, once the settle makes every fill resolve. A fill body
+    // that cannot compile is a unit error — the diag joins ctx.diags.
+    if ctx.build_vtables().is_err() || !ctx.diags.is_empty() {
+        diags.append(&mut ctx.diags);
+        return fail(diags, ast_dump, ast_json);
+    }
     // per-type disposal rows: `(target type, dispose func id)` per
     // `impl ..: Disposal` — the release path's table, flowing module→link
     // beside the vtables
@@ -1362,7 +1366,13 @@ pub fn compile_program_resolved(
     // drain above now answers in `inst_map`, so the shipped rows carry
     // the seeded instantiations' dispatch entries too. The link re-lays
     // both tables through the merged trait table.
-    let vtables = ctx.build_vtables();
+    let vtables = match ctx.build_vtables() {
+        Ok(v) if ctx.diags.is_empty() => v,
+        Err(()) | Ok(_) => {
+            diags.append(&mut ctx.diags);
+            return fail(diags, ast_dump, ast_json);
+        }
+    };
     let mut trait_slots = Vec::new();
     for (i, t) in ctx.traits.iter().enumerate() {
         for m in 0..t.methods.len() {
