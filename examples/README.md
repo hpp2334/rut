@@ -10,9 +10,19 @@ example:
 | [`01-sort/`](01-sort/) | `cargo run -p sort` | a sorting library behind one dispatcher entry; `Result` at the boundary, known-input gates |
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
-| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up) | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
+| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.toml` for the shape law | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
 | [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.toml` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows |
+
+Every rut program here is a module dir with a `rut.toml` — the
+manifest is the deps carrier. `00`/`01`/`02` declare their third-party
+pkgs as PATH rows (`pouch`, plus `json` for `02` — the generic owners;
+the url flip for those is a separate, still-pending engine plan, and
+`calc` takes no row anywhere: it is ambient, the embedder mounts std),
+and their embedders (`src/main.rs`, `tests/session.rs`) mount through
+the manifest lane (`load_dir_session`) instead of in-code `mount_dir`
+calls — same host half, new mount lane. `04`'s manifest is the shape
+law alone: parse-only, nothing loads that dir yet.
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports

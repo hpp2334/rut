@@ -12,33 +12,18 @@ use base64::Engine as _;
 use md5::Digest as _;
 use rut_vm::OpaqueRef;
 
-const SRC: &str = include_str!("../digest.rut");
-
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
-    let mut s = rut_driver::Session::new();
+    // the manifest lane: `rut.toml` carries pouch + json (the LIGHT
+    // consumer world — the manifest header owns that story), the load
+    // mounts the closure and runs the mount passes — then the same
+    // embedder half as before
+    let (mut s, root) =
+        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("load the module dir");
     rut_driver::mount_std(&mut s);
-    rut_driver::mount_dir(
-        &mut s,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
-    )
-    .expect("mount pouch");
-    // json after pouch (the std order). Mounted LIGHT (the base only —
-    // rut/json/rut.toml's own comment): the encode path uses json's
-    // traits + writer directly and needs no peer group, so
-    // `assemble_peers` is deliberately not called. (This DOM's children
-    // are `Vec<opaque>`; the peer-gated `impl JsonSerialize for Vec<T>`
-    // instantiated at T = opaque miscompiles — its element
-    // `x.encode(w)` binds the `?T` row's uncompiled concrete twin and
-    // the binary fails load-time verify. An engine-side
-    // devirtualization gap, disclosed in the batch commit.)
-    rut_driver::mount_dir(
-        &mut s,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/json"),
-    )
-    .expect("mount json");
-    let out = rut_driver::compile_module_in(&mut s, SRC, rut_parser::Mode::Impl, "digests");
-    assert!(out.diags.is_empty(), "{}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    let g = rut_driver::compile_graph(&s, &root);
+    assert!(g.diags.is_empty(), "{}", g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    let prog = g.program.expect("no binary emitted");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(fuel),

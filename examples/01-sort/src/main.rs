@@ -10,19 +10,18 @@
 use std::rc::Rc;
 
 fn main() {
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sort.rut")).unwrap();
-    // the app's libs: core+calc (engine) and `pouch` — a third-party pkg
-    // the app declares, mounted from the toolchain tree
-    let mut session = rut_driver::Session::new();
+    // the manifest lane: this dir's `rut.toml` carries the deps, the
+    // load mounts the closure and runs the mount passes — then the same
+    // embedder half as before (mount, compile, verify, drive)
+    let (mut session, root) =
+        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("load the module dir");
+    // the app's libs: core+calc (engine) — `calc` is ambient, and
+    // `pouch` rode the manifest
     rut_driver::mount_std(&mut session);
-    rut_driver::mount_dir(
-        &mut session,
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
-    )
-    .expect("mount pouch");
-    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "sort");
-    assert!(out.diags.is_empty());
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    let g = rut_driver::compile_graph(&session, &root);
+    assert!(g.diags.is_empty());
+    let prog = g.program.expect("no binary emitted");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(5_000_000),

@@ -7,21 +7,19 @@ use std::rc::Rc;
 use rut_vm::OpaqueRef;
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sort.rut")).unwrap();
-    let mut s = rut_driver::Session::new();
+    // the manifest lane: `rut.toml` carries the deps, the load mounts
+    // the closure — then the same embedder half as before
+    let (mut s, root) =
+        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("load the module dir");
     rut_driver::mount_std(&mut s);
-    rut_driver::mount_dir(
-        &mut s,
-        &std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
-    )
-    .expect("mount pouch");
-    let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "sort");
-assert!(
-        out.diags.is_empty(),
+    let g = rut_driver::compile_graph(&s, &root);
+    assert!(
+        g.diags.is_empty(),
         "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    let prog = g.program.expect("no binary emitted");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(5_000_000),

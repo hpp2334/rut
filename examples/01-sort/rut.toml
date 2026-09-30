@@ -1,0 +1,19 @@
+# 01-sort — the app is a module dir, like every rut program: the
+# manifest carries the deps, and the embedder (`src/main.rs`,
+# `tests/session.rs`) loads this dir through the manifest lane
+# (`load_dir_session`) — same host half, new mount lane.
+#
+# THE PATH ROW: `pouch` is a GENERIC owner — this app's `Vec<i32>` is
+# consumer-spelled — so it rides the DIRECTORY lane, which compiles the
+# shape on demand. The url flip for the generic owners is a separate,
+# still-pending engine plan.
+#
+# THE ABSENT ROW: `calc` takes none — it is ambient. The embedder mounts
+# std (`mount_std`), and nothing in the engine knows a harness's ambient
+# set (the bench workloads' rule); a `use calc::` resolves against that
+# mount at compile time, never through a dep row.
+name = "sort"
+entry.lib = "./sort.rut"
+
+[deps]
+pouch = { path = "../../rut/pouch" }

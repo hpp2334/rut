@@ -96,34 +96,20 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 }
 
 fn main() {
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/digest.rut")).unwrap();
-    // the app's libs: core+calc (engine) and `pouch` + `json` —
-    // third-party pkgs the app declares, mounted from the toolchain
-    // tree (json after pouch, the std order). This consumer mounts json
-    // LIGHT (the base only — rut/json/rut.toml's own comment): the
-    // encode path below uses json's traits + writer directly and needs
-    // no peer group, so `assemble_peers` is deliberately not called.
-    // (This DOM's children are `Vec<opaque>`; the peer-gated
-    // `impl JsonSerialize for Vec<T>` instantiated at T = opaque
-    // miscompiles — its element `x.encode(w)` binds the `?T` row's
-    // uncompiled concrete twin and the binary fails load-time verify.
-    // An engine-side devirtualization gap, disclosed in the batch
-    // commit; a consumer encoding REAL element types wants the group.)
-    let mut session = rut_driver::Session::new();
+    // the manifest lane: this dir's `rut.toml` carries the deps
+    // (`pouch` + `json` by path — the LIGHT consumer world; the
+    // manifest header owns that story), the load mounts the closure
+    // and runs the mount passes — then the same embedder half as
+    // before (mount, compile, verify, drive)
+    let (mut session, root) =
+        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("load the module dir");
+    // the app's libs: core+calc (engine) — `pouch` + `json` rode the
+    // manifest, walk order owning the std order
     rut_driver::mount_std(&mut session);
-    rut_driver::mount_dir(
-        &mut session,
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
-    )
-    .expect("mount pouch");
-    rut_driver::mount_dir(
-        &mut session,
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/json")),
-    )
-    .expect("mount json");
-    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "digests");
-    assert!(out.diags.is_empty());
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    let g = rut_driver::compile_graph(&session, &root);
+    assert!(g.diags.is_empty());
+    let prog = g.program.expect("no binary emitted");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(50_000_000),

@@ -1,0 +1,21 @@
+# 02-digest — the app is a module dir, like every rut program: the
+# manifest carries the deps, and the embedder (`src/main.rs`,
+# `tests/session.rs`) loads this dir through the manifest lane
+# (`load_dir_session`) — same host half, new mount lane.
+#
+# THE PATH ROWS: pouch and json are GENERIC owners — this consumer
+# spells `Vec<opaque>` and drives json's traits + writer directly — so
+# both ride the DIRECTORY lane (the url flip for the generic owners is
+# a separate, still-pending engine plan). The consumer world stays
+# LIGHT: the dev-deps that supply json's own pack closure never mount
+# in a consumer's world, and json's optional integration groups mount
+# only for closure members — `pouch` is declared, so its group rides;
+# `nmapset` is absent and stays inert. json's own `[deps]` pulls
+# strbuild (the writer's accumulator), so the embedder pairs the load
+# with `strbuild::pkg()` (the tests do; exactly ink + `logger::pkg`).
+name = "digests"
+entry.lib = "./digest.rut"
+
+[deps]
+pouch = { path = "../../rut/pouch" }
+json = { path = "../../rut/json" }

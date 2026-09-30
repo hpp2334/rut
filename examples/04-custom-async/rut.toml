@@ -1,0 +1,10 @@
+# 04-custom-async — a PARSE-ONLY example: no runnable harness yet (the
+# disclosed follow-up). The manifest exists for the shape law — every
+# rut program the repo carries is a module dir with a `rut.toml` — not
+# for a run lane: nothing loads this dir today, and the parser
+# conformance suite is the gate that keeps the entry parseable.
+# Dep-free for the same reason: `core` is engine-ambient, and the
+# `async_engine` use resolves only in a mounted world — its row rides
+# in with the harness when one lands.
+name = "custom_async"
+entry.lib = "./custom_async.rut"

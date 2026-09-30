@@ -1,0 +1,15 @@
+# 00-todolist — the app is a module dir, like every rut program: the
+# manifest carries the deps, and the embedder (`src/main.rs`,
+# `tests/session.rs`) loads this dir through the manifest lane
+# (`load_dir_session`) — same host half, new mount lane.
+#
+# THE PATH ROW: `pouch` is a GENERIC owner — a compiled bundle serves
+# only the instantiations its own pack closure spelled, and this app's
+# `Vec<Todo>` is consumer-spelled — so it rides the DIRECTORY lane,
+# which compiles the shape on demand. The url flip for the generic
+# owners is a separate, still-pending engine plan.
+name = "todolist"
+entry.lib = "./todolist.rut"
+
+[deps]
+pouch = { path = "../../rut/pouch" }
