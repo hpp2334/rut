@@ -5,6 +5,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rut_core::ops::{Nat, Op};
+
 /// The toolchain libs a single-file case declares by use (`ink`,
 /// `pouch`) — mounted from the tree as real packages (the driver does
 /// not know their names): mounting `ink` pulls its `rt` dep along.
@@ -1387,6 +1389,126 @@ pub fn main() -> nil {
     let (lines, trap, _) = run_case(src, 4_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["2000 aa xy x 0,1,2,3,4,"]);
+}
+
+#[test]
+fn fstring_accumulator_is_linear_at_100k() {
+    // THE 100k accumulator pin: `out = f"{out}{t}"` appends a short str in
+    // a loop and must complete inside the harness's fuel + 4 MiB heap
+    // budgets while staying FAST — the in-place append (dst == args[0],
+    // rc == 1, geometric growth) runs this in milliseconds, while the copy
+    // path would copy the whole prefix every step (≈ 10^10 octets
+    // cumulative — minutes, not ms). The budgets bound the linear path's
+    // own envelope (fuel O(n), live heap O(n)); the shape test below is
+    // the deterministic linearity discriminator.
+    let src = r#"
+pub fn main() -> nil {
+    let mut out = "";
+    let t = "xy";
+    let mut i = 0;
+    while (i < 100000) {
+        out = f"{out}{t}";
+        i += 1;
+    }
+    Logger.new("app").info(f"{out.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 8_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["200000"]);
+}
+
+#[test]
+fn fstring_accumulator_concat_lowers_with_dst_as_first_arg() {
+    // the DETERMINISTIC linearity pin. Budgets alone cannot catch the
+    // quadratic path: fuel is one per OP (both lowerings run the same op
+    // count per step) and the heap budget refunds at cell death (both
+    // paths peak at ≈ 2× the final size LIVE). The discriminator is the
+    // lowering's SHAPE: `out = f"{out}{t}"` must emit `Concat` with
+    // `dst == argv[0]` — the runtime in-place append's precondition —
+    // which `compile_fstr_into` arranges by reusing the accumulator's own
+    // register as the destination. A fresh-dst regression (copy the
+    // prefix every step) fails THIS test, not just the wall clock.
+    let src = r#"
+pub fn main() -> nil {
+    let mut out = "";
+    let t = "xy";
+    let mut i = 0;
+    while (i < 4) { out = f"{out}{t}"; i += 1; }
+}
+"#;
+    let out = compile(src, "main");
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    assert!(
+        out.diags.is_empty(),
+        "unexpected diags:\n{}",
+        rut_lexer::diag::render_diags(&combined, &out.diags)
+    );
+    let prog = rut_core::binary::decode(&out.binary.expect("binary")).expect("decode");
+    let (_, main_fid) = prog
+        .exports
+        .iter()
+        .find(|(id, _)| prog.interner.name(*id) == "main")
+        .expect("main export");
+    let f = &prog.funcs[*main_fid as usize];
+    let in_place = f.code.iter().any(|op| match op {
+        Op::CallNat { nat: Nat::Concat, argv_off, argc, dst, .. } if *argc >= 2 => {
+            f.argv.get(*argv_off as usize) == Some(dst)
+        }
+        _ => false,
+    });
+    assert!(
+        in_place,
+        "the f-string accumulator must lower to Concat with dst == argv[0] \
+         (the in-place append precondition); a fresh dst makes every step \
+         copy the whole prefix — quadratic"
+    );
+}
+
+#[test]
+fn plus_shape_concat_is_linear_bytes_decode_at_100k() {
+    // the shape the fast path was BUILT for: the `bytes.decode()` lowering
+    // appends one 1-codepoint str per octet through `Concat([out, c]) ->
+    // out` (dst == args[0], the `+` accumulator). 100k octets must decode
+    // inside the fuel budget (≈ 40 interpreted ops per octet) — only the
+    // in-place path stays anywhere near it; a per-step copy of the prefix
+    // is ≈ 5×10^9 octets of copying. Correctness: every octet survives.
+    let src = r#"
+pub fn main() -> nil {
+    let mut b: [u8] = [0; 100000];
+    let mut i = 0;
+    while (i < 100000) { b[i] = (65 + i % 26) as u8; i += 1; }
+    let out = bytes.from(b).decode();
+    Logger.new("app").info(f"{out.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 24_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["100000"]);
+}
+
+#[test]
+fn fstring_accumulator_with_alias_stays_correct_on_the_slow_path() {
+    // the rc == 1 law is the pin's other edge: `alias` shares the cell, so
+    // the accumulator's cell is NOT uniquely owned and the guard must keep
+    // excluding it from the in-place append. Correctness is the assertion —
+    // the alias keeps the pre-loop text while `out` grows past it.
+    let src = r#"
+pub fn main() -> nil {
+    let mut out = "head";
+    let alias = out;
+    let t = "xy";
+    let mut i = 0;
+    while (i < 100000) {
+        out = f"{out}{t}";
+        i += 1;
+    }
+    Logger.new("app").info(f"{out.len()} {alias.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 8_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["200004 4"]);
 }
 
 #[test]
