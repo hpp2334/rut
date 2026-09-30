@@ -5,8 +5,10 @@ move and every timer goes through ten declared host crossings**, and
 the page's brain is a **rut project of TWO packages** (`rut/`): `ui`
 (the framework — the atom store machinery, the t1 widget framework,
 the component vocabulary, one module) and `biz` (the domain-as-
-mutations and the app shell, one module), with the `web` crossing
-declared flat at the example root (`web.d.rut`). Two `rut.toml` total.
+mutations and the app shell, one module), with the `web` crossing in
+its own host-pkg dir (`web/`, `rut.toml` + `web.d.rut` — it rides no
+deps row; the embedder registers it). Three `rut.toml` total, two of
+them consumer packages.
 Pure rut: no `main` loop on the rut side, no event loop, no async
 keywords. The host (web-sys on wasm32, a fake-DOM twin on native) owns
 the loop; rut owns the state.
@@ -19,11 +21,10 @@ literally: the machinery traits are module-private to `ui`, and biz
 cannot name them even to import them.
 
 The `web` crossing is **example-local** by the phase-0 survey's
-decision: `web.d.rut` sits FLAT at
-the example root, outside any package directory (its pre-restructure
-placement, kept — the two-package law counts manifests, and the host
-crossing is not a rut package). Both lanes register it by hand
-(`src/mount.rs`), the `ink_host` precedent.
+decision: the crossing is **example-local**, declared in its own
+host-pkg dir (`web/` — the shape law's fold; it still rides NO deps
+row, so the two-package count is unchanged). Both lanes register it
+by hand (`src/mount.rs`), the `ink_host` precedent.
 
 ## What it teaches
 
@@ -259,9 +260,9 @@ that remains is enforced by type visibility, not just by grep:
 ```
 examples/05-todolist-web/
 ├── index.html  loader.js  gen/     the page shell (gitignored gen/)
-├── web.d.rut                       the `web` host DECL surface — flat at
-│                                   the root, no manifest of its own: the
-│                                   embedder registers it in both lanes
+├── web/                            the `web` host DECL surface as a pkg
+│   ├── rut.toml                     dir (rides no deps row): the embedder
+│   └── web.d.rut                    registers it in both lanes
 ├── src/                            the Rust host: state/pump, hosts,
 │                                   backends (web + fake twin), mount
 ├── tests/                          the gates (95 tests, see Gates)
@@ -323,7 +324,7 @@ examples/05-todolist-web/
   the pkg name), everything `include_str!`. The mirror is `rut/biz/rut.toml`'s mirror and
   nothing more; `tests/mount_lane.rs` (the P3 proof) pins both lanes
   to the same mounted-name set, host surface, and compiled binary.
-  `web.d.rut` rides NO manifest path — both lanes register it by hand
+  `web/` rides NO manifest path — both lanes register it by hand
   (the embedder mounts what the closure uses; the `mount_std_core`
   precedent). INLINE (spliced, deduped by origin — a first-class
   manifest key with a stated shape reason): `ui` (its generic exports

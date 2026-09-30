@@ -22,10 +22,10 @@
 //! host surface, and the same compiled binary. The `limits()`/
 //! `compile_app` halves below are shared by both lanes.
 //!
-//! THE HOST DECL SURFACE: `web.d.rut` sits FLAT at the example root,
-//! outside any package directory (its pre-restructure placement, kept
-//! — the two-package law counts manifests, and the host crossing is
-//! not a rut package). BOTH lanes register it by hand: the embedder
+//! THE HOST DECL SURFACE: `web.d.rut` lives in `web/` as a proper host
+//! pkg (the shape law folded it in; it still rides NO deps row — the
+//! two-package law's count is unchanged, and the host crossing is not
+//! a mounted package). BOTH lanes register it by hand: the embedder
 //! mounts what the closure uses (the `mount_std_core` precedent).
 //!
 //! What died here before this file's current shape: the old
@@ -48,7 +48,7 @@ use rut_driver::{Module, ModuleBody};
 // both lanes, the ink/pouch precedent.
 
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
-pub const WEB_D_RUT: &str = include_str!("../web.d.rut");
+pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 
 const POUCH_RUT: &str = include_str!("../../../rut/pouch/pouch.rut");
 // the nmap host surface, from the COMMITTED CDN artifact (the v6 decl
