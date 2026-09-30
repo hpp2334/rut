@@ -879,11 +879,13 @@ async function main() {
     smokes++;
   }
 
-  // ---- the RFC 0044 dedicated diagnostic (M2's acceptance) ----
+  // ---- the dedicated postfix-removal diagnostic (M2's acceptance;
+  // the RFC sweep reworded it — the message names the fix, not a
+  // proposal number) ----
   {
     const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
-    if (!(b.diags.length === 1 && b.diags[0].message.includes('RFC 0044'))) {
-      bad.push(`postfix T? must give the ONE dedicated RFC 0044 diag, got: ${JSON.stringify(b.diags)}`);
+    if (!(b.diags.length === 1 && b.diags[0].message.includes('postfix spelling'))) {
+      bad.push(`postfix T? must give the ONE dedicated postfix-removal diag, got: ${JSON.stringify(b.diags)}`);
     }
     const g = rut.analyze('file:///ws/e2e-prefix.rut', 'fn g(p: ?i32) -> nil {\n}\n');
     if (g.diags.length !== 0) {
@@ -930,7 +932,7 @@ async function main() {
     process.exit(1);
   }
   console.log(`e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
-    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044/` +
+    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/postfix-removal/` +
     `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
     `def-within/def-cross/def-std/typeDefinition/` +
     `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
