@@ -68,6 +68,11 @@ source text by design; a partially translated book is a valid book.
 | splice | 拼接 | splice-needed → 需要拼接；the splice law → 拼接法则 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |
 | linkable | 可链接 | the splice law's verdict — Linkable |
+| symbol stripping | 符号剥离 | the `--strip` lane — compile-time name/position stripping |
+| sidecar | 旁车 | the `.rutsym` private symbol table rides beside the bundle；`.rutsym` stays code（与 compiler.md 的"旁车 map 文件"同一词） |
+| symbol table | 符号表 | the private restore half; not a secret |
+| mangled name | 改名后的名称 | the strip's rename — `%N` stays code；动词 mangle → 改名 |
+| keep-set | 保留集 | names that never rename（host ABI、exports、pkg specs） |
 | temporary-run lane | 临时运行车道 | the CLI's role — quick experiments (run/fmt/dump/pack)，不是交付路径；两条消费车道都叫车道 |
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
 

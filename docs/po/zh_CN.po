@@ -322,6 +322,10 @@ msgstr "类型化字节码"
 msgid "Module binary and verification"
 msgstr "模块二进制与校验"
 
+#: src/SUMMARY.md:106 src/reference/symbol-stripping.md:1
+msgid "Symbol stripping and `.rutsym` sidecars"
+msgstr "符号剥离与 `.rutsym` 旁车"
+
 #: src/SUMMARY.md:106 src/reference/vm-core.md:1
 msgid "VM core"
 msgstr "VM 核心"
@@ -25373,6 +25377,20 @@ msgstr "符号化数据随每个函数走：`spans` 表（pc → 字节偏移）
 msgid "Type ids at rest and at link"
 msgstr "静止时与链接时的类型 id"
 
+#: src/reference/module-binary.md:115
+msgid ""
+"Both strippable halves are format-legal encodings, not special cases: tail "
+"strings are opaque to the format (rewriting them to mangled `%N` names "
+"touches no id, opcode, or table), and `0`/empty `pos` is the documented "
+"stripped encoding — a stripped binary decodes and verifies identically, no "
+"version bump required. The toolchain lane that produces and restores them — "
+"the mangle/keep-set law, the private `.rutsym` sidecar, and `run --symbols` "
+"— is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
+msgstr ""
+"两个可剥离的部分都是格式合法的编码，不是特例：尾部字符串对格式是透明的（把它们改写成 `%N` 这样的改名不触碰任何 id、操作码或表），而 `0`/空 "
+"`pos` 就是有文档记载的已剥离编码——剥离后的二进制照样解码与校验，不需要版本升级。产出并还原它们的工具链车道——改名/保留集法则、私有的 "
+"`.rutsym` 旁车、以及 `run --symbols`——见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。"
+
 #: src/reference/module-binary.md:123
 msgid ""
 "Type ids are program-global in a linked binary only because **link** already "
@@ -25534,6 +25552,281 @@ msgid ""
 "packages and host pkgs as source groups ([Module bundles](bundles.md))."
 msgstr ""
 "`.d.rut` 声明表面不会产出二进制——它没有函数体，只编译为签名表面（[宿主函数与声明文件](host-fns.md)）。而 `.rutbundle` 是二进制加它们的容器：编译过的包以 `.rutc` 二进制随行（本格式），需要拼接的包与宿主包则以源码组随行（[模块捆绑包](bundles.md)）。"
+
+#: src/reference/symbol-stripping.md:3
+msgid ""
+"A publisher can ship a compiled artifact whose function, type, field, trait, "
+"and method names — and source positions — are unreadable, while keeping a "
+"private **symbol table** that, when supplied at load time, restores the real "
+"names and line/col for [stack-trace symbolication](diagnostics.md). Users "
+"holding only the binary see mangled names and pc-only traces; users holding "
+"the sidecar see the real thing."
+msgstr ""
+"发布者可以发布一个编译产物：其中的函数、类型、字段、trait "
+"与方法名字——以及源码位置——都不可读，同时保留一份私有**符号表**；在加载时提供这份符号表，就能为[栈追踪符号化](diagnostics.md)还原真实名字与行/列。只拿到二进制的人看到的是改名后的名字与仅 "
+"pc 的追踪；拿到旁车的人看到真实的东西。"
+
+#: src/reference/symbol-stripping.md:11
+msgid ""
+"The VM changes nothing: symbolication is lazy, per-index, against the loaded "
+"program's interner and position tables — restoring is a matter of what the "
+"loaded program carries ([Diagnostics, traces, and "
+"symbolication](diagnostics.md))."
+msgstr ""
+"VM "
+"一行不改：符号化是惰性的、按下标的、对着已加载程序的驻留器与位置表进行的——还原只取决于加载的程序携带了什么（[诊断、追踪与符号化](diagnostics.md)）。"
+
+#: src/reference/symbol-stripping.md:16
+msgid "The model"
+msgstr "模型"
+
+#: src/reference/symbol-stripping.md:19
+msgid "# packed plugins/server -> server.rutbundle (...) + symbol table\n"
+msgstr "# packed plugins/server -> server.rutbundle (...) + symbol table\n"
+
+#: src/reference/symbol-stripping.md:24
+msgid "Two files leave the build:"
+msgstr "构建产出两个文件："
+
+#: src/reference/symbol-stripping.md:28
+msgid "`server.rutbundle`"
+msgstr "`server.rutbundle`"
+
+#: src/reference/symbol-stripping.md:28
+msgid ""
+"the public artifact — every renameable name mangled, every function's "
+"symbolication tables gone"
+msgstr "公开产物——每个可改名的名字都改了名，每个函数的符号化表都已抽走"
+
+#: src/reference/symbol-stripping.md:29
+msgid "`server.rutsym`"
+msgstr "`server.rutsym`"
+
+#: src/reference/symbol-stripping.md:29
+msgid ""
+"the private half — mangled → original name rows, and the span/position "
+"tables per module"
+msgstr "私有的一半——改名 → 原名的行，以及每模块的区间/位置表"
+
+#: src/reference/symbol-stripping.md:31
+msgid ""
+"The sidecar is **never an entry inside the bundle**. It rides beside it, and "
+"whoever holds it may restore; whoever holds only the bundle cannot. It is "
+"also not encrypted or obfuscated — see the limitations below."
+msgstr "旁车**绝不是捆绑包里的一个条目**。它随行在捆绑包旁边：持有它可以还原，只持有捆绑包则不能。它也没有加密或混淆——见下文的限制。"
+
+#: src/reference/symbol-stripping.md:35
+msgid "What is renamed"
+msgstr "改什么名"
+
+#: src/reference/symbol-stripping.md:37
+msgid ""
+"Everything name-shaped a binary carries: function names, type names, field "
+"names, trait and method names, enum members, and the exported surface rows. "
+"Renaming is purely a **tail rewrite**: every name in a `.rutc` is an "
+"interned-id index, and the binary serializes only the name table's "
+"instance-local tail ([Module binary and verification](module-binary.md)) — "
+"rewriting those tail strings touches nothing else. Ids, opcodes, vtables, fn "
+"tables, and type layouts are untouched, so **no format-version bump rides "
+"this**: a stripped binary decodes and verifies identically, and `0`/empty "
+"position tables are the documented stripped encoding."
+msgstr ""
+"二进制携带的一切名字形状的东西：函数名、类型名、字段名、trait 与方法名、枚举成员，以及导出表面的行。改名纯粹是**尾部重写**：`.rutc` "
+"里的每个名字都是指入驻留器的 "
+"id，而二进制只序列化名字表的实例本地尾部（[模块二进制与校验](module-binary.md)）——重写这些尾部字符串不触碰任何其他东西。id、操作码、虚表、函数表、类型布局原封不动，所以**这不需要格式版本升级**：剥离后的二进制照样解码与校验，`0`/空位置表就是有文档记载的已剥离编码。"
+
+#: src/reference/symbol-stripping.md:48
+msgid ""
+"Mangled names are **`%0`, `%1`, …** — sequential over the sorted union of "
+"renameable names across the whole packed closure (deterministic and "
+"collision-free). `%` can never appear in an identifier or a package name, so "
+"a mangled string cannot collide with any source-derived name by "
+"construction."
+msgstr ""
+"改名后的名字是 **`%0`、`%1`……**——按整个打包闭包里可改名名字的排序并集顺序编号（确定且无冲突）。`%` "
+"永远不会出现在标识符或包名里，所以改名字符串在构造上就不可能与任何源自源码的名字冲突。"
+
+#: src/reference/symbol-stripping.md:54
+msgid ""
+"Mangling is one closure-wide string→string map applied to every compiled "
+"group in the bundle — never per-group random names. Bundles link across "
+"`.rutc` groups by name text at load (trait merge-by-name, the "
+"instantiation-ledger keys), and a consistent map preserves all cross-group "
+"identity for free."
+msgstr ""
+"改名用的是一张闭包级的字符串→字符串映射，应用到捆绑包里的每个编译组——绝不是每组随机的名字。捆绑包在加载时按名字文本跨 `.rutc` "
+"组链接（trait 按名字合并、实例化台账的键），而一致的映射免费保住所有跨组同一性。"
+
+#: src/reference/symbol-stripping.md:60
+msgid "The keep-set"
+msgstr "保留集"
+
+#: src/reference/symbol-stripping.md:62
+msgid "Some names are load-bearing and never rename:"
+msgstr "有些名字承重，绝不改名："
+
+#: src/reference/symbol-stripping.md:64
+msgid "kept"
+msgstr "保留"
+
+#: src/reference/symbol-stripping.md:64
+msgid "why"
+msgstr "为什么"
+
+#: src/reference/symbol-stripping.md:66
+msgid "well-known names (`main`, the builtin members, the primitives)"
+msgstr "知名名字（`main`、各内建成员、各基本类型）"
+
+#: src/reference/symbol-stripping.md:66
+msgid "never in the serialized tail"
+msgstr "从不在序列化的尾部里"
+
+#: src/reference/symbol-stripping.md:67
+msgid "host-fn registration names (`FuncCode.host_id`, `SurfaceFn.host`, host thunks)"
+msgstr "宿主函数的注册名（`FuncCode.host_id`、`SurfaceFn.host`、宿主 thunk）"
+
+#: src/reference/symbol-stripping.md:67
+msgid "the embedder's registry keys — `ink_host::log`, `rt:log`, …"
+msgstr "嵌入方的注册表键——`ink_host::log`、`rt:log`……"
+
+#: src/reference/symbol-stripping.md:68
+msgid "export names"
+msgstr "导出名"
+
+#: src/reference/symbol-stripping.md:68
+msgid "hosts call by string (`vm.call(\"main\", …`)"
+msgstr "宿主按字符串调用（`vm.call(\"main\", …`）"
+
+#: src/reference/symbol-stripping.md:69
+msgid "package specs in instantiation rows"
+msgstr "实例化行里的包名"
+
+#: src/reference/symbol-stripping.md:69
+msgid "load-time unification keys"
+msgstr "加载期的合一键"
+
+#: src/reference/symbol-stripping.md:71
+msgid ""
+"`Program::name` (the module's display name in traces) is a plain string "
+"field, not an interned name — it stays as-is. Local variable names never "
+"exist at runtime (registers only), so there is nothing to strip there."
+msgstr ""
+"`Program::name`（追踪里模块的显示名）是一个普通字符串字段，不是驻留器名字——原样保留。局部变量名在运行时根本不存在（只有寄存器），所以这里没有可剥离的东西。"
+
+#: src/reference/symbol-stripping.md:75
+msgid "Positions"
+msgstr "位置"
+
+#: src/reference/symbol-stripping.md:77
+msgid ""
+"The pc → byte-offset span table and the parallel pc → (line, col) position "
+"table leave **together**, per function, and restore together. Without them, "
+"`StackTrace.line(i)`/`col(i)` read `0` and `render()` degrades to the "
+"pc-only form — the behavior is unchanged, only the diagnostics lose fidelity "
+"([Diagnostics](diagnostics.md))."
+msgstr ""
+"pc → 字节偏移的区间表与平行的 pc "
+"→（行，列）位置表**一起**离开（逐函数），也一起还原。没有它们，`StackTrace.line(i)`/`col(i)` 读到 "
+"`0`，`render()` 退化为仅 pc 的形态——行为不变，只有诊断损失保真度（[诊断](diagnostics.md)）。"
+
+#: src/reference/symbol-stripping.md:83
+msgid "The mixed-closure refusal"
+msgstr "混合闭包的拒绝"
+
+#: src/reference/symbol-stripping.md:85
+msgid ""
+"`--strip` needs a **fully-compiled** closure. A package riding as a source "
+"group (the `inline` flag, or a host declaration) would bind its compiled "
+"dependencies' surfaces at load — and those names are mangled. The packer "
+"refuses rather than guesses:"
+msgstr ""
+"`--strip` 需要一个**全编译**的闭包。以源码组随行的包（`inline` "
+"旗标，或宿主声明）会在加载时绑定其编译依赖的表面——而那些名字已改名。打包器拒绝而非猜测："
+
+#: src/reference/symbol-stripping.md:97
+msgid ""
+"Host and declaration leaf groups have no compiled dependencies and pass "
+"trivially. A refused world packs fine without `--strip`."
+msgstr "宿主与声明的叶子组没有编译依赖，平凡地通过。被拒绝的世界不加 `--strip` 照样打包。"
+
+#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:204
+msgid "CLI"
+msgstr "CLI"
+
+#: src/reference/symbol-stripping.md:103
+msgid "# + out.rutsym beside it\n"
+msgstr "# + out.rutsym beside it\n"
+
+#: src/reference/symbol-stripping.md:107
+msgid ""
+"`--strip` writes the bundle as today plus the sibling sidecar "
+"(`mod.rutbundle` → `mod.rutsym`) and prints both paths."
+msgstr "`--strip` 照今天一样写出捆绑包，外加旁边的旁车（`mod.rutbundle` → `mod.rutsym`），并打印两个路径。"
+
+#: src/reference/symbol-stripping.md:109
+msgid ""
+"`--symbols` is legal only against a compiled `.rutbundle` — the source and "
+"directory lanes compile fresh and need no map (a mismatched input is a usage "
+"error). The table restores **before** the graph compiles, so linking and "
+"every trace see real names. A section naming a module the bundle does not "
+"carry draws a warning; a table from a different build simply matches nothing "
+"and errors nothing."
+msgstr ""
+"`--symbols` 只对编译的 `.rutbundle` "
+"合法——源码与目录车道重新编译，不需要映射（不匹配的输入是用法错误）。符号表在图编译**之前**还原，所以链接与每条追踪看到的都是真实名字。命名了捆绑包未携带模块的分节会告警；来自另一次构建的符号表什么都不匹配，也不报错。"
+
+#: src/reference/symbol-stripping.md:116
+msgid ""
+"Embedders get the same lane as library calls: the packer's `pack_dir_opts` "
+"returns the sidecar bytes beside the bundle, and `apply_symbols_to_session` "
+"restores into a mounted session."
+msgstr ""
+"嵌入方以库调用的形式得到同一条车道：打包器的 `pack_dir_opts` "
+"把旁车字节随捆绑包一起返回，`apply_symbols_to_session` 把它还原进已挂载的会话。"
+
+#: src/reference/symbol-stripping.md:120
+msgid "Determinism and limitations"
+msgstr "确定性与限制"
+
+#: src/reference/symbol-stripping.md:122
+msgid ""
+"Same input directory ⇒ byte-identical bundle ⇒ byte-identical sidecar (the "
+"mangled numbering is sorted-union based, like everything else in the pack). "
+"That determinism is also the honest limitation:"
+msgstr "相同输入目录 ⇒ 逐字节相同的捆绑包 ⇒ 逐字节相同的旁车（改名的编号按排序并集，与打包里其他一切一样）。这份确定性也是那条诚实的限制："
+
+#: src/reference/symbol-stripping.md:126
+msgid ""
+"**String values are data, not names** — string constants in the binary stay "
+"exactly as the source wrote them. Stripping hides identifiers; it does not "
+"scrub string literals."
+msgstr "**字符串值是数据，不是名字**——二进制里的字符串常量与源码所写逐字相同。剥离隐藏标识符；它不清除字符串字面量。"
+
+#: src/reference/symbol-stripping.md:129
+msgid ""
+"**The sidecar is the private half, not a secret.** Anyone holding the "
+"original source can rebuild the same closure deterministically and "
+"regenerate an identical map. Treat `.rutsym` like a `.pdb`: distribute it "
+"only to parties who may see names and positions."
+msgstr ""
+"**旁车是私有的一半，不是秘密。**任何持有原始源码的人都能确定性地重建同一闭包，再生成一份相同的映射。把 `.rutsym` 当作 `.pdb` "
+"对待：只分发给被允许看到名字与位置的一方。"
+
+#: src/reference/symbol-stripping.md:133
+msgid ""
+"Extending a stripped bundle from source (a consumer binding a compiled "
+"group's surface later) is a loud unification miss, never a mislink — re-pack "
+"with the consumer in the closure instead."
+msgstr "从源码扩展一个已剥离的捆绑包（消费方日后绑定某编译组的表面）是一次响亮的合一失配，绝不是错误链接——请把消费方放进闭包重新打包。"
+
+#: src/reference/symbol-stripping.md:139
+msgid ""
+"`rut dump` on a `.rutc` with `--symbols`, and auto-keeping the shared "
+"surfaces of a mixed closure (so it could strip anyway), are natural "
+"follow-ups; neither ships today."
+msgstr ""
+"对 `.rutc` 的 `rut dump` 支持 "
+"`--symbols`，以及混合闭包共享表面的自动保留（让它本来就能剥离），都是自然的后续；今天都不随版本发布。"
 
 #: src/reference/vm-core.md:3
 msgid ""
@@ -26357,8 +26650,8 @@ msgstr "还原路径"
 #: src/reference/diagnostics.md:95
 msgid ""
 "A trace is captured against whatever is loaded — possibly a stripped, "
-"published artifact. Three ways back to names:"
-msgstr "追踪是针对当时加载的东西捕获的——可能是一个已剥离、已发布的产物。回到名字有三条路："
+"published artifact. Four ways back to names:"
+msgstr "追踪是针对当时加载的东西捕获的——可能是一个已剥离、已发布的产物。回到名字有四条路："
 
 #: src/reference/diagnostics.md:98
 msgid ""
@@ -26379,6 +26672,20 @@ msgid ""
 "**Stripped, no artifact.** Traces still _work_: they degrade to the pc-only "
 "render form above, and stay restorable via path 2 later."
 msgstr "**已剥离、无产物。**追踪仍然_可用_：它们退化为上文仅 pc 的渲染形态，并且日后仍可经路径 2 还原。"
+
+#: src/reference/diagnostics.md:106
+msgid ""
+"**The stripped artifact's private symbol table.** Name resolution and "
+"position lookup follow the loaded program — so supplying a `.rutsym` sidecar "
+"at load time (`run --symbols`, or `apply_symbols_to_session` as a library "
+"call) restores real names and line/col before any trace is taken. The "
+"sidecar's law — what mangles, what stays, the mixed-closure refusal — is "
+"[Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
+msgstr ""
+"**已剥离产物的私有符号表。**名字解析与位置查找都跟随加载的程序——所以在加载时提供一份 `.rutsym` 旁车（`run "
+"--symbols`，或以库调用 "
+"`apply_symbols_to_session`）就能在任何追踪被捕获之前还原真实名字与行/列。旁车的法则——什么改名、什么保留、混合闭包的拒绝——见[符号剥离与 "
+"`.rutsym` 旁车](symbol-stripping.md)。"
 
 #: src/reference/diagnostics.md:107
 msgid "Trap messages"
@@ -26717,6 +27024,30 @@ msgid ""
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
+
+#: src/reference/bundles.md:158
+msgid "Stripping — the private sidecar"
+msgstr "剥离——私有的旁车"
+
+#: src/reference/bundles.md:160
+msgid ""
+"`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
+"table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
+"name in the `.rutc` binaries mangles to `%N` and every function's "
+"span/position tables leave — the sidecar carries exactly what left, so "
+"supplying it at load restores real names and line/col for stack-trace "
+"symbolication. The sidecar is never an entry inside the archive. It needs a "
+"fully-compiled closure (a source group that could bind a compiled group's "
+"surface is a pointed refusal); without `--strip`, packing is unchanged. The "
+"whole law lives in [Symbol stripping and `.rutsym` "
+"sidecars](symbol-stripping.md). `run` accepts `--symbols <file.rutsym>` "
+"against a compiled bundle ([The rut CLI](cli.md))."
+msgstr ""
+"`rut pack <dir> --strip` 在上述内容之外，**外加一份私有符号表**，写在旁边的路径 "
+"`<out-without-ext>.rutsym`。`.rutc` 二进制里每个可改名的名字都改名为 "
+"`%N`，每个函数的区间/位置表都离开——旁车携带的正是离开的东西，因此在加载时提供它就能为栈追踪符号化还原真实名字与行/列。旁车绝不是归档里的一个条目。它需要一个全编译的闭包（可能绑定某编译组表面的源码组会被明确拒绝）；不加 "
+"`--strip` 时，打包一切照旧。完整的法则见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。`run` "
+"对编译的捆绑包接受 `--symbols <file.rutsym>`（[rut CLI](cli.md)）。"
 
 #: src/reference/bundles.md:151
 msgid "Checks on load"
@@ -27719,6 +28050,22 @@ msgid ""
 "default"
 msgstr "为每轮操作预算设上限。燃料需显式开启：不带该旗标时运行不设上限；缺少或无法解析的值是响亮的错误（退出码 2）——没有静默默认值"
 
+#: src/reference/cli.md:31
+msgid "`--symbols <file.rutsym>`"
+msgstr "`--symbols <file.rutsym>`"
+
+#: src/reference/cli.md:31
+msgid ""
+"restore a [stripped artifact's](symbol-stripping.md) private symbol table — "
+"legal only against a compiled `.rutbundle` (the source/dir lanes compile "
+"fresh and need no map; anything else is a usage error, exit 2). The table "
+"restores before the graph compiles, so linking and every trace see real "
+"names; sections naming modules the bundle does not carry warn"
+msgstr ""
+"还原[已剥离产物](symbol-stripping.md)的私有符号表——只对编译的 `.rutbundle` "
+"合法（源码/目录车道重新编译，不需要映射；其他任何输入都是用法错误，退出码 "
+"2）。符号表在图编译之前还原，所以链接与每条追踪看到的都是真实名字；命名了捆绑包未携带模块的分节会告警"
+
 #: src/reference/cli.md:32
 msgid "fixed at 64 MiB"
 msgstr "固定为 64 MiB"
@@ -27864,6 +28211,10 @@ msgstr "`pack`"
 msgid "# packed plugins/server -> server.rutbundle (18304 bytes)\n"
 msgstr "# packed plugins/server -> server.rutbundle (18304 bytes)\n"
 
+#: src/reference/cli.md:98
+msgid "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
+msgstr "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
+
 #: src/reference/cli.md:91
 msgid ""
 "Packs a module directory into a **deterministic** `.rutbundle` — same input, "
@@ -27877,6 +28228,19 @@ msgid ""
 "bundle directly ([module bundles](bundles.md))."
 msgstr ""
 "把模块目录打包成**确定性的** `.rutbundle`——相同输入，相同字节。不给 `-o` 时，输出写在输入旁边，名为 `<dir-name>.rutbundle`。捆绑包是**编译的**（format_version 5）：根与每个可链接包以 `.rutc` 二进制随行（函数体 + 表面——链接的真相），需要拼接的包（泛型导出、trait 对象参数、`inline`）与宿主包以源码组随行，另有一张作用域台账让任何加载器把二进制重定基到自己的编号上。无法链接的根会被拒绝——请改为共享目录。`run` 直接接受捆绑包（[模块捆绑包](bundles.md)）。"
+
+#: src/reference/cli.md:113
+msgid ""
+"`--strip` mangles every renameable name and strips the symbolication tables "
+"from the emitted binaries, writing the private symbol table at the sibling "
+"path `<out-without-ext>.rutsym` — the sidecar is never an entry inside the "
+"bundle. It needs a fully-compiled closure: a source group that could bind a "
+"compiled group's surface is a pointed refusal. See [Symbol stripping and "
+"`.rutsym` sidecars](symbol-stripping.md)."
+msgstr ""
+"`--strip` 把每个可改名的名字改名，并从产出的二进制里剥离符号化表，把私有符号表写在旁边的路径 "
+"`<out-without-ext>.rutsym`——旁车绝不是捆绑包里的一个条目。它需要一个全编译的闭包：可能绑定某编译组表面的源码组会被明确拒绝。见[符号剥离与 "
+"`.rutsym` 旁车](symbol-stripping.md)。"
 
 #: src/reference/cli.md:102 src/reference/cli.md:118
 msgid "`dump`"

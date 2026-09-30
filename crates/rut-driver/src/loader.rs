@@ -658,3 +658,58 @@ pub fn compile_dir(dir: &Path) -> Result<crate::graph::GraphOutput, String> {
     let (session, root) = load_dir_session(dir)?;
     Ok(crate::compile_graph(&session, &root))
 }
+
+/// Restore a symbol table's names and positions into a mounted
+/// session — the load half of compile-time symbol stripping. Each
+/// section resolves its module **spec** through the session (never an
+/// archive path: first-mount-wins has already decided the bodies) and
+/// applies to `ModuleBody::Compiled` programs; the names restore first,
+/// so linking (merge-by-name, ledger keys) and the VM both see the real
+/// thing. Call BEFORE `compile_graph`. Sections whose spec is absent
+/// (or not a compiled module) come back as skipped specs — the caller
+/// decides to warn; a map from a different build simply matches
+/// nothing, which is tolerated, not an error.
+pub fn apply_symbols_to_session(
+    session: &mut Session,
+    map: &rut_core::strip::SymbolMap,
+) -> Vec<String> {
+    // names first: exact-key restore over every mounted compiled module
+    // (kept strings and non-keys pass through)
+    let restore: std::collections::HashMap<&str, &str> = map
+        .names
+        .iter()
+        .map(|(m, o)| (m.as_str(), o.as_str()))
+        .collect();
+    let specs: Vec<String> = session.modules().map(|(s, _)| s.clone()).collect();
+    for spec in &specs {
+        if let Ok(module) = session.resolve_mut(spec) {
+            if let ModuleBody::Compiled(prog) = &mut module.body {
+                prog.interner.remap_tail(|s| {
+                    restore.get(s).copied().unwrap_or(s).to_string()
+                });
+            }
+        }
+    }
+    // then the span/pos sections, spec-resolved like the names
+    let mut skipped: Vec<String> = Vec::new();
+    for section in &map.sections {
+        match session.resolve_mut(&section.spec) {
+            Ok(module) => match &mut module.body {
+                ModuleBody::Compiled(prog) => {
+                    // a fn-count mismatch means the section was taken
+                    // from a different build — matches nothing,
+                    // tolerated silently (the same law as the name rows)
+                    if prog.funcs.len() == section.fns.len() {
+                        for (f, sy) in prog.funcs.iter_mut().zip(&section.fns) {
+                            f.spans = sy.spans.clone();
+                            f.pos = sy.pos.clone();
+                        }
+                    }
+                }
+                _ => skipped.push(section.spec.clone()),
+            },
+            Err(_) => skipped.push(section.spec.clone()),
+        }
+    }
+    skipped
+}

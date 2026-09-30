@@ -90,6 +90,25 @@ impl Interner {
             self.intern(&s);
         }
     }
+
+    /// Rewrite the instance-local tail's strings in id order, rebuilding
+    /// the map — ids are preserved by construction (append-only, no
+    /// dedup: the caller guarantees distinct outputs for distinct
+    /// inputs). The compile-time symbol strip's rename step
+    /// ([`crate::strip`]): every [`IdentId`] keeps meaning the same
+    /// slot, only the text behind it changes.
+    pub fn remap_tail(&mut self, f: impl Fn(&str) -> String) {
+        let wk = self.well_known_len() as usize;
+        for name in self.names[wk..].iter_mut() {
+            *name = f(name).into_boxed_str();
+        }
+        self.map = self
+            .names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), IdentId(i as u32)))
+            .collect();
+    }
 }
 
 /// The well-known table — **append-only, never reorder** (ids are baked
@@ -491,6 +510,29 @@ mod tests {
         assert_eq!(j.lookup("Point"), i.lookup("Point"));
         assert_eq!(j.lookup("Vec"), i.lookup("Vec"));
         assert_eq!(j.well_known_len(), j.names().len() as u32 - 2);
+    }
+
+    #[test]
+    fn remap_tail_preserves_ids_and_rebuilds_lookups() {
+        let mut i = Interner::new();
+        let point = i.intern("Point");
+        let vec = i.intern("Vec");
+        i.remap_tail(|s| format!("%{s}"));
+        // ids preserved, text rewritten — lookups follow the new text
+        assert_eq!(i.name(point), "%Point");
+        assert_eq!(i.name(vec), "%Vec");
+        assert_eq!(i.lookup("%Point"), Some(point));
+        assert_eq!(i.lookup("%Vec"), Some(vec));
+        assert_eq!(i.lookup("Point"), None);
+        // the well-known range is untouched
+        assert_eq!(i.name(crate::sym::MAIN), "main");
+        assert_eq!(i.lookup("main"), Some(crate::sym::MAIN));
+        // distinct inputs stay distinct outputs (the injective-closure law)
+        assert_ne!(i.name(point), i.name(vec));
+        // append-only after a remap: new interns never renumber
+        let fresh = i.intern("Fresh");
+        assert_eq!(i.name(fresh), "Fresh");
+        assert!(fresh.0 > vec.0);
     }
 }
 

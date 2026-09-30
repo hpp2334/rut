@@ -30,7 +30,20 @@ fn main() {
                     }
                 },
             };
-            run(path, fuel);
+            // the symbol table is opt-in against a compiled bundle: the
+            // source/dir lanes compile fresh and need no map — a
+            // mismatched input is a usage error, never a silent ignore
+            let symbols = match args.iter().position(|a| a == "--symbols") {
+                None => None,
+                Some(i) => match args.get(i + 1) {
+                    Some(v) => Some(v.clone()),
+                    None => {
+                        eprintln!("run: --symbols needs a path to a `.rutsym` symbol table (got nothing)");
+                        std::process::exit(2);
+                    }
+                },
+            };
+            run(path, fuel, symbols);
         }
         "fmt" => {
             let Some(path) = args.get(2) else {
@@ -45,7 +58,7 @@ fn main() {
                 eprintln!("pack: missing <dir>");
                 std::process::exit(2);
             };
-            pack(dir, arg_flag(&args, "-o").as_deref());
+            pack(dir, arg_flag(&args, "-o").as_deref(), args.iter().any(|a| a == "--strip"));
         }
         "dump" => {
             let Some(path) = args.get(2) else {
@@ -70,7 +83,7 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump <file.rut>"
+        "rut — run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | dump <file.rut>"
     );
 }
 
@@ -96,13 +109,22 @@ fn mode_of(path: &str) -> rut_parser::Mode {
     }
 }
 
-fn run(path: &str, fuel: Option<u64>) {
+fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
     if path.ends_with(".d.rut") {
         eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
         std::process::exit(2);
     }
     let p = std::path::Path::new(path);
     let packed = p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle");
+    if symbols.is_some()
+        && !(p.is_file() && p.extension().map_or(false, |e| e == "rutbundle"))
+    {
+        eprintln!(
+            "run: --symbols restores a packed artifact's symbol table — give a compiled `.rutbundle` \
+             (a source or directory input compiles fresh and needs no map)"
+        );
+        std::process::exit(2);
+    }
     // the program plus the mount snapshot the host installs against —
     // the ctx is OWNED (the session may die here; the installs below
     // answer to the snapshot)
@@ -116,6 +138,27 @@ fn run(path: &str, fuel: Option<u64>) {
                 std::process::exit(2);
             }
         };
+        // the symbol table restores BEFORE the graph compiles, so
+        // linking and the VM both see the real names and positions
+        if let Some(sym) = &symbols {
+            let bytes = match std::fs::read(sym) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("run: cannot read {sym}: {e}");
+                    std::process::exit(2);
+                }
+            };
+            let map = match rut_core::strip::SymbolMap::from_bytes(&bytes) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("run: {sym}: {e}");
+                    std::process::exit(1);
+                }
+            };
+            for spec in rut_driver::apply_symbols_to_session(&mut session, &map) {
+                eprintln!("run: warning — the symbol table names `{spec}`, which this bundle does not carry");
+            }
+        }
         rut_driver::mount_std(&mut session);
         let g = rut_driver::compile_graph(&session, &root);
         if !g.diags.is_empty() {
@@ -261,12 +304,15 @@ fn run(path: &str, fuel: Option<u64>) {
     }
 }
 
-/// `rut pack <dir> [-o out.rutbundle]` — pack a module directory into a
-/// deterministic v5 **compiled** `.rutbundle` (linkable pkgs ride as
-/// `.rutc` binaries, splice-needed deps as source).
-fn pack(dir: &str, out: Option<&str>) {
+/// `rut pack <dir> [-o out.rutbundle] [--strip]` — pack a module
+/// directory into a deterministic v5 **compiled** `.rutbundle`
+/// (linkable pkgs ride as `.rutc` binaries, splice-needed deps as
+/// source). `--strip` writes the sidecar symbol table at the sibling
+/// path `<out-without-ext>.rutsym` — the PRIVATE half, never an entry
+/// inside the bundle.
+fn pack(dir: &str, out: Option<&str>, strip: bool) {
     let p = std::path::Path::new(dir);
-    let bytes = match rut_driver::pack_dir(p) {
+    let (bytes, symtab) = match rut_driver::pack_dir_opts(p, &rut_driver::PackOpts { strip }) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("pack: {e}");
@@ -280,7 +326,16 @@ fn pack(dir: &str, out: Option<&str>) {
         eprintln!("pack: cannot write {}: {e}", out.display());
         std::process::exit(1);
     }
-    println!("packed {} -> {} ({} bytes)", p.display(), out.display(), bytes.len());
+    print!("packed {} -> {} ({} bytes)", p.display(), out.display(), bytes.len());
+    if let Some(sym) = symtab {
+        let sym_path = out.with_extension("rutsym");
+        if let Err(e) = std::fs::write(&sym_path, &sym) {
+            eprintln!("pack: cannot write {}: {e}", sym_path.display());
+            std::process::exit(1);
+        }
+        print!(" + symbol table {} ({} bytes, keep PRIVATE)", sym_path.display(), sym.len());
+    }
+    println!();
 }
 
 fn dump(path: &str) {

@@ -103,6 +103,7 @@
 - [The compiler pipeline](reference/compiler.md)
 - [Typed bytecode](reference/typed-bytecode.md)
 - [Module binary and verification](reference/module-binary.md)
+- [Symbol stripping and `.rutsym` sidecars](reference/symbol-stripping.md)
 - [VM core](reference/vm-core.md)
 - [Loading and the embed loop](reference/loading.md)
 - [Diagnostics, traces, and symbolication](reference/diagnostics.md)

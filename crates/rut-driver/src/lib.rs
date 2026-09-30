@@ -21,12 +21,12 @@ pub mod graph;
 pub use graph::{compile_graph, compile_units, GraphOutput, Units};
 
 pub mod pack;
-pub use pack::pack_dir;
+pub use pack::{pack_dir, pack_dir_opts, PackOpts};
 
 pub mod loader;
 pub use loader::{
-    assemble_peers, compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session,
-    load_module_source, load_path_session, mount_dir,
+    apply_symbols_to_session, assemble_peers, compile_dir, load_bundle_bytes,
+    load_bundle_session, load_dir_session, load_module_source, load_path_session, mount_dir,
 };
 
 fn respell_surface_ty(

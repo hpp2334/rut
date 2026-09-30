@@ -1957,11 +1957,11 @@ fn nat(b: u8) -> Result<Nat, String> {
 // ---- little-endian encoder/decoder ----
 
 #[derive(Default)]
-struct Enc {
-    out: Vec<u8>,
+pub(crate) struct Enc {
+    pub(crate) out: Vec<u8>,
 }
 impl Enc {
-    fn bytes(&mut self, b: &[u8]) {
+    pub(crate) fn bytes(&mut self, b: &[u8]) {
         self.out.extend_from_slice(b);
     }
     fn u8(&mut self, v: u8) {
@@ -1970,7 +1970,7 @@ impl Enc {
     fn u16(&mut self, v: u16) {
         self.out.extend_from_slice(&v.to_le_bytes());
     }
-    fn u32(&mut self, v: u32) {
+    pub(crate) fn u32(&mut self, v: u32) {
         self.out.extend_from_slice(&v.to_le_bytes());
     }
     fn u64(&mut self, v: u64) {
@@ -1982,7 +1982,7 @@ impl Enc {
     fn f64(&mut self, v: f64) {
         self.out.extend_from_slice(&v.to_le_bytes());
     }
-    fn str(&mut self, s: &str) {
+    pub(crate) fn str(&mut self, s: &str) {
         self.u32(s.len() as u32);
         self.bytes(s.as_bytes());
     }
@@ -2015,11 +2015,16 @@ impl Enc {
     }
 }
 
-struct Dec<'a> {
+pub(crate) struct Dec<'a> {
     b: &'a [u8],
     pos: usize,
 }
 impl<'a> Dec<'a> {
+    /// A fresh decoder over the whole byte range — the shared-codec
+    /// entry for sibling formats (the strip sidecar).
+    pub(crate) fn new(b: &'a [u8]) -> Dec<'a> {
+        Dec { b, pos: 0 }
+    }
     fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
         if self.pos + n > self.b.len() {
             return Err("truncated module binary".into());
@@ -2028,7 +2033,7 @@ impl<'a> Dec<'a> {
         self.pos += n;
         Ok(s)
     }
-    fn bytes(&mut self, out: &mut [u8]) -> Result<(), String> {
+    pub(crate) fn bytes(&mut self, out: &mut [u8]) -> Result<(), String> {
         out.copy_from_slice(self.take(out.len())?);
         Ok(())
     }
@@ -2039,7 +2044,7 @@ impl<'a> Dec<'a> {
         let b = self.take(2)?;
         Ok(u16::from_le_bytes([b[0], b[1]]))
     }
-    fn u32(&mut self) -> Result<u32, String> {
+    pub(crate) fn u32(&mut self) -> Result<u32, String> {
         let b = self.take(4)?;
         Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
@@ -2053,7 +2058,7 @@ impl<'a> Dec<'a> {
     fn f64(&mut self) -> Result<f64, String> {
         Ok(f64::from_bits(self.u64()?))
     }
-    fn str(&mut self) -> Result<String, String> {
+    pub(crate) fn str(&mut self) -> Result<String, String> {
         let n = self.u32()? as usize;
         let b = self.take(n)?;
         String::from_utf8(b.to_vec()).map_err(|_| "bad utf8 in binary".into())

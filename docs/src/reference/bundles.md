@@ -148,6 +148,21 @@ This is the module binary's determinism law extended one level up
 ([Module binary and verification](module-binary.md)): bundles are
 content-cacheable, and two builds of the same module diff to nothing.
 
+## Stripping — the private sidecar
+
+`rut pack <dir> --strip` emits the bundle as above **plus a private
+symbol table** at the sibling path `<out-without-ext>.rutsym`. Every
+renameable name in the `.rutc` binaries mangles to `%N` and every
+function's span/position tables leave — the sidecar carries exactly
+what left, so supplying it at load restores real names and line/col
+for stack-trace symbolication. The sidecar is never an entry inside
+the archive. It needs a fully-compiled closure (a source group that
+could bind a compiled group's surface is a pointed refusal); without
+`--strip`, packing is unchanged. The whole law lives in [Symbol
+stripping and `.rutsym` sidecars](symbol-stripping.md). `run` accepts
+`--symbols <file.rutsym>` against a compiled bundle
+([The rut CLI](cli.md)).
+
 ## Checks on load
 
 Every check runs at load time, before compilation and linking — a bad
@@ -189,8 +204,8 @@ packages them, nothing requires it.
 ## CLI
 
 ```sh
-rut pack <dir> [-o <dir>.rutbundle]   # default output: a sibling of the dir
-rut run <dir | mod.rutbundle>         # mount, compile, execute main
+rut pack <dir> [-o <dir>.rutbundle] [--strip]   # default output: a sibling of the dir
+rut run <dir | mod.rutbundle> [--symbols <file.rutsym>]
 ```
 
 The packed form and its directory compile to identical programs — pinned

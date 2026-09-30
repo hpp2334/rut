@@ -13,9 +13,9 @@ crates from your own project through a Cargo git dependency
 binary itself.
 
 ```sh
-rut run <file.rut | dir | mod.rutbundle> [--fuel N]
+rut run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>]
 rut fmt <file.rut | dir> [--check]
-rut pack <dir> [-o out.rutbundle]
+rut pack <dir> [-o out.rutbundle] [--strip]
 rut dump <file.rut>
 ```
 
@@ -36,6 +36,7 @@ Flags and defaults:
 | item | behavior |
 |---|---|
 | `--fuel N` | cap the op budget per turn. Fuel is opt-in: without the flag the run is uncapped; a missing or unparsable value is a loud error (exit 2) — no silent default |
+| `--symbols <file.rutsym>` | restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the source/dir lanes compile fresh and need no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn |
 | heap limit | fixed at 64 MiB |
 | interrupt check | every 1024 ops |
 
@@ -93,6 +94,9 @@ The canonical formatter. Behavior:
 ```sh
 rut pack plugins/server -o server.rutbundle
 # packed plugins/server -> server.rutbundle (18304 bytes)
+rut pack plugins/server --strip
+# packed plugins/server -> plugins/server.rutbundle (...) + symbol table
+# plugins/server.rutsym (... bytes, keep PRIVATE)
 ```
 
 Packs a module directory into a **deterministic** `.rutbundle` — same
@@ -105,6 +109,13 @@ ride as source groups, and a scope ledger lets any loader rebase the
 binaries onto its own numbering. A root that cannot link is refused —
 share the directory instead. `run` accepts the bundle directly
 ([module bundles](bundles.md)).
+
+`--strip` mangles every renameable name and strips the symbolication
+tables from the emitted binaries, writing the private symbol table at
+the sibling path `<out-without-ext>.rutsym` — the sidecar is never an
+entry inside the bundle. It needs a fully-compiled closure: a source
+group that could bind a compiled group's surface is a pointed refusal.
+See [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md).
 
 ## `dump`
 

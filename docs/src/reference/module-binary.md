@@ -118,6 +118,15 @@ strings is a publishing choice, and stripped traces restore through
 recompilation-by-determinism (see [Diagnostics, traces, and
 symbolication](diagnostics.md)).
 
+Both strippable halves are format-legal encodings, not special cases:
+tail strings are opaque to the format (rewriting them to mangled
+`%N` names touches no id, opcode, or table), and `0`/empty `pos` is the
+documented stripped encoding — a stripped binary decodes and verifies
+identically, no version bump required. The toolchain lane that produces
+and restores them — the mangle/keep-set law, the private `.rutsym`
+sidecar, and `run --symbols` — is [Symbol stripping and `.rutsym`
+sidecars](symbol-stripping.md).
+
 ## Type ids at rest and at link
 
 Type ids are program-global in a linked binary only because **link**

@@ -243,6 +243,20 @@ impl Session {
         }
     }
 
+    /// Mutable exact resolution — the symbol-table apply lane's
+    /// take/replace access to a mounted module's body (a stripped
+    /// bundle's sidecar restores names + positions in place, before the
+    /// graph compiles). Same miss diagnostics as [`Session::resolve`].
+    pub fn resolve_mut(&mut self, spec: &str) -> Result<&mut Module, ResolveError> {
+        if !valid_spec(spec) {
+            return Err(ResolveError::BadSpec { spec: spec.to_string() });
+        }
+        if self.modules.contains_key(spec) {
+            return Ok(self.modules.get_mut(spec).unwrap());
+        }
+        Err(self.peer_miss(spec))
+    }
+
     /// The miss diagnostic for `spec`: when the name is a declared
     /// OPTIONAL peer of some mounted pkg, D2 — pkg + peer + the
     /// integration it unlocks + the fix; otherwise the bare NoModule

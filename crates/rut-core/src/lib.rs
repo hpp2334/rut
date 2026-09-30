@@ -8,6 +8,7 @@ pub mod binary;
 pub mod id;
 pub mod link;
 pub mod ops;
+pub mod strip;
 pub mod sym;
 pub mod types;
 

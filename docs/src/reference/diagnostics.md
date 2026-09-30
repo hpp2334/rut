@@ -93,7 +93,7 @@ surface.
 ### Restoration paths
 
 A trace is captured against whatever is loaded — possibly a stripped,
-published artifact. Three ways back to names:
+published artifact. Four ways back to names:
 
 1. **In-VM (the default).** The loaded program carries its interner and
    position tables; every member call symbolicates from them.
@@ -103,6 +103,13 @@ published artifact. Three ways back to names:
    rebuilt binary ([The compiler pipeline](compiler.md)).
 3. **Stripped, no artifact.** Traces still *work*: they degrade to the
    pc-only render form above, and stay restorable via path 2 later.
+4. **The stripped artifact's private symbol table.** Name resolution
+   and position lookup follow the loaded program — so supplying a
+   `.rutsym` sidecar at load time (`run --symbols`, or
+   `apply_symbols_to_session` as a library call) restores real names
+   and line/col before any trace is taken. The sidecar's law — what
+   mangles, what stays, the mixed-closure refusal — is [Symbol
+   stripping and `.rutsym` sidecars](symbol-stripping.md).
 
 ## Trap messages
 

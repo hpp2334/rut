@@ -45,6 +45,23 @@ fn ledger_text(rows: &[(rut_core::id::ScopeId, String)]) -> String {
 
 /// Pack a module directory into a deterministic v5 `.rutbundle`.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
+    Ok(pack_dir_opts(dir, &PackOpts::default())?.0)
+}
+
+/// Pack options. `strip` mangles every renameable name and strips the
+/// symbolication tables from the emitted binaries — the restore data
+/// rides a PRIVATE symbol-table sidecar beside the bundle (never an
+/// entry inside it).
+#[derive(Clone, Debug, Default)]
+pub struct PackOpts {
+    pub strip: bool,
+}
+
+/// [`pack_dir`] with options. Returns the bundle bytes and — under
+/// `strip` — the serialized symbol table. Deterministic end to end:
+/// same input dir ⇒ byte-identical bundle (mangling is sorted-union
+/// based) ⇒ byte-identical symtab.
+pub fn pack_dir_opts(dir: &Path, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
     let manifest_bytes = std::fs::read(dir.join("rut.toml"))
         .map_err(|e| format!("cannot read {}: {e}", dir.join("rut.toml").display()))?;
     let manifest = parse_manifest(&String::from_utf8(manifest_bytes.clone()).map_err(
@@ -89,7 +106,7 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
         crate::loader::mount_dev_table(&mut session, gdir, &dm)?;
     }
     crate::loader::assemble_peers(&mut session)?;
-    let units = compile_units(&session, &root);
+    let mut units = compile_units(&session, &root);
     if !units.diags.is_empty() || !units.ok {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
         return Err(format!("pack: {}", msgs.join("; ")));
@@ -117,6 +134,75 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
         ));
     }
     let root_idx = root_linked.unwrap().0;
+    // the strip arm — after the compile walk, before any encode. Two
+    // laws run here, both against the packer's OWN group-kind decisions
+    // (the `dirs` map + `units.linked`, the same classifier the encode
+    // loop applies — never a re-derivation):
+    //
+    // 1. the mixed-bundle refusal: a group riding as a SOURCE file set
+    //    binds its compiled deps' surfaces at load, and those names
+    //    would be mangled — refuse, never guess (host/decl leaf groups
+    //    have no compiled deps and pass trivially);
+    // 2. the mangle itself: one closure-wide string→string map over
+    //    every encoded program, symbolication tables taken into the
+    //    sidecar.
+    let mut symtab: Option<Vec<u8>> = None;
+    if opts.strip {
+        for (spec, gdir) in &dirs {
+            if *spec == root || session.resolve(spec).is_err() {
+                continue; // the root rides compiled above; unmounted names never ride
+            }
+            let rides_compiled = match &session.resolve(spec).unwrap().body {
+                ModuleBody::Source { .. } => units.linked.contains_key(spec),
+                _ => false,
+            };
+            if rides_compiled {
+                continue; // a `.rutc` group — no source binds anything
+            }
+            let dm = rut_bundle::read_manifest(gdir, &FsSource)?;
+            for dep in dm.deps.keys() {
+                let dep_compiled = match session.resolve(dep).map(|m| &m.body) {
+                    Ok(ModuleBody::Source { .. }) => units.linked.contains_key(dep),
+                    _ => false,
+                };
+                if dep_compiled {
+                    return Err(format!(
+                        "--strip needs a fully-compiled closure: the source group \
+                         `{spec}` binds compiled `{dep}`'s surface at load, whose \
+                         names would be mangled — drop the `inline` flag / \
+                         restructure the closure, or pack without `--strip`"
+                    ));
+                }
+            }
+        }
+        // the encoded set: the root, then every compiled-riding group in
+        // `dirs` order — gathered in ONE pass so the programs reborrow
+        // disjointly
+        let mut wanted: Vec<(String, usize)> = vec![(root.clone(), root_idx)];
+        for (spec, gdir) in &dirs {
+            if *spec == root || session.resolve(spec).is_err() {
+                continue;
+            }
+            let rides_compiled = match &session.resolve(spec).unwrap().body {
+                ModuleBody::Source { .. } => units.linked.contains_key(spec),
+                _ => false,
+            };
+            if !rides_compiled {
+                continue; // the declaration file set — no binary to strip
+            }
+            let &(idx, _) = units.linked.get(spec).unwrap();
+            wanted.push((spec.clone(), idx));
+        }
+        let mut groups: Vec<(String, &mut rut_core::binary::Program)> =
+            Vec::with_capacity(wanted.len());
+        for (i, prog) in units.programs.iter_mut().enumerate() {
+            if let Some((spec, _)) = wanted.iter().find(|(_, ix)| *ix == i) {
+                groups.push((spec.clone(), prog));
+            }
+        }
+        let map = rut_core::strip::strip_programs(&mut groups)?;
+        symtab = Some(map.to_bytes());
+    }
     entries.push((format!("{name}.rutc"), rut_core::binary::encode(&units.programs[root_idx])));
     if let Some(rel) = &manifest.entry.type_path {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
@@ -154,7 +240,8 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
             collect_source_group(gdir, &dm, &prefix, &FsSource, &mut entries)?;
         }
     }
-    write_bundle(&entries).map_err(|e| e.to_string())
+    let bundle = write_bundle(&entries).map_err(|e| e.to_string())?;
+    Ok((bundle, symtab))
 }
 
 /// The `[deps]` graph, recursively — each package under its name,
