@@ -122,9 +122,9 @@ into the pkg's host rows.
 
 ## The manifest — `rut.toml`
 
-First entry in the zip; TOML; the same subset the directory form uses,
-byte-for-byte the directory's manifest — which is what makes a
-bundle-shaped directory pack unchanged:
+First entry in the zip; TOML; the same manifest grammar the directory
+form uses, byte-for-byte the directory's manifest — which is what makes
+a bundle-shaped directory pack unchanged:
 
 ```toml
 format = "rutbundle"
@@ -229,8 +229,7 @@ numbering its own closure.
 
 The container codec, the `rut.toml` grammar, the source file-set
 collector, and the reader (both root kinds) live in the `rut-bundle`
-crate — std-only
-and **filesystem-free**. Every read goes through a one-method `Source`
+crate — **filesystem-free**. Every read goes through a one-method `Source`
 trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native
 hosts); an in-memory path→bytes map serves tests and wasm hosts. The
 packer itself needs the compiler and lives in `rut-driver`

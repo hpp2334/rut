@@ -7489,7 +7489,7 @@ msgstr ""
 msgid "mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts)"
 msgstr ""
 
-msgid "The container, manifest grammar, and reader (both root kinds) live in the `rut-bundle` crate — std-only, filesystem-free over a one-method `Source` trait."
+msgid "The container, manifest grammar, and reader (both root kinds) live in the `rut-bundle` crate — filesystem-free over a one-method `Source` trait."
 msgstr ""
 
 msgid "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns and declaration files](host-fns.md))."
@@ -9556,8 +9556,8 @@ msgstr "泛型导出自行链接：实例化发生在函数体所在之处，消
 msgid "The frontend turns source text into a checked-syntax tree: source (UTF-8) → [lexer](#the-lexer) → tokens → [parser](#the-parser) → AST, with one diagnostics model flowing out of every stage. It has no type knowledge — resolution and checking begin in [the compiler pipeline](compiler.md)."
 msgstr "前端把源文本变成一棵受检的语法树：源码（UTF-8）→ [词法分析器](#the-lexer) → 记号 → [语法分析器](#the-parser) → AST，一个统一的诊断模型从每个阶段流出。它没有类型知识——解析与检查从[编译器流水线](compiler.md)开始。"
 
-msgid "The implementation is three dependency-free crates: `rut-lexer` (`span`, `token`, `lexer`, `diag`), `rut-ast` (the arena tree and its dumper), and `rut-parser` (the frame machine and its expression engine). Everything is `no_std`\\-clean and wasm-compatible, so the same code runs in the CLI, the LSP, the formatter, and the browser playground."
-msgstr "实现是三个无依赖的 crate：`rut-lexer`（`span`、`token`、`lexer`、`diag`）、`rut-ast`（arena 树及其转储器）和 `rut-parser`（帧机及其表达式引擎）。一切都是 `no_std`\\- 干净且 wasm 兼容的，因此同一份代码运行在 CLI、LSP、格式化器和浏览器 Playground 里。"
+msgid "The implementation is three crates: `rut-lexer` (`span`, `token`, `lexer`, `diag`), `rut-ast` (the arena tree and its dumper), and `rut-parser` (the frame machine and its expression engine). Everything is `no_std`\\-clean and wasm-compatible, so the same code runs in the CLI, the LSP, the formatter, and the browser playground."
+msgstr "实现是三个 crate：`rut-lexer`（`span`、`token`、`lexer`、`diag`）、`rut-ast`（arena 树及其转储器）和 `rut-parser`（帧机及其表达式引擎）。一切都是 `no_std`\\- 干净且 wasm 兼容的，因此同一份代码运行在 CLI、LSP、格式化器和浏览器 Playground 里。"
 
 msgid "The contract"
 msgstr "契约"
@@ -11437,8 +11437,8 @@ msgstr ""
 msgid "The manifest — `rut.toml`"
 msgstr "清单——`rut.toml`"
 
-msgid "First entry in the zip; TOML; the same subset the directory form uses, byte-for-byte the directory's manifest — which is what makes a bundle-shaped directory pack unchanged:"
-msgstr "zip 里的第一个条目；TOML；与目录形态同一子集，逐字节等于目录的清单——这正是让 bundle 形态的目录原样打包的原因："
+msgid "First entry in the zip; TOML; the same manifest grammar the directory form uses, byte-for-byte the directory's manifest — which is what makes a bundle-shaped directory pack unchanged:"
+msgstr "zip 里的第一个条目；TOML；与目录形态同一套清单语法，逐字节等于目录的清单——这正是让 bundle 形态的目录原样打包的原因："
 
 msgid "```toml\nformat = \"rutbundle\"\nformat_version = 5          # the bundle LAYOUT version — independent of\n                            #   the module-binary version; a host root\n                            #   declares 6 instead (see the v6 layout)\nname = \"plugin\"             # the package this bundle answers to\nentry.lib = \"./plugin.rut\"  # directory-time; the compiled form rides\n                            #   plugin.rutc instead\n\n[deps]                      # the whole dep closure rides the archive\nserver = { path = \"../server\" }\n```"
 msgstr ""
@@ -11518,7 +11518,7 @@ msgstr ""
 msgid "The `rut-bundle` crate"
 msgstr "`rut-bundle` crate"
 
-msgid "The container codec, the `rut.toml` grammar, the source file-set collector, and the reader (both root kinds) live in the `rut-bundle` crate — std-only and **filesystem-free**. Every read goes through a one-method `Source` trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer itself needs the compiler and lives in `rut-driver` (`rut_driver::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Mounting a bundle into a session stays in `rut-driver` ([Loading](loading.md)), over `rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
+msgid "The container codec, the `rut.toml` grammar, the source file-set collector, and the reader (both root kinds) live in the `rut-bundle` crate — **filesystem-free**. Every read goes through a one-method `Source` trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer itself needs the compiler and lives in `rut-driver` (`rut_driver::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Mounting a bundle into a session stays in `rut-driver` ([Loading](loading.md)), over `rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
 msgid "Deterministic packing"
@@ -11740,8 +11740,8 @@ msgstr "`[style]`"
 msgid "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults."
 msgstr "格式化器旋钮：`indent_width`（1–8，默认 4）、`max_width`（≥ 20，默认 100）。在清单层无模式——未知键放行；畸形值是格式化器错误，绝不是编译错误。解析：被格式化文件最近的祖先清单；没有清单 → 默认值。"
 
-msgid "The parser accepts only the TOML subset the format uses (comments, `key = \"string\"`, dotted keys, `[section]`, inline tables), so the driver stays dependency-free and wasm-compatible. Descriptors are key/value maps; unknown descriptor keys are line-targeted manifest errors."
-msgstr "解析器只接受该格式用到的 TOML 子集（注释、`key = \"string\"`、点号键、`[section]`、内联表），因此 driver 保持无依赖且 wasm 兼容。描述符是键/值映射；未知的描述符键是按行定位的清单错误。"
+msgid "The manifest parses with `toml_edit` (standard TOML — every legal spelling: escapes, `'literal'` strings, multi-line strings, underscored integers); the value laws are unchanged. Descriptors are key/value maps; unknown descriptor keys are line-targeted manifest errors."
+msgstr "清单用 `toml_edit` 解析（标准 TOML——一切合法拼写：转义、`'literal'` 字符串、多行字符串、下划线整数）；值法则不变。描述符是键/值映射；未知的描述符键是按行定位的清单错误。"
 
 msgid "Resolution laws"
 msgstr "解析法则"

@@ -187,7 +187,7 @@ contain those names.
 
 The container, manifest grammar, and reader (both root kinds) live in
 the `rut-bundle`
-crate — std-only, filesystem-free over a one-method `Source` trait.
+crate — filesystem-free over a one-method `Source` trait.
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`
 ([host fns and declaration files](host-fns.md)).

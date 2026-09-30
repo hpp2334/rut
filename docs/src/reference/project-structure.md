@@ -45,9 +45,9 @@ The keys, all of them:
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `[style]` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 
-The parser accepts only the TOML subset the format uses (comments,
-`key = "string"`, dotted keys, `[section]`, inline tables), so the
-driver stays dependency-free and wasm-compatible. Descriptors are
+The manifest parses with `toml_edit` (standard TOML — every legal
+spelling: escapes, `'literal'` strings, multi-line strings,
+underscored integers); the value laws are unchanged. Descriptors are
 key/value maps; unknown descriptor keys are line-targeted manifest
 errors.
 
