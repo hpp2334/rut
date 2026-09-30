@@ -194,6 +194,12 @@ pub struct Session {
     /// through this table to the module to ensure — a reference with no
     /// row is a load error (refuse, never guess).
     bundle_scopes: BTreeMap<rut_core::id::ScopeId, String>,
+    /// Where archive-mounted pkgs' files live: pkg → (slot, in-archive
+    /// prefix), slot indexing the CALLER's archive list. The session
+    /// stays I/O-free — it remembers locations, never bytes; the peer
+    /// gate's archive group reads and the packer's rode-along copies
+    /// dispatch on it. First mount wins per pkg.
+    archive_mounts: BTreeMap<String, (usize, String)>,
     /// Presence-gated peer-integration groups: declaring
     /// pkg → the group texts whose optional peers are in the program's
     /// closure, in the declarer's peer-table order. The graph compiles
@@ -375,6 +381,37 @@ impl Session {
     /// The spec a pack-time scope belonged to, per the mounted ledger.
     pub fn bundle_scope(&self, scope: rut_core::id::ScopeId) -> Option<&str> {
         self.bundle_scopes.get(&scope).map(String::as_str)
+    }
+
+    /// The spec a pack-time scope belonged to, OWNED — the ledger
+    /// merge's read-back: a second archive whose ledger row collides
+    /// with a DIFFERENT spec is refused at the mount door (corrupt or
+    /// doctored closure), never silently overwritten.
+    pub fn bundle_scope_row(&self, scope: rut_core::id::ScopeId) -> Option<String> {
+        self.bundle_scopes.get(&scope).cloned()
+    }
+
+    /// Record where one archive's mounted pkgs live: every
+    /// `spec → prefix` row under `slot` (first mount wins per pkg).
+    /// `slot` indexes the CALLER's archive list — the session records
+    /// locations only, never bytes (I/O-free, and wasm hosts pass
+    /// in-memory entries the same way).
+    pub fn record_archive_mounts(&mut self, prefixes: &BTreeMap<String, String>, slot: usize) {
+        for (pkg, prefix) in prefixes {
+            self.archive_mounts
+                .entry(pkg.clone())
+                .or_insert_with(|| (slot, prefix.clone()));
+        }
+    }
+
+    /// Where `pkg`'s archive-mounted files live: `(slot, prefix)`.
+    pub(crate) fn archive_mount(&self, pkg: &str) -> Option<(usize, &str)> {
+        self.archive_mounts.get(pkg).map(|(s, p)| (*s, p.as_str()))
+    }
+
+    /// Every archive mount recorded, pkg → (slot, prefix).
+    pub(crate) fn archive_mounts(&self) -> &BTreeMap<String, (usize, String)> {
+        &self.archive_mounts
     }
 
     /// Record one presence-gated peer-integration group for `pkg`

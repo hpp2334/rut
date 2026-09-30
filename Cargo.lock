@@ -1077,6 +1077,7 @@ dependencies = [
  "rut-parser",
  "rut-std",
  "rut-vm",
+ "sha2",
 ]
 
 [[package]]
