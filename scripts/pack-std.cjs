@@ -141,16 +141,31 @@ const PKGS = [
 // `deps` lists the dep KEYS whose rows become url+sha256; keys a
 // manifest declares but this list omits stay untouched (path rows).
 //
-// THE BOUNDARY (the engine's owner-anchored instantiation law): a
-// compiled bundle serves only the instantiations its own pack closure
-// spelled, so the url rows are exactly the pkgs whose surfaces a
-// compiled artifact can serve — http's concrete classes (its closure
-// rides inside). The generic owners (pouch, nmapset, json,
-// async_host) stay path rows in every example: consumer-spelled
-// generic shapes (`Vec<Entry>`, `Map<..>`, `launch_future<..>`) are
-// the directory lane, which compiles them on demand. See
-// docs/src/reference/bundles.md (the std-CDN section).
+// THE BOUNDARY (the generic-source riding law): a compiled bundle
+// whose pkg has an OPEN generic surface rides the source that serves
+// consumer-spelled shapes, so the url rows now cover the generic
+// owners too (pouch, json — `Vec<Todo>` compiles from the bundle at
+// the consumer's link). The examples flip the rows their embedders
+// seed offline from dist/std (the seed IS the cache; gates never
+// touch the network). See docs/src/reference/bundles.md (the std-CDN
+// section).
 const EXAMPLES = [
+  {
+    manifest: "examples/00-todolist/rut.toml",
+    deps: ["pouch"],
+  },
+  {
+    manifest: "examples/01-sort/rut.toml",
+    deps: ["pouch"],
+  },
+  {
+    manifest: "examples/02-digest/rut.toml",
+    deps: ["pouch", "json"],
+  },
+  {
+    manifest: "examples/03-plugin/plugin/rut.toml",
+    deps: ["pouch"],
+  },
   {
     manifest: "examples/06-github-viewer-cli/rut.toml",
     deps: ["http"],

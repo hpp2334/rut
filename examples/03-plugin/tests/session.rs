@@ -8,6 +8,26 @@ use std::path::Path;
 
 use plugin::Plugin;
 
+/// The pack lane with the url dep's bytes seeded from the committed
+/// artifact (the seed IS the cache — the gates never touch the network;
+/// the rode-along law carries the pouch group inside the output).
+fn pack_seeded() -> Result<Vec<u8>, String> {
+    let d = dir();
+    let manifest_text = std::fs::read_to_string(d.join("rut.toml"))
+        .map_err(|e| format!("rut.toml: {e}"))?;
+    let manifest = rut_bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+    let dist = d.join("../../../dist/std");
+    let mut table = std::collections::BTreeMap::new();
+    for desc in manifest.deps.values() {
+        let Some(url) = desc.get("url") else { continue };
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
+        table.insert(url.clone(), bytes);
+    }
+    rut_driver::pack_dir_fetched(&d, &table)
+}
+
 fn dir() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/plugin"))
 }
@@ -70,7 +90,7 @@ fn moderated_session_transcript() {
 #[test]
 fn bundle_form_matches_the_directory() {
     // pack the same directory, load the bundle, run the same session
-    let bytes = rut_driver::pack_dir(dir()).unwrap();
+    let bytes = pack_seeded().unwrap();
     let path = std::env::temp_dir().join(format!("rut-03-plugin-test-{}.rutbundle", std::process::id()));
     std::fs::write(&path, &bytes).unwrap();
     let mut p = Plugin::load(&path, &limits()).unwrap();
@@ -83,8 +103,8 @@ fn bundle_form_matches_the_directory() {
 
 #[test]
 fn packing_is_deterministic() {
-    let a = rut_driver::pack_dir(dir()).unwrap();
-    let b = rut_driver::pack_dir(dir()).unwrap();
+    let a = pack_seeded().unwrap();
+    let b = pack_seeded().unwrap();
     assert_eq!(a, b, "same directory => byte-identical bundle");
 }
 
@@ -110,7 +130,7 @@ fn bad_bundles_are_refused_at_load() {
     assert!(err.msg.contains("format_version"), "{}", err.msg);
 
     // a corrupted payload byte fails the CRC check
-    let mut bytes = rut_driver::pack_dir(dir()).unwrap();
+    let mut bytes = pack_seeded().unwrap();
     let at = 30 + "format = \"rutbundle\"\n".len();
     bytes[at] ^= 0x01;
     let path = base.join("corrupt.rutbundle");

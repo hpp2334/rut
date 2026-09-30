@@ -9,11 +9,12 @@
 # its whole closure (http_host, strbuild, strbuild_host) rides inside.
 #
 # THE PATH ROWS: pouch, nmapset, json and async_host are GENERIC
-# owners. A compiled bundle serves only the instantiations its own pack
-# closure spelled (`re-pack with the consumer in the closure`) — this
-# app's `Vec<Entry>`, `Map<..>` and `launch_future<..>` shapes are
-# consumer-spelled, so they are the DIRECTORY lane, which compiles them
-# on demand. See docs/src/reference/bundles.md (the std-CDN section).
+# owners, and since the generic-source riding law their bundles would
+# serve this app's consumer-spelled shapes at the link — the path rows
+# are a CHOICE, not a wall: the tree checkout is this example's
+# hermetic test input (the fixture lane mounts them from the tree, the
+# url lane seeds http only). See docs/src/reference/bundles.md (the
+# std-CDN section).
 #
 # THE APP'S OWN HOST PKG: `rgh_host` (this project's CLI-I/O rows) is
 # a decl surface — the brain imports it, so the manifest names it. Its

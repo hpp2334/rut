@@ -232,6 +232,7 @@ dependencies = [
  "base64 0.22.1",
  "crc32fast",
  "md-5",
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-lexer",
@@ -1310,6 +1311,7 @@ dependencies = [
 name = "sort"
 version = "0.1.0"
 dependencies = [
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-lexer",
@@ -1412,6 +1414,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 name = "todolist"
 version = "0.1.0"
 dependencies = [
+ "rut-bundle",
  "rut-core",
  "rut-driver",
  "rut-lexer",

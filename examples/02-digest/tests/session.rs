@@ -6,20 +6,66 @@
 //! crc32fast/serde_json crates on deterministic pseudo-random inputs —
 //! including every padding-edge length the block digests have.
 
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::rc::Rc;
+use std::task::{Context, Poll};
 
 use base64::Engine as _;
 use md5::Digest as _;
 use rut_vm::OpaqueRef;
 
+/// The manifest lane's url rows seed the fetcher from the committed
+/// artifacts (the seed IS the cache — the gates never touch the
+/// network; see src/main.rs for the annotated shape).
+struct Table(BTreeMap<String, Vec<u8>>);
+
+impl rut_driver::DepFetch for Table {
+    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+        let r = match self.0.get(url) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(format!("no seeded bytes for {url}")),
+        };
+        std::future::ready(r)
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+fn load_session() -> (rut_driver::Session, String) {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest_text =
+        std::fs::read_to_string(base.join("rut.toml")).expect("rut.toml");
+    let manifest =
+        rut_bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+    let dist = base.join("../../dist/std");
+    let mut table = BTreeMap::new();
+    for desc in manifest.deps.values() {
+        let Some(url) = desc.get("url") else { continue };
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .unwrap_or_else(|e| panic!("the seed is the cache — {artifact}: {e}"));
+        table.insert(url.clone(), bytes);
+    }
+    block_on(rut_driver::load_dir_session_with(base, &Table(table)))
+        .expect("load the module dir")
+}
+
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
-    // the manifest lane: `rut.toml` carries pouch + json (the LIGHT
-    // consumer world — the manifest header owns that story), the load
-    // mounts the closure and runs the mount passes — then the same
-    // embedder half as before
-    let (mut s, root) =
-        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-            .expect("load the module dir");
+    // the manifest lane: `rut.toml` carries pouch + json (CDN bundles
+    // — the LIGHT consumer world — the manifest header owns that
+    // story), the load mounts the closure and runs the mount passes —
+    // then the same embedder half as before
+    let (mut s, root) = load_session();
     rut_driver::mount_std(&mut s);
     let g = rut_driver::compile_graph(&s, &root);
     assert!(g.diags.is_empty(), "{}", g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
@@ -36,6 +82,9 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
     // json's writer rides the strbuild pkg — its `strbuild_host` rows are
     // in this closure's declared set, so the bodies install here too
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
+    // nmapset's bundle carries `nmap_host` — its bodies bind beside
+    // the writer's (the ledger law brought the group in)
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
     {
         let mut vm = rut_vm::interp::Vm::new(

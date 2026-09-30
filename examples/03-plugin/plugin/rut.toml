@@ -4,7 +4,18 @@
 # loading ignores the format keys, and `rut pack plugin/` needs them —
 # so the same directory packs to a v5 compiled `.rutbundle` unchanged,
 # with linkable deps riding as `.rutc` groups and splice-needed deps
-# (pouch's generics, server's host surface) as source groups.
+# (server's host surface) as source groups.
+#
+# THE CDN ROW: `pouch` ships as a COMMITTED v5 compiled bundle
+# (dist/std/pouch.rutbundle, jsDelivr-served at the tag, sha256-pinned
+# here — the pin is law at the mount door on every load). pouch is a
+# GENERIC owner, and since the generic-source riding law its bundle
+# carries the source beside the binary — the plugin's consumer-spelled
+# `Vec<..>` shapes compile from the bundle at the link. The pack lane
+# and the loader take a seeded fetcher (src/main.rs, src/lib.rs — the
+# seed IS the cache; the gates never touch the network), and the pack's
+# rode-along law carries the pouch group inside the plugin's own
+# bundle, so the packed form stays closed.
 format = "rutbundle"
 format_version = 5
 name = "plugin"
@@ -12,4 +23,4 @@ entry.lib = "./plugin.rut"
 
 [deps]
 server = { path = "../server" }
-pouch = { path = "../../../rut/pouch" }
+pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "84b7fb2354d77bed9e3cb1c0e288d47cc8bba76bbb63630a0c83987626ad876f" }

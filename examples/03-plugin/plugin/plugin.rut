@@ -10,15 +10,18 @@
 // the state handle `init` returned.
 
 use server::{ subscribe, emit };
+use pouch::{ Vec };
 
 // The type body is FIELDS ONLY — methods live in the inherent
-// `impl Moderator` block below. The muted list is a fixed cell (the
-// n_muted prefix is the fill): the plugin stays free of generic
-// packages, so it publishes as a v5 COMPILED bundle (`rut pack`).
+// `impl Moderator` block below. The muted list is a `Vec<str>` — the
+// growable sequence, served by the pouch bundle this manifest pins
+// (the CDN row): the consumer-spelled `Vec<str>` compiles from the
+// bundle's ridden source at the link, and the pack's rode-along law
+// carries the pouch group (with the spelled instantiation) inside this
+// plugin's own published bundle.
 class Moderator {
     bus: opaque;          // the host's server — held, never inspected
-    muted: [str];         // flood-control offenders (n_muted is the fill)
-    n_muted: i32;
+    muted: Vec<str>;      // flood-control offenders
     online: i32;          // live count
     msgs: i64;
     mutes: i64;
@@ -28,7 +31,7 @@ class Moderator {
 
 impl Moderator {
     pub fn new(bus: opaque) -> Self {
-        return Self { bus: bus, muted: [""; 64], n_muted: 0, online: 0,
+        return Self { bus: bus, muted: Vec<str>.new(), online: 0,
                       msgs: 0, mutes: 0, last_sender: "", streak: 0 };
     }
 
@@ -59,8 +62,7 @@ impl Moderator {
                 self.streak = 1;
             }
             if (self.streak == 3) {
-                self.muted[self.n_muted] = user;
-                self.n_muted += 1;
+                self.muted.push(user);
                 self.mutes += 1;
                 self.say("system", f"{user} muted for flooding");
             } else {

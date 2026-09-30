@@ -7,15 +7,66 @@
 //! bank, and reads results back as one JSON array string (`serialize`);
 //! `Vec<i32>` itself never crosses.
 
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::rc::Rc;
+use std::task::{Context, Poll};
+
+/// The manifest lane's url rows seed the fetcher from the committed
+/// artifacts (`dist/std/` — the seed IS the cache: the offline gates
+/// never touch the network). Path rows mount natively inside the same
+/// load; the four passes (deps walk, peer gate included) run for real.
+struct Table(BTreeMap<String, Vec<u8>>);
+
+impl rut_driver::DepFetch for Table {
+    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+        let r = match self.0.get(url) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(format!("no seeded bytes for {url}")),
+        };
+        std::future::ready(r)
+    }
+}
+
+/// The std-only driver for the `_with` lane: the fetched futures are
+/// `ready`, so one noop-waker poll settles them.
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+/// The manifest lane's mount: parse this dir's `rut.toml`, seed the
+/// fetcher with every url row's committed artifact, load.
+fn load_sort_session() -> Result<(rut_driver::Session, String), String> {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest_text = std::fs::read_to_string(base.join("rut.toml"))
+        .map_err(|e| format!("rut.toml: {e}"))?;
+    let manifest =
+        rut_bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+    let dist = base.join("../../dist/std");
+    let mut table = BTreeMap::new();
+    for desc in manifest.deps.values() {
+        let Some(url) = desc.get("url") else { continue };
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
+        table.insert(url.clone(), bytes);
+    }
+    block_on(rut_driver::load_dir_session_with(base, &Table(table)))
+}
 
 fn main() {
     // the manifest lane: this dir's `rut.toml` carries the deps, the
     // load mounts the closure and runs the mount passes — then the same
     // embedder half as before (mount, compile, verify, drive)
     let (mut session, root) =
-        rut_driver::load_dir_session(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-            .expect("load the module dir");
+        load_sort_session().expect("load the module dir");
     // the app's libs: core+calc (engine) — `calc` is ambient, and
     // `pouch` rode the manifest
     rut_driver::mount_std(&mut session);

@@ -53,8 +53,27 @@ fn main() {
         p.transcript()
     };
 
-    // form 2: the same directory, packed — deterministically
-    let bytes = rut_driver::pack_dir(dir).unwrap();
+    // form 2: the same directory, packed — deterministically. The pack
+    // lane takes the SAME seeded fetcher the load lane does (the url
+    // dep's bytes come from the committed artifact), and the rode-along
+    // law carries the pouch group inside the output, so the packed form
+    // stays closed (loading it never fetches).
+    let bytes = {
+        let manifest_text =
+            std::fs::read_to_string(dir.join("rut.toml")).expect("rut.toml");
+        let manifest =
+            rut_bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+        let dist = dir.join("../../../dist/std");
+        let mut table = std::collections::BTreeMap::new();
+        for desc in manifest.deps.values() {
+            let Some(url) = desc.get("url") else { continue };
+            let artifact = url.rsplit('/').next().unwrap_or_default();
+            let b = std::fs::read(dist.join(artifact))
+                .unwrap_or_else(|e| panic!("the seed is the cache — {artifact}: {e}"));
+            table.insert(url.clone(), b);
+        }
+        rut_driver::pack_dir_fetched(dir, &table).unwrap()
+    };
     let bundle = std::env::temp_dir().join("rut-03-plugin-demo.rutbundle");
     std::fs::write(&bundle, &bytes).unwrap();
     let mut p = plugin::Plugin::load(&bundle, &limits()).unwrap();

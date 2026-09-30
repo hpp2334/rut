@@ -13,10 +13,26 @@
 //! borrow guards.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::rc::Rc;
 
 use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
 use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
+
+/// The manifest lane's url rows seed the fetcher from the committed
+/// artifacts (the seed IS the cache — the gates never touch the
+/// network; the lib's `Plugin::load` owns the seeding).
+struct Table(std::collections::BTreeMap<String, Vec<u8>>);
+
+impl rut_driver::DepFetch for Table {
+    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+        let r = match self.0.get(url) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => Err(format!("no seeded bytes for {url}")),
+        };
+        std::future::ready(r)
+    }
+}
 
 /// The host's server object — handed to rut as an opaque box. All host
 /// state lives here; the host fns reach it only through the `with`/
@@ -42,11 +58,47 @@ impl Plugin {
     /// Load the plugin module from a module directory (`rut.toml`) or a
     /// packed `.rutbundle` — the two forms of the same
     /// contract; the root spec comes from the manifest, not the caller.
+    /// A directory's url dep rows seed the fetcher from the committed
+    /// std artifacts beside the project (`dist/std/` — the seed IS the
+    /// cache: the gates never touch the network). A bundle never
+    /// fetches — it is closed; its closure rode inside at pack time.
     /// `init` registers the callback names; the table is frozen from
     /// then on.
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
-        let (mut session, root) =
-            rut_driver::load_path_session(path).map_err(|e| Trap::new(TrapKind::Invalid, e))?;
+        let (mut session, root) = if path.is_dir() {
+            let manifest_text = std::fs::read_to_string(path.join("rut.toml"))
+                .map_err(|e| Trap::new(TrapKind::Invalid, format!("rut.toml: {e}")))?;
+            let manifest = rut_bundle::parse_manifest(&manifest_text)
+                .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
+            let dist = path.join("../../../dist/std");
+            let mut table = std::collections::BTreeMap::new();
+            for desc in manifest.deps.values() {
+                let Some(url) = desc.get("url") else { continue };
+                let artifact = url.rsplit('/').next().unwrap_or_default();
+                let bytes = std::fs::read(dist.join(artifact)).map_err(|e| {
+                    Trap::new(
+                        TrapKind::Invalid,
+                        format!("the seed is the cache — cannot read {artifact}: {e}"),
+                    )
+                })?;
+                table.insert(url.clone(), bytes);
+            }
+            let fetcher = Table(table);
+            let fut = rut_driver::load_path_session_with(path, &fetcher);
+            // the std-only driver for the `_with` lane: the fetched
+            // futures are `ready`, so one noop-waker poll settles them
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            let mut pinned = std::pin::pin!(fut);
+            loop {
+                match pinned.as_mut().poll(&mut cx) {
+                    std::task::Poll::Ready(v) => break v,
+                    std::task::Poll::Pending => std::thread::yield_now(),
+                }
+            }
+        } else {
+            rut_driver::load_path_session(path)
+        }
+        .map_err(|e| Trap::new(TrapKind::Invalid, e))?;
         // the embedder mounts what the plugin uses: `core` only —
         // `server` and `pouch` resolved from the plugin manifest's
         // `[deps]` (the server surface is server/server.d.rut, no
