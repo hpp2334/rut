@@ -24,6 +24,14 @@
 //! "pouch" = { path = "rut/pouch" }
 //! ```
 //!
+//! or by url — a packed `.rutbundle` fetched by the host and pinned by
+//! its sha256:
+//!
+//! ```toml
+//! [deps]
+//! "pouch" = { url = "https://example.com/pouch.rutbundle", sha256 = "<64-hex>" }
+//! ```
+//!
 //! Resolution is exact and single-step: a use path resolves only if a
 //! module with that `name` is mounted — nothing is derived. Package
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
@@ -82,8 +90,10 @@ pub struct Manifest {
     /// `format_version` — the bundle LAYOUT version, refused on load when
     /// unknown
     pub format_version: Option<u64>,
-    /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
-    /// the host to resolve; the Session does not read the filesystem.
+    /// `[deps]` — exact specifier → descriptor: exactly one source key,
+    /// `path` (a directory) or `url` (a remote `.rutbundle`), plus
+    /// `sha256` (the pin) only beside `url`. Kept for the host to
+    /// resolve; the Session does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `[peer-deps]` — REQUIRED by default; the CONSUMER
     /// supplies the peer, it is never pulled transitively. `optional =
@@ -467,23 +477,86 @@ fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)
     Ok(out)
 }
 
-/// A `[deps]` descriptor: string-only values, and `optional` is
-/// rejected — it is a `[peer-deps]` attribute.
+/// A `[deps]` descriptor: exactly ONE source — `path` (a directory) or
+/// `url` (a remote `.rutbundle`), never both, never neither — plus,
+/// only beside `url`, the `sha256` pin. `optional` is rejected (it is
+/// a `[peer-deps]` attribute); any other key is the `[entry]`
+/// strictness — a line-targeted error.
 fn parse_deps_descriptor(
     value: &str,
     lineno: usize,
 ) -> Result<BTreeMap<String, String>, ManifestError> {
     let mut out = BTreeMap::new();
     for (k, val) in inline_table_parts(value, lineno)? {
-        if k == "optional" {
+        match k.as_str() {
+            "path" | "url" => {
+                if out.insert(k.clone(), parse_string(&val, lineno)?).is_some() {
+                    return Err(ManifestError(format!(
+                        "line {}: `{k}` appears twice — one descriptor names one source",
+                        lineno + 1
+                    )));
+                }
+            }
+            "sha256" => {
+                out.insert(k, parse_pin(&val, lineno)?);
+            }
+            "optional" => {
+                return Err(ManifestError(format!(
+                    "line {}: `optional` is a `[peer-deps]` attribute — `[deps]` has no options",
+                    lineno + 1
+                )));
+            }
+            other => {
+                return Err(ManifestError(format!(
+                    "line {}: unknown `[deps]` key `{other}`",
+                    lineno + 1
+                )));
+            }
+        }
+    }
+    match (out.contains_key("path"), out.contains_key("url")) {
+        (true, true) => {
             return Err(ManifestError(format!(
-                "line {}: `optional` is a `[peer-deps]` attribute — `[deps]` has no options",
+                "line {}: `path` and `url` are both set — one descriptor, one source: a directory or a `.rutbundle` url, never both",
                 lineno + 1
             )));
         }
-        out.insert(k, parse_string(&val, lineno)?);
+        (false, false) => {
+            return Err(ManifestError(format!(
+                "line {}: the descriptor has no source — `path = \"..\"` for a directory, or `url = \"https://…\"` for a packed bundle",
+                lineno + 1
+            )));
+        }
+        _ => {}
+    }
+    if let Some(url) = out.get("url") {
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(ManifestError(format!(
+                "line {}: `url` must be an http(s) url — found `{url}`",
+                lineno + 1
+            )));
+        }
+    } else if out.contains_key("sha256") {
+        return Err(ManifestError(format!(
+            "line {}: `sha256` pins a url — beside `path` it has no meaning",
+            lineno + 1
+        )));
     }
     Ok(out)
+}
+
+/// The sha256 pin: exactly 64 hex digits, stored LOWERCASE — the pin
+/// law compares the fetched bytes' hash against it, so the manifest
+/// normalizes first and the comparison is byte-exact.
+fn parse_pin(value: &str, lineno: usize) -> Result<String, ManifestError> {
+    let v = parse_string(value, lineno)?;
+    if v.len() != 64 || !v.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(ManifestError(format!(
+            "line {}: `sha256` must be 64 hex digits, found `{v}`",
+            lineno + 1
+        )));
+    }
+    Ok(v.to_ascii_lowercase())
 }
 
 /// A `[peer-deps]`/`[dev-deps]` descriptor: `path` and
@@ -866,5 +939,92 @@ nmapset = { path = "../nmapset" }
         let err = parse_manifest("[peer-deps]\n\"std:pouch\" = { path = \"..\" }\n").unwrap_err();
         assert!(err.to_string().contains("line 2"), "{err}");
         assert!(err.to_string().contains("bare package name"), "{err}");
+    }
+
+    // ---- the url source kind: one descriptor, one source; the pin ----
+
+    #[test]
+    fn url_dep_parses_and_pin_normalizes_to_lowercase() {
+        let m = parse_manifest(
+            "name = \"app\"\n[deps]\npouch = { url = \"https://example.com/pouch.rutbundle\", sha256 = \"ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789\" }\n",
+        )
+        .unwrap();
+        let d = m.deps.get("pouch").unwrap();
+        assert_eq!(d.get("url").unwrap(), "https://example.com/pouch.rutbundle");
+        // the pin law compares byte-exactly — the manifest normalizes first
+        assert_eq!(
+            d.get("sha256").unwrap(),
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        );
+        // an unpinned url is legal (the pin is optional; reproducible
+        // packs want one)
+        let m = parse_manifest(
+            "name = \"app\"\n[deps]\npouch = { url = \"http://localhost:8080/pouch.rutbundle\" }\n",
+        )
+        .unwrap();
+        assert!(m.deps.get("pouch").unwrap().get("sha256").is_none());
+    }
+
+    #[test]
+    fn url_descriptor_refusal_matrix() {
+        // url + path: one descriptor, one source
+        let err = parse_manifest(
+            "[deps]\npouch = { url = \"https://x/p.rutbundle\", path = \"../pouch\" }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `path` and `url` are both set — one descriptor, one source: a directory or a `.rutbundle` url, never both"
+        );
+        // neither
+        let err = parse_manifest("[deps]\npouch = { }\n").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: the descriptor has no source — `path = \"..\"` for a directory, or `url = \"https://…\"` for a packed bundle"
+        );
+        // sha256 beside path (no url) is meaningless
+        let err = parse_manifest(
+            "[deps]\npouch = { path = \"../pouch\", sha256 = \"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789\" }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `sha256` pins a url — beside `path` it has no meaning"
+        );
+        // bad hex
+        let err = parse_manifest(
+            "[deps]\npouch = { url = \"https://x/p.rutbundle\", sha256 = \"nothex\" }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `sha256` must be 64 hex digits, found `nothex`"
+        );
+        // non-http(s)
+        let err = parse_manifest("[deps]\npouch = { url = \"ftp://x/p.rutbundle\" }\n").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `url` must be an http(s) url — found `ftp://x/p.rutbundle`"
+        );
+        // a duplicate source key is the same one-source refusal
+        let err = parse_manifest("[deps]\npouch = { url = \"https://x/a\", url = \"https://x/b\" }\n")
+            .unwrap_err();
+        assert!(err.to_string().contains("`url` appears twice"), "{err}");
+        // unknown keys keep the [entry] strictness
+        let err = parse_manifest("[deps]\npouch = { url = \"https://x/p\", feats = \"x\" }\n")
+            .unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown `[deps]` key `feats`");
+    }
+
+    #[test]
+    fn peer_tables_refuse_the_url_kind() {
+        // `[peer-deps]` stays path-only — its path is directory-time
+        // metadata for the declarer's own build, nothing to fetch
+        let err = parse_manifest("[peer-deps]\npouch = { url = \"https://x/p.rutbundle\" }\n")
+            .unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown `[peer-deps]` key `url`");
+        let err = parse_manifest("[dev-deps]\npouch = { url = \"https://x/p.rutbundle\" }\n")
+            .unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown `[dev-deps]` key `url`");
     }
 }
