@@ -1051,6 +1051,7 @@ dependencies = [
 name = "rut-cli"
 version = "0.1.0"
 dependencies = [
+ "reqwest",
  "rut-bundle",
  "rut-core",
  "rut-driver",
@@ -1059,6 +1060,7 @@ dependencies = [
  "rut-parser",
  "rut-std",
  "rut-vm",
+ "tokio",
 ]
 
 [[package]]

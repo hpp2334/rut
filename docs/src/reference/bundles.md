@@ -91,6 +91,36 @@ The rest of the manifest grammar — deps tables, `inline`,
 rut.toml](project-structure.md); the dependency semantics are
 [Dependency kinds](dependency-kinds.md).
 
+## Url deps — bundles by reference
+
+A consumer may pin a bundle by url instead of vendoring it:
+
+```toml
+[deps]
+server = { url = "https://example.com/server.rutbundle", sha256 = "<64-hex>" }
+```
+
+The mount is the bundle mount, one gate earlier: the call site's
+fetcher produces the bytes (`DepFetch` — the CLI's is cache-first),
+then the loader runs the same container/layout/name checks and —
+before all of them — the **pin law**: the bytes must hash to the
+manifest row's `sha256`, on every load, or the load refuses naming the
+dep, the url, and both hashes. The url dep mounts as a **leaf**: its
+bundle brings the whole closure (every declared dep satisfied by an
+in-archive group — the closure law is unchanged, and a url row inside
+a packed bundle is inert metadata; loading a bundle never fetches).
+
+Because the manifest rides byte-for-byte, url rows carry into a
+consumer's own `rut pack` output, satisfied by the rode-along groups:
+the archive's groups re-encode from the consumer session's units (one
+`.rutc` path), source groups copy their file set under the new prefix,
+and the same manifest + pins still pack byte-identically. v1 refuses,
+loudly and named, the cases that would emit a bundle the loader must
+reject: an archive source group still declaring `[dev-deps]`
+directories (vendor the dep), a compiled group the consumer's closure
+never uses (it cannot ride unpackaged), and a declared dep that did
+not ride.
+
 ## The layout ledger
 
 `format_version` versions the zip layout and manifest keys themselves.

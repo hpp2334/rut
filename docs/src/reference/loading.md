@@ -50,6 +50,7 @@ before it):
 | `pkg_fn!` / `pkg_async_fn!` | the builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
 | `mount_std_core(session)` / `mount_std(session)` / `mount_std_async(session)` | mount the builtin packages (`core`; `core` + `calc`; the async pair) |
 | `load_path_session(path)` / `load_bundle_bytes(bytes, origin)` | mount a directory / an in-memory bundle |
+| `load_path_session_with(path, &fetch)` | the fetched lane: `[deps]` url rows ride the host's `DepFetch`, the `sha256` pin verified at the mount door |
 | `compile_graph(&session, root)` | compile + link the mounted graph |
 | `Vm::new(prog, &limits, hooks, registry)` | boot; fails if a declared host fn is unbound |
 | `vm.call(export, args) -> Result<Value, Trap>` | sync entry — typed arg/ret adapters over the boundary |

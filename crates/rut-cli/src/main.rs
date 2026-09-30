@@ -1,4 +1,9 @@
-//! the `rut` binary — run / dump.
+//! the `rut` binary — run / pack / fetch.
+
+mod fetch;
+
+use fetch::CacheFetch;
+use std::future::Future;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -60,6 +65,13 @@ fn main() {
             };
             pack(dir, arg_flag(&args, "-o").as_deref(), args.iter().any(|a| a == "--strip"));
         }
+        "fetch" => {
+            let Some(dir) = args.get(2) else {
+                eprintln!("fetch: missing <dir>");
+                std::process::exit(2);
+            };
+            fetch_cmd(dir);
+        }
         "dump" => {
             let Some(path) = args.get(2) else {
                 eprintln!("dump: missing <file.rut>");
@@ -83,8 +95,47 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "rut — run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | dump <file.rut>"
+        "rut — run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
     );
+}
+
+/// The block_on seam for the `_with` lanes: one tokio runtime, one
+/// thread's worth of waiting — the CLI's own boundary, where a
+/// `!Send`-tolerant contract meets a plain synchronous binary.
+fn block_on<F: Future>(fut: F) -> Result<F::Output, String> {
+    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("tokio runtime: {e}"))?;
+    Ok(rt.block_on(fut))
+}
+
+/// The eviction law: a driver pin error names dep + url; the cache
+/// entry for that url is poisoned by definition (the pin is checked at
+/// the mount door on every load, so a bad entry reloads bad forever) —
+/// delete it, and the next run re-fetches. Idempotent: any other error
+/// evicts nothing.
+fn evict_poisoned_cache(err: &str) {
+    let Some(rest) = err.split("sha256 pin mismatch for ").nth(1) else {
+        return;
+    };
+    let Some(url) = rest.split(": ").next() else {
+        return;
+    };
+    let Ok(fetch) = CacheFetch::new() else {
+        return;
+    };
+    let path = fetch.cache_path(url);
+    if std::fs::remove_file(&path).is_ok() {
+        eprintln!(
+            "evicted the poisoned cache entry for {url} ({}) — it re-fetches on the next run",
+            path.display()
+        );
+    }
+}
+
+/// The fetched load lane for `run`/`fetch`: a module dir or a
+/// `.rutbundle`, with url deps served by the cache-first fetcher.
+fn load_with_cache(path: &std::path::Path) -> Result<(rut_driver::Session, String), String> {
+    let fetch = CacheFetch::new()?;
+    block_on(rut_driver::load_path_session_with(path, &fetch))?
 }
 
 fn load(path: &str) -> String {
@@ -130,11 +181,13 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
     // answer to the snapshot)
     let (prog, ctx) = if packed {
         // a module directory (`rut.toml`) or a `.rutbundle` — load the
-        // graph, mount std, compile, link
-        let (mut session, root) = match rut_driver::load_path_session(p) {
+        // graph (url deps ride the cache-first fetcher), mount std,
+        // compile, link
+        let (mut session, root) = match load_with_cache(p) {
             Ok(x) => x,
             Err(e) => {
                 eprintln!("{e}");
+                evict_poisoned_cache(&e);
                 std::process::exit(2);
             }
         };
@@ -312,11 +365,27 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
 /// inside the bundle.
 fn pack(dir: &str, out: Option<&str>, strip: bool) {
     let p = std::path::Path::new(dir);
-    let (bytes, symtab) = match rut_driver::pack_dir_opts(p, &rut_driver::PackOpts { strip }) {
-        Ok(b) => b,
+    let fetch = match CacheFetch::new() {
+        Ok(f) => f,
         Err(e) => {
             eprintln!("pack: {e}");
-            std::process::exit(1);
+            std::process::exit(2);
+        }
+    };
+    let (bytes, symtab) = match block_on(rut_driver::pack_dir_opts_with(
+        p,
+        &rut_driver::PackOpts { strip },
+        &fetch,
+    )) {
+        Ok(Ok(b)) => b,
+        Ok(Err(e)) => {
+            eprintln!("pack: {e}");
+            evict_poisoned_cache(&e);
+            std::process::exit(2);
+        }
+        Err(e) => {
+            eprintln!("pack: {e}");
+            std::process::exit(2);
         }
     };
     let out = out
@@ -336,6 +405,27 @@ fn pack(dir: &str, out: Option<&str>, strip: bool) {
         print!(" + symbol table {} ({} bytes, keep PRIVATE)", sym_path.display(), sym.len());
     }
     println!();
+}
+
+/// `rut fetch <dir>` — pre-populate the bundle cache: load the
+/// directory's graph with the cache-first fetcher and discard the
+/// session. CI warms the cache while the network is up; the later
+/// offline `run` hits only the cache. A `.rutbundle` input is refused:
+/// bundles are closed — there is nothing to fetch.
+fn fetch_cmd(dir: &str) {
+    let p = std::path::Path::new(dir);
+    if !p.is_dir() {
+        eprintln!("fetch: {dir} is not a module directory (a `.rutbundle` is closed — nothing to fetch)");
+        std::process::exit(2);
+    }
+    match load_with_cache(p) {
+        Ok((_, root)) => println!("fetch: {dir} — all url deps are cached (root `{root}`)"),
+        Err(e) => {
+            eprintln!("{e}");
+            evict_poisoned_cache(&e);
+            std::process::exit(2);
+        }
+    }
 }
 
 fn dump(path: &str) {

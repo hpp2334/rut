@@ -16,6 +16,7 @@ binary itself.
 rut run <file.rut | dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
+rut fetch <dir>
 rut dump <file.rut>
 ```
 
@@ -129,6 +130,25 @@ Compilation is the same base-mounted pipeline `run` uses, minus execution
 and verification. `.d.rut` inputs dump in declaration mode — useful for
 inspecting a host surface's slots.
 
+## `fetch`
+
+```sh
+rut fetch app/            # CI: warm the cache while the network is up
+```
+
+Loads a module **directory** with the url-dep fetcher and discards the
+session — every `[deps]` url is fetched (or found in the cache) and
+pinned, so a later offline `run` hits only the cache. A `.rutbundle`
+argument is refused: bundles are closed — there is nothing to fetch.
+The cache and the eviction law are the same lane `run`/`pack` use:
+
+| item | behavior |
+|---|---|
+| cache root | `$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`; entries named `<sha256(url)>.rutbundle` |
+| cache-first | a hit never touches the network — offline reloads are the point |
+| miss | GET (redirects on), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename) |
+| poisoned entry | the `sha256` pin is the loader's law at the mount door; when it refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals |
+
 ## Declaration mode
 
 The file extension selects the parser mode:
@@ -144,7 +164,7 @@ The file extension selects the parser mode:
 |---|---|
 | `0` | success |
 | `1` | compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; `pack` or output-write failure |
-| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `fmt` finds no `.rut` files under a directory |
+| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted) |
 
 Diagnostics go to stderr (`run` renders them with source spans on the
 single-file path); `pack`'s success line goes to stdout.

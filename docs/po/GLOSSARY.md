@@ -75,6 +75,10 @@ source text by design; a partially translated book is a valid book.
 | keep-set | 保留集 | names that never rename（host ABI、exports、pkg specs） |
 | temporary-run lane | 临时运行车道 | the CLI's role — quick experiments (run/fmt/dump/pack)，不是交付路径；两条消费车道都叫车道 |
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
+| pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定 |
+| fetch | 拉取 | the `DepFetch` contract → `DepFetch` 契约（代码不译）；`rut fetch` stays code |
+| mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
+| rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

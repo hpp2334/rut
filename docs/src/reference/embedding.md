@@ -99,6 +99,10 @@ is resolved against it once, at boot. A declared-but-unbound fn is a
 | `s.host_pkg_context()` | the mounted surfaces' declared rows, partitioned per pkg — the declared side `install_host_pkg` checks against (build once per boot lane; owned) |
 | `s.expected_host_fns()` | the same rows flattened to one table — the raw lane's `verify_against` input |
 | `load_path_session(path)` | load a module **directory** or `.rutbundle`; returns `(session, root)` |
+| `DepFetch` | the url-dep contract: `dep_fetch(&self, url) -> impl Future<Output = Result<Vec<u8>, String>>` — the call site owns HOW bytes arrive (transport, cache, offline policy). Explicit `-> impl Future`, deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
+| `load_path_session_with(path, &fetch)` / `load_dir_session_with(dir, &fetch)` | the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
+| `mount_dir_with(&mut s, dir, &fetch)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
+| `pack_dir_with(dir, &fetch)` / `pack_dir_opts_with(dir, opts, fetch)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
 | `pack_dir(dir)` | pack a module directory into a deterministic v5 **compiled** `.rutbundle` — root + linkable deps as `.rutc` binaries, splice-needed deps as source groups; returns the bytes ([module bundles](bundles.md)) |
 
 The container, manifest grammar, and v5 reader live in the `rut-bundle`

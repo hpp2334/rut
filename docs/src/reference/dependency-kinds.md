@@ -56,6 +56,50 @@ nmapset = { path = "../nmapset" }
   dev together is the sanctioned pairing: integration-if-present for
   consumers, always-present while developing the package itself.
 
+## Url dependencies — the second source kind
+
+A `[deps]` descriptor may name a remote `.rutbundle` instead of a
+directory:
+
+```toml
+[deps]
+"pouch" = { url = "https://example.com/pouch.rutbundle", sha256 = "<64-hex>" }
+```
+
+- **One descriptor, one source**: `path` or `url`, never both, never
+  neither — a line-targeted manifest error either way. `sha256` is
+  legal only beside `url` and must be exactly 64 hex digits (stored
+  lowercase; the comparison is byte-exact). The url itself must be
+  http(s). `[peer-deps]`/`[dev-deps]` stay `path`-only — a peer's path
+  is directory-time metadata for the declarer's own build, nothing to
+  fetch.
+- **The layer split.** The *call site* owns HOW bytes arrive —
+  transport, caching, offline policy — by implementing the `DepFetch`
+  contract (one method, `dep_fetch(url)`, returning a future of
+  bytes; the `rut` CLI ships a cache-first HTTP fetcher). The *loader*
+  owns WHAT the bytes are declared to be: the `sha256` pin is manifest
+  law, verified at the mount door on **every** load — fresh fetch,
+  cache hit, vendored map, test fixture. A check the call site
+  performs would be a check the call site could skip; only the mount
+  point holds both the pin and the bytes, so only the mount point can
+  enforce it.
+- **Url deps are leaves.** The `[deps]` walk never follows them: one
+  fetch brings the whole closure, because **bundles stay closed** —
+  every dep a bundle's manifest declares must be satisfied by an
+  in-archive group, and a bundle that does not satisfy one is refused
+  at the mount door. A url row inside an already-packed bundle is
+  inert metadata; loading a bundle never fetches.
+- **Pin your deps.** An unpinned url compiles from whatever the cache
+  or the network served — a pinned one refuses to load anything else,
+  naming the dep, the url, and both hashes. Pins are what make packs
+  reproducible: same manifest + same pins ⇒ byte-identical bundle.
+- The CLI lane: `rut run`/`rut pack` fetch through a cache-first
+  fetcher (`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` →
+  `~/.cache/rut/bundles`; a hit never touches the network), and a pin
+  refusal evicts the poisoned cache entry so the next run heals.
+  `rut fetch <dir>` warms the cache without running anything
+  ([The rut CLI](cli.md)).
+
 ## Semantics
 
 | table | who supplies it | transitive? | missing behavior |

@@ -35,7 +35,7 @@ The keys, all of them:
 | `entry.libs` | ordered extra `.rut` files — the **multi-lib entry** (below) |
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind is an error naming both fixes |
 | `entry.type` | the declaration surface: one `.d.rut` file. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
-| `[deps]` | the transitively mounted dependencies — string-valued descriptors: `pkg = { path = "..." }`, relative to this manifest. `optional` is rejected here. |
+| `[deps]` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
 | `[peer-deps]` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `[dev-deps]` | mounted only while building/testing this pkg itself |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
