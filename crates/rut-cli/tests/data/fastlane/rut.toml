@@ -3,4 +3,5 @@
 # lane end to end. (The bench-cross fixture is the mounting pattern.)
 
 name = "fastlane"
+type = "host"
 entry.type = "./fastlane.d.rut"

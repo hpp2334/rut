@@ -22,7 +22,7 @@ pub mod pack;
 pub mod read;
 
 pub use container::{crc32, parse_bundle, write_bundle, BundleError};
-pub use manifest::{parse_manifest, valid_spec, Entry, Manifest, ManifestError};
+pub use manifest::{parse_manifest, valid_spec, Entry, Manifest, ManifestError, PkgType};
 pub use pack::{bundle_key, collect_source_group, default_out_path, entry_rel, read_entry, read_manifest};
 pub use read::{Bundle, GroupKind, Layout};
 

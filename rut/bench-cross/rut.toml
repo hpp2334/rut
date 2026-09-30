@@ -7,4 +7,5 @@
 # that. Mounted via `[deps]` like any tree pkg.
 
 name = "bench_cross"
+type = "host"
 entry.type = "./bench_cross.d.rut"

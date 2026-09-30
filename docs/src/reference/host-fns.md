@@ -17,12 +17,13 @@ bodies plus a hand-written surface.
 
 ## Host pkgs
 
-A package directory whose manifest names a declaration file is a **host
+A package directory whose manifest declares `type = "host"` is a **host
 pkg** — pure surface, no rut source:
 
 ```toml
 # server/rut.toml
 name = "server"
+type = "host"
 entry.type = "./server.d.rut"
 ```
 

@@ -16,7 +16,7 @@ use std::path::Path;
 
 use rut_bundle::{
     bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, GroupKind, Layout,
-    Manifest,
+    Manifest, PkgType,
 };
 use crate::session::{Module, ModuleBody, Session};
 
@@ -79,8 +79,10 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
 
 /// Build a package's entry [`Module`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
-/// in-archive counterpart of `load_entry_module` for a SOURCE group:
-/// `entry.type`-only is a host pkg (decl surface), else the lib source.
+/// in-archive counterpart of `load_entry_module`: the declared kind
+/// dispatches (a `type = "host"` pkg is a decl surface; a `type =
+/// "lib"` pkg with a surface and no body is the surface-only dev
+/// state).
 fn bundle_entry_module(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -91,12 +93,33 @@ fn bundle_entry_module(
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
-    if manifest.entry.lib.is_none() && manifest.entry.type_path.is_some() {
-        let rel = manifest.entry.type_path.as_ref().unwrap();
-        let src = read(rel)?;
-        let mut m = crate::decl::lower_decl_module(&src, &format!("{prefix}{rel}"))?;
-        m.entry = manifest.entry.clone();
-        return Ok(m);
+    match manifest.pkg_type {
+        PkgType::Host => {
+            let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
+                format!("module at bundle prefix `{prefix}` is a host pkg with no `entry.type`")
+            })?;
+            let src = read(rel)?;
+            let mut m = crate::decl::lower_decl_module(&src, &format!("{prefix}{rel}"))?;
+            m.entry = manifest.entry.clone();
+            return Ok(m);
+        }
+        PkgType::Lib => {
+            if let Some(rel) = &manifest.entry.type_path {
+                let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
+                let src = read(rel)?;
+                refuse_host_rows(&src, &origin)?;
+                if manifest.entry.lib.is_none() {
+                    // the surface-only dev state: a decl unit — no host
+                    // rows, nothing exported (use sites resolve-miss,
+                    // correctly)
+                    return Ok(Module {
+                        body: ModuleBody::Source { text: src, is_decl: true },
+                        entry: manifest.entry.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
     }
     let rel = entry_rel(manifest)
         .ok_or_else(|| format!("module at bundle prefix `{prefix}` has no entry"))?;
@@ -317,20 +340,45 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
 
 /// Build a directory's entry [`Module`] from its manifest:
 ///
-/// - `entry.lib` (with or without `entry.type`) — a SOURCE module: the
-///   body compiles; the surface derives from its exports.
-/// - `entry.type` ALONE — a **host pkg**: a pure declaration surface.
-///   The `.d.rut` parses in declaration mode and lowers into the
-///   module's host fns. No body exists — the embedding Rust binds it
-///   at run time.
+/// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
+///   parses in declaration mode and lowers into the module's host fns.
+///   No body exists — the embedding Rust binds it at run time.
+/// - a `type = "lib"` pkg (the default) — a source module: the body
+///   compiles; the surface derives from its exports. A declared
+///   surface with no body is the surface-only dev state (a decl unit);
+///   `host fn` text is refused in either file — the lib-surface law.
 fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> {
-    if manifest.entry.lib.is_none() && manifest.entry.type_path.is_some() {
-        let rel = manifest.entry.type_path.as_ref().unwrap();
-        let origin = format!("{}/{}", dir.display(), rel);
-        let src = load_module_source(&dir.join(rel))?;
-        let mut m = crate::decl::lower_decl_module(&src, &origin)?;
-        m.entry = manifest.entry.clone();
-        return Ok(m);
+    match manifest.pkg_type {
+        PkgType::Host => {
+            let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
+                format!(
+                    "module in {} is a host pkg with no `entry.type`",
+                    dir.display()
+                )
+            })?;
+            let origin = format!("{}/{}", dir.display(), rel);
+            let src = load_module_source(&dir.join(rel))?;
+            let mut m = crate::decl::lower_decl_module(&src, &origin)?;
+            m.entry = manifest.entry.clone();
+            return Ok(m);
+        }
+        PkgType::Lib => {
+            if let Some(rel) = &manifest.entry.type_path {
+                let origin = format!("{}/{}", dir.display(), rel);
+                let src = load_module_source(&dir.join(rel))?;
+                refuse_host_rows(&src, &origin)?;
+                if manifest.entry.lib.is_none() {
+                    // the surface-only dev state: a decl unit — no host
+                    // rows, nothing exported (use sites resolve-miss,
+                    // correctly)
+                    return Ok(Module {
+                        body: ModuleBody::Source { text: src, is_decl: true },
+                        entry: manifest.entry.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
     }
     let mut src = load_entry(dir, &manifest.entry)?;
     // The multi-lib splice: the base `lib` first, then
@@ -350,6 +398,24 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
         entry: manifest.entry.clone(),
         ..Default::default()
     })
+}
+
+/// The lib-surface law: `host fn` text lives only in `type = "host"`
+/// pkgs. Non-parsing surfaces stay inert (doc-only, as today); a
+/// surface that PARSES and declares host fns is the loud error.
+fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
+    if let Ok(m) = crate::decl::lower_decl_module(src, origin) {
+        if let ModuleBody::Host { host_funcs, .. } = m.body {
+            if let Some((name, ..)) = host_funcs.first() {
+                return Err(format!(
+                    "{origin}: `host fn {name}` — a lib pkg cannot declare \
+                     host fns; split the rows into a `type = \"host\"` pkg \
+                     and depend on it"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {

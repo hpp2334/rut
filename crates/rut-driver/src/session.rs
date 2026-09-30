@@ -411,6 +411,7 @@ mod tests {
 # rut/pouch/rut.toml
 name = "pouch"
 entry.type = "./pouch.d.rut"
+entry.lib = "./pouch.rut"
 "#;
 
     #[test]

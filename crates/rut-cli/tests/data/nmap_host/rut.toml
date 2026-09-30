@@ -4,4 +4,5 @@
 # `rut/nmap_host` package (H3) carries the same surface.
 
 name = "nmap_host"
+type = "host"
 entry.type = "./nmap.d.rut"

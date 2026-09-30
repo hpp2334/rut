@@ -1,2 +1,3 @@
 name = "nmap_host"
+type = "host"
 entry.type = "./nmap.d.rut"

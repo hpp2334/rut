@@ -1,6 +1,6 @@
-//! The `rut.toml` grammar — a module manifest (`name` + `entry.*`) or
-//! a consumer manifest (`[deps]`, `[peer-deps]`, `[dev-deps]`), or
-//! both, parsed into [`Manifest`].
+//! The `rut.toml` grammar — a module manifest (`name`, `type`, +
+//! `entry.*`) or a consumer manifest (`[deps]`, `[peer-deps]`,
+//! `[dev-deps]`), or both, parsed into [`Manifest`].
 //!
 //! **One directory is one module.** Its `rut.toml` names the exact
 //! package it answers to and how to reach its surface and body:
@@ -11,6 +11,11 @@
 //! entry.type = "./pouch.d.rut"        # the surface
 //! entry.lib  = "./pouch.rut"          # the body (omitted while surface-only)
 //! ```
+//!
+//! The declared kind: `type = "lib"` (the default) is the ordinary
+//! source package; `type = "host"` is a pure declaration surface the
+//! embedding Rust binds at run time — a host pkg SPELLS itself, the
+//! kind is never inferred.
 //!
 //! A consumer mounts modules by exact name → directory:
 //!
@@ -52,11 +57,24 @@ pub struct Entry {
     pub libs: Vec<String>,
 }
 
+/// The pkg's kind. `lib` is the ordinary rut package (a source body,
+/// deps allowed, no host rows); `host` is a pure declaration surface
+/// the embedding Rust binds at run time. Absent `type` ⇒ `lib` —
+/// a host pkg SPELLS itself (refuse, never guess).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PkgType {
+    #[default]
+    Lib,
+    Host,
+}
+
 /// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or
 /// a consumer manifest (`[deps]`), or both.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Manifest {
     pub name: Option<String>,
+    /// `type = "lib" | "host"` — the declared kind; absent ⇒ [`PkgType::Lib`]
+    pub pkg_type: PkgType,
     pub entry: Entry,
     /// `format = "rutbundle"` — bundle-shaped manifests;
     /// directory loading ignores it
@@ -103,13 +121,16 @@ pub fn valid_spec(spec: &str) -> bool {
     !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
-/// `entry.lib` / `entry.libs` (bare or under `[entry]`),
-/// and the dep tables `[deps]` / `[peer-deps]` / `[dev-deps]`
-/// whose values are inline tables.
+/// Parse the `rut.toml` subset: top-level `name`, `type` (the declared
+/// kind), `entry.type` / `entry.lib` / `entry.libs` (bare or under
+/// `[entry]`), and the dep tables `[deps]` / `[peer-deps]` /
+/// `[dev-deps]` whose values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     let mut m = Manifest::default();
     let mut section = Section::Top;
+    // was `type` spelled? (the no-inference law keys on it: an absent
+    // kind with an `entry.type`-only pkg is the ambiguity)
+    let mut declared_type = false;
 
     for (lineno, raw) in text.lines().enumerate() {
         let line = strip_comment(raw).trim().to_string();
@@ -149,6 +170,22 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                         )));
                     }
                     m.name = Some(name);
+                }
+                // the declared kind: `lib` (the ordinary source package)
+                // or `host` (a pure declaration surface). Absent ⇒ lib —
+                // a host pkg SPELLS itself
+                "type" => {
+                    declared_type = true;
+                    match parse_string(value, lineno)?.as_str() {
+                        "lib" => m.pkg_type = PkgType::Lib,
+                        "host" => m.pkg_type = PkgType::Host,
+                        other => {
+                            return Err(ManifestError(format!(
+                                "line {}: `type` is `\"lib\"` or `\"host\"`, found `{other}`",
+                                lineno + 1
+                            )))
+                        }
+                    }
                 }
                 // bundle-shaped manifests
                 "format" => m.format = Some(parse_string(value, lineno)?),
@@ -228,6 +265,68 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
             return Err(ManifestError(format!(
                 "`{name}` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both"
             )));
+        }
+    }
+    // The declared kind's rules. Host-pkg-ness is DECLARED (`type =
+    // "host"`), never inferred: a host pkg is pure surface, so deps of
+    // any kind, a body, and the bundle-root keys are all refused; the
+    // no-inference law makes an `entry.type`-only lib spelling an error —
+    // spell the kind, either way.
+    match m.pkg_type {
+        PkgType::Host => {
+            // deps of any kind — name the table AND the row (D4 style):
+            // a host pkg is pure surface; the wrapper lib declares the
+            // dep, never the host pkg
+            for (table, rows) in [
+                ("deps", &m.deps),
+                ("peer-deps", &m.peer_deps),
+                ("dev-deps", &m.dev_deps),
+            ] {
+                if let Some(spec) = rows.keys().next() {
+                    return Err(ManifestError(format!(
+                        "`{spec}` appears in `[{table}]` of a `type = \"host\"` pkg — \
+                         a host pkg is pure surface; the wrapper lib declares the dep, \
+                         never the host pkg"
+                    )));
+                }
+            }
+            if m.entry.lib.is_some() || !m.entry.libs.is_empty() {
+                return Err(ManifestError(
+                    "a `type = \"host\"` pkg has no body — drop `entry.lib`/`entry.libs` \
+                     (the wrapper lib owns the source), or declare the pkg `type = \"lib\"`"
+                        .into(),
+                ));
+            }
+            if m.entry.type_path.is_none() {
+                return Err(ManifestError(
+                    "a `type = \"host\"` pkg needs `entry.type` — the declaration surface \
+                     is the whole pkg"
+                        .into(),
+                ));
+            }
+            if m.format.is_some() || m.format_version.is_some() {
+                return Err(ManifestError(
+                    "a `type = \"host\"` pkg cannot be a bundle root — `format`/`format_version` \
+                     belong to a compiled lib pkg"
+                        .into(),
+                ));
+            }
+        }
+        PkgType::Lib => {
+            // the no-inference law: `entry.type` with no lib and NO
+            // DECLARED kind is ambiguous — spell it (this is what makes
+            // old host-pkg manifests fail LOUDLY instead of silently
+            // becoming empty libs). An explicit `type = "lib"` with a
+            // surface and no body is the sanctioned dev state (the
+            // loader mounts it as a decl unit).
+            if !declared_type && m.entry.type_path.is_some() && m.entry.lib.is_none() {
+                return Err(ManifestError(
+                    "an `entry.type`-only pkg spells its kind — `type = \"host\"` for a \
+                     host pkg, or add `entry.lib` (a `type = \"lib\"` surface-only pkg \
+                     is the dev state)"
+                        .into(),
+                ));
+            }
         }
     }
     // The multi-lib entry law: `libs` is an ordered tail
@@ -503,6 +602,7 @@ mod tests {
 # rut/pouch/rut.toml
 name = "pouch"
 entry.type = "./pouch.d.rut"
+entry.lib = "./pouch.rut"
 "#;
 
     #[test]
@@ -510,6 +610,7 @@ entry.type = "./pouch.d.rut"
         let m = parse_manifest(POUCH).unwrap();
         assert_eq!(m.name.as_deref(), Some("pouch"));
         assert_eq!(m.entry.type_path.as_deref(), Some("./pouch.d.rut"));
+        assert_eq!(m.entry.lib.as_deref(), Some("./pouch.rut"));
     }
 
     #[test]
@@ -543,6 +644,107 @@ entry.type = "./pouch.d.rut"
         let text = "name = \"app\"\n[deps]\n\"core\" = { path = \"rut/core\" }\n";
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
+    }
+
+    #[test]
+    fn pkg_type_defaults_to_lib_and_both_spellings_parse() {
+        // absent `type` ⇒ lib — the ordinary source package
+        let m = parse_manifest("name = \"pouch\"\nentry.lib = \"./pouch.rut\"\n").unwrap();
+        assert_eq!(m.pkg_type, PkgType::Lib);
+        let m = parse_manifest(
+            "name = \"pouch\"\ntype = \"lib\"\nentry.lib = \"./pouch.rut\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Lib);
+        // a host pkg SPELLS itself
+        let m = parse_manifest(
+            "name = \"ink_host\"\ntype = \"host\"\nentry.type = \"./ink_host.d.rut\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Host);
+    }
+
+    #[test]
+    fn pkg_type_bad_value_is_line_targeted() {
+        let err = parse_manifest("name = \"x\"\ntype = \"Host\"\n").unwrap_err();
+        assert_eq!(err.to_string(), "line 2: `type` is `\"lib\"` or `\"host\"`, found `Host`");
+        let err = parse_manifest("name = \"x\"\ntype = \"native\"\n").unwrap_err();
+        assert!(err.to_string().contains("line 2"), "{err}");
+    }
+
+    #[test]
+    fn host_pkg_refuses_every_deps_table() {
+        for table in ["deps", "peer-deps", "dev-deps"] {
+            let err = parse_manifest(&format!(
+                "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n[{table}]\nink = {{ path = \"../ink\" }}\n"
+            ))
+            .unwrap_err();
+            let want = format!(
+                "`ink` appears in `[{table}]` of a `type = \"host\"` pkg — a host pkg is pure surface; the wrapper lib declares the dep, never the host pkg",
+                table = table
+            );
+            assert_eq!(err.to_string(), want, "[{table}]");
+        }
+    }
+
+    #[test]
+    fn host_pkg_needs_entry_type() {
+        let err = parse_manifest("name = \"h\"\ntype = \"host\"\n").unwrap_err();
+        assert!(err.to_string().contains("needs `entry.type`"), "{err}");
+    }
+
+    #[test]
+    fn host_pkg_refuses_a_body() {
+        let err = parse_manifest(
+            "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.lib = \"./h.rut\"\n",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("no body"), "{err}");
+        // the libs tail is a body too
+        let err = parse_manifest(
+            "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.libs = [\"./more.rut\"]\n",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("no body"), "{err}");
+    }
+
+    #[test]
+    fn host_pkg_refuses_the_bundle_root_keys() {
+        let err = parse_manifest(
+            "format = \"rutbundle\"\nformat_version = 5\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("bundle root"), "{err}");
+    }
+
+    #[test]
+    fn entry_type_only_without_a_declared_kind_is_the_ambiguity() {
+        // the no-inference law: an entry.type-only pkg spells its kind —
+        // old host-pkg manifests fail LOUDLY here, not as empty libs
+        let err = parse_manifest("name = \"rt\"\nentry.type = \"./rt.d.rut\"\n").unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("an `entry.type`-only pkg spells its kind"),
+            "{err}"
+        );
+        assert!(err.to_string().contains("`type = \"host\"`"), "{err}");
+        // either fix passes: declare host…
+        let m = parse_manifest("name = \"rt\"\ntype = \"host\"\nentry.type = \"./rt.d.rut\"\n")
+            .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Host);
+        // …or add the body (an ordinary lib pkg)
+        let m = parse_manifest(
+            "name = \"dev\"\ntype = \"lib\"\nentry.type = \"./dev.d.rut\"\nentry.lib = \"./dev.rut\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Lib);
+        // an EXPLICIT `type = "lib"` with a surface and no body is the
+        // sanctioned surface-only dev state — spelled, so no ambiguity
+        let m = parse_manifest(
+            "name = \"dev\"\ntype = \"lib\"\nentry.type = \"./dev.d.rut\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.pkg_type, PkgType::Lib);
     }
 
     #[test]

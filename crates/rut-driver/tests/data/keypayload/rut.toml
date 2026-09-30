@@ -2,4 +2,5 @@
 # declaration surface; the driver test binds the body and drives
 # `Vm::opaque_key_payload` through a real host-fn crossing.
 name = "keypayload"
+type = "host"
 entry.type = "./keypayload.d.rut"

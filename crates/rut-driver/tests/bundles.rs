@@ -125,8 +125,10 @@ fn refusals() {
     assert!(err.contains("CRC"), "{err}");
 
     // a pack whose declared surface file is missing refuses loudly
+    // (the surface is a lib pkg's declared `entry.type` — a doc surface;
+    // no host rows: those live only in `type = "host"` pkgs)
     let dir = make_dir(&base);
-    std::fs::write(dir.join("surface.d.rut"), "pub host fn f() -> i32;\n").unwrap();
+    std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.toml"),
         "format = \"rutbundle\"\nformat_version = 5\nname = \"mod\"\nentry.lib = \"./mod.rut\"\nentry.type = \"./surface.d.rut\"\n",
@@ -140,6 +142,111 @@ fn refusals() {
     let loose = base.join("loose.rut");
     std::fs::write(&loose, src).unwrap();
     assert!(load_path_session(&loose).is_err());
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn the_declared_kind_dispatches_in_bundle_groups_too() {
+    // the bundle-group twins of the directory loader's kind dispatch:
+    // a lib group whose surface declares host fns refuses at load
+    // (the lib-surface law), and a surface-only lib group mounts as a
+    // decl unit
+    let base = std::env::temp_dir().join(format!("rut-bundle-kind-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+
+    // the dep `s`: a HOST pkg (declared), packable as a source group
+    let s = base.join("s");
+    std::fs::create_dir_all(&s).unwrap();
+    std::fs::write(
+        s.join("rut.toml"),
+        "name = \"s\"\ntype = \"host\"\nentry.type = \"./s.d.rut\"\n",
+    )
+    .unwrap();
+    std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    // the consumer: m (+ transitively s)
+    let m = base.join("m");
+    std::fs::create_dir_all(&m).unwrap();
+    std::fs::write(
+        m.join("rut.toml"),
+        "format = \"rutbundle\"\nformat_version = 5\nname = \"main\"\nentry.lib = \"./main.rut\"\n[deps]\ns = { path = \"../s\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        m.join("main.rut"),
+        "pub fn main() -> i32 { return 7; }\n",
+    )
+    .unwrap();
+
+    let bytes = pack_dir(&m).unwrap();
+
+    // TWIN 1 — the same group re-spelled `type = "lib"` (and nothing
+    // else changed): the group's surface now rides the LIB arm, and its
+    // host rows refuse at load, naming the fix
+    let entries = rut_bundle::parse_bundle(&bytes).unwrap();
+    let lib_manifest =
+        "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n".as_bytes().to_vec();
+    let respelled: Vec<(String, Vec<u8>)> = entries
+        .iter()
+        .map(|(n, b)| {
+            if n == "s/rut.toml" {
+                (n.clone(), lib_manifest.clone())
+            } else {
+                (n.clone(), b.clone())
+            }
+        })
+        .collect();
+    let respelled_bytes = rut_bundle::write_bundle(&respelled).unwrap();
+    let err = rut_driver::load_bundle_bytes(&respelled_bytes, Path::new("respelled")).unwrap_err();
+    assert!(err.contains("s/s.d.rut"), "{err}");
+    assert!(err.contains("`host fn ping`"), "{err}");
+    assert!(err.contains("`type = \"host\"`"), "{err}");
+
+    // TWIN 2 — the surface-only dev state packs and loads as a decl
+    // unit: a lib dep with a clean surface and no body
+    let s2 = base.join("s2");
+    std::fs::create_dir_all(&s2).unwrap();
+    std::fs::write(
+        s2.join("rut.toml"),
+        "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n",
+    )
+    .unwrap();
+    std::fs::write(s2.join("s.d.rut"), "/// documented surface, no body yet.\n").unwrap();
+    let m2 = base.join("m2");
+    std::fs::create_dir_all(&m2).unwrap();
+    std::fs::write(
+        m2.join("rut.toml"),
+        "format = \"rutbundle\"\nformat_version = 5\nname = \"main\"\nentry.lib = \"./main.rut\"\n[deps]\ns = { path = \"../s2\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        m2.join("main.rut"),
+        "pub fn main() -> i32 { return 7; }\n",
+    )
+    .unwrap();
+    let dev_bytes = pack_dir(&m2).unwrap();
+    let (session, root) = rut_driver::load_bundle_bytes(&dev_bytes, Path::new("dev")).unwrap();
+    assert_eq!(root, "main");
+    let sf = session.resolve("s").expect("s mounted");
+    assert!(
+        matches!(
+            sf.body,
+            rut_driver::ModuleBody::Source { is_decl: true, .. }
+        ),
+        "the surface-only group is a decl unit: {:?}",
+        sf.body
+    );
+    let g = rut_driver::compile_graph(&session, "main");
+    assert!(g.diags.is_empty(), "{:?}", g.diags);
+    assert!(g.program.is_some());
+
+    // and the declared host spelling still mounts as a host body (the
+    // kind is honored from the field, pack to load)
+    let (session, _) = load_bundle_bytes(&bytes, Path::new("host")).unwrap();
+    assert!(matches!(
+        session.resolve("s").expect("s mounted").body,
+        rut_driver::ModuleBody::Host { .. }
+    ));
 
     let _ = std::fs::remove_dir_all(&base);
 }
@@ -161,7 +268,11 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the dep's dep: a host pkg (declaration-only surface) → source
     let s = base.join("s");
     std::fs::create_dir_all(&s).unwrap();
-    std::fs::write(s.join("rut.toml"), "name = \"s\"\nentry.type = \"./s.d.rut\"\n").unwrap();
+    std::fs::write(
+        s.join("rut.toml"),
+        "name = \"s\"\ntype = \"host\"\nentry.type = \"./s.d.rut\"\n",
+    )
+    .unwrap();
     std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
     // m uses s
     std::fs::write(

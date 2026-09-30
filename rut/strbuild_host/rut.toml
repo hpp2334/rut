@@ -6,4 +6,5 @@
 # The registration scope IS the package name; the use path spells it
 # too (`use strbuild_host::{ sb_new, .. }`).
 name = "strbuild_host"
+type = "host"
 entry.type = "./strbuild_host.d.rut"

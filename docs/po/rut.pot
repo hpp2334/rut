@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:143
+#: src/reference/project-structure.md:145
 msgid "The playground"
 msgstr ""
 
@@ -3394,7 +3394,7 @@ msgstr ""
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:147 src/reference/host-futures.md:34
 #: src/reference/embedding.md:62 src/reference/embedding.md:84
-#: src/reference/value-boundary.md:96 src/reference/host-fns.md:242
+#: src/reference/value-boundary.md:96 src/reference/host-fns.md:243
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
 msgstr ""
@@ -7840,7 +7840,7 @@ msgid ""
 msgstr ""
 
 #: src/examples/03-plugin.md:124 src/reference/embedding.md:35
-#: src/reference/host-fns.md:155
+#: src/reference/host-fns.md:156
 msgid "\"server::emit\""
 msgstr ""
 
@@ -9357,7 +9357,7 @@ msgstr ""
 msgid "`fn`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:134
+#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:135
 msgid "`let`"
 msgstr ""
 
@@ -9385,11 +9385,11 @@ msgstr ""
 msgid "`of`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:135
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:136
 msgid "`enum`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:137
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:138
 msgid "`struct`"
 msgstr ""
 
@@ -9397,7 +9397,7 @@ msgstr ""
 msgid "`class`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:136
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:137
 msgid "`trait`"
 msgstr ""
 
@@ -9469,7 +9469,7 @@ msgstr ""
 msgid "Special meaning"
 msgstr ""
 
-#: src/reference/lexical-structure.md:54
+#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:36
 msgid "`type`"
 msgstr ""
 
@@ -14969,7 +14969,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/async.md:47 src/reference/host-futures.md:17
-#: src/reference/host-fns.md:64
+#: src/reference/host-fns.md:65
 msgid "Rules:"
 msgstr ""
 
@@ -17422,7 +17422,7 @@ msgstr ""
 msgid "need"
 msgstr ""
 
-#: src/reference/repr-c.md:89 src/reference/project-structure.md:129
+#: src/reference/repr-c.md:89 src/reference/project-structure.md:131
 msgid "shape"
 msgstr ""
 
@@ -17475,7 +17475,7 @@ msgstr ""
 msgid "bound at link against"
 msgstr ""
 
-#: src/reference/host-fns.md:7 src/reference/host-fns.md:138
+#: src/reference/host-fns.md:7 src/reference/host-fns.md:139
 msgid "`host fn` / `host struct`"
 msgstr ""
 
@@ -17487,7 +17487,7 @@ msgstr ""
 msgid "the load-time contract (below)"
 msgstr ""
 
-#: src/reference/host-fns.md:8 src/reference/host-fns.md:139
+#: src/reference/host-fns.md:8 src/reference/host-fns.md:140
 msgid "`prelude builtin` / `pub builtin` rows"
 msgstr ""
 
@@ -17519,7 +17519,7 @@ msgstr ""
 
 #: src/reference/host-fns.md:20
 msgid ""
-"A package directory whose manifest names a declaration file is a **host "
+"A package directory whose manifest declares `type = \"host\"` is a **host "
 "pkg** — pure surface, no rut source:"
 msgstr ""
 
@@ -17528,11 +17528,12 @@ msgid ""
 "```toml\n"
 "# server/rut.toml\n"
 "name = \"server\"\n"
+"type = \"host\"\n"
 "entry.type = \"./server.d.rut\"\n"
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:29
+#: src/reference/host-fns.md:30
 msgid ""
 "```rut\n"
 "// server/server.d.rut\n"
@@ -17541,35 +17542,35 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:35
+#: src/reference/host-fns.md:36
 msgid "Consumers reach a host pkg two ways:"
 msgstr ""
 
-#: src/reference/host-fns.md:37
+#: src/reference/host-fns.md:38
 msgid ""
 "declared in the manifest's `[deps]` ([project "
 "structure](project-structure.md), [dependency kinds](dependency-kinds.md)); "
 "resolution is recursive, **first mount wins**;"
 msgstr ""
 
-#: src/reference/host-fns.md:40
+#: src/reference/host-fns.md:41
 msgid ""
 "mounted programmatically: `rut_driver::mount_dir(&mut session, dir)` "
 "([embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:43
+#: src/reference/host-fns.md:44
 msgid ""
 "The loader lowers the declared signatures into the mounted surface at load "
 "time; the compiler type-checks calls against them. A host pkg packs into a "
 "`.rutbundle` like any dep ([module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:47
+#: src/reference/host-fns.md:48
 msgid "The surface grammar"
 msgstr ""
 
-#: src/reference/host-fns.md:49
+#: src/reference/host-fns.md:50
 msgid ""
 "```rut\n"
 "host fn name(params) -> T;            // concrete signature; generics are a\n"
@@ -17589,7 +17590,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:66
+#: src/reference/host-fns.md:67
 msgid ""
 "**The crossing set** — `host fn` signatures are concrete over: nil, the "
 "primitives, `str`, `bytes`, `opaque`, tuples/`?T` whose elements cross, and "
@@ -17599,14 +17600,14 @@ msgid ""
 "declaration ([value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:73
+#: src/reference/host-fns.md:74
 msgid ""
 "**`any` is not in the language.** It is a reserved word; a `.d.rut` spelling "
 "it is the reserved-word diagnostic at parse time. Seal polymorphic values "
 "with `opaque(v)` / `opaque.downcast<T>(v)` ([opaque](opaque.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:77
+#: src/reference/host-fns.md:78
 msgid ""
 "**`builtin` is the engine's reservation** — spelled only in the toolchain's "
 "own decl files (`core`, `calc`). A `builtin` in an embedder decl is a "
@@ -17614,24 +17615,24 @@ msgid ""
 "library contracts stay plain `trait` ([traits and dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:82
+#: src/reference/host-fns.md:83
 msgid ""
 "**`builtin` is a contextual keyword**: `.d.rut`\\-only; elsewhere it is a "
 "legal identifier."
 msgstr ""
 
-#: src/reference/host-fns.md:85
+#: src/reference/host-fns.md:86
 msgid "The two builtin spellings"
 msgstr ""
 
-#: src/reference/host-fns.md:87
+#: src/reference/host-fns.md:88
 msgid ""
 "A `builtin` decl spells one of two strict forms — a bare `builtin` diagnoses "
 "_\"`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` "
 "(import-gated)\"_:"
 msgstr ""
 
-#: src/reference/host-fns.md:91
+#: src/reference/host-fns.md:92
 msgid ""
 "**`prelude builtin`** — the **ambient** engine surface: the name binds in "
 "every compilation unit, no `use` needed. The primitives and their `builtin "
@@ -17639,7 +17640,7 @@ msgid ""
 "`capture_stacktrace` are all ambient."
 msgstr ""
 
-#: src/reference/host-fns.md:96
+#: src/reference/host-fns.md:97
 msgid ""
 "**`pub builtin`** — the **import-gated** engine surface: the name resolves "
 "only through `use core::{ .. }`, the way a package's names do. Today's rows "
@@ -17651,20 +17652,20 @@ msgid ""
 "source gates."
 msgstr ""
 
-#: src/reference/host-fns.md:106
+#: src/reference/host-fns.md:107
 msgid ""
 "Using a `pub builtin` name without the use line is a resolution miss that "
 "names the fix, never a bare \"unknown name\":"
 msgstr ""
 
-#: src/reference/host-fns.md:113
+#: src/reference/host-fns.md:114
 msgid ""
 "The split is per name: a unit that imports one gated name still sees every "
 "ambient name for free, and an unused name in a `use core` line stays a lint, "
 "not an error."
 msgstr ""
 
-#: src/reference/host-fns.md:117
+#: src/reference/host-fns.md:118
 msgid ""
 "**`opaque` wraps native state; there is no host class.** rut wraps the "
 "handle in a class of its own — the wrapper-class pattern ([native containers "
@@ -17673,99 +17674,99 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:122
+#: src/reference/host-fns.md:123
 msgid ""
 "**Workers**: an `opaque` box crosses isolates only if the host registered "
 "the boxed type as `send` — checked at the transfer, by type ([workers and "
 "channels](workers-and-channels.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:126 src/reference/frontend.md:157
+#: src/reference/host-fns.md:127 src/reference/frontend.md:157
 #: src/reference/cli.md:114
 msgid "Declaration mode"
 msgstr ""
 
-#: src/reference/host-fns.md:128
+#: src/reference/host-fns.md:129
 msgid ""
 "A `.d.rut` is parsed in **declaration mode**: declarations only, each "
 "complete as a surface."
 msgstr ""
 
-#: src/reference/host-fns.md:131
+#: src/reference/host-fns.md:132
 msgid "allowed"
 msgstr ""
 
-#: src/reference/host-fns.md:131 src/reference/stdlib.md:79
+#: src/reference/host-fns.md:132 src/reference/stdlib.md:79
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr ""
 
-#: src/reference/host-fns.md:133
+#: src/reference/host-fns.md:134
 msgid "`use` / `pub`"
 msgstr ""
 
-#: src/reference/host-fns.md:133
+#: src/reference/host-fns.md:134
 msgid ""
 "visibility exactly as in a module; non-exported decls are known inside the "
 "file, nameable nowhere else"
 msgstr ""
 
-#: src/reference/host-fns.md:134
+#: src/reference/host-fns.md:135
 msgid "with load-time constant initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:135
+#: src/reference/host-fns.md:136
 msgid "the member list is the whole definition"
 msgstr ""
 
-#: src/reference/host-fns.md:136
+#: src/reference/host-fns.md:137
 msgid "method signatures (+ `requires`) are the whole definition"
 msgstr ""
 
-#: src/reference/host-fns.md:137
+#: src/reference/host-fns.md:138
 msgid "fields only, with load-time initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:138
+#: src/reference/host-fns.md:139
 msgid "signatures only, concrete over the crossing set"
 msgstr ""
 
-#: src/reference/host-fns.md:139
+#: src/reference/host-fns.md:140
 msgid "toolchain decl files only — the two spellings above"
 msgstr ""
 
-#: src/reference/host-fns.md:141
+#: src/reference/host-fns.md:142
 msgid ""
 "Forbidden — the parser errors _\"implementation in a declaration file\"_: "
 "any fn/class body, statements. Symmetrically, a `.rut` file that spells "
 "`host` errors _\"belongs in a `.d.rut`\"_."
 msgstr ""
 
-#: src/reference/host-fns.md:145
+#: src/reference/host-fns.md:146
 msgid "Signatures are derived, not hand-written"
 msgstr ""
 
-#: src/reference/host-fns.md:147
+#: src/reference/host-fns.md:148
 msgid "The registered callable's Rust shape **is** the `.d.rut` row:"
 msgstr ""
 
-#: src/reference/host-fns.md:152
+#: src/reference/host-fns.md:153
 msgid "\"server::make\""
 msgstr ""
 
-#: src/reference/host-fns.md:153
+#: src/reference/host-fns.md:154
 msgid ""
 "// two-plus params: spell the marker tuple once, the closure stays plain\n"
 msgstr ""
 
-#: src/reference/host-fns.md:159
+#: src/reference/host-fns.md:160
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's "
 "parameter and return types; a param type with no crossing impl is a "
 "**compile error at the register site**."
 msgstr ""
 
-#: src/reference/host-fns.md:162
+#: src/reference/host-fns.md:163
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` "
 "(fallible). Errors travel an explicit trap channel — a trapped body "
@@ -17773,62 +17774,62 @@ msgid ""
 "modules](embedding.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:166
+#: src/reference/host-fns.md:167
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call "
 "([value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:169
+#: src/reference/host-fns.md:170
 msgid "The load-time contract"
 msgstr ""
 
-#: src/reference/host-fns.md:171
+#: src/reference/host-fns.md:172
 msgid ""
 "Mounting a host pkg **declares**; the embedding Rust **binds**. The two "
 "sides are checked against each other before any rut code runs:"
 msgstr ""
 
-#: src/reference/host-fns.md:175
+#: src/reference/host-fns.md:176
 msgid "// panics on mismatch\n"
 msgstr ""
 
-#: src/reference/host-fns.md:176
+#: src/reference/host-fns.md:177
 msgid "// joins the rest\n"
 msgstr ""
 
-#: src/reference/host-fns.md:179
+#: src/reference/host-fns.md:180
 msgid ""
 "A mismatch is an embedder wiring bug — a **panic**, never a rut diagnostic — "
 "on exactly three classes:"
 msgstr ""
 
-#: src/reference/host-fns.md:182
+#: src/reference/host-fns.md:183
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr ""
 
-#: src/reference/host-fns.md:183
+#: src/reference/host-fns.md:184
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr ""
 
-#: src/reference/host-fns.md:184
+#: src/reference/host-fns.md:185
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding "
 "took `(opaque, i64, str)`."
 msgstr ""
 
-#: src/reference/host-fns.md:187
+#: src/reference/host-fns.md:188
 msgid ""
 "The law follows the mount: **mount what you bind**. An embedder that mounts "
 "`calc` must bind its float fns; an embedder that needs only `core` mounts "
 "only `core`."
 msgstr ""
 
-#: src/reference/host-fns.md:191
+#: src/reference/host-fns.md:192
 msgid "Slots, not strings"
 msgstr ""
 
-#: src/reference/host-fns.md:193
+#: src/reference/host-fns.md:194
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in "
 "declaration order; the module binary carries the slot table. Calls compile "
@@ -17838,11 +17839,11 @@ msgid ""
 "be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 
-#: src/reference/host-fns.md:201
+#: src/reference/host-fns.md:202
 msgid "Async host fns"
 msgstr ""
 
-#: src/reference/host-fns.md:203
+#: src/reference/host-fns.md:204
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -17851,120 +17852,120 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:209
+#: src/reference/host-fns.md:210
 msgid ""
 "The embedder binds the family with one registration; the closure spawns the "
 "work, hands out a completer clone, and returns:"
 msgstr ""
 
-#: src/reference/host-fns.md:213
+#: src/reference/host-fns.md:214
 msgid "\"http_host::http_send\""
 msgstr ""
 
-#: src/reference/host-fns.md:227
+#: src/reference/host-fns.md:228
 msgid "/* optional abort hook: */"
 msgstr ""
 
-#: src/reference/host-fns.md:227
+#: src/reference/host-fns.md:228
 msgid "/* best-effort cancel */"
 msgstr ""
 
-#: src/reference/host-fns.md:231
+#: src/reference/host-fns.md:232
 msgid ""
 "`register_async!(hosts, name, (P…) -> R, start [, abort])` emits the family "
 "the compiler's weave joins:"
 msgstr ""
 
-#: src/reference/host-fns.md:234
+#: src/reference/host-fns.md:235
 msgid "emitted row"
 msgstr ""
 
-#: src/reference/host-fns.md:234 src/reference/reflection.md:75
+#: src/reference/host-fns.md:235 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
 #: src/reference/stdlib.md:307 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:30 src/reference/cli.md:125
+#: src/reference/project-structure.md:31 src/reference/cli.md:125
 msgid "meaning"
 msgstr ""
 
-#: src/reference/host-fns.md:236
+#: src/reference/host-fns.md:237
 msgid "`<name>`"
 msgstr ""
 
-#: src/reference/host-fns.md:236
+#: src/reference/host-fns.md:237
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future "
 "at the call site"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:238
 msgid "`<name>__start(P…) -> opaque`"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:238
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr ""
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:239
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:239
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr ""
 
-#: src/reference/host-fns.md:239
+#: src/reference/host-fns.md:240
 msgid "`<name>__take(state) -> R`"
 msgstr ""
 
-#: src/reference/host-fns.md:239
+#: src/reference/host-fns.md:240
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr ""
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:241
 msgid "`<name>__cancel(state)`"
 msgstr ""
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:241
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-fns.md:242
+#: src/reference/host-fns.md:243
 msgid "`Completer<T>` API"
 msgstr ""
 
-#: src/reference/host-fns.md:244
+#: src/reference/host-fns.md:245
 msgid "`Completer::new()`"
 msgstr ""
 
-#: src/reference/host-fns.md:244
+#: src/reference/host-fns.md:245
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr ""
 
-#: src/reference/host-fns.md:245
+#: src/reference/host-fns.md:246
 msgid "`complete(v)` / `fail(msg)`"
 msgstr ""
 
-#: src/reference/host-fns.md:245
+#: src/reference/host-fns.md:246
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr ""
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:247
 msgid "`poll() -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:247
 msgid "the driving loop's probe"
 msgstr ""
 
-#: src/reference/host-fns.md:247
+#: src/reference/host-fns.md:248
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr ""
 
-#: src/reference/host-fns.md:247
+#: src/reference/host-fns.md:248
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr ""
 
-#: src/reference/host-fns.md:249
+#: src/reference/host-fns.md:250
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. "
 "Cancellation is best-effort — a worker runs to its blocking completion and "
@@ -17972,43 +17973,43 @@ msgid ""
 "and [async and await](async.md)."
 msgstr ""
 
-#: src/reference/host-fns.md:254
+#: src/reference/host-fns.md:255
 msgid "Declaration files as artifacts"
 msgstr ""
 
-#: src/reference/host-fns.md:256
+#: src/reference/host-fns.md:257
 msgid "A published package ships:"
 msgstr ""
 
-#: src/reference/host-fns.md:258
+#: src/reference/host-fns.md:259
 msgid "artifact"
 msgstr ""
 
-#: src/reference/host-fns.md:258
+#: src/reference/host-fns.md:259
 msgid "role"
 msgstr ""
 
-#: src/reference/host-fns.md:260
+#: src/reference/host-fns.md:261
 msgid "`mod.rutc`"
 msgstr ""
 
-#: src/reference/host-fns.md:260
+#: src/reference/host-fns.md:261
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module "
 "binary and verification](module-binary.md))"
 msgstr ""
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:262
 msgid "`mod.d.rut`"
 msgstr ""
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:262
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); "
 "documentation only, never the loader's source of truth"
 msgstr ""
 
-#: src/reference/host-fns.md:263
+#: src/reference/host-fns.md:264
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, trait-table "
@@ -18016,59 +18017,59 @@ msgid ""
 "guesswork."
 msgstr ""
 
-#: src/reference/host-fns.md:267
+#: src/reference/host-fns.md:268
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table "
 "— a pure data compare. Drift is a load error naming both modules, never a "
 "runtime surprise."
 msgstr ""
 
-#: src/reference/host-fns.md:270
+#: src/reference/host-fns.md:271
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are "
 "stripped (`--release` drops member-name strings), but code is recoverable "
 "with effort. What publishing guarantees is API discipline."
 msgstr ""
 
-#: src/reference/host-fns.md:274
+#: src/reference/host-fns.md:275
 msgid "Surface resolution during compilation"
 msgstr ""
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:277
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first "
 "hit wins:"
 msgstr ""
 
-#: src/reference/host-fns.md:279
+#: src/reference/host-fns.md:280
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr ""
 
-#: src/reference/host-fns.md:280
+#: src/reference/host-fns.md:281
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface "
 "on the wire) — or its bundled source for a splice-needed group; explicit "
 "mounts outrank stray sources, never dev source;"
 msgstr ""
 
-#: src/reference/host-fns.md:283
+#: src/reference/host-fns.md:284
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside "
 "the registered implementation."
 msgstr ""
 
-#: src/reference/host-fns.md:286
+#: src/reference/host-fns.md:287
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose "
 "implementation is absent is legal and complete — checking passes; only "
 "running requires the bodies."
 msgstr ""
 
-#: src/reference/host-fns.md:290
+#: src/reference/host-fns.md:291
 msgid "End-to-end shape"
 msgstr ""
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:293
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds "
 "`server::subscribe`/`server::emit` over its own `EventBus` box, the plugin "
@@ -19291,7 +19292,7 @@ msgstr ""
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/project-structure.md:129
+#: src/reference/stdlib.md:128 src/reference/project-structure.md:131
 msgid "package"
 msgstr ""
 
@@ -19330,7 +19331,7 @@ msgstr ""
 msgid "the `Logger` class over `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:135
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:137
 msgid "`pouch`"
 msgstr ""
 
@@ -19351,7 +19352,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:134 src/reference/project-structure.md:136
+#: src/reference/stdlib.md:134 src/reference/project-structure.md:138
 msgid "`json`"
 msgstr ""
 
@@ -19371,7 +19372,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:136 src/reference/project-structure.md:132
+#: src/reference/stdlib.md:136 src/reference/project-structure.md:134
 msgid "`calc`"
 msgstr ""
 
@@ -23232,6 +23233,7 @@ msgid ""
 "\n"
 "# rut/calc/rut.toml — a pure declaration surface (a host pkg)\n"
 "name = \"calc\"\n"
+"type = \"host\"\n"
 "entry.type = \"./calc.d.rut\"\n"
 "\n"
 "# a consumer (an app directory)\n"
@@ -23244,84 +23246,93 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:28
+#: src/reference/project-structure.md:29
 msgid "The keys, all of them:"
 msgstr ""
 
-#: src/reference/project-structure.md:30
+#: src/reference/project-structure.md:31
 msgid "key"
 msgstr ""
 
-#: src/reference/project-structure.md:32
+#: src/reference/project-structure.md:33
 msgid "`name`"
 msgstr ""
 
-#: src/reference/project-structure.md:32
+#: src/reference/project-structure.md:33
 msgid ""
 "the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted "
 "spelling is a manifest error."
 msgstr ""
 
-#: src/reference/project-structure.md:33
+#: src/reference/project-structure.md:34
 msgid "`entry.lib`"
 msgstr ""
 
-#: src/reference/project-structure.md:33
+#: src/reference/project-structure.md:34
 msgid "the body: one `.rut` file (or `.rutc`\\-style artifacts where supported)"
 msgstr ""
 
-#: src/reference/project-structure.md:34
+#: src/reference/project-structure.md:35
 msgid "`entry.libs`"
 msgstr ""
 
-#: src/reference/project-structure.md:34
+#: src/reference/project-structure.md:35
 msgid "ordered extra `.rut` files — the **multi-lib entry** (below)"
 msgstr ""
 
-#: src/reference/project-structure.md:35
+#: src/reference/project-structure.md:36
+msgid ""
+"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration "
+"surface whose `host fn`s the embedder binds at load ([Host fns and "
+"declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the "
+"ordinary source package. The kind is never inferred — an `entry.type`\\-only "
+"manifest with no kind is an error naming both fixes"
+msgstr ""
+
+#: src/reference/project-structure.md:37
 msgid "`entry.type`"
 msgstr ""
 
-#: src/reference/project-structure.md:35
+#: src/reference/project-structure.md:37
 msgid ""
-"the declaration surface: one `.d.rut` file. `entry.type` alone makes a "
-"**host pkg** — a pure signature surface whose `host fn`s the embedder binds "
-"at load ([Host fns and declaration files](host-fns.md))"
+"the declaration surface: one `.d.rut` file. On a lib pkg it is documentation "
+"surface (a surface-only dev state mounts as a declaration unit; `host fn` "
+"text there is refused)"
 msgstr ""
 
-#: src/reference/project-structure.md:36 src/reference/dependency-kinds.md:63
+#: src/reference/project-structure.md:38 src/reference/dependency-kinds.md:63
 msgid "`[deps]`"
 msgstr ""
 
-#: src/reference/project-structure.md:36
+#: src/reference/project-structure.md:38
 msgid ""
 "the transitively mounted dependencies — string-valued descriptors: `pkg = { "
 "path = \"...\" }`, relative to this manifest. `optional` is rejected here."
 msgstr ""
 
-#: src/reference/project-structure.md:37
+#: src/reference/project-structure.md:39
 msgid "`[peer-deps]`"
 msgstr ""
 
-#: src/reference/project-structure.md:37
+#: src/reference/project-structure.md:39
 msgid ""
 "presence-gated peers — descriptors accept `path`, `optional`, `lib` "
 "([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:38 src/reference/dependency-kinds.md:66
+#: src/reference/project-structure.md:40 src/reference/dependency-kinds.md:66
 msgid "`[dev-deps]`"
 msgstr ""
 
-#: src/reference/project-structure.md:38
+#: src/reference/project-structure.md:40
 msgid "mounted only while building/testing this pkg itself"
 msgstr ""
 
-#: src/reference/project-structure.md:39
+#: src/reference/project-structure.md:41
 msgid "`inline`"
 msgstr ""
 
-#: src/reference/project-structure.md:39
+#: src/reference/project-structure.md:41
 msgid ""
 "`true` forces source-inlining into every consumer instead of linking "
 "(packages whose class methods must resolve at the call site — inherent impls "
@@ -23329,21 +23340,21 @@ msgid ""
 "instantiations owned by the declaring package)"
 msgstr ""
 
-#: src/reference/project-structure.md:40
+#: src/reference/project-structure.md:42
 msgid "`format`, `format_version`"
 msgstr ""
 
-#: src/reference/project-structure.md:40
+#: src/reference/project-structure.md:42
 msgid ""
 "bundle keys — ignored by directory loading, required by `rut pack` ([Module "
 "bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:41
+#: src/reference/project-structure.md:43
 msgid "`[style]`"
 msgstr ""
 
-#: src/reference/project-structure.md:41
+#: src/reference/project-structure.md:43
 msgid ""
 "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default "
 "100). Schema-free at the manifest layer — unknown keys ride; malformed "
@@ -23351,7 +23362,7 @@ msgid ""
 "ancestor manifest of the formatted file; no manifest → defaults."
 msgstr ""
 
-#: src/reference/project-structure.md:43
+#: src/reference/project-structure.md:45
 msgid ""
 "The parser accepts only the TOML subset the format uses (comments, `key = "
 "\"string\"`, dotted keys, `[section]`, inline tables), so the driver stays "
@@ -23359,17 +23370,17 @@ msgid ""
 "descriptor keys are line-targeted manifest errors."
 msgstr ""
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:51
 msgid "Resolution laws"
 msgstr ""
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:53
 msgid ""
 "**Exact, single-step.** A use path resolves only if a module with that "
 "`name` is mounted. Nothing is derived from directories or file layouts."
 msgstr ""
 
-#: src/reference/project-structure.md:54
+#: src/reference/project-structure.md:56
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An "
 "already-mounted name (the embedder's, the root's, or an earlier dep's) is "
@@ -23377,35 +23388,35 @@ msgid ""
 "consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 
-#: src/reference/project-structure.md:59
+#: src/reference/project-structure.md:61
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with "
 "its key fails, naming both."
 msgstr ""
 
-#: src/reference/project-structure.md:61
+#: src/reference/project-structure.md:63
 msgid ""
 "**The cross-table law.** A name in `[deps]` beside `[peer-deps]` or "
 "`[dev-deps]` is an error naming both rows; peer + dev together is the "
 "sanctioned pairing."
 msgstr ""
 
-#: src/reference/project-structure.md:64
+#: src/reference/project-structure.md:66
 msgid ""
 "**`core` needs no `[deps]`** — the driver mounts it unconditionally; every "
 "name still requires `use core::{ .. };` per [core and the swappable "
 "packages](stdlib.md)."
 msgstr ""
 
-#: src/reference/project-structure.md:68
+#: src/reference/project-structure.md:70
 msgid "The multi-lib entry"
 msgstr ""
 
-#: src/reference/project-structure.md:70
+#: src/reference/project-structure.md:72
 msgid "A package's body may be split across files:"
 msgstr ""
 
-#: src/reference/project-structure.md:72
+#: src/reference/project-structure.md:74
 msgid ""
 "```toml\n"
 "name = \"ui\"\n"
@@ -23414,7 +23425,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:78
+#: src/reference/project-structure.md:80
 msgid ""
 "The loader splices base-first, then `libs` in listed order, newline-joined, "
 "into **one module** — one namespace, one visibility scope. A name private to "
@@ -23425,18 +23436,18 @@ msgid ""
 "include form — use paths stay inter-module."
 msgstr ""
 
-#: src/reference/project-structure.md:86
+#: src/reference/project-structure.md:88
 msgid ""
 "Contrast with peer groups: group files are _presence-gated_ and therefore "
 "impl-only; multi-lib files are unconditional and full module citizens — "
 "types, functions, and `pub` surface are legal in any file."
 msgstr ""
 
-#: src/reference/project-structure.md:90
+#: src/reference/project-structure.md:92
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:118
+#: src/reference/project-structure.md:120
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
 "rut-core ← rut-vm` (with `rut-vm-threaded` behind it), hosts (`rut-std`, "
@@ -23444,69 +23455,69 @@ msgid ""
 "frontend crates only — tokens, diagnostics, and symbols need no VM."
 msgstr ""
 
-#: src/reference/project-structure.md:124
+#: src/reference/project-structure.md:126
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:126
+#: src/reference/project-structure.md:128
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI mounts on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:131
+#: src/reference/project-structure.md:133
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:131
+#: src/reference/project-structure.md:133
 msgid "the only standard package — the builtin surface, mounted unconditionally"
 msgstr ""
 
-#: src/reference/project-structure.md:132
+#: src/reference/project-structure.md:134
 msgid "host pkg: math surface (`mount_calc`)"
 msgstr ""
 
-#: src/reference/project-structure.md:133
+#: src/reference/project-structure.md:135
 msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:133
+#: src/reference/project-structure.md:135
 msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:134
+#: src/reference/project-structure.md:136
 msgid "`ink`, `http`, `strbuild`, `async_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:134
+#: src/reference/project-structure.md:136
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr ""
 
-#: src/reference/project-structure.md:135
+#: src/reference/project-structure.md:137
 msgid "the sequence library (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:136
+#: src/reference/project-structure.md:138
 msgid ""
 "the base pkg with `[peer-deps]`/`[dev-deps]` — the reference consumer of "
 "[Dependency kinds](dependency-kinds.md)"
 msgstr ""
 
-#: src/reference/project-structure.md:137
+#: src/reference/project-structure.md:139
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:137
+#: src/reference/project-structure.md:139
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:139
+#: src/reference/project-structure.md:141
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps "
 "are resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:145
+#: src/reference/project-structure.md:147
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "

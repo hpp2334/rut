@@ -5,4 +5,5 @@
 # the same surface.
 
 name = "bench_cross"
+type = "host"
 entry.type = "./bench_cross.d.rut"

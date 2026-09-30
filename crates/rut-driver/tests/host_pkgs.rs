@@ -4,6 +4,8 @@
 //! `rut/ink_host/` and 03-plugin's `server/` load from disk, and a
 //! consumer compiles against them with no hand-written Rust surface.
 
+use std::path::Path;
+
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
 use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module};
 use rut_vm::OpaqueRef;
@@ -98,6 +100,104 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
         "the mistyped call must be diagnosed: {:?}",
         out.diags
     );
+}
+
+// ---- the declared kind: host-pkg-ness is spelled, never inferred ----
+
+/// A temp module dir from a manifest + file map.
+fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
+    let dir = base.join("pkg");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, text) in files {
+        std::fs::write(dir.join(name), text).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
+    // the lib-surface law: `host fn` text lives only in
+    // `type = "host"` pkgs. A surface that PARSES and declares host
+    // fns is the loud error, naming the row and the fix.
+    let base = std::env::temp_dir().join(format!("rut-lib-surface-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let dir = make_pkg(
+        &base,
+        &[
+            ("rut.toml", "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n"),
+            ("s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
+        ],
+    );
+    let err = load_path_session(&dir).unwrap_err();
+    assert!(err.contains("s.d.rut"), "{err}");
+    assert!(err.contains("`host fn ping`"), "{err}");
+    assert!(err.contains("`type = \"host\"`"), "{err}");
+
+    // a surface that does not PARSE stays inert (doc-only, as today) —
+    // the refusal fires only on a surface that parses into host rows
+    let dir = make_pkg(
+        &base,
+        &[
+            ("rut.toml", "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n"),
+            ("s.d.rut", "this is not rut source at all <<<\n"),
+        ],
+    );
+    let (session, root) = load_path_session(&dir).unwrap();
+    assert_eq!(root, "s");
+    assert!(matches!(
+        session.resolve("s").unwrap().body,
+        ModuleBody::Source { is_decl: true, .. }
+    ));
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
+    // a `type = "lib"` pkg with a surface and no body is the dev
+    // state: a decl unit — no host rows, nothing exported (use sites
+    // resolve-miss, correctly)
+    let base = std::env::temp_dir().join(format!("rut-dev-state-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let dir = make_pkg(
+        &base,
+        &[
+            ("rut.toml", "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n"),
+            ("s.d.rut", "/// documented surface, no body yet.\n"),
+        ],
+    );
+    let (session, root) = load_path_session(&dir).unwrap();
+    assert_eq!(root, "s");
+    let m = session.resolve("s").unwrap();
+    assert!(
+        matches!(&m.body, ModuleBody::Source { is_decl: true, .. }),
+        "the dev state is a decl unit, not a host body: {:?}",
+        m.body
+    );
+    // a consumer's use of it resolve-misses — the loud, correct answer
+    let (mut session, _) = load_path_session(&dir).unwrap();
+    rut_driver::mount_std_core(&mut session);
+    session
+        .register_module(
+            "app",
+            rut_driver::Module {
+                body: ModuleBody::Source {
+                    text: "use s::{ ping };\npub fn main() -> nil { ping(1); }\n".into(),
+                    is_decl: false,
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let out = rut_driver::compile_graph(&session, "app");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("cannot resolve") || d.msg.contains("unknown")),
+        "the use site must resolve-miss: {:?}",
+        out.diags
+    );
+
+    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]

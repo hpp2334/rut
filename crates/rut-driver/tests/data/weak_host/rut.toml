@@ -1,4 +1,5 @@
 # weak_host/ — the weak batch's host-box test pkg: a pure declaration
 # surface; the test binds the body (weak.rs) and verifies the contract.
 name = "weak_host"
+type = "host"
 entry.type = "./weak_host.d.rut"

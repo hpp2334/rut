@@ -3,4 +3,5 @@
 # bodies over its `EventBus` opaque box; the plugin subscribes and
 # emits through these two fns.
 name = "server"
+type = "host"
 entry.type = "./server.d.rut"
