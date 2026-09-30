@@ -254,6 +254,62 @@ fn mixed_closure_with_a_source_group_refuses_strip() {
 }
 
 #[test]
+fn strip_refuses_a_generic_owning_closure() {
+    // the generic-source interaction law: a compiled pkg that exports
+    // generics rides its source (so consumer-spelled shapes stay
+    // servable at load), and the ridden text would recompile
+    // clean-named beside mangled binaries — the combination refuses,
+    // loudly, naming the pkg and the escape hatch
+    let root = scratch("stripgen");
+    let lib = root.join("pairz");
+    write(
+        &lib,
+        "rut.toml",
+        &format!(
+            "format = \"rutbundle\"\nformat_version = 5\n{}",
+            manifest("pairz", "pairz.rut", "")
+        ),
+    );
+    write(
+        &lib,
+        "pairz.rut",
+        "pub struct Pair<A, B> {\n\
+         \x20   fst: A;\n\
+         \x20   snd: B;\n\
+         }\n",
+    );
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.toml",
+        &format!(
+            "format = \"rutbundle\"\nformat_version = 5\n{}",
+            manifest("app", "app.rut", "[deps]\npairz = { path = \"../pairz\" }\n")
+        ),
+    );
+    write(
+        &app,
+        "app.rut",
+        "use pairz::{ Pair };\n\n\
+         entry fn go() -> i64 {\n\
+         \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
+         \x20   return p.fst;\n\
+         }\n",
+    );
+    // the ROOT arm: app itself is concrete — but pairz's group is the
+    // generic owner
+    let err = pack_dir_opts(&app, &PackOpts { strip: true }).unwrap_err();
+    assert!(err.contains("pairz"), "names the generic owner: {err}");
+    assert!(err.contains("generic"), "says why: {err}");
+    assert!(err.contains("--strip"), "names the escape hatch: {err}");
+    // the root arm: a generic root refuses the same way
+    let err = pack_dir_opts(&lib, &PackOpts { strip: true }).unwrap_err();
+    assert!(err.contains("pairz"), "names the generic root: {err}");
+    assert!(err.contains("generic"), "says why: {err}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn strip_packing_is_deterministic() {
     let root = fc_world("det");
     let dir = root.join("app");

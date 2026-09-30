@@ -252,7 +252,10 @@ fn generic_and_trait_param_roots_publish_compiled() {
     let names: Vec<String> =
         rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
-    assert!(!names.iter().any(|n| n.ends_with(".rut") && !n.ends_with("rut.toml")), "{names:?}");
+    // generic-source riding: the exported template crosses compiled AND
+    // the source rides beside it, so consumer-spelled shapes stay
+    // servable at load
+    assert!(names.contains(&"app.rut".to_string()), "{names:?}");
     let run = |b: &[u8]| {
         let (session, app_root) = load_bundle_bytes(b, Path::new("mem")).expect("load");
         run_entry(session, &app_root, "go")

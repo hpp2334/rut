@@ -375,6 +375,45 @@ fn bundle_entry_module(
     })
 }
 
+/// The generic-bearing source a compiled unit rides, read from the
+/// archive under `prefix` (empty for the root, `<pkg>/` for a group):
+/// the entry lib + `entry.libs` spliced, plus the `[peer-deps]` group
+/// files keyed by peer. The entry lib's PRESENCE is the dispatch
+/// marker the packer laid down — its absence is a legacy bundle (or a
+/// non-generic pkg), which rides nothing and refuses consumer-spelled
+/// shapes at link. Once the marker answers, every other riding file
+/// must be there (refuse, never guess — a corrupt archive is a load
+/// error).
+fn riding_gen_source(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    manifest: &Manifest,
+) -> Result<Option<crate::session::GenSource>, String> {
+    let read = |rel: &str| -> Result<String, String> {
+        let rel = rel.strip_prefix("./").unwrap_or(rel);
+        let key = bundle_key(&format!("{prefix}{rel}"))?;
+        read_entry(entries, &key)
+    };
+    let Some(base) = &manifest.entry.lib else {
+        return Ok(None); // no body — nothing could ride
+    };
+    let mut text = match read(base) {
+        Ok(t) => t,
+        Err(_) => return Ok(None), // the marker's absence: a legacy bundle
+    };
+    for lib in &manifest.entry.libs {
+        text.push('\n');
+        text.push_str(&read(lib)?);
+    }
+    let mut peers = Vec::new();
+    for (peer, desc) in &manifest.peer_deps {
+        if let Some(lib) = desc.get("lib") {
+            peers.push((peer.clone(), read(lib)?));
+        }
+    }
+    Ok(Some(crate::session::GenSource { text, peers }))
+}
+
 /// Mount a `.rutbundle` — a **v5 compiled** bundle (the root's `.rutc`
 /// binary, its pack-time scope ledger, and each dep group as a compiled
 /// `.rutc` or a source file set) or a **v6 decl** bundle (a host root:
@@ -439,13 +478,18 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         session.record_bundle_scope(*scope, spec);
     }
     let root = rut_core::link::rebase(root, &remap);
-    // the root: a compiled module (the packer refuses any other root)
+    // the root: a compiled module (the packer refuses any other root).
+    // A generic-owning root rides its source beside the binary — the
+    // on-demand recompile's input (generic-source riding).
+    let gen_source = riding_gen_source(entries, "", &manifest)
+        .map_err(|e| format!("{}: {e}", origin.display()))?;
     session
         .register_module(
             &root_spec,
             Module {
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
+                gen_source,
                 ..Default::default()
             },
         )
@@ -500,9 +544,12 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                         ));
                     }
                 }
+                let gen_source = riding_gen_source(entries, &format!("{prefix}/"), &dm)
+                    .map_err(|e| format!("{}: {e}", origin.display()))?;
                 Module {
                     body: ModuleBody::Compiled(program),
                     entry: dm.entry.clone(),
+                    gen_source,
                     ..Default::default()
                 }
             }
@@ -1015,20 +1062,25 @@ fn mount_url_dep(
         session.record_bundle_scope(*scope, row_spec);
     }
     let root = rut_core::link::rebase(root, &remap);
-    // gate 5 — the root: a compiled module (the packer refuses any other)
+    // gate 6's group reads + the generic-source marker share one entry
+    // list — cloned before the root mounts
+    let entries = bundle.entries().to_vec();
+    // gate 5 — the root: a compiled module (the packer refuses any
+    // other); a generic-owning root rides its source beside the binary
+    let gen_source = riding_gen_source(&entries, "", &manifest).map_err(|e| format!("{url}: {e}"))?;
     session
         .register_module(
             &root_spec,
             Module {
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
+                gen_source,
                 ..Default::default()
             },
         )
         .map_err(|e| e.to_string())?;
     record_peers(session, &root_spec, &manifest);
     // gate 6 — the group loop, no peer gate inline
-    let entries = bundle.entries().to_vec();
     let slot = archives.len();
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
@@ -1072,9 +1124,12 @@ fn mount_url_dep(
                         ));
                     }
                 }
+                let gen_source = riding_gen_source(&entries, &format!("{prefix}/"), &dm)
+                    .map_err(|e| format!("{url}: {e}"))?;
                 Module {
                     body: ModuleBody::Compiled(program),
                     entry: dm.entry.clone(),
+                    gen_source,
                     ..Default::default()
                 }
             }
@@ -1194,9 +1249,11 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
                 session.record_bundle_scope(*scope, spec);
             }
             let root = rut_core::link::rebase(root, &remap);
+            let gen_source = riding_gen_source(entries, "", &manifest)?;
             let module = Module {
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
+                gen_source,
                 ..Default::default()
             };
             (root_spec, module, Some((scopes, groups, remap)), manifest)
@@ -1251,9 +1308,11 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
                             ));
                         }
                     }
+                    let gen_source = riding_gen_source(entries, &format!("{prefix}/"), &dm)?;
                     Module {
                         body: ModuleBody::Compiled(program),
                         entry: dm.entry.clone(),
+                        gen_source,
                         ..Default::default()
                     }
                 }

@@ -267,8 +267,8 @@ pub fn pack_dir_opts_fetched(
         ));
     }
     let root_idx = root_linked.unwrap().0;
-    // the strip arm — after the compile walk, before any encode. Two
-    // laws run here, both against the packer's OWN group-kind decisions
+    // the strip arm — after the compile walk, before any encode. Three
+    // laws run here, all against the packer's OWN group-kind decisions
     // (the `sources` map + `units.linked`, the same classifier the
     // encode loop applies — never a re-derivation):
     //
@@ -276,11 +276,49 @@ pub fn pack_dir_opts_fetched(
     //    binds its compiled deps' surfaces at load, and those names
     //    would be mangled — refuse, never guess (host/decl leaf groups
     //    have no compiled deps and pass trivially);
-    // 2. the mangle itself: one closure-wide string→string map over
+    // 2. the generic-source refusal: a compiled pkg with an OPEN
+    //    generic surface rides its source (the law below), and the
+    //    ridden text would recompile clean-named beside mangled
+    //    binaries — the combination cannot coexist soundly, refuse and
+    //    say so;
+    // 3. the mangle itself: one closure-wide string→string map over
     //    every encoded program, symbolication tables taken into the
     //    sidecar.
     let mut symtab: Option<Vec<u8>> = None;
     if opts.strip {
+        {
+            let root_prog = &units.programs[root_idx];
+            if has_open_generic_surface(root_prog) {
+                return Err(format!(
+                    "--strip refuses a generic-owning closure: the root `{root}` exports \
+                     generics, so its source rides the bundle to serve consumer-spelled \
+                     shapes at load — the ridden text would recompile clean-named beside \
+                     mangled binaries. Pack without `--strip`"
+                ));
+            }
+            for (spec, source) in &sources {
+                if *spec == root || session.resolve(spec).is_err() {
+                    continue;
+                }
+                if !rides_compiled(&session, spec, &units) {
+                    continue;
+                }
+                let &(idx, _) = units.linked.get(spec).unwrap();
+                if has_open_generic_surface(&units.programs[idx]) {
+                    return Err(format!(
+                        "--strip refuses a generic-owning closure: the compiled group \
+                         `{spec}` (from {}) exports generics, so its source rides the \
+                         bundle to serve consumer-spelled shapes at load — the ridden \
+                         text would recompile clean-named beside mangled binaries. Pack \
+                         without `--strip`",
+                        match source {
+                            PkgSource::Dir(d) => d.display().to_string(),
+                            PkgSource::Archive { slot, .. } => archives[*slot].origin.clone(),
+                        }
+                    ));
+                }
+            }
+        }
         for (spec, source) in &sources {
             if *spec == root || session.resolve(spec).is_err() {
                 continue; // the root rides compiled above; unmounted names never ride
@@ -332,6 +370,18 @@ pub fn pack_dir_opts_fetched(
             .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
         entries.push((bundle_key(&format!("{name}.d.rut"))?, text));
     }
+    // the generic-source riding law (v5, additive): a compiled pkg whose
+    // surface exports generics ALSO rides the source that serves
+    // consumer-spelled shapes — the entry lib + `entry.libs` + the
+    // `[peer-deps]` group files, verbatim, beside the binary. The entry
+    // lib's presence is the loader's dispatch marker; non-generic pkgs
+    // stay source-free. (`--strip` refuses the combination above.)
+    if has_open_generic_surface(&units.programs[root_idx]) {
+        ride_generic_source(&manifest, "", &mut entries, &|rel| {
+            std::fs::read(dir.join(rel))
+                .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))
+        })?;
+    }
     // the dep groups, name order: source pkgs → compiled, host/decl
     // pkgs and declared-but-unused pkgs → the declaration file set
     for (spec, source) in &sources {
@@ -351,6 +401,15 @@ pub fn pack_dir_opts_fetched(
                 let rel = rel.strip_prefix("./").unwrap_or(rel);
                 let text = group_file(source, rel, &archives)?;
                 entries.push((bundle_key(&format!("{prefix}{rel}"))?, text));
+            }
+            // the generic-source riding law, group flavor (see the root
+            // arm above): a generic-owning compiled group rides its
+            // source under the group prefix
+            if has_open_generic_surface(&units.programs[idx]) {
+                let source = source.clone();
+                ride_generic_source(&dm, &prefix, &mut entries, &|rel| {
+                    group_file(&source, rel, &archives)
+                })?;
             }
         } else {
             match source {
@@ -428,6 +487,121 @@ fn rides_compiled(
         Ok(ModuleBody::Compiled(_)) => true,
         _ => false,
     }
+}
+
+/// Does a compiled program's surface export an OPEN generic surface —
+/// the generic-source riding trigger: exported generic fns
+/// (`launch_future<T>`), generic type exports (`Vec<T>`), generic
+/// methods on an inherent row (`MutCtx::set<A, R>`), or a
+/// generic-target impl registration (`impl JsonSerialize for Vec<T>`).
+/// The impl arm reads the template law, not fn ids: a generic target's
+/// row carries `#`-placeholder fields (the dispatch matcher's own
+/// convention), so its field closure names one — a concrete-target impl
+/// (`impl Tag for Badge`) never does. A false positive costs a few
+/// inert archive entries; a false negative would refuse a shape the
+/// ridden source could have served.
+fn has_open_generic_surface(prog: &rut_core::binary::Program) -> bool {
+    let s = &prog.surface;
+    if !s.fn_generics.is_empty()
+        || s.type_exports.iter().any(|t| t.is_generic)
+        || s.inherents
+            .iter()
+            .any(|ih| ih.methods.iter().any(|m| !m.generics.is_empty()))
+    {
+        return true;
+    }
+    // the generic-target impl arm: resolve the target row through the
+    // carried blocks and look for a placeholder in its field closure
+    let boot_len = rut_core::types::TypeTable::boot().types.len() as u32;
+    let row_of = |id: rut_core::types::TypeId| -> Option<&rut_core::types::RutType> {
+        let sc = rut_core::id::scope_of(id);
+        let l = rut_core::id::local_of(id);
+        let dense = if sc == rut_core::id::BOOT_SCOPE {
+            l
+        } else {
+            let off = s
+                .scope_blocks
+                .iter()
+                .rev()
+                .find(|&&(b, _)| b == sc)
+                .map(|&(_, off)| off)?;
+            boot_len + off + l
+        };
+        prog.types.types.get(dense as usize)
+    };
+    let placeholder_in = |id: rut_core::types::TypeId| -> bool {
+        let mut stack = vec![id];
+        while let Some(t) = stack.pop() {
+            let Some(row) = row_of(t) else { continue };
+            if is_placeholder(prog.interner.name(row.name)) {
+                return true;
+            }
+            match &row.kind {
+                rut_core::types::TyKind::Array { elem }
+                | rut_core::types::TyKind::Opt { elem }
+                | rut_core::types::TyKind::Weak { elem } => stack.push(*elem),
+                rut_core::types::TyKind::Data { fields } => {
+                    stack.extend(fields.iter().map(|f| f.ty));
+                }
+                _ => {}
+            }
+        }
+        false
+    };
+    s.impls
+        .iter()
+        .any(|im| placeholder_in(im.target))
+}
+
+/// The generic-parameter placeholder spelling (`#<param>` — the `#` is
+/// unspellable in rut source), distinguished from the async lane's
+/// engine-reserved `#frame@`/`#hframe@`/`#ckpt@` rows: a real
+/// placeholder is a bare parameter name, never one of the reserved
+/// prefixes.
+fn is_placeholder(name: &str) -> bool {
+    use rut_core::async_frame::{CKPT_PREFIX, FRAME_PREFIX, HOST_FRAME_PREFIX};
+    name.starts_with('#')
+        && !name.starts_with(FRAME_PREFIX)
+        && !name.starts_with(HOST_FRAME_PREFIX)
+        && !name.starts_with(CKPT_PREFIX)
+}
+
+/// Emit a generic-owning compiled pkg's riding source under `prefix`
+/// (empty for the root, `<pkg>/` for a group): the entry lib, each
+/// `entry.libs` file in manifest order, then each `[peer-deps]`
+/// descriptor's `lib` group file in peer-name order (the manifest's
+/// BTreeMap order — deterministic). Verbatim bytes, one entry per
+/// manifest-named path — the same file set a source group rides, minus
+/// the manifest (this pkg's manifest already rode).
+fn ride_generic_source(
+    manifest: &rut_bundle::Manifest,
+    prefix: &str,
+    entries: &mut Vec<(String, Vec<u8>)>,
+    read: &impl Fn(&str) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
+    let Some(base) = manifest.entry.lib.clone() else {
+        return Ok(()); // nothing rides — no body, nothing to recompile from
+    };
+    let mut push = |rel: &str, entries: &mut Vec<(String, Vec<u8>)>| -> Result<bool, String> {
+        let rel = rel.strip_prefix("./").unwrap_or(rel);
+        let key = bundle_key(&format!("{prefix}{rel}"))?;
+        if entries.iter().any(|(n, _)| *n == key) {
+            return Ok(false); // already riding (an entry.libs overlap) — one entry, one copy
+        }
+        let text = read(rel)?;
+        entries.push((key, text));
+        Ok(true)
+    };
+    push(&base, entries)?;
+    for lib in &manifest.entry.libs {
+        push(lib, entries)?;
+    }
+    for desc in manifest.peer_deps.values() {
+        if let Some(lib) = desc.get("lib") {
+            push(lib, entries)?;
+        }
+    }
+    Ok(())
 }
 
 /// A group's parsed manifest, read from wherever its files live.

@@ -86,6 +86,27 @@ impl Default for ModuleBody {
     }
 }
 
+/// The generic-bearing source a compiled bundle unit rides beside its
+/// binary (generic-source riding): the pkg's own source text (the entry
+/// lib + `entry.libs`, spliced — the exact text a directory mount
+/// compiles) and the `[peer-deps]` group files keyed by peer spec, in
+/// manifest (peer-name) order. A compiled pkg whose surface exports
+/// generics rides this so consumer-spelled shapes stay servable; the
+/// graph lowers it in the CONSUMER's session only when a request misses
+/// the pack-time ledger — nothing persists, `.rutc` caches stay
+/// pack-time. `None` for directory mounts, for non-generic compiled
+/// pkgs, and for legacy bundles that predate the riding.
+#[derive(Clone, Debug)]
+pub struct GenSource {
+    /// the pkg's own source: `entry.lib` + `entry.libs`, '\n'-joined —
+    /// the same splice shape a source mount reads back
+    pub text: String,
+    /// `(peer spec, group file text)` — the `[peer-deps]` `lib` files;
+    /// the recompile splices exactly the rows whose peer is in the
+    /// program's closure (the presence law, peer-name order)
+    pub peers: Vec<(String, String)>,
+}
+
 /// One mounted module: the bare package name it answers to, its entry
 /// files, and its body ([`ModuleBody`]).
 #[derive(Clone, Debug, Default)]
@@ -98,6 +119,9 @@ pub struct Module {
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
     pub body: ModuleBody,
+    /// the generic-bearing source a compiled bundle unit rides beside
+    /// its binary ([`GenSource`]) — the on-demand recompile's input
+    pub gen_source: Option<GenSource>,
 }
 
 /// One recorded `[peer-deps]` declaration: the declaring

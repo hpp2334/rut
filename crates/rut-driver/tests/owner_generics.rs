@@ -307,11 +307,13 @@ fn packaged_generic_owner_serves_consumer_requests() {
     );
 
     let bytes = pack_dir(&app).expect("pack");
-    // the generic lib rode compiled — no source group for it
+    // the generic lib rode compiled — and, the generic-source riding
+    // law, its source rides beside the binary so consumer-spelled
+    // shapes stay servable at load
     let names: Vec<String> =
         rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"pairz/pairz.rutc".to_string()), "{names:?}");
-    assert!(!names.contains(&"pairz/pairz.rut".to_string()), "{names:?}");
+    assert!(names.contains(&"pairz/pairz.rut".to_string()), "{names:?}");
     // and the pack-time closure's instantiation is IN the binary's ledger
     {
         let group = rut_bundle::parse_bundle(&bytes)
