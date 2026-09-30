@@ -1,7 +1,7 @@
 //! 06-github-viewer-cli — the offline session gate (the async brain
 //! over the REDESIGNED rut/http lane).
 //!
-//! ZERO network: the HTTP lane rides `install_std_http_with` (the
+//! ZERO network: the HTTP lane rides `http::pkg_with` (the
 //! fixture lane) keyed on method+URL — the fixture map's keys ARE the
 //! assertions (a wrong URL is a LOUD transport failure, never a
 //! pass-through), and the recorded reply's CHUNK PLAN arrives on the
@@ -130,14 +130,16 @@ fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 
         interrupt_every: 1024,
     };
     let sinks = Sinks::default();
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    rut_std::async_host::install_std_async(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // json's writer rides the strbuild pkg — the `strbuild_host` rows are
-    // in this closure's declared set, so the bodies bind here too
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
-    let fx = rut_std::http::install_std_http_with(&mut hosts, fix);
+    // in this closure's declared set, so the bodies install here too
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
+    let (http_pkg, fx) = rut_std::http::pkg_with(fix);
+    hosts.install_host_pkg(&ctx, http_pkg);
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -186,7 +188,7 @@ fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 
             *exited_sink.borrow_mut() = true;
             Ok(()) // the recording lane: the brain retires, the loop idles
         });
-    hosts.verify_against(&s.expected_host_fns()); // the decl ↔ the bodies
+    hosts.verify_against(&ctx.flatten()); // the decl ↔ the bodies
     let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .unwrap();
     (vm, sinks, fx)
@@ -645,16 +647,18 @@ fn the_one_shot_law_degrades_second_takers() {
         interrupt_every: 1024,
     };
     let sinks = Sinks::default();
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    rut_std::async_host::install_std_async(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // json's writer rides the strbuild pkg — the `strbuild_host` rows are
-    // in this closure's declared set, so the bodies bind here too
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
-    let fx = rut_std::http::install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
+    // in this closure's declared set, so the bodies install here too
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
+    let (http_pkg, fx) = rut_std::http::pkg_with(|_m, _u, _h, _b| {
         Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
     });
+    hosts.install_host_pkg(&ctx, http_pkg);
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -687,7 +691,7 @@ fn the_one_shot_law_degrades_second_takers() {
             *code_sink.borrow_mut() = Some(code);
             Ok(())
         });
-    hosts.verify_against(&s.expected_host_fns());
+    hosts.verify_against(&ctx.flatten());
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
     vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",)).unwrap();
@@ -749,7 +753,7 @@ fn live_smoke_over_the_real_cdn() {
         return;
     }
     // the embedder's own boot, but the observations ride the sinks and
-    // `exit` records: reqwest lane (install_std_http), the real DNS,
+    // `exit` records: reqwest lane (http::pkg()), the real DNS,
     // the real CDN, the wall-clock pump
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
@@ -771,11 +775,12 @@ fn live_smoke_over_the_real_cdn() {
         interrupt_every: 1024,
     };
     let sinks = Sinks::default();
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    rut_std::async_host::install_std_async(&mut hosts);
-    rut_std::http::install_std_http(&mut hosts); // the reqwest lane
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::http::pkg()); // the reqwest lane
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -808,7 +813,7 @@ fn live_smoke_over_the_real_cdn() {
             *code_sink.borrow_mut() = Some(code);
             Ok(())
         });
-    hosts.verify_against(&s.expected_host_fns());
+    hosts.verify_against(&ctx.flatten());
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
     vm.call::<_, ()>("boot", ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),)).unwrap();

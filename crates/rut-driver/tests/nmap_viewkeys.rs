@@ -35,7 +35,7 @@ fn vm_nmapset(src: &str) -> Vm {
     rut_driver::mount_std_core(&mut session);
     rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount pkg");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     session
         .register_module(
             "app",
@@ -56,8 +56,8 @@ fn vm_nmapset(src: &str) -> Vm {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // the mounted .d.rut ↔ the bodies
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten()); // the mounted .d.rut ↔ the bodies
     rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,

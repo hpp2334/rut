@@ -103,7 +103,10 @@ fn run(path: &str, fuel: Option<u64>) {
     }
     let p = std::path::Path::new(path);
     let packed = p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle");
-    let prog = if packed {
+    // the program plus the mount snapshot the host installs against —
+    // the ctx is OWNED (the session may die here; the installs below
+    // answer to the snapshot)
+    let (prog, ctx) = if packed {
         // a module directory (`rut.toml`) or a `.rutbundle` — load the
         // graph, mount std, compile, link
         let (mut session, root) = match rut_driver::load_path_session(p) {
@@ -121,8 +124,9 @@ fn run(path: &str, fuel: Option<u64>) {
             }
             std::process::exit(1);
         }
+        let ctx = session.host_pkg_context();
         match g.program {
-            Some(p) => p,
+            Some(p) => (p, ctx),
             None => {
                 eprintln!("no program emitted");
                 std::process::exit(1);
@@ -171,12 +175,13 @@ fn run(path: &str, fuel: Option<u64>) {
             print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
             std::process::exit(1);
         }
+        let ctx = s.host_pkg_context();
         let Some(binary) = out.binary else {
             eprintln!("no binary emitted");
             std::process::exit(1);
         };
         match rut_core::binary::decode(&binary) {
-            Ok(p) => p,
+            Ok(p) => (p, ctx),
             Err(e) => {
                 eprintln!("decode: {e}");
                 std::process::exit(1);
@@ -193,32 +198,34 @@ fn run(path: &str, fuel: Option<u64>) {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the CLI is a host: it mounts core+calc (mount_std) and binds their
-    // bodies — math always, the logger to stdout when a program uses ink
+    // the CLI is a host: it mounts core+calc (mount_std) and installs
+    // the matching pkgs — the blanket-install lane (the asymmetry makes
+    // it legal): math always, the logger to stdout when a program uses
+    // ink, the rest merging inert unless the program mounts their pkg
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
-    rut_std::logger::install_std_log(&mut hosts, |s| println!("{s}"));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")));
     // the nmap experiment's native key table (the mapset-host plan) — a
     // program only reaches it when it declares `use nmap_host::{...}` or a
     // pkg that does (`nmapset`)
-    rut_std::nmap::install_std_nmap(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     // the crossing-tax benchmark's nops (the crossing-fastpath plan,
     // phase 0) — reached only by a program that declares
     // `use bench_cross::{...}` (the bench row)
-    rut_std::bench_cross::install_std_bench_cross(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
     // the async host set: launch/abort/sleep bodies for the
     // `async_engine` rows — reached only by a program that mounts the
     // async packages (a `use async_host::` pulls the tree pkg)
-    rut_std::async_host::install_std_async(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the string builder's bodies (the host strbuild pkg): reached only
     // by a program that mounts the strbuild pkg (a `use strbuild::` /
     // `use json::` pulls it — json's writer rides the builder)
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     // the std HTTP lane (the rut/http plan): get + the Response
     // readbacks — reached only by a program that mounts the http
     // packages (a `use http::` / `use http_host::` pulls the tree
     // pkgs; reqwest is the CLI's, native-only)
-    rut_std::http::install_std_http(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::http::pkg());
     let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
         Ok(vm) => vm,
         Err(t) => {

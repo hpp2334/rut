@@ -28,7 +28,7 @@ mod threaded;
 mod util;
 
 pub use completer::{Completer, FAILED, PENDING, READY};
-pub use host::{ExpectedHostFns, HostRegistry};
+pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 use host::HostSlot;
 pub use boundary::{CallArg, CallArgs, Ret};
 

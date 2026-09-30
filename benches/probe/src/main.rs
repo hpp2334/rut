@@ -23,7 +23,6 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use rut_core::binary::decode;
-use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostHooks, Limits, Vm};
 
 struct Args {
@@ -126,7 +125,7 @@ fn main() {
     // `nmapset` bench dirs) loads its own `[deps]` graph instead and
     // yields an already-linked program.
     let t0 = Instant::now();
-    let (session, prog) = if path.is_dir() {
+    let (ctx, prog) = if path.is_dir() {
         let (mut session, root) = rut_driver::load_path_session(path)
             .unwrap_or_else(|e| fail(format!("load {}: {e}", path.display())));
         rut_driver::mount_std(&mut session);
@@ -138,7 +137,9 @@ fn main() {
             fail("compile failed");
         }
         let prog = out.program.unwrap_or_else(|| fail("no program emitted"));
-        (session, prog)
+        // the mount snapshot replaces the session — the installs answer
+        // to the ctx, owned
+        (session.host_pkg_context(), prog)
     } else {
         let src = std::fs::read_to_string(path)
             .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", path.display())));
@@ -162,7 +163,7 @@ fn main() {
         }
         let binary = out.binary.unwrap_or_else(|| fail("no binary emitted"));
         let prog = decode(&binary).unwrap_or_else(|e| fail(format!("decode: {e}")));
-        (session, prog)
+        (session.host_pkg_context(), prog)
     };
     let compile_ms = t0.elapsed().as_secs_f64() * 1e3;
 
@@ -185,41 +186,28 @@ fn main() {
 
     for _ in 0..args.iters {
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        install_std_log(&mut hosts, |_msg| {});
-        rut_std::math::install_std_math(&mut hosts);
+        hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+        hosts.install_host_pkg(&ctx, rut_std::math::pkg());
         // the nmap experiment's native key table (the mapset-host plan) —
-        // bound only when the program's dep graph declares `nmap_host::` (the
-        // engine's `calc` is expected of every workload; `nmap_host` is a tree
-        // pkg like any other, and `verify_against` is exact in BOTH
-        // directions — bound-but-undeclared is an embedder bug, RFC 0025)
-        if session
-            .expected_host_fns()
-            .keys()
-            .any(|name| name.starts_with("nmap_host::"))
-        {
-            rut_std::nmap::install_std_nmap(&mut hosts);
+        // installed only when the program's dep graph declares `nmap_host::`
+        // (the engine's `calc` is expected of every workload; `nmap_host`
+        // is a tree pkg like any other). The gate here is purely to
+        // minimize per-iteration work — the asymmetric contract makes a
+        // blanket install legal either way (unmounted scopes merge inert)
+        if ctx.is_mounted("nmap_host") {
+            hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
         }
         // the crossing-tax benchmark's nops (the crossing-fastpath plan,
-        // phase 0) — same exactness law: bound only when the program's
-        // dep graph declares `bench_cross::`
-        if session
-            .expected_host_fns()
-            .keys()
-            .any(|name| name.starts_with("bench_cross::"))
-        {
-            rut_std::bench_cross::install_std_bench_cross(&mut hosts);
+        // phase 0) — same work-avoidance gate
+        if ctx.is_mounted("bench_cross") {
+            hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
         }
         // the string builder's bodies (the host strbuild pkg) — same
-        // exactness law: bound only when the dep graph declares
-        // `strbuild_host::` (a `use strbuild::` / `use json::` pulls it)
-        if session
-            .expected_host_fns()
-            .keys()
-            .any(|name| name.starts_with("strbuild_host::"))
-        {
-            rut_std::strbuild::install_std_strbuild(&mut hosts);
+        // gate (a `use strbuild::` / `use json::` pulls it)
+        if ctx.is_mounted("strbuild_host") {
+            hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
         }
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.verify_against(&ctx.flatten());
         let mut vm = Vm::new(
             Rc::clone(&prog),
             &limits,

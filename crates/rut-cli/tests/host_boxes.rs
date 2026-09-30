@@ -260,9 +260,10 @@ entry fn churn(n: i64) -> nil {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
+    let ctx = s.host_pkg_context();
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
-    rut_std::math::install_std_math(&mut hosts0);
+    hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+    hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
 

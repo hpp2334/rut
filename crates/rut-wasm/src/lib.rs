@@ -106,7 +106,7 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 /// their `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source.
 /// This host's choice, not the engine's: the driver knows none of these
 /// names. (`nmap_host` + `nmapset` are the survey D6 amendment — the
-/// demo's map lane; `install_std_nmap` binds the crossings in `rut_run`.)
+/// demo's map lane; `rut_std::nmap::pkg()` binds the crossings in `rut_run`.)
 fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session); // core + calc
@@ -120,7 +120,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .expect("mount ink_host");
     // the nmap lane (survey D6): the host surface lowers exactly like
     // `ink_host` — its registration scope is the default (the module
-    // spec `nmap_host`), the prefix `install_std_nmap` registers under
+    // spec `nmap_host`), the scope `rut_std::nmap::pkg()` installs under
     let nmap_host = rut_driver::lower_decl_module(
         include_str!("../../../rut/nmap_host/nmap.d.rut"),
         "nmap.d.rut",
@@ -162,7 +162,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .expect("mount nmapset");
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface mounts as a linked source module —
-    // `install_std_async` binds the crossings in `rut_run`
+    // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
     let async_engine = rut_driver::lower_decl_module(
         include_str!("../../../rut/async_engine/engine.d.rut"),
         "engine.d.rut",
@@ -189,7 +189,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // `use http::` block fails to resolve here — loud, never silent.
     // strbuild's rows ride the `strbuild_host` decl surface (the
     // ink/ink_host pattern), lowered here exactly like `ink_host`
-    // above; the bodies bind in `rut_run` (`install_std_strbuild`)
+    // above; the bodies bind in `rut_run` (`rut_std::strbuild::pkg()`)
     let strbuild_host = rut_driver::lower_decl_module(
         include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
         "strbuild_host.d.rut",
@@ -216,6 +216,9 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount json");
+    // the compile lane's mount snapshot: `rut_run`'s installs answer to
+    // it (the session dies here; the ctx is owned)
+    *CTX.lock().unwrap() = Some(session.host_pkg_context());
     rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
 }
 
@@ -253,6 +256,12 @@ pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
 // ---- run ----
 
 static OUTPUT: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
+
+/// The mount snapshot the compile lane built — the installs in
+/// `rut_run` answer to it (the ctx is OWNED: the compile-time session
+/// is long gone by the time the page presses Run).
+static CTX: std::sync::Mutex<Option<rut_vm::interp::HostPkgContext>> =
+    std::sync::Mutex::new(None);
 
 /// The one parked frame (survey D5). `rut_run` parks its `Vm` here when
 /// the guest traps OutOfFuel with a live frame — `rut_resume` adds fuel
@@ -370,27 +379,33 @@ pub extern "C" fn rut_run(
         interrupt_every: 1024,
     };
     // the playground host's bindings, BEFORE the Vm: the
-    // logger routes into the OUTPUT cell; calc's float fns ride rut-std
+    // logger routes into the OUTPUT cell; calc's float fns ride rut-std.
+    // The installs answer to the COMPILE-time mount snapshot (the ctx
+    // is owned; the session died with the compile call) — the
+    // blanket-install lane: this host ships no `http` (reqwest) and no
+    // `bench_cross`, the rest merge inert unless the program mounts
+    // their pkg
+    let ctx = CTX.lock().unwrap().clone().unwrap_or_default();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, |s| {
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| {
         if let Ok(mut g) = OUTPUT.lock() {
             if let Some(v) = g.as_mut() {
                 v.push(s.to_string());
             }
         }
-    });
-    rut_std::math::install_std_math(&mut hosts);
+    }));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     // the nmap experiment's native key table (survey D6) — a program
     // only reaches it when it declares `use nmap_host::{...}` or a pkg
     // that does (`nmapset`); the CLI mounts it the same way
-    rut_std::nmap::install_std_nmap(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     // the async host set: launch/abort/sleep bodies for the
     // `async_engine` rows the playground mounts in `compile_playground`
-    rut_std::async_host::install_std_async(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the string builder's bodies (the host strbuild pkg): a program
     // only reaches them when it declares `use strbuild::` (or `use
     // json::` — json's writer rides the builder)
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     let mut vm = match rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,

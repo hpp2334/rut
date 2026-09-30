@@ -45,11 +45,12 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(heap),
         interrupt_every: 1024,
     };
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     // json's writer rides the strbuild pkg — its `strbuild_host` rows are
-    // in this closure's declared set, so the bodies bind here too
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
+    // in this closure's declared set, so the bodies install here too
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
     {
         let mut vm = rut_vm::interp::Vm::new(

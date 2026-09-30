@@ -219,8 +219,8 @@ pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), Stri
 /// SOURCE crosses the ABI ([`compile_app`] registers and compiles it),
 /// which is the one thing the I/O-free Session cannot fetch.
 ///
-/// Bind `nmap_host`'s bodies with `rut_std::nmap::install_std_nmap`
-/// next to [`crate::hosts::install_web_hosts`].
+/// Install `nmap_host`'s bodies with `rut_std::nmap::pkg()` next to
+/// [`crate::hosts::install_web_hosts`].
 pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String> {
     mount_host_session(session)?;
 

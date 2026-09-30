@@ -1,6 +1,6 @@
 // nmap_host/nmap.d.rut — the native key-table experiment's host surface:
 // `pub host fn` decls only — the bodies live in rut-std's
-// `install_std_nmap`. This file is mirrored BYTE-FOR-BYTE
+// `nmap::pkg()`. This file is mirrored BYTE-FOR-BYTE
 // by the test fixture `crates/rut-cli/tests/data/nmap_host/nmap.d.rut` —
 // update BOTH when the surface changes.
 //

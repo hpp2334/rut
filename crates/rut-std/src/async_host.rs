@@ -10,8 +10,8 @@
 //! pub host fn __sleep_yield(f: opaque, cx: opaque);  // the sleep future's yield
 //! ```
 //!
-//! Declared by `rut/async_engine/engine.d.rut` (host scope
-//! `async_engine`); the `rut/async_host` inline package wraps them in
+//! Declared by `rut/async_engine/engine.d.rut` (scope `async_engine`);
+//! the `rut/async_host` inline package wraps them in
 //! the typed surface (`launch_future`, `LaunchedFutureHandle::abort`,
 //! `sleep`). Each embedder mounts the modules AND installs these bodies
 //! — a session that mounts neither simply has no launcher, and `await`
@@ -23,7 +23,7 @@
 //! `Opaque<T>` host-payload machinery does NOT apply (a rut-side box
 //! answers `downcast<T>`, never a Rust `T`).
 
-use rut_vm::interp::{HostRegistry, Vm};
+use rut_vm::interp::{HostPkg, Vm};
 use rut_vm::{OpaqueRef, Slot, Trap, TrapKind};
 
 use rut_core::async_frame as af;
@@ -70,15 +70,16 @@ fn unsealed(vm: &Vm, b: &OpaqueRef, what: &str) -> Result<Slot, Trap> {
         })
 }
 
-/// Install the async engine's bodies. No sink, no state: everything
+/// Build the async engine's pkg. No sink, no state: everything
 /// routes through the VM's driving API (`launch` / `cancel` /
 /// `arm_timer`) — the engine owns the queues, the host owns only the
 /// crossing.
-pub fn install_std_async(hosts: &mut HostRegistry) {
+pub fn pkg() -> HostPkg {
+    let mut pkg = HostPkg::new("async_engine");
     // launch_future's engine half: unbox the sealed frame (the box the
     // rut launcher minted with `opaque(f)`); the queue takes its own
     // reference
-    rut_vm::register!(hosts, "async_engine::__launch", (OpaqueRef,) -> (),
+    rut_vm::pkg_fn!(pkg, "__launch", (OpaqueRef,) -> (),
         |vm: &mut Vm, f: OpaqueRef| {
             let frame = unsealed(vm, &f, "__launch")?;
             vm.launch(frame);
@@ -87,7 +88,7 @@ pub fn install_std_async(hosts: &mut HostRegistry) {
     // LaunchedFutureHandle::abort's engine half: `false` when the frame
     // already retired, else the flag + re-enqueue (the probe at its
     // checkpoint runs the drop path)
-    rut_vm::register!(hosts, "async_engine::__abort", (OpaqueRef,) -> bool,
+    rut_vm::pkg_fn!(pkg, "__abort", (OpaqueRef,) -> bool,
         |vm: &mut Vm, f: OpaqueRef| {
             let frame = unsealed(vm, &f, "__abort")?;
             Ok(vm.cancel(frame))
@@ -96,7 +97,7 @@ pub fn install_std_async(hosts: &mut HostRegistry) {
     // local field, SEALED under the `Future<nil>` object spelling — the
     // entry owns the mint reference, the owning handle hands the box's
     // own reference to the return path (`seal_opaque`)
-    rut_vm::register!(hosts, "async_engine::__sleep", (u32,) -> OpaqueRef,
+    rut_vm::pkg_fn!(pkg, "__sleep", (u32,) -> OpaqueRef,
         |vm: &mut Vm, ms: u32| {
             let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
             let frame_ty = find_ty(vm, af::SLEEP_FRAME)?;
@@ -123,7 +124,7 @@ pub fn install_std_async(hosts: &mut HostRegistry) {
     // wire is sealed (the compiler's yield wrapper boxes the raw
     // frame/cx pair the shared ABI passes); the cx is the engine-minted
     // record and the body needs none of it.
-    rut_vm::register!(hosts, "async_engine::__sleep_yield", (OpaqueRef, OpaqueRef) -> (),
+    rut_vm::pkg_fn!(pkg, "__sleep_yield", (OpaqueRef, OpaqueRef) -> (),
         |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
             let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
             let frame = unsealed(vm, &f, "__sleep_yield")?;
@@ -155,4 +156,5 @@ pub fn install_std_async(hosts: &mut HostRegistry) {
             }
             Ok(())
         });
+    pkg.build()
 }

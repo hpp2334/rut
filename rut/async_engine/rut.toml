@@ -1,6 +1,6 @@
 # async_engine/ — the async host surface's engine rows: the
 # crossing signature set the standard launcher needs. The embedding Rust
-# binds the bodies (`rut_std::async_host::install_std_async`); the
+# builds the bodies (`rut_std::async_host::pkg()`); the
 # `async_host` package wraps them in the typed surface
 # (`launch_future` / `LaunchedFutureHandle::abort` / `sleep`).
 #

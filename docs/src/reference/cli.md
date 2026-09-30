@@ -44,12 +44,12 @@ Bodies bound by `run`:
 
 | installer | purpose |
 |---|---|
-| `install_std_math` | `calc`'s float fns |
-| `install_std_log` (sink: stdout) | the logger; silent no-op unless the program uses `ink` |
-| `install_std_nmap` | the native key table behind `nmapset` |
-| `install_std_bench_cross` | the crossing-benchmark rows |
-| `install_std_async` | the async launchers |
-| `install_std_http` | the std HTTP lanes |
+| `math::pkg()` | `calc`'s float fns |
+| `logger::pkg` (sink: stdout) | the logger; silent no-op unless the program uses `ink` |
+| `nmap::pkg()` | the native key table behind `nmapset` |
+| `bench_cross::pkg()` | the crossing-benchmark rows |
+| `async_host::pkg()` | the async launchers |
+| `http::pkg()` | the std HTTP lanes |
 
 Execution: `main` is called with no arguments; then the async driving
 loop runs — drain the ready queue, advance the virtual clock to the next

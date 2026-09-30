@@ -52,15 +52,19 @@ thread when the answer is marshaled.
 thread runs to its blocking completion and the result is simply never
 taken.
 
-## Registering — `register_async!`
+## Registering — `pkg_async_fn!`
 
 One closure (plus an optional abort hook) expands into the five rows
-the weave drives:
+the weave drives. On the installer lane the row names are bare and the
+pkg's scope prefixes at the install; the raw `register_async!` twin
+(full `scope::name` strings on the bare registry) is the escape hatch —
+same emitter, same family:
 
 ```rust
-use rut_vm::{ register_async, Completer, Vm };
+use rut_vm::{ HostPkg, Completer, Vm };
 
-register_async!(hosts, "mypkg::fetch", (String,) -> Vec<u8>,
+let mut pkg = HostPkg::new("mypkg");
+rut_vm::pkg_async_fn!(pkg, "fetch", (String,) -> Vec<u8>,
     |url: String| -> Completer<Vec<u8>> {
         let c = Completer::new();
         let w = c.clone();
@@ -72,6 +76,7 @@ register_async!(hosts, "mypkg::fetch", (String,) -> Vec<u8>,
         });
         c                       // returned immediately: the future parks
     });
+hosts.install_host_pkg(&ctx, pkg.build());
 ```
 
 | Emitted row | Signature | Role |

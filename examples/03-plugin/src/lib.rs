@@ -67,9 +67,10 @@ impl Plugin {
         rut_vm::verify::verify(&prog).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
         // bindings BEFORE the Vm: the .d.rut surface and the
         // bound bodies must agree — a mismatch panics HERE, never mid-run
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        install(&mut hosts);
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.install_host_pkg(&ctx, install());
+        hosts.verify_against(&ctx.flatten());
         let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default(), hosts)?;
 
         // the handshake: bus in, state out
@@ -165,13 +166,16 @@ impl Plugin {
     }
 }
 
-/// Bind the `server` bodies. Stateless: both fns unwrap the bus
-/// from their receiver argument — the bus IS the state. Typed per
+/// Build the `server` pkg — the canonical small HostPkg: one builder,
+/// the scope spelled once, rows under bare names (`pkg_fn!` sugar),
+/// the scope prefixes at the install. Stateless: both fns unwrap the
+/// bus from their receiver argument — the bus IS the state. Typed per
 /// server/server.d.rut; `Plugin::load` verifies the contract.
-fn install(hosts: &mut rut_vm::interp::HostRegistry) {
-    rut_vm::register!(
-        hosts,
-        "server::subscribe",
+fn install() -> rut_vm::HostPkg {
+    let mut pkg = rut_vm::HostPkg::new("server");
+    rut_vm::pkg_fn!(
+        pkg,
+        "subscribe",
         (Opaque<EventBus>, &str, &str) -> (),
         |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
             bus.with_mut(vm, |_vm, b| b.subscriptions.insert(topic.to_string(), handler.to_string()))?;
@@ -179,9 +183,9 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
         },
     );
 
-    rut_vm::register!(
-        hosts,
-        "server::emit",
+    rut_vm::pkg_fn!(
+        pkg,
+        "emit",
         (Opaque<EventBus>, &str, &str) -> (),
         |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
             // The bus stays MUTABLY BORROWED across the nested vm.call
@@ -199,4 +203,5 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
             })?
         },
     );
+    pkg.build()
 }

@@ -145,16 +145,39 @@ any fn/class body, statements. Symmetrically, a `.rut` file that spells
 
 ## Signatures are derived, not hand-written
 
-The registered callable's Rust shape **is** the `.d.rut` row:
+The registered callable's Rust shape **is** the `.d.rut` row. The
+**installer lane** is a `HostPkg` builder per pkg — rows under bare
+names, the scope (the pkg's name) spelled once — installed through
+`HostRegistry::install_host_pkg`:
+
+```rust
+// one builder per host pkg; the scope string appears exactly once
+let mut logger = rut_vm::HostPkg::new("server");
+rut_vm::pkg_fn!(logger, "make", (&str,) -> OpaqueRef,
+    |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()));
+rut_vm::pkg_fn!(logger, "emit", (OpaqueRef, &str, &str) -> (),
+    |_vm, _bus, _topic, _payload| Ok(()));
+
+// the session's mount snapshot — built once, owned, shared by every install
+let ctx = session.host_pkg_context();
+let mut hosts = rut_vm::interp::HostRegistry::new();
+hosts.install_host_pkg(&ctx, logger.build());
+```
+
+`pkg_async_fn!` is the async twin: one row spelling emits the five-row
+family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap),
+the same expansion the ctx declares. The raw macros — `register!` /
+`register_async!` on the bare registry (see
+[embedding and native modules](embedding.md)) — remain the escape hatch
+(hand-spelled `<scope>::<name>` strings, the flat table's own
+responsibility); everything above them is the same derived-signature
+machinery:
 
 ```rust
 let mut hosts = rut_vm::interp::HostRegistry::new();
 hosts.register::<_, (&str,), OpaqueRef, _>(
     "server::make", |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()),
 );
-// two-plus params: spell the marker tuple once, the closure stays plain
-rut_vm::register!(hosts, "server::emit", (OpaqueRef, &str, &str) -> (),
-    |_vm, _bus, _topic, _payload| Ok(()));
 ```
 
 - The signature is a fixed array of type ids derived from the closure's
@@ -166,28 +189,39 @@ rut_vm::register!(hosts, "server::emit", (OpaqueRef, &str, &str) -> (),
   ([embedding and native modules](embedding.md)).
 - `&str` / `&[u8]` params are zero-copy borrows scoped to exactly the
   call ([value boundary](value-boundary.md)).
+- One installer per pkg: a duplicate row name inside a builder panics,
+  a second `install_host_pkg` for the same scope panics, and a pkg
+  cannot spell another pkg's rows — the scope comes solely from
+  `HostPkg::new`.
 
-## The load-time contract
+## The load-time contract — asymmetric, by design
 
-Mounting a host pkg **declares**; the embedding Rust **binds**. The two
-sides are checked against each other before any rut code runs:
+Mounting a host pkg **declares**; the embedding Rust **binds**. The
+`install_host_pkg` call checks the two sides against each other, per
+pkg, against the mount snapshot (`session.host_pkg_context()`):
 
-```rust
-hosts.verify_against(&session.expected_host_fns());  // panics on mismatch
-let mut vm = rut_vm::interp::Vm::new(prog, &limits, hooks, hosts)?;  // joins the rest
-```
+- **scope mounted, a declared row never bound** — a panic naming the
+  pkg (the installer left it out), and the `Vm` constructor refuses a
+  boot naming it again when the installer never ran at all;
+- **signature drift** on a declared row — a panic; this is the only
+  drift gate on the boot path;
+- **scope NOT mounted** — the whole pkg merges **inert**: no panic, no
+  gate. Blanket installs are legal (the CLI installs all of them; a
+  program that mounts a subset carries the rest as dead bindings), and
+  rows the decl does not name ride as inert extras.
 
-A mismatch is an embedder wiring bug — a **panic**, never a rut
-diagnostic — on exactly three classes:
+The raw lane's `verify_against(&ctx.flatten())` — or
+`session.expected_host_fns()` — re-checks the whole flat table and
+panics on all three mismatch classes:
 
 1. **declared but unbound** — a rut call would trap mid-run;
 2. **bound but undeclared** — no surface declares what the host installed;
 3. **signature drift** — the decl says `(opaque, str, str) -> nil`, the
    binding took `(opaque, i64, str)`.
 
-The law follows the mount: **mount what you bind**. An embedder that
-mounts `calc` must bind its float fns; an embedder that needs only `core`
-mounts only `core`.
+The law follows the mount: **mount what you bind** — with the asymmetry
+the mount law needs: rut-declares-but-host-never-binds is loud;
+host-binds-but-rut-never-declares rides inert.
 
 ## Slots, not strings
 
@@ -207,11 +241,13 @@ pub host async fn http_send(c: opaque, method: str, url: str,
                             headers: str, body: bytes) -> opaque;
 ```
 
-The embedder binds the family with one registration; the closure spawns
-the work, hands out a completer clone, and returns:
+The embedder binds the family with one spelling; the closure spawns
+the work, hands out a completer clone, and returns. On the installer
+lane the row names are bare and the scope prefixes at the install:
 
 ```rust
-rut_vm::register_async!(hosts, "http_host::http_send",
+let mut http = rut_vm::HostPkg::new("http_host");
+rut_vm::pkg_async_fn!(http, "http_send",
     (OpaqueRef, &str, &str, &str, &[u8]) -> OpaqueRef,
     |c: OpaqueRef, method: &str, url: &str, headers: &str, body: &[u8]|
         -> rut_vm::Completer<OpaqueRef> {
@@ -227,9 +263,15 @@ rut_vm::register_async!(hosts, "http_host::http_send",
     },
     /* optional abort hook: */ move |_c| { /* best-effort cancel */ },
 );
+hosts.install_host_pkg(&ctx, http.build());
+
+// the raw lane (bare registry, full `scope::name` strings) — the
+// escape hatch, same emitter:
+// rut_vm::register_async!(hosts, "http_host::http_send", ...);
 ```
 
-`register_async!(hosts, name, (P…) -> R, start [, abort])` emits the
+`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw
+twin `register_async!(hosts, …)`) emits the
 family the compiler's weave joins:
 
 | emitted row | meaning |

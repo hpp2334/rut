@@ -49,18 +49,18 @@ fn diags_of(app_src: &str) -> Vec<String> {
 }
 
 /// Compile, verify, and build the Vm with the host bindings the graph
-/// declares — `install_std_nmap`, checked against the mounted `rut/nmap`
-/// surface (the contract).
+/// declares — `rut_std::nmap::pkg()`, checked against the mounted
+/// `rut/nmap` surface (the contract).
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let session = session_with(app_src);
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     for f in ["map_new", "map_len",
               "map_hput_i", "map_hfind_i", "map_hremove_i",
               "map_hvput", "map_hvget", "map_hvremove"]
     {
         assert!(
-            expected.contains_key(&format!("nmap_host::{f}")),
-            "the nmap_host surface must cross through the [deps] mount: {expected:?}"
+            ctx.rows_of("nmap_host").is_some_and(|r| r.contains_key(f)),
+            "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
         );
     }
     let out = rut_driver::compile_graph(&session, "app_main");
@@ -77,8 +77,8 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // rut/nmap_host/nmap.d.rut ↔ the bodies
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten()); // rut/nmap_host/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .expect("vm")
 }

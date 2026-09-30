@@ -50,7 +50,7 @@ const SOFTFAIL: &str = include_str!("softfail.rut");
 /// tree, and returns the app container the pump re-passes every turn.
 fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
     let (session, root) = mount::load_project_session().expect("the rut/ project mounts");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     let prog = mount::compile_manifest(&session, &root).expect("the app compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
@@ -60,8 +60,8 @@ fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
 
     let mut hosts = HostRegistry::new();
     hosts::install_web_hosts(&mut hosts, &shared);
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten());
 
     let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
         .expect("the vm boots");
@@ -444,7 +444,7 @@ fn an_event_without_a_door_traps_loud() {
 fn make_fixture() -> WebHost<FakeDom> {
     let mut session = Session::new();
     mount::mount_store_session(&mut session).expect("the fixture session mounts");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     let prog = mount::compile_app(&mut session, SOFTFAIL).expect("the fixture compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
@@ -453,7 +453,7 @@ fn make_fixture() -> WebHost<FakeDom> {
     shared.borrow_mut().dom.seed_page("div", "app");
 
     let mut hosts = HostRegistry::new();
-    hosts.verify_against(&expected);
+    hosts.verify_against(&ctx.flatten());
     let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);

@@ -2,8 +2,8 @@
 // rut/http redesign): THREE async rows (the request lane, the body
 // drain, the stream read) and FIVE sync readbacks, all concrete over
 // the crossing set. The bodies live in rut-std
-// (`rut_std::http::install_std_http_with` — the fixture lane — and
-// `install_std_http`, the reqwest lane); the async rows expand into
+// (`http::pkg_with` — the fixture lane — and
+// `http::pkg()`, the reqwest lane); the async rows expand into
 // their row families (`__start`/`__yield`/`__take`/`__cancel` — the
 // host future lane) and ride `register_async!` at the embedder.
 //

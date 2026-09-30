@@ -16,18 +16,14 @@ fn mount_case_libs(s: &mut rut_driver::Session) {
     rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
 }
 
-type ExpectedHostFns = std::collections::BTreeMap<
-    String,
-    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
->;
-
-/// The expected host-fn table for a case session (core+calc+libs) —
-/// what `Vm::verify_host_fns` checks the installs against.
-fn expected_case_fns() -> ExpectedHostFns {
+/// The mount snapshot for a case session (core+calc+libs) — what the
+/// installs answer to (`install_host_pkg`'s declared-side check) and
+/// what `verify_against` re-checks at boot.
+fn case_ctx() -> rut_vm::interp::HostPkgContext {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
     mount_case_libs(&mut s);
-    s.expected_host_fns()
+    s.host_pkg_context()
 }
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
@@ -63,16 +59,17 @@ fn run_case_keep_vm(
     };
     // the bindings, BEFORE the Vm; the contract check panics
     // before any rut code runs
+    let ctx = case_ctx();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, move |msg| {
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
         if std::env::var_os("RUT_E2E_DEBUG").is_some() {
             let bs: Vec<u32> = msg.bytes().map(|b| b as u32).collect();
             eprintln!("SINK: {bs:?}");
         }
         sink.borrow_mut().push(msg.to_string());
-    });
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&expected_case_fns());
+    }));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten());
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
@@ -829,10 +826,11 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         interrupt_every: 1024,
     };
     // the compiled program carries calc's and ink_host's thunks (mount =
-    // declare) — bind them, sink discarded
+    // declare) — install them, sink discarded
+    let ctx = case_ctx();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, |_msg| {});
-    rut_std::math::install_std_math(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm")
 }
 
@@ -1276,10 +1274,11 @@ pub fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, move |msg| sink.borrow_mut().push(msg.to_string()));
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&s.expected_host_fns()); // the load-time contract
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten()); // the load-time contract
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
@@ -1335,10 +1334,11 @@ pub fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, move |msg| sink.borrow_mut().push(msg.to_string()));
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&s.expected_host_fns()); // the load-time contract
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten()); // the load-time contract
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
@@ -2230,9 +2230,10 @@ entry fn put(c: opaque) -> u32 {
     let binary = out.binary.expect("binary");
     let prog = rut_core::binary::decode(&binary).expect("decode");
     let limits = rut_vm::interp::Limits { fuel: Some(1_000_000), heap_limit_bytes: Some(8*1024*1024), interrupt_every: 1024 };
+    let ctx = case_ctx();
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
-    rut_std::math::install_std_math(&mut hosts0);
+    hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+    hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
     let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
     let c: rut_vm::OpaqueRef = vm.call("make", ()).unwrap();
     for _ in 0..2 {

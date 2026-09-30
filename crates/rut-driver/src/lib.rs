@@ -1584,7 +1584,8 @@ pub fn mount_std(session: &mut Session) {
 /// Mount the standard async set: the engine rows
 /// (`async_engine` — a decl module) and the typed launcher surface
 /// (`async_host` — an inline rut package). Pair with
-/// `rut_std::async_host::install_std_async` before `Vm::new`; a session
+/// `rut_std::async_host::pkg()` installed through
+/// `HostRegistry::install_host_pkg` before `Vm::new`; a session
 /// that mounts neither simply has no launcher, and `await` stays
 /// cold-poll inline.
 pub fn mount_std_async(session: &mut Session) {

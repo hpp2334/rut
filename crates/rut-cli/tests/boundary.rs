@@ -35,10 +35,13 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the bindings, BEFORE the Vm — mount = declare = bind
+    // the bindings, BEFORE the Vm — mount = declare = install
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, |_msg| {});
-    rut_std::math::install_std_math(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,

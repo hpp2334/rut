@@ -60,7 +60,7 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
     rut_driver::mount_std_core(&mut session);
     rut_driver::mount_dir(&mut session, std::path::Path::new(pkg_dir))
         .expect("mount bench_cross");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     session
         .register_module(
             "app",
@@ -81,8 +81,8 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::bench_cross::install_std_bench_cross(&mut hosts);
-    hosts.verify_against(&expected); // the surface ↔ the bodies
+    hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
+    hosts.verify_against(&ctx.flatten()); // the surface ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .unwrap()
 }
@@ -98,11 +98,13 @@ fn both_surfaces_declare_the_same_contract() {
     let mut b = Session::new();
     rut_driver::mount_std_core(&mut b);
     rut_driver::mount_dir(&mut b, std::path::Path::new(COMMITTED_DIR)).unwrap();
-    assert_eq!(a.expected_host_fns(), b.expected_host_fns());
+    let ctx_a = a.host_pkg_context();
+    let ctx_b = b.host_pkg_context();
+    assert_eq!(ctx_a.flatten(), ctx_b.flatten());
     // and the binding set satisfies the contract exactly
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::bench_cross::install_std_bench_cross(&mut hosts);
-    hosts.verify_against(&b.expected_host_fns());
+    hosts.install_host_pkg(&ctx_b, rut_std::bench_cross::pkg());
+    hosts.verify_against(&ctx_b.flatten());
 }
 
 #[test]

@@ -29,17 +29,24 @@ if !out.diags.is_empty() { /* render and exit */ }
 let prog = rut_core::binary::decode(&out.binary.unwrap())?;
 rut_vm::verify::verify(&prog)?;
 
-// 3. Bind bodies BEFORE the Vm exists — the registry is a pre-VM table.
+// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —
+//    the registry is a pre-VM table and the ctx is the declared side.
+let ctx = session.host_pkg_context();
 let mut hosts = rut_vm::interp::HostRegistry::new();
-rut_std::math::install_std_math(&mut hosts);
-rut_vm::register!(hosts, "server::emit", (OpaqueRef, &str, &str) -> (),
+hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")));
+// a hand-rolled pkg for your own host rows (or the raw `register!`
+// escape hatch on the bare registry — same machinery, flat names)
+let mut server = rut_vm::HostPkg::new("server");
+rut_vm::pkg_fn!(server, "emit", (OpaqueRef, &str, &str) -> (),
     |vm: &mut rut_vm::interp::Vm, bus, topic, payload| -> Result<(), rut_vm::Trap> {
         // re-entrant rut calls are legal here (see "Native fn rules")
         Ok(())
     });
+hosts.install_host_pkg(&ctx, server.build());
 // The decl ↔ impl contract check. Panics, loudly, on any mismatch —
 // an embedder wiring bug is never a rut diagnostic.
-hosts.verify_against(&session.expected_host_fns());
+hosts.verify_against(&ctx.flatten());
 
 // 4. Boot and drive.
 let limits = rut_vm::interp::Limits {
@@ -69,7 +76,8 @@ is resolved against it once, at boot. A declared-but-unbound fn is a
 | `compile_module(src, mode, name)` | full pipeline over one module against a fresh core+calc session |
 | `compile_module_in(&mut s, src, mode, name)` | the same against a caller-built session; returns diags, AST/IR dumps, and the binary |
 | `compile_graph(&s, root)` | compile a whole module directory graph |
-| `s.expected_host_fns()` | the mounted surfaces' declared host rows — the check table for `verify_against` |
+| `s.host_pkg_context()` | the mounted surfaces' declared rows, partitioned per pkg — the declared side `install_host_pkg` checks against (build once per boot lane; owned) |
+| `s.expected_host_fns()` | the same rows flattened to one table — the raw lane's `verify_against` input |
 | `load_path_session(path)` | load a module **directory** or `.rutbundle`; returns `(session, root)` |
 | `pack_dir(dir)` | pack a module directory into a deterministic v5 **compiled** `.rutbundle` — root + linkable deps as `.rutc` binaries, splice-needed deps as source groups; returns the bytes ([module bundles](bundles.md)) |
 
@@ -84,9 +92,12 @@ crate — std-only, filesystem-free over a one-method `Source` trait.
 | API | Meaning |
 |---|---|
 | `HostRegistry::new()` | an empty binding table |
-| `hosts.register::<_, (P…), R, _>(name, f)` | bind one body; the closure's Rust shape **is** the declared row |
-| `hosts.verify_against(&expected)` | panic on declared-unbound / bound-undeclared / signature drift |
-| `Vm::new(prog, &limits, hooks, hosts)` | boot; joins every declared host thunk to its binding |
+| `HostPkg::new(scope)` | a pkg builder; rows register under bare names, the scope prefixes at the install |
+| `pkg_fn!` / `pkg_async_fn!` | the builder's sugar: one spelling → one row / the five-row async family |
+| `hosts.install_host_pkg(&ctx, pkg)` | install one built pkg: bind every row its mounted scope declares (drift/unbound ⇒ panic); an unmounted scope merges inert |
+| `hosts.register::<_, (P…), R, _>(name, f)` | the raw lane: bind one body under a full `scope::name` string |
+| `hosts.verify_against(&expected)` | the raw lane's net: panic on declared-unbound / bound-undeclared / signature drift |
+| `Vm::new(prog, &limits, hooks, hosts)` | boot; joins every declared host thunk to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call::<A, R>(export, args)` | call an export with Rust values, get a Rust value back ([value boundary](value-boundary.md)) |
 | `vm.resume::<R>()` | resume a budget-parked call after refueling |
 | `vm.run_ready()` | drain the async ready queue once; returns tasks run |
@@ -163,15 +174,20 @@ their own registered modules.
 
 ## Host-side helpers (`rut-std`)
 
-| installer | binds |
+One `pkg()` builder per module; each installs through
+`HostRegistry::install_host_pkg` against the session's mount snapshot
+(see [host fns](host-fns.md) for the asymmetric contract — an unmounted
+scope merges inert, so hosts blanket-install their subset):
+
+| builder | binds |
 |---|---|
-| `math::install_std_math` | `calc`'s float functions, both widths |
-| `logger::install_std_log(&mut hosts, sink)` | `ink_host`'s two rows, routed to a `FnMut(&str)` sink |
-| `nmap::install_std_nmap` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
-| `strbuild::install_std_strbuild` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
-| `async_host::install_std_async` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |
-| `http::install_std_http` | the std HTTP lanes (reqwest; native builds only) |
-| `bench_cross::install_std_bench_cross` | the crossing-tax benchmark rows |
+| `math::pkg()` | `calc`'s float functions, both widths |
+| `logger::pkg(sink)` | `ink_host`'s two rows, routed to a `FnMut(&str)` sink |
+| `nmap::pkg()` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
+| `strbuild::pkg()` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
+| `async_host::pkg()` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |
+| `http::pkg()` | the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)` |
+| `bench_cross::pkg()` | the crossing-tax benchmark rows |
 
 ## In-tree examples
 

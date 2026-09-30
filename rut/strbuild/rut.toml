@@ -6,9 +6,9 @@
 #
 # `[deps] strbuild_host` below is the edge: a strbuild mount pulls the
 # decl pkg, whose rows register under the pkg-name scope —
-# mounting strbuild adds those `expected_host_fns` entries, so an
-# embedder pairs the mount with `install_std_strbuild` (exactly ink +
-# `install_std_log`).
+# mounting strbuild adds those declared rows, so an
+# embedder pairs the mount with `strbuild::pkg()` (exactly ink +
+# `logger::pkg`).
 #
 # Publishes COMPILED (the linkable-classes phase): StringBuilder's
 # methods cross on the surface's inherent rows, so `b.append(...)`

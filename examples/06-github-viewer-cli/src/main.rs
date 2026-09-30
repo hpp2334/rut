@@ -4,7 +4,8 @@
 //!
 //! - argv crosses in as ONE `\n`-joined `str` (the crossing
 //!   set admits prims/str/bytes/opaque only — no arg lists);
-//! - the std HTTP lane is bound reqwest-side (`install_std_http` — the
+//! - the std HTTP lane is bound reqwest-side (`rut_std::http::pkg()`
+//!   installed — the
 //!   feature is native-only by law; rgh never builds for wasm32);
 //! - the example-local `rgh_host` rows carry the CLI I/O: two line
 //!   writers, the file pair (`write_file` truncates, `append_file`
@@ -18,7 +19,7 @@
 //!   exit 1 with the trap name.
 //!
 //! The offline suite (tests/session.rs) builds its own VM over the
-//! fixture lane (`install_std_http_with`) and a recording `exit` body —
+//! fixture lane (`http::pkg_with`) and a recording `exit` body —
 //! this file never branches on test env, and nothing here touches the
 //! network at test time.
 
@@ -94,17 +95,20 @@ fn main() {
         interrupt_every: 1024,
     };
 
+    // the mount snapshot the installs answer to (owned; the session
+    // dies when main's boot half ends)
+    let ctx = session.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
     // calc's rows (mount_std mounts the Math surface) and the nmap
     // table's rows (nmapset rides the plan's mount list — a mounted
     // decl pkg's rows demand bodies)
-    rut_std::math::install_std_math(&mut hosts);
-    rut_std::nmap::install_std_nmap(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     // the async engine's rows (the launcher set boot drives)
-    rut_std::async_host::install_std_async(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the std HTTP lane — the reqwest side (UA + redirects live in
     // rut-std); the fixture lane is the tests', never this file's
-    rut_std::http::install_std_http(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::http::pkg());
     // the example's own CLI-I/O rows
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
@@ -149,7 +153,7 @@ fn main() {
         });
     // the decl ↔ the bodies, loudly: every mounted pkg's
     // host rows must have a binding with the declared signature
-    hosts.verify_against(&session.expected_host_fns());
+    hosts.verify_against(&ctx.flatten());
 
     let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts) {
         Ok(vm) => vm,

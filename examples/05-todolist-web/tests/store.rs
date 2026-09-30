@@ -60,7 +60,7 @@ const STORE_PROBE: &str = include_str!("store_probe.rut");
 /// — bodies bound below, never fired.
 fn vm() -> (Vm, OpaqueRef) {
     let (mut session, _root) = mount::load_project_session().expect("the project mounts");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     let prog = mount::compile_root(&mut session, STORE_PROBE, "store_probe")
         .expect("the store-probe spec compiles");
 
@@ -71,8 +71,8 @@ fn vm() -> (Vm, OpaqueRef) {
 
     let mut hosts = HostRegistry::new();
     hosts::install_web_hosts(&mut hosts, &shared);
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten());
 
     let mut v = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
         .expect("the vm boots");

@@ -164,7 +164,7 @@ started
 | `warn(msg)` | 2 |
 | `error(msg)` | 3 |
 
-Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| println!("{s}"))`.
+Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")))` (the ctx is `session.host_pkg_context()` — [embedding](embedding.md)).
 Mounting `ink` pulls `ink_host` along (`[deps]`).
 
 ### `pouch` — `Vec<T>`
@@ -321,7 +321,7 @@ next-capacity is charged), so the wasm 4 MiB cap governs builder growth
 exactly as it governs engine allocations.
 
 Embedder side:
-`rut_std::strbuild::install_std_strbuild(&mut hosts)`. Mounting
+`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting
 `strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json`
 pulls both (its writer rides the builder).
 
@@ -336,7 +336,7 @@ For the common accumulator shape no builder is needed at all:
   `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`,
   `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
   Each embedder mounts the pair **and** installs
-  `rut_std::async_host::install_std_async`; a session that mounts neither
+  `rut_std::async_host::pkg()`; a session that mounts neither
   has no launcher ([tasks](tasks.md), [host futures](host-futures.md)).
 - `http_host` declares the transport rows (three async, five sync
   readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` /

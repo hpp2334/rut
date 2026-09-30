@@ -193,7 +193,7 @@ const MOUNT_DIRS: &[&str] = &[
 ];
 ```
 
-The HTTP bodies bind through `install_std_http` (the reqwest lane);
+The HTTP bodies install through `http::pkg()` (the reqwest lane);
 the example's own rows are CLI I/O only — `out` (stdout; `print` is a
 removed core name), `eprint`, the file pair, and `exit` — declared in
 the example-local `rgh_host` decl package and verified against the

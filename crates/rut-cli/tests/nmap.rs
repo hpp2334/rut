@@ -309,7 +309,7 @@ fn vm_with_nmap() -> Vm {
     rut_driver::mount_std_core(&mut session);
     // `nmap_host` — this test's host pkg, declared in tests/data/nmap_host
     rut_driver::mount_dir(&mut session, std::path::Path::new(PKG_DIR)).expect("mount nmap_host");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     session
         .register_module(
             "app",
@@ -331,8 +331,8 @@ fn vm_with_nmap() -> Vm {
     };
     // bindings BEFORE the Vm: install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // tests/data/nmap_host/nmap.d.rut ↔ the bodies
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten()); // tests/data/nmap_host/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .unwrap()
 }

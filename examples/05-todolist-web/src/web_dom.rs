@@ -225,16 +225,16 @@ fn boot_page(src: &str) -> Result<(), String> {
     // module's spliced source (base + entry.libs)
     crate::mount::mount_app_session(&mut session)?;
     let prog = crate::mount::compile_app(&mut session, src)?;
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
 
     let state = page_state()?;
     let mut hosts = HostRegistry::new();
     crate::hosts::install_web_hosts(&mut hosts, &state);
     // the app session mounts `nmap_host` (the listener table rides
-    // the val-column row `HashMap<str, i64>`) — its bodies bind here,
-    // same join, before verify
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected);
+    // the val-column row `HashMap<str, i64>`) — its bodies install
+    // here, same join, before verify
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten());
 
     let mut vm = Vm::new(
         Rc::new(prog),

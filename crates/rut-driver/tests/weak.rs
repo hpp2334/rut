@@ -123,12 +123,13 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, move |msg| {
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
         sink.borrow_mut().push(msg.to_string());
-    });
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&s.expected_host_fns());
+    }));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten());
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -376,7 +377,7 @@ pub fn main() -> i32 {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
-    let expected = s.expected_host_fns();
+    let ctx = s.host_pkg_context();
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -388,7 +389,7 @@ pub fn main() -> i32 {
         let b = rut_vm::Opaque::alloc(vm, Stamp(n))?;
         Ok(b.handle().clone())
     });
-    hosts.verify_against(&expected);
+    hosts.verify_against(&ctx.flatten());
     let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, HostHooks::default(), hosts).expect("vm");
     let r = vm.call::<_, i32>("main", ()).expect("run");
     assert_eq!(r, 42);

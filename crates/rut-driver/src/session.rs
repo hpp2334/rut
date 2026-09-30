@@ -276,15 +276,28 @@ impl Session {
     pub fn expected_host_fns(
         &self,
     ) -> std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
+        self.host_pkg_context().flatten()
+    }
+
+    /// The mounted host pkgs' declared rows, partitioned by
+    /// registration scope — the driver's distillation of its mount
+    /// knowledge into the vm-side value `HostRegistry::install_host_pkg`
+    /// checks against. One walk replaces the whole helper family:
+    /// scope = spec (the registration naming has no override), each row
+    /// carries its `(params, ret)`, and async rows expand into their
+    /// family (`__start` params→opaque, `__yield` opaque,opaque→i32,
+    /// `__take` opaque→ret, `__cancel` opaque→nil) exactly as
+    /// `register_async!`'s emitter spells them. Snapshot semantics:
+    /// build once per boot lane; rebuild if mounts change after.
+    pub fn host_pkg_context(&self) -> rut_vm::interp::HostPkgContext {
         use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE};
-        let mut out = std::collections::BTreeMap::new();
+        let mut ctx = rut_vm::interp::HostPkgContext::default();
         for (spec, m) in &self.modules {
             let ModuleBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
-            let scope = spec.as_str();
             for (name, params, ret, is_async) in host_funcs {
-                out.insert(format!("{scope}::{name}"), (params.clone(), *ret));
+                ctx.declare(spec, name, params.clone(), *ret);
                 if !*is_async {
                     continue;
                 }
@@ -293,17 +306,13 @@ impl Session {
                 // yield is the resumption probe, take marshals the
                 // answer through the decl's own return type, cancel is
                 // the best-effort abort arm
-                let base = format!("{scope}::{name}");
-                out.insert(format!("{base}__start"), (params.clone(), TY_OPAQUE));
-                out.insert(
-                    format!("{base}__yield"),
-                    (vec![TY_OPAQUE, TY_OPAQUE], TY_I32),
-                );
-                out.insert(format!("{base}__take"), (vec![TY_OPAQUE], *ret));
-                out.insert(format!("{base}__cancel"), (vec![TY_OPAQUE], TY_NIL));
+                ctx.declare(spec, &format!("{name}__start"), params.clone(), TY_OPAQUE);
+                ctx.declare(spec, &format!("{name}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+                ctx.declare(spec, &format!("{name}__take"), vec![TY_OPAQUE], *ret);
+                ctx.declare(spec, &format!("{name}__cancel"), vec![TY_OPAQUE], TY_NIL);
             }
         }
-        out
+        ctx
     }
 
     /// Record a `[peer-deps]` declaration for `pkg`. The

@@ -11,8 +11,6 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use rut_driver::{Module, ModuleBody, Session, compile_graph, lower_decl_module, mount_std_async, mount_std_core};
-use rut_std::async_host::install_std_async;
-use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 use rut_vm::Completer;
 
@@ -136,10 +134,11 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
-    let mut hosts = HostRegistry::new();
     let sink2 = sink.clone();
-    install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-    install_std_async(&mut hosts);
+    let ctx = s.host_pkg_context();
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::probe", (String,) -> String,
@@ -154,7 +153,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
         move |_c: Completer<String>| { fx5.bump_cancel() });
     // the boot join over the EXPANDED expectations — the decl
     // grammar spells one row, the embedder binds five bodies
-    hosts.verify_against(&s.expected_host_fns());
+    hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -578,10 +577,11 @@ pub fn main() -> nil {
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
-    let mut hosts = HostRegistry::new();
     let sink2 = sink.clone();
-    install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-    install_std_async(&mut hosts);
+    let ctx = s.host_pkg_context();
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::probe", (String,) -> String,
@@ -602,7 +602,7 @@ pub fn main() -> nil {
             });
             c
         });
-    hosts.verify_against(&s.expected_host_fns());
+    hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),

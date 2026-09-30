@@ -28,12 +28,13 @@ fn run(src: &str) -> Result<Vec<String>, String> {
     let prog = rut_core::binary::decode(&binary).map_err(|e| format!("decode: {e}"))?;
     rut_vm::verify::verify(&prog).map_err(|e| format!("verify: {e}"))?;
 
+    let ctx = session.host_pkg_context();
     let mut hosts = HostRegistry::new();
-    rut_std::logger::install_std_log(&mut hosts, move |msg: &str| {
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg: &str| {
         sink_lines.borrow_mut().push(msg.to_string());
-    });
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&session.expected_host_fns());
+    }));
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(10_000_000),
         heap_limit_bytes: Some(8 << 20),

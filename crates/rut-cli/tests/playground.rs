@@ -70,14 +70,16 @@ fn classics_run_clean() {
             interrupt_every: 1024,
         };
         // the bindings BEFORE the Vm: the compiled program
-        // carries calc's and ink_host's thunks (mount = declare = bind);
-        // `install_std_nmap` rides like the CLI's — reached only by a
-        // program that declares the nmap lane. The log sink discards:
-        // the run's truth here is the trap channel, not the bytes.
+        // carries calc's and ink_host's thunks (mount = declare =
+        // install); the nmap pkg rides like the CLI's — reached only
+        // by a program that declares the nmap lane. The log sink
+        // discards: the run's truth here is the trap channel, not the
+        // bytes.
+        let ctx = s.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        rut_std::logger::install_std_log(&mut hosts, |_| {});
-        rut_std::math::install_std_math(&mut hosts);
-        rut_std::nmap::install_std_nmap(&mut hosts);
+        hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
+        hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+        hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
         let mut vm = match rut_vm::interp::Vm::new(
             Rc::new(prog),
             &limits,

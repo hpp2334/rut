@@ -36,14 +36,15 @@ fn vm_at(dir: &str) -> Vm {
         heap_limit_bytes: Some(256 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the nmapset group drags nmap_host's declared surface — bind the
+    // the nmapset group drags nmap_host's declared surface — install the
     // bodies (declared host fns run only through the registry)
     // json's writer rides the strbuild pkg — its `strbuild_host` rows are
-    // in this closure's declared set, so the bodies bind through the
+    // in this closure's declared set, so the bodies install through the
     // same registry
+    let ctx = session.host_pkg_context();
     let mut hosts = HostRegistry::new();
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     rut_vm::interp::Vm::new(Rc::new(flat), &limits, HostHooks::default(), hosts).expect("vm")
 }
 

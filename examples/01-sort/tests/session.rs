@@ -28,9 +28,10 @@ assert!(
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
+    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::math::install_std_math(&mut hosts);
-    hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
+    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    hosts.verify_against(&ctx.flatten()); // calc: .d.rut ↔ bodies
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
 
     let c: OpaqueRef = vm.call("create", ()).unwrap();

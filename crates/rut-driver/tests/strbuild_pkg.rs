@@ -52,8 +52,9 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     };
     // the builder's bodies (the host strbuild pkg): the fixture's
     // closure declares the `strbuild_host` rows through the pkg's own dep
+    let ctx = session.host_pkg_context();
     let mut hosts = HostRegistry::new();
-    rut_std::strbuild::install_std_strbuild(&mut hosts);
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     let mut vm = Vm::new(
         Rc::new(flat),
         &limits,

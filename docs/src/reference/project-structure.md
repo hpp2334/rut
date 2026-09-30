@@ -118,7 +118,9 @@ rut/
 ```
 
 Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver →
-rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it), hosts
+rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the
+driver sits on the vm's `HostPkgContext`/`HostRegistry` for the
+installer lane), hosts
 (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those.
 `rut-lsp` sits on the frontend crates only — tokens, diagnostics, and
 symbols need no VM.

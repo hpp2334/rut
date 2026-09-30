@@ -192,7 +192,7 @@ The run recipe:
 the HOST builder (the `ink`/`Logger` pattern): the `strbuild_host`
 decl pkg declares the five rows (`sb_new`/`sb_push`/`sb_push_code`/
 `sb_len`/`sb_finish`, registered under the pkg-name scope), the
-bodies live in `rut-std` (`install_std_strbuild`), and core ships zero
+bodies live in `rut-std` (`strbuild::pkg()`), and core ships zero
 string-building machinery. The whole rut contract is one class:
 
 ```rut
@@ -438,7 +438,7 @@ result is simply never taken. The async rows register through
 whole side is one closure answering a `Completer` per row family —
 the sync readbacks stay plain `register!`. An embedder that wants
 its own transport — tests above all — calls
-`install_std_http_with(hosts, f)` where `f: Fn(&str, &str, &str,
+`http::pkg_with(f)` where `f: Fn(&str, &str, &str,
 &[u8]) -> Result<FixtureReply, String>` maps (method, url, headers,
 body) to a recorded reply — status + the CHUNK PLAN (deterministic
 small chunks) — or `Err(message)` (the status-0 lane): the fixture
@@ -457,10 +457,10 @@ The run recipes:
 - **A loose file**: `rut run file.rut` with `use http::` in the
   source — the CLI mounts both pkgs by presence, same as json.
 - **The worked example**: [`06-github-viewer-cli/`](06-github-viewer-cli/)
-  — `rgh` consumes the pair from an embedder (`install_std_http`, the
+  — `rgh` consumes the pair from an embedder (`http::pkg()`, the
   reqwest lane) plus example-local CLI-I/O rows, its brain an async
   free fn launched through `boot` + `launch_future`, with the fixture
-  lane (`install_std_http_with`, keyed on method+URL) as its offline
+  lane (`http::pkg_with`, keyed on method+URL) as its offline
   test gate. See that example's README for the division of labor and
   the laws.
 

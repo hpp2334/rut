@@ -430,11 +430,11 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     // nmapset pulls the `nmap_host` host pkg through its own [deps]
     rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount nmapset");
-    let expected = session.expected_host_fns();
+    let ctx = session.host_pkg_context();
     for f in ["map_new", "map_len", "map_hput_i", "map_hfind_i", "map_hremove_i"] {
         assert!(
-            expected.contains_key(&format!("nmap_host::{f}")),
-            "the nmap_host surface must cross through the [deps] mount: {expected:?}"
+            ctx.rows_of("nmap_host").is_some_and(|r| r.contains_key(f)),
+            "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
         );
     }
     let out = rut_driver::compile_graph(&session, "app_main");
@@ -451,8 +451,8 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected);
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.verify_against(&ctx.flatten());
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .expect("vm");
     let v: i64 = vm.call("main", ()).expect("run");

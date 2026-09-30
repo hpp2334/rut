@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:145
+#: src/reference/project-structure.md:147
 msgid "The playground"
 msgstr ""
 
@@ -3393,8 +3393,8 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:104
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:147 src/reference/host-futures.md:34
-#: src/reference/embedding.md:62 src/reference/embedding.md:84
-#: src/reference/value-boundary.md:96 src/reference/host-fns.md:243
+#: src/reference/embedding.md:69 src/reference/embedding.md:92
+#: src/reference/value-boundary.md:96 src/reference/host-fns.md:285
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
 msgstr ""
@@ -5724,7 +5724,7 @@ msgstr ""
 
 #: src/core-concepts/async-model.md:107 src/core-concepts/host-boundary.md:30
 #: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
-#: src/reference/host-futures.md:111
+#: src/reference/host-futures.md:116
 msgid "\"main\""
 msgstr ""
 
@@ -7087,7 +7087,7 @@ msgid ""
 msgstr ""
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
-#: src/examples/02-digest.md:199 src/examples/03-plugin.md:210
+#: src/examples/02-digest.md:199 src/examples/03-plugin.md:209
 #: src/examples/04-custom-async.md:203 src/examples/05-todolist-web.md:223
 #: src/examples/06-github-viewer-cli.md:206
 #: src/examples/playground-corpus.md:187
@@ -7839,16 +7839,21 @@ msgid ""
 "makes a **nested** `vm.call(\"render_line\")` to format the wire line:"
 msgstr ""
 
-#: src/examples/03-plugin.md:124 src/reference/embedding.md:35
-#: src/reference/host-fns.md:156
-msgid "\"server::emit\""
+#: src/examples/03-plugin.md:122 src/reference/embedding.md:40
+#: src/reference/host-fns.md:155
+msgid "\"server\""
 msgstr ""
 
-#: src/examples/03-plugin.md:129
+#: src/examples/03-plugin.md:123 src/reference/embedding.md:41
+#: src/reference/host-fns.md:158
+msgid "\"emit\""
+msgstr ""
+
+#: src/examples/03-plugin.md:127
 msgid "\"render_line\""
 msgstr ""
 
-#: src/examples/03-plugin.md:139
+#: src/examples/03-plugin.md:138
 msgid ""
 "(The comment above this code in the source is worth reading too.) The bus "
 "stays mutably borrowed _across_ the nested call — the value boundary's "
@@ -7859,7 +7864,7 @@ msgid ""
 "broadcast row):"
 msgstr ""
 
-#: src/examples/03-plugin.md:147
+#: src/examples/03-plugin.md:146
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -7875,18 +7880,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/03-plugin.md:164
+#: src/examples/03-plugin.md:163
 msgid "The packaging: one directory, two load forms"
 msgstr ""
 
-#: src/examples/03-plugin.md:166
+#: src/examples/03-plugin.md:165
 msgid ""
 "The plugin is a **module directory** — a manifest naming the entry plus its "
 "deps, loadable as-is and packable unchanged ([Project structure and "
 "rut.toml](../reference/project-structure.md)):"
 msgstr ""
 
-#: src/examples/03-plugin.md:170
+#: src/examples/03-plugin.md:169
 msgid ""
 "```toml\n"
 "# plugin/rut.toml\n"
@@ -7900,7 +7905,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/03-plugin.md:181
+#: src/examples/03-plugin.md:180
 msgid ""
 "`server/` is the interesting dependency: a **pure declaration surface** — a "
 "host package whose manifest points at a `.d.rut` decl file, with the Rust "
@@ -7908,7 +7913,7 @@ msgid ""
 "files](../reference/host-fns.md)):"
 msgstr ""
 
-#: src/examples/03-plugin.md:192
+#: src/examples/03-plugin.md:191
 msgid ""
 "`main.rs` packs the same directory with `rut_driver::pack_dir` — a v5 "
 "**compiled** bundle: the plugin rides as a `.rutc` binary, its host pkg "
@@ -7917,19 +7922,19 @@ msgid ""
 "the proof. The CLI drives the same loader for any self-contained module:"
 msgstr ""
 
-#: src/examples/03-plugin.md:199
+#: src/examples/03-plugin.md:198
 msgid "# a module directory (rut.toml)\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:200
+#: src/examples/03-plugin.md:199
 msgid "# -> mod.rutbundle\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:201
+#: src/examples/03-plugin.md:200
 msgid "# the packed form\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:204
+#: src/examples/03-plugin.md:203
 msgid ""
 "The Rust side mirrors the rut layering: business code calls typed methods "
 "(`p.join(\"ada\")`, `p.msg(...)`), and `vm.call` happens in exactly one "
@@ -7938,37 +7943,37 @@ msgid ""
 "didn't subscribe."
 msgstr ""
 
-#: src/examples/03-plugin.md:212
+#: src/examples/03-plugin.md:211
 msgid ""
 "**One directory is one module**; the manifest names the entry and the deps, "
 "and the same directory packs to a `.rutbundle` unchanged."
 msgstr ""
 
-#: src/examples/03-plugin.md:214
+#: src/examples/03-plugin.md:213
 msgid ""
 "**Registration by name, not by closure** — callbacks never cross the "
 "boundary as values, in either direction."
 msgstr ""
 
-#: src/examples/03-plugin.md:216
+#: src/examples/03-plugin.md:215
 msgid ""
 "**Re-entrancy is sound by construction**: a host fn can call back into rut "
 "mid-op, and the borrow guard turns a would-be data race into a loud trap."
 msgstr ""
 
-#: src/examples/03-plugin.md:219
+#: src/examples/03-plugin.md:218
 msgid ""
 "**Both `opaque` directions** compose: rut-state-out, host-state-in, and "
 "neither side can inspect what the other erased."
 msgstr ""
 
-#: src/examples/03-plugin.md:221
+#: src/examples/03-plugin.md:220
 msgid ""
 "The layering discipline — adapters own the crossing protocol, business logic "
 "stays pure — is what keeps a plugin auditable."
 msgstr ""
 
-#: src/examples/03-plugin.md:224
+#: src/examples/03-plugin.md:223
 msgid ""
 "The crossing rules this example lives on are in [the host "
 "boundary](../core-concepts/host-boundary.md); the load forms are specified "
@@ -8774,7 +8779,7 @@ msgstr ""
 
 #: src/examples/06-github-viewer-cli.md:196
 msgid ""
-"The HTTP bodies bind through `install_std_http` (the reqwest lane); the "
+"The HTTP bodies install through `http::pkg()` (the reqwest lane); the "
 "example's own rows are CLI I/O only — `out` (stdout; `print` is a removed "
 "core name), `eprint`, the file pair, and `exit` — declared in the "
 "example-local `rgh_host` decl package and verified against the bindings at "
@@ -14758,7 +14763,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:51 src/reference/embedding.md:147
+#: src/reference/resource-limits.md:51 src/reference/embedding.md:158
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -14774,7 +14779,7 @@ msgstr ""
 msgid "raise limit / free refs → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:146
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:157
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -15234,7 +15239,7 @@ msgstr ""
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:154 src/reference/embedding.md:93
+#: src/reference/async.md:154 src/reference/embedding.md:104
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
@@ -15254,7 +15259,7 @@ msgid ""
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:156 src/reference/embedding.md:95
+#: src/reference/async.md:156 src/reference/embedding.md:106
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
@@ -15688,110 +15693,117 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-futures.md:55
-msgid "Registering — `register_async!`"
+msgid "Registering — `pkg_async_fn!`"
 msgstr ""
 
 #: src/reference/host-futures.md:57
 msgid ""
 "One closure (plus an optional abort hook) expands into the five rows the "
-"weave drives:"
+"weave drives. On the installer lane the row names are bare and the pkg's "
+"scope prefixes at the install; the raw `register_async!` twin (full "
+"`scope::name` strings on the bare registry) is the escape hatch — same "
+"emitter, same family:"
 msgstr ""
 
-#: src/reference/host-futures.md:63
-msgid "\"mypkg::fetch\""
+#: src/reference/host-futures.md:66
+msgid "\"mypkg\""
 msgstr ""
 
-#: src/reference/host-futures.md:73
+#: src/reference/host-futures.md:67
+msgid "\"fetch\""
+msgstr ""
+
+#: src/reference/host-futures.md:77
 msgid "// returned immediately: the future parks\n"
 msgstr ""
 
-#: src/reference/host-futures.md:77
+#: src/reference/host-futures.md:82
 msgid "Emitted row"
 msgstr ""
 
-#: src/reference/host-futures.md:77
+#: src/reference/host-futures.md:82
 msgid "Signature"
 msgstr ""
 
-#: src/reference/host-futures.md:77
+#: src/reference/host-futures.md:82
 msgid "Role"
 msgstr ""
 
-#: src/reference/host-futures.md:79
+#: src/reference/host-futures.md:84
 msgid "`mypkg::fetch`"
 msgstr ""
 
-#: src/reference/host-futures.md:79
+#: src/reference/host-futures.md:84
 msgid "`(args) -> T`"
 msgstr ""
 
-#: src/reference/host-futures.md:79
+#: src/reference/host-futures.md:84
 msgid "the decl row — a teaching trap, never dispatched"
 msgstr ""
 
-#: src/reference/host-futures.md:80
+#: src/reference/host-futures.md:85
 msgid "`mypkg::fetch__start`"
 msgstr ""
 
-#: src/reference/host-futures.md:80
+#: src/reference/host-futures.md:85
 msgid "`(args) -> opaque`"
 msgstr ""
 
-#: src/reference/host-futures.md:80
+#: src/reference/host-futures.md:85
 msgid "calls the closure, boxes the `Completer` — the state cell"
 msgstr ""
 
-#: src/reference/host-futures.md:81
+#: src/reference/host-futures.md:86
 msgid "`mypkg::fetch__yield`"
 msgstr ""
 
-#: src/reference/host-futures.md:81
+#: src/reference/host-futures.md:86
 msgid "`(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-futures.md:81
+#: src/reference/host-futures.md:86
 msgid "the resumption probe: 0 pending / 1 ready / 2 failed"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:87
 msgid "`mypkg::fetch__take`"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:87
 msgid "`(state) -> T`"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:87
 msgid ""
 "marshals the answer onto the heap **on the VM thread**; a failure traps here"
 msgstr ""
 
-#: src/reference/host-futures.md:83
+#: src/reference/host-futures.md:88
 msgid "`mypkg::fetch__cancel`"
 msgstr ""
 
-#: src/reference/host-futures.md:83
+#: src/reference/host-futures.md:88
 msgid "`(state)`"
 msgstr ""
 
-#: src/reference/host-futures.md:83
+#: src/reference/host-futures.md:88
 msgid "the abort closure when one is given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:90
 msgid ""
 "The abort-closure form receives a `Completer<T>` clone (safe to move "
 "anywhere); without it, cancellation is the documented best-effort law — the "
 "thread finishes, the late result is discarded."
 msgstr ""
 
-#: src/reference/host-futures.md:89
+#: src/reference/host-futures.md:94
 msgid ""
 "Rut side, the closure's own surface is invisible — callers see a normal "
 "async fn:"
 msgstr ""
 
-#: src/reference/host-futures.md:92
+#: src/reference/host-futures.md:97
 msgid ""
 "```rut\n"
 "use core::{ RunContext };\n"
@@ -15808,19 +15820,19 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-futures.md:106
+#: src/reference/host-futures.md:111
 msgid "The embedder's loop"
 msgstr ""
 
-#: src/reference/host-futures.md:108
+#: src/reference/host-futures.md:113
 msgid "The engine polls every future parked on a completer:"
 msgstr ""
 
-#: src/reference/host-futures.md:113
+#: src/reference/host-futures.md:118
 msgid "// drain + poll + drain\n"
 msgstr ""
 
-#: src/reference/host-futures.md:118
+#: src/reference/host-futures.md:123
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each "
 "poll runs the `__yield` probe; a ready one is driven through `__take` and "
@@ -15830,17 +15842,17 @@ msgid ""
 "loop alive — the flip side of best-effort cancellation."
 msgstr ""
 
-#: src/reference/host-futures.md:126
+#: src/reference/host-futures.md:131
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` "
 "for deterministic tests ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/host-futures.md:130
+#: src/reference/host-futures.md:135
 msgid "In-tree users"
 msgstr ""
 
-#: src/reference/host-futures.md:132
+#: src/reference/host-futures.md:137
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send`, "
 "`http_body`, and `http_stream_next` are `pub host async fn` rows whose "
@@ -15850,7 +15862,7 @@ msgid ""
 "example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 
-#: src/reference/host-futures.md:139
+#: src/reference/host-futures.md:144
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) "
 "are the other half of the boundary — see [embedding and native "
@@ -16206,394 +16218,446 @@ msgstr ""
 
 #: src/reference/embedding.md:31
 msgid ""
-"// 3. Bind bodies BEFORE the Vm exists — the registry is a pre-VM table.\n"
+"// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —\n"
+"//    the registry is a pre-VM table and the ctx is the declared side.\n"
 msgstr ""
 
 #: src/reference/embedding.md:37
+msgid "\"{s}\""
+msgstr ""
+
+#: src/reference/embedding.md:37
+msgid ""
+"// a hand-rolled pkg for your own host rows (or the raw `register!`\n"
+"// escape hatch on the bare registry — same machinery, flat names)\n"
+msgstr ""
+
+#: src/reference/embedding.md:43
 msgid "// re-entrant rut calls are legal here (see \"Native fn rules\")\n"
 msgstr ""
 
-#: src/reference/embedding.md:39
+#: src/reference/embedding.md:46
 msgid ""
 "// The decl ↔ impl contract check. Panics, loudly, on any mismatch —\n"
 "// an embedder wiring bug is never a rut diagnostic.\n"
 msgstr ""
 
-#: src/reference/embedding.md:43
+#: src/reference/embedding.md:50
 msgid "// 4. Boot and drive.\n"
 msgstr ""
 
-#: src/reference/embedding.md:53
+#: src/reference/embedding.md:60
 msgid "\"compute\""
 msgstr ""
 
-#: src/reference/embedding.md:56
+#: src/reference/embedding.md:63
 msgid ""
 "The registry is consumed by `Vm::new`: every host thunk the program declares "
 "is resolved against it once, at boot. A declared-but-unbound fn is a "
 "**construction error**, never a mid-run trap."
 msgstr ""
 
-#: src/reference/embedding.md:60
+#: src/reference/embedding.md:67
 msgid "Driver API (`rut-driver`)"
 msgstr ""
 
-#: src/reference/embedding.md:62 src/reference/embedding.md:84
+#: src/reference/embedding.md:69 src/reference/embedding.md:92
 #: src/reference/value-boundary.md:96 src/reference/native-containers.md:103
 #: src/reference/templates.md:40
 msgid "API"
 msgstr ""
 
-#: src/reference/embedding.md:64
+#: src/reference/embedding.md:71
 msgid "`Session::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:64
+#: src/reference/embedding.md:71
 msgid "an empty mounting session"
 msgstr ""
 
-#: src/reference/embedding.md:65
+#: src/reference/embedding.md:72
 msgid "`mount_std(&mut s)`"
 msgstr ""
 
-#: src/reference/embedding.md:65
+#: src/reference/embedding.md:72
 msgid "mount `core` + `calc`"
 msgstr ""
 
-#: src/reference/embedding.md:66
+#: src/reference/embedding.md:73
 msgid "`mount_std_async(&mut s)`"
 msgstr ""
 
-#: src/reference/embedding.md:66
+#: src/reference/embedding.md:73
 msgid "mount `async_engine` + `async_host`"
 msgstr ""
 
-#: src/reference/embedding.md:67
+#: src/reference/embedding.md:74
 msgid "`mount_dir(&mut s, dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:67
+#: src/reference/embedding.md:74
 msgid "mount a package directory (`rut.toml`); returns its name"
 msgstr ""
 
-#: src/reference/embedding.md:68
+#: src/reference/embedding.md:75
 msgid "`assemble_peers(&mut s)`"
 msgstr ""
 
-#: src/reference/embedding.md:68
+#: src/reference/embedding.md:75
 msgid "append peer-gated impl groups ([dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/embedding.md:69
+#: src/reference/embedding.md:76
 msgid "`compile_module(src, mode, name)`"
 msgstr ""
 
-#: src/reference/embedding.md:69
+#: src/reference/embedding.md:76
 msgid "full pipeline over one module against a fresh core+calc session"
 msgstr ""
 
-#: src/reference/embedding.md:70
+#: src/reference/embedding.md:77
 msgid "`compile_module_in(&mut s, src, mode, name)`"
 msgstr ""
 
-#: src/reference/embedding.md:70
+#: src/reference/embedding.md:77
 msgid ""
 "the same against a caller-built session; returns diags, AST/IR dumps, and "
 "the binary"
 msgstr ""
 
-#: src/reference/embedding.md:71
+#: src/reference/embedding.md:78
 msgid "`compile_graph(&s, root)`"
 msgstr ""
 
-#: src/reference/embedding.md:71
+#: src/reference/embedding.md:78
 msgid "compile a whole module directory graph"
 msgstr ""
 
-#: src/reference/embedding.md:72
+#: src/reference/embedding.md:79
+msgid "`s.host_pkg_context()`"
+msgstr ""
+
+#: src/reference/embedding.md:79
+msgid ""
+"the mounted surfaces' declared rows, partitioned per pkg — the declared side "
+"`install_host_pkg` checks against (build once per boot lane; owned)"
+msgstr ""
+
+#: src/reference/embedding.md:80
 msgid "`s.expected_host_fns()`"
 msgstr ""
 
-#: src/reference/embedding.md:72
+#: src/reference/embedding.md:80
 msgid ""
-"the mounted surfaces' declared host rows — the check table for "
-"`verify_against`"
+"the same rows flattened to one table — the raw lane's `verify_against` input"
 msgstr ""
 
-#: src/reference/embedding.md:73
+#: src/reference/embedding.md:81
 msgid "`load_path_session(path)`"
 msgstr ""
 
-#: src/reference/embedding.md:73
+#: src/reference/embedding.md:81
 msgid "load a module **directory** or `.rutbundle`; returns `(session, root)`"
 msgstr ""
 
-#: src/reference/embedding.md:74
+#: src/reference/embedding.md:82
 msgid "`pack_dir(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:74
+#: src/reference/embedding.md:82
 msgid ""
 "pack a module directory into a deterministic v5 **compiled** `.rutbundle` — "
 "root + linkable deps as `.rutc` binaries, splice-needed deps as source "
 "groups; returns the bytes ([module bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/embedding.md:76
+#: src/reference/embedding.md:84
 msgid ""
 "The container, manifest grammar, and v5 reader live in the `rut-bundle` "
 "crate — std-only, filesystem-free over a one-method `Source` trait."
 msgstr ""
 
-#: src/reference/embedding.md:79
+#: src/reference/embedding.md:87
 msgid ""
 "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns "
 "and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:82
+#: src/reference/embedding.md:90
 msgid "VM API (`rut_vm::interp`)"
 msgstr ""
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:94
 msgid "`HostRegistry::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:86
+#: src/reference/embedding.md:94
 msgid "an empty binding table"
 msgstr ""
 
-#: src/reference/embedding.md:87
+#: src/reference/embedding.md:95
+msgid "`HostPkg::new(scope)`"
+msgstr ""
+
+#: src/reference/embedding.md:95
+msgid ""
+"a pkg builder; rows register under bare names, the scope prefixes at the "
+"install"
+msgstr ""
+
+#: src/reference/embedding.md:96 src/reference/loading.md:50
+msgid "`pkg_fn!` / `pkg_async_fn!`"
+msgstr ""
+
+#: src/reference/embedding.md:96
+msgid "the builder's sugar: one spelling → one row / the five-row async family"
+msgstr ""
+
+#: src/reference/embedding.md:97 src/reference/loading.md:49
+msgid "`hosts.install_host_pkg(&ctx, pkg)`"
+msgstr ""
+
+#: src/reference/embedding.md:97
+msgid ""
+"install one built pkg: bind every row its mounted scope declares "
+"(drift/unbound ⇒ panic); an unmounted scope merges inert"
+msgstr ""
+
+#: src/reference/embedding.md:98
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr ""
 
-#: src/reference/embedding.md:87
-msgid "bind one body; the closure's Rust shape **is** the declared row"
+#: src/reference/embedding.md:98
+msgid "the raw lane: bind one body under a full `scope::name` string"
 msgstr ""
 
-#: src/reference/embedding.md:88
+#: src/reference/embedding.md:99
 msgid "`hosts.verify_against(&expected)`"
 msgstr ""
 
-#: src/reference/embedding.md:88
-msgid "panic on declared-unbound / bound-undeclared / signature drift"
+#: src/reference/embedding.md:99
+msgid ""
+"the raw lane's net: panic on declared-unbound / bound-undeclared / signature "
+"drift"
 msgstr ""
 
-#: src/reference/embedding.md:89
+#: src/reference/embedding.md:100
 msgid "`Vm::new(prog, &limits, hooks, hosts)`"
 msgstr ""
 
-#: src/reference/embedding.md:89
-msgid "boot; joins every declared host thunk to its binding"
+#: src/reference/embedding.md:100
+msgid ""
+"boot; joins every declared host thunk to its binding (a declared-but-unbound "
+"fn is a construction error)"
 msgstr ""
 
-#: src/reference/embedding.md:90
+#: src/reference/embedding.md:101
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr ""
 
-#: src/reference/embedding.md:90
+#: src/reference/embedding.md:101
 msgid ""
 "call an export with Rust values, get a Rust value back ([value "
 "boundary](value-boundary.md))"
 msgstr ""
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:102
 msgid "`vm.resume::<R>()`"
 msgstr ""
 
-#: src/reference/embedding.md:91
+#: src/reference/embedding.md:102
 msgid "resume a budget-parked call after refueling"
 msgstr ""
 
-#: src/reference/embedding.md:92
+#: src/reference/embedding.md:103
 msgid "`vm.run_ready()`"
 msgstr ""
 
-#: src/reference/embedding.md:92
+#: src/reference/embedding.md:103
 msgid "drain the async ready queue once; returns tasks run"
 msgstr ""
 
-#: src/reference/embedding.md:93
+#: src/reference/embedding.md:104
 msgid "the earliest timer deadline, if any"
 msgstr ""
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:105
 msgid "`vm.set_now(t_ms)`"
 msgstr ""
 
-#: src/reference/embedding.md:94
+#: src/reference/embedding.md:105
 msgid "advance the virtual clock"
 msgstr ""
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:106
 msgid "unfinished async tasks"
 msgstr ""
 
-#: src/reference/embedding.md:96
+#: src/reference/embedding.md:107
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/embedding.md:96
+#: src/reference/embedding.md:107
 msgid "budget meters"
 msgstr ""
 
-#: src/reference/embedding.md:97
+#: src/reference/embedding.md:108
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr ""
 
-#: src/reference/embedding.md:97
+#: src/reference/embedding.md:108
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr ""
 
-#: src/reference/embedding.md:98
+#: src/reference/embedding.md:109
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr ""
 
-#: src/reference/embedding.md:98
+#: src/reference/embedding.md:109
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr ""
 
-#: src/reference/embedding.md:100
+#: src/reference/embedding.md:111
 msgid "The canonical async driving loop (single-threaded; the host owns it):"
 msgstr ""
 
-#: src/reference/embedding.md:106
+#: src/reference/embedding.md:117
 msgid "// advance to the next timer\n"
 msgstr ""
 
-#: src/reference/embedding.md:113
+#: src/reference/embedding.md:124
 msgid ""
 "Cap the loop in embedders that cannot prove termination, so a program that "
 "never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/embedding.md:116
+#: src/reference/embedding.md:127
 msgid "Limits"
 msgstr ""
 
-#: src/reference/embedding.md:120
+#: src/reference/embedding.md:131
 msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
-#: src/reference/embedding.md:122
+#: src/reference/embedding.md:133
 msgid "// ops between interrupt checks\n"
 msgstr ""
 
-#: src/reference/embedding.md:126
+#: src/reference/embedding.md:137
 msgid ""
 "Exhaustion and interrupts surface as traps ([resource "
 "limits](resource-limits.md)). A trap inside re-entrant work propagates to "
 "the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
-#: src/reference/embedding.md:130
+#: src/reference/embedding.md:141
 msgid "Native fn rules"
 msgstr ""
 
-#: src/reference/embedding.md:132
+#: src/reference/embedding.md:143
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:135
+#: src/reference/embedding.md:146
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:137
+#: src/reference/embedding.md:148
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:140
+#: src/reference/embedding.md:151
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:144
+#: src/reference/embedding.md:155
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:144
+#: src/reference/embedding.md:155
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:146
+#: src/reference/embedding.md:157
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:147 src/reference/cli.md:32
+#: src/reference/embedding.md:158 src/reference/cli.md:32
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:159
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:148
+#: src/reference/embedding.md:159
 msgid "interrupt flag"
 msgstr ""
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:160
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:160
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:161
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:150
+#: src/reference/embedding.md:161
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:162
 msgid "`Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:162
 msgid "`panic`"
 msgstr ""
 
-#: src/reference/embedding.md:152
+#: src/reference/embedding.md:163
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:152
+#: src/reference/embedding.md:163
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:164
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:164
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:154
+#: src/reference/embedding.md:165
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:154
+#: src/reference/embedding.md:165
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:156
+#: src/reference/embedding.md:167
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:158
+#: src/reference/embedding.md:169
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
@@ -16602,88 +16666,98 @@ msgid ""
 "registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:164
+#: src/reference/embedding.md:175
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:166 src/reference/cli.md:45
-msgid "installer"
+#: src/reference/embedding.md:177
+msgid ""
+"One `pkg()` builder per module; each installs through "
+"`HostRegistry::install_host_pkg` against the session's mount snapshot (see "
+"[host fns](host-fns.md) for the asymmetric contract — an unmounted scope "
+"merges inert, so hosts blanket-install their subset):"
 msgstr ""
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:182
+msgid "builder"
+msgstr ""
+
+#: src/reference/embedding.md:182
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:168
-msgid "`math::install_std_math`"
+#: src/reference/embedding.md:184 src/reference/cli.md:47
+msgid "`math::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:184
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:169
-msgid "`logger::install_std_log(&mut hosts, sink)`"
+#: src/reference/embedding.md:185
+msgid "`logger::pkg(sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:185
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:170
-msgid "`nmap::install_std_nmap`"
+#: src/reference/embedding.md:186 src/reference/cli.md:49
+msgid "`nmap::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:170
+#: src/reference/embedding.md:186
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:171
-msgid "`strbuild::install_std_strbuild`"
+#: src/reference/embedding.md:187
+msgid "`strbuild::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:171
+#: src/reference/embedding.md:187
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:172
-msgid "`async_host::install_std_async`"
+#: src/reference/embedding.md:188 src/reference/cli.md:51
+msgid "`async_host::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:188
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:173
-msgid "`http::install_std_http`"
+#: src/reference/embedding.md:189 src/reference/cli.md:52
+msgid "`http::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:173
-msgid "the std HTTP lanes (reqwest; native builds only)"
+#: src/reference/embedding.md:189
+msgid ""
+"the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the "
+"fixture twin, returning `(HostPkg, HttpFixture)`"
 msgstr ""
 
-#: src/reference/embedding.md:174
-msgid "`bench_cross::install_std_bench_cross`"
+#: src/reference/embedding.md:190 src/reference/cli.md:50
+msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:174 src/reference/stdlib.md:139
+#: src/reference/embedding.md:190 src/reference/stdlib.md:139
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:176
+#: src/reference/embedding.md:192
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:178
+#: src/reference/embedding.md:194
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:181
+#: src/reference/embedding.md:197
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): mounts the "
 "std packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -17422,7 +17496,7 @@ msgstr ""
 msgid "need"
 msgstr ""
 
-#: src/reference/repr-c.md:89 src/reference/project-structure.md:131
+#: src/reference/repr-c.md:89 src/reference/project-structure.md:133
 msgid "shape"
 msgstr ""
 
@@ -17747,26 +17821,50 @@ msgid "Signatures are derived, not hand-written"
 msgstr ""
 
 #: src/reference/host-fns.md:148
-msgid "The registered callable's Rust shape **is** the `.d.rut` row:"
-msgstr ""
-
-#: src/reference/host-fns.md:153
-msgid "\"server::make\""
+msgid ""
+"The registered callable's Rust shape **is** the `.d.rut` row. The "
+"**installer lane** is a `HostPkg` builder per pkg — rows under bare names, "
+"the scope (the pkg's name) spelled once — installed through "
+"`HostRegistry::install_host_pkg`:"
 msgstr ""
 
 #: src/reference/host-fns.md:154
-msgid ""
-"// two-plus params: spell the marker tuple once, the closure stays plain\n"
+msgid "// one builder per host pkg; the scope string appears exactly once\n"
+msgstr ""
+
+#: src/reference/host-fns.md:156
+msgid "\"make\""
 msgstr ""
 
 #: src/reference/host-fns.md:160
+msgid ""
+"// the session's mount snapshot — built once, owned, shared by every "
+"install\n"
+msgstr ""
+
+#: src/reference/host-fns.md:167
+msgid ""
+"`pkg_async_fn!` is the async twin: one row spelling emits the five-row "
+"family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap), the "
+"same expansion the ctx declares. The raw macros — `register!` / "
+"`register_async!` on the bare registry (see [embedding and native "
+"modules](embedding.md)) — remain the escape hatch (hand-spelled "
+"`<scope>::<name>` strings, the flat table's own responsibility); everything "
+"above them is the same derived-signature machinery:"
+msgstr ""
+
+#: src/reference/host-fns.md:179
+msgid "\"server::make\""
+msgstr ""
+
+#: src/reference/host-fns.md:183
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's "
 "parameter and return types; a param type with no crossing impl is a "
 "**compile error at the register site**."
 msgstr ""
 
-#: src/reference/host-fns.md:163
+#: src/reference/host-fns.md:186
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` "
 "(fallible). Errors travel an explicit trap channel — a trapped body "
@@ -17774,62 +17872,84 @@ msgid ""
 "modules](embedding.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:167
+#: src/reference/host-fns.md:190
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call "
 "([value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:170
-msgid "The load-time contract"
-msgstr ""
-
-#: src/reference/host-fns.md:172
+#: src/reference/host-fns.md:192
 msgid ""
-"Mounting a host pkg **declares**; the embedding Rust **binds**. The two "
-"sides are checked against each other before any rut code runs:"
+"One installer per pkg: a duplicate row name inside a builder panics, a "
+"second `install_host_pkg` for the same scope panics, and a pkg cannot spell "
+"another pkg's rows — the scope comes solely from `HostPkg::new`."
 msgstr ""
 
-#: src/reference/host-fns.md:176
-msgid "// panics on mismatch\n"
+#: src/reference/host-fns.md:197
+msgid "The load-time contract — asymmetric, by design"
 msgstr ""
 
-#: src/reference/host-fns.md:177
-msgid "// joins the rest\n"
-msgstr ""
-
-#: src/reference/host-fns.md:180
+#: src/reference/host-fns.md:199
 msgid ""
-"A mismatch is an embedder wiring bug — a **panic**, never a rut diagnostic — "
-"on exactly three classes:"
+"Mounting a host pkg **declares**; the embedding Rust **binds**. The "
+"`install_host_pkg` call checks the two sides against each other, per pkg, "
+"against the mount snapshot (`session.host_pkg_context()`):"
 msgstr ""
 
-#: src/reference/host-fns.md:183
+#: src/reference/host-fns.md:203
+msgid ""
+"**scope mounted, a declared row never bound** — a panic naming the pkg (the "
+"installer left it out), and the `Vm` constructor refuses a boot naming it "
+"again when the installer never ran at all;"
+msgstr ""
+
+#: src/reference/host-fns.md:206
+msgid ""
+"**signature drift** on a declared row — a panic; this is the only drift gate "
+"on the boot path;"
+msgstr ""
+
+#: src/reference/host-fns.md:208
+msgid ""
+"**scope NOT mounted** — the whole pkg merges **inert**: no panic, no gate. "
+"Blanket installs are legal (the CLI installs all of them; a program that "
+"mounts a subset carries the rest as dead bindings), and rows the decl does "
+"not name ride as inert extras."
+msgstr ""
+
+#: src/reference/host-fns.md:213
+msgid ""
+"The raw lane's `verify_against(&ctx.flatten())` — or "
+"`session.expected_host_fns()` — re-checks the whole flat table and panics on "
+"all three mismatch classes:"
+msgstr ""
+
+#: src/reference/host-fns.md:217
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr ""
 
-#: src/reference/host-fns.md:184
+#: src/reference/host-fns.md:218
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr ""
 
-#: src/reference/host-fns.md:185
+#: src/reference/host-fns.md:219
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding "
 "took `(opaque, i64, str)`."
 msgstr ""
 
-#: src/reference/host-fns.md:188
+#: src/reference/host-fns.md:222
 msgid ""
-"The law follows the mount: **mount what you bind**. An embedder that mounts "
-"`calc` must bind its float fns; an embedder that needs only `core` mounts "
-"only `core`."
+"The law follows the mount: **mount what you bind** — with the asymmetry the "
+"mount law needs: rut-declares-but-host-never-binds is loud; "
+"host-binds-but-rut-never-declares rides inert."
 msgstr ""
 
-#: src/reference/host-fns.md:192
+#: src/reference/host-fns.md:226
 msgid "Slots, not strings"
 msgstr ""
 
-#: src/reference/host-fns.md:194
+#: src/reference/host-fns.md:228
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in "
 "declaration order; the module binary carries the slot table. Calls compile "
@@ -17839,11 +17959,11 @@ msgid ""
 "be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 
-#: src/reference/host-fns.md:202
+#: src/reference/host-fns.md:236
 msgid "Async host fns"
 msgstr ""
 
-#: src/reference/host-fns.md:204
+#: src/reference/host-fns.md:238
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -17852,120 +17972,132 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:210
+#: src/reference/host-fns.md:244
 msgid ""
-"The embedder binds the family with one registration; the closure spawns the "
-"work, hands out a completer clone, and returns:"
+"The embedder binds the family with one spelling; the closure spawns the "
+"work, hands out a completer clone, and returns. On the installer lane the "
+"row names are bare and the scope prefixes at the install:"
 msgstr ""
 
-#: src/reference/host-fns.md:214
-msgid "\"http_host::http_send\""
+#: src/reference/host-fns.md:249
+msgid "\"http_host\""
 msgstr ""
 
-#: src/reference/host-fns.md:228
+#: src/reference/host-fns.md:250
+msgid "\"http_send\""
+msgstr ""
+
+#: src/reference/host-fns.md:264
 msgid "/* optional abort hook: */"
 msgstr ""
 
-#: src/reference/host-fns.md:228
+#: src/reference/host-fns.md:264
 msgid "/* best-effort cancel */"
 msgstr ""
 
-#: src/reference/host-fns.md:232
+#: src/reference/host-fns.md:267
 msgid ""
-"`register_async!(hosts, name, (P…) -> R, start [, abort])` emits the family "
-"the compiler's weave joins:"
+"// the raw lane (bare registry, full `scope::name` strings) — the\n"
+"// escape hatch, same emitter:\n"
+"// rut_vm::register_async!(hosts, \"http_host::http_send\", ...);\n"
 msgstr ""
 
-#: src/reference/host-fns.md:235
+#: src/reference/host-fns.md:273
+msgid ""
+"`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw twin "
+"`register_async!(hosts, …)`) emits the family the compiler's weave joins:"
+msgstr ""
+
+#: src/reference/host-fns.md:277
 msgid "emitted row"
 msgstr ""
 
-#: src/reference/host-fns.md:235 src/reference/reflection.md:75
+#: src/reference/host-fns.md:277 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
 #: src/reference/stdlib.md:307 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:31 src/reference/cli.md:125
 msgid "meaning"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:279
 msgid "`<name>`"
 msgstr ""
 
-#: src/reference/host-fns.md:237
+#: src/reference/host-fns.md:279
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future "
 "at the call site"
 msgstr ""
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:280
 msgid "`<name>__start(P…) -> opaque`"
 msgstr ""
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:280
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr ""
 
-#: src/reference/host-fns.md:239
+#: src/reference/host-fns.md:281
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:239
+#: src/reference/host-fns.md:281
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr ""
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:282
 msgid "`<name>__take(state) -> R`"
 msgstr ""
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:282
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr ""
 
-#: src/reference/host-fns.md:241
+#: src/reference/host-fns.md:283
 msgid "`<name>__cancel(state)`"
 msgstr ""
 
-#: src/reference/host-fns.md:241
+#: src/reference/host-fns.md:283
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-fns.md:243
+#: src/reference/host-fns.md:285
 msgid "`Completer<T>` API"
 msgstr ""
 
-#: src/reference/host-fns.md:245
+#: src/reference/host-fns.md:287
 msgid "`Completer::new()`"
 msgstr ""
 
-#: src/reference/host-fns.md:245
+#: src/reference/host-fns.md:287
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr ""
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:288
 msgid "`complete(v)` / `fail(msg)`"
 msgstr ""
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:288
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr ""
 
-#: src/reference/host-fns.md:247
+#: src/reference/host-fns.md:289
 msgid "`poll() -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:247
+#: src/reference/host-fns.md:289
 msgid "the driving loop's probe"
 msgstr ""
 
-#: src/reference/host-fns.md:248
+#: src/reference/host-fns.md:290
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr ""
 
-#: src/reference/host-fns.md:248
+#: src/reference/host-fns.md:290
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr ""
 
-#: src/reference/host-fns.md:250
+#: src/reference/host-fns.md:292
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. "
 "Cancellation is best-effort — a worker runs to its blocking completion and "
@@ -17973,43 +18105,43 @@ msgid ""
 "and [async and await](async.md)."
 msgstr ""
 
-#: src/reference/host-fns.md:255
+#: src/reference/host-fns.md:297
 msgid "Declaration files as artifacts"
 msgstr ""
 
-#: src/reference/host-fns.md:257
+#: src/reference/host-fns.md:299
 msgid "A published package ships:"
 msgstr ""
 
-#: src/reference/host-fns.md:259
+#: src/reference/host-fns.md:301
 msgid "artifact"
 msgstr ""
 
-#: src/reference/host-fns.md:259
+#: src/reference/host-fns.md:301
 msgid "role"
 msgstr ""
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:303
 msgid "`mod.rutc`"
 msgstr ""
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:303
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module "
 "binary and verification](module-binary.md))"
 msgstr ""
 
-#: src/reference/host-fns.md:262
+#: src/reference/host-fns.md:304
 msgid "`mod.d.rut`"
 msgstr ""
 
-#: src/reference/host-fns.md:262
+#: src/reference/host-fns.md:304
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); "
 "documentation only, never the loader's source of truth"
 msgstr ""
 
-#: src/reference/host-fns.md:264
+#: src/reference/host-fns.md:306
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, trait-table "
@@ -18017,59 +18149,59 @@ msgid ""
 "guesswork."
 msgstr ""
 
-#: src/reference/host-fns.md:268
+#: src/reference/host-fns.md:310
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table "
 "— a pure data compare. Drift is a load error naming both modules, never a "
 "runtime surprise."
 msgstr ""
 
-#: src/reference/host-fns.md:271
+#: src/reference/host-fns.md:313
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are "
 "stripped (`--release` drops member-name strings), but code is recoverable "
 "with effort. What publishing guarantees is API discipline."
 msgstr ""
 
-#: src/reference/host-fns.md:275
+#: src/reference/host-fns.md:317
 msgid "Surface resolution during compilation"
 msgstr ""
 
-#: src/reference/host-fns.md:277
+#: src/reference/host-fns.md:319
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first "
 "hit wins:"
 msgstr ""
 
-#: src/reference/host-fns.md:280
+#: src/reference/host-fns.md:322
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr ""
 
-#: src/reference/host-fns.md:281
+#: src/reference/host-fns.md:323
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface "
 "on the wire) — or its bundled source for a splice-needed group; explicit "
 "mounts outrank stray sources, never dev source;"
 msgstr ""
 
-#: src/reference/host-fns.md:284
+#: src/reference/host-fns.md:326
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside "
 "the registered implementation."
 msgstr ""
 
-#: src/reference/host-fns.md:287
+#: src/reference/host-fns.md:329
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose "
 "implementation is absent is legal and complete — checking passes; only "
 "running requires the bodies."
 msgstr ""
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:333
 msgid "End-to-end shape"
 msgstr ""
 
-#: src/reference/host-fns.md:293
+#: src/reference/host-fns.md:335
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds "
 "`server::subscribe`/`server::emit` over its own `EventBus` box, the plugin "
@@ -19292,7 +19424,7 @@ msgstr ""
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/project-structure.md:131
+#: src/reference/stdlib.md:128 src/reference/project-structure.md:133
 msgid "package"
 msgstr ""
 
@@ -19331,7 +19463,7 @@ msgstr ""
 msgid "the `Logger` class over `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:137
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:139
 msgid "`pouch`"
 msgstr ""
 
@@ -19352,7 +19484,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:134 src/reference/project-structure.md:138
+#: src/reference/stdlib.md:134 src/reference/project-structure.md:140
 msgid "`json`"
 msgstr ""
 
@@ -19372,7 +19504,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:136 src/reference/project-structure.md:134
+#: src/reference/stdlib.md:136 src/reference/project-structure.md:136
 msgid "`calc`"
 msgstr ""
 
@@ -19472,8 +19604,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:167
 msgid ""
-"Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| "
-"println!(\"{s}\"))`. Mounting `ink` pulls `ink_host` along (`[deps]`)."
+"Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| "
+"println!(\"{s}\")))` (the ctx is `session.host_pkg_context()` — "
+"[embedding](embedding.md)). Mounting `ink` pulls `ink_host` along (`[deps]`)."
 msgstr ""
 
 #: src/reference/stdlib.md:170
@@ -19755,7 +19888,7 @@ msgstr ""
 
 #: src/reference/stdlib.md:323
 msgid ""
-"Embedder side: `rut_std::strbuild::install_std_strbuild(&mut hosts)`. "
+"Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. "
 "Mounting `strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json` "
 "pulls both (its writer rides the builder)."
 msgstr ""
@@ -19777,9 +19910,8 @@ msgid ""
 "`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
 "Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> "
 "bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair "
-"**and** installs `rut_std::async_host::install_std_async`; a session that "
-"mounts neither has no launcher ([tasks](tasks.md), [host "
-"futures](host-futures.md))."
+"**and** installs `rut_std::async_host::pkg()`; a session that mounts neither "
+"has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
 msgstr ""
 
 #: src/reference/stdlib.md:341
@@ -22372,21 +22504,15 @@ msgid "bind a host-fn body; signatures derived from the Rust shape"
 msgstr ""
 
 #: src/reference/loading.md:49
-msgid "`register_async!(hosts, \"pkg::name\", ...)`"
-msgstr ""
-
-#: src/reference/loading.md:49
-msgid "bind an async body to the host-future rows"
-msgstr ""
-
-#: src/reference/loading.md:50
-msgid "`install_std_log / _math / _nmap / _http / _async / _bench_cross`"
+msgid ""
+"the installer lane: one built `HostPkg` per host pkg, checked against the "
+"mount snapshot (`session.host_pkg_context()`)"
 msgstr ""
 
 #: src/reference/loading.md:50
 msgid ""
-"mount the toolchain's host bodies ([Embedding and native "
-"modules](embedding.md))"
+"the builder's sugar — one spelling → one row / the five-row async family "
+"([embedding and native modules](embedding.md))"
 msgstr ""
 
 #: src/reference/loading.md:51
@@ -23450,74 +23576,76 @@ msgstr ""
 #: src/reference/project-structure.md:120
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
-"rut-core ← rut-vm` (with `rut-vm-threaded` behind it), hosts (`rut-std`, "
-"`rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the "
-"frontend crates only — tokens, diagnostics, and symbols need no VM."
-msgstr ""
-
-#: src/reference/project-structure.md:126
-msgid "The in-tree packages"
+"rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the "
+"vm's `HostPkgContext`/`HostRegistry` for the installer lane), hosts "
+"(`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` "
+"sits on the frontend crates only — tokens, diagnostics, and symbols need no "
+"VM."
 msgstr ""
 
 #: src/reference/project-structure.md:128
+msgid "The in-tree packages"
+msgstr ""
+
+#: src/reference/project-structure.md:130
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI mounts on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:133
+#: src/reference/project-structure.md:135
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:133
+#: src/reference/project-structure.md:135
 msgid "the only standard package — the builtin surface, mounted unconditionally"
 msgstr ""
 
-#: src/reference/project-structure.md:134
+#: src/reference/project-structure.md:136
 msgid "host pkg: math surface (`mount_calc`)"
 msgstr ""
 
-#: src/reference/project-structure.md:135
+#: src/reference/project-structure.md:137
 msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:135
+#: src/reference/project-structure.md:137
 msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:136
+#: src/reference/project-structure.md:138
 msgid "`ink`, `http`, `strbuild`, `async_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:136
+#: src/reference/project-structure.md:138
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr ""
 
-#: src/reference/project-structure.md:137
+#: src/reference/project-structure.md:139
 msgid "the sequence library (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:138
+#: src/reference/project-structure.md:140
 msgid ""
 "the base pkg with `[peer-deps]`/`[dev-deps]` — the reference consumer of "
 "[Dependency kinds](dependency-kinds.md)"
 msgstr ""
 
-#: src/reference/project-structure.md:139
+#: src/reference/project-structure.md:141
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:139
+#: src/reference/project-structure.md:141
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:141
+#: src/reference/project-structure.md:143
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps "
 "are resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:147
+#: src/reference/project-structure.md:149
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "
@@ -24045,8 +24173,8 @@ msgstr ""
 msgid "Bodies bound by `run`:"
 msgstr ""
 
-#: src/reference/cli.md:47
-msgid "`install_std_math`"
+#: src/reference/cli.md:45
+msgid "installer"
 msgstr ""
 
 #: src/reference/cli.md:47
@@ -24054,7 +24182,7 @@ msgid "`calc`'s float fns"
 msgstr ""
 
 #: src/reference/cli.md:48
-msgid "`install_std_log` (sink: stdout)"
+msgid "`logger::pkg` (sink: stdout)"
 msgstr ""
 
 #: src/reference/cli.md:48
@@ -24062,15 +24190,7 @@ msgid "the logger; silent no-op unless the program uses `ink`"
 msgstr ""
 
 #: src/reference/cli.md:49
-msgid "`install_std_nmap`"
-msgstr ""
-
-#: src/reference/cli.md:49
 msgid "the native key table behind `nmapset`"
-msgstr ""
-
-#: src/reference/cli.md:50
-msgid "`install_std_bench_cross`"
 msgstr ""
 
 #: src/reference/cli.md:50
@@ -24078,15 +24198,7 @@ msgid "the crossing-benchmark rows"
 msgstr ""
 
 #: src/reference/cli.md:51
-msgid "`install_std_async`"
-msgstr ""
-
-#: src/reference/cli.md:51
 msgid "the async launchers"
-msgstr ""
-
-#: src/reference/cli.md:52
-msgid "`install_std_http`"
 msgstr ""
 
 #: src/reference/cli.md:54

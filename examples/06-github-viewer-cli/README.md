@@ -69,7 +69,7 @@ rate-limit note; any other non-2xx → `rgh: CDN <n>`.
 | the brain | `rgh.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes<Root>` over the tree JSON (`impl JsonDeserialize for Entry` + `Root` over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
 | the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient.new()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send(cx)` (headers), `body(cx)` (the drain), `byte_stream()` + `next(cx)` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
-| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, `assemble_peers`, compile `rgh.rut` (Impl mode), verify, bind `install_std_http` (reqwest) + `install_std_async` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
+| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, `assemble_peers`, compile `rgh.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
 
 The disk-write split is the streaming shape: `download` TRUNCATES the
 dest through `write_file` once (a stale file never leaks its tail
@@ -121,7 +121,7 @@ orphan rule forbids the fix and the light mount is the only answer.
 ## The offline gate — the fixture lane
 
 `cargo test -p rgh` runs the whole suite with ZERO network. The HTTP
-bodies bind through `install_std_http_with(hosts, f)` where `f` maps
+bodies bind through `http::pkg_with(f)` where `f` maps
 (method, url, headers, body) to a recorded `FixtureReply` — status
 plus the CHUNK PLAN — or `Err(message)` for a transport failure (the
 status-0 lane). The fixture map's keys ARE the assertions (a wrong

@@ -1045,7 +1045,7 @@ rows, and closing the union-provenance holes (RFC 0043 §3).
 New row for the crossing-fastpath batch, phase 0. `crossing-nop` mounts
 `rut/bench-cross` (host pkg: `nop(x: i64) -> i64`, the identity, and
 `nop4(a..d: i64) -> i64`, the sum — bodies deliberately EMPTY, bound
-infallibly in rut-std's `install_std_bench_cross`) and runs four loops
+infallibly in rut-std's `bench_cross::pkg()`) and runs four loops
 of 2M iterations each: **A** = N host `nop` calls, **B** = N calls of an
 inline rut fn with the SAME body, **A4**/**B4** = the same pair over the
 4-arg sum. Every call does no work beyond its own signature, so the

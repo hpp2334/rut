@@ -119,10 +119,8 @@ mid-op, it makes a **nested** `vm.call("render_line")` to format the
 wire line:
 
 ```rust
-rut_vm::register!(
-    hosts,
-    "server::emit",
-    (Opaque<EventBus>, &str, &str) -> (),
+let mut pkg = rut_vm::HostPkg::new("server");
+rut_vm::pkg_fn!(pkg, "emit", (Opaque<EventBus>, &str, &str) -> (),
     |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
         bus.with_mut(vm, |vm, b| -> Result<(), Trap> {
             let line: String =
@@ -134,6 +132,7 @@ rut_vm::register!(
         })?
     },
 );
+hosts.install_host_pkg(&ctx, pkg.build());
 ```
 
 (The comment above this code in the source is worth reading too.) The

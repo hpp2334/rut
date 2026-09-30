@@ -9933,8 +9933,9 @@ msgstr "宿主把 `server` 的两行绑定到自己的总线上。`emit` 的函�
 
 #: src/examples/03-plugin.md:124 src/reference/embedding.md:35
 #: src/reference/host-fns.md:156
-msgid "\"server::emit\""
-msgstr "\"server::emit\""
+msgid "\\\"emit\\\""
+msgstr "\\\"emit\\\""
+
 
 #: src/examples/03-plugin.md:129
 msgid "\"render_line\""
@@ -11084,16 +11085,20 @@ msgid "\"rut/http\""
 msgstr "\"rut/http\""
 
 #: src/examples/06-github-viewer-cli.md:196
-msgid ""
-"The HTTP bodies bind through `install_std_http` (the reqwest lane); the "
-"example's own rows are CLI I/O only — `out` (stdout; `print` is a removed "
-"core name), `eprint`, the file pair, and `exit` — declared in the "
-"example-local `rgh_host` decl package and verified against the bindings at "
-"boot ([Host fns and declaration files](../reference/host-fns.md)). One "
-"consequence: `rut run` cannot host rgh itself — its rows are example-local — "
-"but ordinary HTTP programs do run under `rut run`, which mounts the std http "
-"pair by presence."
-msgstr "HTTP 函数体经 `install_std_http` 绑定（reqwest 链路）；示例自己的行只有 CLI IO——`out`（stdout；`print` 是被移除的 core 名字）、`eprint`、文件对，以及 `exit`——声明在示例本地的 `rgh_host` 声明包里，并在启动时对照绑定校验（[宿主 fn 与声明文件](../reference/host-fns.md)）。一个后果：`rut run` 无法承载 rgh 本身——它的行是示例本地的——但普通的 HTTP 程序确实能在 `rut run` 下运行，后者按存在性挂载 std http 二件套。"
+msgid "The HTTP bodies install through `http::pkg()` (the reqwest lane); the"
+"example's own rows are CLI I/O only — `out` (stdout; `print` is a removed"
+"core name), `eprint`, the file pair, and `exit` — declared in the"
+"example-local `rgh_host` decl package and verified against the bindings"
+"at boot ([Host fns and declaration files](../reference/host-fns.md)). One"
+"consequence: `rut run` cannot host rgh itself — its rows are"
+"example-local — but ordinary HTTP programs do run under `rut run`, which"
+"mounts the std http pair by presence."
+msgstr "HTTP 函数体经 `http::pkg()` 安装（reqwest 链路）；示例自己的行只有 CLI"
+"IO——`out`（stdout；`print` 是被移除的 core 名字）、`eprint`、文件对，以及 `exit`——声明在示例本地的"
+"`rgh_host` 声明包里，并在启动时对照绑定校验（[宿主 fn"
+"与声明文件](../reference/host-fns.md)）。一个后果：`rut run` 无法承载 rgh"
+"本身——它的行是示例本地的——但普通的 HTTP 程序确实能在 `rut run` 下运行，后者按存在性挂载 std http 二件套。"
+
 
 #: src/examples/06-github-viewer-cli.md:208
 msgid ""
@@ -18792,18 +18797,25 @@ msgid ""
 msgstr "**迟到答案按尽力而为明示**：取消之后线程仍会运行到它的阻塞式完成，而结果只是永远不会被取走。"
 
 #: src/reference/host-futures.md:55
-msgid "Registering — `register_async!`"
-msgstr "注册——`register_async!`"
+msgid "Registering — `pkg_async_fn!`"
+msgstr "注册——`pkg_async_fn!`"
+
 
 #: src/reference/host-futures.md:57
-msgid ""
-"One closure (plus an optional abort hook) expands into the five rows the "
-"weave drives:"
-msgstr "一个闭包（外加一个可选的 abort 钩子）展开成织入所驱动的五行："
+msgid "One closure (plus an optional abort hook) expands into the five rows"
+"the weave drives. On the installer lane the row names are bare and the"
+"pkg's scope prefixes at the install; the raw `register_async!` twin (full"
+"`scope::name` strings on the bare registry) is the escape hatch — same"
+"emitter, same family:"
+msgstr "一个闭包（外加一个可选的 abort 钩子）展开成织入所驱动的五行。在安装方链路上，行的名字是裸名，包的作用域在安装时加上前缀；裸的"
+"`register_async!` 孪生（bare registry 上的完整 `scope::name`"
+"字符串）是逃生舱——同一个发射器，同一个行族："
+
 
 #: src/reference/host-futures.md:63
-msgid "\"mypkg::fetch\""
-msgstr "\"mypkg::fetch\""
+msgid "\\\"fetch\\\""
+msgstr "\\\"fetch\\\""
+
 
 #: src/reference/host-futures.md:73
 msgid "// returned immediately: the future parks\n"
@@ -19336,10 +19348,12 @@ msgid "/* render and exit */"
 msgstr "/* render and exit */"
 
 #: src/reference/embedding.md:31
-msgid ""
-"// 3. Bind bodies BEFORE the Vm exists — the registry is a pre-VM table.\n"
-msgstr ""
-"// 3. Bind bodies BEFORE the Vm exists — the registry is a pre-VM table.\n"
+msgid "// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —\\n// "
+"the registry is a pre-VM table and the ctx is the declared side.\\n"
+msgstr "// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —
+//  "
+"the registry is a pre-VM table and the ctx is the declared side."
+
 
 #: src/reference/embedding.md:37
 msgid "// re-entrant rut calls are legal here (see \"Native fn rules\")\n"
@@ -19445,14 +19459,20 @@ msgid "compile a whole module directory graph"
 msgstr "编译整个模块目录图"
 
 #: src/reference/embedding.md:72
-msgid "`s.expected_host_fns()`"
-msgstr "`s.expected_host_fns()`"
+msgid "`s.host_pkg_context()`"
+msgstr "`s.host_pkg_context()`"
 
 #: src/reference/embedding.md:72
+msgid "the mounted surfaces' declared rows, partitioned per pkg — the declared"
+"side `install_host_pkg` checks against (build once per boot lane; owned)"
+msgstr "已挂载表面声明的行，按包分区——`install_host_pkg` 对照的声明方（每个启动链路构建一次；owned）"
+
+#: src/reference/embedding.md:73
 msgid ""
-"the mounted surfaces' declared host rows — the check table for "
-"`verify_against`"
-msgstr "已挂载表面声明的宿主行——`verify_against` 的检查表"
+"the same rows flattened to one table — the raw lane's `verify_against` "
+"input"
+msgstr "同一批行摊平成一张表——裸链路 `verify_against` 的输入"
+
 
 #: src/reference/embedding.md:73
 msgid "`load_path_session(path)`"
@@ -19504,24 +19524,29 @@ msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr "`hosts.register::<_, (P…), R, _>(name, f)`"
 
 #: src/reference/embedding.md:87
-msgid "bind one body; the closure's Rust shape **is** the declared row"
-msgstr "绑定一个函数体；闭包的 Rust 形状**就是**被声明的行"
+msgid "the raw lane: bind one body under a full `scope::name` string"
+msgstr "裸链路：以完整的 `scope::name` 字符串绑定一个函数体"
+
 
 #: src/reference/embedding.md:88
 msgid "`hosts.verify_against(&expected)`"
 msgstr "`hosts.verify_against(&expected)`"
 
 #: src/reference/embedding.md:88
-msgid "panic on declared-unbound / bound-undeclared / signature drift"
-msgstr "对\"已声明未绑定 / 已绑定未声明 / 签名漂移\" panic"
+msgid "the raw lane's net: panic on declared-unbound / bound-undeclared /"
+"signature drift"
+msgstr "裸链路的网：对“已声明未绑定 / 已绑定未声明 / 签名漂移” panic"
+
 
 #: src/reference/embedding.md:89
 msgid "`Vm::new(prog, &limits, hooks, hosts)`"
 msgstr "`Vm::new(prog, &limits, hooks, hosts)`"
 
 #: src/reference/embedding.md:89
-msgid "boot; joins every declared host thunk to its binding"
-msgstr "启动；把每个已声明的宿主 thunk join 到它的绑定"
+msgid "boot; joins every declared host thunk to its binding (a"
+"declared-but-unbound fn is a construction error)"
+msgstr "启动；把每个已声明的宿主 thunk join 到它的绑定（已声明但未绑定的 fn 是一个构造期错误）"
+
 
 #: src/reference/embedding.md:90
 msgid "`vm.call::<A, R>(export, args)`"
@@ -19751,32 +19776,36 @@ msgid "binds"
 msgstr "绑定"
 
 #: src/reference/embedding.md:168
-msgid "`math::install_std_math`"
-msgstr "`math::install_std_math`"
+msgid "`math::pkg()`"
+msgstr "`math::pkg()`"
+
 
 #: src/reference/embedding.md:168
 msgid "`calc`'s float functions, both widths"
 msgstr "`calc` 的浮点函数，两种宽度皆有"
 
 #: src/reference/embedding.md:169
-msgid "`logger::install_std_log(&mut hosts, sink)`"
-msgstr "`logger::install_std_log(&mut hosts, sink)`"
+msgid "`logger::pkg(sink)`"
+msgstr "`logger::pkg(sink)`"
+
 
 #: src/reference/embedding.md:169
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr "`ink_host` 的两行，路由到一个 `FnMut(&str)` 汇点"
 
 #: src/reference/embedding.md:170
-msgid "`nmap::install_std_nmap`"
-msgstr "`nmap::install_std_nmap`"
+msgid "`nmap::pkg()`"
+msgstr "`nmap::pkg()`"
+
 
 #: src/reference/embedding.md:170
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr "`nmapset` 背后的原生键表（[标准库](stdlib.md)）"
 
 #: src/reference/embedding.md:171
-msgid "`strbuild::install_std_strbuild`"
-msgstr "`strbuild::install_std_strbuild`"
+msgid "`strbuild::pkg()`"
+msgstr "`strbuild::pkg()`"
+
 
 #: src/reference/embedding.md:171
 msgid ""
@@ -19785,24 +19814,30 @@ msgid ""
 msgstr "`strbuild` 之后的字符串构建器各行（[标准库](stdlib.md)）——增长按嵌入方的堆预算记账"
 
 #: src/reference/embedding.md:172
-msgid "`async_host::install_std_async`"
-msgstr "`async_host::install_std_async`"
+msgid "`async_host::pkg()`"
+msgstr "`async_host::pkg()`"
+
 
 #: src/reference/embedding.md:172
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr "启动器各行（`__launch`/`__abort`/`__sleep`/`__sleep_yield`）"
 
 #: src/reference/embedding.md:173
-msgid "`http::install_std_http`"
-msgstr "`http::install_std_http`"
+msgid "`http::pkg()`"
+msgstr "`http::pkg()`"
+
 
 #: src/reference/embedding.md:173
-msgid "the std HTTP lanes (reqwest; native builds only)"
-msgstr "标准 HTTP 链路（reqwest；仅原生构建）"
+msgid "the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)`"
+"is the fixture twin, returning `(HostPkg, HttpFixture)`"
+msgstr "标准 HTTP 链路（reqwest；仅原生构建）；`http::pkg_with(f)` 是 fixture 孪生，返回"
+"`(HostPkg, HttpFixture)`"
+
 
 #: src/reference/embedding.md:174
-msgid "`bench_cross::install_std_bench_cross`"
-msgstr "`bench_cross::install_std_bench_cross`"
+msgid "`bench_cross::pkg()`"
+msgstr "`bench_cross::pkg()`"
+
 
 #: src/reference/embedding.md:174 src/reference/stdlib.md:139
 msgid "the crossing-tax benchmark rows"
@@ -20918,18 +20953,22 @@ msgid "Signatures are derived, not hand-written"
 msgstr "签名是推导的，不是手写的"
 
 #: src/reference/host-fns.md:148
-msgid "The registered callable's Rust shape **is** the `.d.rut` row:"
-msgstr "注册的可调用体的 Rust 形状**就是** `.d.rut` 那一行："
+msgid "The registered callable's Rust shape **is** the `.d.rut` row. The"
+"**installer lane** is a `HostPkg` builder per pkg — rows under bare"
+"names, the scope (the pkg's name) spelled once — installed through"
+"`HostRegistry::install_host_pkg`:"
+msgstr "注册的可调用体的 Rust 形状**就是** `.d.rut` 那一行。**安装方链路**是每个包一个 `HostPkg`"
+"构建器——行用裸名，作用域（包名）只写一次——经 `HostRegistry::install_host_pkg` 安装："
+
 
 #: src/reference/host-fns.md:153
 msgid "\"server::make\""
 msgstr "\"server::make\""
 
 #: src/reference/host-fns.md:154
-msgid ""
-"// two-plus params: spell the marker tuple once, the closure stays plain\n"
-msgstr ""
-"// two-plus params: spell the marker tuple once, the closure stays plain\n"
+msgid "// one builder per host pkg; the scope string appears exactly once\\n"
+msgstr "// 每个宿主包一个构建器；作用域字符串只出现一次"
+
 
 #: src/reference/host-fns.md:160
 msgid ""
@@ -20953,8 +20992,9 @@ msgid ""
 msgstr "`&str` / `&[u8]` 参数是以恰好这一次调用为作用域的零复制借用（[值边界](value-boundary.md)）。"
 
 #: src/reference/host-fns.md:170
-msgid "The load-time contract"
-msgstr "加载期契约"
+msgid "The load-time contract — asymmetric, by design"
+msgstr "加载期契约——非对称，有意为之"
+
 
 #: src/reference/host-fns.md:172
 msgid ""
@@ -20963,12 +21003,15 @@ msgid ""
 msgstr "挂载宿主包是**声明**；嵌入侧 Rust 是**绑定**。在任何 rut 代码运行之前，两侧要彼此对照检查："
 
 #: src/reference/host-fns.md:176
-msgid "// panics on mismatch\n"
-msgstr "// panics on mismatch\n"
+msgid "// the session's mount snapshot — built once, owned, shared by every"
+"install\\n"
+msgstr "// 会话的挂载快照——构建一次，owned，被每次安装共享"
+
 
 #: src/reference/host-fns.md:177
-msgid "// joins the rest\n"
-msgstr "// joins the rest\n"
+msgid "\\\"make\\\""
+msgstr "// joins the rest\\n"
+
 
 #: src/reference/host-fns.md:180
 msgid ""
@@ -22780,10 +22823,15 @@ msgid "3"
 msgstr "3"
 
 #: src/reference/stdlib.md:167
-msgid ""
-"Embedder side: `rut_std::logger::install_std_log(&mut hosts, |s| "
-"println!(\"{s}\"))`. Mounting `ink` pulls `ink_host` along (`[deps]`)."
-msgstr "嵌入方一侧：`rut_std::logger::install_std_log(&mut hosts, |s| println!(\"{s}\"))`。挂载 `ink` 会顺手拉来 `ink_host`（`[deps]`）。"
+msgid "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s|"
+"println!(\\\"{s}\\\")))` (the ctx is `session.host_pkg_context()` —"
+"[embedding](embedding.md)). Mounting `ink` pulls `ink_host` along"
+"(`[deps]`)."
+msgstr "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s|"
+"println!(\\\"{s}\\\")))`（ctx 即"
+"`session.host_pkg_context()`——[嵌入](embedding.md)）。挂载 `ink` 会顺手拉来"
+"`ink_host`（`[deps]`）。"
+
 
 #: src/reference/stdlib.md:170
 msgid "`pouch` — `Vec<T>`"
@@ -23109,11 +23157,13 @@ msgid ""
 msgstr "共享是默认：经由别名（或 `mut` 参数）做出的追加落进调用方的文档；复制恰好发生在两个刻意设计的位置——`build` 的实体化和增长时的前缀搬移。增长在发生之前先询问嵌入方的堆预算（几何下一容量按记账收取），因此 wasm 的 4 MiB 上限对构建器增长的约束与对引擎分配完全一致。"
 
 #: src/reference/stdlib.md:323
-msgid ""
-"Embedder side: `rut_std::strbuild::install_std_strbuild(&mut hosts)`. "
-"Mounting `strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json` "
-"pulls both (its writer rides the builder)."
-msgstr "嵌入方一侧：`rut_std::strbuild::install_std_strbuild(&mut hosts)`。挂载 `strbuild` 会随行拉取 `strbuild_host`（`[deps]`）；挂载 `json` 则两者都拉（它的写入器骑着构建器）。"
+msgid "Embedder side: `hosts.install_host_pkg(&ctx,"
+"rut_std::strbuild::pkg())`. Mounting `strbuild` pulls `strbuild_host`"
+"along (`[deps]`); mounting `json` pulls both (its writer rides the"
+"builder)."
+msgstr "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`。挂载"
+"`strbuild` 会随行拉取 `strbuild_host`（`[deps]`）；挂载 `json` 则两者都拉（它的写入器骑着构建器）。"
+
 
 #: src/reference/stdlib.md:328
 msgid ""
@@ -25777,22 +25827,25 @@ msgid "bind a host-fn body; signatures derived from the Rust shape"
 msgstr "绑定一个宿主函数体；签名从 Rust 形状推导"
 
 #: src/reference/loading.md:49
-msgid "`register_async!(hosts, \"pkg::name\", ...)`"
-msgstr "`register_async!(hosts, \"pkg::name\", ...)`"
+msgid "`pkg_fn!` / `pkg_async_fn!`"
+msgstr "`register_async!(hosts, \\\"pkg::name\\\", ...)`"
+
 
 #: src/reference/loading.md:49
-msgid "bind an async body to the host-future rows"
-msgstr "把一个异步函数体绑定到宿主 future 行"
+msgid "the builder's sugar: one spelling → one row / the five-row async family"
+msgstr "构建器的糖：一个拼写 → 一行 / 五行异步行族"
+
 
 #: src/reference/loading.md:50
-msgid "`install_std_log / _math / _nmap / _http / _async / _bench_cross`"
-msgstr "`install_std_log / _math / _nmap / _http / _async / _bench_cross`"
+msgid "`pkg_fn!` / `pkg_async_fn!`"
+msgstr "`pkg_fn!` / `pkg_async_fn!`"
+
 
 #: src/reference/loading.md:50
-msgid ""
-"mount the toolchain's host bodies ([Embedding and native "
-"modules](embedding.md))"
-msgstr "挂载工具链的宿主函数体（[嵌入与原生模块](embedding.md)）"
+msgid "the builder's sugar — one spelling → one row / the five-row async"
+"family ([embedding and native modules](embedding.md))"
+msgstr "构建器的糖——一个拼写 → 一行 / 五行异步行族（[嵌入与原生模块](embedding.md)）"
+
 
 #: src/reference/loading.md:51
 msgid ""
@@ -26926,12 +26979,16 @@ msgid "The toolchain tree"
 msgstr "工具链树"
 
 #: src/reference/project-structure.md:119
-msgid ""
-"Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
-"rut-core ← rut-vm` (with `rut-vm-threaded` behind it), hosts (`rut-std`, "
-"`rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the "
-"frontend crates only — tokens, diagnostics, and symbols need no VM."
-msgstr "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后），宿主（`rut-std`、`rut-wasm`）在其上，`rut-cli`/`demo` 在最上。`rut-lsp` 只坐在前端 crate 之上——记号、诊断与符号不需要 VM。"
+msgid "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver →"
+"rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the"
+"driver sits on the vm's `HostPkgContext`/`HostRegistry` for the installer"
+"lane), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above"
+"those. `rut-lsp` sits on the frontend crates only — tokens, diagnostics,"
+"and symbols need no VM."
+msgstr "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core"
+"← rut-vm`（`rut-vm-threaded` 在其后；驱动站在 vm 的 `HostPkgContext`/`HostRegistry`"
+"之上以获得安装方链路），宿主（`rut-std`、`rut-wasm`）在顶层，`rut-cli`/`demo` 在其上。"
+
 
 #: src/reference/project-structure.md:125
 msgid "The in-tree packages"
@@ -27551,48 +27608,55 @@ msgid "Bodies bound by `run`:"
 msgstr "`run` 绑定的函数体："
 
 #: src/reference/cli.md:47
-msgid "`install_std_math`"
-msgstr "`install_std_math`"
+msgid "`HostPkg::new(scope)`"
+msgstr "`math::pkg()`"
+
 
 #: src/reference/cli.md:47
 msgid "`calc`'s float fns"
 msgstr "`calc` 的浮点函数"
 
 #: src/reference/cli.md:48
-msgid "`install_std_log` (sink: stdout)"
-msgstr "`install_std_log` (sink: stdout)"
+msgid "`logger::pkg` (sink: stdout)"
+msgstr "`logger::pkg` (sink: stdout)"
+
 
 #: src/reference/cli.md:48
 msgid "the logger; silent no-op unless the program uses `ink`"
 msgstr "logger；除非程序使用 `ink`，否则是无声的空操作"
 
 #: src/reference/cli.md:49
-msgid "`install_std_nmap`"
-msgstr "`install_std_nmap`"
+msgid "`hosts.install_host_pkg(&ctx, pkg)`"
+msgstr "`nmap::pkg()`"
+
 
 #: src/reference/cli.md:49
 msgid "the native key table behind `nmapset`"
 msgstr "`nmapset` 背后的原生键表"
 
 #: src/reference/cli.md:50
-msgid "`install_std_bench_cross`"
-msgstr "`install_std_bench_cross`"
+msgid "a pkg builder; rows register under bare names, the scope prefixes at"
+"the install"
+msgstr "`bench_cross::pkg()`"
+
 
 #: src/reference/cli.md:50
 msgid "the crossing-benchmark rows"
 msgstr "跨越基准测试行"
 
 #: src/reference/cli.md:51
-msgid "`install_std_async`"
-msgstr "`install_std_async`"
+msgid "`math::pkg()`"
+msgstr "`async_host::pkg()`"
+
 
 #: src/reference/cli.md:51
 msgid "the async launchers"
 msgstr "异步启动器"
 
 #: src/reference/cli.md:52
-msgid "`install_std_http`"
-msgstr "`install_std_http`"
+msgid "`nmap::pkg()`"
+msgstr "`http::pkg()`"
+
 
 #: src/reference/cli.md:54
 msgid ""

@@ -129,6 +129,9 @@ fn book_blocks_compile_and_run() {
             }
             rut_driver::assemble_peers(&mut s)
                 .unwrap_or_else(|e| panic!("{rel}#{n}: assemble peers: {e}"));
+            // the mount snapshot the installs answer to (owned; `s`
+            // dies at the end of this block's iteration)
+            let ctx = s.host_pkg_context();
 
             let out = rut_driver::compile_module_in(&mut s, &body, rut_parser::Mode::Impl, "main");
             if !out.diags.is_empty() {
@@ -165,13 +168,13 @@ fn book_blocks_compile_and_run() {
             // the bindings BEFORE the Vm: the same set the wasm
             // host's rut_run installs — the buttons' answers are the truth
             let mut hosts = rut_vm::interp::HostRegistry::new();
-            rut_std::logger::install_std_log(&mut hosts, move |msg| {
+            hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
                 sink.borrow_mut().push(msg.to_string())
-            });
-            rut_std::math::install_std_math(&mut hosts);
-            rut_std::nmap::install_std_nmap(&mut hosts);
-            rut_std::async_host::install_std_async(&mut hosts);
-            rut_std::strbuild::install_std_strbuild(&mut hosts);
+            }));
+            hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+            hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+            hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
+            hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
             let mut vm = match rut_vm::interp::Vm::new(
                 Rc::new(prog),
                 &limits,

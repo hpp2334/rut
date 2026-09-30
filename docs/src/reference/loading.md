@@ -46,8 +46,8 @@ before it):
 | call | purpose |
 |---|---|
 | `HostRegistry::register(name, f)` | bind a host-fn body; signatures derived from the Rust shape |
-| `register_async!(hosts, "pkg::name", ...)` | bind an async body to the host-future rows |
-| `install_std_log / _math / _nmap / _http / _async / _bench_cross` | mount the toolchain's host bodies ([Embedding and native modules](embedding.md)) |
+| `hosts.install_host_pkg(&ctx, pkg)` | the installer lane: one built `HostPkg` per host pkg, checked against the mount snapshot (`session.host_pkg_context()`) |
+| `pkg_fn!` / `pkg_async_fn!` | the builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
 | `mount_std_core(session)` / `mount_std(session)` / `mount_std_async(session)` | mount the builtin packages (`core`; `core` + `calc`; the async pair) |
 | `load_path_session(path)` / `load_bundle_bytes(bytes, origin)` | mount a directory / an in-memory bundle |
 | `compile_graph(&session, root)` | compile + link the mounted graph |

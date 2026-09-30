@@ -1,7 +1,7 @@
 //! `nmap_host` — the native key-table experiment's HOST half: a real
 //! `hashbrown::HashTable` whose entries live Rust-side behind an
 //! `opaque` payload, so rut meets it only through the
-//! `pub host fn` surface bound by [`install_std_nmap`]. (The pure-rut
+//! `pub host fn` surface built by [`pkg`]. (The pure-rut
 //! `mapset` package — the original reference and general-key
 //! implementation — was REMOVED from the tree in Sep 2026, stdlib
 //! slim-down: general keys now mean a `bytes` encoding or the
@@ -76,7 +76,7 @@ use hashbrown::hash_table;
 use hashbrown::HashTable;
 
 use rut_vm::heap::{Heap};
-use rut_vm::interp::{HostRegistry, Ret, Vm};
+use rut_vm::interp::{HostPkg, Ret, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot};
 
 /// Which payload flavor the table stores — fixed by the first inserted
@@ -793,14 +793,15 @@ fn fused_remove_sv(vm: &Vm, t: &mut NativeTable, parent: &str, off: i32, len: i3
 /// row, so the surface declares exactly these signatures. `map_new`'s
 /// box carries the table; every other fn's first param borrows it typed
 /// (`Opaque<NativeTable>` — a wrong payload is a checked trap).
-pub fn install_std_nmap(hosts: &mut HostRegistry) {
-    rut_vm::register!(hosts, "nmap_host::map_new", (i64,) -> OpaqueRef, |vm: &mut Vm, cap: i64| {
+pub fn pkg() -> HostPkg {
+    let mut pkg = HostPkg::new("nmap_host");
+    rut_vm::pkg_fn!(pkg, "map_new", (i64,) -> OpaqueRef, |vm: &mut Vm, cap: i64| {
         let b = Opaque::alloc_hosted(vm, NativeTable::new(cap))?;
         Ok(b.handle().clone())
     });
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_len",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_len",
         (Opaque<NativeTable>,) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>| b.with(|t| t.len()),
     );
@@ -821,33 +822,33 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // The f pair is the same storage through `to_bits`/`from_bits` at
     // the boundary (rut has no float bitcast). Bounds are
     // the live births; a removed key's handle traps `no live entry`.
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_set_u",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_val_set_u",
         (Opaque<NativeTable>, i32, u64) -> (),
         |vm: &mut Vm, b: Opaque<NativeTable>, handle: i32, raw: u64| -> Result<(), Trap> {
             b.with_mut(vm, |vm, t| t.val_set_u(vm, handle, raw))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_get_u",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_val_get_u",
         (Opaque<NativeTable>, i32) -> u64,
         |_vm: &mut Vm, b: Opaque<NativeTable>, handle: i32| -> Result<u64, Trap> {
             b.with(|t| t.val_get_u(handle))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_set_f",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_val_set_f",
         (Opaque<NativeTable>, i32, f64) -> (),
         |vm: &mut Vm, b: Opaque<NativeTable>, handle: i32, v: f64| -> Result<(), Trap> {
             b.with_mut(vm, |vm, t| t.val_set_f(vm, handle, v))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_get_f",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_val_get_f",
         (Opaque<NativeTable>, i32) -> f64,
         |_vm: &mut Vm, b: Opaque<NativeTable>, handle: i32| -> Result<f64, Trap> {
             b.with(|t| t.val_get_f(handle))?
@@ -862,145 +863,145 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // is indexed by. `HashSet` shares `hput` and reads bit 0. Growth is
     // std's — internal, and invisible to every answer (the handle is a
     // birth, not an address).
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_i",
         (Opaque<NativeTable>, i64) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_u",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_u",
         (Opaque<NativeTable>, u64) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_b",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_b",
         (Opaque<NativeTable>, bool) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_s",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_s",
         (Opaque<NativeTable>, &str) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| fused_put_s(t, k))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_y",
         (Opaque<NativeTable>, &[u8]) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| t.hput_ref(KeyRef::Bytes(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hput_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hput_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i64, Trap> {
             b.with_mut(vm, |_vm, t| fused_put_sv(t, parent, off, len))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_i",
         (Opaque<NativeTable>, i64) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_u",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_u",
         (Opaque<NativeTable>, u64) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i32, Trap> {
             b.with(|t| fused_find(t, &KeyVal::Bits(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_b",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_b",
         (Opaque<NativeTable>, bool) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i32, Trap> {
             b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_s",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_s",
         (Opaque<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
             b.with(|t| fused_find_s(t, k))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_y",
         (Opaque<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with(|t| t.hfind_ref(KeyRef::Bytes(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hfind_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hfind_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             b.with(|t| fused_find_sv(t, parent, off, len))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_i",
         (Opaque<NativeTable>, i64) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_u",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_u",
         (Opaque<NativeTable>, u64) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_b",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_b",
         (Opaque<NativeTable>, bool) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k as u64)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_s",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_s",
         (Opaque<NativeTable>, &str) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| fused_remove_s(vm, t, k))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_y",
         (Opaque<NativeTable>, &[u8]) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hremove_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hremove_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| fused_remove_sv(vm, t, parent, off, len))?
@@ -1032,9 +1033,9 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     //   key's handle answers, `-1` when absent.
 
     // the str lane (the bare names)
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvput",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvput",
         (Opaque<NativeTable>, &str, OpaqueRef) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &str, v: OpaqueRef| -> Result<i64, Trap> {
             b.with_mut(vm, |vm, t| {
@@ -1047,18 +1048,18 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             })?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvget",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvget",
         (Opaque<NativeTable>, &str) -> Option<OpaqueRef>,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<Option<OpaqueRef>, Trap> {
             let stored = b.with(|t| t.hvget_ref(KeyRef::Str(k)))??;
             seal_answer(vm, stored)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvremove",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvremove",
         (Opaque<NativeTable>, &str) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(k)))?
@@ -1067,9 +1068,9 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
 
     // the bits lane — one `i64` crossing for every integer primitive
     // and `bool` (the wrapper casts; the bits are the identity)
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvput_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvput_i",
         (Opaque<NativeTable>, i64, OpaqueRef) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: i64, v: OpaqueRef| -> Result<i64, Trap> {
             b.with_mut(vm, |vm, t| {
@@ -1079,18 +1080,18 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             })?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvget_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvget_i",
         (Opaque<NativeTable>, i64) -> Option<OpaqueRef>,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<Option<OpaqueRef>, Trap> {
             let stored = b.with(|t| t.hvget_ref(KeyRef::Bits(k as u64)))??;
             seal_answer(vm, stored)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvremove_i",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvremove_i",
         (Opaque<NativeTable>, i64) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bits(k as u64)))?
@@ -1098,9 +1099,9 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
 
     // the bytes lane
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvput_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvput_y",
         (Opaque<NativeTable>, &[u8], OpaqueRef) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8], v: OpaqueRef| -> Result<i64, Trap> {
             b.with_mut(vm, |vm, t| {
@@ -1110,18 +1111,18 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             })?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvget_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvget_y",
         (Opaque<NativeTable>, &[u8]) -> Option<OpaqueRef>,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<Option<OpaqueRef>, Trap> {
             let stored = b.with(|t| t.hvget_ref(KeyRef::Bytes(k)))??;
             seal_answer(vm, stored)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvremove_y",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvremove_y",
         (Opaque<NativeTable>, &[u8]) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
@@ -1131,9 +1132,9 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // the `_sv` range twins — the key is a borrowed `(parent, off,
     // len)` BYTE range (the house UTF-8 boundary traps; the range runs
     // BEFORE the transfer, as admission does)
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvput_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvput_sv",
         (Opaque<NativeTable>, &str, i32, i32, OpaqueRef) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32, v: OpaqueRef| -> Result<i64, Trap> {
             let range = sv_range(parent, off, len)?;
@@ -1146,9 +1147,9 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             })?
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvget_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvget_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> Option<OpaqueRef>,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<Option<OpaqueRef>, Trap> {
             let range = sv_range(parent, off, len)?;
@@ -1156,15 +1157,16 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             seal_answer(vm, stored)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_hvremove_sv",
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvremove_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             let range = sv_range(parent, off, len)?;
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(range)))?
         },
     );
+    pkg.build()
 }
 
 #[cfg(test)]

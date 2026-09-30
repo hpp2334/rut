@@ -46,11 +46,11 @@
 //! rows ON the VM thread. `std::thread` appears only in the reqwest
 //! lane's closures.
 //!
-//! Two lanes install these bodies: [`install_std_http_with`] rides an
+//! Two lanes build these bodies: [`pkg_with`] rides an
 //! injectable fixture closure keyed on method+URL(+headers/body) and
 //! walks its chunk schedule on the VIRTUAL clock (the settle handle is
 //! the returned [`HttpFixture`] — the test's driving loop advances the
-//! clock and settles the dues); [`install_std_http`] is the reqwest
+//! clock and settles the dues); [`pkg`] is the reqwest
 //! lane (one shared blocking client, one worker thread per request).
 //! The `http` cargo feature is DEFAULT-OFF — reqwest-blocking does not
 //! build on wasm32-unknown-unknown, so only native embedders opt in.
@@ -60,7 +60,7 @@ use std::io::Read as _;
 use std::sync::{Arc, Mutex};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
-use rut_vm::interp::{HostRegistry, Vm};
+use rut_vm::interp::{HostPkg, Vm};
 use rut_vm::interp::Ret;
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind};
 
@@ -227,13 +227,13 @@ fn end_source(src: &Shared) {
 /// The lane-independent rows: the body drain, the stream read, and the
 /// five sync readbacks. Both lanes register these — only `http_send`
 /// differs (a worker thread vs the virtual clock).
-fn install_read_rows(hosts: &mut HostRegistry) {
+fn install_read_rows(pkg: &mut HostPkg) {
     // the one-shot drain: the WHOLE remaining body in one future. A
     // transport-failed response, a second taker (body twice, or body
     // after a stream mint) degrade to EMPTY — the disclosed law.
-    rut_vm::register_async!(
-        hosts,
-        "http_host::http_body",
+    rut_vm::pkg_async_fn!(
+        pkg,
+        "http_body",
         (Opaque<HttpResponse>,) -> Vec<u8>,
         move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
             let comp = CompleterOf::new();
@@ -265,9 +265,9 @@ fn install_read_rows(hosts: &mut HostRegistry) {
     // the stream read: one chunk per future; nil = EOF-or-failed (the
     // sticky read err names which). A degraded mint answers an
     // immediate EOF. A failed completer is NOT the mid-read path.
-    rut_vm::register_async!(
-        hosts,
-        "http_host::http_stream_next",
+    rut_vm::pkg_async_fn!(
+        pkg,
+        "http_stream_next",
         (Opaque<HttpStream>,) -> Option<Vec<u8>>,
         move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
             let comp = CompleterOf::new();
@@ -300,25 +300,25 @@ fn install_read_rows(hosts: &mut HostRegistry) {
         },
     );
     // the sync readbacks (the kept law: 0 is the transport verdict)
-    rut_vm::register!(
-        hosts,
-        "http_host::http_status",
+    rut_vm::pkg_fn!(
+        pkg,
+        "http_status",
         (Opaque<HttpResponse>,) -> i32,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<i32, Trap> {
             Ok(r.with(|resp| resp.status as i32)?)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "http_host::http_err",
+    rut_vm::pkg_fn!(
+        pkg,
+        "http_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
             Ok(r.with(|resp| resp.err.clone())?)
         },
     );
-    rut_vm::register!(
-        hosts,
-        "http_host::http_read_err",
+    rut_vm::pkg_fn!(
+        pkg,
+        "http_read_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
             Ok(r.with(|resp| resp.read.lock().expect("http read state").failed.clone())?)
@@ -327,9 +327,9 @@ fn install_read_rows(hosts: &mut HostRegistry) {
     // the reader mint: instant, sync. The FIRST mint takes the stream
     // lane (body is now refused); a SECOND mint answers a dead reader
     // (immediate EOF) — the one-shot law's degrade, never a trap.
-    rut_vm::register!(
-        hosts,
-        "http_host::http_resp_stream",
+    rut_vm::pkg_fn!(
+        pkg,
+        "http_resp_stream",
         (Opaque<HttpResponse>,) -> OpaqueRef,
         |vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<OpaqueRef, Trap> {
             let (src, dead) = r.with(|resp| {
@@ -504,15 +504,16 @@ impl HttpFixture {
 /// map's keys ARE the assertions: an unknown URL is a LOUD transport
 /// failure, never a pass-through. Returns the settle handle the test's
 /// driving loop walks.
-pub fn install_std_http_with<F>(hosts: &mut HostRegistry, f: F) -> HttpFixture
+pub fn pkg_with<F>(f: F) -> (HostPkg, HttpFixture)
 where
     F: Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
 {
     let fixture = HttpFixture::default();
     let fx = fixture.clone();
-    rut_vm::register_async!(
-        hosts,
-        "http_host::http_send",
+    let mut pkg = HostPkg::new("http_host");
+    rut_vm::pkg_async_fn!(
+        pkg,
+        "http_send",
         (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
         move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
               -> CompleterOf<HttpResponse> {
@@ -521,8 +522,8 @@ where
             fx.arm(reply)
         },
     );
-    install_read_rows(hosts);
-    fixture
+    install_read_rows(&mut pkg);
+    (pkg.build(), fixture)
 }
 
 // ----------------------------------------------------- the reqwest ----
@@ -536,7 +537,8 @@ where
 /// thread. Transport failure maps to status 0 + the message (the kept
 /// law). Requires the `http` cargo feature.
 #[cfg(feature = "http")]
-pub fn install_std_http(hosts: &mut HostRegistry) {
+pub fn pkg() -> HostPkg {
+    let mut pkg = HostPkg::new("http_host");
     let client = Arc::new(
         reqwest::blocking::Client::builder()
             .user_agent("rgh/0.1 (+https://github.com/rut)")
@@ -544,9 +546,9 @@ pub fn install_std_http(hosts: &mut HostRegistry) {
             .build()
             .expect("the std http client builds"),
     );
-    rut_vm::register_async!(
-        hosts,
-        "http_host::http_send",
+    rut_vm::pkg_async_fn!(
+        pkg,
+        "http_send",
         (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
         move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
               -> CompleterOf<HttpResponse> {
@@ -565,7 +567,8 @@ pub fn install_std_http(hosts: &mut HostRegistry) {
             comp
         },
     );
-    install_read_rows(hosts);
+    install_read_rows(&mut pkg);
+    pkg.build()
 }
 
 /// The reqwest worker: build the request (canonical method, the
@@ -740,16 +743,18 @@ entry fn boot_stream(url: str) -> nil {
             interrupt_every: 1024,
         };
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-        crate::async_host::install_std_async(&mut hosts);
+        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
-        // the bodies bind alongside the async set
-        crate::strbuild::install_std_strbuild(&mut hosts);
-        let fx = install_std_http_with(&mut hosts, fixture);
-        hosts.verify_against(&session.expected_host_fns()); // the decl ↔ the bodies
+        // the bodies install alongside the async set
+        hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
+        let (http_pkg, fx) = pkg_with(fixture);
+        hosts.install_host_pkg(&ctx, http_pkg);
+        hosts.verify_against(&ctx.flatten()); // the decl ↔ the bodies
         let vm = rut_vm::interp::Vm::new(
             Rc::new(prog),
             &limits,
@@ -899,9 +904,9 @@ entry fn boot(url: str) -> nil {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
-        let pkg = std::path::Path::new(PKG_DIR);
+        let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
+            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
         }
         session
             .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
@@ -911,18 +916,20 @@ entry fn boot(url: str) -> nil {
         let prog = g.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-        crate::async_host::install_std_async(&mut hosts);
+        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
-        crate::strbuild::install_std_strbuild(&mut hosts);
-        let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
+        hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
+        let (http_pkg, fx) = pkg_with(|_m, _u, _h, _b| {
             Ok(FixtureReply::failing(200, vec![b"xy".to_vec(), b"zw".to_vec()], 1, "eof in chunk"))
         });
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.install_host_pkg(&ctx, http_pkg);
+        hosts.verify_against(&ctx.flatten());
         let limits = rut_vm::interp::Limits {
             fuel: Some(4_000_000),
             heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -1001,9 +1008,9 @@ entry fn boot(url: str) -> nil {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
-        let pkg = std::path::Path::new(PKG_DIR);
+        let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
+            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
         }
         session
             .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
@@ -1013,18 +1020,20 @@ entry fn boot(url: str) -> nil {
         let prog = g.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-        crate::async_host::install_std_async(&mut hosts);
+        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
-        crate::strbuild::install_std_strbuild(&mut hosts);
-        let fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
+        hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
+        let (http_pkg, fx) = pkg_with(|_m, _u, _h, _b| {
             Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
         });
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.install_host_pkg(&ctx, http_pkg);
+        hosts.verify_against(&ctx.flatten());
         let limits = rut_vm::interp::Limits {
             fuel: Some(4_000_000),
             heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -1090,9 +1099,9 @@ entry fn boot() -> nil {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
-        let pkg = std::path::Path::new(PKG_DIR);
+        let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
+            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
         }
         session
             .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
@@ -1102,24 +1111,26 @@ entry fn boot() -> nil {
         let prog = g.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-        crate::async_host::install_std_async(&mut hosts);
+        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
-        // the bodies bind alongside the async set
-        crate::strbuild::install_std_strbuild(&mut hosts);
+        // the bodies install alongside the async set
+        hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
         let seen = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let seen2 = seen.clone();
-        let fx = install_std_http_with(&mut hosts, move |method, url, headers, body| {
+        let (http_pkg, fx) = pkg_with(move |method, url, headers, body| {
             seen2.borrow_mut().push(format!(
                 "{method} {url} headers=[{headers}] body={}",
                 String::from_utf8_lossy(body)
             ));
             Ok(FixtureReply::ok(200, b""))
         });
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.install_host_pkg(&ctx, http_pkg);
+        hosts.verify_against(&ctx.flatten());
         let limits = rut_vm::interp::Limits {
             fuel: Some(4_000_000),
             heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -1153,17 +1164,18 @@ entry fn boot() -> nil {
     fn the_decl_rows_join_both_lanes() {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
-        let pkg = std::path::Path::new(PKG_DIR);
-        rut_driver::mount_dir(&mut session, &pkg.join("http_host")).expect("mount http_host");
-        let expected = session.expected_host_fns();
-        // the fixture lane binds the whole family over the virtual clock
+        let tree = std::path::Path::new(PKG_DIR);
+        rut_driver::mount_dir(&mut session, &tree.join("http_host")).expect("mount http_host");
+        let ctx = session.host_pkg_context();
+        // the fixture lane installs the whole family over the virtual clock
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        let _fx = install_std_http_with(&mut hosts, |_m, _u, _h, _b| Ok(FixtureReply::ok(200, b"")));
-        hosts.verify_against(&expected); // panics on drift
-        // the reqwest lane binds the SAME rows — no network at bind time
+        let (http_pkg, _fx) = pkg_with(|_m, _u, _h, _b| Ok(FixtureReply::ok(200, b"")));
+        hosts.install_host_pkg(&ctx, http_pkg);
+        hosts.verify_against(&ctx.flatten()); // panics on drift
+        // the reqwest lane installs the SAME rows — no network at install time
         let mut hosts = rut_vm::interp::HostRegistry::new();
-        install_std_http(&mut hosts);
-        hosts.verify_against(&expected);
+        hosts.install_host_pkg(&ctx, pkg());
+        hosts.verify_against(&ctx.flatten());
     }
 
     #[test]
@@ -1187,9 +1199,9 @@ entry fn boot() -> nil {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std_core(&mut session);
         rut_driver::mount_std_async(&mut session);
-        let pkg = std::path::Path::new(PKG_DIR);
+        let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
+            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
         }
         let stream_src = r#"
 use core::{ RunContext };
@@ -1231,16 +1243,17 @@ entry fn boot_stream(url: str) -> nil {
         let prog = g.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let ctx = session.host_pkg_context();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        crate::logger::install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-        crate::async_host::install_std_async(&mut hosts);
+        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
-        crate::strbuild::install_std_strbuild(&mut hosts);
-        install_std_http(&mut hosts); // the reqwest lane
-        hosts.verify_against(&session.expected_host_fns());
+        hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
+        hosts.install_host_pkg(&ctx, pkg()); // the reqwest lane
+        hosts.verify_against(&ctx.flatten());
         let limits = rut_vm::interp::Limits {
             fuel: Some(4_000_000),
             heap_limit_bytes: Some(16 * 1024 * 1024),

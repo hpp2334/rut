@@ -1,6 +1,6 @@
 # http_host/ — the std HTTP surface's host rows (the rut/http plan): a
 # pure declaration surface. The embedding Rust binds the bodies
-# (`rut_std::http::install_std_http{,_with}`); the `http` package
+# (`http::pkg()` / `pkg_with`); the `http` package
 # wraps them in the `Response` class.
 #
 # The registration scope IS the package name; the use path spells it

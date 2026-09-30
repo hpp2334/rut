@@ -10,8 +10,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_driver::{Module, ModuleBody, Session, compile_graph, lower_decl_module, mount_std_async, mount_std_core};
-use rut_std::async_host::install_std_async;
-use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
@@ -30,11 +28,12 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
-    let mut hosts = HostRegistry::new();
     let sink2 = sink.clone();
-    install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
-    install_std_async(&mut hosts);
-    hosts.verify_against(&s.expected_host_fns());
+    let ctx = s.host_pkg_context();
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
+    hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),

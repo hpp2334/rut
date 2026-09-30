@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
-use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module};
+use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module, mount_std_core};
 use rut_vm::OpaqueRef;
 
 const INK_HOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/ink_host");
@@ -367,4 +367,141 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
         hosts
     )
     .is_ok());
+}
+
+// ---- the installer lane: `host_pkg_context` + `install_host_pkg` ----
+
+#[test]
+fn host_pkg_context_partitions_per_pkg_and_expands_async() {
+    // the ctx partitions the mounted host pkgs' rows by scope (the pkg
+    // name — the registration naming has no override) and expands async
+    // rows into their family
+    use rut_core::types::{TY_BOOL, TY_STR};
+
+    let mut s = Session::new();
+    let ink_host = lower_decl_module(
+        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        "ink_host.d.rut",
+    )
+    .expect("ink_host surface");
+    s.register_module("ink_host", ink_host).unwrap();
+    s.register_module(
+        "engine",
+        rut_driver::Module {
+            body: ModuleBody::Host {
+                host_funcs: vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
+                consts: vec![],
+                native_types: vec![],
+                native_traits: vec![],
+                native_fns: vec![],
+                native_impls: vec![],
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let ctx = s.host_pkg_context();
+    // the partition: per-scope rows, scoped from the spec
+    let ink = ctx.rows_of("ink_host").expect("ink_host partitioned");
+    assert!(ink.contains_key("create_logger"));
+    assert!(ink.contains_key("logger_log"));
+    assert!(!ink.contains_key("__launch"), "rows never cross scopes");
+    let engine = ctx.rows_of("engine").expect("engine partitioned");
+    // the async expansion: one decl row → the five-row family
+    for suffix in ["", "__start", "__yield", "__take", "__cancel"] {
+        assert!(engine.contains_key(&format!("probe{suffix}")), "probe{suffix}");
+    }
+    assert!(ctx.is_mounted("engine"));
+    assert!(!ctx.is_mounted("nmap_host"));
+    assert_eq!(
+        ctx.scopes().collect::<Vec<_>>(),
+        vec!["engine", "ink_host"],
+        "the scopes iterate in name order"
+    );
+
+    // the raw-lane compatibility: expected_host_fns IS the flatten
+    assert_eq!(s.expected_host_fns(), ctx.flatten());
+
+    // the pkg contract pins re-run per-pkg: the ink_host pkg satisfies
+    // its scope's rows exactly
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
+    // a pkg whose installer left a row out panics naming ITS scope —
+    // the engine rows are declared and nobody installed them here, so
+    // verify_against (the net) names the pkg's row
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        hosts.verify_against(&ctx.flatten());
+    }))
+    .err()
+    .and_then(|e| e.downcast_ref::<String>().cloned())
+    .expect("verify panics on the uninstalled engine rows");
+    assert!(
+        err.contains("engine::") && err.contains("never bound"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
+    // the e2e contract: TWO host pkgs mounted, one installer missing —
+    // the net (`Vm::new`) panics naming the pkg; installing BOTH over a
+    // session that mounts a subset boots clean (the inert-merge law)
+    use rut_vm::interp::{HostRegistry, Limits, Vm};
+
+    let mut s = Session::new();
+    mount_std_core(&mut s);
+    let ink_host = lower_decl_module(
+        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        "ink_host.d.rut",
+    )
+    .expect("ink_host surface");
+    s.register_module("ink_host", ink_host).unwrap();
+    let server = lower_decl_module(
+        "pub host fn subscribe(bus: opaque, topic: str, handler: str) -> nil;\n",
+        "server.d.rut",
+    )
+    .expect("server surface");
+    s.register_module("server", server).unwrap();
+    s.register_module(
+        "app",
+        rut_driver::Module {
+            body: ModuleBody::Source {
+                text: "use ink_host::{ create_logger };\nuse server::{ subscribe };\npub fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n".into(),
+                is_decl: false,
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let out = rut_driver::compile_graph(&s, "app");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let prog = std::rc::Rc::new(rut_core::link::flatten(out.program.expect("linked")));
+    let limits = Limits::default();
+
+    // ONE installer (ink_host's) ran; server's never did — the boot
+    // refuses naming the missing pkg's row (the net: today's join)
+    let ctx = s.host_pkg_context();
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
+    let err = match Vm::new(prog.clone(), &limits, rut_vm::interp::HostHooks::default(), hosts) {
+        Err(t) => t,
+        Ok(_) => panic!("a missing installer must not boot the program"),
+    };
+    assert!(err.msg.contains("server::subscribe"), "{}", err.msg);
+    assert!(err.msg.contains("never bound"), "{}", err.msg);
+
+    // the blanket install: BOTH pkgs installed (server's rows bound as
+    // inert extras — the program never mounts a `server` use), boots clean
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
+    rut_vm::register!(
+        hosts,
+        "server::subscribe",
+        (OpaqueRef, &str, &str) -> (),
+        |_vm: &mut rut_vm::interp::Vm, _b: OpaqueRef, _t: &str, _h: &str| ()
+    );
+    let mut vm = Vm::new(prog, &limits, rut_vm::interp::HostHooks::default(), hosts)
+        .expect("the blanket install boots");
+    let _: OpaqueRef = vm.call("main", ()).expect("main");
 }

@@ -1,6 +1,6 @@
 // bench-cross/bench_cross.d.rut — the crossing-tax benchmark's host
 // surface (the crossing-fastpath plan, phase 0): `pub host fn` decls
-// only — the bodies live in rut-std's `install_std_bench_cross`.
+// only — the bodies live in rut-std's `bench_cross::pkg()`.
 //
 // The bodies are the identity and a four-way sum — deliberately empty
 // so the difference between a host call and the same-shaped inline rut
