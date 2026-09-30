@@ -364,7 +364,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // paths (checked loosely: a final Ret with default value)
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
         let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
@@ -472,7 +472,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.emit(Op::Ret { val: Some(c.last_reg) }, 0);
         }
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
         let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
@@ -547,7 +547,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::ConstRaw { dst: t, bits: 1 }, 0);
         c.emit(Op::Ret { val: Some(t) }, 0);
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
         let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let mut param_tys = vec![elem_ty];

@@ -101,6 +101,25 @@ pub fn main() -> i32 {{
     assert!(vm.heap_peak() > const_bytes, "the drain ran on a real heap");
 }
 
+/// SROA vs the drain (the recorded engine quirk, fixed): a field read of
+/// a disposal-implementing record after its mint must not scalarize the
+/// mint away — the cell stays a real allocation and `dispose` logs at the
+/// scope end's release, exactly like the no-read shape beside it.
+#[test]
+fn a_field_read_after_the_mint_does_not_elide_dispose() {
+    let src = format!(
+        r#"{DISP}
+pub fn main() -> i32 {{
+    let a = A {{ n: 1 }};
+    let x = a.n;
+    return x;
+}}
+"#
+    );
+    let (_, lines) = run_logged(&src);
+    assert_eq!(lines, vec!["gone 1".to_string()], "the dispose runs through the drain");
+}
+
 #[test]
 fn the_disposal_row_rides_the_binary() {
     let src = r#"

@@ -312,7 +312,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     }
     patch_members(c.ctx, layout.ckpt_ty, table_labels.len() as u32);
 
-    let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+    let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
     let (code, spans, pools) = peephole::run(code, spans, c.pools);
     let Pools { argv, labels, .. } = pools;
     let regs = c.regs;

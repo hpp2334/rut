@@ -315,3 +315,45 @@ fn boxed_opt_mint_unchanged() {
     );
     assert_eq!(run_main(src), 5);
 }
+
+// ---- the Disposal guard: a lifetime-observing record keeps its mint ----
+
+/// A `Disposal` row observes the cell's LIFETIME (`dispose` runs at
+/// refcount zero), which no identity probe can see — so the
+/// scalar-replacement pass must decline a mint whose type implements
+/// `Disposal` even when every use is a non-ref field read: deleting the
+/// allocation would delete the call. The exact shape that used to swallow
+/// the dispose (mint → prim `getf` → scope end) keeps its `makerecord`;
+/// the same shape over a plain class still scalarizes.
+#[test]
+fn disposal_record_keeps_its_mint_plain_class_still_elides() {
+    let disposal_src = r#"
+        use core::{ Disposal, DisposalContext };
+        class A { pub n: i32 = 0; }
+        impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
+        pub fn main() -> i32 {
+            let a = A { n: 1 };
+            let x = a.n;
+            return x;
+        }
+    "#;
+    let dump = ir_dump(disposal_src);
+    assert!(
+        dump.contains("makerecord"),
+        "a Disposal-implementing mint observes its own lifetime — it must survive SROA:\n{dump}"
+    );
+
+    let plain_src = r#"
+        class P { pub n: i32 = 0; }
+        pub fn main() -> i32 {
+            let p = P { n: 1 };
+            let x = p.n;
+            return x;
+        }
+    "#;
+    let dump = ir_dump(plain_src);
+    assert!(
+        !dump.contains("makerecord"),
+        "a plain record read only through prim fields still scalarizes:\n{dump}"
+    );
+}

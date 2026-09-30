@@ -413,6 +413,25 @@ impl<'a> Ctx<'a> {
         out
     }
 
+    /// The dense-type set carrying a static `Disposal` impl (the SROA
+    /// guard): a record of one of these types observes its own lifetime —
+    /// `dispose` runs at refcount zero — so the optimizer must not delete
+    /// its mint. Derived from the impl DECLARATIONS (not the inst map), so
+    /// it is stable at every point of the monomorphization queue; a
+    /// generic target keeps its row under the template's own id, exactly
+    /// where the static dispatch table looks (instantiations dispatch no
+    /// static row, so their mints stay elidable — the mirror of runtime).
+    pub fn disposal_dense_set(&self) -> std::collections::HashSet<TypeId> {
+        let mut set = std::collections::HashSet::new();
+        for im in &self.impls {
+            if im.inherent || im.target_data.is_some() || im.trait_name != sym::DISPOSAL {
+                continue;
+            }
+            set.insert(im.target);
+        }
+        set
+    }
+
     pub fn compile_module_lets(&mut self) {
         let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> = self.lets.clone();
         for (_, ty, init) in entries {

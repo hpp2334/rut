@@ -16,6 +16,13 @@
 //! return), a ref-typed field read, or a redefined field value register
 //! disqualifies the record and it is left as a real allocation.
 //!
+//! So does a `Disposal` row on the record's type: `dispose` runs at
+//! refcount zero, which makes the allocation's LIFETIME observable even
+//! when its identity is not — a type whose class implements `Disposal`
+//! keeps its mint (the caller passes the dense-type set; the guard is
+//! exactly the static dispatch table's row existence, generic targets
+//! included under the template id).
+//!
 //! The return-position window (err-channel phase 1) extends the same
 //! machinery past that disqualification list: after the checker-level
 //! inliner has spliced callee into caller, the dominant surviving mint is
@@ -37,7 +44,7 @@
 use super::peephole::def_use;
 use super::Pools;
 use rut_core::ops::*;
-use rut_core::types::Repr;
+use rut_core::types::{Repr, TypeId};
 use std::collections::{HashMap, VecDeque};
 
 /// Run SROA to a fixed point on one function: the scalar-replacement
@@ -49,10 +56,11 @@ pub(crate) fn run(
     mut code: Vec<Op>,
     mut spans: Vec<(u32, u32)>,
     pools: &mut Pools,
+    disposal: &std::collections::HashSet<TypeId>,
 ) -> (Vec<Op>, Vec<(u32, u32)>) {
     for _ in 0..4 {
-        let (c1, s1, sroa_changed) = one_round(code, spans, pools);
-        let (c2, s2, ret_changed) = ret_round(c1, s1, pools);
+        let (c1, s1, sroa_changed) = one_round(code, spans, pools, disposal);
+        let (c2, s2, ret_changed) = ret_round(c1, s1, pools, disposal);
         code = c2;
         spans = s2;
         if !sroa_changed && !ret_changed {
@@ -66,6 +74,7 @@ fn one_round(
     code: Vec<Op>,
     spans: Vec<(u32, u32)>,
     pools: &mut Pools,
+    disposal: &std::collections::HashSet<TypeId>,
 ) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
@@ -111,12 +120,17 @@ fn one_round(
     let mut replace_getf: HashMap<usize, (u16, u16)> = HashMap::new();
 
     for pc in 0..n {
-        let Op::MakeRecord { dst: p, argv_off, argc, .. } = &code[pc] else {
+        let Op::MakeRecord { dst: p, ty, argv_off, argc, .. } = &code[pc] else {
             continue;
         };
         let p = *p;
         let vals: &[Reg] = &pools.argv[*argv_off as usize..*argv_off as usize + *argc as usize];
         if is_target[pc] || defs.get(&p).map_or(true, |d| d.len() != 1) {
+            continue;
+        }
+        // a `Disposal` row observes the cell's lifetime (dispose runs at
+        // refcount zero): deleting the mint would delete the call
+        if disposal.contains(ty) {
             continue;
         }
         // no uses at all: a dead allocation — leave it for the dead-op
@@ -254,6 +268,7 @@ fn ret_round(
     code: Vec<Op>,
     spans: Vec<(u32, u32)>,
     pools: &mut Pools,
+    disposal: &std::collections::HashSet<TypeId>,
 ) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
@@ -300,7 +315,7 @@ fn ret_round(
     let mut replace_getf: HashMap<usize, Op> = HashMap::new();
 
     for pc in 0..n {
-        let Op::MakeRecord { dst: p, argv_off, argc, .. } = &code[pc] else {
+        let Op::MakeRecord { dst: p, ty, argv_off, argc, .. } = &code[pc] else {
             continue;
         };
         let p = *p;
@@ -310,6 +325,12 @@ fn ret_round(
             || vals.contains(&p)
             || defs.get(&p).map_or(true, |d| d.len() != 1)
         {
+            continue;
+        }
+        // the same lifetime-observability guard as the scalar round: the
+        // ret window's deletions remove the mint's own rc traffic, and a
+        // `Disposal` row makes that death observable
+        if disposal.contains(ty) {
             continue;
         }
         // walk the handoff chain: (register, its single def site). The

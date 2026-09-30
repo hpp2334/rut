@@ -5468,10 +5468,10 @@ msgstr "构建器是一个包"
 msgid ""
 "Core has no string-building class: the growable builder lives in the "
 "`strbuild` package ([the stdlib "
-"reference](../reference/stdlib.md#strbuild-the-builder)) — `use strbuild::{ "
+"reference](../reference/stdlib.md#strbuild--the-builder)) — `use strbuild::{ "
 "StringBuilder }`. For the common accumulator shape you need no builder at "
 "all: `out = f\"{out}{t}\"` appends in place, linear in the total output."
-msgstr "core 没有字符串构建类：可增长的构建器住在 `strbuild` 包里（[标准库参考](../reference/stdlib.md#strbuild-the-builder)）——`use strbuild::{ StringBuilder }`。对常见的累加器形状，你完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性。"
+msgstr "core 没有字符串构建类：可增长的构建器住在 `strbuild` 包里（[标准库参考](../reference/stdlib.md#strbuild--the-builder)）——`use strbuild::{ StringBuilder }`。对常见的累加器形状，你完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性。"
 
 #: src/tutorial/stdlib.md:132
 msgid "One gated name"
@@ -22575,9 +22575,9 @@ msgstr "`StrBuf`"
 #: src/reference/stdlib.md:121
 msgid ""
 "`use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` "
-"is engine-optimized ([the builder package](#strbuild-the-builder), "
+"is engine-optimized ([the builder package](#strbuild--the-builder), "
 "[f-strings](literals-and-inference.md))"
-msgstr "`use strbuild::{ StringBuilder }`，或直接累加：`out = f\"{out}{t}\"` 已被引擎优化（[构建器包](#strbuild-the-builder)、[f 字符串](literals-and-inference.md)）"
+msgstr "`use strbuild::{ StringBuilder }`，或直接累加：`out = f\"{out}{t}\"` 已被引擎优化（[构建器包](#strbuild--the-builder)、[f 字符串](literals-and-inference.md)）"
 
 #: src/reference/stdlib.md:123
 msgid ""
@@ -24251,27 +24251,29 @@ msgstr "对纯操作做 **CSE / LICM**——类型 id 加载、向下转型检�
 msgid ""
 "**Peephole + SROA** — the rewriters re-intern operand pools on register "
 "remap, so pool sharing stays consistent (see [Typed "
-"bytecode](typed-bytecode.md))."
-msgstr "**窥孔 + SROA**——重写器在寄存器重映射时重新驻留操作数池，因此池共享保持一致（见[类型化字节码](typed-bytecode.md)）。"
+"bytecode](typed-bytecode.md)). SROA declines a record whose class implements "
+"`Disposal`: the cell's death is observable (dispose runs at refcount zero), "
+"so its mint is never deleted."
+msgstr "**窥孔 + SROA**——重写器在寄存器重映射时重新驻留操作数池，因此池共享保持一致（见[类型化字节码](typed-bytecode.md)）。SROA 拒绝其类实现了 `Disposal` 的记录：单元的死亡是可观察的（dispose 在引用计数归零时运行），因此它的铸造绝不会被删除。"
 
-#: src/reference/compiler.md:162
+#: src/reference/compiler.md:164
 msgid ""
 "**Pattern lowering** — downcast chains become one type-id load plus a jump "
 "table; `when` on enums lowers to `brtable` over the member value."
 msgstr "**模式下降**——向下转型链变成一次类型 id 加载加一张跳转表；枚举上的 `when` 下降为对成员值的 `brtable`。"
 
-#: src/reference/compiler.md:165
+#: src/reference/compiler.md:167
 msgid ""
 "The pipeline is honest by construction: there is no tier-2 to fall back on, "
 "so the emitted code must be right the first time. Every gate measures "
 "against the example programs and the benchmark corpus."
 msgstr "这条流水线从构造上就是诚实的：没有 tier-2 可以退而求其次，因此发出的代码必须第一次就对。每道门禁都对照示例程序与基准语料测量。"
 
-#: src/reference/compiler.md:169 src/reference/typed-bytecode.md:170
+#: src/reference/compiler.md:171 src/reference/typed-bytecode.md:170
 msgid "Async lowering"
 msgstr "异步下降"
 
-#: src/reference/compiler.md:171
+#: src/reference/compiler.md:173
 msgid ""
 "`async fn` compiles to a state machine: each `await` is a checkpoint state "
 "in the hidden frame, resume dispatch is the existing jump-table op, locals "
@@ -24281,11 +24283,11 @@ msgid ""
 "and [Tasks](tasks.md)."
 msgstr "`async fn` 编译成一个状态机：每个 `await` 是隐藏帧里的一个检查点状态，恢复分派是现有的跳转表操作，局部变量成为帧字段，挂起是一次普通的返回。为此操作集零新增——被驱动的那一半是一次普通的 trait-vtable 调用，走 future 的 `yield` 行。完整协议见[异步与 await](async.md)与[任务](tasks.md)。"
 
-#: src/reference/compiler.md:178 src/reference/module-binary.md:102
+#: src/reference/compiler.md:180 src/reference/module-binary.md:102
 msgid "Determinism"
 msgstr "确定性"
 
-#: src/reference/compiler.md:180
+#: src/reference/compiler.md:182
 msgid ""
 "Same source + same dependency versions + same compiler version ⇒ "
 "byte-identical output. Serialization is ordered and little-endian "
