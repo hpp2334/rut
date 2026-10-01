@@ -71,17 +71,17 @@ pub struct Widget {
 
 impl Widget {
     /// Append a child (no variadics — one at a time, per §2.4).
-    fn w(mut self, child: Widget) -> Self {
+    pub fn w(mut self, child: Widget) -> Self {
         self.children.push(child);
         return self;
     }
 
-    fn gap(mut self, n: i32) -> Self {
+    pub fn gap(mut self, n: i32) -> Self {
         self.gap = n;
         return self;
     }
 
-    fn pad(mut self, n: i32) -> Self {
+    pub fn pad(mut self, n: i32) -> Self {
         self.pad = n;
         return self;
     }
@@ -92,13 +92,13 @@ impl Widget {
     }
 
     /// The stable test id — the lowering emits it as the `id` attr.
-    fn hook(mut self, id: str) -> Self {
+    pub fn hook(mut self, id: str) -> Self {
         self.hook = id;
         return self;
     }
 
     /// The keyed-diff identity; defaults from `hook` when unset.
-    fn key(mut self, id: str) -> Self {
+    pub fn key(mut self, id: str) -> Self {
         self.key = id;
         return self;
     }
@@ -106,14 +106,14 @@ impl Widget {
     /// tur's `onClick(mutate(...))`: the mutation the framework runs
     /// when this widget fires (buttons, checkboxes). The event's
     /// SEMANTICS ride the mutation, not a subject string.
-    fn on_click(mut self, m: Mutation<str, opaque>) -> Self {
+    pub fn on_click(mut self, m: Mutation<str, opaque>) -> Self {
         self.on_click = m;
         return self;
     }
 
     /// tur's `{ onInput: mutate(...) }`: the mutation run with the
     /// input's event-carried value (fields).
-    fn on_input(mut self, m: Mutation<str, opaque>) -> Self {
+    pub fn on_input(mut self, m: Mutation<str, opaque>) -> Self {
         self.on_input = m;
         return self;
     }
@@ -121,14 +121,14 @@ impl Widget {
     /// tur's captured-index click, DATA-SHAPED: the machine mutation
     /// plus its arg as fields — no runtime closure mint (see on_row's
     /// comment); `ev_run` feeds it the bound arg on the firing event.
-    fn on_row(mut self, m: Mutation<i64, opaque>, arg: i64) -> Self {
+    pub fn on_row(mut self, m: Mutation<i64, opaque>, arg: i64) -> Self {
         self.on_row = m;
         self.row_arg = arg;
         return self;
     }
 
     /// The field's value — the LITERAL arm (tests, static shells).
-    fn value(mut self, v: str) -> Self {
+    pub fn value(mut self, v: str) -> Self {
         self.value = v;
         return self;
     }
@@ -136,20 +136,20 @@ impl Widget {
     /// tur's `Text({ text: derive(...) })`: a REACTIVE text content —
     /// the derived resolves at the render door; the literal `text`
     /// it replaces is what the diff compares.
-    fn text_of(mut self, d: Derived<str>) -> Self {
+    pub fn text_of(mut self, d: Derived<str>) -> Self {
         self.text$ = d;
         return self;
     }
 
     /// The reactive field value — the derived resolves at the render
     /// door (the draft mirror without an eager pull at view build).
-    fn value_of(mut self, d: Derived<str>) -> Self {
+    pub fn value_of(mut self, d: Derived<str>) -> Self {
         self.value$ = d;
         return self;
     }
 
     /// The placeholder (Field).
-    fn placeholder(mut self, p: str) -> Self {
+    pub fn placeholder(mut self, p: str) -> Self {
         self.placeholder = p;
         return self;
     }

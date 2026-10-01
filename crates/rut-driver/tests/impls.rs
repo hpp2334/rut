@@ -565,3 +565,75 @@ fn widened_scalar_slots_survive_calls_and_vtable_dispatch() {
                }\n";
     assert_eq!(run_main(src), 5);
 }
+
+// ---- impl-method visibility (the pub law) ---------------------------
+// `pub fn` on a struct's inherent impl exports cross-module; plain
+// `fn` is module-private (the class rule). Struct FIELDS keep the
+// all-pub law — this is about methods only.
+
+const VIS_DEP: &str = "\
+pub struct Counter { n: i32 }\n\
+impl Counter {\n\
+\x20   pub fn new() -> Self { return Counter { n: 0 }; }\n\
+\x20   pub fn bump(mut self) -> Self { self.n += 1; return self; }\n\
+\x20   fn secret(self) -> i32 { return self.n; }\n\
+}\n\
+// same-module: the plain fn is right there — the ordinary law\n\
+pub fn peek(c: Counter) -> i32 { return c.secret(); }\n\
+pub fn fresh() -> Counter { return Counter.new(); }\n";
+
+#[test]
+fn pub_struct_methods_cross_private_ones_stay_home() {
+    let dep = rut_driver::compile_program(VIS_DEP, Mode::Impl, "counter", 1, &[]);
+    assert!(dep.diags.is_empty(), "the plain fn is fine same-module: {:?}", dep.diags);
+    let dep = dep.program.expect("dep");
+    let surface = dep.surface.clone();
+
+    // the consumer calls the pub methods; the private one is a
+    // standard no-method error (visibility enforcement is structural)
+    let pub_only = rut_driver::compile_program(
+        "use counter::{Counter, fresh, peek};\n\
+         pub fn main() -> i32 {\n\
+         \x20   let c = fresh().bump();\n\
+         \x20   if (peek(c) != 1) { return -1; }\n\
+         \x20   return 0;\n\
+         }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface.clone(), "counter".to_string())],
+    );
+    assert!(pub_only.diags.is_empty(), "pub methods cross: {:?}", pub_only.diags);
+    let out = rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
+    assert_eq!(run_main_src(out), 0, "the linked pub-method call runs");
+
+    let private = rut_driver::compile_program(
+        "use counter::{fresh};\n\
+         fn main() -> i32 {\n\
+         \x20   let c = fresh();\n\
+         \x20   return c.secret();\n\
+         }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface, "counter".to_string())],
+    );
+    let ds: Vec<String> = private.diags.iter().map(|d| d.msg.clone()).collect();
+    assert!(
+        ds.iter().any(|d| d.contains("`Counter` has no method `secret`")),
+        "a private method is a no-method error at the consumer: {ds:?}"
+    );
+}
+
+fn run_main_src(p: rut_core::binary::Program) -> i32 {
+    let prog = rut_core::link::flatten(p);
+    rut_vm::verify::verify(&prog).expect("verify");
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &rut_vm::interp::Limits::default(),
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    vm.call::<_, i32>("main", ()).expect("run")
+}

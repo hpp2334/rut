@@ -482,7 +482,7 @@ pub fn compile_program_resolved(
         roots.push(Inst { key: FnKey::Free(name), subst: vec![], trait_origins: vec![] });
     }
     // library surface, class half (the linkable-classes phase): every
-    // non-generic class's exported methods are callable from a
+    // non-generic data's pub methods are callable from a
     // consumer, so their bodies compile even when nothing local calls
     // them — the inherent surface rows carry the fn ids. Generic
     // classes monomorphize per instantiation (the owner-side request
@@ -494,8 +494,7 @@ pub fn compile_program_resolved(
         }
         for (mname, mnode) in &d.methods {
             let md = ctx.ast.method_decl(*mnode);
-            let exported =
-                d.kind == rut_lir::check::DataKind::Struct || md.vis == Some(rut_ast::ast::Vis::Pub);
+            let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
             if !exported || md.is_async || !md.generics.is_empty() {
                 continue;
             }
@@ -570,9 +569,9 @@ pub fn compile_program_resolved(
     // the compiled fn ids; a generic class's row spells the
     // TEMPLATE (placeholder `#<param>` signatures, fn local zero),
     // and the consumer substitutes per instantiation and requests
-    // the bodies. Member visibility is the class law (structs
-    // are all-public); async and generic METHODS cross no surface
-    // (call-site shapes).
+    // the bodies. Method visibility is the pub law — `pub fn` crosses,
+    // plain `fn` is module-private; async and generic METHODS cross no
+    // surface (call-site shapes).
     for (dname, d) in ctx.datas.clone() {
         if d.methods.is_empty() {
             continue;
@@ -598,8 +597,7 @@ pub fn compile_program_resolved(
         let mut methods = Vec::new();
         for (mname, mnode) in &d.methods {
             let md = ctx.ast.method_decl(*mnode);
-            let exported =
-                d.kind == rut_lir::check::DataKind::Struct || md.vis == Some(rut_ast::ast::Vis::Pub);
+            let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
             // GENERIC methods cross too: the row carries the method's
             // own generic parameters, the call site substitutes, and
             // the bodies ride the request machinery
