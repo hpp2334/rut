@@ -77,7 +77,7 @@ fn run_entry<R: rut_vm::interp::Ret>(session: &Session, root: &str, entry: &str)
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
-/// The pinned identity world: `cells` (a generic dataclass pkg, linked —
+/// The pinned identity world: `cells` (a generic struct pkg, linked —
 /// no inline flag) and `maker` (a linked lib whose pub fn returns an
 /// instantiation of the foreign generic). The consumer uses both plus
 /// its own spelling of the same instantiation.
@@ -238,7 +238,7 @@ where
     }
 }
 
-/// A generic dataclass pkg consumed through the REQUEST path: the
+/// A generic struct pkg consumed through the REQUEST path: the
 /// consumer instantiates against the linked owner's template, the owner
 /// recompiles with the seeded instantiation, and both sides' rows unify
 /// at link.

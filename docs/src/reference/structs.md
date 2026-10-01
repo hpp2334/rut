@@ -29,9 +29,6 @@ pub fn main() {
 16711935 1
 ```
 
-The keyword is `struct`. The removed spelling `dataclass` is a reserved
-word whose error names the replacement.
-
 ## Reference semantics
 
 A struct value is a **heap cell handle** (see

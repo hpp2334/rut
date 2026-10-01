@@ -1,4 +1,4 @@
-//! Collection: pass 1 declares types (enums, dataclasses,
+//! Collection: pass 1 declares types (enums, structs,
 //! classes, traits), pass 2 impls/fns/lets. Record payloads are slot arrays
 //!; impl methods enter the instantiation queue eagerly.
 
@@ -13,14 +13,14 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.module_items(self.ast.root).to_vec();
-        // pass 1a: declare types (enums, dataclasses, classes, traits,
+        // pass 1a: declare types (enums, structs, classes, traits,
         // aliases) so every name is in scope before any field/signature
         // is resolved
         for it in &items {
             match self.ast.item(*it) {
             ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
-            ItemKind::Dataclass { vis, name, generics, methods, .. } => {
-                self.declare_data(it.id(), DataKind::Dataclass, *vis, *name, generics, &[], methods);
+            ItemKind::Struct { vis, name, generics, methods, .. } => {
+                self.declare_data(it.id(), DataKind::Struct, *vis, *name, generics, &[], methods);
             }
             ItemKind::Class { vis, name, generics, requires, methods, .. } => {
                 self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, requires, methods);
@@ -44,7 +44,7 @@ impl<'a> Ctx<'a> {
         }
         for it in &items {
             match self.ast.item(*it) {
-                ItemKind::Dataclass { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
+                ItemKind::Struct { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
                     // generic records instantiate on use (mk_data_inst), so
                     // their field types resolve under the PARAMETER
                     // PLACEHOLDERS here — the template row crosses the
@@ -518,7 +518,7 @@ impl<'a> Ctx<'a> {
         // the same record from recursing
         self.admit_bounds(&decl.requires, &env, sp);
         let field_nodes: Vec<NodeHandle<FieldDeclNode>> = match self.ast.item(decl.node) {
-            ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+            ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
             _ => Vec::new(),
         };
         let mut resolved: Vec<FieldInfo> = Vec::new();

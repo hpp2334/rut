@@ -495,7 +495,7 @@ pub fn compile_program_resolved(
         for (mname, mnode) in &d.methods {
             let md = ctx.ast.method_decl(*mnode);
             let exported =
-                d.kind == rut_lir::check::DataKind::Dataclass || md.vis == Some(rut_ast::ast::Vis::Pub);
+                d.kind == rut_lir::check::DataKind::Struct || md.vis == Some(rut_ast::ast::Vis::Pub);
             if !exported || md.is_async || !md.generics.is_empty() {
                 continue;
             }
@@ -570,7 +570,7 @@ pub fn compile_program_resolved(
     // the compiled fn ids; a generic class's row spells the
     // TEMPLATE (placeholder `#<param>` signatures, fn local zero),
     // and the consumer substitutes per instantiation and requests
-    // the bodies. Member visibility is the class law (dataclasses
+    // the bodies. Member visibility is the class law (structs
     // are all-public); async and generic METHODS cross no surface
     // (call-site shapes).
     for (dname, d) in ctx.datas.clone() {
@@ -599,7 +599,7 @@ pub fn compile_program_resolved(
         for (mname, mnode) in &d.methods {
             let md = ctx.ast.method_decl(*mnode);
             let exported =
-                d.kind == rut_lir::check::DataKind::Dataclass || md.vis == Some(rut_ast::ast::Vis::Pub);
+                d.kind == rut_lir::check::DataKind::Struct || md.vis == Some(rut_ast::ast::Vis::Pub);
             // GENERIC methods cross too: the row carries the method's
             // own generic parameters, the call site substitutes, and
             // the bodies ride the request machinery

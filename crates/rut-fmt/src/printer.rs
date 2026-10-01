@@ -707,7 +707,7 @@ impl<'a> P<'a> {
                 self.sp();
                 self.text("}");
             }
-            ItemKind::Dataclass { vis, name, generics, fields, methods } => {
+            ItemKind::Struct { vis, name, generics, fields, methods } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -786,7 +786,7 @@ impl<'a> P<'a> {
                 }
                 self.text(";");
             }
-            ItemKind::SurfaceDataclass { vis, name, fields } => {
+            ItemKind::SurfaceStruct { vis, name, fields } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();

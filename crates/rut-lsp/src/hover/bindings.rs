@@ -97,7 +97,7 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
                 cx.walk_block(d.body);
             }
             ItemKind::Class { methods, .. }
-            | ItemKind::Dataclass { methods, .. }
+            | ItemKind::Struct { methods, .. }
             | ItemKind::Trait { methods, .. }
             | ItemKind::Impl { methods, .. } => {
                 for m in methods {

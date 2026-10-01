@@ -7,7 +7,7 @@ use rut_lexer::span::Span;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TyForm {
     Class,
-    Dataclass,
+    Struct,
     Trait,
     Enum,
     /// `builtin Name<..>` — an engine builtin's member contract (core
@@ -20,7 +20,7 @@ pub enum TyForm {
     /// Iterator, Disposal); users implement it with ordinary impl blocks
     BuiltinTrait,
     /// `host struct Name { fields }` — a flat host-constructed record
-    HostDataclass,
+    HostStruct,
     /// `type X = A;` — a transparent alias
     Alias,
 }
@@ -29,13 +29,13 @@ impl TyForm {
     pub(crate) fn keyword(self) -> &'static str {
         match self {
             TyForm::Class => "class",
-            TyForm::Dataclass => "struct",
+            TyForm::Struct => "struct",
             TyForm::Trait => "trait",
             TyForm::Enum => "enum",
             TyForm::Builtin => "builtin",
             TyForm::Primitive => "primitive",
             TyForm::BuiltinTrait => "builtin trait",
-            TyForm::HostDataclass => "host struct",
+            TyForm::HostStruct => "host struct",
             TyForm::Alias => "type",
         }
     }

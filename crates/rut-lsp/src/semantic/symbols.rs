@@ -88,7 +88,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .collect();
             Some(sym(ast.name(*name), SymKind::Enum, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Dataclass { name, fields, methods, .. }
+        ItemKind::Struct { name, fields, methods, .. }
         | ItemKind::Class { name, fields, methods, .. } => {
             let children = member_symbols(toks, ast, fields, methods);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
@@ -141,7 +141,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .collect();
             Some(sym(ast.name(*prim), SymKind::Class, find_name(toks, span, ast.name(*prim), false), children))
         }
-        ItemKind::SurfaceDataclass { name, fields, .. } => {
+        ItemKind::SurfaceStruct { name, fields, .. } => {
             let children = member_symbols(toks, ast, fields, &[]);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }

@@ -322,7 +322,7 @@ pub enum ItemKind {
     Alias(AliasData),
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },
-    Dataclass {
+    Struct {
         vis: Vis,
         name: IdentId,
         generics: Vec<IdentId>,
@@ -376,7 +376,7 @@ pub enum ItemKind {
     /// `host struct` — .d.rut only: a flat record whose every field is
     /// a crossing type. Host fns take/return it; the host constructs and
     /// reads it through the field table (the shape is the whole surface).
-    SurfaceDataclass {
+    SurfaceStruct {
         vis: Vis,
         name: IdentId,
         fields: Vec<NodeHandle<FieldDeclNode>>,

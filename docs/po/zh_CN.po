@@ -12263,70 +12263,60 @@ msgid "rut spells this `trait`"
 msgstr "rut 将其拼写作 `trait`"
 
 
-#: src/reference/lexical-structure.md:74 src/reference/reflection.md:31
-msgid "`dataclass`"
-msgstr "`dataclass`"
-
-
 #: src/reference/lexical-structure.md:74
-msgid "removed — spell it `struct`"
-msgstr "已移除 —— 请拼写作 `struct`"
-
-
-#: src/reference/lexical-structure.md:75
 msgid "`in`"
 msgstr "`in`"
 
 
-#: src/reference/lexical-structure.md:75
+#: src/reference/lexical-structure.md:74
 msgid "iteration is `for (let x of ..)`"
 msgstr "迭代写作 `for (let x of ..)`"
 
 
-#: src/reference/lexical-structure.md:76
+#: src/reference/lexical-structure.md:75
 msgid "`private`"
 msgstr "`private`"
 
 
-#: src/reference/lexical-structure.md:76
+#: src/reference/lexical-structure.md:75
 msgid "members are private by default; add `pub`"
 msgstr "成员默认私有；要公开就加上 `pub`"
 
 
-#: src/reference/lexical-structure.md:78
+#: src/reference/lexical-structure.md:77
 msgid ""
 "The list is short and closed. Words that are keywords in JavaScript or Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … — are ordinary identifiers here: `let null = 5;` and `fn match()` are legal rut."
 msgstr ""
 "这份列表很短，而且是封闭的。在 JavaScript 或 Rust 中是关键字的那些词 —— `switch`、`match`、`null`、`var`、`const`、`delete`、`new`…… —— 在这里只是普通标识符：`let null = 5;` 和 `fn match()` 都是合法的 rut。"
 
 
-#: src/reference/lexical-structure.md:83
+#: src/reference/lexical-structure.md:82
 msgid "Naming conventions (enforced)"
 msgstr "命名约定（强制执行）"
 
 
-#: src/reference/lexical-structure.md:85
+#: src/reference/lexical-structure.md:84
 msgid ""
 "**Types are PascalCase** — user types and parameterized builtins: `Vec<T>`, `[T]`, `Weak<T>`, `opaque`, `Task<T>`, `Point`, `Drawable`. Scalars and simple buffers stay lowercase: `i32`, `u8`, `f32`, `bool`, `str`, `bytes`."
 msgstr ""
 "**类型采用 PascalCase** —— 用户类型与参数化的内置类型：`Vec<T>`、`[T]`、`Weak<T>`、`opaque`、`Task<T>`、`Point`、`Drawable`。标量与简单缓冲区保持小写：`i32`、`u8`、`f32`、`bool`、`str`、`bytes`。"
 
 
-#: src/reference/lexical-structure.md:89
+#: src/reference/lexical-structure.md:88
 msgid ""
 "**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, `checked_add(y)`, `spawn_worker(..)`."
 msgstr ""
 "**函数与方法采用 lower_snake_case** —— `unwrap_or(d)`、`push(v)`、`checked_add(y)`、`spawn_worker(..)`。"
 
 
-#: src/reference/lexical-structure.md:91
+#: src/reference/lexical-structure.md:90
 msgid ""
 "**Construction is a method call, never a type-call.** User classes construct through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` — see [Classes and constructors](classes.md). Only builtin surfaces keep call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat `[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
 "**构造是方法调用，绝不是类型调用。** 用户类通过自己的类方法进行构造：`Rect.new(3, 4)`、`Rect.from(other)`、`Version.parse(s)` —— 参见[类与构造器](classes.md)。只有内置接口面保留调用形式：`bytes.zeroed(n)`、`opaque(v)`、重复形式 `[v; n]`，以及 `Vec<T>.from(..)`（参见[内置泛型类型](builtin-generic-types.md)）。"
 
 
-#: src/reference/lexical-structure.md:98
+#: src/reference/lexical-structure.md:97
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the compiler attaches no semantics to it."
 msgstr "尾部 `$` 标记仅靠这条风格规则保持其意义；编译器不为它附加任何语义。"
@@ -14245,25 +14235,19 @@ msgstr ""
 "```"
 
 
-#: src/reference/structs.md:32
-msgid ""
-"The keyword is `struct`. The removed spelling `dataclass` is a reserved word whose error names the replacement."
-msgstr "关键字是 `struct`。已移除的写法 `dataclass` 是保留字，其报错信息会指明替代写法。"
-
-
-#: src/reference/structs.md:35 src/reference/rc-dispose-identity.md:6
+#: src/reference/structs.md:32 src/reference/rc-dispose-identity.md:6
 msgid "Reference semantics"
 msgstr "引用语义"
 
 
-#: src/reference/structs.md:37
+#: src/reference/structs.md:34
 msgid ""
 "A struct value is a **heap cell handle** (see [By-reference and nullable](by-reference-and-nullable.md)): assignment, argument passing, and returning share the cell, and a mutation through any alias is visible through all of them."
 msgstr ""
 "结构体值是**堆单元句柄**（参见[按引用与可空](by-reference-and-nullable.md)）：赋值、传参和返回都共享该单元，透过任何别名做出的修改透过所有别名可见。"
 
 
-#: src/reference/structs.md:42
+#: src/reference/structs.md:39
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14294,14 +14278,14 @@ msgstr ""
 "```"
 
 
-#: src/reference/structs.md:60
+#: src/reference/structs.md:57
 msgid ""
 "Writing is gated by the `mut`\\-binding law (see [Modules and visibility](modules-and-visibility.md)): field stores and `mut self` methods need a `let mut` binding (or a `mut` parameter). Parameters declare their intent: `fn nudge(mut pt: Point)` may write the caller's point; `fn length(pt: Point) -> f64` promises not to, and returns a fresh record instead:"
 msgstr ""
 "写入由 `mut`\\- 绑定法则把关（参见[模块与可见性](modules-and-visibility.md)）：字段存储和 `mut self` 方法需要 `let mut` 绑定（或 `mut` 参数）。参数声明其意图：`fn nudge(mut pt: Point)` 可以写入调用方的点；`fn length(pt: Point) -> f64` 承诺不这样做，而是返回一个全新的记录："
 
 
-#: src/reference/structs.md:67
+#: src/reference/structs.md:64
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14336,42 +14320,42 @@ msgstr ""
 "```"
 
 
-#: src/reference/structs.md:87
+#: src/reference/structs.md:84
 msgid ""
 "`==` on two struct values is a **cell-identity test** — `q == p` is true exactly when they name one cell; two separately built literals are never equal. Field-wise comparison is a trait contract of your own (declare and implement it — see [Traits and dispatch](traits.md))."
 msgstr ""
 "两个结构体值上的 `==` 是**单元同一性测试** —— `q == p` 为真当且仅当它们命名同一个单元；两个分别构造的字面量永不相等。按字段比较是你自己的 trait 契约（自行声明并实现 —— 参见[trait 与分派](traits.md)）。"
 
 
-#: src/reference/structs.md:93
+#: src/reference/structs.md:90
 msgid "Construction — the literal, everywhere"
 msgstr "构造 —— 字面量，无处不在"
 
 
-#: src/reference/structs.md:95
+#: src/reference/structs.md:92
 msgid ""
 "`Name { field: expr, .. }` is the **only** construction. There is no `new`, no class methods, no type-call. The literal is available everywhere — function bodies and module-level `let` initializers alike — and it allocates the cell."
 msgstr ""
 "`Name { field: expr, .. }` 是**唯一的**构造方式。没有 `new`，没有类方法，没有类型调用。字面量在任何地方都可用 —— 函数体和模块级 `let` 初始化式皆可 —— 并且它分配单元。"
 
 
-#: src/reference/structs.md:100
+#: src/reference/structs.md:97
 msgid "Fields may be given in any order, by name."
 msgstr "字段可以按名称以任意顺序给出。"
 
 
-#: src/reference/structs.md:101
+#: src/reference/structs.md:98
 msgid "The literal must initialize **every** field that has no initializer."
 msgstr "字面量必须初始化**每个**没有初始化式的字段。"
 
 
-#: src/reference/structs.md:102
+#: src/reference/structs.md:99
 msgid ""
 "An omitted field with an initializer takes it; `{}` with all-default fields is legal."
 msgstr "省略的、带初始化式的字段取其初始化式；全部字段都有默认值时，`{}` 合法。"
 
 
-#: src/reference/structs.md:105
+#: src/reference/structs.md:102
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14406,31 +14390,31 @@ msgstr ""
 "```"
 
 
-#: src/reference/structs.md:125
+#: src/reference/structs.md:122
 msgid "All fields public, always"
 msgstr "所有字段公开，始终如此"
 
 
-#: src/reference/structs.md:127
+#: src/reference/structs.md:124
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a compile error (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md)). Structs also have no `static` members."
 msgstr ""
 "结构体是开放的数据记录：结构体体内出现成员可见性标注是编译错误（隐私需要控制构造，那是类的职责 —— 参见[类与构造器](classes.md)）。结构体也没有 `static` 成员。"
 
 
-#: src/reference/structs.md:132
+#: src/reference/structs.md:129
 msgid "Methods live in impl blocks"
 msgstr "方法位于 impl 块中"
 
 
-#: src/reference/structs.md:134
+#: src/reference/structs.md:131
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse error. Inherent methods live in `impl S { .. }`, in the type's module only; trait impls in `impl I for S { .. }` (see [Traits and dispatch](traits.md)):"
 msgstr ""
 "结构体体**只有字段** —— 体内出现 `fn` 成员是硬性解析错误。固有方法位于 `impl S { .. }` 中，且只能写在该类型的模块内；trait impl 位于 `impl I for S { .. }`（参见[trait 与分派](traits.md)）："
 
 
-#: src/reference/structs.md:139
+#: src/reference/structs.md:136
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -14455,55 +14439,55 @@ msgstr ""
 "```"
 
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:147
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight helpers, impl blocks for trait contracts."
 msgstr "作用于数据的自由函数仍是默认惯用法；方法用于紧密的辅助操作，impl 块用于 trait 契约。"
 
 
-#: src/reference/structs.md:153
+#: src/reference/structs.md:150
 msgid "Limits, exhaustively:"
 msgstr "限制，穷尽列举："
 
 
-#: src/reference/structs.md:155
+#: src/reference/structs.md:152
 msgid "**no member visibility** — all fields are public, always;"
 msgstr "**没有成员可见性** —— 所有字段永远公开；"
 
 
-#: src/reference/structs.md:156
+#: src/reference/structs.md:153
 msgid ""
 "**no class methods** — the literal is the only construction (open literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr "**没有类方法**——字面量是唯一的构造（开放字面量 vs 类方法把守_正是_ struct/class 的分界）。"
 
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:156
 msgid ""
 "Everything else class-shaped is allowed, including `impl` blocks. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — implement `Disposal` for the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 "其余类形态的东西都允许，包括 `impl` 块。而旧的“没有析构器”限制已经消失：共享值恰在其单元引用计数归零时死亡，所以清理只是一个 `impl` 之遥——为该类型实现 `Disposal`，引擎便会在那一刻调用 `dispose`（参见[Rc、dispose 与同一性](rc-dispose-identity.md)）。"
 
 
-#: src/reference/structs.md:165
+#: src/reference/structs.md:162
 msgid "Traits and representation"
 msgstr "trait 与表示"
 
 
-#: src/reference/structs.md:167
+#: src/reference/structs.md:164
 msgid ""
 "Widening a struct to a trait `I` **attaches the impl vtable to the same handle** — no allocation, no copy: the trait-typed value aliases the record, and mutations through it are visible to every other handle."
 msgstr ""
 "把结构体宽化到 trait `I` 会**把 impl vtable 附加到同一个句柄上** —— 不分配，不复制：trait 类型的值就是该记录的别名，透过它做出的修改对所有其他句柄可见。"
 
 
-#: src/reference/structs.md:171
+#: src/reference/structs.md:168
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — primitive fields widened into their slot, composite fields as cell-handle slots (see [Reified types and layout](reified-types.md)). Recursive shapes (`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 "表示：单元内每个字段一个槽，按声明顺序排列 —— 基本类型字段宽化进自己的槽，复合字段作为单元句柄槽（参见[具体化类型与布局](reified-types.md)）。递归形状（`next: ?Node`）是合法的，因为复合字段是指针大小的。"
 
 
-#: src/reference/structs.md:176
+#: src/reference/structs.md:173
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is allowed."
 msgstr "结构体用于小型数据（点、矩形、颜色、配置），但任意大小都允许。"
@@ -22943,6 +22927,11 @@ msgstr "stringify"
 #: src/reference/reflection.md:29
 msgid "deserialize"
 msgstr "deserialize"
+
+
+#: src/reference/reflection.md:31
+msgid "`dataclass`"
+msgstr "`dataclass`"
 
 
 #: src/reference/reflection.md:31 src/reference/reflection.md:32

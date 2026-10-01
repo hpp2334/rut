@@ -649,7 +649,6 @@ fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "void" => "rut spells the empty type `nil`",
         "interface" => "rut spells this `trait`",
-        "dataclass" => "`dataclass` was removed —spell it `struct`",
         "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
         "private" => {
             "members are private by default —add `pub`"

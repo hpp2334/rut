@@ -9884,55 +9884,47 @@ msgstr ""
 msgid "rut spells this `trait`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:74 src/reference/reflection.md:31
-msgid "`dataclass`"
-msgstr ""
-
 #: src/reference/lexical-structure.md:74
-msgid "removed — spell it `struct`"
-msgstr ""
-
-#: src/reference/lexical-structure.md:75
 msgid "`in`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:75
+#: src/reference/lexical-structure.md:74
 msgid "iteration is `for (let x of ..)`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:76
+#: src/reference/lexical-structure.md:75
 msgid "`private`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:76
+#: src/reference/lexical-structure.md:75
 msgid "members are private by default; add `pub`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:78
+#: src/reference/lexical-structure.md:77
 msgid ""
 "The list is short and closed. Words that are keywords in JavaScript or Rust "
 "— `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … — are "
 "ordinary identifiers here: `let null = 5;` and `fn match()` are legal rut."
 msgstr ""
 
-#: src/reference/lexical-structure.md:83
+#: src/reference/lexical-structure.md:82
 msgid "Naming conventions (enforced)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:85
+#: src/reference/lexical-structure.md:84
 msgid ""
 "**Types are PascalCase** — user types and parameterized builtins: `Vec<T>`, "
 "`[T]`, `Weak<T>`, `opaque`, `Task<T>`, `Point`, `Drawable`. Scalars and "
 "simple buffers stay lowercase: `i32`, `u8`, `f32`, `bool`, `str`, `bytes`."
 msgstr ""
 
-#: src/reference/lexical-structure.md:89
+#: src/reference/lexical-structure.md:88
 msgid ""
 "**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, "
 "`checked_add(y)`, `spawn_worker(..)`."
 msgstr ""
 
-#: src/reference/lexical-structure.md:91
+#: src/reference/lexical-structure.md:90
 msgid ""
 "**Construction is a method call, never a type-call.** User classes construct "
 "through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, "
@@ -9942,7 +9934,7 @@ msgid ""
 "types](builtin-generic-types.md))."
 msgstr ""
 
-#: src/reference/lexical-structure.md:98
+#: src/reference/lexical-structure.md:97
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the "
 "compiler attaches no semantics to it."
@@ -11544,17 +11536,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:32
-msgid ""
-"The keyword is `struct`. The removed spelling `dataclass` is a reserved word "
-"whose error names the replacement."
-msgstr ""
-
-#: src/reference/structs.md:35 src/reference/rc-dispose-identity.md:6
+#: src/reference/structs.md:32 src/reference/rc-dispose-identity.md:6
 msgid "Reference semantics"
 msgstr ""
 
-#: src/reference/structs.md:37
+#: src/reference/structs.md:34
 msgid ""
 "A struct value is a **heap cell handle** (see [By-reference and "
 "nullable](by-reference-and-nullable.md)): assignment, argument passing, and "
@@ -11562,7 +11548,7 @@ msgid ""
 "through all of them."
 msgstr ""
 
-#: src/reference/structs.md:42
+#: src/reference/structs.md:39
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11579,7 +11565,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:60
+#: src/reference/structs.md:57
 msgid ""
 "Writing is gated by the `mut`\\-binding law (see [Modules and "
 "visibility](modules-and-visibility.md)): field stores and `mut self` methods "
@@ -11589,7 +11575,7 @@ msgid ""
 "instead:"
 msgstr ""
 
-#: src/reference/structs.md:67
+#: src/reference/structs.md:64
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11608,7 +11594,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:87
+#: src/reference/structs.md:84
 msgid ""
 "`==` on two struct values is a **cell-identity test** — `q == p` is true "
 "exactly when they name one cell; two separately built literals are never "
@@ -11616,11 +11602,11 @@ msgid ""
 "implement it — see [Traits and dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/structs.md:93
+#: src/reference/structs.md:90
 msgid "Construction — the literal, everywhere"
 msgstr ""
 
-#: src/reference/structs.md:95
+#: src/reference/structs.md:92
 msgid ""
 "`Name { field: expr, .. }` is the **only** construction. There is no `new`, "
 "no class methods, no type-call. The literal is available everywhere — "
@@ -11628,21 +11614,21 @@ msgid ""
 "the cell."
 msgstr ""
 
-#: src/reference/structs.md:100
+#: src/reference/structs.md:97
 msgid "Fields may be given in any order, by name."
 msgstr ""
 
-#: src/reference/structs.md:101
+#: src/reference/structs.md:98
 msgid "The literal must initialize **every** field that has no initializer."
 msgstr ""
 
-#: src/reference/structs.md:102
+#: src/reference/structs.md:99
 msgid ""
 "An omitted field with an initializer takes it; `{}` with all-default fields "
 "is legal."
 msgstr ""
 
-#: src/reference/structs.md:105
+#: src/reference/structs.md:102
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11663,11 +11649,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:125
+#: src/reference/structs.md:122
 msgid "All fields public, always"
 msgstr ""
 
-#: src/reference/structs.md:127
+#: src/reference/structs.md:124
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a "
 "compile error (privacy needs construction control, which is the class's job "
@@ -11675,18 +11661,18 @@ msgid ""
 "members."
 msgstr ""
 
-#: src/reference/structs.md:132
+#: src/reference/structs.md:129
 msgid "Methods live in impl blocks"
 msgstr ""
 
-#: src/reference/structs.md:134
+#: src/reference/structs.md:131
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse "
 "error. Inherent methods live in `impl S { .. }`, in the type's module only; "
 "trait impls in `impl I for S { .. }` (see [Traits and dispatch](traits.md)):"
 msgstr ""
 
-#: src/reference/structs.md:139
+#: src/reference/structs.md:136
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -11701,27 +11687,27 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:147
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for trait contracts."
 msgstr ""
 
-#: src/reference/structs.md:153
+#: src/reference/structs.md:150
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:155
+#: src/reference/structs.md:152
 msgid "**no member visibility** — all fields are public, always;"
 msgstr ""
 
-#: src/reference/structs.md:156
+#: src/reference/structs.md:153
 msgid ""
 "**no class methods** — the literal is the only construction (open literal vs "
 "class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:156
 msgid ""
 "Everything else class-shaped is allowed, including `impl` blocks. And the "
 "old \"no destructor\" limit is gone: a shared value dies exactly when its "
@@ -11730,18 +11716,18 @@ msgid ""
 "[Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/structs.md:165
+#: src/reference/structs.md:162
 msgid "Traits and representation"
 msgstr ""
 
-#: src/reference/structs.md:167
+#: src/reference/structs.md:164
 msgid ""
 "Widening a struct to a trait `I` **attaches the impl vtable to the same "
 "handle** — no allocation, no copy: the trait-typed value aliases the record, "
 "and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:171
+#: src/reference/structs.md:168
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -11749,7 +11735,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:176
+#: src/reference/structs.md:173
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."
@@ -19186,6 +19172,10 @@ msgstr ""
 
 #: src/reference/reflection.md:29
 msgid "deserialize"
+msgstr ""
+
+#: src/reference/reflection.md:31
+msgid "`dataclass`"
 msgstr ""
 
 #: src/reference/reflection.md:31 src/reference/reflection.md:32

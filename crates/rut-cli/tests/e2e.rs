@@ -1062,7 +1062,7 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn recursive_dataclass_tree_runs() {
+fn recursive_struct_tree_runs() {
     // recursive shapes are legal; v1.1 spells
     // the recursive edge as a pointer (`left: *Node`, nil = leaf). They
     // used to fail at resolve (`unknown type Node`) because the record was

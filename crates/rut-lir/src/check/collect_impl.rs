@@ -423,12 +423,12 @@ impl<'a> Ctx<'a> {
         // local struct/class: methods attach to the decl, where the
         // ordinary inherent-call machinery finds them
         if let Some(kind) = self.find_data(tname).map(|d| d.kind) {
-            if kind == DataKind::Dataclass {
+            if kind == DataKind::Struct {
                 for (_, mnode) in &mths {
                     if self.ast.method_decl(*mnode).vis.is_some() {
                         self.err(
                             self.ast.span(mnode.id()),
-                            "dataclasses have no member visibility —all members are public",
+                            "structs have no member visibility —all members are public",
                         );
                         break;
                     }

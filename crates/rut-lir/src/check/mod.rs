@@ -30,7 +30,7 @@ pub struct EnumDecl {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DataKind {
-    Dataclass,
+    Struct,
     Class,
 }
 

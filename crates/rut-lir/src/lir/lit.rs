@@ -182,7 +182,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let class_subst: Vec<(IdentId, TypeId)> =
                         d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
                     let field_nodes = match self.ctx.ast.item(d.node) {
-                        ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+                        ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
                         _ => Vec::new(),
                     };
                     let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
@@ -209,7 +209,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let desc = desc.clone();
                     (
                         dname,
-                        crate::check::DataKind::Dataclass,
+                        crate::check::DataKind::Struct,
                         desc.into_iter().map(|f| (f.name, f.ty, None)).collect(),
                         Vec::new(),
                     )
@@ -226,7 +226,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // construct their containers directly (`World { .. }`, the spikes'
         // `Source<str> { .. }`), so the instance literal is the
         // constructor surface everywhere now. The every-field-covered law
-        // below still holds; dataclass vs class changes nothing at the
+        // below still holds; struct vs class changes nothing at the
         // literal any more (`kind` stays for the extern path).
         let _ = kind;
         // every field initialized (any order, by name) or has an initializer;

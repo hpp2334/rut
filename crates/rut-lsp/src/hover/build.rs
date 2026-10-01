@@ -272,14 +272,14 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::Dataclass { vis, name, generics, fields, methods, .. } => {
+            ItemKind::Struct { vis, name, generics, fields, methods, .. } => {
                 let fs = field_members(src, ast, toks, fields);
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     toks,
                     ast.name(*name),
-                    TyForm::Dataclass,
+                    TyForm::Struct,
                     *vis,
                     generics_of(ast, generics),
                     fs,
@@ -412,13 +412,13 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::SurfaceDataclass { name, fields, .. } => {
+            ItemKind::SurfaceStruct { name, fields, .. } => {
                 let fs = field_members(src, ast, toks, fields);
                 idx.types.push(ty_def(
                     src,
                     toks,
                     ast.name(*name),
-                    TyForm::HostDataclass,
+                    TyForm::HostStruct,
                     Vis::Pub,
                     Vec::new(),
                     fs,

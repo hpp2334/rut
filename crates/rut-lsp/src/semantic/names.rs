@@ -65,7 +65,7 @@ fn classify_item(
                 }
             }
         }
-        ItemKind::Dataclass { name, .. } | ItemKind::Class { name, .. } => {
+        ItemKind::Struct { name, .. } | ItemKind::Class { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         ItemKind::Trait { name, .. } => {
@@ -74,7 +74,7 @@ fn classify_item(
         ItemKind::BuiltinTrait { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Trait, out, false)
         }
-        ItemKind::BuiltinTy { name, .. } | ItemKind::BuiltinPrimitive { name, .. } | ItemKind::SurfaceDataclass { name, .. } => {
+        ItemKind::BuiltinTy { name, .. } | ItemKind::BuiltinPrimitive { name, .. } | ItemKind::SurfaceStruct { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         // `builtin impl i32 { .. }` declares no new name — the primitive

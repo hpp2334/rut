@@ -25,7 +25,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "type" => Some(Frame::Alias(TypeAliasFrame::new(Vis::Self_))),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
-            "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
+            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, Vis::Self_))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
             "trait" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
@@ -97,7 +97,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
             "type" => Some(Frame::Alias(TypeAliasFrame::new(vis))),
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
-            "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
+            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
             "trait" => Some(Frame::Trait(TraitFrame::new(vis))),
             // `async fn` — the async declaration
@@ -482,7 +482,7 @@ impl TyDeclFrame {
         self.stage = TdStage::Body;
         Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Class {
             allow_pub: self.is_class,
-            is_dataclass: !self.is_class,
+            is_struct: !self.is_class,
         })))
     }
 
@@ -512,7 +512,7 @@ impl TyDeclFrame {
                         methods,
                     }
                 } else {
-                    ItemKind::Dataclass { vis, name, generics, fields, methods }
+                    ItemKind::Struct { vis, name, generics, fields, methods }
                 };
                 Step::Pop(Done::Item(p.item(kind, Span::new(self.lo, p.span().hi))))
             }
@@ -687,10 +687,10 @@ impl ImplFrame {
 pub(crate) enum BodyMode {
     /// struct/class body: FIELDS ONLY — methods live in `impl` blocks
     ///
-    Class { allow_pub: bool, is_dataclass: bool },
+    Class { allow_pub: bool, is_struct: bool },
     /// `host struct` body: fields only, no initializers — the host
     /// constructs the record
-    HostDataclass,
+    HostStruct,
     /// trait body: bodiless method signatures (`async` and no-`self`
     /// signatures legal — no bodies)
     Trait,
@@ -748,7 +748,7 @@ impl TypeBodyFrame {
             BodyMode::Trait => "traits declare method signatures",
             BodyMode::Impl => "impl blocks contain trait methods",
             BodyMode::Inherent => "inherent impl blocks declare methods",
-            BodyMode::HostDataclass => "host dataclasses declare fields",
+            BodyMode::HostStruct => "host structs declare fields",
             BodyMode::Class { .. } => "type bodies declare fields —methods live in `impl` blocks",
         }
     }
@@ -756,7 +756,7 @@ impl TypeBodyFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         // v1 brace strictness: struct/class and trait bodies bail on a
         // missing `{`; impl and surface bodies had already expected it
-        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostDataclass | BodyMode::Trait);
+        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Trait);
         if strict {
             if p.expect(Tok::LBrace).is_none() {
                 return Step::Pop(Done::Failed);
@@ -776,7 +776,7 @@ impl TypeBodyFrame {
                 return Step::Pop(Done::Body(fields, methods));
             }
             match self.mode {
-                BodyMode::HostDataclass => {
+                BodyMode::HostStruct => {
                     let lo = p.span();
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
@@ -794,9 +794,9 @@ impl TypeBodyFrame {
                     }
                     match p.tok().clone() {
                         // parse (bodiless) to stay in sync; the methods are
-                        // dropped — SurfaceDataclass keeps fields only
+                        // dropped — SurfaceStruct keeps fields only
                         Tok::Ident(kw) if kw == "fn" => {
-                            p.err(lo, "host dataclasses declare fields only —methods live in rut wrapper classes");
+                            p.err(lo, "host structs declare fields only —methods live in rut wrapper classes");
                             self.stage = TbStage::Method;
                             return Step::Push(Frame::Method(MethodFrame::new(None, false, false, false)));
                         }
@@ -817,7 +817,7 @@ impl TypeBodyFrame {
                         }
                     }
                 }
-                BodyMode::Class { allow_pub, is_dataclass } => {
+                BodyMode::Class { allow_pub, is_struct } => {
                     let lo = p.span();
                     // members default to module-private;
                     // `pub` (+ scopes) exposes them. FIELDS ONLY since the
@@ -833,15 +833,15 @@ impl TypeBodyFrame {
                                 if !allow_pub {
                                     p.err(
                                         lo,
-                                        "dataclasses have no member visibility —all fields are public",
+                                        "structs have no field visibility —all fields are public",
                                     );
                                 }
                             }
                             "static" => {
                                 is_static = true;
                                 p.bump();
-                                if is_dataclass {
-                                    p.err(lo, "dataclasses have no `static` members");
+                                if is_struct {
+                                    p.err(lo, "structs have no `static` members");
                                 }
                             }
                             "async" => {
@@ -967,7 +967,7 @@ impl TypeBodyFrame {
                 debug_assert!(matches!(self.stage, TbStage::FieldTy));
                 self.f_ty = Some(t);
                 if p.eat_punct(Tok::Eq) {
-                    if matches!(self.mode, BodyMode::HostDataclass) {
+                    if matches!(self.mode, BodyMode::HostStruct) {
                         p.err(
                             p.span(),
                             "host struct fields have no initializers —the host constructs the record",
@@ -1436,7 +1436,7 @@ impl SurfaceFrame {
                 };
                 self.name = name;
                 self.stage = SuStage::Members;
-                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::HostDataclass)))
+                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::HostStruct)))
             }
             Tok::Ident(k) if k == "class" => {
                 p.err(
@@ -1663,7 +1663,7 @@ impl SurfaceFrame {
             // `fn` member was diagnosed by the body frame and is dropped
             (SuStage::Members, Done::Body(fields, _methods)) => {
                 let node = p.item(
-                    ItemKind::SurfaceDataclass {
+                    ItemKind::SurfaceStruct {
                         vis: Vis::Self_,
                         name: self.name,
                         fields,

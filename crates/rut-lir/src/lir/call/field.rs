@@ -102,7 +102,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .node,
         };
         let fields = match self.ctx.ast.item(decl_node) {
-            ItemKind::Class { fields, .. } | ItemKind::Dataclass { fields, .. } => fields.clone(),
+            ItemKind::Class { fields, .. } | ItemKind::Struct { fields, .. } => fields.clone(),
             _ => return None,
         };
         fields.iter().find_map(|&f| {

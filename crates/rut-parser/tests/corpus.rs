@@ -66,7 +66,6 @@ fn depth_budget_is_a_diag_not_a_crash() {
 #[test]
 fn reserved_words_explain_themselves() {
     for (word, want) in [
-        ("dataclass", "struct"),
         ("private", "pub"),
         ("void", "nil"),
         ("interface", "trait"),

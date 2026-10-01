@@ -71,7 +71,6 @@ replacement:
 |---|---|
 | `void` | the empty type spells `nil` |
 | `interface` | rut spells this `trait` |
-| `dataclass` | removed — spell it `struct` |
 | `in` | iteration is `for (let x of ..)` |
 | `private` | members are private by default; add `pub` |
 

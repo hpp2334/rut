@@ -1,5 +1,5 @@
 //! `host`/`builtin` surface decls: `.d.rut` declares the
-//! host functions/dataclasses the runtime binds and the engine builtin
+//! host functions/structs the runtime binds and the engine builtin
 //! contracts — `host fn string_len(s: str) -> i32;`, `prelude builtin
 //! primitive opaque { .. }`. Parses in declaration mode only; the
 //! removed forms (`host primitive`, `host class`, `extern`) are
@@ -115,7 +115,7 @@ fn zero_member_builtin_bodies_parse() {
     assert!(methods.is_empty());
 }
 
-const HOST_DATACLASS: &str = "\
+const HOST_STRUCT: &str = "\
 pub host struct Location {
     file: str,
     line: i32,
@@ -124,20 +124,20 @@ pub host struct Location {
 ";
 
 #[test]
-fn host_dataclass_parses() {
-    let (ast, diags) = parse(HOST_DATACLASS, Mode::Decl);
+fn host_struct_parses() {
+    let (ast, diags) = parse(HOST_STRUCT, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::SurfaceDataclass { name, fields, .. } = ast.item(items[0]) else {
-        panic!("expected a SurfaceDataclass item, got {:?}", ast.item(items[0]));
+    let ItemKind::SurfaceStruct { name, fields, .. } = ast.item(items[0]) else {
+        panic!("expected a SurfaceStruct item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(ast.name(*name), "Location");
     assert_eq!(fields.len(), 3);
 }
 
 #[test]
-fn host_dataclass_members_are_fields_only() {
+fn host_struct_members_are_fields_only() {
     // methods and initializers are rejected: the shape is the whole
     // surface, the host constructs the record
     let (_, diags) = parse("host struct L { fn f(self) -> i32; }", Mode::Decl);

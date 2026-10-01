@@ -143,7 +143,7 @@ fn call_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
         match ctx.ast.item(*h) {
             ItemKind::Fn(d) => cx.walk_block(d.body),
             ItemKind::Class { methods, .. }
-            | ItemKind::Dataclass { methods, .. }
+            | ItemKind::Struct { methods, .. }
             | ItemKind::Trait { methods, .. }
             | ItemKind::Impl { methods, .. } => {
                 for m in methods {

@@ -54,7 +54,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body
             )));
         }
-        TyForm::Class | TyForm::Dataclass | TyForm::HostDataclass => {
+        TyForm::Class | TyForm::Struct | TyForm::HostStruct => {
             let mut body = String::new();
             for f in &ty.fields {
                 body.push_str("    ");

@@ -1,5 +1,5 @@
 //! `pub` visibility on members: the scoped forms parse on
-//! class fields and on inherent impl methods, dataclasses
+//! class fields and on inherent impl methods, structs
 //! reject the dial, and the dropped `private` keyword is a
 //! lexer hard error naming its replacement. Type bodies
 //! are FIELDS ONLY — methods live in `impl` blocks.
@@ -82,11 +82,11 @@ impl Sink {
 }
 
 #[test]
-fn dataclass_rejects_member_pub() {
+fn struct_rejects_member_pub() {
     // struct members are always public — no visibility dial
     let (_, diags) = parse("struct P { pub x: i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("dataclasses have no member visibility")),
+        diags.iter().any(|d| d.msg.contains("structs have no field visibility")),
         "member pub must be diagnosed in a struct: {diags:?}"
     );
 }

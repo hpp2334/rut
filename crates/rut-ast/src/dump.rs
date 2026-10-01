@@ -127,9 +127,9 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 ));
                 "Enum"
             }
-            ItemKind::Dataclass { vis, name, generics, fields: fs, methods } => {
+            ItemKind::Struct { vis, name, generics, fields: fs, methods } => {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
-                "Dataclass"
+                "Struct"
             }
             ItemKind::Class { vis, name, generics, requires, fields: fs, methods } => {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
@@ -210,11 +210,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 }
                 "SurfaceFn"
             }
-            ItemKind::SurfaceDataclass { vis, name, fields: fs } => {
+            ItemKind::SurfaceStruct { vis, name, fields: fs } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 fields.push(field("fields", DumpVal::Nodes(fs.iter().map(|&f| node_dump(a, f.id())).collect())));
-                "SurfaceDataclass"
+                "SurfaceStruct"
             }
             ItemKind::BuiltinTy { vis, ambient, name, generics, members } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
