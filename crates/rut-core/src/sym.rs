@@ -118,7 +118,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "Self",       // SELF_TY
     "nil",        // NIL
     "main",       // MAIN
-    "__iterate",  // ITERATE
+    "iterate",    // ITERATE
     "len",        // LEN
     "set",        // SET
     "new",        // NEW
@@ -221,7 +221,7 @@ pub const SELF: IdentId = IdentId(0); // `self`
 pub const SELF_TY: IdentId = IdentId(1); // `Self`
 pub const NIL: IdentId = IdentId(2);
 pub const MAIN: IdentId = IdentId(3);
-pub const ITERATE: IdentId = IdentId(4); // `__iterate`
+pub const ITERATE: IdentId = IdentId(4); // `iterate`
 pub const LEN: IdentId = IdentId(5);
 pub const SET: IdentId = IdentId(6);
 pub const NEW: IdentId = IdentId(7);
@@ -380,7 +380,7 @@ mod tests {
             ("Self", SELF_TY),
             ("nil", NIL),
             ("main", MAIN),
-            ("__iterate", ITERATE),
+            ("iterate", ITERATE),
             ("len", LEN),
             ("set", SET),
             ("new", NEW),

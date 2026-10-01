@@ -1763,7 +1763,7 @@ pub fn main() -> nil {
 fn for_of_user_iterate_protocol() {
     // a type is iterable when it registers
     // `impl Iterator<E> for T`; `for (v of it)` desugars to
-    // `it.__iterate(emit)` — the loop var is the emit closure's parameter
+    // `it.iterate(emit)` — the loop var is the emit closure's parameter
     // (fresh per iteration); `break` returns `false`, `continue` returns
     // `true`; captures are by value, so the accumulator is a shared cell
     // (`*Acc`). `total` takes the trait-typed parameter: it specializes
@@ -1781,7 +1781,7 @@ impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
 impl Iterator<i32> for CountUp {
-    fn __iterate(self, emit: fn(i32) -> bool) {
+    fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
@@ -1790,7 +1790,7 @@ impl Iterator<i32> for CountUp {
 
 fn total(it: Iterator<i32>) -> i32 {
     let mut acc: ?Acc = Acc { };
-    it.__iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
+    it.iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
 }
 

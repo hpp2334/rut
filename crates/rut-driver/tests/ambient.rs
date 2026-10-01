@@ -96,7 +96,7 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
 fn the_gated_traits_require_the_import() {
     // no use: each bare spelling names its fix
     for (src, name) in [
-        ("class C { }\nimpl Iterator<i32> for C { fn __iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterator"),
+        ("class C { }\nimpl Iterator<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterator"),
         ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\npub fn main() -> i32 { return f(nil); }\n", "RunContext"),
         ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\npub fn main() -> i32 { return 0; }\n", "Future"),
     ] {
@@ -117,7 +117,7 @@ fn the_gated_traits_require_the_import() {
          class CountUp { n: i32 = 0; }\n\
          impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
          impl Iterator<i32> for CountUp {\n\
-             fn __iterate(self, emit: fn(i32) -> bool) {\n\
+             fn iterate(self, emit: fn(i32) -> bool) {\n\
                  for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
              }\n\
          }\n\

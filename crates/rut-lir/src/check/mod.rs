@@ -186,7 +186,7 @@ pub enum FnKey {
     /// so one instantiation per node)
     Lambda(NodeId),
     /// the emit closure of a desugared `for (v of xs)` over the
-    /// `__iterate` protocol: `body` with `v: E` bound;
+    /// `iterate` protocol: `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
     ForOfEmit { body: NodeId, var: IdentId },
     /// An engine-backed thunk: a bodyless FuncCode whose

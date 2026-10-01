@@ -187,7 +187,7 @@ class CountUp {
 }
 
 impl Iterator<i32> for CountUp {
-    fn __iterate(self, emit: fn(i32) -> bool) {
+    fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
@@ -210,7 +210,7 @@ tick 3
 done
 ```
 
-`for (let v of it) { body }` desugars to `it.__iterate(emit)` with a
+`for (let v of it) { body }` desugars to `it.iterate(emit)` with a
 synthetic closure: the body runs, then `emit` returns `true`; `break`
 returns `false`. The loop variable is the closure's parameter — a fresh
 binding per iteration by construction. The builtin sequences (`[T]`,

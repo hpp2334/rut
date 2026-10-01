@@ -180,7 +180,7 @@ Spans sit on every node; there are no `String` keys — names are `IdentId`s
 into an interner that lives in `rut-core`, shared by the AST, the type
 table, and the module binary's name table. The interner pre-interns a fixed
 well-known table (`rut_core::sym`: `self`, `Self`, `nil`, `main`,
-`__iterate`, the builtin members, the primitives, …), so ids below
+`iterate`, the builtin members, the primitives, …), so ids below
 `well_known_len` mean the same name in every interner instance and special
 names compare as `IdentId` equality, never by text.
 

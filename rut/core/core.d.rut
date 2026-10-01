@@ -281,14 +281,14 @@ prelude builtin impl u64 {
 
 // The iteration protocol. A type is iterable when it declares this
 // member (duck-typed satisfaction); `for (x of it)` desugars to
-// `it.__iterate(emit)` with a fresh per-iteration binding: `emit`
+// `it.iterate(emit)` with a fresh per-iteration binding: `emit`
 // returning `false` stops the iteration (a `break`). `pub builtin`
 // (the import-gated spelling): the builtin sequences (`[T]`, `Vec`,
 // `str`, `bytes`) keep their fused loops and never name the trait —
 // only source that SPELLS `Iterator` (an `impl Iterator<E> for T`, a
 // trait-typed parameter) resolves it, through `use core::{ Iterator }`.
 pub builtin trait Iterator<E> {
-    fn __iterate(self, emit: fn(E) -> bool);
+    fn iterate(self, emit: fn(E) -> bool);
 }
 
 // The async protocol, the Future-only vocabulary. Two engine-named

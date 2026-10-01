@@ -416,7 +416,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The registered `impl Iterator<E> for T` on `ty` (nominal):
     /// `(impl index, target substitution, element type)`. The element
-    /// type is read off the impl's trait instantiation — the `__iterate`
+    /// type is read off the impl's trait instantiation — the `iterate`
     /// emit parameter. Built-in sequences never reach here (their fused
     /// loops lower first).
     fn iterate_impl(&mut self, ty: TypeId) -> Option<(usize, Vec<(IdentId, TypeId)>, TypeId)> {
@@ -474,7 +474,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// `for (v of xs)` over a user iterable — desugars to
-    /// `xs.__iterate(emit)` on the registered impl, where `emit` is a
+    /// `xs.iterate(emit)` on the registered impl, where `emit` is a
     /// synthetic closure carrying the loop body: `break` returns `false`,
     /// `continue` and the fall-through return `true`. The loop variable is
     /// the closure's parameter, so it is a fresh binding per iteration by
@@ -521,7 +521,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
         let clo = self.new_reg(fty);
         { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
-        // `xs.__iterate(emit)` — the impl's method, statically bound to
+        // `xs.iterate(emit)` — the impl's method, statically bound to
         // this impl (nominal registry)
         let mfid = self
             .ctx

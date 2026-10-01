@@ -283,7 +283,7 @@ use ink::{ Logger };
 struct CountUp { n: i32 }
 
 impl Iterator<i32> for CountUp {
-    fn __iterate(self, emit: fn(i32) -> bool) {
+    fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }   // false = stop
         }
@@ -305,7 +305,7 @@ pub fn main() {
 n=4 first=1 last=4
 ```
 
-`for (let v of it)` desugars to `it.__iterate(emit)` with a synthetic
+`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic
 closure. One consequence to know: the loop body's captures are taken
 at the desugar, so reassigning an enclosing *scalar* inside the loop
 mutates a copy, not the original. Accumulate through something shared

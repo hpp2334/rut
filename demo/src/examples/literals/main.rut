@@ -3,7 +3,7 @@ use pouch::{ Vec };
 // (`Vec<f32>.filled(0.0, 1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`[T]`, non-growable);
 // growables are `Vec<T>`. Both carry the engine-woven iteration
-// contract (`Iterator`, `__iterate` in core), so `a[i]`, `a.len()` and
+// contract (`Iterator`, `iterate` in core), so `a[i]`, `a.len()` and
 // `for (x of a)` lower through the same shape.
 // `bytes` is the binary primitive — `bytes(64)` zeroes a 64-octet
 // buffer; see the bytes example for encode/decode/clone.

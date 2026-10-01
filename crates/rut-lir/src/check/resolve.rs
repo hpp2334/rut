@@ -129,7 +129,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The `Iterator<E>` protocol contract: one trait per
-    /// type-argument list, its single method `__iterate(emit: fn(E) -> bool)`.
+    /// type-argument list, its single method `iterate(emit: fn(E) -> bool)`.
     /// Duck-typed satisfaction fills its vtable slot from the iterable's own
     /// member — the contract is engine-woven, not user-declarable.
     pub fn mk_iterator_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {

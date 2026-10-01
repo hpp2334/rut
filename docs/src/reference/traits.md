@@ -181,7 +181,7 @@ impl CountUp {
 }
 
 impl Iterator<i32> for CountUp {
-    fn __iterate(self, emit: fn(i32) -> bool) {
+    fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
@@ -202,7 +202,7 @@ tick 2
 tick 3
 ```
 
-`for (v of it) { body }` desugars to `it.__iterate(emit)` with a
+`for (v of it) { body }` desugars to `it.iterate(emit)` with a
 synthetic closure: the body runs, then `emit` returns `true`; `break`
 returns `false` (stopping the iteration); `continue` returns `true`
 immediately; a `return` inside the body stops the iteration (not the
@@ -220,7 +220,7 @@ path:
 
 ```rut
 pub builtin trait Iterator<E> {
-    fn __iterate(self, emit: fn(E) -> bool);
+    fn iterate(self, emit: fn(E) -> bool);
 }
 pub builtin trait Future<T> { fn yield(cx: RunContext); }
 pub builtin trait RunContext {

@@ -4212,7 +4212,7 @@ msgid ""
 "struct CountUp { n: i32 }\n"
 "\n"
 "impl Iterator<i32> for CountUp {\n"
-"    fn __iterate(self, emit: fn(i32) -> bool) {\n"
+"    fn iterate(self, emit: fn(i32) -> bool) {\n"
 "        for (let i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }   // false = stop\n"
 "        }\n"
@@ -4230,14 +4230,14 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
-"```rutuse core::{ Iterator };use pouch::{ Vec };use ink::{ Logger };struct CountUp { n: i32 }impl Iterator<i32> for CountUp {    fn __iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }   // false = stop        }    }}pub fn main() {    let log = Logger.new(\"iter\");    let ups = CountUp { n: 4 };    let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures    for (let v of ups) {        got.push(v);    }    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");}```"
+"```rutuse core::{ Iterator };use pouch::{ Vec };use ink::{ Logger };struct CountUp { n: i32 }impl Iterator<i32> for CountUp {    fn iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }   // false = stop        }    }}pub fn main() {    let log = Logger.new(\"iter\");    let ups = CountUp { n: 4 };    let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures    for (let v of ups) {        got.push(v);    }    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");}```"
 
 
 #: src/tutorial/traits.md:308
 msgid ""
-"`for (let v of it)` desugars to `it.__iterate(emit)` with a synthetic closure. One consequence to know: the loop body's captures are taken at the desugar, so reassigning an enclosing _scalar_ inside the loop mutates a copy, not the original. Accumulate through something shared instead — `vec.push(v)` — or have the loop body act on values it can see directly."
+"`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure. One consequence to know: the loop body's captures are taken at the desugar, so reassigning an enclosing _scalar_ inside the loop mutates a copy, not the original. Accumulate through something shared instead — `vec.push(v)` — or have the loop body act on values it can see directly."
 msgstr ""
-"`for (let v of it)` 会脱糖为带合成闭包的 `it.__iterate(emit)`。有一个需要知道的后果：循环体的捕获发生在脱糖之时，因此在循环内重新赋值外围的_标量_，改的是副本而不是原件。要累积，就通过某个共享的东西——`vec.push(v)`——或者让循环体作用于它能直接看到的值。"
+"`for (let v of it)` 会脱糖为带合成闭包的 `it.iterate(emit)`。有一个需要知道的后果：循环体的捕获发生在脱糖之时，因此在循环内重新赋值外围的_标量_，改的是副本而不是原件。要累积，就通过某个共享的东西——`vec.push(v)`——或者让循环体作用于它能直接看到的值。"
 
 
 #: src/tutorial/traits.md:315
@@ -7446,7 +7446,7 @@ msgid ""
 "}\n"
 "\n"
 "impl Iterator<i32> for CountUp {\n"
-"    fn __iterate(self, emit: fn(i32) -> bool) {\n"
+"    fn iterate(self, emit: fn(i32) -> bool) {\n"
 "        for (let i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }\n"
 "        }\n"
@@ -7462,14 +7462,14 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
-"```rutuse core::{ Iterator };use ink::{ Logger };class CountUp {    n: i32;}impl Iterator<i32> for CountUp {    fn __iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }        }    }}pub fn main() {    let log = Logger.new(\"iter\");    for (let v of CountUp { n: 3 }) {        log.info(f\"tick {v}\");    }    log.info(\"done\");}```"
+"```rutuse core::{ Iterator };use ink::{ Logger };class CountUp {    n: i32;}impl Iterator<i32> for CountUp {    fn iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }        }    }}pub fn main() {    let log = Logger.new(\"iter\");    for (let v of CountUp { n: 3 }) {        log.info(f\"tick {v}\");    }    log.info(\"done\");}```"
 
 
 #: src/core-concepts/traits-and-dispatch.md:213
 msgid ""
-"`for (let v of it) { body }` desugars to `it.__iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is the closure's parameter — a fresh binding per iteration by construction. The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call."
+"`for (let v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is the closure's parameter — a fresh binding per iteration by construction. The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call."
 msgstr ""
-"`for (let v of it) { body }` 会脱糖为带合成闭包的 `it.__iterate(emit)`：先跑循环体，然后 `emit` 返回 `true`；`break` 则返回 `false`。循环变量是闭包的参数——按构造每轮迭代都是全新绑定。内置序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）则保留融合的索引循环；它们从不为每个元素付一次调用。"
+"`for (let v of it) { body }` 会脱糖为带合成闭包的 `it.iterate(emit)`：先跑循环体，然后 `emit` 返回 `true`；`break` 则返回 `false`。循环变量是闭包的参数——按构造每轮迭代都是全新绑定。内置序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）则保留融合的索引循环；它们从不为每个元素付一次调用。"
 
 
 #: src/core-concepts/traits-and-dispatch.md:220
@@ -15460,7 +15460,7 @@ msgid ""
 "}\n"
 "\n"
 "impl Iterator<i32> for CountUp {\n"
-"    fn __iterate(self, emit: fn(i32) -> bool) {\n"
+"    fn iterate(self, emit: fn(i32) -> bool) {\n"
 "        for (let i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }\n"
 "        }\n"
@@ -15475,14 +15475,14 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
-"```rutuse core::{ Iterator };use ink::{ Logger };class CountUp {    n: i32;}impl CountUp {    pub fn new(n: i32) -> Self { return Self { n: n }; }}impl Iterator<i32> for CountUp {    fn __iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }        }    }}pub fn main() {    let log = Logger.new(\"t\");    for (let v of CountUp.new(3)) {        log.info(f\"tick {v}\");    }}```"
+"```rutuse core::{ Iterator };use ink::{ Logger };class CountUp {    n: i32;}impl CountUp {    pub fn new(n: i32) -> Self { return Self { n: n }; }}impl Iterator<i32> for CountUp {    fn iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }        }    }}pub fn main() {    let log = Logger.new(\"t\");    for (let v of CountUp.new(3)) {        log.info(f\"tick {v}\");    }}```"
 
 
 #: src/reference/traits.md:205
 msgid ""
-"`for (v of it) { body }` desugars to `it.__iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false` (stopping the iteration); `continue` returns `true` immediately; a `return` inside the body stops the iteration (not the enclosing function). The loop variable is the closure's parameter — a fresh binding per iteration; captured enclosing locals are copied by value at the desugar, so accumulate through a shared cell or a method. The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their fused index loops and never reach the protocol."
+"`for (v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false` (stopping the iteration); `continue` returns `true` immediately; a `return` inside the body stops the iteration (not the enclosing function). The loop variable is the closure's parameter — a fresh binding per iteration; captured enclosing locals are copied by value at the desugar, so accumulate through a shared cell or a method. The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
-"`for (v of it) { body }` 脱糖为带合成闭包的 `it.__iterate(emit)`：先运行体，然后 `emit` 返回 `true`；`break` 返回 `false`（停止迭代）；`continue` 立即返回 `true`；体内遇到 `return` 会停止迭代（而不是外围函数）。循环变量是闭包的参数 —— 每次迭代一个新绑定；在脱糖时被捕获的外围局部变量按值复制，因此要透过共享单元或方法来累加。内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）保留其融合的索引循环，永远不会走到该协议。"
+"`for (v of it) { body }` 脱糖为带合成闭包的 `it.iterate(emit)`：先运行体，然后 `emit` 返回 `true`；`break` 返回 `false`（停止迭代）；`continue` 立即返回 `true`；体内遇到 `return` 会停止迭代（而不是外围函数）。循环变量是闭包的参数 —— 每次迭代一个新绑定；在脱糖时被捕获的外围局部变量按值复制，因此要透过共享单元或方法来累加。内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）保留其融合的索引循环，永远不会走到该协议。"
 
 
 #: src/reference/traits.md:215
@@ -23585,8 +23585,8 @@ msgstr "`Iterator<E>`"
 
 
 #: src/reference/stdlib.md:81
-msgid "`fn __iterate(self, emit: fn(E) -> bool)`"
-msgstr "`fn __iterate(self, emit: fn(E) -> bool)`"
+msgid "`fn iterate(self, emit: fn(E) -> bool)`"
+msgstr "`fn iterate(self, emit: fn(E) -> bool)`"
 
 
 #: src/reference/stdlib.md:81
@@ -25007,9 +25007,9 @@ msgstr "AST"
 
 #: src/reference/frontend.md:178
 msgid ""
-"Nodes are plain records in one arena; children are `NodeId`s into it. Spans sit on every node; there are no `String` keys — names are `IdentId`s into an interner that lives in `rut-core`, shared by the AST, the type table, and the module binary's name table. The interner pre-interns a fixed well-known table (`rut_core::sym`: `self`, `Self`, `nil`, `main`, `__iterate`, the builtin members, the primitives, …), so ids below `well_known_len` mean the same name in every interner instance and special names compare as `IdentId` equality, never by text."
+"Nodes are plain records in one arena; children are `NodeId`s into it. Spans sit on every node; there are no `String` keys — names are `IdentId`s into an interner that lives in `rut-core`, shared by the AST, the type table, and the module binary's name table. The interner pre-interns a fixed well-known table (`rut_core::sym`: `self`, `Self`, `nil`, `main`, `iterate`, the builtin members, the primitives, …), so ids below `well_known_len` mean the same name in every interner instance and special names compare as `IdentId` equality, never by text."
 msgstr ""
-"节点是同一个 arena 里的普通记录；子节点是指向它的 `NodeId`。每个节点都带 span；没有 `String` 键——名字是指入一个驻留器的 `IdentId`，该驻留器住在 `rut-core` 里，被 AST、类型表和模块二进制的名字表共享。驻留器预驻留一张固定的知名表（`rut_core::sym`：`self`、`Self`、`nil`、`main`、`__iterate`、各内建成员、各基本类型……），因此低于 `well_known_len` 的 id 在每个驻留器实例中都意味着同一个名字，特殊名字以 `IdentId` 相等比较，绝不按文本比较。"
+"节点是同一个 arena 里的普通记录；子节点是指向它的 `NodeId`。每个节点都带 span；没有 `String` 键——名字是指入一个驻留器的 `IdentId`，该驻留器住在 `rut-core` 里，被 AST、类型表和模块二进制的名字表共享。驻留器预驻留一张固定的知名表（`rut_core::sym`：`self`、`Self`、`nil`、`main`、`iterate`、各内建成员、各基本类型……），因此低于 `well_known_len` 的 id 在每个驻留器实例中都意味着同一个名字，特殊名字以 `IdentId` 相等比较，绝不按文本比较。"
 
 
 #: src/reference/frontend.md:192
