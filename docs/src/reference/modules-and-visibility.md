@@ -124,9 +124,13 @@ carries a visibility:
 - **Class members take the same forms**: an unannotated field or method
   is module-private; `pub` (optionally scoped) exposes it. See
   [Classes and constructors](classes.md).
-- Dataclass members are **always public** — no visibility dial (see
-  [Structs](structs.md)). Trait method signatures and impl methods are
-  as visible as their trait (see [Traits and dispatch](traits.md)).
+- **Struct fields are always public** — the field law has no dial
+  (see [Structs](structs.md)). **Impl-block methods take the `pub`
+  dial** — `pub fn` exports cross-module, plain `fn` is
+  module-private — the same law a class's methods follow, enums
+  included (see [Structs](structs.md) and [Enums](enums.md)). Trait
+  method signatures and impl methods are as visible as their trait
+  (see [Traits and dispatch](traits.md)).
 - Visibility is checked at compile time; it has no runtime
   representation. Only `pub` names enter a module's export table; a
   non-exported declaration is *known* inside its module but *nameable*

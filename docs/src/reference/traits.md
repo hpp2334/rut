@@ -202,6 +202,11 @@ tick 2
 tick 3
 ```
 
+An enum value iterates the same way: `impl Iterator<E> for Color`
+makes `for (let v of c)` walk whatever the impl's `iterate` emits —
+the desugar is the trait, the target's kind is irrelevant (see
+[Enums](enums.md)).
+
 `for (v of it) { body }` desugars to `it.iterate(emit)` with a
 synthetic closure: the body runs, then `emit` returns `true`; `break`
 returns `false` (stopping the iteration); `continue` returns `true`

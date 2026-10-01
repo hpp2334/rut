@@ -87,7 +87,7 @@ const isCode = (tok) => !inComment(tok) && !inString(tok);
 // Each check walks tokens and pushes human-readable violations.
 
 function checkDeadWords(tok, bad) {
-  // M1/M2: `dataclass` (lexer hard error, "spell it struct") and `where`
+  // M1/M2: `dataclass` (an ordinary identifier — never a keyword) and `where`
   // (removed, RFC 0043) must NEVER carry a keyword scope.
   if ((tok.text === 'dataclass' || tok.text === 'where') && hasScope(tok, 'keyword')) {
     bad.push(`${tok.file}:${tok.line} dead word '${tok.text}' is keyword-scoped (scopes: ${tok.scopes.join(' ')})`);
@@ -116,7 +116,7 @@ function checkTypeAliasLine(line, i, file, toks, bad) {
 
 // ---- smoke snippets (what the corpus cannot exercise) --------------------
 const SNIPPETS = [
-  // M1: `dataclass` is a lexer error — the grammar must not endorse it.
+  // M1: `dataclass` is an ordinary identifier — the grammar must not endorse it.
   { name: 'M1 dataclass not keyword', src: 'let dataclass = 1;', text: 'dataclass', notScope: 'keyword' },
   // M2: `where` left RESERVED_KW (RFC 0043) — now a legal identifier.
   { name: 'M2 where not keyword', src: 'let where = 1;', text: 'where', notScope: 'keyword' },

@@ -144,20 +144,51 @@ impl Hashable for Point {
 }
 ```
 
+Methods carry real visibility — the class rule: `pub fn` exports
+cross-module, plain `fn` is module-private. `Self` spells the struct,
+in signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`)
+alike:
+
+```rut
+use ink::{ Logger };
+
+struct Counter { n: i32 }
+
+impl Counter {
+    pub fn new() -> Self { return Counter { n: 0 }; }
+    fn bump(mut self) -> Self { self.n += 1; return self; }
+    fn value(self) -> i32 { return self.n; }
+}
+
+pub fn main() {
+    let log = Logger.new("t");
+    let c = Counter.new().bump().bump();
+    log.info(f"{c.value()}");
+}
+```
+
+```text
+2
+```
+
 Free functions over data remain the default idiom; methods are for
 tight helpers, impl blocks for trait contracts.
 
 Limits, exhaustively:
 
-- **no member visibility** — all fields are public, always;
-- **no class methods** — the literal is the only construction (open
-  literal vs class-method-gated *is* the struct/class distinction).
+- **fields are always public** — no field-visibility dial (privacy
+  needs construction control, which is the class's job — see
+  [Classes and constructors](classes.md));
+- **construction is the literal** — `Point { x: 1, y: 2 }` everywhere
+  (open literal vs class-method-gated *is* the struct/class
+  distinction).
 
-Everything else class-shaped is allowed, including `impl` blocks. And
-the old "no destructor" limit is gone: a shared value dies exactly when
-its cell's refcount reaches zero, so cleanup is one `impl` away —
-implement `Disposal` for the type and the engine calls `dispose` at
-that moment (see [Rc, dispose, and identity](rc-dispose-identity.md)).
+Everything else class-shaped is allowed — `impl` blocks, `Self`,
+`Disposal`. And the old "no destructor" limit is gone: a shared value
+dies exactly when its cell's refcount reaches zero, so cleanup is one
+`impl` away — implement `Disposal` for the type and the engine calls
+`dispose` at that moment (see
+[Rc, dispose, and identity](rc-dispose-identity.md)).
 
 ## Traits and representation
 

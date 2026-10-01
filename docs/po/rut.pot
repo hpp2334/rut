@@ -1574,7 +1574,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
-#: src/tutorial/functions.md:220 src/tutorial/types.md:273
+#: src/tutorial/functions.md:220 src/tutorial/types.md:280
 #: src/tutorial/traits.md:318 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
@@ -2404,9 +2404,9 @@ msgstr ""
 
 #: src/tutorial/types.md:20
 msgid ""
-"An enum is a distinct named type over integer constants. No payloads, no "
-"methods, no computed members — where another language would use a union of "
-"literal strings, rut uses an enum:"
+"An enum is a distinct named type over integer constants. No payloads and no "
+"computed members — where another language would use a union of literal "
+"strings, rut uses an enum:"
 msgstr ""
 
 #: src/tutorial/types.md:24
@@ -2436,20 +2436,23 @@ msgstr ""
 msgid ""
 "`when` over an enum must be exhaustive — every member, or an `else` arm (see "
 "[control flow and when](control-flow.md)). Enums render as their member name "
-"in format strings."
+"in format strings. Enums take `impl` blocks — non-self methods on the name, "
+"`self` methods on a value, and trait impls (`impl Iterator<E> for Light` "
+"makes `for (let v of l)` walk) — see [enums](../reference/enums.md)."
 msgstr ""
 
-#: src/tutorial/types.md:49
+#: src/tutorial/types.md:52
 msgid "Structs — open records"
 msgstr ""
 
-#: src/tutorial/types.md:51
+#: src/tutorial/types.md:54
 msgid ""
 "Declare with `struct`, construct with a literal — anywhere in a function "
-"body, nested inside other literals. There is no `new`:"
+"body, nested inside other literals. Construction is the literal; there is no "
+"constructor gate:"
 msgstr ""
 
-#: src/tutorial/types.md:54
+#: src/tutorial/types.md:58
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2481,13 +2484,15 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:85
+#: src/tutorial/types.md:89
 msgid ""
 "All fields are public, always — member visibility in a struct is a compile "
-"error. Privacy is what classes are for."
+"error. Privacy is what classes are for. Methods live in `impl` blocks with "
+"real visibility — `pub fn` exports cross-module, plain `fn` stays "
+"module-private (see [structs](../reference/structs.md))."
 msgstr ""
 
-#: src/tutorial/types.md:88
+#: src/tutorial/types.md:95
 msgid ""
 "**Structs share.** A struct value is a handle to a heap cell: assignment, "
 "arguments, and returns all pass the handle, and a write through any alias is "
@@ -2495,7 +2500,7 @@ msgid ""
 "parameter:"
 msgstr ""
 
-#: src/tutorial/types.md:93
+#: src/tutorial/types.md:100
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2512,20 +2517,20 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:111
+#: src/tutorial/types.md:118
 msgid ""
 "`==` on struct values is **cell identity** — `q == p` is true (one cell), `p "
 "== Point { x: 4, y: 2 }` is false (a different cell). To compare field by "
 "field, write a function."
 msgstr ""
 
-#: src/tutorial/types.md:115
+#: src/tutorial/types.md:122
 msgid ""
 "Recursive shapes are legal — a record may name itself through a nullable "
 "field, because `?Node` is one word:"
 msgstr ""
 
-#: src/tutorial/types.md:118
+#: src/tutorial/types.md:125
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2555,11 +2560,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:149
+#: src/tutorial/types.md:156
 msgid "Classes — sealed records"
 msgstr ""
 
-#: src/tutorial/types.md:151
+#: src/tutorial/types.md:158
 msgid ""
 "A class adds two things to a struct: module-private fields and construction "
 "gated through class methods. There is no `constructor` keyword, no `new` "
@@ -2570,7 +2575,7 @@ msgid ""
 "and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 
-#: src/tutorial/types.md:160
+#: src/tutorial/types.md:167
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2601,37 +2606,37 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:192
+#: src/tutorial/types.md:199
 msgid "The pieces:"
 msgstr ""
 
-#: src/tutorial/types.md:194
+#: src/tutorial/types.md:201
 msgid ""
 "**A class method is just a function without `self`.** `Rect.new(w, h)`, "
 "`Version.parse(s)`, `Rect.from_square(s)` — any no-`self` method returning "
 "`Self` is a constructor. `new` is a convention, not syntax."
 msgstr ""
 
-#: src/tutorial/types.md:197
+#: src/tutorial/types.md:204
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the "
 "class's own impl block, never outside. This is the seal."
 msgstr ""
 
-#: src/tutorial/types.md:199
+#: src/tutorial/types.md:206
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; `mut "
 "self` marks methods that write. There is no `this`, no static methods, no "
 "`get`/`set` syntax — a computed property is a method (`c.count()`)."
 msgstr ""
 
-#: src/tutorial/types.md:203
+#: src/tutorial/types.md:210
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it "
 "can check arguments and refuse:"
 msgstr ""
 
-#: src/tutorial/types.md:206
+#: src/tutorial/types.md:213
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2665,13 +2670,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:241
+#: src/tutorial/types.md:248
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, "
 "not a crash:"
 msgstr ""
 
-#: src/tutorial/types.md:244
+#: src/tutorial/types.md:251
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -2683,39 +2688,39 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:253
+#: src/tutorial/types.md:260
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code "
 "sharing is composition (hold a helper in a field) or free functions; "
 "polymorphism is traits — the next chapter."
 msgstr ""
 
-#: src/tutorial/types.md:257
+#: src/tutorial/types.md:264
 msgid "Visibility recap"
 msgstr ""
 
-#: src/tutorial/types.md:259
+#: src/tutorial/types.md:266
 msgid "Struct members: public, always."
 msgstr ""
 
-#: src/tutorial/types.md:260
+#: src/tutorial/types.md:267
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers "
 "(also `pub(mod)`, `pub(super)`, `pub(self)`)."
 msgstr ""
 
-#: src/tutorial/types.md:262
+#: src/tutorial/types.md:269
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, "
 "a bare `class Helper` stays in its module. See [modules and "
 "packages](modules.md)."
 msgstr ""
 
-#: src/tutorial/types.md:266
+#: src/tutorial/types.md:273
 msgid "Struct or class?"
 msgstr ""
 
-#: src/tutorial/types.md:268
+#: src/tutorial/types.md:275
 msgid ""
 "Default to a struct: data in, data out, shared like every other value. Reach "
 "for a class when the type has rules that construction must enforce, holds "
@@ -2723,7 +2728,7 @@ msgid ""
 "explicit cleanup."
 msgstr ""
 
-#: src/tutorial/types.md:275
+#: src/tutorial/types.md:282
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2776,7 +2781,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:329
+#: src/tutorial/types.md:336
 msgid "Next: [traits and impl blocks](traits.md)."
 msgstr ""
 
@@ -7839,7 +7844,7 @@ msgid ""
 "Byte payloads need no wrapper — `bytes` is in the crossing set, so `entry fn "
 "hex_enc(data: bytes) -> str` takes a host byte slice head-on ([primitive "
 "types](../reference/primitive-types.md)). The one erasure in the file is the "
-"recursive JSON tree: rut has no recursive dataclass, so the tree is a tagged "
+"recursive JSON tree: rut has no recursive struct, so the tree is a tagged "
 "union by hand with children boxed in `opaque` to break the recursion "
 "([opaque — erasure and downcast](../reference/opaque.md)):"
 msgstr ""
@@ -9695,6 +9700,7 @@ msgid "`enum`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
+#: src/reference/reflection.md:31
 msgid "`struct`"
 msgstr ""
 
@@ -10183,12 +10189,15 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:127
 msgid ""
-"Dataclass members are **always public** — no visibility dial (see "
-"[Structs](structs.md)). Trait method signatures and impl methods are as "
-"visible as their trait (see [Traits and dispatch](traits.md))."
+"**Struct fields are always public** — the field law has no dial (see "
+"[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
+"fn` exports cross-module, plain `fn` is module-private — the same law a "
+"class's methods follow, enums included (see [Structs](structs.md) and "
+"[Enums](enums.md)). Trait method signatures and impl methods are as visible "
+"as their trait (see [Traits and dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:130
+#: src/reference/modules-and-visibility.md:134
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -10927,18 +10936,20 @@ msgid ""
 msgstr ""
 
 #: src/reference/enums.md:35
-msgid "No data payloads, no methods, no computed members — ever."
+msgid ""
+"No data payloads and no computed members — ever. Methods are an `impl` block "
+"away (see [Impl blocks](#impl-blocks))."
 msgstr ""
 
-#: src/reference/enums.md:37
+#: src/reference/enums.md:38
 msgid "Using members"
 msgstr ""
 
-#: src/reference/enums.md:39
+#: src/reference/enums.md:40
 msgid "Members are named through the enum and compare as equal singletons:"
 msgstr ""
 
-#: src/reference/enums.md:41
+#: src/reference/enums.md:42
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -10954,28 +10965,28 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:57
+#: src/reference/enums.md:58
 msgid ""
 "An enum value renders as its member name in format strings: "
 "`f\"{Color.Red}\"` is `\"Red\"`."
 msgstr ""
 
-#: src/reference/enums.md:59
+#: src/reference/enums.md:60
 msgid "Enums are ordinary shared values: binding shares the singleton."
 msgstr ""
 
-#: src/reference/enums.md:61
+#: src/reference/enums.md:62
 msgid "Exhaustive `when`"
 msgstr ""
 
-#: src/reference/enums.md:63
+#: src/reference/enums.md:64
 msgid ""
 "`when` over an enum must be **exhaustive**: cover every member (then `else` "
 "is optional) or add an explicit `else` arm — a partial `when` is a compile "
 "error. See [Control flow and when](control-flow.md)."
 msgstr ""
 
-#: src/reference/enums.md:67
+#: src/reference/enums.md:68
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -10997,25 +11008,125 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:90
+#: src/reference/enums.md:91 src/reference/traits.md:35
+msgid "Impl blocks"
+msgstr ""
+
+#: src/reference/enums.md:93
+msgid ""
+"Enums take `impl` blocks — the same three forms a struct or class takes: "
+"non-self methods (called on the enum's name), `self` methods (called on a "
+"value), and trait impls."
+msgstr ""
+
+#: src/reference/enums.md:97
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Dial { Low, High }\n"
+"\n"
+"impl Dial {\n"
+"    fn default() -> Self { return Dial.Low; }\n"
+"    fn flipped(self) -> Dial {\n"
+"        return when (self) {\n"
+"            Dial.Low  -> Dial.High,\n"
+"            Dial.High -> Dial.Low,\n"
+"        };\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    let d = Dial.default().flipped();\n"
+"    log.info(when (d) {\n"
+"        Dial.Low  -> \"low\",\n"
+"        Dial.High -> \"high\",\n"
+"    });\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/enums.md:126
+msgid ""
+"A non-self method is a namespaced function: `Dial.default()`. `Self` spells "
+"the enum, so `-> Self` is the return type and `Dial.Low` mints the member."
+msgstr ""
+
+#: src/reference/enums.md:129
+msgid ""
+"A `self` method dispatches on the value: `d.flipped()` — the receiver "
+"crosses as the singleton cell it already is."
+msgstr ""
+
+#: src/reference/enums.md:131
+msgid ""
+"Method visibility is real: `pub fn` exports cross-module, plain `fn` is "
+"module-private (see [Modules and visibility](modules-and-visibility.md))."
+msgstr ""
+
+#: src/reference/enums.md:135
+msgid ""
+"Trait impls make enum values iterable — `for (let v of c)` rides the same "
+"desugar as a class's (see [The iteration protocol](traits.md)):"
+msgstr ""
+
+#: src/reference/enums.md:138
+msgid ""
+"```rut\n"
+"use core::{ Iterator };\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"impl Iterator<Light> for Light {\n"
+"    fn iterate(self, emit: fn(Light) -> bool) {\n"
+"        let mut cur = self;\n"
+"        for (let i = 0; i < 3; i += 1) {\n"
+"            if (!emit(cur)) { return; }\n"
+"            cur = when (cur) {\n"
+"                Light.Green  -> Light.Yellow,\n"
+"                Light.Yellow -> Light.Red,\n"
+"                Light.Red    -> Light.Green,\n"
+"            };\n"
+"        }\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    for (let l of Light.Red) {\n"
+"        log.info(f\"{l}\");\n"
+"    }\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/enums.md:172
+msgid ""
+"One limit stays: `Disposal` is for structs and classes only — the engine "
+"disposes a record's cell, and an enum member is immortal."
+msgstr ""
+
+#: src/reference/enums.md:175
 msgid "Boundaries"
 msgstr ""
 
-#: src/reference/enums.md:92
+#: src/reference/enums.md:177
 msgid ""
 "Where another language would use a union of literals (`\"left\" | "
 "\"right\"`), rut uses an enum; where it would use a union of _shapes_, rut "
 "uses a trait-typed value (see [Traits and dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/enums.md:96
+#: src/reference/enums.md:181
 msgid ""
 "The `|` spelling exists only for bound-only union aliases and `requires` "
 "bounds (see [Type aliases and union bounds](type-aliases.md)) — a "
 "compile-time admission gate, never a runtime union value."
 msgstr ""
 
-#: src/reference/enums.md:99
+#: src/reference/enums.md:184
 msgid ""
 "There is no enum↔int cast: `as` is the numeric cast only. Enum values cross "
 "the host boundary as their runtime identity plus the integer value."
@@ -11342,7 +11453,8 @@ msgstr ""
 msgid ""
 "Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s "
 "per step), `bytes` (`u8` per step), and any type with a registered "
-"`Iterator` impl (see [Traits and dispatch](traits.md)):"
+"`Iterator` impl — an enum value included (see [Traits and "
+"dispatch](traits.md) and [Enums](enums.md)):"
 msgstr ""
 
 #: src/reference/control-flow.md:28
@@ -11689,45 +11801,76 @@ msgstr ""
 
 #: src/reference/structs.md:147
 msgid ""
+"Methods carry real visibility — the class rule: `pub fn` exports "
+"cross-module, plain `fn` is module-private. `Self` spells the struct, in "
+"signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
+msgstr ""
+
+#: src/reference/structs.md:152
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Counter { n: i32 }\n"
+"\n"
+"impl Counter {\n"
+"    pub fn new() -> Self { return Counter { n: 0 }; }\n"
+"    fn bump(mut self) -> Self { self.n += 1; return self; }\n"
+"    fn value(self) -> i32 { return self.n; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    let c = Counter.new().bump().bump();\n"
+"    log.info(f\"{c.value()}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/structs.md:174
+msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for trait contracts."
 msgstr ""
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:177
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:152
-msgid "**no member visibility** — all fields are public, always;"
-msgstr ""
-
-#: src/reference/structs.md:153
+#: src/reference/structs.md:179
 msgid ""
-"**no class methods** — the literal is the only construction (open literal vs "
-"class-method-gated _is_ the struct/class distinction)."
+"**fields are always public** — no field-visibility dial (privacy needs "
+"construction control, which is the class's job — see [Classes and "
+"constructors](classes.md));"
 msgstr ""
 
-#: src/reference/structs.md:156
+#: src/reference/structs.md:182
 msgid ""
-"Everything else class-shaped is allowed, including `impl` blocks. And the "
-"old \"no destructor\" limit is gone: a shared value dies exactly when its "
-"cell's refcount reaches zero, so cleanup is one `impl` away — implement "
-"`Disposal` for the type and the engine calls `dispose` at that moment (see "
-"[Rc, dispose, and identity](rc-dispose-identity.md))."
+"**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open "
+"literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:162
+#: src/reference/structs.md:186
+msgid ""
+"Everything else class-shaped is allowed — `impl` blocks, `Self`, `Disposal`. "
+"And the old \"no destructor\" limit is gone: a shared value dies exactly "
+"when its cell's refcount reaches zero, so cleanup is one `impl` away — "
+"implement `Disposal` for the type and the engine calls `dispose` at that "
+"moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
+msgstr ""
+
+#: src/reference/structs.md:193
 msgid "Traits and representation"
 msgstr ""
 
-#: src/reference/structs.md:164
+#: src/reference/structs.md:195
 msgid ""
 "Widening a struct to a trait `I` **attaches the impl vtable to the same "
 "handle** — no allocation, no copy: the trait-typed value aliases the record, "
 "and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:168
+#: src/reference/structs.md:199
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -11735,7 +11878,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:173
+#: src/reference/structs.md:204
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."
@@ -12278,10 +12421,6 @@ msgid ""
 "heterogeneous needs compose a trait that declares both method sets."
 msgstr ""
 
-#: src/reference/traits.md:35
-msgid "Impl blocks"
-msgstr ""
-
 #: src/reference/traits.md:37
 msgid "Type bodies are fields only; methods live in impl blocks."
 msgstr ""
@@ -12605,6 +12744,13 @@ msgstr ""
 
 #: src/reference/traits.md:205
 msgid ""
+"An enum value iterates the same way: `impl Iterator<E> for Color` makes `for "
+"(let v of c)` walk whatever the impl's `iterate` emits — the desugar is the "
+"trait, the target's kind is irrelevant (see [Enums](enums.md))."
+msgstr ""
+
+#: src/reference/traits.md:210
+msgid ""
 "`for (v of it) { body }` desugars to `it.iterate(emit)` with a synthetic "
 "closure: the body runs, then `emit` returns `true`; `break` returns `false` "
 "(stopping the iteration); `continue` returns `true` immediately; a `return` "
@@ -12615,17 +12761,17 @@ msgid ""
 "`str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
 
-#: src/reference/traits.md:215
+#: src/reference/traits.md:220
 msgid "Engine contracts"
 msgstr ""
 
-#: src/reference/traits.md:217
+#: src/reference/traits.md:222
 msgid ""
 "`builtin trait` names are compiler-backed but **engine-named, not "
 "engine-closed** — users implement them through the ordinary nominal path:"
 msgstr ""
 
-#: src/reference/traits.md:236
+#: src/reference/traits.md:241
 msgid ""
 "`impl Future<nil> for CustomFuture` registers in the same registry as any "
 "other impl. Every builtin trait is the import-gated `pub builtin` spelling: "
@@ -12640,11 +12786,11 @@ msgid ""
 "Rc heap](rc-heap.md)."
 msgstr ""
 
-#: src/reference/traits.md:249
+#: src/reference/traits.md:254
 msgid "Equality"
 msgstr ""
 
-#: src/reference/traits.md:251
+#: src/reference/traits.md:256
 msgid ""
 "`==` is a builtin operator with no vtable dispatch: primitives by value, "
 "`str`/`bytes` by content, everything else by cell identity — see [Rc, "
@@ -14437,7 +14583,7 @@ msgstr ""
 
 #: src/reference/weak-refs.md:21
 msgid ""
-"Cycles are possible through ordinary dataclass fields (`next: ?Node` "
+"Cycles are possible through ordinary struct fields (`next: ?Node` "
 "back-pointers) as well as through collections."
 msgstr ""
 
@@ -14498,7 +14644,7 @@ msgstr ""
 
 #: src/reference/weak-refs.md:69
 msgid ""
-"Works over **any cell**: a class, dataclass, `Vec`, `[T]`, enum, `str`, "
+"Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`, "
 "`bytes`, a user `opaque` box, or a host box."
 msgstr ""
 
@@ -16229,8 +16375,7 @@ msgstr ""
 
 #: src/reference/workers-and-channels.md:52
 msgid ""
-"every other cell — `Vec<T>`, `[T]`, class/dataclass instances, enums, `?T` "
-"boxes"
+"every other cell — `Vec<T>`, `[T]`, class/struct instances, enums, `?T` boxes"
 msgstr ""
 
 #: src/reference/workers-and-channels.md:52
@@ -17286,7 +17431,7 @@ msgstr ""
 
 #: src/reference/value-boundary.md:22
 msgid ""
-"Everything else — dataclasses, classes, `Vec<T>`, `[T]`, trait-typed values, "
+"Everything else — structs, classes, `Vec<T>`, `[T]`, trait-typed values, "
 "closures — stays inside the VM. Seal polymorphic values in the erasure box: "
 "`opaque(v)` at the call, `opaque.downcast<T>(v)` after ([opaque — erasure "
 "and downcast](opaque.md))."
@@ -17739,7 +17884,7 @@ msgid "The layout rut records really have"
 msgstr ""
 
 #: src/reference/repr-c.md:12
-msgid "A user record (struct or dataclass) is an **array of 8-byte slots**:"
+msgid "A user record is an **array of 8-byte slots**:"
 msgstr ""
 
 #: src/reference/repr-c.md:14 src/reference/module-binary.md:165
@@ -17898,7 +18043,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/repr-c.md:67
-msgid "user record (struct/dataclass)"
+msgid "user record (struct)"
 msgstr ""
 
 #: src/reference/repr-c.md:67
@@ -19120,7 +19265,7 @@ msgstr ""
 #: src/reference/reflection.md:3
 msgid ""
 "Reflection is a **trait**, not a keyword privilege. `Reflectable` is the "
-"mechanism protocol; compiler auto-implementations (dataclasses, enums) and "
+"mechanism protocol; compiler auto-implementations (structs, enums) and "
 "builtin-impl registry entries (enums, records, `Vec`, `[T]`) fill it for the "
 "data world; classes opt in by hand with a **curated** view. Libraries layer "
 "contracts on top and take trait-object-typed consumers or bounded producers. "
@@ -19172,10 +19317,6 @@ msgstr ""
 
 #: src/reference/reflection.md:29
 msgid "deserialize"
-msgstr ""
-
-#: src/reference/reflection.md:31
-msgid "`dataclass`"
 msgstr ""
 
 #: src/reference/reflection.md:31 src/reference/reflection.md:32
@@ -19252,12 +19393,12 @@ msgstr ""
 
 #: src/reference/reflection.md:37
 msgid ""
-"**Auto-impls** are ordinary vtable fills: a dataclass walks its fields "
-"(arity = field count, child `i` = field `i`, boxed); an enum walks the "
-"current variant's payloads. The descriptor's impl list gains the entry "
-"implicitly; re-declaring one is a duplicate-impl error. Auto-impls satisfy "
-"`requires` edges of contract layers written on top — `impl Serializable for "
-"User {}` costs zero methods."
+"**Auto-impls** are ordinary vtable fills: a struct walks its fields (arity = "
+"field count, child `i` = field `i`, boxed); an enum walks the current "
+"variant's payloads. The descriptor's impl list gains the entry implicitly; "
+"re-declaring one is a duplicate-impl error. Auto-impls satisfy `requires` "
+"edges of contract layers written on top — `impl Serializable for User {}` "
+"costs zero methods."
 msgstr ""
 
 #: src/reference/reflection.md:43
@@ -20566,8 +20707,8 @@ msgid ""
 "One flat `Tok` enum for literals, punctuation, and operators. Keywords are "
 "ordinary `Ident`s; the parser matches them by interner name. **Reserved "
 "words are rejected by the lexer** with a message naming the rut replacement "
-"(`interface`, `dataclass`, `private`, `void`, `in`); `?.` and `??` are "
-"punctuation-level rejections, a separate mechanism."
+"(`interface`, `private`, `void`, `in`); `?.` and `??` are punctuation-level "
+"rejections, a separate mechanism."
 msgstr ""
 
 #: src/reference/frontend.md:36

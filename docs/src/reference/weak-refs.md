@@ -18,7 +18,7 @@ first-class answer.
 | Pure-data cycles | Harmless — memory only, freed wholesale at teardown. |
 | Lints | The compiler may warn on obvious self-reference (a value stored into its own field through a handle path); general cycle detection stays out of scope. |
 
-Cycles are possible through ordinary dataclass fields (`next: ?Node`
+Cycles are possible through ordinary struct fields (`next: ?Node`
 back-pointers) as well as through collections.
 
 ## `Weak<T>`
@@ -66,7 +66,7 @@ node 1
   `Weak.new(some_fn)` diagnose; primitives and `fn` values refuse.
   (The retired type-call spelling — a bare call of the type name —
   does not compile; the diagnostic names `Weak.new(v)`.)
-- Works over **any cell**: a class, dataclass, `Vec`, `[T]`, enum, `str`,
+- Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`,
   `bytes`, a user `opaque` box, or a host box.
 - `Weak.new(nil)` traps ("weak on nil").
 - **`Weak.new(v)` consumes the argument's temporary** and nulls its

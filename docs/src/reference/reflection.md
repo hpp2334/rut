@@ -1,7 +1,7 @@
 # Reflection
 
 Reflection is a **trait**, not a keyword privilege. `Reflectable` is the
-mechanism protocol; compiler auto-implementations (dataclasses, enums) and
+mechanism protocol; compiler auto-implementations (structs, enums) and
 builtin-impl registry entries (enums, records, `Vec`, `[T]`) fill it for
 the data world; classes opt in by hand with a **curated** view. Libraries
 layer contracts on top and take trait-object-typed consumers or bounded
@@ -28,13 +28,13 @@ pub trait Deserializable requires Reflectable { }
 
 | type | `Reflectable` | `Deserializable` | stringify | deserialize |
 |---|---|---|---|---|
-| `dataclass` | compiler auto-impl | auto | opt-in (`impl Serializable for T {}`) | yes |
+| `struct` | compiler auto-impl | auto | opt-in (`impl Serializable for T {}`) | yes |
 | user `enum` | compiler auto-impl | auto | opt-in | yes |
 | `Option`/`Result`/`Vec`/`[T]` | builtin-impl registry, every instantiation | registry | as *fields* only | yes (`[T; N]` minting excepted — deserialize targets `Vec<T>`) |
 | `class`, no impl | — | — | compile error at the call | compile error at the call |
 | `class`, manual impl | hand-written (curated) | **impossible** | yes (positional view) | **compile error** |
 
-- **Auto-impls** are ordinary vtable fills: a dataclass walks its fields
+- **Auto-impls** are ordinary vtable fills: a struct walks its fields
   (arity = field count, child `i` = field `i`, boxed); an enum walks the
   current variant's payloads. The descriptor's impl list gains the entry
   implicitly; re-declaring one is a duplicate-impl error. Auto-impls

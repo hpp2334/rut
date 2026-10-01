@@ -31,7 +31,7 @@ so they are fuzzable and reusable in an LSP or formatter with no VM present.
 - One flat `Tok` enum for literals, punctuation, and operators. Keywords are
   ordinary `Ident`s; the parser matches them by interner name. **Reserved
   words are rejected by the lexer** with a message naming the rut
-  replacement (`interface`, `dataclass`, `private`, `void`, `in`);
+  replacement (`interface`, `private`, `void`, `in`);
   `?.` and `??` are punctuation-level rejections, a separate mechanism.
 - Maximal munch with an explicit longest-match table; `/` vs `//` vs `/*`
   resolves with one lookahead. Compound assignment operators are one token

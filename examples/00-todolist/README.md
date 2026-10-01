@@ -68,6 +68,6 @@ fuel used: 680 of Some(1000000)
   embedder mistakes (wrong value shape) come back as named traps, never
   silent zeros
 - the executable M1 surface — classes (`Self {}` construction,
-  zero-param `new`, `-> Self`), dataclasses with field initializers,
+  zero-param `new`, `-> Self`), structs with field initializers,
   `Vec<T>`/`Option<T>`/`Result<T,E>`, `if/else`, `&&`/`||`, `when` with
   block arms, f-strings, `opaque.new`/`opaque.downcast`

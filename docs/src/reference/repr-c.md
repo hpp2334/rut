@@ -9,7 +9,7 @@ every FFI: here is what actually exists.
 
 ## The layout rut records really have
 
-A user record (struct or dataclass) is an **array of 8-byte slots**:
+A user record is an **array of 8-byte slots**:
 
 | rule | content |
 |---|---|
@@ -64,7 +64,7 @@ A host touches record data only through the checked boundary
 |---|---|
 | tuple (a record of crossing-typed fields) | a Rust tuple, positionally, field-by-field under the record's declared field types — arity 1–8 ([value boundary](value-boundary.md)) |
 | `host struct` | the declared flat record, decoded through the field table; the shape is the whole surface |
-| user record (struct/dataclass) | never crosses whole — pass it as `opaque`, mirror it as a `host struct`, or walk it with reflection |
+| user record (struct) | never crosses whole — pass it as `opaque`, mirror it as a `host struct`, or walk it with reflection |
 | `Vec<T>` / `[T]` | never crosses; per-element fns, or `bytes` for raw payloads |
 
 The positional tuple decode is the one place record *structure* reaches

@@ -66,5 +66,5 @@ and the host holds the handle. Results come back three ways:
 - **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the session runs under fuel + heap limits,
   and `main.rs` prints fuel per algorithm: quick < insertion <
   selection < bubble, as it should be
-- the executable M1 surface — dataclasses, `opaque.new`/`opaque.downcast`,
+- the executable M1 surface — structs, `opaque.new`/`opaque.downcast`,
   `Option`/`Result`, `for`/`while`, short-circuit `&&`, f-strings

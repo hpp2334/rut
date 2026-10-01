@@ -99,7 +99,7 @@ Byte payloads need no wrapper — `bytes` is in the crossing set, so
 `entry fn hex_enc(data: bytes) -> str` takes a host byte slice
 head-on ([primitive types](../reference/primitive-types.md)). The one
 erasure in the file is the recursive JSON tree: rut has no recursive
-dataclass, so the tree is a tagged union by hand with children boxed
+struct, so the tree is a tagged union by hand with children boxed
 in `opaque` to break the recursion
 ([opaque — erasure and downcast](../reference/opaque.md)):
 

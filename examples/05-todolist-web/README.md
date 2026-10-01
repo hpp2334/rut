@@ -366,7 +366,7 @@ module-private traits behind `pub` methods (impl-trait
 visibility, [traits](../../docs/src/reference/traits.md)), first-class fns as values
 (`store.derive` / `store.mutation`
 take fn literals; `opaque.downcast` unwraps the erased program at the
-trust boundary, [opaque](../../docs/src/reference/opaque.md)), dataclass-literal structs (`World`,
+trust boundary, [opaque](../../docs/src/reference/opaque.md)), literal structs (`World`,
 `AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (the
 container crossing is NON-NULLABLE end to end: `opaque(AppRoot)` —
 `downcast<AppRoot>` — nil-checked unwrap `let mut r: AppRoot = root`),

@@ -1894,7 +1894,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
-#: src/tutorial/functions.md:220 src/tutorial/types.md:273
+#: src/tutorial/functions.md:220 src/tutorial/types.md:280
 #: src/tutorial/traits.md:318 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
@@ -3143,8 +3143,8 @@ msgstr ""
 
 #: src/tutorial/types.md:20
 msgid ""
-"An enum is a distinct named type over integer constants. No payloads, no methods, no computed members — where another language would use a union of literal strings, rut uses an enum:"
-msgstr "枚举是建立在整型常量之上的一个独立命名类型。没有载荷，没有方法，没有计算型成员——换作别的语言会在字面量字符串的并集上做文章的地方，rut 用枚举："
+"An enum is a distinct named type over integer constants. No payloads and no computed members — where another language would use a union of literal strings, rut uses an enum:"
+msgstr "枚举是建立在整型常量之上的一个独立命名类型。没有载荷，也没有计算型成员——换作别的语言会在字面量字符串的并集上做文章的地方，rut 用枚举："
 
 
 #: src/tutorial/types.md:24
@@ -3184,23 +3184,23 @@ msgstr "成员就是枚举的值，书写时带限定：`Light.Green`。显式�
 
 #: src/tutorial/types.md:45
 msgid ""
-"`when` over an enum must be exhaustive — every member, or an `else` arm (see [control flow and when](control-flow.md)). Enums render as their member name in format strings."
+"`when` over an enum must be exhaustive — every member, or an `else` arm (see [control flow and when](control-flow.md)). Enums render as their member name in format strings. Enums take `impl` blocks — non-self methods on the name, `self` methods on a value, and trait impls (`impl Iterator<E> for Light` makes `for (let v of l)` walk) — see [enums](../reference/enums.md)."
 msgstr ""
-"对枚举的 `when` 必须穷尽——覆盖每个成员，或带一个 `else` 分支（参见[控制流与 when](control-flow.md)）。枚举在格式化字符串里渲染为成员名。"
+"对枚举的 `when` 必须穷尽——覆盖每个成员，或带一个 `else` 分支（参见[控制流与 when](control-flow.md)）。枚举在格式化字符串里渲染为成员名。枚举可以带 `impl` 块——非 self 方法挂在枚举名上调用，`self` 方法挂在值上调用，还有 trait impl（`impl Iterator<E> for Light` 让 `for (let v of l)` 走起来）——参见[枚举](../reference/enums.md)。"
 
 
-#: src/tutorial/types.md:49
+#: src/tutorial/types.md:52
 msgid "Structs — open records"
 msgstr "结构体——开放的记录"
 
 
-#: src/tutorial/types.md:51
-msgid ""
-"Declare with `struct`, construct with a literal — anywhere in a function body, nested inside other literals. There is no `new`:"
-msgstr "用 `struct` 声明，用字面量构造——函数体内的任何位置，或嵌在其他字面量里。没有 `new`："
-
-
 #: src/tutorial/types.md:54
+msgid ""
+"Declare with `struct`, construct with a literal — anywhere in a function body, nested inside other literals. Construction is the literal; there is no constructor gate:"
+msgstr "用 `struct` 声明，用字面量构造——函数体内的任何位置，或嵌在其他字面量里。构造就是字面量；没有构造器门禁："
+
+
+#: src/tutorial/types.md:58
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3257,20 +3257,21 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:85
+#: src/tutorial/types.md:89
 msgid ""
-"All fields are public, always — member visibility in a struct is a compile error. Privacy is what classes are for."
-msgstr "所有字段永远公开——给结构体成员标注可见性是编译错误。私有正是类存在的意义。"
+"All fields are public, always — member visibility in a struct is a compile error. Privacy is what classes are for. Methods live in `impl` blocks with real visibility — `pub fn` exports cross-module, plain `fn` stays module-private (see [structs](../reference/structs.md))."
+msgstr ""
+"所有字段永远公开——给结构体成员标注可见性是编译错误。私有正是类存在的意义。方法住在 `impl` 块里，可见性是真实的——`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见（参见[结构体](../reference/structs.md)）。"
 
 
-#: src/tutorial/types.md:88
+#: src/tutorial/types.md:95
 msgid ""
 "**Structs share.** A struct value is a handle to a heap cell: assignment, arguments, and returns all pass the handle, and a write through any alias is visible through all of them. Writing needs a `mut` binding or `mut` parameter:"
 msgstr ""
 "**结构体共享。**结构体值是指向堆单元的句柄：赋值、实参和返回传递的都是句柄，经由任何别名做出的写入，经所有别名都可见。写入需要 `mut` 绑定或 `mut` 参数："
 
 
-#: src/tutorial/types.md:93
+#: src/tutorial/types.md:100
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3301,20 +3302,20 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:111
+#: src/tutorial/types.md:118
 msgid ""
 "`==` on struct values is **cell identity** — `q == p` is true (one cell), `p == Point { x: 4, y: 2 }` is false (a different cell). To compare field by field, write a function."
 msgstr ""
 "结构体值上的 `==` 是**单元同一性**——`q == p` 为 true（同一个单元），`p == Point { x: 4, y: 2 }` 为 false（另一个单元）。想逐字段比较，就写一个函数。"
 
 
-#: src/tutorial/types.md:115
+#: src/tutorial/types.md:122
 msgid ""
 "Recursive shapes are legal — a record may name itself through a nullable field, because `?Node` is one word:"
 msgstr "递归的形状是合法的——记录可以经由可空字段指涉自身，因为 `?Node` 就是一个词："
 
 
-#: src/tutorial/types.md:118
+#: src/tutorial/types.md:125
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3371,19 +3372,19 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:149
+#: src/tutorial/types.md:156
 msgid "Classes — sealed records"
 msgstr "类——封闭的记录"
 
 
-#: src/tutorial/types.md:151
+#: src/tutorial/types.md:158
 msgid ""
 "A class adds two things to a struct: module-private fields and construction gated through class methods. There is no `constructor` keyword, no `new` operator, and no outside literal — the only way to build a class value from outside is to call a class method that chooses to. (Cleanup hooks are not a class privilege: implement `Disposal` for either shape, and the engine calls `dispose` when the value's cell refcount reaches zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 "类在结构体之上加两样东西：模块私有的字段，以及经由类方法把守的构造。没有 `constructor` 关键字、没有 `new` 运算符、也没有外部字面量——从外部构建类值的唯一途径，是调用一个愿意为你构建的类方法。（清理钩子并不是类的特权：为任一形态实现 `Disposal`，引擎就会在该值的单元引用计数归零时调用 `dispose`——参见[Rc、dispose 与同一性](../reference/rc-dispose-identity.md)。）"
 
 
-#: src/tutorial/types.md:160
+#: src/tutorial/types.md:167
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3442,38 +3443,38 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:192
+#: src/tutorial/types.md:199
 msgid "The pieces:"
 msgstr "组成部分如下："
 
 
-#: src/tutorial/types.md:194
+#: src/tutorial/types.md:201
 msgid ""
 "**A class method is just a function without `self`.** `Rect.new(w, h)`, `Version.parse(s)`, `Rect.from_square(s)` — any no-`self` method returning `Self` is a constructor. `new` is a convention, not syntax."
 msgstr ""
 "**类方法就是不带 `self` 的函数。**`Rect.new(w, h)`、`Version.parse(s)`、`Rect.from_square(s)`——任何不带 `self` 且返回 `Self` 的方法都是构造器。`new` 是约定，不是语法。"
 
 
-#: src/tutorial/types.md:197
+#: src/tutorial/types.md:204
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the class's own impl block, never outside. This is the seal."
 msgstr "**`Self { .. }` 字面量是类私有的**——在类自己的 impl 块内的任何地方都合法，出了它就再也不合法。这就是封闭。"
 
 
-#: src/tutorial/types.md:199
+#: src/tutorial/types.md:206
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; `mut self` marks methods that write. There is no `this`, no static methods, no `get`/`set` syntax — a computed property is a method (`c.count()`)."
 msgstr ""
 "**实例方法把 `self` 显式写成第一个参数**；`mut self` 标记会写入的方法。没有 `this`，没有静态方法，没有 `get`/`set` 语法——计算属性就是一个方法（`c.count()`）。"
 
 
-#: src/tutorial/types.md:203
+#: src/tutorial/types.md:210
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it can check arguments and refuse:"
 msgstr "**构造即验证。**构造器是一个普通函数——它可以检查实参并拒绝："
 
 
-#: src/tutorial/types.md:206
+#: src/tutorial/types.md:213
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3538,13 +3539,13 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:241
+#: src/tutorial/types.md:248
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, not a crash:"
 msgstr "_try_ 构造器以可空作答——`nil` 是一次验证失败，不是崩溃："
 
 
-#: src/tutorial/types.md:244
+#: src/tutorial/types.md:251
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -3565,49 +3566,49 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:253
+#: src/tutorial/types.md:260
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code sharing is composition (hold a helper in a field) or free functions; polymorphism is traits — the next chapter."
 msgstr ""
 "**没有继承。**没有 `extends`，没有 `super`，没有覆写。代码共享靠组合（把辅助对象放在字段里）或自由函数；多态靠 trait——下一章。"
 
 
-#: src/tutorial/types.md:257
+#: src/tutorial/types.md:264
 msgid "Visibility recap"
 msgstr "可见性小结"
 
 
-#: src/tutorial/types.md:259
+#: src/tutorial/types.md:266
 msgid "Struct members: public, always."
 msgstr "结构体成员：永远公开。"
 
 
-#: src/tutorial/types.md:260
+#: src/tutorial/types.md:267
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers (also `pub(mod)`, `pub(super)`, `pub(self)`)."
 msgstr "类成员：不标注即模块私有；`pub` 对导入方可见（另有 `pub(mod)`、`pub(super)`、`pub(self)`）。"
 
 
-#: src/tutorial/types.md:262
+#: src/tutorial/types.md:269
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, a bare `class Helper` stays in its module. See [modules and packages](modules.md)."
 msgstr ""
 "类型本身遵循同一条规则：`pub class Vec<T>` 可被导入，裸的 `class Helper` 则留在其模块内。参见[模块与包](modules.md)。"
 
 
-#: src/tutorial/types.md:266
+#: src/tutorial/types.md:273
 msgid "Struct or class?"
 msgstr "结构体还是类？"
 
 
-#: src/tutorial/types.md:268
+#: src/tutorial/types.md:275
 msgid ""
 "Default to a struct: data in, data out, shared like every other value. Reach for a class when the type has rules that construction must enforce, holds private state that outsiders must not read, or owns a resource that needs explicit cleanup."
 msgstr ""
 "默认选结构体：数据进、数据出，像其他一切值一样共享。当类型带有构造时必须强制执行的规则、持有外人不得读取的私有状态、或拥有需要显式清理的资源时，才选类。"
 
 
-#: src/tutorial/types.md:275
+#: src/tutorial/types.md:282
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3710,7 +3711,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:329
+#: src/tutorial/types.md:336
 msgid "Next: [traits and impl blocks](traits.md)."
 msgstr "下一章：[trait 与 impl 块](traits.md)。"
 
@@ -9831,9 +9832,9 @@ msgstr "`bytes` 直接跨越；`opaque` 恰好出现一次"
 
 #: src/examples/02-digest.md:98
 msgid ""
-"Byte payloads need no wrapper — `bytes` is in the crossing set, so `entry fn hex_enc(data: bytes) -> str` takes a host byte slice head-on ([primitive types](../reference/primitive-types.md)). The one erasure in the file is the recursive JSON tree: rut has no recursive dataclass, so the tree is a tagged union by hand with children boxed in `opaque` to break the recursion ([opaque — erasure and downcast](../reference/opaque.md)):"
+"Byte payloads need no wrapper — `bytes` is in the crossing set, so `entry fn hex_enc(data: bytes) -> str` takes a host byte slice head-on ([primitive types](../reference/primitive-types.md)). The one erasure in the file is the recursive JSON tree: rut has no recursive struct, so the tree is a tagged union by hand with children boxed in `opaque` to break the recursion ([opaque — erasure and downcast](../reference/opaque.md)):"
 msgstr ""
-"字节载荷不需要包装器——`bytes` 在可跨越集合里，所以 `entry fn hex_enc(data: bytes) -> str` 迎面接下宿主的字节切片（[原始类型](../reference/primitive-types.md)）。文件中唯一一处擦除是递归的 JSON 树：rut 没有递归数据类，所以这棵树是手工打造的带标签联合，子节点装进 `opaque` 盒以打断递归（[opaque — 擦除与向下转型](../reference/opaque.md)）："
+"字节载荷不需要包装器——`bytes` 在可跨越集合里，所以 `entry fn hex_enc(data: bytes) -> str` 迎面接下宿主的字节切片（[原始类型](../reference/primitive-types.md)）。文件中唯一一处擦除是递归的 JSON 树：rut 没有递归结构体，所以这棵树是手工打造的带标签联合，子节点装进 `opaque` 盒以打断递归（[opaque — 擦除与向下转型](../reference/opaque.md)）："
 
 
 #: src/examples/02-digest.md:106
@@ -12034,6 +12035,7 @@ msgstr "`enum`"
 
 
 #: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
+#: src/reference/reflection.md:31
 msgid "`struct`"
 msgstr "`struct`"
 
@@ -12586,12 +12588,12 @@ msgstr "**类成员采用同样的形式**：未加注解的字段或方法是�
 
 #: src/reference/modules-and-visibility.md:127
 msgid ""
-"Dataclass members are **always public** — no visibility dial (see [Structs](structs.md)). Trait method signatures and impl methods are as visible as their trait (see [Traits and dispatch](traits.md))."
+"**Struct fields are always public** — the field law has no dial (see [Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub fn` exports cross-module, plain `fn` is module-private — the same law a class's methods follow, enums included (see [Structs](structs.md) and [Enums](enums.md)). Trait method signatures and impl methods are as visible as their trait (see [Traits and dispatch](traits.md))."
 msgstr ""
-"数据类成员**始终公开** —— 没有可见性调节项（参见[结构体](structs.md)）。trait 方法签名与 impl 方法的可见性与其 trait 一致（参见[trait 与分派](traits.md)）。"
+"**结构体的字段永远公开**——字段法则没有调节项（参见[结构体](structs.md)）。**impl 块的方法走 `pub` 调节项**——`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见——与类的方法同一法则，枚举亦然（参见[结构体](structs.md)与[枚举](enums.md)）。trait 方法签名与 impl 方法的可见性与其 trait 一致（参见[trait 与分派](traits.md)）。"
 
 
-#: src/reference/modules-and-visibility.md:130
+#: src/reference/modules-and-visibility.md:134
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones."
 msgstr ""
@@ -13438,21 +13440,22 @@ msgstr ""
 
 
 #: src/reference/enums.md:35
-msgid "No data payloads, no methods, no computed members — ever."
-msgstr "没有数据载荷，没有方法，没有计算型成员 —— 永远没有。"
+msgid ""
+"No data payloads and no computed members — ever. Methods are an `impl` block away (see [Impl blocks](#impl-blocks))."
+msgstr "没有数据载荷，也没有计算型成员——永远如此。方法就在一个 `impl` 块之外（参见[impl 块](#impl-blocks)）。"
 
 
-#: src/reference/enums.md:37
+#: src/reference/enums.md:38
 msgid "Using members"
 msgstr "使用成员"
 
 
-#: src/reference/enums.md:39
+#: src/reference/enums.md:40
 msgid "Members are named through the enum and compare as equal singletons:"
 msgstr "成员通过枚举来命名，并作为相等的单例进行比较："
 
 
-#: src/reference/enums.md:41
+#: src/reference/enums.md:42
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13479,30 +13482,30 @@ msgstr ""
 "```"
 
 
-#: src/reference/enums.md:57
+#: src/reference/enums.md:58
 msgid ""
 "An enum value renders as its member name in format strings: `f\"{Color.Red}\"` is `\"Red\"`."
 msgstr "枚举值在格式化字符串中渲染为它的成员名：`f\"{Color.Red}\"` 是 `\"Red\"`。"
 
 
-#: src/reference/enums.md:59
+#: src/reference/enums.md:60
 msgid "Enums are ordinary shared values: binding shares the singleton."
 msgstr "枚举是普通的共享值：绑定即共享该单例。"
 
 
-#: src/reference/enums.md:61
+#: src/reference/enums.md:62
 msgid "Exhaustive `when`"
 msgstr "穷尽的 `when`"
 
 
-#: src/reference/enums.md:63
+#: src/reference/enums.md:64
 msgid ""
 "`when` over an enum must be **exhaustive**: cover every member (then `else` is optional) or add an explicit `else` arm — a partial `when` is a compile error. See [Control flow and when](control-flow.md)."
 msgstr ""
 "对枚举的 `when` 必须**穷尽**：覆盖每个成员（此时 `else` 可省略）或添加显式的 `else` 分支 —— 不完整的 `when` 是编译错误。参见[控制流与 when](control-flow.md)。"
 
 
-#: src/reference/enums.md:67
+#: src/reference/enums.md:68
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13543,26 +13546,131 @@ msgstr ""
 "```"
 
 
-#: src/reference/enums.md:90
+#: src/reference/enums.md:91 src/reference/traits.md:35
+msgid "Impl blocks"
+msgstr "impl 块"
+
+
+#: src/reference/enums.md:93
+msgid ""
+"Enums take `impl` blocks — the same three forms a struct or class takes: non-self methods (called on the enum's name), `self` methods (called on a value), and trait impls."
+msgstr ""
+"枚举可以带 `impl` 块——与结构体和类相同的三种形式：非 self 方法（通过枚举名调用）、`self` 方法（通过值调用），以及 trait impl。"
+
+
+#: src/reference/enums.md:97
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Dial { Low, High }\n"
+"\n"
+"impl Dial {\n"
+"    fn default() -> Self { return Dial.Low; }\n"
+"    fn flipped(self) -> Dial {\n"
+"        return when (self) {\n"
+"            Dial.Low  -> Dial.High,\n"
+"            Dial.High -> Dial.Low,\n"
+"        };\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    let d = Dial.default().flipped();\n"
+"    log.info(when (d) {\n"
+"        Dial.Low  -> \"low\",\n"
+"        Dial.High -> \"high\",\n"
+"    });\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/enums.md:126
+msgid ""
+"A non-self method is a namespaced function: `Dial.default()`. `Self` spells the enum, so `-> Self` is the return type and `Dial.Low` mints the member."
+msgstr ""
+"非 self 方法是一个带命名空间前缀的函数：`Dial.default()`。`Self` 拼写的就是这个枚举，所以 `-> Self` 是返回类型，`Dial.Low` 铸造出成员。"
+
+
+#: src/reference/enums.md:129
+msgid ""
+"A `self` method dispatches on the value: `d.flipped()` — the receiver crosses as the singleton cell it already is."
+msgstr "`self` 方法在值上分派：`d.flipped()`——接收者本来就是单例单元，按原样跨越。"
+
+
+#: src/reference/enums.md:131
+msgid ""
+"Method visibility is real: `pub fn` exports cross-module, plain `fn` is module-private (see [Modules and visibility](modules-and-visibility.md))."
+msgstr ""
+"方法可见性是真实的：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见（参见[模块与可见性](modules-and-visibility.md)）。"
+
+
+#: src/reference/enums.md:135
+msgid ""
+"Trait impls make enum values iterable — `for (let v of c)` rides the same desugar as a class's (see [The iteration protocol](traits.md)):"
+msgstr "trait impl 让枚举值可迭代——`for (let v of c)` 走与类相同的脱糖（参见[迭代协议](traits.md)）："
+
+
+#: src/reference/enums.md:138
+msgid ""
+"```rut\n"
+"use core::{ Iterator };\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"impl Iterator<Light> for Light {\n"
+"    fn iterate(self, emit: fn(Light) -> bool) {\n"
+"        let mut cur = self;\n"
+"        for (let i = 0; i < 3; i += 1) {\n"
+"            if (!emit(cur)) { return; }\n"
+"            cur = when (cur) {\n"
+"                Light.Green  -> Light.Yellow,\n"
+"                Light.Yellow -> Light.Red,\n"
+"                Light.Red    -> Light.Green,\n"
+"            };\n"
+"        }\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    for (let l of Light.Red) {\n"
+"        log.info(f\"{l}\");\n"
+"    }\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/enums.md:172
+msgid ""
+"One limit stays: `Disposal` is for structs and classes only — the engine disposes a record's cell, and an enum member is immortal."
+msgstr "只有一条限制仍在：`Disposal` 只属于结构体和类——引擎处置的是记录的单元，而枚举成员是不朽的。"
+
+
+#: src/reference/enums.md:175
 msgid "Boundaries"
 msgstr "边界"
 
 
-#: src/reference/enums.md:92
+#: src/reference/enums.md:177
 msgid ""
 "Where another language would use a union of literals (`\"left\" | \"right\"`), rut uses an enum; where it would use a union of _shapes_, rut uses a trait-typed value (see [Traits and dispatch](traits.md))."
 msgstr ""
 "其他语言会用字面量联合（`\"left\" | \"right\"`）的场合，rut 用枚举；会用 _形状_ 联合的场合，rut 用 trait 类型的值（参见[trait 与分派](traits.md)）。"
 
 
-#: src/reference/enums.md:96
+#: src/reference/enums.md:181
 msgid ""
 "The `|` spelling exists only for bound-only union aliases and `requires` bounds (see [Type aliases and union bounds](type-aliases.md)) — a compile-time admission gate, never a runtime union value."
 msgstr ""
 "`|` 写法只用于仅约束的联合别名和 `requires` 约束（参见[类型别名与联合约束](type-aliases.md)）—— 它是编译期的准入门槛，绝不是运行期的联合值。"
 
 
-#: src/reference/enums.md:99
+#: src/reference/enums.md:184
 msgid ""
 "There is no enum↔int cast: `as` is the numeric cast only. Enum values cross the host boundary as their runtime identity plus the integer value."
 msgstr "没有枚举↔整数转换：`as` 只是数值类型转换。枚举值跨越宿主边界时，以运行时同一性加上整数值的形式跨越。"
@@ -13955,9 +14063,9 @@ msgstr "`for` —— 两种形式"
 
 #: src/reference/control-flow.md:19
 msgid ""
-"Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s per step), `bytes` (`u8` per step), and any type with a registered `Iterator` impl (see [Traits and dispatch](traits.md)):"
+"Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s per step), `bytes` (`u8` per step), and any type with a registered `Iterator` impl — an enum value included (see [Traits and dispatch](traits.md) and [Enums](enums.md)):"
 msgstr ""
-"迭代形式 —— vec、定长数组、切片、字符串（每步一个单码点 `str`）、`bytes`（每步一个 `u8`），以及任何注册了 `Iterator` impl 的类型（参见[trait 与分派](traits.md)）："
+"迭代形式 —— vec、定长数组、切片、字符串（每步一个单码点 `str`）、`bytes`（每步一个 `u8`），以及任何注册了 `Iterator` impl 的类型——枚举值也在内（参见[trait 与分派](traits.md)与[枚举](enums.md)）："
 
 
 #: src/reference/control-flow.md:28
@@ -14441,53 +14549,83 @@ msgstr ""
 
 #: src/reference/structs.md:147
 msgid ""
+"Methods carry real visibility — the class rule: `pub fn` exports cross-module, plain `fn` is module-private. `Self` spells the struct, in signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
+msgstr ""
+"方法带有真实可见性——类的法则：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见。`Self` 拼写的就是这个结构体，签名（`-> Self`）和字面量（`Self { x: 1, y: 2 }`）里都一样："
+
+
+#: src/reference/structs.md:152
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Counter { n: i32 }\n"
+"\n"
+"impl Counter {\n"
+"    pub fn new() -> Self { return Counter { n: 0 }; }\n"
+"    fn bump(mut self) -> Self { self.n += 1; return self; }\n"
+"    fn value(self) -> i32 { return self.n; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    let c = Counter.new().bump().bump();\n"
+"    log.info(f\"{c.value()}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/structs.md:174
+msgid ""
 "Free functions over data remain the default idiom; methods are for tight helpers, impl blocks for trait contracts."
 msgstr "作用于数据的自由函数仍是默认惯用法；方法用于紧密的辅助操作，impl 块用于 trait 契约。"
 
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:177
 msgid "Limits, exhaustively:"
 msgstr "限制，穷尽列举："
 
 
-#: src/reference/structs.md:152
-msgid "**no member visibility** — all fields are public, always;"
-msgstr "**没有成员可见性** —— 所有字段永远公开；"
-
-
-#: src/reference/structs.md:153
+#: src/reference/structs.md:179
 msgid ""
-"**no class methods** — the literal is the only construction (open literal vs class-method-gated _is_ the struct/class distinction)."
-msgstr "**没有类方法**——字面量是唯一的构造（开放字面量 vs 类方法把守_正是_ struct/class 的分界）。"
+"**fields are always public** — no field-visibility dial (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md));"
+msgstr "**字段永远公开**——字段可见性没有调节项（私有需要构造控制，那是类的职责——参见[类与构造器](classes.md)）；"
 
 
-#: src/reference/structs.md:156
+#: src/reference/structs.md:182
 msgid ""
-"Everything else class-shaped is allowed, including `impl` blocks. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — implement `Disposal` for the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
+"**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open literal vs class-method-gated _is_ the struct/class distinction)."
+msgstr "**构造就是字面量**——`Point { x: 1, y: 2 }` 到处可用（开放字面量 vs 类方法门禁_正是_结构体/类的分界）。"
+
+
+#: src/reference/structs.md:186
+msgid ""
+"Everything else class-shaped is allowed — `impl` blocks, `Self`, `Disposal`. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — implement `Disposal` for the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
-"其余类形态的东西都允许，包括 `impl` 块。而旧的“没有析构器”限制已经消失：共享值恰在其单元引用计数归零时死亡，所以清理只是一个 `impl` 之遥——为该类型实现 `Disposal`，引擎便会在那一刻调用 `dispose`（参见[Rc、dispose 与同一性](rc-dispose-identity.md)）。"
+"其余类形态的东西都允许——`impl` 块、`Self`、`Disposal`。而旧的“没有析构器”限制已经消失：共享值恰在其单元引用计数归零时死亡，所以清理只是一个 `impl` 之遥——为该类型实现 `Disposal`，引擎便会在那一刻调用 `dispose`（参见[Rc、dispose 与同一性](rc-dispose-identity.md)）。"
 
 
-#: src/reference/structs.md:162
+#: src/reference/structs.md:193
 msgid "Traits and representation"
 msgstr "trait 与表示"
 
 
-#: src/reference/structs.md:164
+#: src/reference/structs.md:195
 msgid ""
 "Widening a struct to a trait `I` **attaches the impl vtable to the same handle** — no allocation, no copy: the trait-typed value aliases the record, and mutations through it are visible to every other handle."
 msgstr ""
 "把结构体宽化到 trait `I` 会**把 impl vtable 附加到同一个句柄上** —— 不分配，不复制：trait 类型的值就是该记录的别名，透过它做出的修改对所有其他句柄可见。"
 
 
-#: src/reference/structs.md:168
+#: src/reference/structs.md:199
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — primitive fields widened into their slot, composite fields as cell-handle slots (see [Reified types and layout](reified-types.md)). Recursive shapes (`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 "表示：单元内每个字段一个槽，按声明顺序排列 —— 基本类型字段宽化进自己的槽，复合字段作为单元句柄槽（参见[具体化类型与布局](reified-types.md)）。递归形状（`next: ?Node`）是合法的，因为复合字段是指针大小的。"
 
 
-#: src/reference/structs.md:173
+#: src/reference/structs.md:204
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is allowed."
 msgstr "结构体用于小型数据（点、矩形、颜色、配置），但任意大小都允许。"
@@ -15100,11 +15238,6 @@ msgid ""
 msgstr "**交集类型（`A & B`）永不受支持** —— 不是推迟：异构需求请组合出一个同时声明两组方法的 trait。"
 
 
-#: src/reference/traits.md:35
-msgid "Impl blocks"
-msgstr "impl 块"
-
-
 #: src/reference/traits.md:37
 msgid "Type bodies are fields only; methods live in impl blocks."
 msgstr "类型体只有字段；方法位于 impl 块中。"
@@ -15464,35 +15597,42 @@ msgstr ""
 
 #: src/reference/traits.md:205
 msgid ""
+"An enum value iterates the same way: `impl Iterator<E> for Color` makes `for (let v of c)` walk whatever the impl's `iterate` emits — the desugar is the trait, the target's kind is irrelevant (see [Enums](enums.md))."
+msgstr ""
+"枚举值以同样的方式迭代：`impl Iterator<E> for Color` 让 `for (let v of c)` 走遍 impl 的 `iterate` 所发射的一切——脱糖的是 trait，目标的种类无关紧要（参见[枚举](enums.md)）。"
+
+
+#: src/reference/traits.md:210
+msgid ""
 "`for (v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false` (stopping the iteration); `continue` returns `true` immediately; a `return` inside the body stops the iteration (not the enclosing function). The loop variable is the closure's parameter — a fresh binding per iteration; captured enclosing locals are copied by value at the desugar, so accumulate through a shared cell or a method. The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
 "`for (v of it) { body }` 脱糖为带合成闭包的 `it.iterate(emit)`：先运行体，然后 `emit` 返回 `true`；`break` 返回 `false`（停止迭代）；`continue` 立即返回 `true`；体内遇到 `return` 会停止迭代（而不是外围函数）。循环变量是闭包的参数 —— 每次迭代一个新绑定；在脱糖时被捕获的外围局部变量按值复制，因此要透过共享单元或方法来累加。内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）保留其融合的索引循环，永远不会走到该协议。"
 
 
-#: src/reference/traits.md:215
+#: src/reference/traits.md:220
 msgid "Engine contracts"
 msgstr "引擎契约"
 
 
-#: src/reference/traits.md:217
+#: src/reference/traits.md:222
 msgid ""
 "`builtin trait` names are compiler-backed but **engine-named, not engine-closed** — users implement them through the ordinary nominal path:"
 msgstr "`builtin trait` 名称由编译器支撑，但**由引擎命名，不对引擎封闭** —— 用户通过普通的名义路径实现它们："
 
 
-#: src/reference/traits.md:236
+#: src/reference/traits.md:241
 msgid ""
 "`impl Future<nil> for CustomFuture` registers in the same registry as any other impl. Every builtin trait is the import-gated `pub builtin` spelling: the ENGINE weaves on the native-trait symbols — async frames, the minted cx, and the fused `for..of` loops never consult user scope — but source that SPELLS a trait name resolves it only through `use core::{ .. }` (`Iterator` for an `impl Iterator<E> for T` or a trait-typed parameter; `Future` for a user impl, a launcher's `f: Future<T>`, or `downcast<Future<..>>`; `RunContext` for a yield signature or an `async fn` head; the `Disposal` pair through `use core::{ Disposal, DisposalContext }` — see [Host fns and declaration files](host-fns.md)). See [Async and await](async.md) and [the Rc heap](rc-heap.md)."
 msgstr ""
 "`impl Future<nil> for CustomFuture` 与任何其他 impl 一样注册进同一个注册表。每个内置 trait 都是导入把守的 `pub builtin` 拼写：引擎在原生 trait 符号上织造——异步帧、铸造的 cx、融合的 `for..of` 循环从不查阅用户作用域——但拼写了 trait 名字的源码只能经 `use core::{ .. }` 解析它（`impl Iterator<E> for T` 或 trait 类型的参数用 `Iterator`；用户 impl、启动器的 `f: Future<T>`、`downcast<Future<..>>` 用 `Future`；yield 签名或 `async fn` 头用 `RunContext`；`Disposal` 对经 `use core::{ Disposal, DisposalContext }`——见[宿主函数与声明文件](host-fns.md)）。参见[异步与 await](async.md)与 [Rc 堆](rc-heap.md)。"
 
 
-#: src/reference/traits.md:249
+#: src/reference/traits.md:254
 msgid "Equality"
 msgstr "相等"
 
 
-#: src/reference/traits.md:251
+#: src/reference/traits.md:256
 msgid ""
 "`==` is a builtin operator with no vtable dispatch: primitives by value, `str`/`bytes` by content, everything else by cell identity — see [Rc, dispose, and identity](rc-dispose-identity.md). Field-wise comparison is a `Hashable`\\-style contract implemented per type; it is not connected to `==`."
 msgstr ""
@@ -17525,8 +17665,8 @@ msgstr "编译器可能对明显的自引用报警（一个值透过句柄路径
 
 #: src/reference/weak-refs.md:21
 msgid ""
-"Cycles are possible through ordinary dataclass fields (`next: ?Node` back-pointers) as well as through collections."
-msgstr "循环可能透过普通数据类字段（`next: ?Node` 反向指针）产生，也可能透过集合产生。"
+"Cycles are possible through ordinary struct fields (`next: ?Node` back-pointers) as well as through collections."
+msgstr "循环可能透过普通结构体字段（`next: ?Node` 反向指针）产生，也可能透过集合产生。"
 
 
 #: src/reference/weak-refs.md:24 src/reference/stdlib.md:74
@@ -17612,8 +17752,8 @@ msgstr ""
 
 #: src/reference/weak-refs.md:69
 msgid ""
-"Works over **any cell**: a class, dataclass, `Vec`, `[T]`, enum, `str`, `bytes`, a user `opaque` box, or a host box."
-msgstr "适用于**任何单元**：类、数据类、`Vec`、`[T]`、枚举、`str`、`bytes`、用户 `opaque` 盒，或宿主盒。"
+"Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`, `bytes`, a user `opaque` box, or a host box."
+msgstr "适用于**任何单元**：类、结构体、`Vec`、`[T]`、枚举、`str`、`bytes`、用户 `opaque` 盒，或宿主盒。"
 
 
 #: src/reference/weak-refs.md:71
@@ -19589,8 +19729,8 @@ msgstr "复制（不可变）"
 
 #: src/reference/workers-and-channels.md:52
 msgid ""
-"every other cell — `Vec<T>`, `[T]`, class/dataclass instances, enums, `?T` boxes"
-msgstr "其余每个单元——`Vec<T>`、`[T]`、类/dataclass 实例、枚举、`?T` 盒"
+"every other cell — `Vec<T>`, `[T]`, class/struct instances, enums, `?T` boxes"
+msgstr "其余每个单元——`Vec<T>`、`[T]`、类/struct 实例、枚举、`?T` 盒"
 
 
 #: src/reference/workers-and-channels.md:52
@@ -20776,9 +20916,9 @@ msgstr "入口 fn 在两个方向遵循同一规则：`?T` 可跨越当且仅当
 
 #: src/reference/value-boundary.md:22
 msgid ""
-"Everything else — dataclasses, classes, `Vec<T>`, `[T]`, trait-typed values, closures — stays inside the VM. Seal polymorphic values in the erasure box: `opaque(v)` at the call, `opaque.downcast<T>(v)` after ([opaque — erasure and downcast](opaque.md))."
+"Everything else — structs, classes, `Vec<T>`, `[T]`, trait-typed values, closures — stays inside the VM. Seal polymorphic values in the erasure box: `opaque(v)` at the call, `opaque.downcast<T>(v)` after ([opaque — erasure and downcast](opaque.md))."
 msgstr ""
-"其余一切——dataclass、类、`Vec<T>`、`[T]`、trait 类型的值、闭包——都留在 VM 内部。把多态的值封进擦除盒：调用时 `opaque(v)`，调用后 `opaque.downcast<T>(v)`（[opaque —— 擦除与向下转型](opaque.md)）。"
+"其余一切——struct、类、`Vec<T>`、`[T]`、trait 类型的值、闭包——都留在 VM 内部。把多态的值封进擦除盒：调用时 `opaque(v)`，调用后 `opaque.downcast<T>(v)`（[opaque —— 擦除与向下转型](opaque.md)）。"
 
 
 #: src/reference/value-boundary.md:27
@@ -21311,8 +21451,8 @@ msgstr "rut 记录真正拥有的布局"
 
 
 #: src/reference/repr-c.md:12
-msgid "A user record (struct or dataclass) is an **array of 8-byte slots**:"
-msgstr "用户记录（struct 或 dataclass）是一个 **8 字节槽位的数组**："
+msgid "A user record is an **array of 8-byte slots**:"
+msgstr "用户记录是一个 **8 字节槽位的数组**："
 
 
 #: src/reference/repr-c.md:14 src/reference/module-binary.md:165
@@ -21488,8 +21628,8 @@ msgstr "声明的扁平记录，经由字段表解码；形状就是整个表面
 
 
 #: src/reference/repr-c.md:67
-msgid "user record (struct/dataclass)"
-msgstr "用户记录（struct/dataclass）"
+msgid "user record (struct)"
+msgstr "用户记录（struct）"
 
 
 #: src/reference/repr-c.md:67
@@ -22864,9 +23004,9 @@ msgstr ""
 
 #: src/reference/reflection.md:3
 msgid ""
-"Reflection is a **trait**, not a keyword privilege. `Reflectable` is the mechanism protocol; compiler auto-implementations (dataclasses, enums) and builtin-impl registry entries (enums, records, `Vec`, `[T]`) fill it for the data world; classes opt in by hand with a **curated** view. Libraries layer contracts on top and take trait-object-typed consumers or bounded producers. Nothing in the language names a builtin; no strings are matched; nothing changes under `--release` stripping. Userland serde is the proving application."
+"Reflection is a **trait**, not a keyword privilege. `Reflectable` is the mechanism protocol; compiler auto-implementations (structs, enums) and builtin-impl registry entries (enums, records, `Vec`, `[T]`) fill it for the data world; classes opt in by hand with a **curated** view. Libraries layer contracts on top and take trait-object-typed consumers or bounded producers. Nothing in the language names a builtin; no strings are matched; nothing changes under `--release` stripping. Userland serde is the proving application."
 msgstr ""
-"反射是一个 **trait**，不是关键字特权。`Reflectable` 是机制协议；编译器自动实现（dataclass、枚举）与 builtin-impl 注册表条目（枚举、记录、`Vec`、`[T]`）为数据世界填上它；类则以**策展的**视图手工选择加入。库在其上分层叠加契约，接受 trait 对象类型的消费方或受约束的生产方。语言里没有任何东西指名某个内建类型；不匹配任何字符串；`--release` 剥离不改变任何东西。用户态 serde 是那个用来证明的应用。"
+"反射是一个 **trait**，不是关键字特权。`Reflectable` 是机制协议；编译器自动实现（struct、枚举）与 builtin-impl 注册表条目（枚举、记录、`Vec`、`[T]`）为数据世界填上它；类则以**策展的**视图手工选择加入。库在其上分层叠加契约，接受 trait 对象类型的消费方或受约束的生产方。语言里没有任何东西指名某个内建类型；不匹配任何字符串；`--release` 剥离不改变任何东西。用户态 serde 是那个用来证明的应用。"
 
 
 #: src/reference/reflection.md:12
@@ -22927,11 +23067,6 @@ msgstr "stringify"
 #: src/reference/reflection.md:29
 msgid "deserialize"
 msgstr "deserialize"
-
-
-#: src/reference/reflection.md:31
-msgid "`dataclass`"
-msgstr "`dataclass`"
 
 
 #: src/reference/reflection.md:31 src/reference/reflection.md:32
@@ -23026,9 +23161,9 @@ msgstr "**编译错误**"
 
 #: src/reference/reflection.md:37
 msgid ""
-"**Auto-impls** are ordinary vtable fills: a dataclass walks its fields (arity = field count, child `i` = field `i`, boxed); an enum walks the current variant's payloads. The descriptor's impl list gains the entry implicitly; re-declaring one is a duplicate-impl error. Auto-impls satisfy `requires` edges of contract layers written on top — `impl Serializable for User {}` costs zero methods."
+"**Auto-impls** are ordinary vtable fills: a struct walks its fields (arity = field count, child `i` = field `i`, boxed); an enum walks the current variant's payloads. The descriptor's impl list gains the entry implicitly; re-declaring one is a duplicate-impl error. Auto-impls satisfy `requires` edges of contract layers written on top — `impl Serializable for User {}` costs zero methods."
 msgstr ""
-"**自动实现**就是普通的 vtable 填充：dataclass 遍历它的字段（元数 = 字段数，子节点 `i` = 字段 `i`，装盒）；枚举遍历当前成员的载荷。描述符的 impl 列表隐式获得该条目；重新声明一次是重复 impl 错误。自动实现满足叠在其上的契约层的 `requires` 边——`impl Serializable for User {}` 一个方法都不用写。"
+"**自动实现**就是普通的 vtable 填充：struct 遍历它的字段（元数 = 字段数，子节点 `i` = 字段 `i`，装盒）；枚举遍历当前成员的载荷。描述符的 impl 列表隐式获得该条目；重新声明一次是重复 impl 错误。自动实现满足叠在其上的契约层的 `requires` 边——`impl Serializable for User {}` 一个方法都不用写。"
 
 
 #: src/reference/reflection.md:43
@@ -24550,9 +24685,9 @@ msgstr "词法分析器"
 
 #: src/reference/frontend.md:31
 msgid ""
-"One flat `Tok` enum for literals, punctuation, and operators. Keywords are ordinary `Ident`s; the parser matches them by interner name. **Reserved words are rejected by the lexer** with a message naming the rut replacement (`interface`, `dataclass`, `private`, `void`, `in`); `?.` and `??` are punctuation-level rejections, a separate mechanism."
+"One flat `Tok` enum for literals, punctuation, and operators. Keywords are ordinary `Ident`s; the parser matches them by interner name. **Reserved words are rejected by the lexer** with a message naming the rut replacement (`interface`, `private`, `void`, `in`); `?.` and `??` are punctuation-level rejections, a separate mechanism."
 msgstr ""
-"一个扁平的 `Tok` 枚举覆盖字面量、标点和运算符。关键字就是普通的 `Ident`；语法分析器按驻留名匹配它们。**保留字由词法分析器拒绝**，消息会指明 rut 的替代写法（`interface`、`dataclass`、`private`、`void`、`in`）；`?.` 与 `??` 是标点层面的拒绝，属于另一套机制。"
+"一个扁平的 `Tok` 枚举覆盖字面量、标点和运算符。关键字就是普通的 `Ident`；语法分析器按驻留名匹配它们。**保留字由词法分析器拒绝**，消息会指明 rut 的替代写法（`interface`、`private`、`void`、`in`）；`?.` 与 `??` 是标点层面的拒绝，属于另一套机制。"
 
 
 #: src/reference/frontend.md:36

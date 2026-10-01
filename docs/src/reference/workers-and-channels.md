@@ -49,7 +49,7 @@ async fn worker(cx: RunContext, rx: Receiver<u32>, tx: Sender<u32>) -> nil {
 |---|---|
 | primitives (ints, floats, `bool`) | copy |
 | `str` | copy (immutable) |
-| every other cell — `Vec<T>`, `[T]`, class/dataclass instances, enums, `?T` boxes | **transfer** if `rc == 1`, else deep copy — the zero-copy fast path is the common case; every element/field must itself be crossable |
+| every other cell — `Vec<T>`, `[T]`, class/struct instances, enums, `?T` boxes | **transfer** if `rc == 1`, else deep copy — the zero-copy fast path is the common case; every element/field must itself be crossable |
 | `Slice<T>` view | same rule as its owner cell; provenance (which `Vec`/`[T]` it views) is invisible across the boundary |
 | `Sender` / `Receiver` | transfer |
 | `Template` | copy — a builtin carrier; its `opaque` args must themselves be crossable ([templates](templates.md)) |

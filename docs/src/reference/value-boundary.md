@@ -19,7 +19,7 @@ a compile error on the declaration or binding — never a call-time failure.
 - Tuples cross field-by-field; each field must itself cross.
 - Entry fns follow the same rule in both directions: `?T` crosses iff `T`
   crosses, decoded nil-flattened.
-- Everything else — dataclasses, classes, `Vec<T>`, `[T]`, trait-typed
+- Everything else — structs, classes, `Vec<T>`, `[T]`, trait-typed
   values, closures — stays inside the VM. Seal polymorphic values in the
   erasure box: `opaque(v)` at the call, `opaque.downcast<T>(v)` after
   ([opaque — erasure and downcast](opaque.md)).

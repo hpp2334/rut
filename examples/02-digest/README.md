@@ -89,7 +89,7 @@ fuel used: 1014105 of Some(50000000)
   [primitive types](../../docs/src/reference/primitive-types.md)) — no opaque
   wrapper needed for byte payloads; `opaque` appears exactly once,
   boxing the recursive JSON tree
-- **payloadless enums + dataclasses build a tagged union**
+- **payloadless enums + structs build a tagged union**
   ([enums](../../docs/src/reference/enums.md)):
   `JTag` + `Json` with children as `Vec<opaque>` — recursion through
   the [opaque](../../docs/src/reference/opaque.md) escape hatch

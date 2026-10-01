@@ -18,8 +18,8 @@ construct is exhaustive.
 
 Iterating form — vecs, fixed arrays, slices, strings (one-codepoint
 `str`s per step), `bytes` (`u8` per step), and any type with a
-registered `Iterator` impl (see
-[Traits and dispatch](traits.md)):
+registered `Iterator` impl — an enum value included (see
+[Traits and dispatch](traits.md) and [Enums](enums.md)):
 
 ```rut
 for (let x of expr) { .. }

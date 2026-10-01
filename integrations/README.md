@@ -21,7 +21,7 @@ What it provides (the LSP slice landed early; the
   fields, enum members), including inside `f"…"` holes
 - **diagnostics** — lexer + parser errors as you type (`.d.rut` files
   parse in declaration mode)
-- **document symbols** — the outline: fns, enums, dataclasses, classes,
+- **document symbols** — the outline: fns, enums, structs, classes,
   traits, impl blocks
 - **hover** — types on identifiers (written annotation or inferred),
   fields, methods, enum members, and primitives, at decl and use sites

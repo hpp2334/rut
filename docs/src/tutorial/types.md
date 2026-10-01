@@ -17,8 +17,8 @@ The reference pages are
 
 ## Enums
 
-An enum is a distinct named type over integer constants. No payloads,
-no methods, no computed members — where another language would use a
+An enum is a distinct named type over integer constants. No payloads
+and no computed members — where another language would use a
 union of literal strings, rut uses an enum:
 
 ```rut
@@ -44,12 +44,16 @@ the rest continue from there.
 
 `when` over an enum must be exhaustive — every member, or an `else`
 arm (see [control flow and when](control-flow.md)). Enums render as
-their member name in format strings.
+their member name in format strings. Enums take `impl` blocks —
+non-self methods on the name, `self` methods on a value, and trait
+impls (`impl Iterator<E> for Light` makes `for (let v of l)` walk) —
+see [enums](../reference/enums.md).
 
 ## Structs — open records
 
 Declare with `struct`, construct with a literal — anywhere in a
-function body, nested inside other literals. There is no `new`:
+function body, nested inside other literals. Construction is the
+literal; there is no constructor gate:
 
 ```rut
 use ink::{ Logger };
@@ -83,7 +87,10 @@ r.max.x=1 width=1
 ```
 
 All fields are public, always — member visibility in a struct is a
-compile error. Privacy is what classes are for.
+compile error. Privacy is what classes are for. Methods live in
+`impl` blocks with real visibility — `pub fn` exports cross-module,
+plain `fn` stays module-private (see
+[structs](../reference/structs.md)).
 
 **Structs share.** A struct value is a handle to a heap cell:
 assignment, arguments, and returns all pass the handle, and a write

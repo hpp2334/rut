@@ -89,8 +89,12 @@ def esc(s):
 
 
 # the mechanical cutover — the ONLY auto-carried diffs (the JSONC
-# cutover's textual shapes, applied identically to msgid and msgstr)
+# cutover's textual shapes, applied identically to msgid and msgstr;
+# the vocabulary purge's shape: the legacy word IS `struct` now)
 MECH = [
+    (re.compile(r'\bdataclasses\b'), 'structs'),
+    (re.compile(r'\bdataclass\b'), 'struct'),
+    (re.compile(r'数据类'), '结构体'),
     (re.compile(r'rut\.json(?!c)'), 'rut.jsonc'),
     (re.compile(r'\bv7\b'), 'v9'),
     (re.compile(r'\bv8\b'), 'v10'),

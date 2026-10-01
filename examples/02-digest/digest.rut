@@ -650,7 +650,7 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 
 // ---------------------------------------------------------------- JSON ---
 //
-// enums carry no data, and recursive dataclasses are not
+// enums carry no data, and recursive structs are not
 // expressible — so the tree is a tagged union by hand (JTag + Json),
 // with children boxed in `opaque` to break the recursion:
 // `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
