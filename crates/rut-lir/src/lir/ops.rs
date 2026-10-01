@@ -223,7 +223,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             ));
                             return Err(());
                         }
-                        let mut cur = l.reg;
+                        // the chain head: a promoted binding loads its
+                        // shared cell's value first (the capture law's
+                        // accessor); an ordinary one chains off its
+                        // register raw, as before
+                        let mut cur = if l.cell.is_some() { self.read_local(&l, sp.lo) } else { l.reg };
                         let mut cur_ty = l.ty;
                         if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
                             let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
@@ -309,8 +313,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None => {
                         // `s = f"{s}{..}"` builds into `s` in place (amortized
                         // growth, no copy of the growing prefix each step);
-                        // see `compile_fstr_into`.
-                        if l.ty == TY_STR && self.try_accumulate_fstr(value, name, l.reg, sp)? {
+                        // see `compile_fstr_into`. A promoted binding skips
+                        // the in-place form: the concat must land in the
+                        // cell, not in the register that holds the cell.
+                        if l.cell.is_none() && l.ty == TY_STR && self.try_accumulate_fstr(value, name, l.reg, sp)? {
                             return Ok(());
                         }
                         let t = self.compile_expr(value, Some(l.ty))?;
@@ -325,9 +331,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // concrete → slot widening boxes scalars (the slot
                         // ABI): the binding always holds a cell
                         self.widen_to_slot(t, l.ty, sp.lo);
-                        // the sharing law: the binding takes the
-                        // value's cell handle — a share, never a copy
-                        self.mov_slot(l.reg, self.last_reg, l.ty, sp.lo);
+                        // the capture law's write path: a promoted
+                        // binding stores into its shared cell (`SetF`),
+                        // an ordinary one takes the value's handle (the
+                        // sharing law — a share, never a copy)
+                        let src = self.last_reg;
+                        self.write_local(name, src, sp.lo);
                         // origin counting: a concrete value
                         // re-pins the origin; anything else erases it —
                         // a stale origin could statically bind the WRONG
@@ -346,8 +355,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.mirror_local(name, sp.lo);
                     }
                     Some(bin) => {
-                        let cur = self.new_reg(l.ty);
-                        self.mov_slot(cur, l.reg, l.ty, sp.lo);
+                        // compound form: the accumulator reads through
+                        // the capture law's accessor, the result stores
+                        // through the write path
+                        let cur = self.read_local(&l, sp.lo);
                         let t = self.compile_expr(value, Some(l.ty))?;
                         if t != l.ty {
                             self.ctx.err(sp, format!(
@@ -359,11 +370,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let res = self.new_reg(l.ty);
                         self.emit_compound(bin, l.ty, cur, val_reg, res, sp)?;
                         // res is freshly computed (arith) — a handle move
-                        if self.ctx.types.is_ref(l.ty) {
-                            self.emit(Op::MovRef { dst: l.reg, src: res }, sp.lo);
-                        } else {
-                            self.emit(Op::Mov { dst: l.reg, src: res }, sp.lo);
-                        }
+                        self.write_local(name, res, sp.lo);
                         // async weave: mirror the write (above)
                         self.mirror_local(name, sp.lo);
                     }

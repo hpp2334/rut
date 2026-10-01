@@ -469,3 +469,35 @@ pub fn main() -> nil {
     assert!(after > before, "a drive step charges fuel: {before} -> {after}");
     assert_eq!(*sink.borrow(), vec!["ran"]);
 }
+
+#[test]
+fn async_local_captured_by_closure_shares_its_slot() {
+    // the capture law in an async frame: a local that a lambda both
+    // captures and reassigns promotes to a shared-slot cell — the
+    // rebind inside the closure is visible in the async body after the
+    // call (and across the park, since the cell rides the frame)
+    let src = r#"
+use core::{ RunContext };
+use ink_host::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep };
+
+struct Box2 { v: i32 }
+
+async fn work(cx: RunContext, log: opaque, seed: i32) -> nil {
+    let mut r = Box2 { v: seed };
+    let touch = fn() -> bool { r = Box2 { v: 5 }; return true; };
+    await sleep(2);
+    touch();
+    logger_log(log, 2, f"r={r.v}");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("cap");
+    launch_future(work(log, 1));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 100);
+    assert_eq!(*sink.borrow(), vec!["r=5"]);
+}

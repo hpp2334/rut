@@ -212,10 +212,13 @@ done
 
 `for (let v of it) { body }` desugars to `it.iterate(emit)` with a
 synthetic closure: the body runs, then `emit` returns `true`; `break`
-returns `false`. The loop variable is the closure's parameter — a fresh
-binding per iteration by construction. The builtin sequences (`[T]`,
-`str`, `bytes`, and the standard growable `Vec`) keep fused index loops
-instead; they never pay a per-element call.
+returns `false`. The loop variable is ONE variable reassigned per
+iteration — the same law the fused index loops follow (the capture
+law treats the two forms identically; see
+[functions, closures, and generics](../reference/functions-closures-generics.md)).
+The builtin sequences (`[T]`, `str`, `bytes`, and the standard
+growable `Vec`) keep fused index loops instead; they never pay a
+per-element call.
 
 ## Engine contracts are traits too
 

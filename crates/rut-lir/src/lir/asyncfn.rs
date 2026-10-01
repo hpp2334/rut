@@ -202,6 +202,9 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         union_bounds: std::collections::HashMap::new(),
         union_syms: std::collections::HashMap::new(),
         async_frame: None,
+        assigned: std::collections::HashSet::new(),
+        captured: std::collections::HashSet::new(),
+        cell_counter: 0,
     };
     // argv pair: reg 0 the frame, reg 1 the cx (the FuncCode params are
     // exactly these two — the driving loop supplies both per drive)
@@ -216,6 +219,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         loop_var: false,
         origins: Vec::new(),
         field: NO_FIELD,
+        cell: None,
     });
     // the cx binding: user-visible by its declared name, register-live
     // only — each drive mints a fresh cx, so it is never cell-backed
@@ -227,6 +231,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         loop_var: false,
         origins: Vec::new(),
         field: NO_FIELD,
+        cell: None,
     });
     // the user params: fields LOCALS_BASE.. — restore at every arm
     for (i, (pname, pty)) in param_fields.iter().enumerate() {
@@ -240,6 +245,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
             loop_var: false,
             origins: Vec::new(),
             field,
+            cell: None,
         });
     }
     c.async_frame = Some(AsyncFrame {
@@ -267,6 +273,9 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     emit_cancelled_probe(&mut c, sp.lo, l_drop0, l_live0);
     c.bind(l_live0);
     emit_restore(&mut c, sp.lo);
+    // the capture law's pre-pass: an async body's locals promote like
+    // any frame's (the hidden cell rides the frame field)
+    c.capture_pre_pass(f.body.id());
     if c.compile_block(f.body).is_err() {
         return Err(());
     }

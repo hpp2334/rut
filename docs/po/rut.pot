@@ -1574,8 +1574,8 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
-#: src/tutorial/functions.md:220 src/tutorial/types.md:280
-#: src/tutorial/traits.md:318 src/tutorial/errors.md:233
+#: src/tutorial/functions.md:240 src/tutorial/types.md:280
+#: src/tutorial/traits.md:320 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
 msgid "Put it together"
@@ -1890,7 +1890,7 @@ msgid ""
 "are statement arms."
 msgstr ""
 
-#: src/tutorial/control-flow.md:203 src/reference/control-flow.md:63
+#: src/tutorial/control-flow.md:203 src/reference/control-flow.md:67
 msgid "Patterns"
 msgstr ""
 
@@ -2183,25 +2183,48 @@ msgstr ""
 msgid ""
 "Closures capture the enclosing bindings — a closure body sees and can use "
 "the locals around it, including after the enclosing function would have "
-"returned, because captured cells stay alive as long as the closure does. "
-"Since non-primitives share, a capture of a `Vec` or a struct is a handle to "
-"the same cell: writes through the closure are visible to everyone else "
-"holding it."
+"returned, because captured cells stay alive as long as the closure does. The "
+"capture law has two halves: primitives (and `nil` and `fn` values) copy — "
+"the closure gets its own slot, and a reassign inside the closure never moves "
+"the original — while everything ref-headed (a `Vec`, a struct, `str`, `?T`, "
+"…) crosses as a handle to the same cell. That second half includes "
+"whole-value reassignment: a captured binding that is reassigned — either "
+"frame — shares its slot with the closure, so both sides always see the "
+"current value:"
 msgstr ""
 
-#: src/tutorial/functions.md:106
-#: src/reference/functions-closures-generics.md:71
+#: src/tutorial/functions.md:110
+msgid ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() -> nil {\n"
+"    let log = Logger.new(\"cap\");\n"
+"    let mut xs: Vec<i32> = Vec.new();\n"
+"    xs.push(1);\n"
+"    let len = fn() -> i32 { return xs.len(); };\n"
+"    let mut ys: Vec<i32> = Vec.new();\n"
+"    ys.push(9); ys.push(9);\n"
+"    xs = ys;                       // a rebind the closure sees\n"
+"    log.info(f\"len={len()}\");      // 2 — the closure shares the slot\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/tutorial/functions.md:126
+#: src/reference/functions-closures-generics.md:78
 msgid "Generics"
 msgstr ""
 
-#: src/tutorial/functions.md:108
+#: src/tutorial/functions.md:128
 msgid ""
 "A generic function declares type parameters in angle brackets. Each concrete "
 "instantiation is compiled separately (monomorphized), so generics cost "
 "nothing at runtime:"
 msgstr ""
 
-#: src/tutorial/functions.md:112
+#: src/tutorial/functions.md:132
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2223,35 +2246,35 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/functions.md:134
+#: src/tutorial/functions.md:154
 msgid ""
 "`T` is inferred from the arguments; you rarely spell `first<i32>(..)` "
 "explicitly. Two rules to know:"
 msgstr ""
 
-#: src/tutorial/functions.md:137
+#: src/tutorial/functions.md:157
 msgid ""
 "A bare `T` has **no methods** — you cannot call anything on a value whose "
 "type is just `T`. Pass concrete values in, or take a trait-typed parameter "
 "instead (next chapter)."
 msgstr ""
 
-#: src/tutorial/functions.md:140
+#: src/tutorial/functions.md:160
 msgid ""
 "In v1 a _generic class_ in a parameter position does not unify — `fn sum(xs: "
 "Vec<i32>)` is fine, but a function generic over `T` taking `Vec<T>` is not "
 "yet the shape to reach for. Concrete instantiations cover most code."
 msgstr ""
 
-#: src/tutorial/functions.md:145
+#: src/tutorial/functions.md:165
 msgid "`requires` bounds"
 msgstr ""
 
-#: src/tutorial/functions.md:147
+#: src/tutorial/functions.md:167
 msgid "An inline `requires` bound gates which instantiations compile:"
 msgstr ""
 
-#: src/tutorial/functions.md:149
+#: src/tutorial/functions.md:169
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2278,7 +2301,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/functions.md:177
+#: src/tutorial/functions.md:197
 msgid ""
 "The bound is _admission-only_: it checks at each call site that the concrete "
 "type satisfies the named trait (or union of traits), and it proves a "
@@ -2286,7 +2309,7 @@ msgid ""
 "on `T` itself. Union bounds admit any member:"
 msgstr ""
 
-#: src/tutorial/functions.md:186
+#: src/tutorial/functions.md:206
 msgid ""
 "This is exactly how typed JSON entry points are spelled — `decodeJson<T "
 "requires JsonDeserialize>(s: str)` — see [errors and "
@@ -2294,18 +2317,18 @@ msgid ""
 "reference on type aliases and union bounds](../reference/type-aliases.md)."
 msgstr ""
 
-#: src/tutorial/functions.md:191
+#: src/tutorial/functions.md:211
 msgid "Free functions are the default idiom"
 msgstr ""
 
-#: src/tutorial/functions.md:193
+#: src/tutorial/functions.md:213
 msgid ""
 "rut's records carry no methods (bodies are fields only; methods live in "
 "`impl` blocks — see [structs, enums, and classes](types.md)), so the "
 "everyday shape is small data plus free functions over it:"
 msgstr ""
 
-#: src/tutorial/functions.md:197
+#: src/tutorial/functions.md:217
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2324,13 +2347,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/functions.md:217
+#: src/tutorial/functions.md:237
 msgid ""
 "Reach for methods when something is genuinely _the receiver's_ behavior, and "
 "for trait impls — everything else is a plain function."
 msgstr ""
 
-#: src/tutorial/functions.md:222
+#: src/tutorial/functions.md:242
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -2369,7 +2392,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/functions.md:261
+#: src/tutorial/functions.md:281
 msgid "Next: [structs, enums, and classes](types.md)."
 msgstr ""
 
@@ -3149,20 +3172,22 @@ msgstr ""
 
 #: src/tutorial/traits.md:308
 msgid ""
-"`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure. "
-"One consequence to know: the loop body's captures are taken at the desugar, "
-"so reassigning an enclosing _scalar_ inside the loop mutates a copy, not the "
-"original. Accumulate through something shared instead — `vec.push(v)` — or "
-"have the loop body act on values it can see directly."
+"`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure, "
+"and the capture law covers it like every closure: scalars copy (a rebind "
+"inside the loop stays local), ref-headed bindings share their slot — "
+"reassigning one inside the loop moves the original, and the loop variable is "
+"ONE variable reassigned per iteration, exactly like a handwritten `while` "
+"(see [functions, closures, and generics](functions.md)). Accumulating "
+"through a shared `vec.push(v)` works, and so does plain reassignment."
 msgstr ""
 
-#: src/tutorial/traits.md:315
+#: src/tutorial/traits.md:317
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the "
 "trait — their loops are fused, never a per-element call."
 msgstr ""
 
-#: src/tutorial/traits.md:320
+#: src/tutorial/traits.md:322
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -3211,7 +3236,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:372
+#: src/tutorial/traits.md:374
 msgid "Next: [errors and optionality](errors.md)."
 msgstr ""
 
@@ -4862,7 +4887,7 @@ msgid ""
 msgstr ""
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
-#: src/core-concepts/traits-and-dispatch.md:239 src/core-concepts/memory.md:204
+#: src/core-concepts/traits-and-dispatch.md:242 src/core-concepts/memory.md:204
 msgid "What this buys you"
 msgstr ""
 
@@ -5173,19 +5198,21 @@ msgstr ""
 
 #: src/core-concepts/everything-is-a-value.md:181
 msgid ""
-"**Loop variables are fresh per iteration but share elements.** A `for (let x "
-"of xs)` loop hands you the stored element; writes through it mutate the "
-"sequence. Each iteration is a fresh _binding_."
+"**Loop variables share elements; the binding is one variable.** A `for (let "
+"x of xs)` loop hands you the stored element; writes through it mutate the "
+"sequence. The loop variable is ONE binding reassigned per iteration — "
+"`for..of` is sugar for a `while`\\-shaped loop, and the capture law treats "
+"it like any other ref-headed binding."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:184
+#: src/core-concepts/everything-is-a-value.md:186
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` "
 "buffer; growable sequences of primitives store raw payloads with a one-byte "
 "nil tag — no per-element heap box."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:187
+#: src/core-concepts/everything-is-a-value.md:189
 msgid ""
 "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is "
 "`opaque.downcast<T>(o)`, checked against the runtime type. See [reified "
@@ -5193,7 +5220,7 @@ msgid ""
 "[`opaque`](../reference/opaque.md)."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:192
+#: src/core-concepts/everything-is-a-value.md:194
 msgid ""
 "The memory machinery under all of this — refcounts, deterministic "
 "destructors, weak references — is the next chapter's subject: "
@@ -5771,17 +5798,19 @@ msgstr ""
 msgid ""
 "`for (let v of it) { body }` desugars to `it.iterate(emit)` with a synthetic "
 "closure: the body runs, then `emit` returns `true`; `break` returns `false`. "
-"The loop variable is the closure's parameter — a fresh binding per iteration "
-"by construction. The builtin sequences (`[T]`, `str`, `bytes`, and the "
-"standard growable `Vec`) keep fused index loops instead; they never pay a "
-"per-element call."
+"The loop variable is ONE variable reassigned per iteration — the same law "
+"the fused index loops follow (the capture law treats the two forms "
+"identically; see [functions, closures, and "
+"generics](../reference/functions-closures-generics.md)). The builtin "
+"sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep "
+"fused index loops instead; they never pay a per-element call."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:220
+#: src/core-concepts/traits-and-dispatch.md:223
 msgid "Engine contracts are traits too"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:222
+#: src/core-concepts/traits-and-dispatch.md:225
 msgid ""
 "The async machinery is spelled as builtin traits — `Future<T>` and "
 "`RunContext` — which the engine _names_ but does not close: a hand-written "
@@ -5793,11 +5822,11 @@ msgid ""
 "async](../examples/04-custom-async.md)."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:232
+#: src/core-concepts/traits-and-dispatch.md:235
 msgid "Equality is not a trait"
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:234
+#: src/core-concepts/traits-and-dispatch.md:237
 msgid ""
 "`==` is builtin and cannot be opted into or out of: primitives compare by "
 "value, `str`/`bytes` by content, everything else by cell identity. "
@@ -5805,20 +5834,20 @@ msgid ""
 "rules. See [everything is a value](everything-is-a-value.md)."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:241
+#: src/core-concepts/traits-and-dispatch.md:244
 msgid ""
 "**Nominal satisfaction** keeps the registry exact: capability probes, "
 "widening, and vtable fills all read one table, so casts stay cheap and "
 "runtime identities stay meaningful."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:244
+#: src/core-concepts/traits-and-dispatch.md:247
 msgid ""
 "**The two-rule law** makes dispatch predictable: you can tell, per call "
 "site, whether you are paying a hop."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:246
+#: src/core-concepts/traits-and-dispatch.md:249
 msgid ""
 "**Placement rules** keep coherence decidable across packages without a "
 "global uniqueness proof — one of the pair is always local."
@@ -9334,7 +9363,7 @@ msgid "`point 1 2`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:36
+#: src/reference/control-flow.md:40
 msgid "`when`"
 msgstr ""
 
@@ -11285,7 +11314,7 @@ msgid ""
 "ever happens implicitly):"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:111 src/reference/control-flow.md:65
+#: src/reference/literals-and-inference.md:111 src/reference/control-flow.md:69
 msgid "Example"
 msgstr ""
 
@@ -11454,22 +11483,25 @@ msgid ""
 "Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s "
 "per step), `bytes` (`u8` per step), and any type with a registered "
 "`Iterator` impl — an enum value included (see [Traits and "
-"dispatch](traits.md) and [Enums](enums.md)):"
+"dispatch](traits.md) and [Enums](enums.md)). Both spellings of this form are "
+"one loop: the loop variable is a single binding reassigned per iteration, "
+"and over a user iterable the loop desugars to an `it.iterate(emit)` closure "
+"that follows the capture law exactly like the fused form:"
 msgstr ""
 
-#: src/reference/control-flow.md:28
+#: src/reference/control-flow.md:32
 msgid ""
 "Indexed form — the induction variable is **loop-owned**: the update clause "
 "and the body may assign it without `mut`; it is not a normal binding:"
 msgstr ""
 
-#: src/reference/control-flow.md:38
+#: src/reference/control-flow.md:42
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching "
 "arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 
-#: src/reference/control-flow.md:42
+#: src/reference/control-flow.md:46
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11489,62 +11521,62 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:65
+#: src/reference/control-flow.md:69
 msgid "Pattern"
 msgstr ""
 
-#: src/reference/control-flow.md:67
+#: src/reference/control-flow.md:71
 msgid "enum member (dotted path)"
 msgstr ""
 
-#: src/reference/control-flow.md:67
+#: src/reference/control-flow.md:71
 msgid "`Light.Green`"
 msgstr ""
 
-#: src/reference/control-flow.md:68
+#: src/reference/control-flow.md:72
 msgid "literal"
 msgstr ""
 
-#: src/reference/control-flow.md:68
+#: src/reference/control-flow.md:72
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr ""
 
-#: src/reference/control-flow.md:69
+#: src/reference/control-flow.md:73
 msgid "negative literal"
 msgstr ""
 
-#: src/reference/control-flow.md:69
+#: src/reference/control-flow.md:73
 msgid "`-1`"
 msgstr ""
 
-#: src/reference/control-flow.md:70
+#: src/reference/control-flow.md:74
 msgid "alternatives (comma list)"
 msgstr ""
 
-#: src/reference/control-flow.md:70
+#: src/reference/control-flow.md:74
 msgid "`1, 2, 3`"
 msgstr ""
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:75
 msgid "wildcard `else` / `_`"
 msgstr ""
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:75
 msgid "`else -> ..`"
 msgstr ""
 
-#: src/reference/control-flow.md:73
+#: src/reference/control-flow.md:77
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not "
 "exist; patterns are enum members, literals, alternatives, and the wildcards "
 "only."
 msgstr ""
 
-#: src/reference/control-flow.md:77 src/reference/opaque.md:44
+#: src/reference/control-flow.md:81 src/reference/opaque.md:44
 msgid "The laws"
 msgstr ""
 
-#: src/reference/control-flow.md:79
+#: src/reference/control-flow.md:83
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover "
 "every member (then `else` is optional) or add `else` — a partial `when` is a "
@@ -11552,30 +11584,30 @@ msgid ""
 "`else` is **mandatory**."
 msgstr ""
 
-#: src/reference/control-flow.md:83
+#: src/reference/control-flow.md:87
 msgid ""
 "**All arms must agree on one type** — that is the `when`'s type. Used as a "
 "statement, that type must be `nil` (arm bodies that are evaluated for effect "
 "are written as block arms)."
 msgstr ""
 
-#: src/reference/control-flow.md:86
+#: src/reference/control-flow.md:90
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile "
 "errors."
 msgstr ""
 
-#: src/reference/control-flow.md:88
+#: src/reference/control-flow.md:92
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the "
 "trailing comma (the corpus writes it)."
 msgstr ""
 
-#: src/reference/control-flow.md:90
+#: src/reference/control-flow.md:94
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr ""
 
-#: src/reference/control-flow.md:92
+#: src/reference/control-flow.md:96
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11597,11 +11629,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:115
+#: src/reference/control-flow.md:119
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr ""
 
-#: src/reference/control-flow.md:117
+#: src/reference/control-flow.md:121
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12891,18 +12923,25 @@ msgstr ""
 
 #: src/reference/functions-closures-generics.md:64
 msgid ""
-"Closures capture **by reference** to the enclosing bindings: mutation "
-"through a captured `let mut` binding is visible to the definer. Refcounting "
-"keeps captures alive; a closure is itself a shared cell value."
+"**The capture law**: primitives, `nil`, and `fn` values copy — a captured "
+"scalar is the closure's own slot, and reassigning it inside the closure "
+"never moves the original. Ref-headed values (records, `Vec`, arrays, "
+"`str`/`bytes`, `?T`, enums) cross as handles: writes through the captured "
+"handle reach the shared cell, and so does a whole-value REASSIGNMENT — a "
+"captured-and-reassigned binding is promoted to a hidden shared-slot cell, so "
+"both frames stay linked for the binding's whole scope (a "
+"stash-then-reassign, a reassign inside the closure, and the `for..of` loop "
+"variable all follow this one law). Refcounting keeps captures alive; a "
+"closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:68
+#: src/reference/functions-closures-generics.md:75
 msgid ""
 "Closures are not transferable across isolates (a worker boundary transfers "
 "values, not closures)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:73
+#: src/reference/functions-closures-generics.md:80
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12922,44 +12961,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:93
+#: src/reference/functions-closures-generics.md:100
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:97
+#: src/reference/functions-closures-generics.md:104
 msgid ""
 "Trait-typed arguments are ordinary arguments: a `T` instantiated at a trait "
 "type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:99
+#: src/reference/functions-closures-generics.md:106
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, or take an `I`\\-typed parameter "
 "instead of a generic."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:102
+#: src/reference/functions-closures-generics.md:109
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:105
+#: src/reference/functions-closures-generics.md:112
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:112
+#: src/reference/functions-closures-generics.md:119
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and trait generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:116
+#: src/reference/functions-closures-generics.md:123
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -12967,7 +13006,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:121
+#: src/reference/functions-closures-generics.md:128
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -12976,20 +13015,20 @@ msgid ""
 "spelling is invalid — a trait bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:127
+#: src/reference/functions-closures-generics.md:134
 msgid ""
 "**Trait objects satisfy nothing**: a `T` instantiated at a trait type fails "
 "any bound — only a concrete type with a registered impl admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:129
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-member-typed slot (`let w: Labeled = x;`), but gains no "
 "method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:132
+#: src/reference/functions-closures-generics.md:139
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -12997,13 +13036,13 @@ msgid ""
 "instantiation still binds the concrete member's own impl."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:137
+#: src/reference/functions-closures-generics.md:144
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:139
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "
@@ -13011,7 +13050,7 @@ msgid ""
 "types](builtin-generic-types.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:144
+#: src/reference/functions-closures-generics.md:151
 msgid ""
 "The trailing `where` clause does not exist: `where` is an ordinary "
 "identifier, and a stray clause diagnoses with the inline replacement."

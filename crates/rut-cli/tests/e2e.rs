@@ -2497,3 +2497,228 @@ fn unit_type_name_explains_itself() {
     assert!(out.diags.iter().any(|d| d.msg.contains("`unit` was removed")));
     assert!(out.diags.iter().any(|d| d.msg.contains("`nil`")));
 }
+
+// ---- the capture law: primitives copy, ref-headed bindings share the slot ----
+
+#[test]
+fn capture_rebind_inside_for_of_body_propagates() {
+    // case 1 — a ref-headed binding reassigned inside a desugared
+    // `for..of` body shares its slot with the emit closure: the rebind
+    // is visible after the loop (it stayed invisible under the copy law)
+    let src = r#"
+use ink::{ Logger };
+use core::{ Iterator };
+
+struct Box2 { v: i32 }
+
+class Gen {
+    n: i32;
+}
+impl Gen {
+    fn new(n: i32) -> Self { return Self { n: n }; }
+}
+impl Iterator<i32> for Gen {
+    fn iterate(self, emit: fn(i32) -> bool) {
+        let mut i = 0;
+        while (i < self.n) {
+            if (!emit(i)) { return; }
+            i += 1;
+        }
+    }
+}
+
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut cur = Box2 { v: -1 };
+    for (let b of Gen.new(3)) {
+        cur = Box2 { v: b * 100 };
+    }
+    log.info(f"last={cur.v}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["last=200"]);
+}
+
+#[test]
+fn capture_rebind_after_lambda_creation_is_seen() {
+    // case 2 — a lambda that captured a ref-headed binding sees a LATER
+    // reassignment of it (the binding shares its slot with the closure)
+    let src = r#"
+use pouch::{ Vec };
+use ink::{ Logger };
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut xs: Vec<i32> = Vec.new();
+    xs.push(1);
+    let get = fn() -> i32 { return xs.len(); };
+    let mut ys: Vec<i32> = Vec.new();
+    ys.push(9); ys.push(9);
+    xs = ys;
+    log.info(f"see={get()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["see=2"]);
+}
+
+#[test]
+fn capture_rebind_inside_lambda_propagates_out() {
+    // case 3 — a reassignment INSIDE a lambda is visible to the
+    // enclosing frame after the call
+    let src = r#"
+use pouch::{ Vec };
+use ink::{ Logger };
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut zs: Vec<i32> = Vec.new();
+    zs.push(5);
+    let set = fn() -> bool { zs = Vec.new(); zs.push(7); return true; };
+    set();
+    log.info(f"len={zs.len()} first={zs[0]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["len=1 first=7"]);
+}
+
+#[test]
+fn primitive_capture_stays_a_copy() {
+    // case 4 — PINNED: primitives copy. A lambda reassigning a captured
+    // scalar mutates its own frame's copy; the enclosing binding never
+    // moves (each call starts from the captured value)
+    let src = r#"
+use ink::{ Logger };
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut count = 0;
+    let bump = fn() -> i32 { count = count + 1; return count; };
+    let a = bump();
+    let b = bump();
+    log.info(f"inner={a},{b} outer={count}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["inner=1,1 outer=0"]);
+}
+
+#[test]
+fn read_only_ref_capture_and_push_through_capture_unchanged() {
+    // case 5 — the working cases stay working: a read-only capture and
+    // a method mutation through a capture (the handle shares the cell)
+    let src = r#"
+use pouch::{ Vec };
+use ink::{ Logger };
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let ws: Vec<i32> = Vec.new();
+    let add = fn(v: i32) -> bool { ws.push(v); return true; };
+    add(1); add(2);
+    log.info(f"len={ws.len()} first={ws[0]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["len=2 first=1"]);
+}
+
+#[test]
+fn nested_desugared_for_of_shares_slots() {
+    // case 6 — nested desugared loops: a rebind in the inner body (and
+    // one in the outer body, read by the inner) propagates through the
+    // two closure frames to the outermost binding
+    let src = r#"
+use pouch::{ Vec };
+use ink::{ Logger };
+use core::{ Iterator };
+
+struct Box2 { v: i32 }
+
+class Gen {
+    n: i32;
+}
+impl Gen {
+    fn new(n: i32) -> Self { return Self { n: n }; }
+}
+impl Iterator<i32> for Gen {
+    fn iterate(self, emit: fn(i32) -> bool) {
+        let mut i = 0;
+        while (i < self.n) {
+            if (!emit(i)) { return; }
+            i += 1;
+        }
+    }
+}
+
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut picked = Box2 { v: -1 };
+    for (let a of Gen.new(2)) {
+        for (let b of Gen.new(2)) {
+            if (b == 1) { picked = Box2 { v: a * 10 + b }; }
+        }
+    }
+    log.info(f"picked={picked.v}");
+    let mut shared: Vec<i32> = Vec.new();
+    shared.push(0);
+    for (let a of Gen.new(2)) {
+        shared = Vec.new();
+        for (let b of Gen.new(2)) {
+            shared.push(a * 10 + b);
+        }
+    }
+    log.info(f"len={shared.len()} last={shared[shared.len()-1]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 2_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["picked=11", "len=2 last=11"]);
+}
+
+#[test]
+fn sugar_law_fused_and_desugared_loop_var_agree() {
+    // case 7 — the loop var is ONE variable reassigned per iteration in
+    // BOTH loop forms: a stashed lambda capturing it sees the value
+    // current at call time — the last element after the loop. The fused
+    // (builtin sequence) and desugared (user `Iterator`) forms answer
+    // identically.
+    let src = r#"
+use ink::{ Logger };
+use core::{ Iterator };
+
+class Count3 {
+}
+impl Count3 {
+    fn new() -> Self { return Self { }; }
+}
+impl Iterator<i32> for Count3 {
+    fn iterate(self, emit: fn(i32) -> bool) {
+        emit(7); emit(8); emit(9);
+        return;
+    }
+}
+
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut grab: ?(fn() -> i32) = nil;
+    let src: [i32] = [7, 8, 9];
+    for (let x of src) {
+        grab = fn() -> i32 { return x; };
+    }
+    let fused = grab();
+    let mut grab2: ?(fn() -> i32) = nil;
+    for (let y of Count3.new()) {
+        grab2 = fn() -> i32 { return y; };
+    }
+    let desug = grab2();
+    log.info(f"fused={fused} desug={desug}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 2_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["fused=9 desug=9"]);
+}

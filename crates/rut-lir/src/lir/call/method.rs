@@ -53,10 +53,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // receiver bypass: a mutating method operates
         // on the ORIGINAL binding — a single-name receiver uses its register
-        // raw instead of a boundary clone
+        // raw instead of a boundary clone; a PROMOTED binding reads
+        // through the capture law's accessor instead (its register
+        // holds the shared cell, the value loads from it — method
+        // mutation through the read hits the same shared cell)
         let recv_raw = match self.ctx.ast.expr(recv).clone() {
             ExprKind::Path { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                self.lookup(segs[0].name).map(|l| (l.ty, l.reg))
+                let l = self.lookup(segs[0].name).cloned();
+                l.map(|l| {
+                    let reg = if l.cell.is_some() { self.read_local(&l, sp.lo) } else { l.reg };
+                    (l.ty, reg)
+                })
             }
             _ => None,
         };

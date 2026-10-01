@@ -1894,8 +1894,8 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
-#: src/tutorial/functions.md:220 src/tutorial/types.md:280
-#: src/tutorial/traits.md:318 src/tutorial/errors.md:233
+#: src/tutorial/functions.md:240 src/tutorial/types.md:280
+#: src/tutorial/traits.md:320 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
 msgid "Put it together"
@@ -2373,7 +2373,7 @@ msgid ""
 msgstr "作为语句使用时，`when` 必须不产出任何东西——上面的块分支就是语句分支。"
 
 
-#: src/tutorial/control-flow.md:203 src/reference/control-flow.md:63
+#: src/tutorial/control-flow.md:203 src/reference/control-flow.md:67
 msgid "Patterns"
 msgstr "模式"
 
@@ -2833,24 +2833,44 @@ msgstr ""
 
 #: src/tutorial/functions.md:99
 msgid ""
-"Closures capture the enclosing bindings — a closure body sees and can use the locals around it, including after the enclosing function would have returned, because captured cells stay alive as long as the closure does. Since non-primitives share, a capture of a `Vec` or a struct is a handle to the same cell: writes through the closure are visible to everyone else holding it."
+"Closures capture the enclosing bindings — a closure body sees and can use the locals around it, including after the enclosing function would have returned, because captured cells stay alive as long as the closure does. The capture law has two halves: primitives (and `nil` and `fn` values) copy — the closure gets its own slot, and a reassign inside the closure never moves the original — while everything ref-headed (a `Vec`, a struct, `str`, `?T`, …) crosses as a handle to the same cell. That second half includes whole-value reassignment: a captured binding that is reassigned — either frame — shares its slot with the closure, so both sides always see the current value:"
 msgstr ""
-"闭包捕获外围的绑定——闭包体看得见、用得上周围的局部变量，甚至在外围函数本该返回之后依然可以，因为被捕获的单元与闭包活得一样久。由于非基本类型是共享的，捕获一个 `Vec` 或结构体得到的是指向同一个单元的句柄：经闭包做出的写入，对其他所有持有者都可见。"
+"闭包捕获外围绑定——闭包体看得见、用得上它周围的局部量，即使外围函数早已返回也没有关系，因为被捕获的单元只要闭包还活着就不会消失。捕获法则有两半：标量（以及 `nil` 和 `fn` 值）按复制走——闭包拿到自己的槽位，在闭包内重新赋值绝不会移动原绑定——而一切以引用为头的值（`Vec`、结构体、`str`、`?T`……）都以句柄跨越：穿过被捕获句柄的写入抵达同一个单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。"
 
 
-#: src/tutorial/functions.md:106
-#: src/reference/functions-closures-generics.md:71
+#: src/tutorial/functions.md:110
+msgid ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() -> nil {\n"
+"    let log = Logger.new(\"cap\");\n"
+"    let mut xs: Vec<i32> = Vec.new();\n"
+"    xs.push(1);\n"
+"    let len = fn() -> i32 { return xs.len(); };\n"
+"    let mut ys: Vec<i32> = Vec.new();\n"
+"    ys.push(9); ys.push(9);\n"
+"    xs = ys;                       // a rebind the closure sees\n"
+"    log.info(f\"len={len()}\");      // 2 — the closure shares the slot\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/tutorial/functions.md:126
+#: src/reference/functions-closures-generics.md:78
 msgid "Generics"
 msgstr "泛型"
 
 
-#: src/tutorial/functions.md:108
+#: src/tutorial/functions.md:128
 msgid ""
 "A generic function declares type parameters in angle brackets. Each concrete instantiation is compiled separately (monomorphized), so generics cost nothing at runtime:"
 msgstr "泛型函数在尖括号里声明类型参数。每个具体实例化都单独编译（单态化），因此泛型在运行时零开销："
 
 
-#: src/tutorial/functions.md:112
+#: src/tutorial/functions.md:132
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2889,36 +2909,36 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/functions.md:134
+#: src/tutorial/functions.md:154
 msgid ""
 "`T` is inferred from the arguments; you rarely spell `first<i32>(..)` explicitly. Two rules to know:"
 msgstr "`T` 由实参推断；你很少需要显式写出 `first<i32>(..)`。有两条规则值得知道："
 
 
-#: src/tutorial/functions.md:137
+#: src/tutorial/functions.md:157
 msgid ""
 "A bare `T` has **no methods** — you cannot call anything on a value whose type is just `T`. Pass concrete values in, or take a trait-typed parameter instead (next chapter)."
 msgstr "裸的 `T` **没有任何方法**——你无法在类型仅为 `T` 的值上调用任何东西。要么传具体值进来，要么改用 trait 类型的参数（下一章）。"
 
 
-#: src/tutorial/functions.md:140
+#: src/tutorial/functions.md:160
 msgid ""
 "In v1 a _generic class_ in a parameter position does not unify — `fn sum(xs: Vec<i32>)` is fine, but a function generic over `T` taking `Vec<T>` is not yet the shape to reach for. Concrete instantiations cover most code."
 msgstr ""
 "在 v1 里，参数位置上的_泛型类_不做统一——`fn sum(xs: Vec<i32>)` 没问题，但对 `T` 泛型又接收 `Vec<T>` 的函数还不是值得选用的形状。具体实例化覆盖大多数代码。"
 
 
-#: src/tutorial/functions.md:145
+#: src/tutorial/functions.md:165
 msgid "`requires` bounds"
 msgstr "`requires` 约束"
 
 
-#: src/tutorial/functions.md:147
+#: src/tutorial/functions.md:167
 msgid "An inline `requires` bound gates which instantiations compile:"
 msgstr "内联的 `requires` 约束限定哪些实例化可以编译："
 
 
-#: src/tutorial/functions.md:149
+#: src/tutorial/functions.md:169
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2969,33 +2989,33 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/functions.md:177
+#: src/tutorial/functions.md:197
 msgid ""
 "The bound is _admission-only_: it checks at each call site that the concrete type satisfies the named trait (or union of traits), and it proves a `T`\\-typed value may be used as that trait type — it does not put methods on `T` itself. Union bounds admit any member:"
 msgstr ""
 "这个约束是_只管准入的_：它在每个调用点检查具体类型满足所写的 trait（或 trait 并集），并证明一个 `T` 类型的值可以用作那个 trait 类型——它不会把方法挂到 `T` 本身上。并集约束接受任何成员："
 
 
-#: src/tutorial/functions.md:186
+#: src/tutorial/functions.md:206
 msgid ""
 "This is exactly how typed JSON entry points are spelled — `decodeJson<T requires JsonDeserialize>(s: str)` — see [errors and optionality](errors.md). Bounds and unions are covered fully in [the reference on type aliases and union bounds](../reference/type-aliases.md)."
 msgstr ""
 "类型化 JSON 入口的写法正是如此——`decodeJson<T requires JsonDeserialize>(s: str)`——参见[错误与可空性](errors.md)。约束与并集在[类型别名与并集约束参考](../reference/type-aliases.md)里完整覆盖。"
 
 
-#: src/tutorial/functions.md:191
+#: src/tutorial/functions.md:211
 msgid "Free functions are the default idiom"
 msgstr "自由函数是默认惯用法"
 
 
-#: src/tutorial/functions.md:193
+#: src/tutorial/functions.md:213
 msgid ""
 "rut's records carry no methods (bodies are fields only; methods live in `impl` blocks — see [structs, enums, and classes](types.md)), so the everyday shape is small data plus free functions over it:"
 msgstr ""
 "rut 的记录不携带方法（主体只有字段；方法住在 `impl` 块里——参见[结构体、枚举与类](types.md)），因此日常的形状是小数据，外加作用于其上的自由函数："
 
 
-#: src/tutorial/functions.md:197
+#: src/tutorial/functions.md:217
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3030,13 +3050,13 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/functions.md:217
+#: src/tutorial/functions.md:237
 msgid ""
 "Reach for methods when something is genuinely _the receiver's_ behavior, and for trait impls — everything else is a plain function."
 msgstr "当某件事确实是_接收者_的行为时才用方法，trait impl 也是如此——其余一切都是普通函数。"
 
 
-#: src/tutorial/functions.md:222
+#: src/tutorial/functions.md:242
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -3107,7 +3127,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/functions.md:261
+#: src/tutorial/functions.md:281
 msgid "Next: [structs, enums, and classes](types.md)."
 msgstr "下一章：[结构体、枚举与类](types.md)。"
 
@@ -4236,18 +4256,18 @@ msgstr ""
 
 #: src/tutorial/traits.md:308
 msgid ""
-"`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure. One consequence to know: the loop body's captures are taken at the desugar, so reassigning an enclosing _scalar_ inside the loop mutates a copy, not the original. Accumulate through something shared instead — `vec.push(v)` — or have the loop body act on values it can see directly."
+"`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure, and the capture law covers it like every closure: scalars copy (a rebind inside the loop stays local), ref-headed bindings share their slot — reassigning one inside the loop moves the original, and the loop variable is ONE variable reassigned per iteration, exactly like a handwritten `while` (see [functions, closures, and generics](functions.md)). Accumulating through a shared `vec.push(v)` works, and so does plain reassignment."
 msgstr ""
-"`for (let v of it)` 会脱糖为带合成闭包的 `it.iterate(emit)`。有一个需要知道的后果：循环体的捕获发生在脱糖之时，因此在循环内重新赋值外围的_标量_，改的是副本而不是原件。要累积，就通过某个共享的东西——`vec.push(v)`——或者让循环体作用于它能直接看到的值。"
+"`for (let v of it)` 会脱糖成 `it.iterate(emit)` 加一个合成闭包，而捕获法则像对待每个闭包一样对待它：标量按复制走（循环内的重绑定只留在局部），以引用为头的绑定共享槽位——在循环内重新赋值会移动原绑定，且循环变量是每一轮被重新赋值的同一个变量，与手写的 `while` 完全一致（参见[函数、闭包与泛型](functions.md)）。通过共享的 `vec.push(v)` 累积可行，直接重新赋值同样可行。"
 
 
-#: src/tutorial/traits.md:315
+#: src/tutorial/traits.md:317
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the trait — their loops are fused, never a per-element call."
 msgstr "内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）无需这个 trait 即可迭代——它们的循环是融合的，绝不是逐元素调用。"
 
 
-#: src/tutorial/traits.md:320
+#: src/tutorial/traits.md:322
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4342,7 +4362,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:372
+#: src/tutorial/traits.md:374
 msgid "Next: [errors and optionality](errors.md)."
 msgstr "下一章：[错误与可空性](errors.md)。"
 
@@ -6443,7 +6463,7 @@ msgstr ""
 
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
-#: src/core-concepts/traits-and-dispatch.md:239 src/core-concepts/memory.md:204
+#: src/core-concepts/traits-and-dispatch.md:242 src/core-concepts/memory.md:204
 msgid "What this buys you"
 msgstr "这给你带来什么"
 
@@ -6826,26 +6846,26 @@ msgstr "**重新赋值很便宜。**把容器搬来搬去——返回、存储�
 
 #: src/core-concepts/everything-is-a-value.md:181
 msgid ""
-"**Loop variables are fresh per iteration but share elements.** A `for (let x of xs)` loop hands you the stored element; writes through it mutate the sequence. Each iteration is a fresh _binding_."
+"**Loop variables share elements; the binding is one variable.** A `for (let x of xs)` loop hands you the stored element; writes through it mutate the sequence. The loop variable is ONE binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture law treats it like any other ref-headed binding."
 msgstr ""
-"**循环变量每轮都是新的，但共享元素。**`for (let x of xs)` 循环交给你的是存储的元素；通过它写入会改变序列本身。每一轮都是一个全新的_绑定_。"
+"**循环变量共享元素；绑定是同一个变量。** `for (let x of xs)` 循环把存储的元素交给你；穿过它的写入会改动序列本身。循环变量是每一轮被重新赋值的同一个绑定——`for..of` 是 `while`\\-形循环的语法糖，捕获法则像对待其他以引用为头的绑定一样对待它。"
 
 
-#: src/core-concepts/everything-is-a-value.md:184
+#: src/core-concepts/everything-is-a-value.md:186
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` buffer; growable sequences of primitives store raw payloads with a one-byte nil tag — no per-element heap box."
 msgstr ""
 "**原始类型容器保持扁平。**定长 `[i32]` 就是一块打包的 `i32` 缓冲区；可增长的原始类型序列直接存储裸载荷，外加一个字节的 nil 标签——没有逐元素的堆盒。"
 
 
-#: src/core-concepts/everything-is-a-value.md:187
+#: src/core-concepts/everything-is-a-value.md:189
 msgid ""
 "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is `opaque.downcast<T>(o)`, checked against the runtime type. See [reified types](reified-types.md) and the reference on [`opaque`](../reference/opaque.md)."
 msgstr ""
 "**擦除是一个盒。**`opaque(v)` 铸造一个擦除盒；恢复靠 `opaque.downcast<T>(o)`，对照运行时类型检查。参见[具体化类型](reified-types.md)以及关于 [`opaque`](../reference/opaque.md) 的参考章节。"
 
 
-#: src/core-concepts/everything-is-a-value.md:192
+#: src/core-concepts/everything-is-a-value.md:194
 msgid ""
 "The memory machinery under all of this — refcounts, deterministic destructors, weak references — is the next chapter's subject: [memory](memory.md). The exact rules live in the reference on [by-reference and nullable](../reference/by-reference-and-nullable.md)."
 msgstr ""
@@ -7468,48 +7488,48 @@ msgstr ""
 
 #: src/core-concepts/traits-and-dispatch.md:213
 msgid ""
-"`for (let v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is the closure's parameter — a fresh binding per iteration by construction. The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call."
+"`for (let v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is ONE variable reassigned per iteration — the same law the fused index loops follow (the capture law treats the two forms identically; see [functions, closures, and generics](../reference/functions-closures-generics.md)). The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call."
 msgstr ""
-"`for (let v of it) { body }` 会脱糖为带合成闭包的 `it.iterate(emit)`：先跑循环体，然后 `emit` 返回 `true`；`break` 则返回 `false`。循环变量是闭包的参数——按构造每轮迭代都是全新绑定。内置序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）则保留融合的索引循环；它们从不为每个元素付一次调用。"
+"`for (let v of it) { body }` 会脱糖成 `it.iterate(emit)` 加一个合成闭包：先跑循环体，然后 `emit` 返回 `true`；`break` 返回 `false`。循环变量是每一轮被重新赋值的同一个变量——与融合索引循环节点遵循的是同一条法则（捕获法则对两种形式一视同仁；参见[函数、闭包与泛型](../reference/functions-closures-generics.md)）。内建序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）保留融合索引循环；它们从不支付逐元素调用的开销。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:220
+#: src/core-concepts/traits-and-dispatch.md:223
 msgid "Engine contracts are traits too"
 msgstr "引擎契约也是 trait"
 
 
-#: src/core-concepts/traits-and-dispatch.md:222
+#: src/core-concepts/traits-and-dispatch.md:225
 msgid ""
 "The async machinery is spelled as builtin traits — `Future<T>` and `RunContext` — which the engine _names_ but does not close: a hand-written type can `impl Future<nil> for MyFuture` through the same registry as any other impl and be driven by the same loop. Like `Iterator`, both are `pub builtin` core names: the engine's weave never needs the import, but source that spells the names does (`use core::{ Future, RunContext }`). See [the async model](async-model.md) and the worked example in [04 — Custom async](../examples/04-custom-async.md)."
 msgstr ""
 "异步机制拼写成内置 trait——`Future<T>` 与 `RunContext`——引擎_点名_它们但不对它们封闭：手写类型可以像任何其他 impl 一样，经同一个注册表 `impl Future<nil> for MyFuture`，并由同一个循环驱动。与 `Iterator` 一样，两者都是 `pub builtin` 的 core 名字：引擎的织造从不需要导入，而拼写了名字的源码需要（`use core::{ Future, RunContext }`）。参见[异步模型](async-model.md)与 [04 — 自定义异步](../examples/04-custom-async.md)中的完整示例。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:232
+#: src/core-concepts/traits-and-dispatch.md:235
 msgid "Equality is not a trait"
 msgstr "相等不是 trait"
 
 
-#: src/core-concepts/traits-and-dispatch.md:234
+#: src/core-concepts/traits-and-dispatch.md:237
 msgid ""
 "`==` is builtin and cannot be opted into or out of: primitives compare by value, `str`/`bytes` by content, everything else by cell identity. Field-wise comparison is a loop you write, or the map packages' own key rules. See [everything is a value](everything-is-a-value.md)."
 msgstr ""
 "`==` 是内置的，不能选择加入或退出：原始类型按值比较，`str`/`bytes` 按内容，其余一切按单元身份。逐字段比较是你自己写的循环，或者 map 包自带的键规则。参见[一切皆值](everything-is-a-value.md)。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:241
+#: src/core-concepts/traits-and-dispatch.md:244
 msgid ""
 "**Nominal satisfaction** keeps the registry exact: capability probes, widening, and vtable fills all read one table, so casts stay cheap and runtime identities stay meaningful."
 msgstr "**名义满足**让注册表保持精确：能力探测、宽化、vtable 填充读取的都是同一张表，因此转型保持廉价，运行时身份保持有意义。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:244
+#: src/core-concepts/traits-and-dispatch.md:247
 msgid ""
 "**The two-rule law** makes dispatch predictable: you can tell, per call site, whether you are paying a hop."
 msgstr "**两条规则的法则**让分派可预测：对每个调用点，你都能说出自己是否在付一次跳转的钱。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:246
+#: src/core-concepts/traits-and-dispatch.md:249
 msgid ""
 "**Placement rules** keep coherence decidable across packages without a global uniqueness proof — one of the pair is always local."
 msgstr "**放置规则**让跨包的连贯性可判定，无需全局唯一性证明——组合中总有一侧是本地的。"
@@ -11575,7 +11595,7 @@ msgstr "`point 1 2`"
 
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:36
+#: src/reference/control-flow.md:40
 msgid "`when`"
 msgstr "`when`"
 
@@ -13875,7 +13895,7 @@ msgid ""
 msgstr "三种形式 —— 普通的 `\"...\"` 字符串始终是惰性的（绝不会隐式发生插值）："
 
 
-#: src/reference/literals-and-inference.md:111 src/reference/control-flow.md:65
+#: src/reference/literals-and-inference.md:111 src/reference/control-flow.md:69
 msgid "Example"
 msgstr "示例"
 
@@ -14063,25 +14083,25 @@ msgstr "`for` —— 两种形式"
 
 #: src/reference/control-flow.md:19
 msgid ""
-"Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s per step), `bytes` (`u8` per step), and any type with a registered `Iterator` impl — an enum value included (see [Traits and dispatch](traits.md) and [Enums](enums.md)):"
+"Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s per step), `bytes` (`u8` per step), and any type with a registered `Iterator` impl — an enum value included (see [Traits and dispatch](traits.md) and [Enums](enums.md)). Both spellings of this form are one loop: the loop variable is a single binding reassigned per iteration, and over a user iterable the loop desugars to an `it.iterate(emit)` closure that follows the capture law exactly like the fused form:"
 msgstr ""
-"迭代形式 —— vec、定长数组、切片、字符串（每步一个单码点 `str`）、`bytes`（每步一个 `u8`），以及任何注册了 `Iterator` impl 的类型——枚举值也在内（参见[trait 与分派](traits.md)与[枚举](enums.md)）："
+"迭代形式——vec、定长数组、切片、字符串（每步一个码点的 `str`）、`bytes`（每步一个 `u8`），以及任何注册了 `Iterator` impl 的类型——枚举值也在内（参见[trait 与分派](traits.md)与[枚举](enums.md)）。这一形式的两种写法是同一个循环：循环变量是每一轮被重新赋值的单个绑定，而在用户可迭代对象之上，循环会脱糖为 `it.iterate(emit)` 闭包，与融合形式完全一致地遵循捕获法则："
 
 
-#: src/reference/control-flow.md:28
+#: src/reference/control-flow.md:32
 msgid ""
 "Indexed form — the induction variable is **loop-owned**: the update clause and the body may assign it without `mut`; it is not a normal binding:"
 msgstr "索引形式 —— 归纳变量**为循环所拥有**：更新子句和循环体无需 `mut` 即可给它赋值；它不是普通绑定："
 
 
-#: src/reference/control-flow.md:38
+#: src/reference/control-flow.md:42
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 "`when (x) { pattern -> body, ... }` 是一个**表达式**：第一个匹配分支的体产出它的值。没有贯穿（fallthrough）；恰好执行一个分支。"
 
 
-#: src/reference/control-flow.md:42
+#: src/reference/control-flow.md:46
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14118,104 +14138,104 @@ msgstr ""
 "```"
 
 
-#: src/reference/control-flow.md:65
+#: src/reference/control-flow.md:69
 msgid "Pattern"
 msgstr "模式"
 
 
-#: src/reference/control-flow.md:67
+#: src/reference/control-flow.md:71
 msgid "enum member (dotted path)"
 msgstr "枚举成员（点路径）"
 
 
-#: src/reference/control-flow.md:67
+#: src/reference/control-flow.md:71
 msgid "`Light.Green`"
 msgstr "`Light.Green`"
 
 
-#: src/reference/control-flow.md:68
+#: src/reference/control-flow.md:72
 msgid "literal"
 msgstr "字面量"
 
 
-#: src/reference/control-flow.md:68
+#: src/reference/control-flow.md:72
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr "`0`, `3.5`, `true`, `\"text\"`"
 
 
-#: src/reference/control-flow.md:69
+#: src/reference/control-flow.md:73
 msgid "negative literal"
 msgstr "负字面量"
 
 
-#: src/reference/control-flow.md:69
+#: src/reference/control-flow.md:73
 msgid "`-1`"
 msgstr "`-1`"
 
 
-#: src/reference/control-flow.md:70
+#: src/reference/control-flow.md:74
 msgid "alternatives (comma list)"
 msgstr "多选一（逗号列表）"
 
 
-#: src/reference/control-flow.md:70
+#: src/reference/control-flow.md:74
 msgid "`1, 2, 3`"
 msgstr "`1, 2, 3`"
 
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:75
 msgid "wildcard `else` / `_`"
 msgstr "通配 `else` / `_`"
 
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:75
 msgid "`else -> ..`"
 msgstr "`else -> ..`"
 
 
-#: src/reference/control-flow.md:73
+#: src/reference/control-flow.md:77
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not exist; patterns are enum members, literals, alternatives, and the wildcards only."
 msgstr "不存在范围、解构、绑定模式和守卫（`x if cond`）；模式只有枚举成员、字面量、多选一和通配符。"
 
 
-#: src/reference/control-flow.md:77 src/reference/opaque.md:44
+#: src/reference/control-flow.md:81 src/reference/opaque.md:44
 msgid "The laws"
 msgstr "法则"
 
 
-#: src/reference/control-flow.md:79
+#: src/reference/control-flow.md:83
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover every member (then `else` is optional) or add `else` — a partial `when` is a compile error. Any other scrutinee type (integers can't be enumerated): `else` is **mandatory**."
 msgstr ""
 "**始终强制穷尽性。** 枚举类型的被匹配值必须覆盖每个成员（此时 `else` 可省略）或添加 `else` —— 不完整的 `when` 是编译错误。任何其他被匹配值类型（整数无法枚举）：`else` 是**强制的**。"
 
 
-#: src/reference/control-flow.md:83
+#: src/reference/control-flow.md:87
 msgid ""
 "**All arms must agree on one type** — that is the `when`'s type. Used as a statement, that type must be `nil` (arm bodies that are evaluated for effect are written as block arms)."
 msgstr ""
 "**所有分支必须就同一个类型达成一致** —— 该类型就是 `when` 的类型。作为语句使用时，该类型必须是 `nil`（为副作用而求值的分支体写成块分支）。"
 
 
-#: src/reference/control-flow.md:86
+#: src/reference/control-flow.md:90
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile errors."
 msgstr "重复的模式，以及被更早分支挡住而不可达的分支，都是编译错误。"
 
 
-#: src/reference/control-flow.md:88
+#: src/reference/control-flow.md:92
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the trailing comma (the corpus writes it)."
 msgstr "分支使用 `->`。表达式分支以逗号分隔；块分支可以省略尾逗号（语料库中写了它）。"
 
 
-#: src/reference/control-flow.md:90
+#: src/reference/control-flow.md:94
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr "`when` 的字面量模式匹配编译期值，绝非运行期的 `==`。"
 
 
-#: src/reference/control-flow.md:92
+#: src/reference/control-flow.md:96
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14256,12 +14276,12 @@ msgstr ""
 "```"
 
 
-#: src/reference/control-flow.md:115
+#: src/reference/control-flow.md:119
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr "`when` 也是惯用的可空守卫，与 `!= nil` 搭配："
 
 
-#: src/reference/control-flow.md:117
+#: src/reference/control-flow.md:121
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -15761,17 +15781,18 @@ msgstr "匿名 fn 直接栖居于 `fn(P..) -> R` —— 它就是函数类型的
 
 #: src/reference/functions-closures-generics.md:64
 msgid ""
-"Closures capture **by reference** to the enclosing bindings: mutation through a captured `let mut` binding is visible to the definer. Refcounting keeps captures alive; a closure is itself a shared cell value."
-msgstr "闭包**按引用**捕获外围绑定：透过被捕获的 `let mut` 绑定做出的修改对定义者可见。引用计数让捕获保持存活；闭包本身是一个共享单元值。"
+"**The capture law**: primitives, `nil`, and `fn` values copy — a captured scalar is the closure's own slot, and reassigning it inside the closure never moves the original. Ref-headed values (records, `Vec`, arrays, `str`/`bytes`, `?T`, enums) cross as handles: writes through the captured handle reach the shared cell, and so does a whole-value REASSIGNMENT — a captured-and-reassigned binding is promoted to a hidden shared-slot cell, so both frames stay linked for the binding's whole scope (a stash-then-reassign, a reassign inside the closure, and the `for..of` loop variable all follow this one law). Refcounting keeps captures alive; a closure is itself a shared cell value."
+msgstr ""
+"**捕获法则**：标量、`nil` 和 `fn` 值按复制走——被捕获的标量是闭包自己的槽位，在闭包内重新赋值绝不会移动原绑定。以引用为头的值（记录、`Vec`、数组、`str`/`bytes`、`?T`、枚举）以句柄跨越：穿过被捕获句柄的写入抵达共享单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。引用计数让捕获保持存活；闭包本身就是一个共享单元值。"
 
 
-#: src/reference/functions-closures-generics.md:68
+#: src/reference/functions-closures-generics.md:75
 msgid ""
 "Closures are not transferable across isolates (a worker boundary transfers values, not closures)."
 msgstr "闭包不能跨隔离单元转移（worker 边界转移的是值，不是闭包）。"
 
 
-#: src/reference/functions-closures-generics.md:73
+#: src/reference/functions-closures-generics.md:80
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -15806,91 +15827,91 @@ msgstr ""
 "```"
 
 
-#: src/reference/functions-closures-generics.md:93
+#: src/reference/functions-closures-generics.md:100
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own typed code. `T` infers from the arguments; explicit type arguments may be spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 "**泛型在编译期单态化**：每个实例化发出自己的类型化代码。`T` 从实参推断；显式类型实参可以写在调用点，包括方法调用：`self.st.get<T>(self)`。"
 
 
-#: src/reference/functions-closures-generics.md:97
+#: src/reference/functions-closures-generics.md:104
 msgid ""
 "Trait-typed arguments are ordinary arguments: a `T` instantiated at a trait type becomes a handle slot, satisfying no bound."
 msgstr "trait 类型的实参是普通实参：在 trait 类型上实例化的 `T` 成为一个句柄槽，不满足任何约束。"
 
 
-#: src/reference/functions-closures-generics.md:99
+#: src/reference/functions-closures-generics.md:106
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call methods on a bare `T`. Pass values in, or take an `I`\\-typed parameter instead of a generic."
 msgstr "**泛型参数默认不受约束** —— 你不能在裸 `T` 上调用方法。要么把值传进去，要么改用 `I`\\- 类型的参数而不是泛型。"
 
 
-#: src/reference/functions-closures-generics.md:102
+#: src/reference/functions-closures-generics.md:109
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their shapes (`[T]` is one type; lengths are runtime values)."
 msgstr "没有常量泛型用户参数。内置接口面固定了它们的形状（`[T]` 是一个类型；长度是运行期值）。"
 
 
-#: src/reference/functions-closures-generics.md:105
+#: src/reference/functions-closures-generics.md:112
 msgid "Inline bounds — `requires`"
 msgstr "内联约束 —— `requires`"
 
 
-#: src/reference/functions-closures-generics.md:112
+#: src/reference/functions-closures-generics.md:119
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, and class generic parameters (struct and trait generic parameters reject `requires`):"
 msgstr ""
 "`fn f<T requires A | B>(x: T)` —— fn、方法和类泛型参数上的**仅准入**约束（struct 与 trait 泛型参数拒绝 `requires`）："
 
 
-#: src/reference/functions-closures-generics.md:116
+#: src/reference/functions-closures-generics.md:123
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every substitution-completing site (free-fn calls, method instantiation, impl-method enqueue). A failing instantiation diagnoses with the bound spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 "约束把关哪些实例化可以编译：在每一个完成替换的位置强制执行（自由函数调用、方法实例化、impl 方法入队）。失败的实例化会带着写明的约束诊断 —— \"`bool` does not satisfy `T` requires `i32 | str`\"。"
 
 
-#: src/reference/functions-closures-generics.md:121
+#: src/reference/functions-closures-generics.md:128
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), aliases (expanded first — see [Type aliases and union bounds](type-aliases.md)), a single trait (satisfied via the impl registry), or a **type union** of concrete names/aliases. A trait member inside a union spelling is invalid — a trait bound stands alone."
 msgstr ""
 "成员可以是具体类型名（按精确类型同一性满足）、别名（先展开 —— 参见[类型别名与联合约束](type-aliases.md)）、单个 trait（经 impl 注册表满足），或具体名/别名的**类型联合**。联合写法内部的 trait 成员无效 —— trait 约束必须独立成立。"
 
 
-#: src/reference/functions-closures-generics.md:127
+#: src/reference/functions-closures-generics.md:134
 msgid ""
 "**Trait objects satisfy nothing**: a `T` instantiated at a trait type fails any bound — only a concrete type with a registered impl admits."
 msgstr "**trait 对象不满足任何约束**：在 trait 类型上实例化的 `T` 无法通过任何约束 —— 只有带已注册 impl 的具体类型才获准入。"
 
 
-#: src/reference/functions-closures-generics.md:129
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed value into a bound-member-typed slot (`let w: Labeled = x;`), but gains no method calls on bare `T`."
 msgstr ""
 "非联合约束**证明宽化成立**：体内可以把 `T` 类型的值宽化为约束成员类型的槽（`let w: Labeled = x;`），但对裸 `T` 得不到任何方法调用。"
 
 
-#: src/reference/functions-closures-generics.md:132
+#: src/reference/functions-closures-generics.md:139
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a union-bounded value requires **every** member to provide the method — even a member that is never actually instantiated. Dispatch is untouched: each instantiation still binds the concrete member's own impl."
 msgstr ""
 "**联合约束**携带整个约束的契约：对联合约束值的方法调用要求**每个**成员都提供该方法 —— 即使是永远不会真正实例化的成员。分派不受影响：每个实例化仍绑定具体成员自己的 impl。"
 
 
-#: src/reference/functions-closures-generics.md:137
+#: src/reference/functions-closures-generics.md:144
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires [T]>(x: U)`."
 msgstr "约束可以引用条目的其他泛型：`fn hold<T, U requires [T]>(x: U)`。"
 
 
-#: src/reference/functions-closures-generics.md:139
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on the class descriptor and admits every instantiation: `pub class HashMap<K requires i8 | .. | bytes, V>` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
 "泛型**类**在其参数上带约束 —— 该约束记录在类描述符上并准入每个实例化：`pub class HashMap<K requires i8 | .. | bytes, V>`（参见[内置泛型类型](builtin-generic-types.md)）。"
 
 
-#: src/reference/functions-closures-generics.md:144
+#: src/reference/functions-closures-generics.md:151
 msgid ""
 "The trailing `where` clause does not exist: `where` is an ordinary identifier, and a stray clause diagnoses with the inline replacement."
 msgstr "尾随 `where` 子句不存在：`where` 是普通标识符，游离的子句会以内联替代方案诊断报错。"

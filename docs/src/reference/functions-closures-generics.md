@@ -61,9 +61,16 @@ add=3 area=3.1415927
 
 - An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of
   the function type, copyable like a primitive.
-- Closures capture **by reference** to the enclosing bindings:
-  mutation through a captured `let mut` binding is visible to the
-  definer. Refcounting keeps captures alive; a closure is itself a
+- **The capture law**: primitives, `nil`, and `fn` values copy — a
+  captured scalar is the closure's own slot, and reassigning it inside
+  the closure never moves the original. Ref-headed values (records,
+  `Vec`, arrays, `str`/`bytes`, `?T`, enums) cross as handles: writes
+  through the captured handle reach the shared cell, and so does a
+  whole-value REASSIGNMENT — a captured-and-reassigned binding is
+  promoted to a hidden shared-slot cell, so both frames stay linked
+  for the binding's whole scope (a stash-then-reassign, a reassign
+  inside the closure, and the `for..of` loop variable all follow this
+  one law). Refcounting keeps captures alive; a closure is itself a
   shared cell value.
 - Closures are not transferable across isolates (a worker boundary
   transfers values, not closures).

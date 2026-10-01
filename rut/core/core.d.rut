@@ -281,7 +281,9 @@ prelude builtin impl u64 {
 
 // The iteration protocol. A type is iterable when it declares this
 // member (duck-typed satisfaction); `for (x of it)` desugars to
-// `it.iterate(emit)` with a fresh per-iteration binding: `emit`
+// `it.iterate(emit)` — the loop variable is ONE variable reassigned per
+// iteration, and captures follow the language's capture law (scalars
+// copy; ref-headed bindings share their slot): `emit`
 // returning `false` stops the iteration (a `break`). `pub builtin`
 // (the import-gated spelling): the builtin sequences (`[T]`, `Vec`,
 // `str`, `bytes`) keep their fused loops and never name the trait —

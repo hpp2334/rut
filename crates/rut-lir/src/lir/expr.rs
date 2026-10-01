@@ -498,14 +498,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(l.ty);
                     }
                 }
-                // copy into a fresh register (keeps regs SSA-ish); the
-                // wrapper clones value results at the boundary
-                let reg = self.new_reg(l.ty);
-                if self.ctx.types.is_ref(l.ty) {
-                    self.emit(Op::MovRef { dst: reg, src: l.reg }, sp.lo);
-                } else {
-                    self.emit(Op::Mov { dst: reg, src: l.reg }, sp.lo);
-                }
+                // the capture law's read accessor: a promoted binding
+                // reads its shared cell, an ordinary one copies its
+                // register — ONE funnel for every read
+                let reg = self.read_local(&l, sp.lo);
                 return Ok(l.ty);
             }
             // a builtin fn name in value position — point at the call form
@@ -553,7 +549,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // shadow type names (a local is a value position)
         if segs.len() >= 2 && segs[0].generics.is_empty() {
             if let Some(l) = self.lookup(segs[0].name).cloned() {
-                let mut cur = l.reg;
+                // the chain head: a promoted binding loads its shared
+                // cell's value first (the capture law's accessor); an
+                // ordinary one chains off its register raw, as before
+                let mut cur = if l.cell.is_some() { self.read_local(&l, sp.lo) } else { l.reg };
                 let mut cur_ty = l.ty;
                 for seg in &segs[1..] {
                     if !seg.generics.is_empty() {

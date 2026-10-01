@@ -93,6 +93,26 @@ FRESH = {
 
  "One flat `Tok` enum for literals, punctuation, and operators. Keywords are ordinary `Ident`s; the parser matches them by interner name. **Reserved words are rejected by the lexer** with a message naming the rut replacement (`interface`, `private`, `void`, `in`); `?.` and `??` are punctuation-level rejections, a separate mechanism.":
   "一个扁平的 `Tok` 枚举覆盖字面量、标点和运算符。关键字就是普通的 `Ident`；语法分析器按驻留名匹配它们。**保留字由词法分析器拒绝**，消息会指明 rut 的替代写法（`interface`、`private`、`void`、`in`）；`?.` 与 `??` 是标点层面的拒绝，属于另一套机制。",
+
+ # ---- the capture law (closure captures follow the ref law) ----
+
+ "Closures capture the enclosing bindings — a closure body sees and can use the locals around it, including after the enclosing function would have returned, because captured cells stay alive as long as the closure does. The capture law has two halves: primitives (and `nil` and `fn` values) copy — the closure gets its own slot, and a reassign inside the closure never moves the original — while everything ref-headed (a `Vec`, a struct, `str`, `?T`, …) crosses as a handle to the same cell. That second half includes whole-value reassignment: a captured binding that is reassigned — either frame — shares its slot with the closure, so both sides always see the current value:":
+  "闭包捕获外围绑定——闭包体看得见、用得上它周围的局部量，即使外围函数早已返回也没有关系，因为被捕获的单元只要闭包还活着就不会消失。捕获法则有两半：标量（以及 `nil` 和 `fn` 值）按复制走——闭包拿到自己的槽位，在闭包内重新赋值绝不会移动原绑定——而一切以引用为头的值（`Vec`、结构体、`str`、`?T`……）都以句柄跨越：穿过被捕获句柄的写入抵达同一个单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。",
+
+ "`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure, and the capture law covers it like every closure: scalars copy (a rebind inside the loop stays local), ref-headed bindings share their slot — reassigning one inside the loop moves the original, and the loop variable is ONE variable reassigned per iteration, exactly like a handwritten `while` (see [functions, closures, and generics](functions.md)). Accumulating through a shared `vec.push(v)` works, and so does plain reassignment.":
+  "`for (let v of it)` 会脱糖成 `it.iterate(emit)` 加一个合成闭包，而捕获法则像对待每个闭包一样对待它：标量按复制走（循环内的重绑定只留在局部），以引用为头的绑定共享槽位——在循环内重新赋值会移动原绑定，且循环变量是每一轮被重新赋值的同一个变量，与手写的 `while` 完全一致（参见[函数、闭包与泛型](functions.md)）。通过共享的 `vec.push(v)` 累积可行，直接重新赋值同样可行。",
+
+ "**Loop variables share elements; the binding is one variable.** A `for (let x of xs)` loop hands you the stored element; writes through it mutate the sequence. The loop variable is ONE binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture law treats it like any other ref-headed binding.":
+  "**循环变量共享元素；绑定是同一个变量。** `for (let x of xs)` 循环把存储的元素交给你；穿过它的写入会改动序列本身。循环变量是每一轮被重新赋值的同一个绑定——`for..of` 是 `while`\\-形循环的语法糖，捕获法则像对待其他以引用为头的绑定一样对待它。",
+
+ "`for (let v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is ONE variable reassigned per iteration — the same law the fused index loops follow (the capture law treats the two forms identically; see [functions, closures, and generics](../reference/functions-closures-generics.md)). The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call.":
+  "`for (let v of it) { body }` 会脱糖成 `it.iterate(emit)` 加一个合成闭包：先跑循环体，然后 `emit` 返回 `true`；`break` 返回 `false`。循环变量是每一轮被重新赋值的同一个变量——与融合索引循环节点遵循的是同一条法则（捕获法则对两种形式一视同仁；参见[函数、闭包与泛型](../reference/functions-closures-generics.md)）。内建序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）保留融合索引循环；它们从不支付逐元素调用的开销。",
+
+ "Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s per step), `bytes` (`u8` per step), and any type with a registered `Iterator` impl — an enum value included (see [Traits and dispatch](traits.md) and [Enums](enums.md)). Both spellings of this form are one loop: the loop variable is a single binding reassigned per iteration, and over a user iterable the loop desugars to an `it.iterate(emit)` closure that follows the capture law exactly like the fused form:":
+  "迭代形式——vec、定长数组、切片、字符串（每步一个码点的 `str`）、`bytes`（每步一个 `u8`），以及任何注册了 `Iterator` impl 的类型——枚举值也在内（参见[trait 与分派](traits.md)与[枚举](enums.md)）。这一形式的两种写法是同一个循环：循环变量是每一轮被重新赋值的单个绑定，而在用户可迭代对象之上，循环会脱糖为 `it.iterate(emit)` 闭包，与融合形式完全一致地遵循捕获法则：",
+
+ "**The capture law**: primitives, `nil`, and `fn` values copy — a captured scalar is the closure's own slot, and reassigning it inside the closure never moves the original. Ref-headed values (records, `Vec`, arrays, `str`/`bytes`, `?T`, enums) cross as handles: writes through the captured handle reach the shared cell, and so does a whole-value REASSIGNMENT — a captured-and-reassigned binding is promoted to a hidden shared-slot cell, so both frames stay linked for the binding's whole scope (a stash-then-reassign, a reassign inside the closure, and the `for..of` loop variable all follow this one law). Refcounting keeps captures alive; a closure is itself a shared cell value.":
+  "**捕获法则**：标量、`nil` 和 `fn` 值按复制走——被捕获的标量是闭包自己的槽位，在闭包内重新赋值绝不会移动原绑定。以引用为头的值（记录、`Vec`、数组、`str`/`bytes`、`?T`、枚举）以句柄跨越：穿过被捕获句柄的写入抵达共享单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。引用计数让捕获保持存活；闭包本身就是一个共享单元值。",
 }
 
 

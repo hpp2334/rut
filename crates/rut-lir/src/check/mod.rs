@@ -138,6 +138,22 @@ pub struct InstRequest {
     pub impl_target: TypeId,
 }
 
+/// One capture of a lambda or a desugared `for..of` emit closure:
+/// the binding's `(name, value type, is_mut)`, plus the capture law's
+/// by-cell marker — `cell` is `Some(record type)` for a PROMOTED
+/// binding, in which case the closure's parameter carries the shared
+/// one-field cell's handle and the body reads/writes through it; the
+/// FuncCode param list spells the CELL type (so `MakeClosure` retains
+/// the cell), while `ty` stays the value type the body is typed
+/// against.
+#[derive(Clone, Copy, Debug)]
+pub struct Capture {
+    pub name: IdentId,
+    pub ty: TypeId,
+    pub is_mut: bool,
+    pub cell: Option<TypeId>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ImplDecl {
     pub trait_id: u32,
@@ -260,9 +276,10 @@ pub struct Ctx<'a> {
     /// free fn decl nodes: (name, Fn node)
     pub fn_nodes: Vec<(IdentId, NodeHandle<FnNode>)>,
     /// lambda capture lists, filled when the lambda is created:
-    /// lambda node → (name, ty) per capture (by value — v1 deviation
-    /// from the by-reference capture, documented)
-    pub lambda_info: std::collections::HashMap<NodeId, Vec<(IdentId, TypeId, bool)>>,
+    /// lambda node → one `Capture` per capture. `cell: Some` marks a
+    /// promoted binding — the closure shares the binding's slot cell
+    /// (the capture law); `None` is the immediate-slot copy.
+    pub lambda_info: std::collections::HashMap<NodeId, Vec<Capture>>,
     /// lambda signatures: body node → (resolved param types incl.
     /// expected-type inference, ret type)
     pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
@@ -313,8 +330,12 @@ pub struct Ctx<'a> {
     pub extern_generic_fns: std::collections::HashMap<IdentId, ExternGenericFn>,
     /// the emit-closure signature of each desugared `for..of`,
     /// recorded at the creation site and read when the queue compiles the fn:
-    /// body node → (element type, captures)
-    pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId, bool)>)>,
+    /// body node → (element type, captures, the loop var's cell when
+    /// the loop var itself is captured — the emit closure binds it
+    /// cell-backed and stores the incoming element into the shared
+    /// cell at frame entry, so both loop forms see one variable)
+    pub for_of_sigs:
+        std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound

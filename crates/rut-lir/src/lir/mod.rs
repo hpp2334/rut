@@ -4,7 +4,7 @@
 //! register bytecode per function, monomorphized.
 
 use rut_ast::ast::*;
-use crate::check::{Ctx, FnKey, Inst, TcResult};
+use crate::check::{Capture, Ctx, FnKey, Inst, TcResult};
 use rut_lexer::span::Span;
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
@@ -94,6 +94,15 @@ pub(crate) struct Local {
     is_mut: bool,
     /// for-c induction variables are loop-owned
     loop_var: bool,
+    /// The capture law's shared-slot storage: `Some(cell record type)`
+    /// for a PROMOTED binding (captured ∧ reassigned ∧ ref-headed).
+    /// The register then holds the one-field cell's handle — reads go
+    /// through `read_local` (`GetF`), writes through `write_local
+    /// (`SetF`) — and closures capture the cell itself, so both frames
+    /// stay linked for the binding's whole scope. `None`: the register
+    /// IS the storage (today's law: copy semantics for primitives,
+    /// handle copies for refs).
+    cell: Option<TypeId>,
     /// origin counting: the concrete types a trait-typed
     /// binding is known to hold. Single origin ⇒ static dispatch;
     /// empty ⇒ unknown/multiple ⇒ vtable. Only direct constructions
@@ -152,6 +161,21 @@ pub struct FnCompiler<'a, 'b> {
     span: u32,
     /// the register holding the value produced by the last compile_expr
     last_reg: u16,
+    /// The capture law's fn-level pre-pass (names only; types resolve
+    /// during the fused walk):
+    /// - `assigned`: names that are the single-segment LHS of any
+    ///   `Assign` (plain + compound) anywhere in the fn body, plus
+    ///   every `for..of` loop variable (the element store in the
+    ///   expansion IS an assignment — the sugar law).
+    /// - `captured`: names referenced inside any lambda body or `for..of`
+    ///   body (a flat over-approximation — shadowing only over-promotes,
+    ///   which costs a cell and stays correct).
+    /// A binding promotes iff `captured ∩ assigned ∩ is_ref(ty)`, tested
+    /// at `bind_local` where the type is resolved.
+    assigned: std::collections::HashSet<IdentId>,
+    captured: std::collections::HashSet<IdentId>,
+    /// disambiguator for the hidden capture-cell record names
+    cell_counter: u32,
     /// while inlining a `Slice` accessor, reads of this local
     /// (`self`) use the receiver register directly — no copy, so element
     /// access pays no per-access ref copy
@@ -297,6 +321,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// frame field and a `SetF` lands the value. Every body binding
     /// goes through here — cell-backed uniformly, no liveness analysis
     /// decides which locals survive a park.
+    ///
+    /// The capture law's promotion runs here too: a binding that is
+    /// (a) referenced inside a nested closure site and (b) reassigned
+    /// anywhere in the fn and (c) ref-headed, is promoted to
+    /// shared-slot storage — the register re-binds to a hidden
+    /// one-field cell holding the handle (`MakeRecord` with the init),
+    /// and every later read/write routes through `read_local`/`write_local`.
+    /// Primitives, `nil`, and `fn` values never promote: their capture
+    /// is an immediate-slot copy, now as policy.
     pub(crate) fn bind_local(
         &mut self,
         name: IdentId,
@@ -312,6 +345,44 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             field = f.next_field;
             frame_reg = f.frame_reg;
         }
+        // capture-law promotion: `self` never promotes (the Slice
+        // accessor inlining reads the receiver register raw, and a
+        // reassigned `self` has no cross-frame observer worth the risk)
+        let promote = name != sym::SELF
+            && self.captured.contains(&name)
+            && self.assigned.contains(&name)
+            && self.ctx.types.is_ref(ty);
+        let mut cell = None;
+        if promote {
+            let cname = self.ctx.intern(&format!(
+                "#cell@{}@{}",
+                self.ctx.name(name),
+                self.cell_counter
+            ));
+            self.cell_counter += 1;
+            let cty = self.ctx.types.intern(RutType {
+                name: cname,
+                kind: TyKind::Data { fields: vec![FieldInfo { name, ty }] },
+            });
+            let crec = self.new_reg(cty);
+            { let (argv_off, argc) = self.pool_args(&[reg]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp_lo); }
+            cell = Some(cty);
+            let crec2 = crec;
+            if field != NO_FIELD {
+                if let Some(f) = &mut self.async_frame {
+                    f.next_field += 1;
+                    let frame_ty = f.frame_ty;
+                    // the frame type's field list grows with the body (the
+                    // mk_data_inst in-place patch law): NewCell reads the
+                    // final list at runtime
+                    crate::lir::asyncfn::append_frame_field(self.ctx, frame_ty, name, cty);
+                }
+                let repr = self.ctx.types.repr_of(cty);
+                self.emit(Op::SetF { obj: frame_reg, field, val: crec2, repr }, sp_lo);
+            }
+            self.locals.push(Local { name, reg: crec2, ty, is_mut, loop_var, origins, field, cell });
+            return;
+        }
         if field != NO_FIELD {
             if let Some(f) = &mut self.async_frame {
                 f.next_field += 1;
@@ -324,7 +395,77 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let repr = self.ctx.types.repr_of(ty);
             self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
         }
-        self.locals.push(Local { name, reg, ty, is_mut, loop_var, origins, field });
+        self.locals.push(Local { name, reg, ty, is_mut, loop_var, origins, field, cell });
+    }
+
+    /// The capture law's promotion for a param local already bound
+    /// directly (params bypass `bind_local`'s uniform path): when the
+    /// pre-pass demands it, mint the hidden one-field cell, move the
+    /// incoming value in, and re-bind the register to the cell. Async
+    /// fn params keep the frame-field law (their frame IS the storage;
+    /// a reassigned-and-captured async param is not promoted in v1).
+    pub(crate) fn promote_param(&mut self, idx: usize, sp_lo: u32) {
+        let (name, ty) = {
+            let l = &self.locals[idx];
+            (l.name, l.ty)
+        };
+        if name == sym::SELF {
+            return;
+        }
+        if !(self.captured.contains(&name)
+            && self.assigned.contains(&name)
+            && self.ctx.types.is_ref(ty))
+        {
+            return;
+        }
+        let cname = self
+            .ctx
+            .intern(&format!("#cell@{}@{}", self.ctx.name(name), self.cell_counter));
+        self.cell_counter += 1;
+        let cty = self.ctx.types.intern(RutType {
+            name: cname,
+            kind: TyKind::Data { fields: vec![FieldInfo { name, ty }] },
+        });
+        let old = self.locals[idx].reg;
+        let crec = self.new_reg(cty);
+        { let (argv_off, argc) = self.pool_args(&[old]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp_lo); }
+        self.locals[idx].reg = crec;
+        self.locals[idx].cell = Some(cty);
+    }
+
+    /// The capture law's read accessor — EVERY read of a local's value
+    /// funnels through here. A promoted binding reads its one-field
+    /// cell (`GetF` into a fresh register; no register-mastered mirror:
+    /// a stashed closure can run between any two accesses, so the cell
+    /// is the only truth). An ordinary binding copies its register
+    /// (ref handle share / primitive slot copy — the old law, unchanged).
+    pub(crate) fn read_local(&mut self, l: &Local, sp_lo: u32) -> u16 {
+        if let Some(cty) = l.cell {
+            let d = self.new_reg(l.ty);
+            let _ = cty;
+            self.emit(Op::GetF { dst: d, obj: l.reg, field: 0, repr: self.ctx.types.repr_of(l.ty) }, sp_lo);
+            return d;
+        }
+        let reg = self.new_reg(l.ty);
+        self.mov_slot(reg, l.reg, l.ty, sp_lo);
+        reg
+    }
+
+    /// The capture law's write path — every whole-value store to a
+    /// local goes through here. A promoted binding stores into its
+    /// cell (`SetF`); an ordinary binding moves into its register.
+    /// Callers still run `mirror_local` after (a promoted binding's
+    /// cell handle never changes, so the mirror is a harmless re-write).
+    pub(crate) fn write_local(&mut self, name: IdentId, val: u16, sp_lo: u32) {
+        let Some(l) = self.locals.iter().rev().find(|l| l.name == name) else {
+            return;
+        };
+        if l.cell.is_some() {
+            let repr = self.ctx.types.repr_of(l.ty);
+            self.emit(Op::SetF { obj: l.reg, field: 0, val, repr }, sp_lo);
+        } else {
+            self.mov_slot(l.reg, val, l.ty, sp_lo);
+        }
     }
 
     /// The park-spill law, the other half of cell-backing: after a

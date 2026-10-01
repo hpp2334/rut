@@ -178,9 +178,11 @@ boundary the same pair crosses field by field, which makes
   storing them, restructuring them — is handle traffic, not payload
   traffic. Algorithms that churn records and arrays pay aliasing, not
   copying.
-- **Loop variables are fresh per iteration but share elements.** A
+- **Loop variables share elements; the binding is one variable.** A
   `for (let x of xs)` loop hands you the stored element; writes through it
-  mutate the sequence. Each iteration is a fresh *binding*.
+  mutate the sequence. The loop variable is ONE binding reassigned per
+  iteration — `for..of` is sugar for a `while`-shaped loop, and the
+  capture law treats it like any other ref-headed binding.
 - **Containers of primitives stay flat.** A fixed `[i32]` is a packed
   `i32` buffer; growable sequences of primitives store raw payloads with
   a one-byte nil tag — no per-element heap box.

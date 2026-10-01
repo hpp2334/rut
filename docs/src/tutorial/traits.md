@@ -306,11 +306,13 @@ n=4 first=1 last=4
 ```
 
 `for (let v of it)` desugars to `it.iterate(emit)` with a synthetic
-closure. One consequence to know: the loop body's captures are taken
-at the desugar, so reassigning an enclosing *scalar* inside the loop
-mutates a copy, not the original. Accumulate through something shared
-instead — `vec.push(v)` — or have the loop body act on values it can
-see directly.
+closure, and the capture law covers it like every closure: scalars
+copy (a rebind inside the loop stays local), ref-headed bindings share
+their slot — reassigning one inside the loop moves the original, and
+the loop variable is ONE variable reassigned per iteration, exactly
+like a handwritten `while` (see
+[functions, closures, and generics](functions.md)). Accumulating
+through a shared `vec.push(v)` works, and so does plain reassignment.
 
 The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate
 without the trait — their loops are fused, never a per-element call.

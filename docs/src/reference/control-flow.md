@@ -19,7 +19,11 @@ construct is exhaustive.
 Iterating form — vecs, fixed arrays, slices, strings (one-codepoint
 `str`s per step), `bytes` (`u8` per step), and any type with a
 registered `Iterator` impl — an enum value included (see
-[Traits and dispatch](traits.md) and [Enums](enums.md)):
+[Traits and dispatch](traits.md) and [Enums](enums.md)). Both spellings
+of this form are one loop: the loop variable is a single binding
+reassigned per iteration, and over a user iterable the loop desugars to
+an `it.iterate(emit)` closure that follows the capture law exactly like
+the fused form:
 
 ```rut
 for (let x of expr) { .. }

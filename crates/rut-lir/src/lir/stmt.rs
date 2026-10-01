@@ -368,6 +368,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let elem_ty = info.elem;
         let idx = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: idx, bits: 0 }, sp.lo);
+        // the sugar law: the loop var is ONE variable reassigned per
+        // iteration. When a closure site captures it, the binding is
+        // cell-backed: the hidden cell mints ONCE here (null-seeded —
+        // the per-iteration store precedes any read), every iteration
+        // stores into it, reads go through the accessor, and captures
+        // pool the cell — the fused form behaves exactly like the
+        // desugared one.
+        let mut var_cell: Option<TypeId> = None;
+        let mut cell_reg = NOREG;
+        if self.captured.contains(&var) {
+            let cname = self.ctx.intern(&format!(
+                "#cell@{}@{}",
+                self.ctx.name(var),
+                self.cell_counter
+            ));
+            self.cell_counter += 1;
+            let cty = self.ctx.types.intern(RutType {
+                name: cname,
+                kind: TyKind::Data { fields: vec![FieldInfo { name: var, ty: elem_ty }] },
+            });
+            let crec = self.new_reg(cty);
+            let null = self.new_reg(elem_ty);
+            self.emit(Op::ConstRaw { dst: null, bits: 0 }, sp.lo);
+            { let (argv_off, argc) = self.pool_args(&[null]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp.lo); }
+            var_cell = Some(cty);
+            cell_reg = crec;
+        }
         // read a fixed source's length once, before the back-edge (`str`/
         // `bytes` are immutable, `Array` is fixed-size); an `impl Iter`
         // accessor stays inside the loop
@@ -396,7 +423,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // (`Vec<T>`'s `[?T]` backing, `[?T]` arrays) binds its handle and
         // every use auto-derefs; scalars copy their slot.
         let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
-        self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD });
+        match var_cell {
+            Some(cty) => {
+                // the element store: into the shared cell (the binding's
+                // register holds the cell, stable across iterations)
+                let repr = self.ctx.types.repr_of(elem_ty);
+                self.emit(Op::SetF { obj: cell_reg, field: 0, val: var_reg, repr }, sp.lo);
+                self.locals.push(Local { name: var, reg: cell_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+            }
+            None => {
+                self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: None });
+            }
+        }
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;
         self.loops.pop();
@@ -476,9 +514,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `for (v of xs)` over a user iterable — desugars to
     /// `xs.iterate(emit)` on the registered impl, where `emit` is a
     /// synthetic closure carrying the loop body: `break` returns `false`,
-    /// `continue` and the fall-through return `true`. The loop variable is
-    /// the closure's parameter, so it is a fresh binding per iteration by
-    /// construction.
+    /// `continue` and the fall-through return `true`.
+    ///
+    /// The capture law: plain captures copy their slot (ref-headed
+    /// handles share the cell, primitives copy); a PROMOTED capture
+    /// (captured ∧ reassigned) pools the binding's hidden cell instead,
+    /// so both frames stay linked. The loop var itself, when captured,
+    /// is ONE variable reassigned per iteration (the sugar law): the
+    /// outer frame mints its shared cell, the emit closure binds it
+    /// cell-backed and stores the incoming element at frame entry.
     fn compile_for_of_iterate(
         &mut self,
         var: IdentId,
@@ -489,38 +533,76 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         body: NodeHandle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
-        // captures: the body's enclosing locals, copied by value (the
-        // closure law); the capture inherits the binding's mutability
-        // (writes through a captured `let mut` stay legal)
+        // captures: the body's enclosing locals; the capture inherits
+        // the binding's mutability (writes through a captured `let mut`
+        // stay legal)
         let mut referenced = Vec::new();
         self.scan_names(body.id(), &mut referenced);
-        let mut caps: Vec<(IdentId, TypeId, bool, u16)> = Vec::new();
+        let mut caps: Vec<Capture> = Vec::new();
+        let mut cap_regs: Vec<u16> = Vec::new();
         for n in referenced {
             if n == var {
                 continue;
             }
             if let Some(l) = self.lookup(n).cloned() {
-                let cap_reg = self.new_reg(l.ty);
-                if self.ctx.types.is_ref(l.ty) {
-                    self.emit(Op::MovRef { dst: cap_reg, src: l.reg }, sp.lo);
+                if l.cell.is_some() {
+                    // promoted: pool the SHARED CELL (not the value) —
+                    // reads and writes on either side route through it
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell });
+                    cap_regs.push(l.reg);
                 } else {
-                    self.emit(Op::Mov { dst: cap_reg, src: l.reg }, sp.lo);
+                    // copy the CURRENT value into a capture register
+                    // (the immediate-slot copy: primitives copy, ref
+                    // handles share their cell)
+                    let cap_reg = self.read_local(&l, sp.lo);
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None });
+                    cap_regs.push(cap_reg);
                 }
-                caps.push((n, l.ty, l.is_mut, cap_reg));
             }
+        }
+        // the loop var captured: mint its shared cell in THIS frame
+        // (null-seeded — the emit closure stores the element before the
+        // body can ever read it), and pool it as the emit closure's
+        // first capture
+        let mut var_cell: Option<TypeId> = None;
+        let mut var_cell_reg: Option<u16> = None;
+        if self.captured.contains(&var) {
+            let cname = self.ctx.intern(&format!(
+                "#cell@{}@{}",
+                self.ctx.name(var),
+                self.cell_counter
+            ));
+            self.cell_counter += 1;
+            let cty = self.ctx.types.intern(RutType {
+                name: cname,
+                kind: TyKind::Data { fields: vec![FieldInfo { name: var, ty: elem_ty }] },
+            });
+            let crec = self.new_reg(cty);
+            let null = self.new_reg(elem_ty);
+            self.emit(Op::ConstRaw { dst: null, bits: 0 }, sp.lo);
+            { let (argv_off, argc) = self.pool_args(&[null]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp.lo); }
+            var_cell = Some(cty);
+            var_cell_reg = Some(crec);
         }
         self.ctx
             .for_of_sigs
-            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, m, _)| (*n, *t, *m)).collect::<Vec<_>>()));
+            .insert(body.id().0, (elem_ty, caps.clone(), var_cell));
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
             trait_origins: vec![],
         };
         let fid = self.ctx.ensure_inst(emit);
+        // the surface fn type spells the element parameter only — the
+        // capture tail (and a promoted loop var's cell) is ABI
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
         let clo = self.new_reg(fty);
-        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
+        {
+            let mut argv: Vec<u16> = var_cell_reg.into_iter().collect();
+            argv.extend(cap_regs.iter().copied());
+            let (argv_off, argc) = self.pool_args(&argv);
+            self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo);
+        }
         // `xs.iterate(emit)` — the impl's method, statically bound to
         // this impl (nominal registry)
         let mfid = self

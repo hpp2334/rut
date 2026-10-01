@@ -252,7 +252,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds,
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
+        assigned: std::collections::HashSet::new(),
+        captured: std::collections::HashSet::new(),
+        cell_counter: 0,
         };
+        // the capture law's pre-pass: names first (a fn-level walk over
+        // the body), promotion at each `bind_local` once types resolve
+        c.capture_pre_pass(body);
         // signature: params (self first for methods), resolved under subst.
         // Under the slot ABI (`slot_self`, a prim-target impl method) the
         // receiver and every `Self`-spelled parameter cross as the slot.
@@ -314,6 +320,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         loop_var: false,
                         origins: Vec::new(),
                         field: NO_FIELD,
+                        cell: None,
                     });
                 }
                 MemberKind::Param(ParamData { name, is_mut, .. }) => {
@@ -341,6 +348,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         loop_var: false,
                         origins,
                         field: NO_FIELD,
+                        cell: None,
                     });
                 }
                 _ => {}
@@ -368,6 +376,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 c.locals[li].reg = u;
                 c.locals[li].ty = concrete;
             }
+        }
+        // the capture law: params promote too (a captured param
+        // reassigned anywhere in the fn shares its slot). Runs after the
+        // slot-ABI prologue so the cell seeds from the concrete working
+        // value the body is typed against.
+        for li in 0..c.locals.len() {
+            c.promote_param(li, 0);
         }
         let _ = generics; // user generic methods unsupported (diag at call)
         // body
@@ -437,6 +452,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
+        assigned: std::collections::HashSet::new(),
+        captured: std::collections::HashSet::new(),
+        cell_counter: 0,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -455,18 +473,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
+        // the lambda body's own pre-pass: this frame promotes its own
+        // bindings (nested closure sites under the body)
+        c.capture_pre_pass(body.id());
         // bind params then captures
         for (i, p) in params.iter().enumerate() {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
-                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD });
+                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
             }
         }
-        for (n, t, m) in &caps {
-            let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new(), field: NO_FIELD });
+        for (cap) in &caps {
+            let Capture { name: n, ty: t, is_mut: m, cell: by_cell } = *cap;
+            // a promoted capture's parameter carries the SHARED cell's
+            // handle — the local re-binds cell-backed so both frames
+            // route through one slot (stay-linked for the binding's scope)
+            let reg = c.new_reg(by_cell.unwrap_or(t));
+            c.locals.push(Local { name: n, reg, ty: t, is_mut: m, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: by_cell });
             // captures are part of the fn's parameter list (after declared)
-            param_tys.push(*t);
+            param_tys.push(by_cell.unwrap_or(t));
         }
         let n_caps = caps.len() as u32;
         // body: block or single expression (arrows)
@@ -515,8 +540,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Compile a desugared `for..of` emit closure: one
     /// parameter `v: E`, return `bool` — the body runs, then `true`;
     /// `break`/`continue` were translated to returns at their sites.
+    ///
+    /// Under the sugar law the loop var is ONE variable reassigned per
+    /// iteration: when the loop var itself is captured, the closure
+    /// binds it cell-backed on the shared cell (the creation site
+    /// pooled it) and stores the incoming element into the cell at
+    /// frame entry — a stashed inner lambda sees the value current at
+    /// call time, exactly like the fused `while`-shaped form.
     fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
-        let Some((elem_ty, caps)) = ctx.for_of_sigs.get(&body.0).cloned() else {
+        let Some((elem_ty, caps, var_cell)) = ctx.for_of_sigs.get(&body.0).cloned() else {
             return Ok(()); // creation site already diagnosed
         };
         let mut c = FnCompiler {
@@ -543,15 +575,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
+        assigned: std::collections::HashSet::new(),
+        captured: std::collections::HashSet::new(),
+        cell_counter: 0,
         };
-        // the loop variable: the closure's parameter — a fresh binding
-        // per iteration by construction (each emit call is a fresh frame);
-        // loop-owned, so writes through it (the shared element) are legal
-        let reg = c.new_reg(elem_ty);
-        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD });
-        for (n, t, m) in &caps {
-            let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new(), field: NO_FIELD });
+        // the emit closure's own pre-pass: its frame promotes its own
+        // bindings (nested lambdas / for-of bodies under the loop body)
+        c.capture_pre_pass(body);
+        // the incoming element: the desugar's per-iteration store source
+        let preg = c.new_reg(elem_ty);
+        if let Some(cty) = var_cell {
+            // the loop var, cell-backed on the SHARED cell (argv[1]);
+            // frame entry stores the element into it
+            let crec = c.new_reg(cty);
+            c.locals.push(Local { name: var, reg: crec, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+            let repr = c.ctx.types.repr_of(elem_ty);
+            c.emit(Op::SetF { obj: crec, field: 0, val: preg, repr }, 0);
+        } else {
+            // the loop variable: the closure's parameter — a fresh binding
+            // per iteration by construction (each emit call is a fresh frame);
+            // loop-owned, so writes through it (the shared element) are legal
+            c.locals.push(Local { name: var, reg: preg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: None });
+        }
+        for (cap) in &caps {
+            let Capture { name: n, ty: t, is_mut: m, cell: by_cell } = *cap;
+            let reg = c.new_reg(by_cell.unwrap_or(t));
+            c.locals.push(Local { name: n, reg, ty: t, is_mut: m, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: by_cell });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {
@@ -565,8 +614,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let mut param_tys = vec![elem_ty];
-        for (_, t, _) in &caps {
-            param_tys.push(*t);
+        if let Some(cty) = var_cell {
+            param_tys.push(cty);
+        }
+        for (cap) in &caps {
+            param_tys.push(cap.cell.unwrap_or(cap.ty));
         }
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -574,7 +626,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             params: param_tys,
             ret: TY_BOOL,
             is_method: false,
-            n_captures: caps.len() as u32,
+            n_captures: caps.len() as u32 + var_cell.iter().map(|_| 1usize).sum::<usize>() as u32,
             regs,
             argv,
             labels,

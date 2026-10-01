@@ -99,9 +99,29 @@ apply=42
 Closures capture the enclosing bindings — a closure body sees and can
 use the locals around it, including after the enclosing function would
 have returned, because captured cells stay alive as long as the
-closure does. Since non-primitives share, a capture of a `Vec` or a
-struct is a handle to the same cell: writes through the closure are
-visible to everyone else holding it.
+closure does. The capture law has two halves: primitives (and `nil`
+and `fn` values) copy — the closure gets its own slot, and a reassign
+inside the closure never moves the original — while everything
+ref-headed (a `Vec`, a struct, `str`, `?T`, …) crosses as a handle to
+the same cell. That second half includes whole-value reassignment: a
+captured binding that is reassigned — either frame — shares its slot
+with the closure, so both sides always see the current value:
+
+```rut
+use pouch::{ Vec };
+use ink::{ Logger };
+
+pub fn main() -> nil {
+    let log = Logger.new("cap");
+    let mut xs: Vec<i32> = Vec.new();
+    xs.push(1);
+    let len = fn() -> i32 { return xs.len(); };
+    let mut ys: Vec<i32> = Vec.new();
+    ys.push(9); ys.push(9);
+    xs = ys;                       // a rebind the closure sees
+    log.info(f"len={len()}");      // 2 — the closure shares the slot
+}
+```
 
 ## Generics
 

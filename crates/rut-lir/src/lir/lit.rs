@@ -525,23 +525,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => None,
             })
             .collect();
-        let mut caps: Vec<(IdentId, TypeId, bool, u16)> = Vec::new();
+        let mut caps: Vec<Capture> = Vec::new();
+        let mut cap_regs: Vec<u16> = Vec::new();
         for n in referenced {
             if lambda_param_names.contains(&n) {
                 continue;
             }
             if let Some(l) = self.lookup(n).cloned() {
-                // copy the CURRENT value into a capture register (by value);
-                // the capture inherits the binding's mutability so writes
-                // through a captured `let mut` stay legal (the
-                // old pointer exception is gone)
-                let cap_reg = self.new_reg(l.ty);
-                if self.ctx.types.is_ref(l.ty) {
-                    self.emit(Op::MovRef { dst: cap_reg, src: l.reg }, sp.lo);
+                if l.cell.is_some() {
+                    // promoted: pool the SHARED CELL — the closure's
+                    // parameter carries the cell handle, reads and
+                    // writes route through it, both frames stay linked
+                    // for the binding's whole scope
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell });
+                    cap_regs.push(l.reg);
                 } else {
-                    self.emit(Op::Mov { dst: cap_reg, src: l.reg }, sp.lo);
+                    // the immediate-slot copy: primitives/nil/fn copy
+                    // their slot, ref-headed values cross as handles
+                    // (the capture inherits the binding's mutability so
+                    // writes through a captured `let mut` stay legal)
+                    let cap_reg = self.read_local(&l, sp.lo);
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None });
+                    cap_regs.push(cap_reg);
                 }
-                caps.push((n, l.ty, l.is_mut, cap_reg));
             }
         }
         // register the synthetic fn: params = declared ++ captures
@@ -552,20 +558,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // body node; FnKey::Lambda uses the body node id (unique).
         // record the resolved signature for the body compilation
         self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty));
-        self.ctx.lambda_info.insert(lambda_node, caps.iter().map(|(n, t, m, _)| (*n, *t, *m)).collect());
+        self.ctx.lambda_info.insert(lambda_node, caps.clone());
         let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], trait_origins: vec![] };
         let fid = self.ctx.ensure_inst(inst);
+        // the surface fn type spells the DECLARED params only — the
+        // capture tail is ABI, never type-checked against
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);
         let dst = self.new_reg(fty);
-        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
+        { let (argv_off, argc) = self.pool_args(&cap_regs); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
         Ok(fty)
     }
 
     /// collect every single-segment path name under `node` (capture scan).
     /// Generic walk over the arena by `NodeId` — it must cross statement and
     /// expression categories freely; type subtrees carry no value names.
-    pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {
-        if out.len() > 4096 {
+    pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {        if out.len() > 4096 {
             return;
         }
         let kids = |n: NodeId, out: &mut Vec<IdentId>, s: &mut Self| s.scan_names(n, out);
@@ -699,6 +706,195 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 kids(scrut.id(), out, self);
                 for a in arms {
                     kids(a.id(), out, self);
+                }
+            }
+        }
+    }
+}
+
+// ---- the capture law's fn-level pre-pass ----
+
+impl<'a, 'b> FnCompiler<'a, 'b> {
+    /// The fn-level pre-pass behind the capture law: one walk over the
+    /// fn body collecting NAMES only (types resolve during the fused
+    /// walk, so promotion tests `is_ref` at `bind_local`):
+    ///
+    /// - `assigned`: every name that is the single-segment LHS of an
+    ///   `Assign` (plain or compound), plus every `for..of` loop
+    ///   variable — the desugar's element store IS an assignment (the
+    ///   sugar law: the loop var is one variable, reassigned per
+    ///   iteration, exactly like a handwritten `while`).
+    /// - `captured`: every single-segment name referenced inside a
+    ///   lambda body or a `for..of` body — the closure sites. A flat
+    ///   set: shadowing only over-approximates, which costs a cell and
+    ///   stays correct.
+    pub(crate) fn capture_pre_pass(&mut self, node: NodeId) {
+        let mut assigned = std::collections::HashSet::new();
+        let mut captured = std::collections::HashSet::new();
+        self.walk_capture_law(node, false, &mut assigned, &mut captured);
+        self.assigned = assigned;
+        self.captured = captured;
+    }
+
+    fn walk_capture_law(
+        &mut self,
+        node: NodeId,
+        inside: bool,
+        assigned: &mut std::collections::HashSet<IdentId>,
+        captured: &mut std::collections::HashSet<IdentId>,
+    ) {
+        if assigned.len() + captured.len() > 8192 {
+            return;
+        }
+        let walk = |n: NodeId,
+                    inside: bool,
+                    s: &mut Self,
+                    a: &mut std::collections::HashSet<IdentId>,
+                    c: &mut std::collections::HashSet<IdentId>| {
+            s.walk_capture_law(n, inside, a, c)
+        };
+        match self.ctx.ast.kind(node).clone() {
+            Kind::Item(_) | Kind::Member(_) | Kind::Pat(_) | Kind::Type(_) => {}
+            Kind::Stmt(StmtKind::LetStmt { init, .. }) => walk(init.id(), inside, self, assigned, captured),
+            Kind::Stmt(StmtKind::If { cond, then, els }) => {
+                walk(cond.id(), inside, self, assigned, captured);
+                walk(then.id(), inside, self, assigned, captured);
+                if let Some(e) = els {
+                    match e {
+                        ElseBranch::If(h) => walk(h.id(), inside, self, assigned, captured),
+                        ElseBranch::Block(h) => walk(h.id(), inside, self, assigned, captured),
+                    }
+                }
+            }
+            Kind::Stmt(StmtKind::While { cond, body }) => {
+                walk(cond.id(), inside, self, assigned, captured);
+                walk(body.id(), inside, self, assigned, captured);
+            }
+            Kind::Stmt(StmtKind::ForOf { var, iter, body }) => {
+                // the loop var is ONE variable reassigned per iteration
+                // (the sugar law) — the element store counts as an
+                // assignment in BOTH frames
+                assigned.insert(var);
+                walk(iter.id(), inside, self, assigned, captured);
+                walk(body.id(), true, self, assigned, captured);
+            }
+            Kind::Stmt(StmtKind::ForC { init, cond, update, body, .. }) => {
+                walk(init.id(), inside, self, assigned, captured);
+                walk(cond.id(), inside, self, assigned, captured);
+                walk(update.id(), inside, self, assigned, captured);
+                walk(body.id(), inside, self, assigned, captured);
+            }
+            Kind::Stmt(StmtKind::Return { value }) => {
+                if let Some(v) = value {
+                    walk(v.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
+                walk(scrut.id(), inside, self, assigned, captured);
+                for a in arms {
+                    walk(a.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Stmt(StmtKind::ExprStmt(e)) => walk(e.id(), inside, self, assigned, captured),
+            Kind::Stmt(StmtKind::Break | StmtKind::Continue) => {}
+            Kind::Arm(ArmKind::WhenArm { pats, body }) => {
+                for p in pats {
+                    walk(p.id(), inside, self, assigned, captured);
+                }
+                walk(body.id(), inside, self, assigned, captured);
+            }
+            Kind::Arm(ArmKind::SelectArm { fut, body, .. }) => {
+                walk(fut.id(), inside, self, assigned, captured);
+                walk(body.id(), inside, self, assigned, captured);
+            }
+            Kind::Expr(ExprKind::Block { stmts }) => {
+                for s in stmts {
+                    walk(s.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::Path { segs }) => {
+                if inside && !segs.is_empty() {
+                    captured.insert(segs[0].name);
+                }
+            }
+            Kind::Expr(ExprKind::Lit(_)) => {}
+            Kind::Expr(ExprKind::Call { callee, args }) => {
+                walk(callee.id(), inside, self, assigned, captured);
+                for a in args {
+                    walk(a.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::Method { recv, args, .. }) => {
+                walk(recv.id(), inside, self, assigned, captured);
+                for a in args {
+                    walk(a.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::Field { recv, .. }) => walk(recv.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Index { recv, idx }) => {
+                walk(recv.id(), inside, self, assigned, captured);
+                walk(idx.id(), inside, self, assigned, captured);
+            }
+            Kind::Expr(ExprKind::Unary { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Binary { lhs, rhs, .. }) => {
+                walk(lhs.id(), inside, self, assigned, captured);
+                walk(rhs.id(), inside, self, assigned, captured);
+            }
+            Kind::Expr(ExprKind::Assign { target, value, .. }) => {
+                // the single-segment LHS names an assignment; compound
+                // forms (`+=` and kin) count too. A multi-segment or
+                // field/index target mutates THROUGH the head — not an
+                // assignment OF the binding (the shared handle already
+                // crosses).
+                if let ExprKind::Path { segs } = self.ctx.ast.expr(target) {
+                    if segs.len() == 1 {
+                        assigned.insert(segs[0].name);
+                    }
+                }
+                walk(target.id(), inside, self, assigned, captured);
+                walk(value.id(), inside, self, assigned, captured);
+            }
+            Kind::Expr(ExprKind::Lambda { body: b, .. }) => walk(b.id(), true, self, assigned, captured),
+            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
+                walk(expr.id(), inside, self, assigned, captured)
+            }
+            Kind::Expr(ExprKind::Select { arms }) => {
+                for a in arms {
+                    walk(a.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::Is { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Cast { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::FStr { parts }) => {
+                for p in parts {
+                    if let FPartAst::Hole(e) = p {
+                        walk(e.id(), inside, self, assigned, captured);
+                    }
+                }
+            }
+            Kind::Expr(ExprKind::Struct { fields, .. }) => {
+                for (_, v) in fields {
+                    walk(v.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::ArrayLit { elems }) => {
+                for e in elems {
+                    walk(e.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::ArrayRepeat { value, count }) => {
+                walk(value.id(), inside, self, assigned, captured);
+                walk(count.id(), inside, self, assigned, captured);
+            }
+            Kind::Expr(ExprKind::Tuple { elems }) => {
+                for e in elems {
+                    walk(e.id(), inside, self, assigned, captured);
+                }
+            }
+            Kind::Expr(ExprKind::WhenExpr { scrut, arms }) => {
+                walk(scrut.id(), inside, self, assigned, captured);
+                for a in arms {
+                    walk(a.id(), inside, self, assigned, captured);
                 }
             }
         }
