@@ -312,11 +312,13 @@ examples/05-todolist-web/
   byte-identical through the splice.
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
-  `load_dir_session("rut/biz")` reads `rut/biz/rut.json` and runs the
+  the Loader over `rut/biz` reads `rut/biz/rut.jsonc` and runs the
   [dependency-kinds](../../docs/src/reference/dependency-kinds.md) four
-  passes (the deps walk — `ui`, and through it
-  pouch/nmapset/nmap_host — the root's dev-deps, the peer gate,
+  passes (the deps walk — `ui` by its local path row, and through it
+  pouch/nmapset/nmap_host from the pinned jsDelivr bundles — the root's dev-deps, the peer gate,
   compile) FOR REAL — the manifest, not a Rust fn, is the module list.
+  The tests prime an offline remote from the committed dist/std
+  artifacts (dist/std plays the wire), so the gates never network.
 * **both lanes, one closure.** The wasm lane keeps the `Session`
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
   the same packages BY HAND — one `register_module` per package, the

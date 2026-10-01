@@ -23,14 +23,20 @@
     ]
   },
   "deps": {
+    // the sibling package — the consumer's OWN local package is what
+    // `path` is for (the two-package law's ui side)
     "ui": {
       "path": "../ui"
     },
-    "pouch": {
-      "path": "../../../../rut/pouch"
-    },
-    "nmapset": {
-      "path": "../../../../rut/nmapset"
-    }
+    // THE STD CLOSURE, from the CDN: pouch and nmapset ship as committed
+    // compiled bundles on jsDelivr at the std-v3 tag, sha256-pinned here
+    // (the pin is law at the mount door on every load). Both are GENERIC
+    // owners — since the generic-source riding law their bundles carry
+    // the source beside the binaries, so this app's consumer-spelled
+    // shapes compile from the bundles at the link. The tests prime an
+    // offline remote from the committed artifacts (dist/std plays the
+    // wire), so the gates never network.
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "5cb593f8ef2f352bf600f2cd0b60a621cc9259004dd40a7bb9b13f787a9826c1" }
   }
 }

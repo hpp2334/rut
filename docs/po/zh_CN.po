@@ -9206,7 +9206,7 @@ msgstr ""
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:212
-#: src/examples/04-custom-async.md:203 src/examples/05-todolist-web.md:225
+#: src/examples/04-custom-async.md:203 src/examples/05-todolist-web.md:231
 #: src/examples/06-github-viewer-cli.md:206
 #: src/examples/playground-corpus.md:187
 msgid "Takeaways"
@@ -10924,53 +10924,56 @@ msgid ""
 "  \"entry\": { \"lib\": \"./biz.rut\", \"libs\": [\"./domain.rut\", \"./world.rut\", \"./app.rut\"] },\n"
 "\n"
 "  \"deps\": {\n"
+"    // the sibling package — the consumer's own local package\n"
 "    \"ui\":      { \"path\": \"../ui\" },\n"
-"    \"pouch\":   { \"path\": \"../../../../rut/pouch\" },\n"
-"    \"nmapset\": { \"path\": \"../../../../rut/nmapset\" }\n"
+"    // the toolchain's packages, from jsDelivr at the std-v3 tag,\n"
+"    // pinned by sha256\n"
+"    \"pouch\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle\", \"sha256\": \"21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0\" },\n"
+"    \"nmapset\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle\", \"sha256\": \"5cb593f8ef2f352bf600f2cd0b60a621cc9259004dd40a7bb9b13f787a9826c1\" }\n"
 "  }\n"
 "}\n"
 "```"
 msgstr ""
 
 
-#: src/examples/05-todolist-web.md:216
+#: src/examples/05-todolist-web.md:219
 msgid ""
-"`entry.libs` splices several files into ONE module (base first, array order), so a name private to `store.rut` is visible to `components.rut` and to nothing outside `ui` — single-file privacy, kept at package scale. `ui` is marked `inline = true` (its generic exports splice by law), and the native lane mounts the _directory_ — the manifest, not a Rust fn, is the module list. The wasm lane mounts the same packages by hand as a mirror, and a test pins both lanes to byte-identical binaries."
+"`entry.libs` splices several files into ONE module (base first, array order), so a name private to `store.rut` is visible to `components.rut` and to nothing outside `ui` — single-file privacy, kept at package scale. `ui` is marked `inline = true` (its generic exports splice by law), and the native lane mounts the _directory_ — the manifest, not a Rust fn, is the module list. The `path` row is for the project's own sibling package; the toolchain's packages ride in as pinned url deps from the std tree's jsDelivr CDN ([dependency kinds](../reference/dependency-kinds.md)). The wasm lane mounts the same packages by hand as a mirror, and a test pins both lanes to byte-identical binaries."
 msgstr ""
-"`entry.libs` 把多个文件拼接成一个模块（基文件在前，按数组顺序），所以 `store.rut` 私有的名字对 `components.rut` 可见，对 `ui` 之外的一切不可见——单文件隐私，保持在包尺度。`ui` 被标为 `inline = true`（它的泛型导出依法拼接），原生通道挂载_目录_——清单就是模块列表，而不是某个 Rust fn。wasm 通道作为镜像手工挂载同样的包，并且有一个测试把两条通道钉在逐字节相同的二进制上。"
+"`entry.libs` 把多个文件拼接成一个模块（基文件在前，按数组顺序），所以 `store.rut` 私有的名字对 `components.rut` 可见，对 `ui` 之外的一切不可见——单文件隐私，保持在包尺度。`ui` 被标为 `inline = true`（它的泛型导出依法拼接），原生通道挂载_目录_——清单就是模块列表，而不是某个 Rust fn。`path` 行用于项目自己的兄弟包；工具链的包作为固定的 url 依赖从 std 树的 jsDelivr CDN 进入（[依赖种类](../reference/dependency-kinds.md)）。wasm 通道作为镜像手工挂载同样的包，并且有一个测试把两条通道钉在逐字节相同的二进制上。"
 
 
-#: src/examples/05-todolist-web.md:227
+#: src/examples/05-todolist-web.md:233
 msgid ""
 "The page ABI is `main` plus doors named for their events; state lives in the container the host re-passes every turn."
 msgstr "页面 ABI 就是 `main` 加各扇以其事件命名的门；状态活在宿主每回合回传的容器里。"
 
 
-#: src/examples/05-todolist-web.md:229
+#: src/examples/05-todolist-web.md:235
 msgid ""
 "Ten thin crossings carried an entire reactive framework — the host stayed generic and never learned the word \"todo\"."
 msgstr "十条薄跨越扛起了整个响应式框架——宿主保持通用，从未学会\"todo\"这个词。"
 
 
-#: src/examples/05-todolist-web.md:231
+#: src/examples/05-todolist-web.md:237
 msgid ""
 "The store is jotai's shape in rut: discovered deps, pull-on-read freshness, mutations as the write lane, and type-level non-writability through private traits."
 msgstr "存储是 rut 里的 jotai 形态：发现的依赖、读时拉取的新鲜度、作为写车道的变更，以及透过私有 trait 达成的类型级不可写。"
 
 
-#: src/examples/05-todolist-web.md:234
+#: src/examples/05-todolist-web.md:240
 msgid ""
 "Widgets are values; the keyed diff is the only thing that speaks DOM, and patch-in-place is what makes the UI animatable."
 msgstr "部件是值；键控 diff 是唯一会讲 DOM 的东西，而就地打补丁正是 UI 可动画的原因。"
 
 
-#: src/examples/05-todolist-web.md:236
+#: src/examples/05-todolist-web.md:242
 msgid ""
 "Soft failures are data (`(nil, why)` and the pump keeps draining); a panic alone kills the page, loud."
 msgstr "软失败是数据（`(nil, why)`，泵继续排空）；只有 panic 才杀死页面，而且死得响亮。"
 
 
-#: src/examples/05-todolist-web.md:239
+#: src/examples/05-todolist-web.md:245
 msgid ""
 "The async shape this page _simulates_ (the request table + timers) is the real thing in [06 — GitHub viewer CLI](06-github-viewer-cli.md); the store's building blocks are in [the swappable packages](../reference/stdlib.md)."
 msgstr ""

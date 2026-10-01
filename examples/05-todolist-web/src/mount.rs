@@ -3,8 +3,11 @@
 //! THE MANIFEST (the native lane's truth): `rut/biz/` is the project
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is mounted by
-//! [`crate::mount::project_dir`] + `rut_driver::load_dir_session`,
-//! the four passes run FOR REAL. The manifest, not a Rust fn,
+//! [`crate::mount::project_dir`] through the Loader — the manifest's
+//! ui row is a local `path`, the std closure rides pinned jsDelivr url
+//! rows served by the PRIMED OFFLINE REMOTE ([`crate::mount::std_remote`];
+//! dist/std plays the wire, no gate networks). The four passes run FOR
+//! REAL. The manifest, not a Rust fn,
 //! is the module list.
 //!
 //! THE MIRROR (the wasm lane): the Session is I/O-free by law (wasm
@@ -107,15 +110,16 @@ pub fn project_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rut").join("biz")
 }
 
-/// The MANIFEST LANE's mount (native only): `load_dir_session` over
-/// the rut/biz project root — the four passes for real — plus
+/// The MANIFEST LANE's mount (native only): the rut/biz project root
+/// through the Loader — the four passes for real, the url rows served
+/// by the primed offline remote ([`std_remote`]) — plus
 /// the embedder half every lane owns: the `core` prelude AND the `web`
 /// host surface (the crossing is no package's dep; both lanes register
 /// it by hand — the registration scope IS the pkg name (`web::*`).
 /// `tests/mount_lane.rs` pins the two lanes together.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = rut_driver::load_dir_session(&project_dir(), &rut_driver::bundle::FsSource).map_err(|e| e.to_string())?;
+    let (mut session, root) = load_dir_with_std(&project_dir())?;
     rut_driver::mount_std_core(&mut session);
     register_web_surface(&mut session)?;
     Ok((session, root))
@@ -129,18 +133,89 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(probe)
 }
 
-/// The PROBE lanes' mount (native only): `load_dir_session` over
-/// `tests/<probe>/` — the probe's own manifest names its deps (path
-/// rows; `web` rides no row) — plus the embedder half every lane owns:
+/// The PROBE lanes' mount (native only): the Loader over
+/// `tests/<probe>/` — the probe's own manifest names its deps (the
+/// sibling ui row stays a local `path`; the std rows are pinned
+/// jsDelivr urls; `web` rides no row) — plus the embedder half every lane owns:
 /// the `core` prelude AND the `web` host surface. The softfail fixture
 /// is the deliberate exception: no crossings is its point, so it loads
 /// its dir bare + `mount_std_core` (its test spells that shape).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_probe_session(probe: &str) -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = rut_driver::load_dir_session(&probe_dir(probe), &rut_driver::bundle::FsSource).map_err(|e| e.to_string())?;
+    let (mut session, root) = load_dir_with_std(&probe_dir(probe))?;
     rut_driver::mount_std_core(&mut session);
     register_web_surface(&mut session)?;
     Ok((session, root))
+}
+
+/// The manifest lane's directory load: the Loader (its default source
+/// IS the filesystem) over [`std_remote`] — the same embedder shape
+/// src/main.rs of the other examples spells, with the offline flavor
+/// swapped in. One noop-waker poll settles the READY futures: every
+/// url row is a primed cache hit, so nothing ever awaits the wire.
+#[cfg(not(target_arch = "wasm32"))]
+fn load_dir_with_std(
+    dir: &std::path::Path,
+) -> Result<(rut_driver::Session, String), String> {
+    use std::future::Future;
+    let fut = rut_driver::Loader::new(dir).dep_remote(std_remote()).build().load();
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(v) => return v.map_err(|e| e.to_string()),
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+/// dist/std plays the wire: the committed artifacts prime ONE offline
+/// cache per process (`DepRemote::write` is the stand-in for the GET —
+/// the ONCE-gated priming is the 03-plugin precedent), and every
+/// manifest-lane load rides an `HttpRemote::offline` over it — a miss
+/// NEVER touches the network, so the gate cannot network by
+/// construction. The pin's bytes are the committed bytes
+/// (`pack-std --check` green); the CDN is only the human lane. The
+/// cache root lives in the tmp dir: a throwaway, not the project-local
+/// `.rut/cache` a `rut run` would warm.
+#[cfg(not(target_arch = "wasm32"))]
+fn std_remote() -> rut_driver::HttpRemote {
+    static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    rut_driver::HttpRemote::offline(ROOT.get_or_init(|| {
+        let root = std::env::temp_dir()
+            .join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        // every manifest this example loads with deps — the app's two
+        // packages and the two probes that name the std closure
+        // (harness/softfail are dep-free) — walked for url rows exactly
+        // like the loader's own prefetch walks
+        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let dist = base.join("../../dist/std");
+        let mut urls = std::collections::BTreeSet::new();
+        for rel in [
+            "rut/biz/rut.jsonc",
+            "rut/ui/rut.jsonc",
+            "tests/store_probe/rut.jsonc",
+            "tests/t1_harness/rut.jsonc",
+        ] {
+            let Ok(text) = std::fs::read_to_string(base.join(rel)) else { continue };
+            let Ok(manifest) = rut_driver::bundle::parse_manifest(&text) else { continue };
+            for desc in manifest.deps.values() {
+                if let Some(url) = desc.get("url") {
+                    urls.insert(url.clone());
+                }
+            }
+        }
+        let warmer = rut_driver::HttpRemote::offline(&root);
+        for url in &urls {
+            let artifact = url.rsplit('/').next().unwrap_or_default();
+            let bytes = std::fs::read(dist.join(artifact)).unwrap_or_else(|e| {
+                panic!("the committed artifact is the cache — {artifact}: {e}")
+            });
+            rut_driver::DepRemote::write(&warmer, url, &bytes).expect("prime the cache");
+        }
+        root
+    }))
 }
 
 /// Register the `web` DECL surface — the embedder half both lanes run.

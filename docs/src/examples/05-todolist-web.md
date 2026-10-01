@@ -206,9 +206,12 @@ privacy boundary, which is why there are exactly two
   "entry": { "lib": "./biz.rut", "libs": ["./domain.rut", "./world.rut", "./app.rut"] },
 
   "deps": {
+    // the sibling package — the consumer's own local package
     "ui":      { "path": "../ui" },
-    "pouch":   { "path": "../../../../rut/pouch" },
-    "nmapset": { "path": "../../../../rut/nmapset" }
+    // the toolchain's packages, from jsDelivr at the std-v3 tag,
+    // pinned by sha256
+    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "5cb593f8ef2f352bf600f2cd0b60a621cc9259004dd40a7bb9b13f787a9826c1" }
   }
 }
 ```
@@ -217,8 +220,11 @@ privacy boundary, which is why there are exactly two
 order), so a name private to `store.rut` is visible to
 `components.rut` and to nothing outside `ui` — single-file privacy,
 kept at package scale. `ui` is marked `inline = true` (its generic
-exports splice by law), and the native lane mounts the *directory*
-— the manifest, not a Rust fn, is the module list. The wasm lane
+exports splice by law), and the native lane mounts the *directory* —
+the manifest, not a Rust fn, is the module list. The `path` row is for
+the project's own sibling package; the toolchain's packages ride in as
+pinned url deps from the std tree's jsDelivr CDN
+([dependency kinds](../reference/dependency-kinds.md)). The wasm lane
 mounts the same packages by hand as a mirror, and a test pins both
 lanes to byte-identical binaries.
 
