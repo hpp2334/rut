@@ -261,10 +261,10 @@ from the AST:
   pipeline before and after formatting and log identical output.
 - **Refusal law** — a source with diagnostics is refused: rendered
   diagnostics, exit 1, nothing rewritten. The formatter never guesses.
-- **Style is the package's** — the nearest ancestor `rut.toml`'s
-  `[style]` block sets `indent_width` (1–8, default 4) and `max_width`
+- **Style is the package's** — the nearest ancestor `rut.json`'s
+  `style` block sets `indent_width` (1–8, default 4) and `max_width`
   (≥ 20, default 100); no manifest means defaults. See
-  [Project structure and rut.toml](project-structure.md).
+  [Project structure and rut.json](project-structure.md).
 
 ## Testing
 

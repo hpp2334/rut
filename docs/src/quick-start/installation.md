@@ -146,14 +146,14 @@ The binary embeds the whole engine: lexer, parser, compiler, typed
 bytecode, and the VM. It also carries the vendored packages from the
 repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a program
 says `use ink::{ Logger };` and mounts the package through its
-manifest's `[deps]` row, since every rut program is a module directory
+manifest's `deps` row, since every rut program is a module directory
 ([your first rut program](first-program.md)).
 
 Try it:
 
 ```sh
 mkdir hello
-cat > hello/rut.toml <<'EOF'
+cat > hello/rut.json <<'EOF'
 name = "hello"
 entry.lib = "./main.rut"
 

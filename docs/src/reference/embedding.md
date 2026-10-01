@@ -128,7 +128,7 @@ the wire — `DepRemote::write` is the stand-in for the GET:
 
 ```rust
 let remote = rut_driver::HttpRemote::offline(&cache_root);
-for (url, bytes) in vendored_rows {                  // parsed from rut.toml
+for (url, bytes) in vendored_rows {                  // parsed from rut.json
     rut_driver::DepRemote::write(&remote, &url, &bytes)?;  // prime the cache
 }
 let (mut session, root) =
@@ -166,8 +166,8 @@ hit, vendored map, test fixture.
 counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the
 compile owns presence) — is
 `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`:
-both root kinds mount (a v5 compiled root with its groups, the ledger
-namespaced into the session; a v6 decl root as the pkg's host rows),
+both root kinds mount (a v7 compiled root with its groups, the ledger
+namespaced into the session; a v8 decl root as the pkg's host rows),
 first-mount-wins, and the bundle root's package name comes back. Wasm
 hosts `include_bytes!` the committed artifact and mount through this —
 05-todolist-web's mirror lane takes the `nmap_host` surface from the
@@ -194,7 +194,7 @@ contain those names.
 | `Session::new()` | an empty mounting session |
 | `mount_std(&mut s)` | mount `core` + `calc` |
 | `mount_std_async(&mut s)` | mount `async_engine` + `async_host` |
-| `mount_dir(&mut s, dir)` | mount a package directory (`rut.toml`); returns its name |
+| `mount_dir(&mut s, dir)` | mount a package directory (`rut.json`); returns its name |
 | `assemble_peers(&mut s)` | append peer-gated impl groups ([dependency kinds](dependency-kinds.md)) |
 | `compile_module(src, mode, name)` | full pipeline over one module against a fresh core+calc session |
 | `compile_module_in(&mut s, src, mode, name)` | the same against a caller-built session; returns diags, AST/IR dumps, and the binary |
@@ -205,10 +205,10 @@ contain those names.
 | `Loader::new(project)` / `.source(&src)` / `.dep_remote(r)` / `.build()` / `loaded.load()` | THE embedder door: a directory or `.rutbundle`, the fs + remote policies explicit, one `async load()` — the no-remote check is lazy (it fires only when a url row is reached, as a panic naming the fix) |
 | `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
 | `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete |
-| `load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)` | the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
+| `load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)` | the fetched lanes: url deps in `deps` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
 | `mount_dir_with(&mut s, dir, &remote)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
 | `pack_dir_with(dir, &remote)` / `pack_dir_opts_with(dir, opts, remote)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
-| `pack_dir(dir)` | pack a module directory into a deterministic `.rutbundle` — a **v5 compiled** root for a lib pkg, a **v6 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
+| `pack_dir(dir)` | pack a module directory into a deterministic `.rutbundle` — a **v7 compiled** root for a lib pkg, a **v8 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
 | `mount_bundle_bytes(&mut s, &bytes)` | mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts) |
 
 The container, manifest grammar, and reader (both root kinds) live in

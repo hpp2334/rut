@@ -6,8 +6,8 @@ the page's brain is a **rut project of TWO packages** (`rut/`): `ui`
 (the framework — the atom store machinery, the t1 widget framework,
 the component vocabulary, one module) and `biz` (the domain-as-
 mutations and the app shell, one module), with the `web` crossing in
-its own host-pkg dir (`web/`, `rut.toml` + `web.d.rut` — it rides no
-deps row; the embedder registers it). Three `rut.toml` total, two of
+its own host-pkg dir (`web/`, `rut.json` + `web.d.rut` — it rides no
+deps row; the embedder registers it). Three `rut.json` total, two of
 them consumer packages.
 Pure rut: no `main` loop on the rut side, no event loop, no async
 keywords. The host (web-sys on wasm32, a fake-DOM twin on native) owns
@@ -261,7 +261,7 @@ that remains is enforced by type visibility, not just by grep:
 examples/05-todolist-web/
 ├── index.html  loader.js  gen/     the page shell (gitignored gen/)
 ├── web/                            the `web` host DECL surface as a pkg
-│   ├── rut.toml                     dir (rides no deps row): the embedder
+│   ├── rut.json                     dir (rides no deps row): the embedder
 │   └── web.d.rut                    registers it in both lanes
 ├── src/                            the Rust host: state/pump, hosts,
 │                                   backends (web + fake twin), mount
@@ -271,8 +271,8 @@ examples/05-todolist-web/
 │   │                               ABI stays main + the doors)
 └── rut/                            TWO packages, TWO manifests
     ├── ui/                         THE FRAMEWORK package
-    │   ├── rut.toml                name = "ui"; inline = true (generic
-    │   │                           exports splice by law); [deps] pouch
+    │   ├── rut.json                name = "ui"; inline = true (generic
+    │   │                           exports splice by law); `deps` pouch
     │   │                           + nmapset; entry.libs = the five
     │   │                           section files
     │   ├── ui.rut                  the base: the law header + the use
@@ -287,7 +287,7 @@ examples/05-todolist-web/
     │   └── components.rut          §5 the component vocabulary
     └── biz/                        THE DOMAIN package AND the project
         │                           root (the ABI spec stays `app`)
-        ├── rut.toml                name = "app"; [deps] ui + pouch +
+        ├── rut.json                name = "app"; `deps` ui + pouch +
         │                           nmapset; entry.libs = the three
         │                           section files
         ├── biz.rut                 the base: the law header + the use
@@ -312,7 +312,7 @@ examples/05-todolist-web/
   byte-identical through the splice.
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
-  `load_dir_session("rut/biz")` reads `rut/biz/rut.toml` and runs the
+  `load_dir_session("rut/biz")` reads `rut/biz/rut.json` and runs the
   [dependency-kinds](../../docs/src/reference/dependency-kinds.md) four
   passes (the deps walk — `ui`, and through it
   pouch/nmapset/nmap_host — the root's dev-deps, the peer gate,
@@ -321,7 +321,7 @@ examples/05-todolist-web/
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
   the same packages BY HAND — one `register_module` per package, the
   same `inline` values the manifests state (the registration scope is
-  the pkg name), everything `include_str!`. The mirror is `rut/biz/rut.toml`'s mirror and
+  the pkg name), everything `include_str!`. The mirror is `rut/biz/rut.json`'s mirror and
   nothing more; `tests/mount_lane.rs` (the P3 proof) pins both lanes
   to the same mounted-name set, host surface, and compiled binary.
   `web/` rides NO manifest path — both lanes register it by hand
@@ -413,8 +413,8 @@ retired; freshness is the read's job now.
 
 | path | what |
 |---|---|
-| `rut/biz/rut.toml` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
-| `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
+| `rut/biz/rut.json` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
+| `rut/ui/rut.json` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), scope = the pkg name) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
 | `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
 | `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |

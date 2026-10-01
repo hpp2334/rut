@@ -720,7 +720,7 @@ pub(crate) fn run_peer_gate(
                 }
                 // D1: loud at mount, naming pkg + peer + fix
                 return Err(LoadError::law(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.json` `deps`"
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `\"{peer}\": {{ \"path\": \"..\" }}` to your `rut.json` `deps`"
                 )));
             }
             if compiled {

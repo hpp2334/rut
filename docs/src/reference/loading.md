@@ -8,7 +8,7 @@ code runs.
 ## From path to machine
 
 ```sh
-rut run app/            # a directory with rut.toml
+rut run app/            # a directory with rut.json
 rut run plugin/plugin.rutbundle
 ```
 
@@ -17,7 +17,7 @@ steps:
 
 | step | what happens |
 |---|---|
-| 1. mount | A **directory is one module**: its `rut.toml` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `[deps]`/`[peer-deps]`/`[dev-deps]` ([Project structure and rut.toml](project-structure.md)). A `.rutbundle` mounts identically from a zip ([Module bundles](bundles.md)). The graph walks `[deps]` recursively — cycle guard, first-mount-wins, name-mismatch is an error — then runs one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). |
+| 1. mount | A **directory is one module**: its `rut.json` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.json](project-structure.md)). A `.rutbundle` mounts identically from a zip ([Module bundles](bundles.md)). The graph walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — then runs one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). |
 | 2. resolve surfaces | Use paths resolve against mounted modules, exact and single-step: a package name resolves or the diagnostic names the consumer manifest. A `.d.rut` surface compiles through the checker and publishes signatures only. |
 | 3. compile the graph | Each module compiles (sources, in dependency post-order); `inline = true` packages splice into their consumers instead of linking; host packages synthesize bodyless thunks from their declared surfaces; a mounted bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md)). |
 | 4. link + flatten | Module-local type/function/const ids rebase into the global tables; the shared boot prefix passes through; name tables merge; duplicate `(trait, type)` impl pairs and duplicate module names are link errors. Cyclic use is a compile-graph error, never a runtime event. |
@@ -50,7 +50,7 @@ before it):
 | `pkg_fn!` / `pkg_async_fn!` | the builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
 | `mount_std_core(session)` / `mount_std(session)` / `mount_std_async(session)` | mount the builtin packages (`core`; `core` + `calc`; the async pair) |
 | `load_path_session(path)` / `load_bundle_bytes(bytes, origin)` | mount a directory / an in-memory bundle |
-| `load_path_session_with(path, &remote)` | the fetched lane: `[deps]` url rows ride the host's `DepRemote`, the `sha256` pin verified at the mount door |
+| `load_path_session_with(path, &remote)` | the fetched lane: `deps` url rows ride the host's `DepRemote`, the `sha256` pin verified at the mount door |
 | `compile_graph(&session, root)` | compile + link the mounted graph |
 | `Vm::new(prog, &limits, hooks, registry)` | boot; fails if a declared host fn is unbound |
 | `vm.call(export, args) -> Result<Value, Trap>` | sync entry — typed arg/ret adapters over the boundary |

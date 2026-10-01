@@ -5,7 +5,7 @@ standard — a prelude of builtin names that are *ambient*: in scope in
 every compilation unit, no `use` needed. Everything else is a set of
 **swappable packages** shipped in the toolchain tree — a program that
 wants one says so: a `use` line in the source and the package's
-`[deps]` row in its `rut.toml` ([project
+`deps` row in its `rut.json` ([project
 structure](../reference/project-structure.md)). Any of them can be
 replaced wholesale; the engine knows none of their names.
 

@@ -6,7 +6,7 @@ The standard library splits in two:
   engine-implemented: it registers **no** host bodies and needs no mount
   beyond the base one.
 - **the swappable packages** — in-tree rut/host packages that a module
-  declares in its manifest `[deps]`
+  declares in its manifest `deps`
   ([project structure](project-structure.md)). The community may replace
   any of them wholesale; nothing in the engine knows their names.
 
@@ -165,7 +165,7 @@ started
 | `error(msg)` | 3 |
 
 Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")))` (the ctx is `session.host_pkg_context()` — [embedding](embedding.md)).
-Mounting `ink` pulls `ink_host` along (`[deps]`).
+Mounting `ink` pulls `ink_host` along (`deps`).
 
 ### `pouch` — `Vec<T>`
 
@@ -322,7 +322,7 @@ exactly as it governs engine allocations.
 
 Embedder side:
 `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting
-`strbuild` pulls `strbuild_host` along (`[deps]`); mounting `json`
+`strbuild` pulls `strbuild_host` along (`deps`); mounting `json`
 pulls both (its writer rides the builder).
 
 For the common accumulator shape no builder is needed at all:

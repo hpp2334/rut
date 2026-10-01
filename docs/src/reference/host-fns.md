@@ -20,11 +20,13 @@ bodies plus a hand-written surface.
 A package directory whose manifest declares `type = "host"` is a **host
 pkg** — pure surface, no rut source:
 
-```toml
-# server/rut.toml
-name = "server"
-type = "host"
-entry.type = "./server.d.rut"
+```json
+// server/rut.json
+{
+  "name": "server",
+  "type": "host",
+  "entry": { "type": "./server.d.rut" }
+}
 ```
 
 ```rut
@@ -35,7 +37,7 @@ pub host fn emit(bus: opaque, topic: str, payload: str) -> nil;
 
 Consumers reach a host pkg two ways:
 
-- declared in the manifest's `[deps]`
+- declared in the manifest's `deps`
   ([project structure](project-structure.md), [dependency kinds](dependency-kinds.md));
   resolution is recursive, **first mount wins**;
 - mounted programmatically: `rut_driver::mount_dir(&mut session, dir)`

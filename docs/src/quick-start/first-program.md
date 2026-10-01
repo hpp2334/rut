@@ -23,13 +23,13 @@ pub fn main() {
 }
 ```
 
-Every rut program is a **module directory**: a `rut.toml` naming the
+Every rut program is a **module directory**: a `rut.json` naming the
 package and its dependencies, plus the source file the manifest points
 at. Create it and run the directory:
 
 ```sh
 mkdir hello
-cat > hello/rut.toml <<'EOF'
+cat > hello/rut.json <<'EOF'
 name = "hello"
 entry.lib = "./main.rut"
 
@@ -47,13 +47,13 @@ hello, rut!
 
 Three things to notice:
 
-- **One directory with a `rut.toml` is one program.** The manifest is
+- **One directory with a `rut.json` is one program.** The manifest is
   the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the
   only run lane. Inside the package, one file is one module; cross-module
   code is reached through `use` paths (see the
   [modules tutorial](../tutorial/modules.md)).
 - **`use ink::{ Logger };`** pulls `Logger` out of the `ink` package —
-  and the manifest's `[deps]` row is what mounts it: a `use` line says
+  and the manifest's `deps` row is what mounts it: a `use` line says
   *which* names the program wants, the manifest says *where* the package
   lives ([project structure](../reference/project-structure.md)).
 - **`f"hello, {name}!"`** is a format literal: `{expr}` interpolates any

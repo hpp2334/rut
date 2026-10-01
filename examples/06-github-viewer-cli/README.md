@@ -199,5 +199,5 @@ walked, never printed):
 - **`rut run` cannot host rgh itself** — its `rgh_host` rows are
   example-local, so only this embedder (or your own, binding the same
   rows) can run the brain. Ordinary HTTP programs do run under
-  `rut run` (the manifest's `[deps]` http row mounts the std pair, and
+  `rut run` (the manifest's ``deps`` http row mounts the std pair, and
   the CLI drives the async loop).

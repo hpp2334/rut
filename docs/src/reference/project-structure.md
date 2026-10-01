@@ -1,6 +1,6 @@
-# Project structure and rut.toml
+# Project structure and rut.json
 
-One directory is one module; its `rut.toml` names the exact package it
+One directory is one module; its `rut.json` names the exact package it
 answers to and how to reach its surface and body. The manifest is what
 makes the directory **the runnable unit**: `rut run <dir>` (or its
 packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
@@ -10,23 +10,30 @@ toolchain tree.
 
 ## The manifest
 
-```toml
-# rut/pouch/rut.toml — a body package
-name = "pouch"
-entry.lib = "./pouch.rut"
+```json
+// rut/pouch/rut.json — a body package
+{
+  "name": "pouch",
+  "entry": { "lib": "./pouch.rut" }
+}
 
-# rut/calc/rut.toml — a pure declaration surface (a host pkg)
-name = "calc"
-type = "host"
-entry.type = "./calc.d.rut"
+// rut/calc/rut.json — a pure declaration surface (a host pkg)
+{
+  "name": "calc",
+  "type": "host",
+  "entry": { "type": "./calc.d.rut" }
+}
 
-# a consumer (an app directory)
-name = "app"
-entry.lib = "./app.rut"
+// a consumer (an app directory)
+{
+  "name": "app",
+  "entry": { "lib": "./app.rut" },
 
-[deps]
-pouch = { path = "../pouch" }
-ink   = { path = "../ink" }
+  "deps": {
+    "pouch": { "path": "../pouch" },
+    "ink":   { "path": "../ink" }
+  }
+}
 ```
 
 The keys, all of them:
@@ -38,18 +45,20 @@ The keys, all of them:
 | `entry.libs` | ordered extra `.rut` files — the **multi-lib entry** (below) |
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind is an error naming both fixes |
 | `entry.type` | the declaration surface: one `.d.rut` file. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
-| `[deps]` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
-| `[peer-deps]` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
-| `[dev-deps]` | mounted only while building/testing this pkg itself |
+| `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
+| `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
+| `dev-deps` | mounted only while building/testing this pkg itself |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
-| `[style]` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
+| `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 
-The manifest parses with `toml_edit` (standard TOML — every legal
-spelling: escapes, `'literal'` strings, multi-line strings,
-underscored integers); the value laws are unchanged. Descriptors are
-key/value maps; unknown descriptor keys are line-targeted manifest
-errors.
+The manifest parses with `serde_json` (standard JSON); the value
+laws are unchanged. Syntax errors keep the parser's `line N:` prefix;
+value laws are path-targeted (`deps.pouch: unknown key 'feats'`).
+Descriptors are key/value objects; unknown descriptor keys are
+path-targeted manifest errors. JSON has no comments, so keys starting
+with `_` (e.g. `"_comment"`) ride ignored in every table — the prose
+stays in the file — and duplicate keys are last-wins.
 
 ## Resolution laws
 
@@ -63,10 +72,10 @@ errors.
   `path`.
 - **Name mismatch is an error.** A dep whose manifest `name` disagrees
   with its key fails, naming both.
-- **The cross-table law.** A name in `[deps]` beside `[peer-deps]` or
-  `[dev-deps]` is an error naming both rows; peer + dev together is the
+- **The cross-table law.** A name in `deps` beside `peer-deps` or
+  `dev-deps` is an error naming both rows; peer + dev together is the
   sanctioned pairing.
-- **`core` needs no `[deps]`** — the driver mounts it unconditionally;
+- **`core` needs no `deps`** — the driver mounts it unconditionally;
   every name still requires `use core::{ .. };` per
   [core and the swappable packages](stdlib.md).
 
@@ -74,10 +83,11 @@ errors.
 
 A package's body may be split across files:
 
-```toml
-name = "ui"
-entry.lib  = "./ui.rut"
-entry.libs = ["./store.rut", "./t1.rut"]
+```json
+{
+  "name": "ui",
+  "entry": { "lib": "./ui.rut", "libs": ["./store.rut", "./t1.rut"] }
+}
 ```
 
 The loader splices base-first, then `libs` in listed order, newline-joined,
@@ -140,7 +150,7 @@ demand:
 | `ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
 | `ink`, `http`, `strbuild`, `async_host` | inline rut wrappers over host rows (`inline = true`) |
 | `pouch` | the sequence library (plain linked package) |
-| `json` | the base pkg with `[peer-deps]`/`[dev-deps]` — the reference consumer of [Dependency kinds](dependency-kinds.md) |
+| `json` | the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md) |
 | `nmapset` | native-key maps/sets over `nmap_host` |
 
 Nothing in the engine knows the swappable packages' names — peers and

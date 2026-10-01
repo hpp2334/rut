@@ -266,18 +266,21 @@ it constantly.
 
 ## Put it together
 
-Put this in a module directory and run it: `literals/rut.toml` names
+Put this in a module directory and run it: `literals/rut.json` names
 the two packages the program uses, and the program is
 `literals/main.rut`:
 
-```toml
-# literals/rut.toml
-name = "literals"
-entry.lib = "./main.rut"
+```json
+// literals/rut.json
+{
+  "name": "literals",
+  "entry": { "lib": "./main.rut" },
 
-[deps]
-pouch = { path = "../rut/pouch" }
-ink   = { path = "../rut/ink" }
+  "deps": {
+    "pouch": { "path": "../rut/pouch" },
+    "ink":   { "path": "../rut/ink" }
+  }
+}
 ```
 
 Save the program as `literals/main.rut` and run `rut run literals`:

@@ -111,6 +111,6 @@
 
 ## Packages and tooling
 
-- [Project structure and rut.toml](reference/project-structure.md)
+- [Project structure and rut.json](reference/project-structure.md)
 - [Dependency kinds](reference/dependency-kinds.md)
 - [The rut CLI](reference/cli.md)

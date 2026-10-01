@@ -408,7 +408,7 @@ mod tests {
         let err = s.resolve("pouch").unwrap_err();
         assert_eq!(
             err.to_string(),
-            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.json` `deps`"
+            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.json` `deps`"
         );
         // a name NO pkg declares as a peer stays the bare miss
         let err = s.resolve("stranger").unwrap_err();

@@ -1,76 +1,84 @@
 # Dependency kinds
 
-Every package's `rut.toml` names the packages it relates to, and the
+Every package's `rut.json` names the packages it relates to, and the
 *kind* of each relation decides how — and whether — it mounts. Three
 tables, one grammar:
 
-- **`[deps]`** — the transitively mounted dependencies.
-- **`[peer-deps]`** — **required by default**: not transitively pulled;
+- **`deps`** — the transitively mounted dependencies.
+- **`peer-deps`** — **required by default**: not transitively pulled;
   the *consumer* must supply the peer. With `optional = true`, presence
   in the consumer's closure mounts the integration; absence is inert.
-- **`[dev-deps]`** — mounted only when building/testing the package
+- **`dev-deps`** — mounted only when building/testing the package
   itself (the program root), never in a consumer's world.
 
 Peers are a *presence* relation, not a *pull* relation: the gate looks at
 what the program's closure already contains and never adds a package. A
-package is either pulled transitively (`[deps]`) or required of the
-consumer / held for development (`[peer-deps]`/`[dev-deps]`) — never
+package is either pulled transitively (`deps`) or required of the
+consumer / held for development (`peer-deps`/`dev-deps`) — never
 both.
 
 ## The grammar
 
-```toml
-# rut/json/rut.toml — the reference shape
-name = "json"
-entry.lib = "./json.rut"
-inline = true
+```json
+// rut/json/rut.json — the reference shape
+{
+  "name": "json",
+  "entry": { "lib": "./json.rut" },
+  "inline": true,
 
-[deps]
-strbuild = { path = "../strbuild" }
+  "deps": {
+    "strbuild": { "path": "../strbuild" }
+  },
 
-[peer-deps]
-pouch   = { path = "../pouch",   optional = true, lib = "./group-pouch.rut" }
-nmapset = { path = "../nmapset", optional = true, lib = "./group-nmapset.rut" }
+  "peer-deps": {
+    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./group-pouch.rut" },
+    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./group-nmapset.rut" }
+  },
 
-[dev-deps]
-pouch   = { path = "../pouch" }
-nmapset = { path = "../nmapset" }
+  "dev-deps": {
+    "pouch":   { "path": "../pouch" },
+    "nmapset": { "path": "../nmapset" }
+  }
+}
 ```
 
 - Keys are bare package names — the same `[a-zA-Z0-9_]+` law as `name`;
-  a dep-table key outside it is a line-targeted manifest error.
-- `[peer-deps]`/`[dev-deps]` descriptors accept exactly three keys:
+  a dep-table key outside it is a path-targeted manifest error.
+- `peer-deps`/`dev-deps` descriptors accept exactly three keys:
   `path` (string, directory-time), `optional` (the one bool the inline
   grammar learns), and `lib` (string; the peer-gated integration file).
-  Anything else is the strict-manifest error. `[deps]` keeps
+  Anything else is the strict-manifest error. `deps` keeps
   string-valued descriptors and **rejects** `optional` — it has no
   options.
 - `optional` defaults to `false` — required by default. The zero-dep
   spelling `{ path = ".." }` is valid in all three tables.
 - A `lib` ending in `.d.rut` is a load error: the integration must be a
   `.rut` source — a declaration surface does not gate.
-- **The cross-table law**: a name riding `[deps]` beside `[peer-deps]`
-  or `[dev-deps]` is a manifest error naming both rows — *`pouch`
-  appears in both `[deps]` and `[peer-deps]` — a package is either
+- **The cross-table law**: a name riding `deps` beside `peer-deps`
+  or `dev-deps` is a manifest error naming both rows — *`pouch`
+  appears in both `deps` and `peer-deps` — a package is either
   pulled transitively or required of the consumer, never both*. Peer +
   dev together is the sanctioned pairing: integration-if-present for
   consumers, always-present while developing the package itself.
 
 ## Url dependencies — the second source kind
 
-A `[deps]` descriptor may name a remote `.rutbundle` instead of a
+A `deps` descriptor may name a remote `.rutbundle` instead of a
 directory:
 
-```toml
-[deps]
-"pouch" = { url = "https://example.com/pouch.rutbundle", sha256 = "<64-hex>" }
+```json
+{
+  "deps": {
+    "pouch": { "url": "https://example.com/pouch.rutbundle", "sha256": "<64-hex>" }
+  }
+}
 ```
 
 - **One descriptor, one source**: `path` or `url`, never both, never
-  neither — a line-targeted manifest error either way. `sha256` is
+  neither — a path-targeted manifest error either way. `sha256` is
   legal only beside `url` and must be exactly 64 hex digits (stored
   lowercase; the comparison is byte-exact). The url itself must be
-  http(s). `[peer-deps]`/`[dev-deps]` stay `path`-only — a peer's path
+  http(s). `peer-deps`/`dev-deps` stay `path`-only — a peer's path
   is directory-time metadata for the declarer's own build, nothing to
   fetch.
 - **The layer split.** The *call site* owns HOW bytes arrive —
@@ -84,7 +92,7 @@ directory:
   performs would be a check the call site could skip; only the mount
   point holds both the pin and the bytes, so only the mount point can
   enforce it.
-- **Url deps are leaves.** The `[deps]` walk never follows them: one
+- **Url deps are leaves.** The `deps` walk never follows them: one
   fetch brings the whole closure, because **bundles stay closed** —
   every dep a bundle's manifest declares must be satisfied by an
   in-archive group, and a bundle that does not satisfy one is refused
@@ -137,28 +145,28 @@ generics **also rides the source that serves consumer-spelled shapes**:
 
 | table | who supplies it | transitive? | missing behavior |
 |---|---|---|---|
-| `[deps]` | the declarer's own graph | yes — walked recursively | mount error |
-| `[peer-deps]` (required, the default) | the **consumer's** closure | never pulled | loud resolution error at mount |
-| `[peer-deps]` with `optional = true` | the consumer's closure, if anywhere | never pulled | inert; referencing the integration is the dedicated missing-peer diagnostic |
-| `[dev-deps]` | the pkg's own self-build | root only — never walked for a dep | n/a (they exist to be there) |
+| `deps` | the declarer's own graph | yes — walked recursively | mount error |
+| `peer-deps` (required, the default) | the **consumer's** closure | never pulled | loud resolution error at mount |
+| `peer-deps` with `optional = true` | the consumer's closure, if anywhere | never pulled | inert; referencing the integration is the dedicated missing-peer diagnostic |
+| `dev-deps` | the pkg's own self-build | root only — never walked for a dep | n/a (they exist to be there) |
 
 ## The mount law — four passes, one gate
 
 All loader-owned; the session stays I/O-free and the compile graph never
 learns what a peer is.
 
-1. **The `[deps]` walk — unchanged.** Recursive, name order,
+1. **The `deps` walk — unchanged.** Recursive, name order,
    first-mount-wins, cycle guard, name-mismatch error. While walking,
-   the loader records each mounted package's `[peer-deps]` into the
+   the loader records each mounted package's `peer-deps` into the
    session's peer registry (it reads every dep's manifest anyway).
-2. **The dev pass — root only.** The program root's `[dev-deps]` mount
-   exactly like `[deps]`. A dep's dev table is **never** walked — a
+2. **The dev pass — root only.** The program root's `dev-deps` mount
+   exactly like `deps`. A dep's dev table is **never** walked — a
    consumer's world never contains another package's dev table. Embedder
    mounting (`mount_dir`) offers a package to someone else's program: it
    mounts no dev-deps and runs no gate (its peer declarations are still
    recorded).
 3. **The peer gate — one post-closure pass.** After the full closure
-   exists, for every mounted package and every `[peer-deps]` entry:
+   exists, for every mounted package and every `peer-deps` entry:
    - **required**: the peer must resolve in the session, else the D1
      error. Never auto-pulled.
    - **optional, present** (any reason): the declarer's group file (the
@@ -198,18 +206,18 @@ peer-aware diagnostics. A group appended to a module with no rut body (a
 | optional peer absent, integration referenced | **D2** — the dedicated missing-peer diagnostic; never a bare unresolved name |
 | peer present (any reason) | the integration mounts automatically — presence-based resolution |
 | self-build / dev mode | dev-deps guarantee presence; no missing case exists |
-| a `[peer-deps]` path that does not resolve | **D3** — loud manifest error at the pkg's own build; for consumers, required ⇒ D1, optional ⇒ inert |
+| a `peer-deps` path that does not resolve | **D3** — loud manifest error at the pkg's own build; for consumers, required ⇒ D1, optional ⇒ inert |
 
 The four diagnostics, verbatim shapes (all load/resolution-time errors,
 never runtime traps):
 
 - **D1** — `pkg \`json\` requires the peer \`nmapset\`, and \`nmapset\`
   is not in this program's closure — peers are not pulled transitively:
-  add \`nmapset = { path = ".." }\` to your \`rut.toml\` \`[deps]\``
+  add "nmapset": { "path": ".." } to your \`rut.json\` \`deps\``
 - **D2** — `cannot resolve \`pouch\` — \`json\`'s pouch integration is
   not mounted because the optional peer \`pouch\` is absent from this
-  program's closure; add \`pouch = { path = ".." }\` to your
-  \`rut.toml\` \`[deps]\``. Declaring packages scan in mount order, so
+  program's closure; add "pouch": { "path": ".." } to your
+  \`rut.json\` \`deps\``. Declaring packages scan in mount order, so
   the diagnostic is deterministic when several packages declare the same
   peer. Required peers never reach this path — D1 fires at mount.
 - **D3** — three shapes, all *a packaging bug in json*: cannot read a
@@ -245,11 +253,15 @@ never runtime traps):
 
 ## Consuming a peer-gated package
 
-```toml
-# an app that wants json's pouch integration
-[deps]
-json  = { path = "vendor/json" }
-pouch = { path = "vendor/pouch" }   # presence is the only requirement
+```json
+// an app that wants json's pouch integration
+{
+  "deps": {
+    "json":  { "path": "vendor/json" },
+    // presence is the only requirement
+    "pouch": { "path": "vendor/pouch" }
+  }
+}
 ```
 
 The group mounts because `pouch` is anywhere in the closure — no extra

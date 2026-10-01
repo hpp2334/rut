@@ -1,10 +1,10 @@
 # Modules and packages
 
 A rut file is a module: one namespace, one visibility scope. A
-directory with a `rut.toml` is a *package* — the unit you depend on and
+directory with a `rut.json` is a *package* — the unit you depend on and
 share. This chapter walks up those two levels. The reference pages are
 [modules and visibility](../reference/modules-and-visibility.md),
-[project structure and rut.toml](../reference/project-structure.md),
+[project structure and rut.json](../reference/project-structure.md),
 and [dependency kinds](../reference/dependency-kinds.md).
 
 ## What lives at module scope
@@ -81,7 +81,7 @@ lint, not an error.
 Within one module, everything is visible — including declarations
 later in the file. Order never matters.
 
-## Packages: `rut.toml`
+## Packages: `rut.json`
 
 A package is a directory with a manifest. The small but complete case —
 one library package and one app:
@@ -89,20 +89,24 @@ one library package and one app:
 ```text
 greet/
 ├── pkg/
-│   ├── rut.toml
+│   ├── rut.json
 │   └── greet.rut
 └── app/
-    ├── rut.toml
+    ├── rut.json
     └── main.rut
 ```
 
-```toml
-# greet/pkg/rut.toml
-name = "greet"
-entry.lib = "./greet.rut"
+```json
+// greet/pkg/rut.json
+{
+  "name": "greet",
+  "entry": { "lib": "./greet.rut" },
 
-[deps]
-pouch = { path = "../../rut/pouch" }   # the toolchain tree's pouch package
+  "deps": {
+    // the toolchain tree's pouch package
+    "pouch": { "path": "../../rut/pouch" }
+  }
+}
 ```
 
 ```rut
@@ -137,18 +141,22 @@ fn shout(msg: str) -> str {   // module-private: no `pub`, never importable
 }
 ```
 
-The app names its dependencies in `[deps]`, by path — each package
+The app names its dependencies in `deps`, by path — each package
 pulls its own dependencies along (`ink` brings the host surface `ink_host`;
 you never spell it):
 
-```toml
-# greet/app/rut.toml
-name = "app"
-entry.lib = "./main.rut"
+```json
+// greet/app/rut.json
+{
+  "name": "app",
+  "entry": { "lib": "./main.rut" },
 
-[deps]
-greet = { path = "../pkg" }
-ink = { path = "../../rut/ink" }       # the logger package
+  "deps": {
+    "greet": { "path": "../pkg" },
+    // the logger package
+    "ink": { "path": "../../rut/ink" }
+  }
+}
 ```
 
 ```rut
@@ -175,7 +183,7 @@ rut run .
 dear rut, hello from a package
 ```
 
-Resolution walks `[deps]` recursively (a dep's own `[deps]` mount with
+Resolution walks `deps` recursively (a dep's own `deps` mount with
 it), with a cycle guard and first-mount-wins.
 
 ## One package, several files
@@ -185,10 +193,11 @@ base first, in listed order — into **one module**: one namespace, one
 visibility scope. A name private to one file is visible to every other
 file of the same package:
 
-```toml
-name = "app"
-entry.lib = "./biz.rut"
-entry.libs = ["./domain.rut", "./world.rut", "./app.rut"]
+```json
+{
+  "name": "app",
+  "entry": { "lib": "./biz.rut", "libs": ["./domain.rut", "./world.rut", "./app.rut"] }
+}
 ```
 
 This is assembly, not an include form — cross-package references still
@@ -196,23 +205,27 @@ go through `use` paths.
 
 ## Dependency kinds
 
-Beyond `[deps]`, a manifest can declare two other relations:
+Beyond `deps`, a manifest can declare two other relations:
 
-- **`[peer-deps]`** — a package this one *integrates with* but never
+- **`peer-deps`** — a package this one *integrates with* but never
   pulls: the consumer supplies it, or (with `optional = true`) the
   integration mounts only if the peer is already in the program's
   closure. The standard library's `json` package uses this to attach
   its `Vec`/map serialization impls only for programs that carry the
   container packages.
-- **`[dev-deps]`** — mounted only when building/testing the package
+- **`dev-deps`** — mounted only when building/testing the package
   itself, never for a consumer.
 
-```toml
-[peer-deps]
-pouch = { path = "../pouch", optional = true, lib = "./group-pouch.rut" }
+```json
+{
+  "peer-deps": {
+    "pouch": { "path": "../pouch", "optional": true, "lib": "./group-pouch.rut" }
+  },
 
-[dev-deps]
-pouch = { path = "../pouch" }
+  "dev-deps": {
+    "pouch": { "path": "../pouch" }
+  }
+}
 ```
 
 ## `entry fn` — the host-facing surface

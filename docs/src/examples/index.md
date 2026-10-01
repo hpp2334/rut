@@ -29,17 +29,17 @@ stretches it the farthest.
 
 ## The three dependency kinds
 
-Every package carries a `rut.toml` manifest (see
-[Project structure and rut.toml](../reference/project-structure.md)),
+Every package carries a `rut.json` manifest (see
+[Project structure and rut.json](../reference/project-structure.md)),
 and a manifest relates a package to other packages through **three
 tables**, all visible in the examples:
 
-- **`[deps]`** — ordinary dependencies, transitively mounted. The
-  common case: `03-plugin`'s `plugin/rut.toml` declares
+- **`deps`** — ordinary dependencies, transitively mounted. The
+  common case: `03-plugin`'s `plugin/rut.json` declares
   `server = { path = "../server" }`, and
   [05 — Todolist web](05-todolist-web.md)'s `biz` package declares
   `ui` (which itself pulls the collection packages).
-- **`[peer-deps]`** — required by default: the *consumer* supplies the
+- **`peer-deps`** — required by default: the *consumer* supplies the
   peer and the peer is never pulled transitively. Marking a peer
   `optional = true` flips it to a presence relation: its integration
   file (impl-only code the peer makes compilable) mounts only when the
@@ -47,11 +47,11 @@ tables**, all visible in the examples:
   the std `json` package's serde-model impls — `impl JsonSerialize for
   Vec<T>` is written in json but must not force every json consumer to
   mount the collection packages, so those live as optional peers and
-  as `[dev-deps]` for json's own tests. [02 — Digest](02-digest.md)
+  as `dev-deps` for json's own tests. [02 — Digest](02-digest.md)
   consumes json *light*; [06 — GitHub viewer CLI](06-github-viewer-cli.md)
   calls `assemble_peers` and mounts the impl groups for real because
   the collections are in its closure.
-- **`[dev-deps]`** — mounted only while building the package itself,
+- **`dev-deps`** — mounted only while building the package itself,
   never in a consumer's world. json develops against the real
   collection packages through the both-kinds pairing while its
   consumers mount it without them.

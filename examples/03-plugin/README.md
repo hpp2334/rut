@@ -3,7 +3,7 @@
 A Rust chat-room **server** with a rut **moderator plugin**, in the shape
 of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 [02-digest](../02-digest) — but loaded as a **module directory**:
-`plugin/rut.toml` names the module (`plugin`), `plugin/plugin.rut` is
+`plugin/rut.json` names the module (`plugin`), `plugin/plugin.rut` is
 the whole plugin (adapter + business logic), `src/lib.rs` is the
 embedder SDK, and `src/main.rs` drives a scripted session through **both
 load forms** — the directory and a v5 **compiled** `.rutbundle` packed
@@ -81,7 +81,7 @@ The same loader drives the CLI for any self-contained module (this
 example's host fns live in the embedder, so it needs `cargo run`):
 
 ```
-rut run path/to/mod            # a module directory (rut.toml)
+rut run path/to/mod            # a module directory (rut.json)
 rut pack path/to/mod           # -> mod.rutbundle
 rut run path/to/mod.rutbundle  # the packed form
 ```

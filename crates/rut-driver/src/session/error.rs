@@ -22,7 +22,7 @@ pub enum ResolveError {
     /// mounted. Names the pkg, the peer, the integration it unlocks,
     /// and the fix. (A REQUIRED peer's absence is louder still: D1 at
     /// mount, so it never reaches resolve through the loader.)
-    #[error("cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.json` `deps`")]
+    #[error("cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `\"{spec}\": {{ \"path\": \"..\" }}` to your `rut.json` `deps`")]
     PeerMissing { spec: String, pkg: String },
 }
 

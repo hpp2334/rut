@@ -30,11 +30,11 @@ loose-file shape:
 
 | input | pipeline |
 |---|---|
-| `dir` (a module directory with `rut.toml`) | load the whole graph, compile it, run the root's `main` ([project structure](project-structure.md)) |
+| `dir` (a module directory with `rut.json`) | load the whole graph, compile it, run the root's `main` ([project structure](project-structure.md)) |
 | `mod.rutbundle` | the packed form of the same contract ([module bundles](bundles.md)) |
 
 Anything else is refused at the door (exit 2): a loose `.rut` file is
-not a runnable unit — give the directory a `rut.toml` (`name = "…"` +
+not a runnable unit — give the directory a `rut.json` (`name = "…"` +
 `entry.lib = "./<file>.rut"`), or run a packed `.rutbundle`.
 
 Flags and defaults:
@@ -76,7 +76,7 @@ The canonical formatter. Behavior:
 
 - a **directory** argument is walked recursively; every `.rut` file is
   collected (sorted) and formatted;
-- style comes from the nearest ancestor `rut.toml`'s `[style]` block; no
+- style comes from the nearest ancestor `rut.json`'s `style` block; no
   manifest → defaults ([project structure](project-structure.md));
 - `.d.rut` files are formatted in declaration mode;
 - a file that does not parse clean is **refused** (diagnostics listed,
@@ -100,13 +100,13 @@ rut pack plugins/server --strip
 Packs a module directory into a **deterministic** `.rutbundle` — same
 input, same bytes. Without `-o`, the output is written beside the input
 as `<dir-name>.rutbundle`. A **lib** pkg packs **compiled**
-(format_version 5): the root and every linkable package ride as
+(format_version 7): the root and every linkable package ride as
 `.rutc` binaries (bodies + surface — the linking truth), splice-needed
 packages (generic exports, trait-object parameters, `inline`) and host
 pkgs ride as source groups, and a scope ledger lets any loader rebase
 the binaries onto its own numbering. A root that cannot link is
 refused — share the directory instead. A **`type = "host"` pkg packs
-as a v6 decl root** (its `.d.rut` surface riding as source,
+as a v8 decl root** (its `.d.rut` surface riding as source,
 single-package), `--strip` refuses there (`no symbols to strip`), and
 `run` accepts either bundle directly — though running a host bundle
 refuses with intent: bind its rows from the embedder
@@ -138,7 +138,7 @@ rut fetch app/            # CI: warm the cache while the network is up
 ```
 
 Loads a module **directory** with the url-dep remote and discards the
-session — every `[deps]` url is fetched (or found in the cache) and
+session — every `deps` url is fetched (or found in the cache) and
 pinned, so a later offline `run` hits only the cache. A `.rutbundle`
 argument is refused: bundles are closed — there is nothing to fetch.
 The cache and the eviction law are the same lane `run`/`pack` use:

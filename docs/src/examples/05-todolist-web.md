@@ -197,18 +197,20 @@ lowered `t1-*` tokens, and the app spells no class.
 
 A real project is not one file — but the package boundary is also the
 privacy boundary, which is why there are exactly two
-([Project structure and rut.toml](../reference/project-structure.md)):
+([Project structure and rut.json](../reference/project-structure.md)):
 
-```toml
-# rut/biz/rut.toml — the project root
-name = "app"
-entry.lib = "./biz.rut"
-entry.libs = ["./domain.rut", "./world.rut", "./app.rut"]
+```json
+// rut/biz/rut.json — the project root
+{
+  "name": "app",
+  "entry": { "lib": "./biz.rut", "libs": ["./domain.rut", "./world.rut", "./app.rut"] },
 
-[deps]
-ui = { path = "../ui" }
-pouch = { path = "../../../../rut/pouch" }
-nmapset = { path = "../../../../rut/nmapset" }
+  "deps": {
+    "ui":      { "path": "../ui" },
+    "pouch":   { "path": "../../../../rut/pouch" },
+    "nmapset": { "path": "../../../../rut/nmapset" }
+  }
+}
 ```
 
 `entry.libs` splices several files into ONE module (base first, array
