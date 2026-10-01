@@ -744,9 +744,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if segs.len() == 2 {
                     let ename = segs[0].name;
                     let mname = segs[1].name;
-                    if let Some(e) = self.ctx.find_enum(ename).cloned() {
-                        if e.ty == scrut_ty {
-                            let midx = e.members.iter().position(|&m| m == mname);
+                    // a LOCAL enum's decl or a USED enum's binding — the
+                    // same members the member-path expression reads
+                    let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
+                        if let Some(e) = self.ctx.find_enum(ename).cloned() {
+                            let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
+                                TyKind::Enum { members } => members.clone(),
+                                _ => vec![],
+                            };
+                            Some((e.ty, members))
+                        } else {
+                            self.ctx.extern_enum(ename)
+                        };
+                    if let Some((ety, members)) = enum_hit {
+                        if ety == scrut_ty {
+                            let midx = members.iter().position(|&(m, _)| m == mname);
                             match midx {
                                 Some(i) => {
                                     let mreg = self.new_reg(scrut_ty);

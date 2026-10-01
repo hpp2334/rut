@@ -505,13 +505,28 @@ pub fn compile_program_resolved(
             });
         }
     }
+    // library surface, enum half: the same eager roots for an enum's
+    // pub methods — the surface rows carry their fn ids (the decl's
+    // methods slot; enums are concrete, no template lane)
+    for (ename, e) in ctx.enums.clone() {
+        for (mname, mnode) in &e.methods {
+            let md = ctx.ast.method_decl(*mnode);
+            if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+                continue;
+            }
+            roots.push(Inst {
+                key: FnKey::Method { data: ename, name: *mname },
+                subst: vec![],
+                trait_origins: vec![],
+            });
+        }
+    }
     for root in roots {
         if ctx.compile_queue(root).is_err() {
             diags.append(&mut ctx.diags);
             return fail(diags, ast_dump, ast_json);
         }
-    }
-    if !ctx.diags.is_empty() {
+    }    if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
         return fail(diags, ast_dump, ast_json);
     }
@@ -662,6 +677,64 @@ pub fn compile_program_resolved(
         }
         surface.inherents.push(rut_core::binary::SurfaceInherent {
             target: d.ty,
+            methods,
+        });
+    }
+    // enum inherent rows: the pub law again — the row's target is the
+    // enum's type id (its descriptor crosses in the carried type
+    // block), methods are concrete (no template, no placeholder env),
+    // and generic methods stay call-site shapes like everywhere else
+    for (ename, e) in ctx.enums.clone() {
+        if e.methods.is_empty() {
+            continue;
+        }
+        let mut methods = Vec::new();
+        for (mname, mnode) in &e.methods {
+            let md = ctx.ast.method_decl(*mnode);
+            if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+                continue;
+            }
+            let has_self = matches!(
+                md.params.first().map(|p| ctx.ast.param(*p)),
+                Some(rut_ast::ast::MemberKind::SelfParam(_))
+            );
+            let self_ty = e.ty;
+            let mut params = Vec::new();
+            for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
+                match ctx.ast.param(*p) {
+                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                        params.push(ctx.resolve_sig_ty(*t, &[], Some(self_ty)));
+                    }
+                    _ => params.push(TY_I32),
+                }
+            }
+            let ret = md
+                .ret
+                .map(|r| ctx.resolve_sig_ty(r, &[], Some(self_ty)))
+                .unwrap_or(TY_NIL);
+            let local = ctx
+                .inst_map
+                .get(&Inst {
+                    key: FnKey::Method { data: ename, name: *mname },
+                    subst: vec![],
+                    trait_origins: vec![],
+                })
+                .copied()
+                .unwrap_or(0);
+            methods.push(rut_core::binary::SurfaceMethod {
+                name: *mname,
+                params,
+                ret,
+                local,
+                has_self,
+                generics: vec![],
+            });
+        }
+        if methods.is_empty() {
+            continue;
+        }
+        surface.inherents.push(rut_core::binary::SurfaceInherent {
+            target: e.ty,
             methods,
         });
     }

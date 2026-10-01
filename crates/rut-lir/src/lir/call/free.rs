@@ -159,9 +159,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         args: Vec<NodeHandle<AnyExpr>>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let d = self.ctx.find_data(dname).cloned().unwrap();
-        let class_subst: Vec<(IdentId, TypeId)> =
-            d.generics.iter().cloned().zip(class_args.iter().cloned()).collect();
+        // the decl name may be a class (generics substitute) or an
+        // enum (concrete — the empty substitution)
+        let class_subst: Vec<(IdentId, TypeId)> = match self.ctx.find_data(dname) {
+            Some(d) => d.generics.iter().cloned().zip(class_args.iter().cloned()).collect(),
+            None => vec![],
+        };
         let md = self.ctx.ast.method_decl(mnode).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name);
         // no-self first param (or no params at all) = class method

@@ -212,7 +212,7 @@ fn impl_target_must_be_a_local_type_or_owned_builtin() {
          fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl target must be a struct or class of this module")),
+        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum of this module")),
         "foreign target must diagnose: {ds:?}"
     );
 }
@@ -636,4 +636,151 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
     )
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
+}
+
+// ---- enums as impl targets ------------------------------------------
+// `impl Color { .. }` attaches to the enum's decl slot: non-self
+// statics (`Color.default()`), self methods (`c.label()`), and trait
+// impls (`impl Iterator<E> for Color` — `for (let v of c)` rides the
+// same desugar as a class's).
+
+#[test]
+fn enum_inherent_statics_and_self_calls_compile() {
+    let src = "enum Color { Red, Green, Blue }\n\
+               impl Color {\n\
+               \x20   fn default() -> Self { return Color.Green; }\n\
+               \x20   fn label(self) -> str {\n\
+               \x20       return when (self) {\n\
+               \x20           Color.Red -> \"red\",\n\
+               \x20           Color.Green -> \"green\",\n\
+               \x20           Color.Blue -> \"blue\",\n\
+               \x20       };\n\
+               \x20   }\n\
+               }\n\
+               pub fn main() -> i32 {\n\
+               \x20   let d: Color = Color.default();\n\
+               \x20   if (d.label() != \"green\") { return -1; }\n\
+               \x20   if (Color.Red.label() != \"red\") { return -2; }\n\
+               \x20   return 7;\n\
+               }\n";
+    assert_eq!(run_main(src), 7);
+}
+
+#[test]
+fn enum_iterator_impl_drives_for_break_continue() {
+    // the for-of desugar is the trait: `for (let v of c)` calls the
+    // impl's `iterate` with a synthetic emit closure — `break` returns
+    // false, `continue` returns true — exactly the class semantics
+    let src = "use core::{ Iterator };\n\
+               enum Light { Green, Yellow, Red }\n\
+               struct Acc { hits: i32 = 0; }\n\
+               impl Iterator<Light> for Light {\n\
+               \x20   fn iterate(self, emit: fn(Light) -> bool) {\n\
+               \x20       if (!emit(Light.Green)) { return; }\n\
+               \x20       if (!emit(Light.Yellow)) { return; }\n\
+               \x20       emit(Light.Red);\n\
+               \x20   }\n\
+               }\n\
+               pub fn main() -> i32 {\n\
+               \x20   // the capture law: scalars copy into the emit closure,\n\
+               \x20   // so the accumulator is a shared cell\n\
+               \x20   let mut acc: ?Acc = Acc { };\n\
+               \x20   for (let v of Light.Green) {\n\
+               \x20       acc.hits += 1;\n\
+               \x20       if (acc.hits == 2) { break; }\n\
+               \x20   }\n\
+               \x20   if (acc.hits != 2) { return -1; }\n\
+               \x20   let mut all: ?Acc = Acc { };\n\
+               \x20   for (let v of Light.Red) {\n\
+               \x20       all.hits += 1;\n\
+               \x20       continue;\n\
+               \x20   }\n\
+               \x20   if (all.hits != 3) { return -2; }\n\
+               \x20   return 9;\n\
+               }\n";
+    assert_eq!(run_main(src), 9);
+}
+
+#[test]
+fn enum_target_rejects_generic_arguments_and_foreign_names() {
+    // enums are concrete: `Light<E>` is a spelled-arity error, and a
+    // foreign name keeps the fallthrough diagnosis (now naming enums)
+    let ds = diags_of(
+        "use core::{ Iterator };\n\
+         enum Light { Green, Red }\n\
+         impl Iterator<i32> for Light<i32> { fn iterate(self, emit: fn(i32) -> bool) { } }\n\
+         fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("`Light` takes no generic arguments")),
+        "an enum target is concrete: {ds:?}"
+    );
+}
+
+#[test]
+fn disposal_stays_data_only_for_enums() {
+    let ds = diags_of(
+        "use core::{ Disposal };\n\
+         enum Light { Green, Red }\n\
+         impl Disposal for Light { fn dispose(self) { } }\n\
+         fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("cannot implement Disposal") && d.contains("only a struct or class")),
+        "the engine disposes record cells only: {ds:?}"
+    );
+}
+
+#[test]
+fn enum_pub_methods_cross_private_ones_stay_home() {
+    // the surface lane is kind-blind now: an enum's pub inherent
+    // methods cross exactly like a class's, via the inherent rows
+    let dep = rut_driver::compile_program(
+        "pub enum Dial { Low, High }\n\
+         impl Dial {\n\
+         \x20   pub fn default() -> Self { return Dial.Low; }\n\
+         \x20   pub fn flipped(self) -> Self {\n\
+         \x20       return when (self) { Dial.Low -> Dial.High, Dial.High -> Dial.Low };\n\
+         \x20   }\n\
+         \x20   fn hidden(self) -> i32 { return 5; }\n\
+         }\n",
+        Mode::Impl,
+        "dial",
+        1,
+        &[],
+    );
+    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
+    let dep = dep.program.expect("dep");
+    let surface = dep.surface.clone();
+
+    let pub_only = rut_driver::compile_program(
+        "use dial::{Dial};\n\
+         pub fn main() -> i32 {\n\
+         \x20   let d = Dial.default().flipped();\n\
+         \x20   return when (d) { Dial.Low -> 1, Dial.High -> 2 };\n\
+         }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface.clone(), "dial".to_string())],
+    );
+    assert!(pub_only.diags.is_empty(), "pub enum methods cross: {:?}", pub_only.diags);
+    let out = rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
+    assert_eq!(run_main_src(out), 2, "the static chains through the flipped self method");
+
+    let private = rut_driver::compile_program(
+        "use dial::{Dial};\n\
+         pub fn main() -> i32 {\n\
+         \x20   return Dial.High.hidden();\n\
+         }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface, "dial".to_string())],
+    );
+    let ds: Vec<String> = private.diags.iter().map(|d| d.msg.clone()).collect();
+    assert!(
+        ds.iter().any(|d| d.contains("no method `hidden`") || d.contains("unknown name `Dial.hidden`")),
+        "a private enum method is invisible at the consumer: {ds:?}"
+    );
 }

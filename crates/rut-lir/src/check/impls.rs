@@ -422,6 +422,16 @@ impl<'a> Ctx<'a> {
                     .any(|im| im.inherent && self.impl_target_is(im, ty) && im.methods.iter().any(|(n, _)| *n == name));
                 inherent || self.has_extern_method(ty, name) || self.has_trait_impl_method(ty, name)
             }
+            TyKind::Enum { .. } => {
+                // inherent: the enum's `impl` block — or a used enum's
+                // surface rows (the row target is the enum's type id)
+                let inherent = self
+                    .enums
+                    .iter()
+                    .find(|(_, e)| self.types.dense(e.ty) == self.types.dense(ty))
+                    .map_or(false, |(_, e)| e.methods.iter().any(|(n, _)| *n == name));
+                inherent || self.has_extern_method(ty, name) || self.has_trait_impl_method(ty, name)
+            }
             TyKind::Array { .. } => self
                 .impls
                 .iter()

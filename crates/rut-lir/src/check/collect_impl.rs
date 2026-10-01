@@ -92,7 +92,7 @@ impl<'a> Ctx<'a> {
             _ => {
                 self.err(
                     sp,
-                    "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module",
+                    "impl target must be a struct, class, or enum of this module — a `builtin class` takes impls only in its own module",
                 );
                 return;
             }
@@ -179,6 +179,14 @@ impl<'a> Ctx<'a> {
                 }
                 Some((d.ty, Some((name, params)), true, false, false, name))
             }
+        } else if let Some(e) = self.find_enum(name).cloned() {
+            // a local enum: concrete and non-generic — inherent
+            // methods and trait impls attach exactly as a struct's
+            if !generics.is_empty() {
+                self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                return None;
+            }
+            Some((e.ty, None, true, false, false, name))
         } else if let Some(g) = self.extern_generics.get(&name).cloned() {
             // a used GENERIC class (the linkable-classes phase): a trait
             // impl registers on the exporter's template row — the
@@ -242,10 +250,9 @@ impl<'a> Ctx<'a> {
             }
             Some((prim, None, false, false, true, name))
         } else {
-            
             self.err(
                 sp,
-                "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module",
+                "impl target must be a struct, class, or enum of this module — a `builtin class` takes impls only in its own module",
             );
             None
         }
@@ -305,6 +312,10 @@ impl<'a> Ctx<'a> {
                 if let Some(d) = self.find_data(name) {
                     // a decl of THIS unit — every decl's origin IS its
                     // module (no splicing)
+                    (display, Some(self.own_spec.clone()))
+                } else if self.find_enum(name).is_some() {
+                    // a local enum: the same nominal door — the impl
+                    // registers in its declaring module
                     (display, Some(self.own_spec.clone()))
                 } else if let Some(AliasTarget::Ty(t)) = self
                     .find_alias(name)
@@ -422,18 +433,31 @@ impl<'a> Ctx<'a> {
         }
         // local struct/class: methods attach to the decl, where the
         // ordinary inherent-call machinery finds them
-        let Some(idx) = self.datas.iter().position(|(n, _)| *n == tname) else {
-            return;
-        };
-        for (n, mnode) in &mths {
-            if self.datas[idx].1.methods.iter().any(|(pn, _)| pn == n) {
-                self.err(
-                    self.ast.span(mnode.id()),
-                    format!("duplicate method `{}` on `{}`", self.name(*n), self.name(tname)),
-                );
+        if let Some(idx) = self.datas.iter().position(|(n, _)| *n == tname) {
+            for (n, mnode) in &mths {
+                if self.datas[idx].1.methods.iter().any(|(pn, _)| pn == n) {
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!("duplicate method `{}` on `{}`", self.name(*n), self.name(tname)),
+                    );
+                }
             }
+            self.datas[idx].1.methods.extend(mths);
+            return;
         }
-        self.datas[idx].1.methods.extend(mths);
+        // a local enum: the same attach on the enum's own decl slot —
+        // statics and self methods alike, the struct rule
+        if let Some(idx) = self.enums.iter().position(|(n, _)| *n == tname) {
+            for (n, mnode) in &mths {
+                if self.enums[idx].1.methods.iter().any(|(pn, _)| pn == n) {
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!("duplicate method `{}` on `{}`", self.name(*n), self.name(tname)),
+                    );
+                }
+            }
+            self.enums[idx].1.methods.extend(mths);
+        }
     }
 
     /// The descriptor-derived sig type vs the impl's concrete sig type:

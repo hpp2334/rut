@@ -350,10 +350,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
                 }
             }
-        }        if let Some(e) = self.ctx.find_enum(base) {
-            let _ = e;
-            self.ctx.err(sp, format!("enum `{}` has no static `{}` in this build", self.ctx.name(base), self.ctx.name(member)));
-            return Err(());
+        }
+        // enum statics: `Color.default()` — the decl's own methods,
+        // the struct/class arm's shape with no generics and no
+        // instantiation mint
+        if let Some(e) = self.ctx.find_enum(base).cloned() {
+            if let Some((_, mnode)) = e.methods.iter().find(|(m, _)| *m == member).cloned() {
+                return self.compile_direct_method(base, vec![], e.ty, mnode, args, sp);
+            }
         }
         let msg = self
             .ctx

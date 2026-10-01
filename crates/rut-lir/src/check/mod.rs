@@ -26,6 +26,9 @@ pub struct EnumDecl {
     pub ty: TypeId,
     /// member name → index
     pub members: Vec<IdentId>,
+    /// inherent methods (`impl Color { .. }`): statics and self
+    /// methods alike, exactly the struct decl's slot
+    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

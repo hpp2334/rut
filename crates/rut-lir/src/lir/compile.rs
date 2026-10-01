@@ -30,33 +30,47 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 (n.id(), None, false, None, None)
             }
             FnKey::Method { data, name } => {
-                let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) else {
-                    return Ok(());
-                };
-                let d = d.clone();
-                let Some(m) = d.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
-                    return Ok(());
-                };
-                // a generic class's method is monomorphized per instantiation:
-                // `self_ty` is `Name<args>` from the Inst substitution, not the
-                // uninstantiated template
-                let self_ty = if d.generics.is_empty() {
-                    d.ty
-                } else {
-                    let args: Vec<TypeId> = d
-                        .generics
-                        .iter()
-                        .map(|g| {
-                            inst.subst
+                let found = if let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) {
+                    let d = d.clone();
+                    let m = d.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n);
+                    m.map(|m| {
+                        // a generic class's method is monomorphized per instantiation:
+                        // `self_ty` is `Name<args>` from the Inst substitution, not the
+                        // uninstantiated template
+                        let self_ty = if d.generics.is_empty() {
+                            d.ty
+                        } else {
+                            let args: Vec<TypeId> = d
+                                .generics
                                 .iter()
-                                .find(|(n, _)| n == g)
-                                .map(|(_, t)| *t)
-                                .unwrap_or(TY_I32)
-                        })
-                        .collect();
-                    ctx.mk_data_inst(*data, args, ctx.ast.span(m.id()))
+                                .map(|g| {
+                                    inst.subst
+                                        .iter()
+                                        .find(|(n, _)| n == g)
+                                        .map(|(_, t)| *t)
+                                        .unwrap_or(TY_I32)
+                                })
+                                .collect();
+                            ctx.mk_data_inst(*data, args, ctx.ast.span(m.id()))
+                        };
+                        (m.id(), Some(self_ty), true, Some(*data))
+                    })
+                } else if let Some((_, e)) = ctx.enums.iter().find(|(n, _)| n == data) {
+                    // an enum's inherent method: concrete, no generics —
+                    // `Self` is the enum's own type, no class context
+                    // (only generic-class bounds care)
+                    let e = e.clone();
+                    e.methods
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, m)| (m.id(), Some(e.ty), true, None))
+                } else {
+                    None
                 };
-                (m.id(), Some(self_ty), true, Some(*data), None)
+                let Some((node, self_ty, has_self, cname)) = found else {
+                    return Ok(());
+                };
+                (node, self_ty, has_self, cname, None)
             }
             FnKey::ImplMethod { idx, name, slot_abi } => {
                 let im = ctx.impls[*idx].clone();

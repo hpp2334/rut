@@ -517,6 +517,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.no_method_error(rt, name, sp);
             return Err(());
         }
+        // enums: inherent methods answer on the decl (same module) —
+        // self methods dispatch like a record's, `Self` binds the
+        // enum's own type; a used enum rides the exporter's surface
+        // rows. Trait impls are nominal TypeId equality, the same
+        // registry every other concrete receiver reads.
+        if let TyKind::Enum { .. } = self.ctx.types.kind(rt).clone() {
+            if let Some((ename, e)) = self.ctx.enums.iter().find(|(_, e)| e.ty == rt).cloned() {
+                if let Some((_, mnode)) = e.methods.iter().find(|(mn, _)| *mn == name).cloned() {
+                    return self.compile_inherent_call(ename, vec![], rt, mnode, rreg, generics, args, expected, sp);
+                }
+            }
+            if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
+                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
+            }
+            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+            }
+            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
+            }
+            self.no_method_error(rt, name, sp);
+            return Err(());
+        }
         // primitives take trait impls only (the inherent
         // surface is core's `builtin impl`): a bare
         // concrete receiver dispatches the impl's CONCRETE-ABI variant —

@@ -140,7 +140,7 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Enum { members: vals },
         });
         let member_ids: Vec<IdentId> = members.iter().map(|(m, _)| *m).collect();
-        self.enums.push((name, EnumDecl { ty, members: member_ids }));
+        self.enums.push((name, EnumDecl { ty, members: member_ids, methods: Vec::new() }));
     }
 
     /// Pass 1a — intern a struct/class placeholder and register its name.
