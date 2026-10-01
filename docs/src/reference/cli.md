@@ -137,7 +137,7 @@ inspecting a host surface's slots.
 rut fetch app/            # CI: warm the cache while the network is up
 ```
 
-Loads a module **directory** with the url-dep fetcher and discards the
+Loads a module **directory** with the url-dep remote and discards the
 session — every `[deps]` url is fetched (or found in the cache) and
 pinned, so a later offline `run` hits only the cache. A `.rutbundle`
 argument is refused: bundles are closed — there is nothing to fetch.
@@ -145,10 +145,14 @@ The cache and the eviction law are the same lane `run`/`pack` use:
 
 | item | behavior |
 |---|---|
-| cache root | `$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`; entries named `<sha256(url)>.rutbundle` |
+| cache root | `<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the driver never reads env). Entries named `<sha256(url)>.rutbundle` |
 | cache-first | a hit never touches the network — offline reloads are the point |
 | miss | GET (redirects on), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename) |
 | poisoned entry | the `sha256` pin is the loader's law at the mount door; when it refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals |
+
+The wire is the driver's `http` feature (default on) — a build with
+`default-features = false` (the wasm graphs) has no transport at all:
+a cache miss errors loudly instead of networking.
 
 ## Declaration mode
 

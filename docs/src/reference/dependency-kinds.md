@@ -74,9 +74,10 @@ directory:
   is directory-time metadata for the declarer's own build, nothing to
   fetch.
 - **The layer split.** The *call site* owns HOW bytes arrive —
-  transport, caching, offline policy — by implementing the `DepFetch`
-  contract (one method, `dep_fetch(url)`, returning a future of
-  bytes; the `rut` CLI ships a cache-first HTTP fetcher). The *loader*
+  transport, caching, offline policy — by implementing the `DepRemote`
+  contract (`fetch(url)` — one required method returning a boxed future
+  of bytes — plus optional `lookup`/`write`; the standard
+  `HttpRemote` is cache-first). The *loader*
   owns WHAT the bytes are declared to be: the `sha256` pin is manifest
   law, verified at the mount door on **every** load — fresh fetch,
   cache hit, vendored map, test fixture. A check the call site
@@ -93,9 +94,9 @@ directory:
   or the network served — a pinned one refuses to load anything else,
   naming the dep, the url, and both hashes. Pins are what make packs
   reproducible: same manifest + same pins ⇒ byte-identical bundle.
-- The CLI lane: `rut run`/`rut pack` fetch through a cache-first
-  fetcher (`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` →
-  `~/.cache/rut/bundles`; a hit never touches the network), and a pin
+- The CLI lane: `rut run`/`rut pack` fetch through the cache-first
+  standard remote (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides;
+  a hit never touches the network), and a pin
   refusal evicts the poisoned cache entry so the next run heals.
   `rut fetch <dir>` warms the cache without running anything
   ([The rut CLI](cli.md)).

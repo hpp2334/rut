@@ -158,9 +158,9 @@ A consumer may pin a bundle by url instead of vendoring it:
 server = { url = "https://example.com/server.rutbundle", sha256 = "<64-hex>" }
 ```
 
-The mount is the bundle mount, one gate earlier: the call site's
-fetcher produces the bytes (`DepFetch` — the CLI's is cache-first),
-then the loader runs the same container/layout/name checks and —
+The mount is the bundle mount, one gate earlier: the embedder's
+remote produces the bytes (`DepRemote` — the standard `HttpRemote` is
+cache-first), then the loader runs the same container/layout/name checks and —
 before all of them — the **pin law**: the bytes must hash to the
 manifest row's `sha256`, on every load, or the load refuses naming the
 dep, the url, and both hashes. The url dep mounts as a **leaf**: its
@@ -225,19 +225,19 @@ never guess — that check is per archive). The CDN lane below is the
 reason this exists: per-package bundles are packed independently, each
 numbering its own closure.
 
-## The `rut-bundle` crate
+## The `bundle` module
 
 The container codec, the `rut.toml` grammar, the source file-set
-collector, and the reader (both root kinds) live in the `rut-bundle`
-crate — **filesystem-free**. Every read goes through a one-method `Source`
-trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native
-hosts); an in-memory path→bytes map serves tests and wasm hosts. The
-packer itself needs the compiler and lives in `rut-driver`
-(`rut_driver::pack_dir`) — it returns the bundle bytes; writing the
-output file stays with the caller. Mounting a bundle into a session
-stays in `rut-driver` ([Loading](loading.md)), over
-`rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the
-compiled root and its ledger + groups, or the decl root and its
+collector, and the reader (both root kinds) live in the driver's
+`rut_driver::bundle` module — **filesystem-free**. Every read goes
+through a one-method `Source` trait: `rut_driver::bundle::FsSource` is
+the real filesystem (the CLI, native hosts); an in-memory path→bytes
+map serves tests and wasm hosts. The packer itself needs the compiler
+and lives beside it (`rut_driver::pack_dir`) — it returns the bundle
+bytes; writing the output file stays with the caller. Mounting a bundle
+into a session stays in the loader ([Loading](loading.md)), over
+`rut_driver::bundle::Bundle` and its parsed `rut_driver::bundle::Layout`
+— the compiled root and its ledger + groups, or the decl root and its
 surface.
 
 ## Deterministic packing

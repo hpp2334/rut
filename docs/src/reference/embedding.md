@@ -90,53 +90,77 @@ The registry is consumed by `Vm::new`: every host thunk the program declares
 is resolved against it once, at boot. A declared-but-unbound fn is a
 **construction error**, never a mid-run trap.
 
-## Url deps without a filesystem — the seeded fetcher
+## Url deps — the remote policy (`Loader` + `HttpRemote`)
 
-Embedders (and wasm hosts) own HOW bytes arrive, so an offline
-embedder answers the `DepFetch` contract from memory: parse the
-project's `rut.toml` with `rut_bundle::parse_manifest` (the manifest is
-the only url carrier — no duplicated url constants), read each url
-row's bytes from wherever they live (`std::fs::read` from the repo's
-`dist/std/` natively, `include_bytes!` on wasm), and hand the loader a
-map behind `std::future::ready`:
+The embedder owns exactly three things: the fs policy ([`Source`]),
+the remote policy ([`DepRemote`]), and its own runtime. The door is
+the **`Loader`** — non-generic, no remote default, and the check is
+LAZY: `build()` validates only the path shape; the remote matters only
+when the dep walk actually reaches a url row, and the panic fires
+there (naming the dep, the url, and the fix). Url-free projects and
+`.rutbundle`s are closed — they load with no remote named at all.
 
 ```rust
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl rut_driver::DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no seeded bytes for {url}")),
-        };
-        std::future::ready(r)
-    }
-}
-
-fn block_on<F: Future>(fut: F) -> F::Output {
-    let mut fut = std::pin::pin!(fut);
-    let mut cx = Context::from_waker(std::task::Waker::noop());
-    loop {
-        match fut.as_mut().poll(&mut cx) {
-            Poll::Ready(v) => return v,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
-// the manifest lane: the four passes run for real, the pin is law at
-// the mount door, and the root module registers with its source
-let (mut session, root) = block_on(
-    rut_driver::load_dir_session_with(project_dir, &Table(table))?,
-)?;
-// compile the loaded graph — the root is already mounted
-let g = rut_driver::compile_graph(&session, &root);
+// the ENTIRE embedder load half for a project with url rows
+let app = rut_driver::Loader::new(project_dir)
+    .dep_remote(rut_driver::HttpRemote::project_local(project_dir))
+    .build();
+let (mut session, root) = block_on(app.load())?;   // Result<_, rut_driver::LoadError>
 ```
 
-The seed IS the cache: an embedder that vendors the committed std
-artifacts never touches the network, and the sha256 pins still hold at
-the mount door. 06-github-viewer-cli's `main.rs` is the working
-example.
+The standard remote is **`HttpRemote`** — cache-first: a hit NEVER
+touches the network, a miss GETs (redirects on, loud status errors, a
+size cap) on the remote's own private worker thread and writes the
+cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`.
+The futures come back READY, so any executor works — including the
+std-only noop-waker `block_on` poll loop the examples spell.
+
+| constructor | behavior |
+|---|---|
+| `HttpRemote::project_local(project)` | `<project>/.rut/cache` — hermetic, project-local; networks on a miss (the `http` feature, default on) |
+| `HttpRemote::at(root)` | an explicit cache root, wire on |
+| `HttpRemote::offline(root)` | **cache-only** — a miss never networks; the guaranteed-offline lane (CI gates, wasm-adjacent hosts) |
+| `path_for(url)` / `evict(url)` | the concrete entry path / delete a poisoned entry |
+
+**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an
+`offline` remote, then load over it. The committed std artifacts play
+the wire — `DepRemote::write` is the stand-in for the GET:
+
+```rust
+let remote = rut_driver::HttpRemote::offline(&cache_root);
+for (url, bytes) in vendored_rows {                  // parsed from rut.toml
+    rut_driver::DepRemote::write(&remote, &url, &bytes)?;  // prime the cache
+}
+let (mut session, root) =
+    block_on(rut_driver::Loader::new(project_dir).dep_remote(remote).build().load())?;
+```
+
+**Memory hosts** (wasm, in-process tests) hand-roll the trait — one
+required method, sync impls are first-class via `std::future::ready`:
+
+```rust
+struct Mem(Vec<(String, Vec<u8>)>);
+
+impl rut_driver::DepRemote for Mem {
+    fn fetch(&self, url: &str)
+        -> Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
+        Box::pin(std::future::ready(
+            self.lookup(url).ok_or_else(|| rut_driver::RemoteError::new(
+                format!("no bytes for {url}")))))
+    }
+    fn lookup(&self, url: &str) -> Option<Vec<u8>> {
+        self.0.iter().find(|(u, _)| u == url).map(|(_, b)| b.clone())
+    }
+    fn write(&self, url: &str, bytes: &[u8]) -> Result<(), rut_driver::RemoteError> {
+        self.0.retain(|(u, _)| u != url);
+        Ok(self.0.push((url.to_string(), bytes.to_vec())))
+    }
+}
+```
+
+The loader still owns WHAT the bytes are: the `sha256` pin is manifest
+law, verified at the mount door on every load — fresh fetch, cache
+hit, vendored map, test fixture.
 
 **Mounting a bundle into an existing session** — the in-memory
 counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the
@@ -178,16 +202,18 @@ contain those names.
 | `s.host_pkg_context()` | the mounted surfaces' declared rows, partitioned per pkg — the declared side `install_host_pkg` checks against (build once per boot lane; owned) |
 | `s.expected_host_fns()` | the same rows flattened to one table — the raw lane's `verify_against` input |
 | `load_path_session(path)` | load a module **directory** or `.rutbundle`; returns `(session, root)` |
-| `DepFetch` | the url-dep contract: `dep_fetch(&self, url) -> impl Future<Output = Result<Vec<u8>, String>>` — the call site owns HOW bytes arrive (transport, cache, offline policy). Explicit `-> impl Future`, deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
-| `load_path_session_with(path, &fetch)` / `load_dir_session_with(dir, &fetch)` | the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
-| `mount_dir_with(&mut s, dir, &fetch)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
-| `pack_dir_with(dir, &fetch)` / `pack_dir_opts_with(dir, opts, fetch)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
+| `Loader::new(project)` / `.source(&src)` / `.dep_remote(r)` / `.build()` / `loaded.load()` | THE embedder door: a directory or `.rutbundle`, the fs + remote policies explicit, one `async load()` — the no-remote check is lazy (it fires only when a url row is reached, as a panic naming the fix) |
+| `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
+| `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete |
+| `load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)` | the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
+| `mount_dir_with(&mut s, dir, &remote)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
+| `pack_dir_with(dir, &remote)` / `pack_dir_opts_with(dir, opts, remote)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
 | `pack_dir(dir)` | pack a module directory into a deterministic `.rutbundle` — a **v5 compiled** root for a lib pkg, a **v6 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
 | `mount_bundle_bytes(&mut s, &bytes)` | mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts) |
 
 The container, manifest grammar, and reader (both root kinds) live in
-the `rut-bundle`
-crate — filesystem-free over a one-method `Source` trait.
+the driver's `rut_driver::bundle` module — filesystem-free over a
+one-method `Source` trait.
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`
 ([host fns and declaration files](host-fns.md)).

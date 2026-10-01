@@ -79,7 +79,11 @@ source text by design; a partially translated book is a valid book.
 | temporary-run lane | 临时运行车道 | the CLI's role — quick experiments (run/fmt/dump/pack)，不是交付路径；两条消费车道都叫车道 |
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
 | pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定 |
-| fetch | 拉取 | the `DepFetch` contract → `DepFetch` 契约（代码不译）；`rut fetch` stays code |
+| fetch | 拉取 | the `DepRemote` contract → `DepRemote` 契约（代码不译）；`rut fetch` stays code |
+| remote (policy) | 远程（策略） | the remote policy → 远程策略；`DepRemote`/`HttpRemote`/`Loader`/`Loaded` stay code |
+| cache-first | 缓存优先 | a hit never touches the network → 命中则绝不触碰网络 |
+| offline remote | 离线远程 | `HttpRemote::offline` — cache-only → 只用缓存；prime the cache → 预热缓存 |
+| poisoned entry | 被污染的缓存条目 | the eviction law → 驱逐法则 |
 | mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
 | rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
 
@@ -119,7 +123,7 @@ context; after that, use the zh-CN rendering alone.
 6. **Chapter/section titles follow the glossary** and stay short; the
    sidebar, search index, and anchors derive from them. Do not add the
    English in parentheses to titles.
-| seeded fetcher | 预置取回器 | seed/预置（the seed IS the cache → 预置就是缓存）；offline embedder 离线嵌入方 |
+| seeded fetcher | 预置取回器 | RETIRED — the seed shape is gone; the remote policy is named explicitly now（远程策略） |
 | builder | 构建器 | `HostPkg` builder → `HostPkg` 构建器（`HostPkg` stays code） |
 | installer lane | 安装者车道 | 对照 the raw lane → 原生车道 |
 | mount snapshot | 挂载快照 | `session.host_pkg_context()` stays code |

@@ -7357,23 +7357,13 @@ msgstr "编译步骤是**嵌入方的字符串车道**：宿主拥有源码文�
 msgid "The registry is consumed by `Vm::new`: every host thunk the program declares is resolved against it once, at boot. A declared-but-unbound fn is a **construction error**, never a mid-run trap."
 msgstr "注册表会被 `Vm::new` 消费：程序声明的每个宿主 thunk 都在启动时对照它解析一次。声明了却未绑定的 fn 是一个**构造错误**，绝不是运行中途的陷阱。"
 
-msgid "Url deps without a filesystem — the seeded fetcher"
-msgstr "无文件系统的 url 依赖——预置取回器"
+msgid "Url deps — the remote policy (`Loader` + `HttpRemote`)"
+msgstr "Url 依赖——远程策略（`Loader` + `HttpRemote`）"
 
-msgid "Embedders (and wasm hosts) own HOW bytes arrive, so an offline embedder answers the `DepFetch` contract from memory: parse the project's `rut.toml` with `rut_bundle::parse_manifest` (the manifest is the only url carrier — no duplicated url constants), read each url row's bytes from wherever they live (`std::fs::read` from the repo's `dist/std/` natively, `include_bytes!` on wasm), and hand the loader a map behind `std::future::ready`:"
-msgstr "嵌入方（以及 wasm 宿主）拥有字节如何到达的决定权，因此离线嵌入方从内存回答 `DepFetch` 契约：用 `rut_bundle::parse_manifest` 解析工程的 `rut.toml`（清单是唯一的 url 载体——不重复 url 常量），从字节所在之处读出每条 url 行的字节（原生用 `std::fs::read` 读仓库的 `dist/std/`，wasm 用 `include_bytes!`），把映射藏在 `std::future::ready` 后交给加载器："
 
-msgid "\"no seeded bytes for {url}\""
-msgstr ""
 
-msgid "// the manifest lane: the four passes run for real, the pin is law at\n// the mount door, and the root module registers with its source\n"
-msgstr ""
 
-msgid "// compile the loaded graph — the root is already mounted\n"
-msgstr ""
 
-msgid "The seed IS the cache: an embedder that vendors the committed std artifacts never touches the network, and the sha256 pins still hold at the mount door. 06-github-viewer-cli's `main.rs` is the working example."
-msgstr "预置就是缓存：自带已提交 std 工件的嵌入方永不触网，且 sha256 钉仍在挂载门口成立。06-github-viewer-cli 的 `main.rs` 是可运行的范例。"
 
 msgid "**Mounting a bundle into an existing session** — the in-memory counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the compile owns presence) — is `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`: both root kinds mount (a v5 compiled root with its groups, the ledger namespaced into the session; a v6 decl root as the pkg's host rows), first-mount-wins, and the bundle root's package name comes back. Wasm hosts `include_bytes!` the committed artifact and mount through this — 05-todolist-web's mirror lane takes the `nmap_host` surface from the CDN artifact that way. For the url-dep _walk_ (pins, closure checks, the peer gate over archive groups) stay on the load/pack lanes — `mount_bundle_bytes` is the offer, not the walk."
 msgstr "**把捆绑包挂载进既有会话**——`mount_dir` 的内存对应物（offer 法则：无 dev-deps、无门，编译拥有存在性）——是 `rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`：两种根都可挂载（v5 编译根连同其组，作用域台账按会话命名空间化；v6 声明根作为该包的宿主行），先挂载者胜，捆绑包根的包名会返回。wasm 宿主 `include_bytes!` 已提交的工件并经此挂载——05-todolist-web 的镜像车道就是这样从 CDN 工件取来 `nmap_host` 面。至于 url 依赖的_行走_（钉、闭包检查、档案组上的对等门）请留在加载/打包车道——`mount_bundle_bytes` 是 offer，不是行走。"
@@ -7453,26 +7443,24 @@ msgstr "`load_path_session(path)`"
 msgid "load a module **directory** or `.rutbundle`; returns `(session, root)`"
 msgstr "加载一个模块**目录**或 `.rutbundle`；返回 `(session, root)`"
 
-msgid "`DepFetch`"
-msgstr "`DepFetch`"
+msgid "`DepRemote`"
+msgstr "`DepRemote`"
 
-msgid "the url-dep contract: `dep_fetch(&self, url) -> impl Future<Output = Result<Vec<u8>, String>>` — the call site owns HOW bytes arrive (transport, cache, offline policy). Explicit `-> impl Future`, deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class"
-msgstr "url 依赖契约：`dep_fetch(&self, url) -> impl Future<Output = Result<Vec<u8>, String>>` — 调用方拥有字节如何到达（传输、缓存、离线策略）。显式 `-> impl Future`，刻意**不** `+ Send`：浏览器的 `fetch` 桥是 `!Send` 的，而同步实现（缓存命中、夹具）是一等公民"
 
-msgid "`load_path_session_with(path, &fetch)` / `load_dir_session_with(dir, &fetch)`"
-msgstr "`load_path_session_with(path, &fetch)` / `load_dir_session_with(dir, &fetch)`"
+msgid "`load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)`"
+msgstr "`load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)`"
 
 msgid "the fetched lanes: url deps in `[deps]` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md))"
 msgstr "拉取车道：`[deps]` 的 url 依赖被收集、拉取，并在挂载门校验固定值（[依赖种类](dependency-kinds.md)、[模块捆绑包](bundles.md)）"
 
-msgid "`mount_dir_with(&mut s, dir, &fetch)`"
-msgstr "`mount_dir_with(&mut s, dir, &fetch)`"
+msgid "`mount_dir_with(&mut s, dir, &remote)`"
+msgstr "`mount_dir_with(&mut s, dir, &remote)`"
 
 msgid "mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate)"
 msgstr "挂载带 url 依赖的包目录 — 提供法则不变（不挂 dev-deps，不跑对等门禁）"
 
-msgid "`pack_dir_with(dir, &fetch)` / `pack_dir_opts_with(dir, opts, fetch)`"
-msgstr "`pack_dir_with(dir, &fetch)` / `pack_dir_opts_with(dir, opts, fetch)`"
+msgid "`pack_dir_with(dir, &remote)` / `pack_dir_opts_with(dir, opts, remote)`"
+msgstr "`pack_dir_with(dir, &remote)` / `pack_dir_opts_with(dir, opts, remote)`"
 
 msgid "pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical)"
 msgstr "在已拉取的 url 依赖之上打包；同一确定性法则（相同清单 + 相同固定值 ⇒ 逐字节相同）"
@@ -7489,8 +7477,8 @@ msgstr ""
 msgid "mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts)"
 msgstr "把捆绑包的内容挂载进既有会话——字节之上的 offer 法则（wasm 宿主 `include_bytes!` 已提交的工件）"
 
-msgid "The container, manifest grammar, and reader (both root kinds) live in the `rut-bundle` crate — filesystem-free over a one-method `Source` trait."
-msgstr "容器、清单文法与读取器（两种根）都在 `rut-bundle` crate 里——经由单方法 `Source` trait 做到无文件系统。"
+msgid "The container, manifest grammar, and reader (both root kinds) live in the driver's `rut_driver::bundle` module — filesystem-free over a one-method `Source` trait."
+msgstr "容器、清单文法与读取器（两种根）都在驱动 crate 的 `rut_driver::bundle` 模块里——经由单方法 `Source` trait 做到无文件系统。"
 
 msgid "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns and declaration files](host-fns.md))."
 msgstr "`mode` 为 `.rut` 取 `Mode::Impl`，为 `.d.rut` 取 `Mode::Decl`（[宿主函数与声明文件](host-fns.md)）。"
@@ -11128,11 +11116,11 @@ msgstr "`load_path_session(path)` / `load_bundle_bytes(bytes, origin)`"
 msgid "mount a directory / an in-memory bundle"
 msgstr "挂载一个目录 / 一个内存中的捆绑包"
 
-msgid "`load_path_session_with(path, &fetch)`"
-msgstr "`load_path_session_with(path, &fetch)`"
+msgid "`load_path_session_with(path, &remote)`"
+msgstr "`load_path_session_with(path, &remote)`"
 
-msgid "the fetched lane: `[deps]` url rows ride the host's `DepFetch`, the `sha256` pin verified at the mount door"
-msgstr "the fetched lane: `[deps]` url rows ride the host's `DepFetch`, the `sha256` pin verified at the mount door"
+msgid "the fetched lane: `[deps]` url rows ride the host's `DepRemote`, the `sha256` pin verified at the mount door"
+msgstr "the fetched lane: `[deps]` url rows ride the host's `DepRemote`, the `sha256` pin verified at the mount door"
 
 msgid "`compile_graph(&session, root)`"
 msgstr "`compile_graph(&session, root)`"
@@ -11458,8 +11446,6 @@ msgstr "消费者可以用 url 固定一个捆绑包，而不是将其内嵌（v
 msgid "```toml\n[deps]\nserver = { url = \"https://example.com/server.rutbundle\", sha256 = \"<64-hex>\" }\n```"
 msgstr ""
 
-msgid "The mount is the bundle mount, one gate earlier: the call site's fetcher produces the bytes (`DepFetch` — the CLI's is cache-first), then the loader runs the same container/layout/name checks and — before all of them — the **pin law**: the bytes must hash to the manifest row's `sha256`, on every load, or the load refuses naming the dep, the url, and both hashes. The url dep mounts as a **leaf**: its bundle brings the whole closure (every declared dep satisfied by an in-archive group — the closure law is unchanged, and a url row inside a packed bundle is inert metadata; loading a bundle never fetches)."
-msgstr "挂载就是捆绑包挂载，只是提前了一道门：调用方的拉取器产出字节（`DepFetch` — CLI 的实现是缓存优先的），然后加载器执行同样的容器/布局/名称检查，而且 — 先于所有检查 — 执行**固定值法则**：字节必须散列到清单行的 `sha256`，在每次加载时皆然，否则加载被拒绝，并指名依赖、url 与两个哈希。url 依赖作为**叶子**挂载：它的捆绑包带来整个闭包（每个声明的依赖都由包内组满足 — 闭包法则不变；已打包捆绑包内的 url 行是惰性元数据，加载捆绑包从不拉取）。"
 
 msgid "Because the manifest rides byte-for-byte, url rows carry into a consumer's own `rut pack` output, satisfied by the rode-along groups: the archive's groups re-encode from the consumer session's units (one `.rutc` path), source groups copy their file set under the new prefix, and the same manifest + pins still pack byte-identically. v1 refuses, loudly and named, the cases that would emit a bundle the loader must reject: an archive source group still declaring `[dev-deps]` directories (vendor the dep), a compiled group the consumer's closure never uses (it cannot ride unpackaged), and a declared dep that did not ride."
 msgstr "由于清单逐字节随行，url 行会带进消费者自己的 `rut pack` 输出，由随行组满足：存档的组从消费者会话的 units 重新编码（唯一的 `.rutc` 路径），源码组把它的文件集复制到新前缀下，而相同清单 + 相同固定值仍逐字节相同地打包。v1 会响亮地、指名道姓地拒绝那些会产出加载器必须拒绝的捆绑包的情形：仍在声明 `[dev-deps]` 目录的存档源码组（vendor 这个依赖）、消费者闭包从不使用的编译组（它无法未打包地随行），以及没有随行的声明依赖。"
@@ -11515,11 +11501,9 @@ msgstr "Peer 门控的包以两种方式在 v5 内发布，依其组别类法则
 msgid "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the mounting session (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one session without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr "**台账按档案命名空间化。** 每个档案的作用域行移入挂载会话的新数值区间（启动穿过其间），其二进制在挂载**前**用同一映射重定基——于是两个独立打包的捆绑包可共享一个会话，打包期编号永不争吵。先挂载者胜仍决定共享组名保留哪个体，组的台账行仍须是其二进制自带的作用域（拒绝，从不猜——该检查按档案进行）。下方的 CDN 车道就是它存在的理由：按包捆绑包独立打包，各自给自己的闭包编号。"
 
-msgid "The `rut-bundle` crate"
-msgstr "`rut-bundle` crate"
+msgid "The `bundle` module"
+msgstr "`bundle` 模块"
 
-msgid "The container codec, the `rut.toml` grammar, the source file-set collector, and the reader (both root kinds) live in the `rut-bundle` crate — **filesystem-free**. Every read goes through a one-method `Source` trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer itself needs the compiler and lives in `rut-driver` (`rut_driver::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Mounting a bundle into a session stays in `rut-driver` ([Loading](loading.md)), over `rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
-msgstr "容器编解码、`rut.toml` 文法、源文件集收集器与读取器（两种根）都住在 `rut-bundle` crate——**无文件系统**。每次读取都经过单方法 `Source` trait：`rut_bundle::FsSource` 是真实文件系统（CLI、原生宿主）；内存中的路径→字节映射服务测试与 wasm 宿主。打包器本身需要编译器，住在 `rut-driver`（`rut_driver::pack_dir`）——它返回捆绑包字节；写输出文件留给调用方。把捆绑包挂载进会话仍在 `rut-driver`（[加载](loading.md)），经 `rut_bundle::Bundle` 与其解析出的 `rut_bundle::Layout`——编译根及其台账 + 组，或声明根及其面。"
 
 msgid "Deterministic packing"
 msgstr "确定性打包"
@@ -11875,8 +11859,6 @@ msgstr ""
 msgid "**One descriptor, one source**: `path` or `url`, never both, never neither — a line-targeted manifest error either way. `sha256` is legal only beside `url` and must be exactly 64 hex digits (stored lowercase; the comparison is byte-exact). The url itself must be http(s). `[peer-deps]`/`[dev-deps]` stay `path`\\-only — a peer's path is directory-time metadata for the declarer's own build, nothing to fetch."
 msgstr "**一个描述符，一个来源**：`path` 或 `url`，二者不可兼得，也不可皆无 — 两种情况都是行定位的清单错误。`sha256` 只能出现在 `url` 旁，且必须恰好是 64 位十六进制数字（存储为小写；比较是逐字节的）。url 本身必须是 http(s)。`[peer-deps]`/`[dev-deps]` 保持仅 `path` — 对方的 path 是声明方自身构建的目录期元数据，无可拉取。"
 
-msgid "**The layer split.** The _call site_ owns HOW bytes arrive — transport, caching, offline policy — by implementing the `DepFetch` contract (one method, `dep_fetch(url)`, returning a future of bytes; the `rut` CLI ships a cache-first HTTP fetcher). The _loader_ owns WHAT the bytes are declared to be: the `sha256` pin is manifest law, verified at the mount door on **every** load — fresh fetch, cache hit, vendored map, test fixture. A check the call site performs would be a check the call site could skip; only the mount point holds both the pin and the bytes, so only the mount point can enforce it."
-msgstr "**分层裁定。**_调用方_ 拥有字节如何到达 — 传输、缓存、离线策略 — 方式是实现 `DepFetch` 契约（一个方法，`dep_fetch(url)`，返回字节的 future；`rut` CLI 自带缓存优先的 HTTP 拉取器）。_加载器_ 拥有字节被声明成什么：`sha256` 固定值是清单法则，在挂载门于**每次**加载时校验 — 新拉取、缓存命中、内嵌映射、测试夹具皆然。调用方自己执行的检查，是调用方可以跳过的检查；只有挂载点同时持有固定值与字节，所以也只有挂载点能执行它。"
 
 msgid "**Url deps are leaves.** The `[deps]` walk never follows them: one fetch brings the whole closure, because **bundles stay closed** — every dep a bundle's manifest declares must be satisfied by an in-archive group, and a bundle that does not satisfy one is refused at the mount door. A url row inside an already-packed bundle is inert metadata; loading a bundle never fetches."
 msgstr "**url 依赖是叶子。**`[deps]` 遍历从不跟随它们：一次拉取带来整个闭包，因为**捆绑包保持封闭** — 捆绑包清单声明的每个依赖都必须由包内组满足，否则在挂载门被拒绝。已打包捆绑包内的 url 行是惰性元数据；加载捆绑包从不拉取。"
@@ -11884,8 +11866,6 @@ msgstr "**url 依赖是叶子。**`[deps]` 遍历从不跟随它们：一次拉�
 msgid "**Pin your deps.** An unpinned url compiles from whatever the cache or the network served — a pinned one refuses to load anything else, naming the dep, the url, and both hashes. Pins are what make packs reproducible: same manifest + same pins ⇒ byte-identical bundle."
 msgstr "**固定你的依赖。**未固定的 url 从缓存或网络所获的内容编译 — 固定了的则拒绝加载其他任何内容，并指名依赖、url 与两个哈希。固定是可复现打包的前提：相同清单 + 相同固定值 ⇒ 逐字节相同的捆绑包。"
 
-msgid "The CLI lane: `rut run`/`rut pack` fetch through a cache-first fetcher (`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`; a hit never touches the network), and a pin refusal evicts the poisoned cache entry so the next run heals. `rut fetch <dir>` warms the cache without running anything ([The rut CLI](cli.md))."
-msgstr "CLI 车道：`rut run`/`rut pack` 经缓存优先的拉取器拉取（`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`；命中则绝不触碰网络），固定值拒绝会驱逐被污染的缓存条目，让下一次运行自愈。`rut fetch <dir>` 只预热缓存，不运行任何东西（[rut CLI](cli.md)）。"
 
 msgid "The std tree on jsDelivr"
 msgstr "jsDelivr 上的 std 树"
@@ -12217,14 +12197,12 @@ msgstr "`fetch`"
 msgid "# CI: warm the cache while the network is up\n"
 msgstr "# CI：趁有网络时预热缓存\n"
 
-msgid "Loads a module **directory** with the url-dep fetcher and discards the session — every `[deps]` url is fetched (or found in the cache) and pinned, so a later offline `run` hits only the cache. A `.rutbundle` argument is refused: bundles are closed — there is nothing to fetch. The cache and the eviction law are the same lane `run`/`pack` use:"
-msgstr "用 url 依赖拉取器加载模块**目录**并丢弃会话 — `[deps]` 的每个 url 都被拉取（或命中缓存）并校验固定值，此后的离线 `run` 只命中缓存。`.rutbundle` 参数被拒绝：捆绑包是封闭的 — 无可拉取。缓存与驱逐法则和 `run`/`pack` 用的是同一条车道："
 
 msgid "cache root"
 msgstr "缓存根目录"
 
-msgid "`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`; entries named `<sha256(url)>.rutbundle`"
-msgstr "`$RUT_CACHE_DIR` → `$XDG_CACHE_HOME/rut/bundles` → `~/.cache/rut/bundles`; entries named `<sha256(url)>.rutbundle`"
+msgid "`<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the driver never reads env). Entries named `<sha256(url)>.rutbundle`"
+msgstr "`<project>/.rut/cache`——工程本地、封闭；`$RUT_CACHE_DIR` 覆盖缓存根（仅 CLI 一侧——驱动从不读环境变量）。条目名为 `<sha256(url)>.rutbundle`"
 
 msgid "cache-first"
 msgstr "缓存优先"
@@ -12316,3 +12294,104 @@ msgstr "HTTP 链路仅限原生：CLI 构建携带它，wasm 构建不携带。"
 msgid "`run` on a module directory is the deployment path for development; `pack` + `run <bundle>` is the shipping path — both run the identical contract ([loading and the embed loop](loading.md))."
 msgstr "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
 
+
+
+
+msgid "The standard remote is **`HttpRemote`** — cache-first: a hit NEVER touches the network, a miss GETs (redirects on, loud status errors, a size cap) on the remote's own private worker thread and writes the cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any executor works — including the std-only noop-waker `block_on` poll loop the examples spell."
+msgstr "标准远程是 **`HttpRemote`**——缓存优先：命中绝不触碰网络，未命中在远程自己的私有工作线程上 GET（重定向开启、响亮的状态错误、大小上限）并把缓存原子写回。缓存布局法则：`<root>/<sha256(url)>.rutbundle`。future 立即就绪地返回，所以任何执行器都能用——包括示例拼写的纯 std noop-waker `block_on` 轮询循环。"
+
+msgid "`<project>/.rut/cache` — hermetic, project-local; networks on a miss (the `http` feature, default on)"
+msgstr "`<project>/.rut/cache`——工程本地、封闭；未命中时联网（`http` feature，默认开启）"
+
+msgid "an explicit cache root, wire on"
+msgstr "显式缓存根，联网开启"
+
+msgid "**cache-only** — a miss never networks; the guaranteed-offline lane (CI gates, wasm-adjacent hosts)"
+msgstr "**只用缓存**——未命中绝不联网；保证离线的车道（CI 门、wasm 毗邻的宿主）"
+
+msgid "the concrete entry path / delete a poisoned entry"
+msgstr "具体的条目路径 / 删除一条被污染的缓存条目"
+
+msgid "**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an `offline` remote, then load over it. The committed std artifacts play the wire — `DepRemote::write` is the stand-in for the GET:"
+msgstr "**保证离线的加载**（测试、CI、wasm 毗邻的宿主）：先预热一台 `offline` 远程，再在它之上加载。已提交的 std 工件扮演线路——`DepRemote::write` 是 GET 的替身："
+
+msgid "**Memory hosts** (wasm, in-process tests) hand-roll the trait — one required method, sync impls are first-class via `std::future::ready`:"
+msgstr "**内存宿主**（wasm、进程内测试）手写该 trait——一个必选方法，同步实现经由 `std::future::ready` 是一等公民："
+
+msgid "The loader still owns WHAT the bytes are: the `sha256` pin is manifest law, verified at the mount door on every load — fresh fetch, cache hit, vendored map, test fixture."
+msgstr "加载器仍然拥有字节**是什么**：`sha256` 固定值是清单法则，在挂载门于每次加载时校验——新拉取、缓存命中、自带映射、测试夹具，一视同仁。"
+
+msgid "THE embedder door: a directory or `.rutbundle`, the fs + remote policies explicit, one `async load()` — the no-remote check is lazy (it fires only when a url row is reached, as a panic naming the fix)"
+msgstr "嵌入方之门：目录或 `.rutbundle`，文件系统与远程策略都显式指名，一个 `async load()`——无远程检查是惰性的（只在到达一条 url 行时触发，panic 指名修法）"
+
+msgid "the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class"
+msgstr "url 依赖契约：`fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>`（必选）、`lookup`、`write`——调用方拥有字节如何到达（传输、缓存、离线策略）。dyn 兼容（手写装箱，不用 async-trait），刻意**不** `+ Send`：浏览器的 `fetch` 桥是 `!Send` 的，同步实现（缓存命中、夹具）是一等公民"
+
+msgid "the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete"
+msgstr "标准远程：缓存优先（`<root>/<sha256(url)>.rutbundle`），未命中在私有工作线程上 GET 并原子写回；`project_local` / `at` 联网开启，`offline` 只用缓存，`path_for`/`evict` 是具体路径"
+
+msgid "The mount is the bundle mount, one gate earlier: the embedder's remote produces the bytes (`DepRemote` — the standard `HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and — before all of them — the **pin law**: the bytes must hash to the manifest row's `sha256`, on every load, or the load refuses naming the dep, the url, and both hashes. The url dep mounts as a **leaf**: its bundle brings the whole closure (every declared dep satisfied by an in-archive group — the closure law is unchanged, and a url row inside a packed bundle is inert metadata; loading a bundle never fetches)."
+msgstr "挂载就是捆绑包挂载，只是提前了一道门：嵌入方的远程产出字节（`DepRemote` — 标准的 `HttpRemote` 是缓存优先的），然后加载器执行同样的容器/布局/名称检查，而且 — 先于所有检查 — 执行**固定值法则**：字节必须散列到清单行的 `sha256`，在每次加载时皆然，否则加载被拒绝，并指名依赖、url 与两个哈希。url 依赖作为**叶子**挂载：它的捆绑包带来整个闭包（每条声明的依赖都由档案内的组满足——闭包法则不变，打包好的捆绑包内的 url 行是惰性元数据；加载捆绑包从不拉取）。"
+
+msgid "The container codec, the `rut.toml` grammar, the source file-set collector, and the reader (both root kinds) live in the driver's `rut_driver::bundle` module — **filesystem-free**. Every read goes through a one-method `Source` trait: `rut_driver::bundle::FsSource` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer itself needs the compiler and lives beside it (`rut_driver::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Mounting a bundle into a session stays in the loader ([Loading](loading.md)), over `rut_driver::bundle::Bundle` and its parsed `rut_driver::bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
+msgstr "容器编解码、`rut.toml` 文法、源文件集收集器与读取器（两种根）都住在驱动 crate 的 `rut_driver::bundle` 模块——**无文件系统**。每次读取都经过单方法 `Source` trait：`rut_driver::bundle::FsSource` 是真实文件系统（CLI、原生宿主）；内存中的路径→字节映射服务于测试与 wasm 宿主。打包器本身需要编译器，住在它旁边（`rut_driver::pack_dir`）——它返回捆绑包字节；写出输出文件留在调用方。把捆绑包挂载进会话仍在加载器里（[Loading](loading.md)），经由 `rut_driver::bundle::Bundle` 与其解析出的 `rut_driver::bundle::Layout`——编译根及其台账 + 组，或声明根及其表面。"
+
+msgid "**The layer split.** The _call site_ owns HOW bytes arrive — transport, caching, offline policy — by implementing the `DepRemote` contract (`fetch(url)` — one required method returning a boxed future of bytes — plus optional `lookup`/`write`; the standard `HttpRemote` is cache-first). The _loader_ owns WHAT the bytes are declared to be: the `sha256` pin is manifest law, verified at the mount door on **every** load — fresh fetch, cache hit, vendored map, test fixture. A check the call site performs would be a check the call site could skip; only the mount point holds both the pin and the bytes, so only the mount point can enforce it."
+msgstr "**分层裁定。**_调用方_ 拥有字节如何到达 — 传输、缓存、离线策略 — 方式是实现 `DepRemote` 契约（`fetch(url)`——一个必选方法，返回字节的装箱 future——外加可选的 `lookup`/`write`；标准的 `HttpRemote` 是缓存优先的）。_加载器_ 拥有字节被声明成什么：`sha256` 固定值是清单法则，在挂载门于**每次**加载时校验——新拉取、缓存命中、自带映射、测试夹具。调用方自己做的检查就是调用方可以跳过的检查；只有挂载点同时握着固定值与字节，所以只有挂载点能强制执行它。"
+
+msgid "The CLI lane: `rut run`/`rut pack` fetch through the cache-first standard remote (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides; a hit never touches the network), and a pin refusal evicts the poisoned cache entry so the next run heals. `rut fetch <dir>` warms the cache without running anything ([The rut CLI](cli.md))."
+msgstr "CLI 车道：`rut run`/`rut pack` 经缓存优先的标准远程拉取（`<project>/.rut/cache`，`$RUT_CACHE_DIR` 可覆盖；命中则绝不触碰网络），固定值拒绝会驱逐被污染的缓存条目，让下一次运行自愈。`rut fetch <dir>` 只预热缓存，不运行任何东西（[The rut CLI](cli.md)）。"
+
+msgid "The wire is the driver's `http` feature (default on) — a build with `default-features = false` (the wasm graphs) has no transport at all: a cache miss errors loudly instead of networking."
+msgstr "线路是驱动 crate 的 `http` feature（默认开启）——`default-features = false` 的构建（wasm 图）完全没有传输层：缓存未命中时响亮报错，而不是联网。"
+
+msgid ""
+"// the ENTIRE embedder load half for a project with url rows\n"
+""
+msgstr ""
+
+msgid ""
+"// Result<_, rut_driver::LoadError>\n"
+""
+msgstr ""
+
+msgid ""
+"// parsed from rut.toml\n"
+""
+msgstr ""
+
+msgid ""
+"// prime the cache\n"
+""
+msgstr ""
+
+msgid "\"no bytes for {url}\""
+msgstr ""
+
+msgid "`HttpRemote::project_local(project)`"
+msgstr ""
+
+msgid "`HttpRemote::at(root)`"
+msgstr ""
+
+msgid "`HttpRemote::offline(root)`"
+msgstr ""
+
+msgid "`path_for(url)` / `evict(url)`"
+msgstr ""
+
+msgid "constructor"
+msgstr ""
+
+msgid "`Loader::new(project)` / `.source(&src)` / `.dep_remote(r)` / `.build()` / `loaded.load()`"
+msgstr ""
+
+msgid "`HttpRemote`"
+msgstr ""
+
+
+msgid "The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the remote policy (\\[`DepRemote`\\]), and its own runtime. The door is the **`Loader`** — non-generic, no remote default, and the check is LAZY: `build()` validates only the path shape; the remote matters only when the dep walk actually reaches a url row, and the panic fires there (naming the dep, the url, and the fix). Url-free projects and `.rutbundle`s are closed — they load with no remote named at all."
+msgstr ""
+
+msgid "Loads a module **directory** with the url-dep remote and discards the session — every `[deps]` url is fetched (or found in the cache) and pinned, so a later offline `run` hits only the cache. A `.rutbundle` argument is refused: bundles are closed — there is nothing to fetch. The cache and the eviction law are the same lane `run`/`pack` use:"
+msgstr "用 url 依赖远程加载模块**目录**并丢弃会话 — `[deps]` 的每个 url 都被拉取（或命中缓存）并校验固定值，此后的离线 `run` 只命中缓存。`.rutbundle` 参数被拒绝：捆绑包是封闭的 — 无可拉取。缓存与驱逐法则和 `run`/`pack` 用的是同一条车道："
