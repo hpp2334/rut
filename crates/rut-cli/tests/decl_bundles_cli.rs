@@ -31,8 +31,8 @@ fn host_world(tag: &str) -> PathBuf {
     let dir = root.join("logger_host");
     write(
         &dir,
-        "rut.json",
-        r#"{"format": "rutbundle", "format_version": 8, "name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
     );
     write(&dir, "logger_host.d.rut", "pub host fn log(line: str);\n");
     root

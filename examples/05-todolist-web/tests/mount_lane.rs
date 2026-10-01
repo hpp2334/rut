@@ -37,7 +37,7 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     assert_eq!(
         manifest_names, mirror_names,
         "the mirror drifted from the manifest — mount_app_session must \
-         register exactly rut/biz/rut.json's closure (minus the ABI root)"
+         register exactly rut/biz/rut.jsonc's closure (minus the ABI root)"
     );
 
     // same host surface: the `.d.rut` pkg rides the manifest (its

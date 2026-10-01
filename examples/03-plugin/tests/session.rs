@@ -1,6 +1,6 @@
 //! The example's gate: drive the moderator through the typed `Plugin`
 //! surface and assert the exact transcript — `cargo test --workspace`
-//! runs it. The plugin loads from a module directory (`plugin/rut.json`)
+//! runs it. The plugin loads from a module directory (`plugin/rut.jsonc`)
 //! and from a packed `.rutbundle`; both forms must behave
 //! identically.
 
@@ -24,7 +24,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let _ = std::fs::remove_dir_all(&cache);
     let remote = rut_driver::HttpRemote::offline(&cache);
     let manifest_text =
-        std::fs::read_to_string(d.join("rut.json")).map_err(|e| format!("rut.json: {e}"))?;
+        std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = d.join("../../../dist/std");
     for desc in manifest.deps.values() {
@@ -61,7 +61,34 @@ fn limits() -> rut_vm::interp::Limits {
 }
 
 fn load_dir() -> Plugin {
+    prime_project_cache();
     Plugin::load(dir(), &limits()).unwrap()
+}
+
+/// Prime the plugin's PROJECT-LOCAL cache (`<dir>/.rut/cache`, the
+/// remote `Plugin::load` names) from the committed dist/std artifacts —
+/// the same doctrine `pack_seeded` applies to the pack lane: the pin's
+/// bytes are the committed bytes, so the gate is hermetic by
+/// construction (the CDN is only the human lane). ONCE per process:
+/// the tests run on parallel threads and the cache write is
+/// write-then-rename, so concurrent primers would race the `.part`.
+fn prime_project_cache() {
+    static PRIMED: std::sync::Once = std::sync::Once::new();
+    PRIMED.call_once(|| {
+        let d = dir();
+        let manifest_text =
+            std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
+        let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
+        let dist = d.join("../../../dist/std");
+        let remote = rut_driver::HttpRemote::offline(d.join(".rut").join("cache"));
+        for desc in manifest.deps.values() {
+            let Some(url) = desc.get("url") else { continue };
+            let artifact = url.rsplit('/').next().unwrap_or_default();
+            let bytes = std::fs::read(dist.join(artifact))
+                .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
+            rut_driver::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
+        }
+    });
 }
 
 /// The scripted session; returns `(transcript, total)`.
@@ -136,7 +163,7 @@ fn bad_bundles_are_refused_at_load() {
     // unknown format_version — refused before anything else is read
     let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin", "entry": {"lib": "./plugin.rut"}}"#;
     let bytes = rut_driver::bundle::write_bundle(&[
-        ("rut.json".to_string(), manifest.as_bytes().to_vec()),
+        ("rut.jsonc".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
     ])
     .unwrap();

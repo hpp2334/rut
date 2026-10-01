@@ -1,0 +1,9 @@
+{
+  // nmapset — the hermetic stand-in: a two-param
+  // generic class with one method, shaped like the real pkg.
+  "name": "nmapset",
+  "entry": {
+    "lib": "./nmapset.rut"
+  },
+  "inline": true
+}

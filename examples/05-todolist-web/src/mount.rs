@@ -17,7 +17,7 @@
 //! root.
 //!
 //! [`crate::mount::mount_app_session`] is the mirror of
-//! `rut/biz/rut.json` and nothing more — `tests/mount_lane.rs` (the P3
+//! `rut/biz/rut.jsonc` and nothing more — `tests/mount_lane.rs` (the P3
 //! proof) pins the two lanes to the same mounted-name set, the same
 //! host surface, and the same compiled binary. The `limits()`/
 //! `compile_app` halves below are shared by both lanes.
@@ -64,7 +64,7 @@ const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmap_host.rutb
 const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 
 const UI_RUT: &str = include_str!("../rut/ui/ui.rut");
-// ui's `entry.libs` tail (rut.json) — the mirror spells the manifest's
+// ui's `entry.libs` tail (rut.jsonc) — the mirror spells the manifest's
 // file list BY HAND (the mirror's whole job: an independent embedder
 // spelling what the manifest says; mount_lane pins the two together)
 const UI_STORE_RUT: &str = include_str!("../rut/ui/store.rut");
@@ -122,7 +122,7 @@ pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
 }
 
 /// A probe's module dir — `tests/<probe>/`. Each probe under tests/ is
-/// its own rut program (its own `rut.json`), the manifest lane's truth
+/// its own rut program (its own `rut.jsonc`), the manifest lane's truth
 /// for the test suites exactly like `rut/` is for the app.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn probe_dir(probe: &str) -> std::path::PathBuf {
@@ -231,7 +231,7 @@ pub fn limits() -> rut_vm::interp::Limits {
     }
 }
 
-/// The app session — THE MIRROR of `rut/biz/rut.json` (survey §2.4):
+/// The app session — THE MIRROR of `rut/biz/rut.jsonc` (survey §2.4):
 /// every package the manifest names, registered with the manifest's
 /// own mount properties. The ROOT is deliberately absent: the app's
 /// SOURCE crosses the ABI ([`compile_app`] registers and compiles it),

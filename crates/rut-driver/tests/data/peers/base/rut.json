@@ -1,7 +1,0 @@
-{
-  "_comment": "base — the core-shaped base pkg (T8's chain):\none concrete helper the pouch-shaped pkg rides, so the T8 chain has a\nreal dep walk under it.",
-  "name": "base",
-  "entry": {
-    "lib": "./base.rut"
-  }
-}

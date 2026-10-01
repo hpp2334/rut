@@ -1,7 +1,0 @@
-{
-  "_comment": "tests/softfail/ — the pump's containment fixture\n(tests/todolist_app.rs), its own module dir like every rut program.\nDep-free: no `use` at all — a container, a downcast, and the two\nchannels, no store, no widgets, no web crossings.",
-  "name": "softfail",
-  "entry": {
-    "lib": "./softfail.rut"
-  }
-}

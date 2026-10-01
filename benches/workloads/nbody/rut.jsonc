@@ -1,0 +1,19 @@
+{
+  // nbody/ — the solar-system integration from the benchmark game: 1000
+  // steps of dt = 0.01, with a fixed-iteration Newton sqrt standing in for
+  // the std host fn so the checksum stays exact. A module dir because it
+  // mounts `pouch`; `ink` is declared for the logger. The JS twin is
+  // ../nbody.js.
+  "name": "nbody",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 //! Module mounts & resolution — the compile-time half
 //! (loading model: `docs/src/reference/loading.md`).
 //!
-//! **One directory is one module.** Its `rut.json` names the exact
+//! **One directory is one module.** Its `rut.jsonc` names the exact
 //! package it answers to and how to reach its surface and body; the
 //! manifest grammar itself — the parsed [`crate::bundle::Manifest`], its
 //! dep tables and its error shapes — lives in the [`crate::bundle`]
@@ -356,8 +356,8 @@ mod tests {
     use super::*;
 
     const POUCH: &str = r#"
+// rut/pouch manifest — the surface + the body
 {
-  "_comment": "rut/pouch manifest — the surface + the body",
   "name": "pouch",
   "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
 }
@@ -376,7 +376,7 @@ mod tests {
         let s = Session::new();
         let err = s.resolve("missing").unwrap_err();
         assert_eq!(err, ResolveError::NoModule { spec: "missing".into() });
-        assert!(err.to_string().contains("`rut.json` `deps`"), "{}", err);
+        assert!(err.to_string().contains("`rut.jsonc` `deps`"), "{}", err);
     }
 
     /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
@@ -408,7 +408,7 @@ mod tests {
         let err = s.resolve("pouch").unwrap_err();
         assert_eq!(
             err.to_string(),
-            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.json` `deps`"
+            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.jsonc` `deps`"
         );
         // a name NO pkg declares as a peer stays the bare miss
         let err = s.resolve("stranger").unwrap_err();

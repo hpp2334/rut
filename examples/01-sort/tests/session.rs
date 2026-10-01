@@ -21,9 +21,9 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
         .join(format!("rut-01-sort-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let remote = rut_driver::HttpRemote::offline(&root);
-    let manifest_text = std::fs::read_to_string(base.join("rut.json")).expect("rut.json");
+    let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.json");
+        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
     let dist = base.join("../../dist/std");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
@@ -53,7 +53,7 @@ fn load_session() -> (rut_driver::Session, String) {
 }
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
-    // the manifest lane: `rut.json` carries the deps (pouch rides its
+    // the manifest lane: `rut.jsonc` carries the deps (pouch rides its
     // CDN bundle, pinned), the load mounts the closure — then the same
     // embedder half as before
     let (mut s, root) = load_session();

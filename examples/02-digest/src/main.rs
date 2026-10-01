@@ -125,7 +125,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 fn main() {
-    // the manifest lane: this dir's `rut.json` carries the deps
+    // the manifest lane: this dir's `rut.jsonc` carries the deps
     // (`pouch` + `json` as CDN bundles — the LIGHT consumer world; the
     // manifest header owns that story), the load mounts the closure
     // and runs the mount passes — then the same embedder half as

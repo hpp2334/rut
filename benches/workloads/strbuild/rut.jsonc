@@ -1,0 +1,25 @@
+{
+  // strbuild/ — the std strbuild pkg's bench row: churn (one small-hint
+  // builder through geometric grows) plus the per-fragment-mint build
+  // shape, the checksum folded over counts + sampled content. A module
+  // dir because it mounts `strbuild` (which pulls the `strbuild_host`
+  // host pkg through its own [deps]); `pouch` for the fragment table,
+  // `ink` for the logger. The pkg name carries the `_bench` suffix — the
+  // root's name must not collide with the mounted `strbuild` pkg it
+  // deps. The JS twin is ../strbuild.js.
+  "name": "strbuild_bench",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "strbuild": {
+      "path": "../../../rut/strbuild"
+    },
+    "pouch": {
+      "path": "../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

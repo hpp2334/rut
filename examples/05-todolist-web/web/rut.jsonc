@@ -1,0 +1,18 @@
+{
+  // web/ — 05-todolist-web's browser-crossing rows (the rgh_host shape: a
+  // pure declaration surface, bodies in the embedding Rust — wasm DOM/timer
+  // doors on wasm32, the fake-DOM twin in tests). The registration scope IS
+  // the package name (`web::*`); the use path spells it too.
+  //
+  // The manifest-uniformity law folded this file into a pkg dir; it still
+  // rides NO deps row anywhere — BOTH lanes register it by hand
+  // (`register_web_surface` over the include_str!'d source, the
+  // `mount_std_core` precedent), so the two-package law's count is
+  // unchanged: the CONSUMER packages are biz and ui, and the host crossing
+  // is bound, never mounted.
+  "name": "web",
+  "type": "host",
+  "entry": {
+    "type": "./web.d.rut"
+  }
+}

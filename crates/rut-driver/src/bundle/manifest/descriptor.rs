@@ -38,7 +38,8 @@ pub(super) fn parse_deps_descriptor(
     let mut out = BTreeMap::new();
     for (k, v) in obj {
         if k.starts_with('_') {
-            continue;
+            // the retired prose lane — loud, never a silent ignore
+            return Err(super::walk::underscore_refused(&path, k));
         }
         match k.as_str() {
             "path" | "url" => {
@@ -116,7 +117,8 @@ pub(super) fn parse_peer_descriptor(
     let mut out = BTreeMap::new();
     for (k, v) in obj {
         if k.starts_with('_') {
-            continue;
+            // the retired prose lane — loud, never a silent ignore
+            return Err(super::walk::underscore_refused(&path, k));
         }
         match k.as_str() {
             "path" => {

@@ -52,7 +52,7 @@ const EXAMPLE = path.dirname(HERE); // examples/05-todolist-web
 const ROOT = path.resolve(EXAMPLE, "..", "..");
 const WASM = path.join(ROOT, "target", "wasm32-unknown-unknown", "release", "todolist_web.wasm");
 // the app source is the biz MODULE: the base plus its `entry.libs`
-// tail, concatenated in rut/biz/rut.json's array order — the same
+// tail, concatenated in rut/biz/rut.jsonc's array order — the same
 // splice loader.js spells (the two-package law retired the single
 // app.rut this file used to read)
 const BIZ_FILES = ["rut/biz/biz.rut", "rut/biz/domain.rut", "rut/biz/world.rut", "rut/biz/app.rut"];

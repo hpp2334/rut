@@ -27,7 +27,7 @@ pub struct Loader<'a> {
 }
 
 impl<'a> Loader<'a> {
-    /// Aim the loader at a project: a module directory (`rut.json`) or
+    /// Aim the loader at a project: a module directory (`rut.jsonc`) or
     /// a packed `.rutbundle`.
     pub fn new(project: impl Into<PathBuf>) -> Self {
         Loader {

@@ -155,8 +155,8 @@ function usage() {
 function discoverWorkloads() {
   const names = [];
   for (const f of readdirSync(WORKLOADS_DIR).sort()) {
-    if (existsSync(join(WORKLOADS_DIR, f, "rut.json"))) {
-      // dir-shaped workload: one module dir (rut.json + main.rut) per
+    if (existsSync(join(WORKLOADS_DIR, f, "rut.jsonc"))) {
+      // dir-shaped workload: one module dir (rut.jsonc + main.rut) per
       // name — the rut side runs as `rut run <dir>` (the deps graph
       // resolves its packages, e.g. `nmapset` pulling `nmap`)
       names.push(f);
@@ -504,7 +504,7 @@ if (existsSync(EXPECTED_FILE)) {
 const baselines = measureBaselines(runtimes, opt);
 
 for (const name of workloadNames) {
-  // every workload is a module dir (rut.json + main.rut) — the rut side
+  // every workload is a module dir (rut.jsonc + main.rut) — the rut side
   // runs as `rut run <dir>`, the JS side its ../<name>.js twin
   const rutFile = join(WORKLOADS_DIR, name);
   const jsFile = join(WORKLOADS_DIR, `${name}.js`);

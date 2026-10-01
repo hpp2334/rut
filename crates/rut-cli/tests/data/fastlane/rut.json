@@ -1,8 +1,0 @@
-{
-  "_comment": "fastlane/ — the crossing-fastpath phase-1 test fixture: a pure\ndeclaration surface; the tests bind the bodies and drive the fast\nlane end to end. (The bench-cross fixture is the mounting pattern.)",
-  "name": "fastlane",
-  "type": "host",
-  "entry": {
-    "type": "./fastlane.d.rut"
-  }
-}

@@ -1,0 +1,9 @@
+{
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "calc",
+  "type": "host",
+  "entry": {
+    "type": "./calc.d.rut"
+  }
+}

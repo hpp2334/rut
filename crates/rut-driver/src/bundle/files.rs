@@ -1,8 +1,8 @@
 //! Manifest- and file-set helpers over a [`Source`]: reading a
-//! directory's `rut.json`, normalizing bundle entry names, and
-//! collecting a package's **source file set** — the `rut.json` +
+//! directory's `rut.jsonc`, normalizing bundle entry names, and
+//! collecting a package's **source file set** — the `rut.jsonc` +
 //! entry + `libs` + peer-group files shape a source group rides inside
-//! a v5 compiled bundle. The packer itself (which compiles the closure
+//! a compiled bundle. The packer itself (which compiles the closure
 //! and emits the `.rutc` groups) lives in [`crate::pack`] — it needs
 //! the compiler, and this module stays compiler-free. Same input ⇒
 //! same bytes; the packer only ever reads manifest-named paths, never
@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 
 use super::manifest::{parse_manifest, Manifest};
 use super::Source;
+
+/// The manifest's file name — ONE name, no fallback lane: a directory
+/// is one module and its manifest is `rut.jsonc` (JSONC: comments and
+/// trailing commas legal). A directory still holding the retired
+/// `rut.json` gets the pointed refusal in [`read_manifest`].
+pub const MANIFEST_NAME: &str = "rut.jsonc";
 
 /// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
 /// outside the archive root is refused (entries are archive-relative).
@@ -44,18 +50,33 @@ pub(crate) fn read_text(path: &Path, src: &dyn Source) -> Result<String, String>
     String::from_utf8(bytes).map_err(|_| "stream did not contain valid UTF-8".to_string())
 }
 
-/// Read a directory's `rut.json` through `src` and parse it.
+/// Read a directory's `rut.jsonc` through `src` and parse it. A
+/// directory still holding the RETIRED `rut.json` name gets the
+/// pointed cutover refusal — no fallback lane reads it (refuse, never
+/// guess).
 pub fn read_manifest(dir: &Path, src: &dyn Source) -> Result<Manifest, String> {
-    let text = read_text(&dir.join("rut.json"), src)?;
+    let text = match read_text(&dir.join(MANIFEST_NAME), src) {
+        Ok(text) => text,
+        Err(missing) => {
+            if read_text(&dir.join("rut.json"), src).is_ok() {
+                return Err(format!(
+                    "{} found — the manifest is `{MANIFEST_NAME}` (JSONC: comments and \
+                     trailing commas legal) since wire 9; re-name the file or re-pack the directory",
+                    dir.join("rut.json").display()
+                ));
+            }
+            return Err(missing);
+        }
+    };
     parse_manifest(&text).map_err(|e| e.to_string())
 }
 
-/// Collect a package's SOURCE file set — the v4 group shape — under
-/// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.json`
+/// Collect a package's SOURCE file set — the group shape — under
+/// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.jsonc`
 /// byte-for-byte, its entry file, each `entry.libs` file beside the
 /// entry, and each `[peer-deps]` descriptor's `lib` group file.
 /// Descriptor order is the manifest's (BTreeMap), so the archive stays
-/// deterministic. A v5 compiled group does not take this shape (its
+/// deterministic. A compiled group does not take this shape (its
 /// `.rutc` is the linking truth); splice-needed deps and host pkgs ride
 /// the bundle exactly like this.
 pub fn collect_source_group(
@@ -65,8 +86,8 @@ pub fn collect_source_group(
     src: &dyn Source,
     out: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), String> {
-    let text = read_text(&dir.join("rut.json"), src)?;
-    out.push((format!("{prefix}rut.json"), text.into_bytes()));
+    let text = read_text(&dir.join(MANIFEST_NAME), src)?;
+    out.push((format!("{prefix}{MANIFEST_NAME}"), text.into_bytes()));
     let rel = entry_rel(manifest)
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
     // normalize the entry's `./` prefix before the group prefix joins it

@@ -1,0 +1,16 @@
+{
+  // ink_host/ — the logger host pkg: a pure
+  // declaration surface. The embedding Rust binds the bodies
+  // (`logger::pkg` → `ink_host::create_logger` /
+  // `ink_host::logger_log`); `ink` wraps them in the `Logger` class.
+  //
+  // The registration scope IS the package name; the use path spells it
+  // too (`use ink_host::{create_logger}`).
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "ink_host",
+  "type": "host",
+  "entry": {
+    "type": "./ink_host.d.rut"
+  }
+}

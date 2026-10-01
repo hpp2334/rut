@@ -1,0 +1,29 @@
+{
+  // strbuild — the 10th std pkg: the growable string builder, a rut
+  // class over the `strbuild_host` decl pkg's host fns (the ink/Logger
+  // pattern; the bodies live in `rut-std`). One field, one forwarded
+  // host call per member — no copy, no re-buffering, the share law rides
+  // the host box.
+  //
+  // `[deps] strbuild_host` below is the edge: a strbuild mount pulls the
+  // decl pkg, whose rows register under the pkg-name scope —
+  // mounting strbuild adds those declared rows, so an
+  // embedder pairs the mount with `strbuild::pkg()` (exactly ink +
+  // `logger::pkg`).
+  //
+  // Publishes COMPILED (the linkable-classes phase): StringBuilder's
+  // methods cross on the surface's inherent rows, so `b.append(...)`
+  // binds in every consumer from this pkg's binary — the ordinary call
+  // boundary, no source ever crossing.
+  "format": "rutbundle",
+  "format_version": 9,
+  "name": "strbuild",
+  "entry": {
+    "lib": "./strbuild.rut"
+  },
+  "deps": {
+    "strbuild_host": {
+      "path": "../strbuild_host"
+    }
+  }
+}

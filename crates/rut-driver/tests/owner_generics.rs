@@ -35,7 +35,7 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 7, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// One session, one in-memory module set (no filesystem): the specs'
@@ -277,7 +277,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     let pairz = root.join("pairz");
     write(
         &pairz,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("pairz", "pairz.rut", ""),
     );
     write(
@@ -291,7 +291,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
@@ -397,7 +397,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
 fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     let root = scratch("det");
     let pairz = root.join("pairz");
-    write(&pairz, "rut.json", &manifest("pairz", "pairz.rut", ""));
+    write(&pairz, "rut.jsonc", &manifest("pairz", "pairz.rut", ""));
     write(
         &pairz,
         "pairz.rut",
@@ -409,7 +409,7 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
@@ -434,7 +434,7 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
 fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     let root = scratch("equiv");
     let pairz = root.join("pairz");
-    write(&pairz, "rut.json", &manifest("pairz", "pairz.rut", ""));
+    write(&pairz, "rut.jsonc", &manifest("pairz", "pairz.rut", ""));
     write(
         &pairz,
         "pairz.rut",
@@ -446,7 +446,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(

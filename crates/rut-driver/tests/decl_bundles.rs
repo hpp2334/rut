@@ -1,6 +1,6 @@
 //! The v6 decl root — a `type = "host"` pkg packs as its OWN bundle:
 //! the root IS its declaration surface (single-package, no ledger, no
-//! groups, nothing to decode), format_version 8, readers accept 7|8 —
+//! groups, nothing to decode), format_version 10, readers accept 9|10 —
 //! the pairing is total, both directions refused. The mechanism tests:
 //! the pack/load round trip, the url lane (pin law, name-vs-key, the
 //! leaf law), the refusal matrix, the v5 byte-stability law (writers
@@ -41,7 +41,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// A v6-shaped host manifest — the keys PREPEND (before any table).
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        r#"{{"format": "rutbundle", "format_version": 8, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -49,7 +49,7 @@ fn host_manifest(name: &str, surface: &str) -> String {
 fn host_world(tag: &str, name: &str, surface: &str, decls: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join(name);
-    write(&dir, "rut.json", &host_manifest(name, surface));
+    write(&dir, "rut.jsonc", &host_manifest(name, surface));
     write(&dir, surface, decls);
     dir
 }
@@ -103,17 +103,17 @@ fn host_root_packs_v6_and_loads_back() {
     let names = entry_names(&bytes);
     assert_eq!(
         names,
-        vec!["rut.json".to_string(), "logger_host.d.rut".to_string()],
+        vec!["rut.jsonc".to_string(), "logger_host.d.rut".to_string()],
         "a host bundle is its manifest + its surface, nothing else: {names:?}"
     );
     // the riding manifest is byte-for-byte the directory's (v6 declared)
     let toml = rut_driver::bundle::Bundle::parse(&bytes)
         .unwrap()
-        .read("rut.json")
+        .read("rut.jsonc")
         .unwrap();
-    assert_eq!(toml, std::fs::read_to_string(dir.join("rut.json")).unwrap());
+    assert_eq!(toml, std::fs::read_to_string(dir.join("rut.jsonc")).unwrap());
     let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
-    assert_eq!(m.format_version, Some(8), "a decl root declares 8");
+    assert_eq!(m.format_version, Some(10), "a decl root declares 10");
 
     // load: the root mounts as the pkg's host rows
     let (session, root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
@@ -145,7 +145,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     let app = scratch("urllane-app").join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{pin}"}}}}}}"#
         ),
@@ -175,15 +175,15 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 
 /// The real tree host pkgs, shim-packed: the std manifests already
 /// carry their format keys (the std-cdn phase added them), so the
-/// tree's `rut.json` rides byte-for-byte — the point is REAL surfaces
+/// tree's `rut.jsonc` rides byte-for-byte — the point is REAL surfaces
 /// (including `nmap_host`, whose surface is named `nmap.d.rut` — NOT
 /// `<name>.d.rut` — and `async_engine`, `engine.d.rut`: the entry's
 /// own rel path keys the archive).
 fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(name);
     let dir = scratch(tag).join(name);
-    let toml = std::fs::read_to_string(tree.join("rut.json")).unwrap();
-    write(&dir, "rut.json", &toml);
+    let toml = std::fs::read_to_string(tree.join("rut.jsonc")).unwrap();
+    write(&dir, "rut.jsonc", &toml);
     write(&dir, surface, &std::fs::read_to_string(tree.join(surface)).unwrap());
     dir
 }
@@ -202,7 +202,7 @@ fn the_real_tree_host_pkgs_pack_and_load() {
         let names = entry_names(&bytes);
         assert_eq!(
             names,
-            vec!["rut.json".to_string(), surface.to_string()],
+            vec!["rut.jsonc".to_string(), surface.to_string()],
             "rut/{name}: {names:?}"
         );
         let (session, root) = load_bundle_bytes(&bytes, Path::new("mem"))
@@ -232,15 +232,15 @@ fn v5_byte_stability_writers_emit_6_only_for_decl_roots() {
     // explicit pairing law, pinned from the packed bytes
     let base = scratch("v5stable");
     let lib = base.join("util");
-    write(&lib, "rut.json",
-        r#"{"format": "rutbundle", "format_version": 7, "name": "util", "entry": {"lib": "./util.rut"}}"#);
+    write(&lib, "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 9, "name": "util", "entry": {"lib": "./util.rut"}}"#);
     write(&lib, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
-        &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.json").unwrap(),
+        &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(7), "a lib root's manifest still declares 7");
+    assert_eq!(m.format_version, Some(9), "a lib root's manifest still declares 9");
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
     assert!(names.contains(&"util.rutc".to_string()), "{names:?}");
@@ -257,27 +257,27 @@ fn strip_refuses_on_a_host_root() {
 }
 
 #[test]
-fn the_v5_v6_pairing_is_total() {
-    // v7 + host manifest: the broken pairing — a v7 root must be a
+fn the_v9_v10_pairing_is_total() {
+    // v9 + host manifest: the broken pairing — a v9 root must be a
     // compiled `.rutc` a host pkg cannot have
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
     let v5_manifest = format!(
-        r#"{{"format": "rutbundle", "format_version": 7, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
     );
-    let err = load_bundle_bytes(&resealed(&bytes, "rut.json", &v5_manifest), Path::new("mem"))
+    let err = load_bundle_bytes(&resealed(&bytes, "rut.jsonc", &v5_manifest), Path::new("mem"))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("packs at format_version 8"), "{err}");
-    assert!(err.contains("a v7 bundle's root is compiled"), "{err}");
+    assert!(err.contains("packs at format_version 10"), "{err}");
+    assert!(err.contains("a v9 bundle's root is compiled"), "{err}");
 
-    // v8 + lib manifest: the other broken half — lib roots stay v7
-    let v8_lib = r#"{"format": "rutbundle", "format_version": 8, "name": "h", "entry": {"lib": "./h.rut"}}"#;
-    let err = load_bundle_bytes(&resealed(&bytes, "rut.json", v8_lib), Path::new("mem"))
+    // v10 + lib manifest: the other broken half — lib roots stay v9
+    let v10_lib = r#"{"format": "rutbundle", "format_version": 10, "name": "h", "entry": {"lib": "./h.rut"}}"#;
+    let err = load_bundle_bytes(&resealed(&bytes, "rut.jsonc", v10_lib), Path::new("mem"))
         .unwrap_err()
         .to_string();
     assert!(err.contains("decl-root layout"), "{err}");
-    assert!(err.contains("a lib root packs at 7"), "{err}");
+    assert!(err.contains("a lib root packs at 9"), "{err}");
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn v6_refuses_compiled_shaped_entries() {
 
     // a dep group: single-package law
     let group_manifest = rut_driver::bundle::write_bundle(&[(
-        "g/rut.json".into(),
+        "g/rut.jsonc".into(),
         br#"{"name": "g", "entry": {"lib": "./g.rut"}}"#.to_vec(),
     )])
     .unwrap();
@@ -336,7 +336,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
     let app = scratch("pins-app").join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{wrong}"}}}}}}"#
         ),
@@ -353,7 +353,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
     let app2 = scratch("pins-app2").join("app2");
     write(
         &app2,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             r#"{{"name": "app2", "entry": {{"lib": "./app2.rut"}}, "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#
         ),
@@ -379,7 +379,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     let app = root_dir.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"pouch": {{"path": "../pouch"}}, "logger_host": {{"url": "{url}"}}}}}}"#
         ),
@@ -389,7 +389,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     // url row goes through the fetcher)
     let pouch = root_dir.join("pouch");
     std::fs::create_dir_all(&pouch).unwrap();
-    write(&pouch, "rut.json", r#"{"name": "pouch", "entry": {"lib": "./pouch.rut"}}"#);
+    write(&pouch, "rut.jsonc", r#"{"name": "pouch", "entry": {"lib": "./pouch.rut"}}"#);
     write(&pouch, "pouch.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
 
     struct Counting(BTreeMap<String, Vec<u8>>);
@@ -434,7 +434,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     let app = scratch("embed").join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
         ),

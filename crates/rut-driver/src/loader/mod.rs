@@ -1,4 +1,4 @@
-//! Filesystem loader — read a module directory (`rut.json`) or a packed
+//! Filesystem loader — read a module directory (`rut.jsonc`) or a packed
 //! `.rutbundle` into a [`Session`].
 //!
 //! One module is one directory with ONE entry file: its `use` statements
@@ -33,7 +33,7 @@ use crate::bundle::{
 };
 use crate::session::{Module, ModuleBody, Session};
 
-/// Read a directory's `rut.json` — the real-filesystem lane of
+/// Read a directory's `rut.jsonc` — the real-filesystem lane of
 /// [`crate::bundle::read_manifest`] (the module itself never touches the
 /// filesystem).
 fn read_manifest(dir: &Path, src: &dyn Source) -> Result<Manifest, LoadError> {
@@ -257,7 +257,7 @@ pub fn load_module_source(path: &Path) -> Result<String, LoadError> {
 }
 
 /// Mount a directory's consumer manifest: its own module (if named) and
-/// every `[deps]` module, reading each dep's `rut.json` and entry source,
+/// every `[deps]` module, reading each dep's `rut.jsonc` and entry source,
 /// then the mount passes over the finished closure. Returns the
 /// session and the root spec (the directory's own `name`).
 ///
@@ -300,7 +300,7 @@ pub fn load_dir_session_fetched(
     let root = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.json").display())))?;
+        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.jsonc").display())))?;
     let root_module = load_entry_module(dir, &manifest, src)?;
     session.register_module(&root, root_module)?;
     // the root's dir rides the session's map too, so a later
@@ -504,7 +504,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             // groups, no ledger, no closure — a LEAF, done.
             let entries = bundle.entries();
             let root_spec = manifest.name.clone().ok_or_else(|| {
-                LoadError::law(format!("{}: rut.json has no `name`", origin.display()))
+                LoadError::law(format!("{}: rut.jsonc has no `name`", origin.display()))
             })?;
             let mut session = Session::new();
             let module = bundle_entry_module(entries, "", &manifest)
@@ -518,7 +518,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     let root_spec = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{}: rut.json has no `name`", origin.display())))?;
+        .ok_or_else(|| LoadError::law(format!("{}: rut.jsonc has no `name`", origin.display())))?;
     let mut session = Session::new();
     // the scope ledger first, namespaced: the rows shift into a fresh
     // range of this session and the root's program rebases with the
@@ -551,13 +551,13 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
-        let dep_toml = read_entry(entries, &format!("{prefix}/rut.json"))
+        let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| LoadError::Bundle { origin: origin.display().to_string(), message: e })?;
         let dm = parse_manifest(&dep_toml).map_err(|e| {
-            LoadError::law(format!("{}: {prefix}/rut.json: {e}", origin.display()))
+            LoadError::law(format!("{}: {prefix}/rut.jsonc: {e}", origin.display()))
         })?;
         let name = dm.name.clone().ok_or_else(|| {
-            LoadError::law(format!("{}: {prefix}/rut.json has no `name`", origin.display()))
+            LoadError::law(format!("{}: {prefix}/rut.jsonc has no `name`", origin.display()))
         })?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (the root, an earlier group)
@@ -720,7 +720,7 @@ pub(crate) fn run_peer_gate(
                 }
                 // D1: loud at mount, naming pkg + peer + fix
                 return Err(LoadError::law(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `\"{peer}\": {{ \"path\": \"..\" }}` to your `rut.json` `deps`"
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `\"{peer}\": {{ \"path\": \"..\" }}` to your `rut.jsonc` `deps`"
                 )));
             }
             if compiled {
@@ -771,7 +771,7 @@ pub(crate) fn run_peer_gate(
     Ok(())
 }
 
-/// Load a module directory (`rut.json`) or a `.rutbundle` file — the two
+/// Load a module directory (`rut.jsonc`) or a `.rutbundle` file — the two
 /// packed forms of the same contract. A loose `.rut` file is NOT this: it
 /// is a single-file module with no manifest.
 pub fn load_path_session(path: &Path) -> Result<(Session, String), LoadError> {
@@ -1083,7 +1083,7 @@ fn mount_url_dep(
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law(format!("{url}: rut.json has no `name`")))?;
+                .ok_or_else(|| LoadError::law(format!("{url}: rut.jsonc has no `name`")))?;
             if root_spec != spec {
                 return Err(LoadError::law(format!(
                     "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
@@ -1105,7 +1105,7 @@ fn mount_url_dep(
     let root_spec = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{url}: rut.json has no `name`")))?;
+        .ok_or_else(|| LoadError::law(format!("{url}: rut.jsonc has no `name`")))?;
     if root_spec != spec {
         return Err(LoadError::law(format!(
             "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
@@ -1145,14 +1145,14 @@ fn mount_url_dep(
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
-        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.json"))
+        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| LoadError::Bundle { origin: url.to_string(), message: e })?;
         let dm = parse_manifest(&dep_toml)
-            .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.json: {e}")))?;
+            .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
             .clone()
-            .ok_or_else(|| LoadError::law(format!("{url}: {prefix}/rut.json has no `name`")))?;
+            .ok_or_else(|| LoadError::law(format!("{url}: {prefix}/rut.jsonc has no `name`")))?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (an earlier archive, or a dir dep)
         }
@@ -1253,7 +1253,7 @@ pub(crate) fn mount_dir_fetched(
     let name = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.json").display())))?;
+        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.jsonc").display())))?;
     if session.resolve(&name).is_ok() {
         return Ok(name); // the embedder's mount outranks the directory
     }
@@ -1302,7 +1302,7 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.json has no `name`".to_string()))?;
+                .ok_or_else(|| LoadError::law("bundle: rut.jsonc has no `name`".to_string()))?;
             // the ledger, namespaced into THIS session's numbering, and
             // the root rebased with the same map before mounting
             let remap = namescope_ledger(session, &scopes)?;
@@ -1325,7 +1325,7 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.json has no `name`".to_string()))?;
+                .ok_or_else(|| LoadError::law("bundle: rut.jsonc has no `name`".to_string()))?;
             let module = bundle_entry_module(entries, "", &manifest)?;
             (root_spec, module, None, manifest)
         }
@@ -1340,14 +1340,14 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
         // the group loop — load_bundle_bytes' law, minus the archive
         // recording (see the doc comment)
         for (prefix, kind) in &groups {
-            let dep_toml = read_entry(entries, &format!("{prefix}/rut.json"))
+            let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
                 .map_err(|e| LoadError::law(format!("bundle: {e}")))?;
             let dm = parse_manifest(&dep_toml)
-                .map_err(|e| LoadError::law(format!("bundle: {prefix}/rut.json: {e}")))?;
+                .map_err(|e| LoadError::law(format!("bundle: {prefix}/rut.jsonc: {e}")))?;
             let name = dm
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law(format!("bundle: {prefix}/rut.json has no `name`")))?;
+                .ok_or_else(|| LoadError::law(format!("bundle: {prefix}/rut.jsonc has no `name`")))?;
             if session.resolve(&name).is_ok() {
                 continue; // first mount wins
             }
@@ -1452,7 +1452,7 @@ pub async fn mount_dir_with(
     mount_dir_fetched(session, dir, &map)
 }
 
-/// Read a directory's `rut.json` graph and compile it to one linked program.
+/// Read a directory's `rut.jsonc` graph and compile it to one linked program.
 pub fn compile_dir(dir: &Path) -> Result<crate::graph::GraphOutput, LoadError> {
     let (session, root) = load_dir_session(dir, &FsSource)?;
     Ok(crate::compile_graph(&session, &root))

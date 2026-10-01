@@ -1,0 +1,24 @@
+{
+  // 00-todolist — the app is a module dir, like every rut program: the
+  // manifest carries the deps, and the embedder (`src/main.rs`,
+  // `tests/session.rs`) loads this dir through the manifest lane
+  // (`load_dir_session_with`) — same host half, new mount lane.
+  //
+  // THE CDN ROW: `pouch` ships as a COMMITTED v7 compiled bundle
+  // (dist/std/pouch.rutbundle, jsDelivr-served at the tag, sha256-pinned
+  // here — the pin is law at the mount door on every load). pouch is a
+  // GENERIC owner, and since the generic-source riding law its bundle
+  // carries the source beside the binary: this app's consumer-spelled
+  // `Vec<Todo>` compiles from the bundle at the link. The embedder names
+  // its remote policy (Loader + HttpRemote::project_local) — a cold start
+  // networks on the miss, a warm start is pure cache; the TESTS prime an
+  // offline remote from the committed artifacts (dist/std plays the
+  // wire), so the gates never touch the network.
+  "name": "todolist",
+  "entry": {
+    "lib": "./todolist.rut"
+  },
+  "deps": {
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" }
+  }
+}

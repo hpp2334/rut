@@ -1,7 +1,7 @@
 //! The section walkers: top-level keys, `entry`, the dep tables,
 //! `style` — plus the syntax boundary (serde_json's diagnostics become
 //! the module's single-line `line N:` shape; value laws are
-//! path-targeted instead) and the `_`-prefix ignore rule.
+//! path-targeted instead) and the `_`-key retirement.
 
 use serde_json::{Map, Value};
 
@@ -50,10 +50,16 @@ pub(super) fn expect_object<'a>(table: &str, value: &'a Value) -> Result<&'a Map
         .ok_or_else(|| ManifestError(format!("{table}: expected an object, found {}", raw(value))))
 }
 
-/// `_`-prefixed keys ride IGNORED in every table — the comments law:
-/// JSON has none, so `"_comment"` (and any `_`-key) carries the prose.
-pub(super) fn ignored(key: &str) -> bool {
-    key.starts_with('_')
+/// The `_`-prefixed prose lane RETIRED with the JSONC cutover: the
+/// manifest speaks comments now (`// …`, `/* … */`), so an `_`-key
+/// (`"_comment"`, any `_`-prefixed name) refuses loudly naming the fix
+/// — an old manifest keeps failing LOUDLY instead of silently
+/// dropping its prose. `path` is the key's walk path (`entry`,
+/// `deps.pouch`, …) — the value laws' targeting.
+pub(crate) fn underscore_refused(path: &str, key: &str) -> ManifestError {
+    ManifestError(format!(
+        "{path}: `{key}` — the `_`-prefixed prose lane retired; JSONC comments are the prose now (write a `//` comment above the key)"
+    ))
 }
 
 // ---- the sections ----
@@ -120,8 +126,8 @@ pub(super) fn walk_top(
 pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("entry", value)?;
     for (key, v) in table {
-        if ignored(key) {
-            continue;
+        if key.starts_with('_') {
+            return Err(underscore_refused("entry", key));
         }
         match key.as_str() {
             "type" => m.entry.type_path = Some(expect_field_string("entry", "type", v)?),
@@ -141,8 +147,8 @@ pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), Manifest
 pub(super) fn walk_deps(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("deps", value)?;
     for (spec, v) in table {
-        if ignored(spec) {
-            continue;
+        if spec.starts_with('_') {
+            return Err(underscore_refused("deps", spec));
         }
         check_dep_key("deps", spec)?;
         m.deps.insert(spec.clone(), parse_deps_descriptor("deps", spec, v)?);
@@ -159,8 +165,8 @@ pub(super) fn walk_peers(
 ) -> Result<(), ManifestError> {
     let table = expect_object(kind, value)?;
     for (spec, v) in table {
-        if ignored(spec) {
-            continue;
+        if spec.starts_with('_') {
+            return Err(underscore_refused(kind, spec));
         }
         check_dep_key(kind, spec)?;
         let desc = parse_peer_descriptor(kind, spec, v)?;
@@ -183,8 +189,8 @@ pub(super) fn walk_peers(
 pub(super) fn walk_style(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("style", value)?;
     for (key, v) in table {
-        if ignored(key) {
-            continue;
+        if key.starts_with('_') {
+            return Err(underscore_refused("style", key));
         }
         m.style.insert(key.clone(), expect_field_string("style", key, v)?);
     }

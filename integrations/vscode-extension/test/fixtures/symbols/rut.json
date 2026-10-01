@@ -1,7 +1,0 @@
-{
-  "_comment": "the extension suites' symbol fixture (test/runTest.js +\ntest/e2e-wasm.js read the entry source directly — a parse/symbol\nfixture, no lane needed). Dir + manifest for the shape law: every rut\nprogram the repo carries is a module dir with a `rut.json`. Dep-free:\nthe fixture has no `use` statements.",
-  "name": "symbols",
-  "entry": {
-    "lib": "./symbols.rut"
-  }
-}

@@ -1,0 +1,15 @@
+{
+  // pouch/ — the growable sequence package: `Vec<T>` in rut.
+  // Publishes COMPILED (the linkable-classes phase): the class's methods
+  // cross on the surface's inherent rows (generic — placeholder
+  // signatures the consumer substitutes per instantiation), and a
+  // consumer's `Vec<i64>` instantiates + requests the bodies from this
+  // pkg (owner-anchored generics) — ONE row program-wide, identity by
+  // owner. No source ever crosses.
+  "format": "rutbundle",
+  "format_version": 9,
+  "name": "pouch",
+  "entry": {
+    "lib": "./pouch.rut"
+  }
+}

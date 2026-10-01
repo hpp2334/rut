@@ -1,9 +1,0 @@
-{
-  "format": "rutbundle",
-  "format_version": 8,
-  "name": "core",
-  "type": "host",
-  "entry": {
-    "type": "./core.d.rut"
-  }
-}

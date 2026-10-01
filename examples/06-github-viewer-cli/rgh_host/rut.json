@@ -1,8 +1,0 @@
-{
-  "_comment": "rgh_host/ — 06-github-viewer-cli's own CLI-I/O rows (the http_host\nshape: a pure declaration surface, bodies in the embedding Rust).\nThe registration scope IS the package name (`rgh_host::*`); the use\npath spells it too (`use rgh_host::{ out, eprint }`).",
-  "name": "rgh_host",
-  "type": "host",
-  "entry": {
-    "type": "./rgh_host.d.rut"
-  }
-}

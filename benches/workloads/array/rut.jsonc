@@ -1,0 +1,17 @@
+{
+  // array/ — growable-sequence churn over Vec<i32>: push through the grow
+  // path, indexed read+write, full iteration. A module dir because it mounts
+  // `pouch`; `ink` is declared for the logger. The JS twin is ../array.js.
+  "name": "array",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

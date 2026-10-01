@@ -1,5 +1,5 @@
 //! The `.rutbundle` container — a deterministic zip archive
-//! carrying a module's `rut.json` and its rut sources (the packaging
+//! carrying a module's `rut.jsonc` and its rut sources (the packaging
 //! reference lives at `docs/src/reference/bundles.md`). The archive
 //! mechanics live in [`super::zip`] (the community `zip` crate behind
 //! a thin layer); this module is the format's POLICY: which entries
@@ -45,7 +45,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Pack `(name, bytes)` entries into a `.rutbundle`. Names must be
-/// ASCII-ish short paths (`rut.json`, `plugin.rut`) — v1 has no
+/// ASCII-ish short paths (`rut.jsonc`, `plugin.rut`) — v1 has no
 /// directories inside the archive.
 pub fn write_bundle(entries: &[(String, Vec<u8>)]) -> Result<Vec<u8>, BundleError> {
     for (name, _) in entries {
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn round_trip_and_determinism() {
         let entries = vec![
-            ("rut.json".to_string(), b"name = \"app:x\"\n".to_vec()),
+            ("rut.jsonc".to_string(), b"name = \"app:x\"\n".to_vec()),
             ("x.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
         ];
         let a = write_bundle(&entries).unwrap();
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(a, b, "same input => byte-identical bundle");
         let parsed = parse_bundle(&a).unwrap();
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].0, "rut.json");
+        assert_eq!(parsed[0].0, "rut.jsonc");
         assert_eq!(parsed[1].1, entries[1].1);
     }
 
@@ -184,8 +184,8 @@ mod tests {
         // stability starts at this hash.)
         let entries = vec![
             (
-                "rut.json".to_string(),
-                br#"{"format": "rutbundle", "format_version": 7, "name": "golden"}"#.to_vec(),
+                "rut.jsonc".to_string(),
+                br#"{"format": "rutbundle", "format_version": 9, "name": "golden"}"#.to_vec(),
             ),
             ("golden.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
         ];
@@ -197,7 +197,7 @@ mod tests {
             .collect();
         assert_eq!(
             hex,
-            "cdfbfa9258173b0c862a1ed890ffb4e311bf50928f59121885498b4d61e94c34",
+            "5a23daf2ab7a32d50c43e08676df5d91cd9141d23fe4d7162e2a63312787d7a4",
             "the .rutbundle byte layout moved — is the shift intended? re-pin consciously: {hex}"
         );
     }

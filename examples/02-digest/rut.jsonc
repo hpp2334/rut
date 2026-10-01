@@ -1,0 +1,35 @@
+{
+  // 02-digest — the app is a module dir, like every rut program: the
+  // manifest carries the deps, and the embedder (`src/main.rs`,
+  // `tests/session.rs`) loads this dir through the manifest lane
+  // (`load_dir_session_with`) — same host half, new mount lane.
+  //
+  // THE CDN ROWS: pouch, json and nmapset ship as COMMITTED v7 compiled
+  // bundles (dist/std/<pkg>.rutbundle, jsDelivr-served at the tag,
+  // sha256-pinned here — the pin is law at the mount door on every load).
+  // All three are GENERIC owners, and since the generic-source riding law
+  // their bundles carry the source beside the binaries: this consumer
+  // spells `Vec<opaque>` and drives json's traits + writer directly, and
+  // the shapes compile from the bundles at the link. The embedder names
+  // its remote policy (Loader + HttpRemote::project_local) — a cold start
+  // networks on its misses, a warm start is pure cache; the TESTS prime
+  // an offline remote from the committed artifacts (dist/std plays the
+  // wire), so the gates never touch the network. `nmapset` rides because a
+  // bundle-mounted json's pack-time ledger names its dev closure — the
+  // compiled rows reference the peer scopes, so the closure must contain
+  // them (the six-pin law); json's optional integration groups mount only
+  // for closure members, so the nmapset rows stay inert unless spelled.
+  // json's own `[deps]` pulls strbuild (the writer's accumulator), so the
+  // embedder pairs the load with `strbuild::pkg()` — and nmapset's bundle
+  // carries `nmap_host`, whose bodies bind beside it (the tests do;
+  // exactly ink + `logger::pkg`).
+  "name": "digests",
+  "entry": {
+    "lib": "./digest.rut"
+  },
+  "deps": {
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/json.rutbundle", "sha256": "adadde5aeb8464e09012b3858d78f6d89780c612435de5526cf6ac46f59ebc7c" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "5cb593f8ef2f352bf600f2cd0b60a621cc9259004dd40a7bb9b13f787a9826c1" }
+  }
+}

@@ -1,8 +1,0 @@
-{
-  "_comment": "boxes/ — the host-box test pkg: a pure declaration surface; the test\nbinds the bodies (host_boxes.rs) and verifies the contract.",
-  "name": "boxes",
-  "type": "host",
-  "entry": {
-    "type": "./boxes.d.rut"
-  }
-}

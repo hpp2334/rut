@@ -6,7 +6,7 @@
 //! while the emitting handler is still parked mid-op.
 //!
 //! The plugin loads twice from the same source: as a module **directory**
-//! (`plugin/rut.json`) and as a packed **`.rutbundle`** produced by
+//! (`plugin/rut.jsonc`) and as a packed **`.rutbundle`** produced by
 //! `rut_driver::pack_dir` — the two forms of one contract.
 //! Both run the identical scripted session; the transcript printed at
 //! the end is what `tests/session.rs` asserts.

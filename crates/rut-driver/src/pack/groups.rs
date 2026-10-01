@@ -52,9 +52,10 @@ pub(super) fn group_manifest(source: &PkgSource, archives: &[Archive]) -> Result
         PkgSource::Dir(gdir) => crate::bundle::read_manifest(gdir, &FsSource),
         PkgSource::Archive { slot, prefix } => {
             let archive = &archives[*slot];
-            let text = read_entry(&archive.entries, &format!("{prefix}rut.json"))
+            let name = crate::bundle::files::MANIFEST_NAME;
+            let text = read_entry(&archive.entries, &format!("{prefix}{name}"))
                 .map_err(|e| format!("{}: {e}", archive.origin))?;
-            parse_manifest(&text).map_err(|e| format!("{}: {prefix}rut.json: {e}", archive.origin))
+            parse_manifest(&text).map_err(|e| format!("{}: {prefix}{name}: {e}", archive.origin))
         }
     }
 }

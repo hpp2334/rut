@@ -1,0 +1,11 @@
+{
+  // server/ — the chat-room bus host pkg of 03-plugin: a
+  // pure declaration surface. The demo host (../src/lib.rs) binds the
+  // bodies over its `EventBus` opaque box; the plugin subscribes and
+  // emits through these two fns.
+  "name": "server",
+  "type": "host",
+  "entry": {
+    "type": "./server.d.rut"
+  }
+}

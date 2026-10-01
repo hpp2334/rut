@@ -55,10 +55,10 @@
 //! `line N:` prefix that names the ORIGINAL file's line. Everything
 //! above the syntax is PATH-TARGETED — a value-law error names the
 //! key's path (`deps.pouch: unknown key 'feats'`, `entry: expected a
-//! string for 'lib'`), never a line. Keys starting with `_` (e.g.
-//! `"_comment"`) ride IGNORED in every table — the prose stays in the
-//! file; and duplicate keys are last-wins (standard JSON semantics —
-//! the grammar adds no machinery).
+//! string for 'lib'`), never a line. The old `_`-prefixed prose lane
+//! (`"_comment"`) RETIRED with the JSONC cutover — an `_`-key refuses
+//! loudly naming the fix; and duplicate keys are last-wins (standard
+//! JSON semantics — the grammar adds no machinery).
 
 mod descriptor;
 mod expect;
@@ -68,7 +68,7 @@ mod walk;
 use std::collections::BTreeMap;
 
 use serde_json::Value;
-use walk::{ignored, syntax_error, walk_top};
+use walk::{syntax_error, underscore_refused, walk_top};
 
 use thiserror::Error;
 
@@ -147,6 +147,11 @@ pub fn valid_spec(spec: &str) -> bool {
     !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// The top-level shape of the `_`-key retirement: the path IS the key.
+fn underscore_refused_top(key: &str) -> ManifestError {
+    underscore_refused("manifest", key)
+}
+
 /// Parse the manifest: **JSONC** syntax (comments + trailing commas,
 /// stripped by [`jsonc::strip`] before the parser sees them — the
 /// positions never move), then standard JSON (`serde_json`), then this
@@ -166,8 +171,9 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     // kind with an `entry.type`-only pkg is the ambiguity)
     let mut declared_type = false;
     for (key, value) in root {
-        if ignored(key) {
-            continue;
+        if key.starts_with('_') {
+            // the retired prose lane — loud, never a silent ignore
+            return Err(underscore_refused_top(key));
         }
         walk_top(key, value, &mut declared_type, &mut m)?;
     }
@@ -281,8 +287,8 @@ mod tests {
     use super::*;
 
     const POUCH: &str = r#"
+// pouch — the growable sequence package: Vec<T> in rut
 {
-  "_comment": "pouch — the growable sequence package: Vec<T> in rut",
   "name": "pouch",
   "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
 }
@@ -642,23 +648,33 @@ mod tests {
     }
 
     #[test]
-    fn underscore_prefixed_keys_ride_everywhere() {
-        // JSON has no comments — the `_` prefix is the prose lane, in
-        // EVERY table (the forward-compat law extended one notch)
-        let m = parse_manifest(
-            r#"{
-                "_comment": "the header prose",
-                "name": "x",
-                "entry": {"_note": "why", "lib": "./x.rut"},
-                "deps": {"_private": "why", "core": {"_hint": "why", "path": "rut/core"}},
-                "peer-deps": {"p": {"_hint": "why", "path": "..", "optional": true}}
-            }"#,
+    fn underscore_keys_retire_loudly_everywhere() {
+        // the retired prose lane: an `_`-key refuses at EVERY table,
+        // naming the key and the JSONC fix — never a silent ignore
+        // (the migrated manifests speak `//` comments, which parse)
+        let err = parse_manifest(r#"{"_comment": "prose", "name": "x"}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "manifest: `_comment` — the `_`-prefixed prose lane retired; JSONC comments are the prose now (write a `//` comment above the key)"
+        );
+        let err = parse_manifest(r#"{"entry": {"_note": "why", "lib": "./x.rut"}}"#).unwrap_err();
+        assert!(err.to_string().starts_with("entry: `_note` — the `_`-prefixed prose lane retired"), "{err}");
+        let err = parse_manifest(r#"{"deps": {"_private": "why", "core": {"path": "p"}}}"#)
+            .unwrap_err();
+        assert!(err.to_string().starts_with("deps: `_private`"), "{err}");
+        let err = parse_manifest(r#"{"deps": {"core": {"_hint": "why", "path": "p"}}}"#)
+            .unwrap_err();
+        assert!(err.to_string().starts_with("deps.core: `_hint`"), "{err}");
+        let err = parse_manifest(
+            r#"{"peer-deps": {"p": {"_hint": "why", "path": "..", "optional": true}}}"#,
         )
-        .unwrap();
+        .unwrap_err();
+        assert!(err.to_string().starts_with("peer-deps.p: `_hint`"), "{err}");
+        let err = parse_manifest(r#"{"style": {"_why": "2"}}"#).unwrap_err();
+        assert!(err.to_string().starts_with("style: `_why`"), "{err}");
+        // the JSONC spelling of the same prose parses — the fix works
+        let m = parse_manifest("// prose\n{\"name\": \"x\"}").unwrap();
         assert_eq!(m.name.as_deref(), Some("x"));
-        assert_eq!(m.entry.lib.as_deref(), Some("./x.rut"));
-        assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
-        assert_eq!(m.peer_deps.get("p").unwrap().get("optional").unwrap(), "true");
     }
 
     #[test]

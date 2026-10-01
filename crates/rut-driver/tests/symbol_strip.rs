@@ -36,7 +36,7 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 7, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// The fully-compiled closure: `app` (linkable root) uses `util`
@@ -46,7 +46,7 @@ fn fc_world(tag: &str) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#,)
     );
     write(
@@ -58,7 +58,7 @@ fn fc_world(tag: &str) -> PathBuf {
          }\n",
     );
     let util = root.join("util");
-    write(&util, "rut.json", &manifest("util", "util.rut", ""));
+    write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
     write(
         &util,
         "util.rut",
@@ -82,8 +82,8 @@ fn trace_world(tag: &str) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
-        r#"{"format": "rutbundle", "format_version": 7, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 9, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     let mut src = String::from("fn boom() -> str {\n");
     src.push_str(&pad(25));
@@ -107,7 +107,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest(
             "app",
             "app.rut",
@@ -123,12 +123,12 @@ fn mixed_world(tag: &str) -> PathBuf {
          }\n",
     );
     let util = root.join("util");
-    write(&util, "rut.json", &manifest("util", "util.rut", ""));
+    write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
     write(&util, "util.rut", "pub fn twice(v: i64) -> i64 { return v * 2; }\n");
     let boxy = root.join("boxy");
     write(
         &boxy,
-        "rut.json",
+        "rut.jsonc",
         &format!(
             "{}",
             manifest("boxy", "boxy.rut", r#", "inline": true, "deps": {"util": {"path": "../util"}}"#)
@@ -263,7 +263,7 @@ fn strip_refuses_a_generic_owning_closure() {
     let lib = root.join("pairz");
     write(
         &lib,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("pairz", "pairz.rut", ""),
     );
     write(
@@ -277,7 +277,7 @@ fn strip_refuses_a_generic_owning_closure() {
     let app = root.join("app");
     write(
         &app,
-        "rut.json",
+        "rut.jsonc",
         &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(

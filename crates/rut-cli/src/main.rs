@@ -179,14 +179,15 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
         eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
         std::process::exit(2);
     }
-    // the door is an EXPLICIT ALLOWLIST: a module directory (`rut.json`)
+    // the door is an EXPLICIT ALLOWLIST: a module directory (`rut.jsonc`)
     // or a packed `.rutbundle` — every program is a manifest'd dir, so
     // there is no loose-file shape to fall back to
     let p = std::path::Path::new(path);
     if !(p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle")) {
         eprintln!(
-            "run: {path} is not a runnable unit — give the directory a `rut.json` \
-             (`{{\"name\": \"…\", \"entry\": {{\"lib\": \"./<file>.rut\"}}}}`), or run a packed `.rutbundle`"
+            "run: {path} is not a runnable unit — give the directory a `rut.jsonc` \
+             (`{{\"name\": \"…\", \"entry\": {{\"lib\": \"./<file>.rut\"}}}}` — JSONC: \
+             `//` comments and trailing commas are legal), or run a packed `.rutbundle`"
         );
         std::process::exit(2);
     }
@@ -204,7 +205,7 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
     }
     // the program plus the mount snapshot the host installs against —
     // the ctx is OWNED (the session may die here; the installs below
-    // answer to the snapshot). A module directory (`rut.json`) or a
+    // answer to the snapshot). A module directory (`rut.jsonc`) or a
     // `.rutbundle` — load the graph (url deps ride the cache-first
     // fetcher), mount std, compile, link
     let (mut session, root) = match load_with_cache(p) {
@@ -415,7 +416,7 @@ fn dump(path: &str) {
 }
 
 /// `rut fmt <file.rut | dir> [--check]` — the source formatter: canonical house layout over the AST reprint, comments recovered
-/// and reattached verbatim, style from the nearest ancestor `rut.json`'s
+/// and reattached verbatim, style from the nearest ancestor `rut.jsonc`'s
 /// `[style]` block. Default: rewrite in place. `--check`: write nothing,
 /// exit 1 when anything would change.
 fn fmt(path: &str, check: bool) {
@@ -503,12 +504,12 @@ fn fmt(path: &str, check: bool) {
     }
 }
 
-/// the style for a file: the nearest ancestor `rut.json`'s `[style]`
+/// the style for a file: the nearest ancestor `rut.jsonc`'s `[style]`
 /// block, parsed and validated by the fmt crate; no manifest → defaults
 fn style_for(f: &std::path::Path) -> Result<rut_fmt::Style, String> {
     let mut dir = f.parent().map(|d| d.to_path_buf()).unwrap_or_default();
     loop {
-        let manifest = dir.join("rut.json");
+        let manifest = dir.join("rut.jsonc");
         if manifest.is_file() {
             let text = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
             let m = rut_driver::bundle::parse_manifest(&text).map_err(|e| e.to_string())?;

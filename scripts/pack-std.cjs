@@ -7,8 +7,8 @@
  * publish ADVANCES the number, never rewrites a tag).
  *
  * The bundle set is exhaustive over `rut/` (15 pkgs): lib pkgs pack as
- * compiled v7 roots (their closures ride inside), host pkgs pack as
- * decl v8 roots (single-package — the surface IS the root). Same
+ * compiled v9 roots (their closures ride inside), host pkgs pack as
+ * decl v10 roots (single-package — the surface IS the root). Same
  * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
  * PURE EQUALITY gate — CI never touches the network.
  *
@@ -32,7 +32,7 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG, default std-v2). An ADVANCING
+ *                    RUT_STD_TAG, default std-v3). An ADVANCING
  *                    number: never re-point a published tag (jsDelivr
  *                    caches aggressively; a re-pointed tag lies).
  *   -h, --help
@@ -52,7 +52,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const DEFAULT_TAG = "std-v2";
+const DEFAULT_TAG = "std-v3";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -151,23 +151,23 @@ const PKGS = [
 // section).
 const EXAMPLES = [
   {
-    manifest: "examples/00-todolist/rut.json",
+    manifest: "examples/00-todolist/rut.jsonc",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/01-sort/rut.json",
+    manifest: "examples/01-sort/rut.jsonc",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/02-digest/rut.json",
+    manifest: "examples/02-digest/rut.jsonc",
     deps: ["pouch", "json", "nmapset"],
   },
   {
-    manifest: "examples/03-plugin/plugin/rut.json",
+    manifest: "examples/03-plugin/plugin/rut.jsonc",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/06-github-viewer-cli/rut.json",
+    manifest: "examples/06-github-viewer-cli/rut.jsonc",
     deps: ["http"],
   },
 ];
@@ -180,9 +180,9 @@ const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex"
 
 /** A pkg's manifest name (what a deps row spells — the artifact name). */
 function pkgName(dir) {
-  const text = fs.readFileSync(path.join(RUT, dir, "rut.json"), "utf8");
+  const text = fs.readFileSync(path.join(RUT, dir, "rut.jsonc"), "utf8");
   const m = text.match(/"name"\s*:\s*"([A-Za-z0-9_]+)"/);
-  if (!m) die(`rut/${dir}/rut.json has no \`name\` row`);
+  if (!m) die(`rut/${dir}/rut.jsonc has no \`name\` row`);
   return m[1];
 }
 

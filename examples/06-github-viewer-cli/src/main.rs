@@ -69,7 +69,7 @@ fn load_rgh_session() -> Result<(rut_driver::Session, String), String> {
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>().join("\n");
 
-    // the std closure mounts through the manifest lane (rut.json is
+    // the std closure mounts through the manifest lane (rut.jsonc is
     // the url carrier; the committed artifact seeds the fetcher), and
     // the brain's module registers with it — the four passes run for
     // real, peer gate included

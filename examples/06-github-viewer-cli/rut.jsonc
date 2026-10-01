@@ -1,0 +1,48 @@
+{
+  // 06-github-viewer-cli — the project root: the brain (`rgh.rut`) is the
+  // entry module, and the std closure mixes the two dep kinds the engine
+  // allows over a CDN artifact.
+  //
+  // THE CDN ROW: `http` ships as a COMMITTED v7 compiled bundle
+  // (dist/std/http.rutbundle, jsDelivr-served at the tag, sha256-pinned
+  // here — the pin is law at the mount door on every load). Its classes
+  // are CONCRETE — the methods cross on the surface's inherent rows — and
+  // its whole closure (http_host, strbuild, strbuild_host) rides inside.
+  //
+  // THE PATH ROWS: pouch, nmapset, json and async_host are GENERIC
+  // owners, and since the generic-source riding law their bundles would
+  // serve this app's consumer-spelled shapes at the link — the path rows
+  // are a CHOICE, not a wall: the tree checkout is this example's
+  // hermetic test input (the fixture lane mounts them from the tree, the
+  // url lane seeds http only). See docs/src/reference/bundles.md (the
+  // std-CDN section).
+  //
+  // THE APP'S OWN HOST PKG: `rgh_host` (this project's CLI-I/O rows) is
+  // a decl surface — the brain imports it, so the manifest names it. Its
+  // bodies live in the embedding Rust half (src/main.rs), so `rut run`
+  // stops at the boot door ("declared but never bound"): the generic CLI
+  // registry carries no rgh_host bodies by design — the embedder binds
+  // them (`install_host_pkg` over the mounted rows).
+  "name": "rgh",
+  "entry": {
+    "lib": "./rgh.rut"
+  },
+  "deps": {
+    "rgh_host": {
+      "path": "./rgh_host"
+    },
+    "pouch": {
+      "path": "../../rut/pouch"
+    },
+    "nmapset": {
+      "path": "../../rut/nmapset"
+    },
+    "json": {
+      "path": "../../rut/json"
+    },
+    "async_host": {
+      "path": "../../rut/async_host"
+    },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/http.rutbundle", "sha256": "424be52bc379115ce3486abb0d993a0cf31cd27f1027f124f22e4b0b1b93664f" }
+  }
+}
