@@ -1,9 +1,8 @@
-# bench-cross/ — the crossing-tax benchmark's test fixture (the
-# crossing-fastpath plan, phase 0): a pure declaration surface; the
-# tests bind the bodies (`bench_cross::pkg()`) and verify the
-# contract. The committed `rut/bench-cross` package (phase 0) carries
-# the same surface.
-
-name = "bench_cross"
-type = "host"
-entry.type = "./bench_cross.d.rut"
+{
+  "_comment": "bench-cross/ — the crossing-tax benchmark's test fixture (the\ncrossing-fastpath plan, phase 0): a pure declaration surface; the\ntests bind the bodies (`bench_cross::pkg()`) and verify the\ncontract. The committed `rut/bench-cross` package (phase 0) carries\nthe same surface.",
+  "name": "bench_cross",
+  "type": "host",
+  "entry": {
+    "type": "./bench_cross.d.rut"
+  }
+}

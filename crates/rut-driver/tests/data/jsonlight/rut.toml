@@ -1,15 +1,12 @@
-# the light consumer (the rut-json batch phase 1): json mounts with NO
-# peers in the closure — the base alone (traits, reader/writer, prims,
-# ?T, [T], entries); the peer-gated container rows never exist here and
-# a reference to them diagnoses (D2 — asserted in
-# json_pkg.rs).
-#
-# THE LAW this fixture pins: dev-deps mount into the closure exactly
-# like deps (load_dir_session pass 2), and json's groups are
-# presence-gated — listing pouch/nmapset in ANY dep table of this
-# fixture would silently mount the full json. Light means json ALONE.
-name = "jsonlight"
-entry.lib = "./main.rut"
-
-[deps]
-json = { path = "../../../../../rut/json" }
+{
+  "_comment": "the light consumer (the rut-json batch phase 1): json mounts with NO\npeers in the closure — the base alone (traits, reader/writer, prims,\n?T, [T], entries); the peer-gated container rows never exist here and\na reference to them diagnoses (D2 — asserted in\njson_pkg.rs).\n\nTHE LAW this fixture pins: dev-deps mount into the closure exactly\nlike deps (load_dir_session pass 2), and json's groups are\npresence-gated — listing pouch/nmapset in ANY dep table of this\nfixture would silently mount the full json. Light means json ALONE.",
+  "name": "jsonlight",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "json": {
+      "path": "../../../../../rut/json"
+    }
+  }
+}

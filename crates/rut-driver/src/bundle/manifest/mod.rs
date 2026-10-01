@@ -1,53 +1,60 @@
-//! The `rut.toml` grammar — a module manifest (`name`, `type`, +
-//! `entry.*`) or a consumer manifest (`[deps]`, `[peer-deps]`,
-//! `[dev-deps]`), or both, parsed into [`Manifest`].
+//! The manifest grammar — a module manifest (`name`, `type`, +
+//! `entry`) or a consumer manifest (`deps`, `peer-deps`,
+//! `dev-deps`), or both, parsed into [`Manifest`].
 //!
-//! **One directory is one module.** Its `rut.toml` names the exact
+//! **One directory is one module.** Its manifest names the exact
 //! package it answers to and how to reach its surface and body:
 //!
-//! ```toml
-//! # rut/pouch/rut.toml
-//! name = "pouch"
-//! entry.type = "./pouch.d.rut"        # the surface
-//! entry.lib  = "./pouch.rut"          # the body (omitted while surface-only)
+//! ```json
+//! {
+//!   "name": "pouch",
+//!   "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
+//! }
 //! ```
 //!
-//! The declared kind: `type = "lib"` (the default) is the ordinary
-//! source package; `type = "host"` is a pure declaration surface the
+//! (`entry.type` is the surface, `entry.lib` the body — omitted while
+//! surface-only.)
+//!
+//! The declared kind: `"type": "lib"` (the default) is the ordinary
+//! source package; `"type": "host"` is a pure declaration surface the
 //! embedding Rust binds at run time — a host pkg SPELLS itself, the
 //! kind is never inferred.
 //!
 //! A consumer mounts modules by exact name → directory:
 //!
-//! ```toml
-//! [deps]
-//! "pouch" = { path = "rut/pouch" }
+//! ```json
+//! { "deps": { "pouch": { "path": "rut/pouch" } } }
 //! ```
 //!
 //! or by url — a packed `.rutbundle` fetched by the host and pinned by
 //! its sha256:
 //!
-//! ```toml
-//! [deps]
-//! "pouch" = { url = "https://example.com/pouch.rutbundle", sha256 = "<64-hex>" }
+//! ```json
+//! { "deps": { "pouch": { "url": "https://example.com/pouch.rutbundle",
+//!                        "sha256": "<64-hex>" } } }
 //! ```
 //!
 //! Resolution is exact and single-step: a use path resolves only if a
 //! module with that `name` is mounted — nothing is derived. Package
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
-//! consumer manifest (`[deps]`).
+//! consumer manifest (the `deps` object).
 //!
-//! The dep kinds: `[deps]` is today's transitively-mounted
-//! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
-//! the peer) with `optional = true` marking the presence-mounted kind
-//! whose integration group is the descriptor's `lib` file; `[dev-deps]`
-//! mount only while building the pkg itself (the loader's law — the
-//! Session never sees a dev table).
+//! The dep kinds: `deps` is today's transitively-mounted table;
+//! `peer-deps` is REQUIRED by default (the consumer supplies the peer)
+//! with `"optional": true` marking the presence-mounted kind whose
+//! integration group is the descriptor's `lib` file; `dev-deps` mount
+//! only while building the pkg itself (the loader's law — the Session
+//! never sees a dev table).
 //!
-//! The TOML text itself parses with `toml_edit` — standard TOML, every
-//! legal spelling (escapes, `'literal'` strings, multi-line strings,
-//! underscored integers) processed by the parser; the laws below are
-//! the manifest's value rules over the parsed document.
+//! The manifest text is standard JSON, parsed with `serde_json`. The
+//! syntax lane keeps a location: a malformed file's error carries the
+//! parser's own wording under a `line N:` prefix. Everything above the
+//! syntax is PATH-TARGETED — a value-law error names the key's path
+//! (`deps.pouch: unknown key 'feats'`, `entry: expected a string for
+//! 'lib'`), never a line. JSON has no comments, so keys starting with
+//! `_` (e.g. `"_comment"`) ride IGNORED in every table — the prose
+//! stays in the file; and duplicate keys are last-wins (standard JSON
+//! semantics — the grammar adds no machinery).
 
 mod descriptor;
 mod expect;
@@ -55,10 +62,10 @@ mod walk;
 
 use std::collections::BTreeMap;
 
-use walk::{key_line, syntax_error, unknown_section, walk_deps, walk_entry, walk_peers, walk_style, walk_top};
+use serde_json::Value;
+use walk::{ignored, syntax_error, walk_top};
 
 use thiserror::Error;
-use toml_edit::{Document, Item, Table};
 
 /// A module's entry points: where its surface and body live, relative to
 /// the module directory.
@@ -71,7 +78,7 @@ pub struct Entry {
     /// additional `.rut` body files, spliced after `lib` in listed
     /// order — ONE module, one namespace (the multi-lib
     /// entry; contrast the presence-gated impl-only peer groups, which
-    /// ride `[peer-deps]` instead)
+    /// ride `peer-deps` instead)
     pub libs: Vec<String>,
 }
 
@@ -86,8 +93,8 @@ pub enum PkgType {
     Host,
 }
 
-/// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or
-/// a consumer manifest (`[deps]`), or both.
+/// A parsed manifest — either a module manifest (`name` + `entry`) or
+/// a consumer manifest (`deps`), or both.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Manifest {
     pub name: Option<String>,
@@ -100,23 +107,23 @@ pub struct Manifest {
     /// `format_version` — the bundle LAYOUT version, refused on load when
     /// unknown
     pub format_version: Option<u64>,
-    /// `[deps]` — exact specifier → descriptor: exactly one source key,
+    /// `deps` — exact specifier → descriptor: exactly one source key,
     /// `path` (a directory) or `url` (a remote `.rutbundle`), plus
     /// `sha256` (the pin) only beside `url`. Kept for the host to
     /// resolve; the Session does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `[peer-deps]` — REQUIRED by default; the CONSUMER
+    /// `peer-deps` — REQUIRED by default; the CONSUMER
     /// supplies the peer, it is never pulled transitively. `optional =
     /// true` marks the presence-mounted kind whose integration group is
     /// the descriptor's `lib` file. Descriptors: `path` (string),
     /// `optional` (bool), `lib` (string) — nothing else.
     pub peer_deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `[dev-deps]` — mounted ONLY when building/testing
+    /// `dev-deps` — mounted ONLY when building/testing
     /// the pkg itself (the program root), never in a consumer's world.
-    /// Same descriptor shape as `[deps]`.
+    /// Same descriptor shape as `deps`.
     pub dev_deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `[style]` — the pkg's formatter knobs (the rut-fmt batch): flat
-    /// `key = value` rows read by the fmt crate's consumer, which
+    /// `style` — the pkg's formatter knobs (the rut-fmt batch): flat
+    /// `"key": "value"` rows read by the fmt crate's consumer, which
     /// validates the keys and parses the values (the manifest layer
     /// stays schema-free like the deps tables). Unknown keys are
     /// ignored (the forward-compat rule); unknown VALUES trip the
@@ -130,57 +137,33 @@ pub struct Manifest {
 pub struct ManifestError(pub String);
 
 /// A bare package name: `[a-zA-Z0-9_]+`, non-empty. The same charset
-/// governs manifest `name` values and `[deps]` keys.
+/// governs manifest `name` values and dep-table keys.
 pub fn valid_spec(spec: &str) -> bool {
     !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Parse `rut.toml`: standard TOML (`toml_edit`), then this format's
-/// value laws — top-level `name`, `type` (the declared kind),
-/// `entry.type` / `entry.lib` / `entry.libs` (bare or under
-/// `[entry]`), and the dep tables `[deps]` / `[peer-deps]` /
-/// `[dev-deps]` whose values are inline tables.
+/// Parse the manifest: standard JSON (`serde_json`), then this
+/// format's value laws — top-level `name`, `type` (the declared kind),
+/// the `entry` object, and the dep objects `deps` / `peer-deps` /
+/// `dev-deps` whose values are descriptor objects. Syntax errors keep
+/// the `line N:` prefix; value laws are path-targeted.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
-    let doc = Document::parse(text).map_err(|e| syntax_error(text, &e))?;
+    let root: Value = serde_json::from_str(text).map_err(|e| syntax_error(&e))?;
+    let Some(root) = root.as_object() else {
+        return Err(ManifestError("manifest: expected a JSON object".into()));
+    };
     let mut m = Manifest::default();
     // was `type` spelled? (the no-inference law keys on it: an absent
     // kind with an `entry.type`-only pkg is the ambiguity)
     let mut declared_type = false;
-    let root = doc.as_table();
-
-    for (key, item) in root.iter() {
-        match item {
-            // an explicit `[section]` header: the five known sections
-            // walk their laws; any other header — including sub-tables
-            // like `[deps.pouch]` — is the unknown-section refusal,
-            // named as the document spells it, at the header's line
-            Item::Table(t) if !t.is_dotted() => match key {
-                "entry" => walk_entry(text, t, &mut m)?,
-                "deps" => walk_deps(text, t, &mut m)?,
-                "peer-deps" => walk_peers(text, t, "peer-deps", &mut m)?,
-                "dev-deps" => walk_peers(text, t, "dev-deps", &mut m)?,
-                "style" => walk_style(text, t, &mut m)?,
-                other => return Err(unknown_section(text, root, other, other, t)),
-            },
-            // a dotted key's implicit table: `entry.type = "..."` spells
-            // the entry keys in place; other dotted keys ride (the
-            // forward-compat law covers them as it covers unknown
-            // scalar keys)
-            Item::Table(t) if key == "entry" => walk_entry(text, t, &mut m)?,
-            Item::Table(_) => {}
-            Item::Value(v) => walk_top(text, root, key, v, &mut declared_type, &mut m)?,
-            // `[[array-of-tables]]` — no rut.toml section takes the shape
-            Item::ArrayOfTables(_) => {
-                return Err(ManifestError(format!(
-                    "line {}: unknown section `[[{key}]]`",
-                    key_line(text, root, key)
-                )));
-            }
-            Item::None => {}
+    for (key, value) in root {
+        if ignored(key) {
+            continue;
         }
+        walk_top(key, value, &mut declared_type, &mut m)?;
     }
-    // D4: `[peer-deps]` + `[dev-deps]` is the sanctioned
-    // both-kinds pairing (the ruling); anything riding `[deps]` beside
+    // D4: `peer-deps` + `dev-deps` is the sanctioned
+    // both-kinds pairing (the ruling); anything riding `deps` beside
     // either is a manifest error naming both rows — a pkg is either
     // pulled transitively or required of the consumer / held for
     // development, never both.
@@ -201,7 +184,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     // any kind and a body are refused; the no-inference law makes an
     // `entry.type`-only lib spelling an error — spell the kind, either
     // way. The bundle-root keys (`format`/`format_version`) are LEGAL on
-    // a host manifest: a host pkg packs as a v6 decl root (its root is
+    // a host manifest: a host pkg packs as a decl root (its root is
     // the declaration surface itself). Directory loading ignores the
     // keys either way.
     match m.pkg_type {
@@ -257,7 +240,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     // The multi-lib entry law: `libs` is an ordered tail
     // on the base `lib`, so the base must exist; every element is a
     // `.rut` source (a `.d.rut` is a decl surface, not a body — the
-    // same refusal `[peer-deps]` `lib` gets); and no file rides twice
+    // same refusal `peer-deps` `lib` gets); and no file rides twice
     // — the splice would duplicate every name in it.
     if !m.entry.libs.is_empty() {
         if m.entry.lib.is_none() {
@@ -284,17 +267,16 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     Ok(m)
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const POUCH: &str = r#"
-# rut/pouch/rut.toml
-name = "pouch"
-entry.type = "./pouch.d.rut"
-entry.lib = "./pouch.rut"
+{
+  "_comment": "pouch — the growable sequence package: Vec<T> in rut",
+  "name": "pouch",
+  "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
+}
 "#;
 
     #[test]
@@ -306,15 +288,8 @@ entry.lib = "./pouch.rut"
     }
 
     #[test]
-    fn entry_section_form() {
-        let text = "name = \"vec\"\n[entry]\ntype = \"./vec.d.rut\"\nlib = \"./vec.rut\"\n";
-        let m = parse_manifest(text).unwrap();
-        assert_eq!(m.entry.lib.as_deref(), Some("./vec.rut"));
-    }
-
-    #[test]
     fn bundle_manifest_keys() {
-        let text = "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
+        let text = r#"{"format": "rutbundle", "format_version": 1, "name": "x", "entry": {"lib": "./x.rut"}}"#;
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
         assert_eq!(m.format_version, Some(1));
@@ -323,17 +298,22 @@ entry.lib = "./pouch.rut"
     #[test]
     fn manifest_names_must_be_bare_package_names() {
         // scoped manifest names are retired — the diagnostic is
-        // line-targeted and names the charset
-        let err = parse_manifest("name = \"std:core\"\n").unwrap_err();
-        assert!(err.to_string().contains("line 1"), "{err}");
-        assert!(err.to_string().contains("bare package name"), "{err}");
-        let err = parse_manifest("[deps]\n\"std:math\" = { path = \"rut/calc\" }\n").unwrap_err();
-        assert!(err.to_string().contains("line 2"), "{err}");
+        // path-targeted and names the charset
+        let err = parse_manifest(r#"{"name": "std:core"}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "name: 'std:core' is not a bare package name — expected [a-zA-Z0-9_]+"
+        );
+        let err = parse_manifest(r#"{"deps": {"std:math": {"path": "rut/calc"}}}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "deps: 'std:math' is not a bare package name — expected [a-zA-Z0-9_]+"
+        );
     }
 
     #[test]
     fn deps_parse() {
-        let text = "name = \"app\"\n[deps]\n\"core\" = { path = \"rut/core\" }\n";
+        let text = r#"{"name": "app", "deps": {"core": {"path": "rut/core"}}}"#;
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
     }
@@ -341,34 +321,34 @@ entry.lib = "./pouch.rut"
     #[test]
     fn pkg_type_defaults_to_lib_and_both_spellings_parse() {
         // absent `type` ⇒ lib — the ordinary source package
-        let m = parse_manifest("name = \"pouch\"\nentry.lib = \"./pouch.rut\"\n").unwrap();
+        let m = parse_manifest(r#"{"name": "pouch", "entry": {"lib": "./pouch.rut"}}"#).unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
         let m = parse_manifest(
-            "name = \"pouch\"\ntype = \"lib\"\nentry.lib = \"./pouch.rut\"\n",
+            r#"{"name": "pouch", "type": "lib", "entry": {"lib": "./pouch.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
         // a host pkg SPELLS itself
         let m = parse_manifest(
-            "name = \"ink_host\"\ntype = \"host\"\nentry.type = \"./ink_host.d.rut\"\n",
+            r#"{"name": "ink_host", "type": "host", "entry": {"type": "./ink_host.d.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
     }
 
     #[test]
-    fn pkg_type_bad_value_is_line_targeted() {
-        let err = parse_manifest("name = \"x\"\ntype = \"Host\"\n").unwrap_err();
-        assert_eq!(err.to_string(), "line 2: `type` is `\"lib\"` or `\"host\"`, found `Host`");
-        let err = parse_manifest("name = \"x\"\ntype = \"native\"\n").unwrap_err();
-        assert!(err.to_string().contains("line 2"), "{err}");
+    fn pkg_type_bad_value_is_path_targeted() {
+        let err = parse_manifest(r#"{"name": "x", "type": "Host"}"#).unwrap_err();
+        assert_eq!(err.to_string(), "type: expected 'lib' or 'host', found 'Host'");
+        let err = parse_manifest(r#"{"name": "x", "type": "native"}"#).unwrap_err();
+        assert_eq!(err.to_string(), "type: expected 'lib' or 'host', found 'native'");
     }
 
     #[test]
     fn host_pkg_refuses_every_deps_table() {
         for table in ["deps", "peer-deps", "dev-deps"] {
             let err = parse_manifest(&format!(
-                "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n[{table}]\nink = {{ path = \"../ink\" }}\n"
+                r#"{{"name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
             let want = format!(
@@ -381,20 +361,20 @@ entry.lib = "./pouch.rut"
 
     #[test]
     fn host_pkg_needs_entry_type() {
-        let err = parse_manifest("name = \"h\"\ntype = \"host\"\n").unwrap_err();
+        let err = parse_manifest(r#"{"name": "h", "type": "host"}"#).unwrap_err();
         assert!(err.to_string().contains("needs `entry.type`"), "{err}");
     }
 
     #[test]
     fn host_pkg_refuses_a_body() {
         let err = parse_manifest(
-            "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.lib = \"./h.rut\"\n",
+            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
         )
         .unwrap_err();
         assert!(err.to_string().contains("no body"), "{err}");
         // the libs tail is a body too
         let err = parse_manifest(
-            "name = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.libs = [\"./more.rut\"]\n",
+            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut", "libs": ["./more.rut"]}}"#,
         )
         .unwrap_err();
         assert!(err.to_string().contains("no body"), "{err}");
@@ -402,15 +382,15 @@ entry.lib = "./pouch.rut"
 
     #[test]
     fn host_pkg_takes_the_bundle_root_keys() {
-        // the v6 grammar: `format`/`format_version` are LEGAL on a
+        // the decl-root grammar: `format`/`format_version` are LEGAL on a
         // `type = "host"` manifest — a host pkg packs as a decl root
         let m = parse_manifest(
-            "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(6));
+        assert_eq!(m.format_version, Some(8));
     }
 
     #[test]
@@ -420,89 +400,126 @@ entry.lib = "./pouch.rut"
         // keys present
         for table in ["deps", "peer-deps", "dev-deps"] {
             let err = parse_manifest(&format!(
-                "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n[{table}]\nink = {{ path = \"../ink\" }}\n"
+                r#"{{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
             assert!(err.to_string().contains("a host pkg is pure surface"), "[{table}]: {err}");
         }
         let err = parse_manifest(
-            "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\nentry.lib = \"./h.rut\"\n",
+            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
         )
         .unwrap_err();
         assert!(err.to_string().contains("no body"), "{err}");
-        let err = parse_manifest("format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\ntype = \"host\"\n")
-            .unwrap_err();
+        let err = parse_manifest(
+            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host"}"#,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("needs `entry.type`"), "{err}");
     }
 
     #[test]
     fn format_version_must_be_an_integer() {
-        // a TOML-legal but non-integer value trips the value law
+        // a JSON-legal but non-integer value trips the value law
         let err = parse_manifest(
-            "format = \"rutbundle\"\nformat_version = \"1\"\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n",
+            r#"{"format": "rutbundle", "format_version": "1", "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("line 2"), "{err}");
-        assert!(err.to_string().contains("expected an integer"), "{err}");
+        assert_eq!(
+            err.to_string(),
+            r#"format_version: expected an integer, found "1""#
+        );
+        // a float is not an integer either — the JSON spellings are
+        // the parser's business, the law only sees u64
+        let err = parse_manifest(r#"{"format_version": 1.0}"#).unwrap_err();
+        assert_eq!(err.to_string(), "format_version: expected an integer, found 1.0");
     }
 
     #[test]
     fn syntax_errors_normalize_to_line_n() {
-        // `six` is not a TOML value — the syntax error carries the
-        // `line N:` prefix with the parser's own wording
-        let err = parse_manifest("name = \"x\"\nformat_version = six\n").unwrap_err();
+        // the syntax lane keeps the location: serde_json's message
+        // under a `line N:` prefix
+        let err = parse_manifest("{\n  \"name\": \"x\",\n}\n").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.starts_with("line 2: "), "{msg}");
-        assert!(msg.contains("expected literal string"), "{msg}");
+        assert!(msg.starts_with("line 3: "), "{msg}");
+        assert!(msg.contains("trailing comma"), "{msg}");
+        let err = parse_manifest("{\"name\": six}").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("line 1: "), "{msg}");
+        assert!(msg.contains("expected value"), "{msg}");
     }
 
     #[test]
-    fn full_toml_spellings_parse() {
-        // standard TOML now: 'literal' strings, \uXXXX escapes,
-        // underscored integers, multi-line strings — the parser
-        // processes them, the value laws are unchanged
-        let m = parse_manifest("name = 'pouch'\nentry.lib = \"./p\\u006Fuch.rut\"\n").unwrap();
+    fn full_json_spellings_parse() {
+        // standard JSON: \uXXXX escapes process to their characters,
+        // integers ride u64 — the parser processes the spellings, the
+        // value laws are unchanged
+        let m = parse_manifest(r#"{"name": "pouch", "entry": {"lib": "./p\u006Fuch.rut"}}"#).unwrap();
         assert_eq!(m.name.as_deref(), Some("pouch"));
         assert_eq!(m.entry.lib.as_deref(), Some("./pouch.rut"));
         let m = parse_manifest(
-            "name = \"x\"\nformat = \"rutbundle\"\nformat_version = 1_0\n",
+            r#"{"name": "x", "format": "rutbundle", "format_version": 18446744073709551615}"#,
         )
         .unwrap();
-        assert_eq!(m.format_version, Some(10));
-        let m = parse_manifest("name = \"x\"\nentry.lib = \"\"\"\n./a.rut\"\"\"\n").unwrap();
-        assert_eq!(m.entry.lib.as_deref(), Some("./a.rut"));
+        assert_eq!(m.format_version, Some(u64::MAX));
     }
 
     #[test]
-    fn name_type_mismatch_is_line_targeted() {
-        // an integer is not a string — the value law's wording, today's
-        let err = parse_manifest("name = 3\n").unwrap_err();
-        assert_eq!(err.to_string(), "line 1: expected a quoted string, found `3`");
+    fn duplicate_keys_are_last_wins() {
+        // standard JSON semantics — serde_json keeps the last spelling,
+        // the grammar adds no machinery (the TOML duplicate-key refusal
+        // retired with the syntax)
+        let m = parse_manifest(r#"{"name": "a", "name": "b", "entry": {"lib": "./x.rut"}}"#)
+            .unwrap();
+        assert_eq!(m.name.as_deref(), Some("b"));
+        let m = parse_manifest(
+            r#"{"deps": {"p": {"url": "https://x/a.rutbundle", "url": "https://x/b.rutbundle"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            m.deps.get("p").unwrap().get("url").unwrap(),
+            "https://x/b.rutbundle"
+        );
     }
 
     #[test]
-    fn sub_tables_are_unknown_sections() {
-        // `[deps.pouch]` is nobody's row — the unknown-section refusal
-        // names the header, at the header's line
-        let err = parse_manifest("name = \"x\"\n[deps.pouch]\npath = \"p\"\n").unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown section `[deps.pouch]`");
+    fn name_type_mismatch_is_path_targeted() {
+        // an integer is not a string — the value law's wording, the
+        // path names the key
+        let err = parse_manifest(r#"{"name": 3}"#).unwrap_err();
+        assert_eq!(err.to_string(), "name: expected a string, found 3");
     }
 
     #[test]
-    fn repeated_headers_are_toml_errors() {
-        // today's reader merged a repeated header silently (last wins);
-        // TOML refuses the duplicate
-        let err = parse_manifest("[deps]\n[deps]\n").unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("line 2"), "{msg}");
-        assert!(msg.contains("duplicate key"), "{msg}");
+    fn unknown_top_level_keys_and_objects_ride() {
+        // forward compatibility, any shape: an unknown scalar, object,
+        // or array at the top level is ignored (JSON has no section
+        // headers to refuse — the five known objects walk, the rest
+        // rides)
+        let m = parse_manifest(
+            r#"{"name": "x", "entry": {"lib": "./x.rut"}, "whatever": {"a": [1, 2]}, "future": true}"#,
+        )
+        .unwrap();
+        assert_eq!(m.entry.lib.as_deref(), Some("./x.rut"));
+    }
+
+    #[test]
+    fn the_known_objects_must_be_objects() {
+        let err = parse_manifest(r#"{"entry": "./x.rut"}"#).unwrap_err();
+        assert_eq!(err.to_string(), "entry: expected an object, found \"./x.rut\"");
+        let err = parse_manifest(r#"{"deps": []}"#).unwrap_err();
+        assert_eq!(err.to_string(), "deps: expected an object, found []");
+        let err = parse_manifest(r#"{"style": "indent=2"}"#).unwrap_err();
+        assert_eq!(err.to_string(), "style: expected an object, found \"indent=2\"");
+        // and so must the whole document
+        let err = parse_manifest("[1, 2]").unwrap_err();
+        assert_eq!(err.to_string(), "manifest: expected a JSON object");
     }
 
     #[test]
     fn entry_type_only_without_a_declared_kind_is_the_ambiguity() {
         // the no-inference law: an entry.type-only pkg spells its kind —
         // old host-pkg manifests fail LOUDLY here, not as empty libs
-        let err = parse_manifest("name = \"rt\"\nentry.type = \"./rt.d.rut\"\n").unwrap_err();
+        let err = parse_manifest(r#"{"name": "rt", "entry": {"type": "./rt.d.rut"}}"#).unwrap_err();
         assert!(
             err.to_string()
                 .contains("an `entry.type`-only pkg spells its kind"),
@@ -510,22 +527,77 @@ entry.lib = "./pouch.rut"
         );
         assert!(err.to_string().contains("`type = \"host\"`"), "{err}");
         // either fix passes: declare host…
-        let m = parse_manifest("name = \"rt\"\ntype = \"host\"\nentry.type = \"./rt.d.rut\"\n")
-            .unwrap();
+        let m = parse_manifest(
+            r#"{"name": "rt", "type": "host", "entry": {"type": "./rt.d.rut"}}"#,
+        )
+        .unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         // …or add the body (an ordinary lib pkg)
         let m = parse_manifest(
-            "name = \"dev\"\ntype = \"lib\"\nentry.type = \"./dev.d.rut\"\nentry.lib = \"./dev.rut\"\n",
+            r#"{"name": "dev", "type": "lib", "entry": {"type": "./dev.d.rut", "lib": "./dev.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
         // an EXPLICIT `type = "lib"` with a surface and no body is the
         // sanctioned surface-only dev state — spelled, so no ambiguity
         let m = parse_manifest(
-            "name = \"dev\"\ntype = \"lib\"\nentry.type = \"./dev.d.rut\"\n",
+            r#"{"name": "dev", "type": "lib", "entry": {"type": "./dev.d.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
+    }
+
+    #[test]
+    fn entry_keys_are_path_targeted() {
+        // the plan's canonical shape: the table's path, the key named
+        // in the message
+        let err = parse_manifest(r#"{"entry": {"lib": 3}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "entry: expected a string for 'lib'");
+        let err = parse_manifest(r#"{"entry": {"libs": "./a.rut"}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "entry: expected a string array for 'libs'");
+        let err = parse_manifest(r#"{"entry": {"libs": []}}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "entry.libs: cannot be empty — drop the key for a single-file module"
+        );
+        let err = parse_manifest(r#"{"entry": {"libs": ["./a.rut", 1]}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "entry.libs: expected a string, found 1");
+        // unknown entry keys refuse (the entry strictness)
+        let err = parse_manifest(r#"{"entry": {"lib": "./x.rut", "feats": 1}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "entry: unknown key 'feats'");
+        // the retired `ir` rides
+        let m = parse_manifest(r#"{"name": "x", "entry": {"lib": "./x.rut", "ir": false}}"#)
+            .unwrap();
+        assert_eq!(m.entry.lib.as_deref(), Some("./x.rut"));
+    }
+
+    #[test]
+    fn style_rows_are_string_typed() {
+        let m = parse_manifest(r#"{"name": "x", "entry": {"lib": "./x.rut"}, "style": {"indent": "2"}}"#)
+            .unwrap();
+        assert_eq!(m.style.get("indent").map(String::as_str), Some("2"));
+        let err = parse_manifest(r#"{"style": {"indent": 2}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "style: expected a string for 'indent'");
+    }
+
+    #[test]
+    fn underscore_prefixed_keys_ride_everywhere() {
+        // JSON has no comments — the `_` prefix is the prose lane, in
+        // EVERY table (the forward-compat law extended one notch)
+        let m = parse_manifest(
+            r#"{
+                "_comment": "the header prose",
+                "name": "x",
+                "entry": {"_note": "why", "lib": "./x.rut"},
+                "deps": {"_private": "why", "core": {"_hint": "why", "path": "rut/core"}},
+                "peer-deps": {"p": {"_hint": "why", "path": "..", "optional": true}}
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(m.name.as_deref(), Some("x"));
+        assert_eq!(m.entry.lib.as_deref(), Some("./x.rut"));
+        assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
+        assert_eq!(m.peer_deps.get("p").unwrap().get("optional").unwrap(), "true");
     }
 
     #[test]
@@ -536,14 +608,15 @@ entry.lib = "./pouch.rut"
         // still parses as an unknown key: old manifests keep loading,
         // the flag does nothing.
         let err = parse_manifest(
-            "name = \"ink_host\"\nentry.type = \"./ink_host.d.rut\"\nhost_scope = \"ink_host\"\n",
+            r#"{"name": "ink_host", "entry": {"type": "./ink_host.d.rut"}, "host_scope": "ink_host"}"#,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("line 3"), "{err}");
-        assert!(err.to_string().contains("`host_scope` is retired"), "{err}");
+        assert!(err.to_string().starts_with("host_scope: retired"), "{err}");
         assert!(err.to_string().contains("the registration scope is the package name"), "{err}");
-        let m = parse_manifest("name = \"ink\"\nentry.lib = \"./ink.rut\"\ninline = true\n")
-            .unwrap();
+        let m = parse_manifest(
+            r#"{"name": "ink", "entry": {"lib": "./ink.rut"}, "inline": true}"#,
+        )
+        .unwrap();
         assert_eq!(m.entry.lib.as_deref(), Some("./ink.rut"));
     }
 
@@ -552,16 +625,20 @@ entry.lib = "./pouch.rut"
 
     /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
     const JSON: &str = r#"
-name = "json"
-entry.lib = "./json.rut"
+{
+  "name": "json",
+  "entry": { "lib": "./json.rut" },
 
-[peer-deps]
-pouch   = { path = "../pouch",   optional = true, lib = "./serde_pouch.rut" }
-nmapset = { path = "../nmapset", optional = true, lib = "./serde_nmapset.rut" }
+  "peer-deps": {
+    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./serde_pouch.rut" },
+    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./serde_nmapset.rut" }
+  },
 
-[dev-deps]
-pouch   = { path = "../pouch" }
-nmapset = { path = "../nmapset" }
+  "dev-deps": {
+    "pouch":   { "path": "../pouch" },
+    "nmapset": { "path": "../nmapset" }
+  }
+}
 "#;
 
     #[test]
@@ -572,8 +649,10 @@ nmapset = { path = "../nmapset" }
         assert_eq!(pouch.get("optional").unwrap(), "true");
         assert_eq!(pouch.get("lib").unwrap(), "./serde_pouch.rut");
         // `optional` defaults to false — REQUIRED by default
-        let req = parse_manifest("name = \"j\"\n[peer-deps]\nnmapset = { path = \"../nmapset\" }\n")
-            .unwrap();
+        let req = parse_manifest(
+            r#"{"name": "j", "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
+        )
+        .unwrap();
         assert_eq!(req.peer_deps.get("nmapset").unwrap().get("optional"), None);
         // the sanctioned both-kinds pairing parses (pouch in peer + dev)
         assert!(m.dev_deps.contains_key("pouch"));
@@ -582,48 +661,64 @@ nmapset = { path = "../nmapset" }
 
     #[test]
     fn t11_optional_rejected_inside_deps() {
-        let err = parse_manifest("[deps]\npouch = { path = \"../pouch\", optional = true }\n")
-            .unwrap_err();
+        let err =
+            parse_manifest(r#"{"deps": {"pouch": {"path": "../pouch", "optional": true}}}"#)
+                .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `optional` is a `[peer-deps]` attribute — `[deps]` has no options"
+            "deps.pouch: 'optional' is a peer-deps attribute — deps has no options"
         );
     }
 
     #[test]
     fn t11_optional_must_be_a_bool() {
-        let err =
-            parse_manifest("[peer-deps]\npouch = { path = \"..\", optional = \"yes\" }\n")
-                .unwrap_err();
-        assert_eq!(err.to_string(), "line 2: `optional` expects `true` or `false`");
+        let err = parse_manifest(
+            r#"{"peer-deps": {"pouch": {"path": "..", "optional": "yes"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "peer-deps.pouch: 'optional' expects true or false"
+        );
     }
 
     #[test]
-    fn t11_unknown_descriptor_key_is_line_targeted() {
-        let err =
-            parse_manifest("[peer-deps]\npouch = { path = \"..\", feats = \"x\" }\n").unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown `[peer-deps]` key `feats`");
-        let err = parse_manifest("[dev-deps]\npouch = { path = \"..\", git = \"x\" }\n").unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown `[dev-deps]` key `git`");
+    fn t11_unknown_descriptor_key_is_path_targeted() {
+        let err = parse_manifest(
+            r#"{"peer-deps": {"pouch": {"path": "..", "feats": "x"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "peer-deps.pouch: unknown key 'feats'");
+        let err = parse_manifest(
+            r#"{"dev-deps": {"pouch": {"path": "..", "git": "x"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'git'");
+    }
+
+    #[test]
+    fn t11_descriptor_must_be_an_object() {
+        let err = parse_manifest(r#"{"deps": {"pouch": "../pouch"}}"#).unwrap_err();
+        assert_eq!(err.to_string(), "deps.pouch: expected an object, found \"../pouch\"");
     }
 
     #[test]
     fn t11_lib_must_be_a_rut_source() {
         // a `.d.rut` lib key is a load error: decl surfaces don't gate
         let err = parse_manifest(
-            "[peer-deps]\npouch = { path = \"..\", optional = true, lib = \"./pouch.d.rut\" }\n",
+            r#"{"peer-deps": {"pouch": {"path": "..", "optional": true, "lib": "./pouch.d.rut"}}}"#,
         )
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate"
+            "peer-deps.pouch: 'lib' must be a .rut source — a .d.rut decl surface does not gate"
         );
     }
 
     #[test]
     fn t11_d4_deps_beside_peer_or_dev_is_the_collision() {
         let err = parse_manifest(
-            "name = \"j\"\n[deps]\npouch = { path = \"../pouch\" }\n[peer-deps]\npouch = { path = \"../pouch\", optional = true }\n",
+            r#"{"name": "j", "deps": {"pouch": {"path": "../pouch"}}, "peer-deps": {"pouch": {"path": "../pouch", "optional": true}}}"#,
         )
         .unwrap_err();
         assert_eq!(
@@ -631,7 +726,7 @@ nmapset = { path = "../nmapset" }
             "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
         );
         let err = parse_manifest(
-            "name = \"j\"\n[deps]\npouch = { path = \"../pouch\" }\n[dev-deps]\npouch = { path = \"../pouch\" }\n",
+            r#"{"name": "j", "deps": {"pouch": {"path": "../pouch"}}, "dev-deps": {"pouch": {"path": "../pouch"}}}"#,
         )
         .unwrap_err();
         assert_eq!(
@@ -644,9 +739,11 @@ nmapset = { path = "../nmapset" }
 
     #[test]
     fn t11_peer_dep_keys_are_bare_names() {
-        let err = parse_manifest("[peer-deps]\n\"std:pouch\" = { path = \"..\" }\n").unwrap_err();
-        assert!(err.to_string().contains("line 2"), "{err}");
-        assert!(err.to_string().contains("bare package name"), "{err}");
+        let err = parse_manifest(r#"{"peer-deps": {"std:pouch": {"path": ".."}}}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "peer-deps: 'std:pouch' is not a bare package name — expected [a-zA-Z0-9_]+"
+        );
     }
 
     // ---- the url source kind: one descriptor, one source; the pin ----
@@ -654,7 +751,7 @@ nmapset = { path = "../nmapset" }
     #[test]
     fn url_dep_parses_and_pin_normalizes_to_lowercase() {
         let m = parse_manifest(
-            "name = \"app\"\n[deps]\npouch = { url = \"https://example.com/pouch.rutbundle\", sha256 = \"ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789\" }\n",
+            r#"{"name": "app", "deps": {"pouch": {"url": "https://example.com/pouch.rutbundle", "sha256": "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"}}}"#,
         )
         .unwrap();
         let d = m.deps.get("pouch").unwrap();
@@ -667,7 +764,7 @@ nmapset = { path = "../nmapset" }
         // an unpinned url is legal (the pin is optional; reproducible
         // packs want one)
         let m = parse_manifest(
-            "name = \"app\"\n[deps]\npouch = { url = \"http://localhost:8080/pouch.rutbundle\" }\n",
+            r#"{"name": "app", "deps": {"pouch": {"url": "http://localhost:8080/pouch.rutbundle"}}}"#,
         )
         .unwrap();
         assert!(m.deps.get("pouch").unwrap().get("sha256").is_none());
@@ -677,64 +774,63 @@ nmapset = { path = "../nmapset" }
     fn url_descriptor_refusal_matrix() {
         // url + path: one descriptor, one source
         let err = parse_manifest(
-            "[deps]\npouch = { url = \"https://x/p.rutbundle\", path = \"../pouch\" }\n",
+            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "path": "../pouch"}}}"#,
         )
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `path` and `url` are both set — one descriptor, one source: a directory or a `.rutbundle` url, never both"
+            "deps.pouch: 'path' and 'url' are both set — one descriptor, one source: a directory or a .rutbundle url, never both"
         );
         // neither
-        let err = parse_manifest("[deps]\npouch = { }\n").unwrap_err();
+        let err = parse_manifest(r#"{"deps": {"pouch": {}}}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: the descriptor has no source — `path = \"..\"` for a directory, or `url = \"https://…\"` for a packed bundle"
+            "deps.pouch: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
         );
         // sha256 beside path (no url) is meaningless
         let err = parse_manifest(
-            "[deps]\npouch = { path = \"../pouch\", sha256 = \"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789\" }\n",
+            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}}}"#,
         )
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `sha256` pins a url — beside `path` it has no meaning"
+            "deps.pouch: 'sha256' pins a url — beside 'path' it has no meaning"
         );
         // bad hex
         let err = parse_manifest(
-            "[deps]\npouch = { url = \"https://x/p.rutbundle\", sha256 = \"nothex\" }\n",
+            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "sha256": "nothex"}}}"#,
         )
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `sha256` must be 64 hex digits, found `nothex`"
+            "deps.pouch: 'sha256' must be 64 hex digits, found 'nothex'"
         );
         // non-http(s)
-        let err = parse_manifest("[deps]\npouch = { url = \"ftp://x/p.rutbundle\" }\n").unwrap_err();
+        let err =
+            parse_manifest(r#"{"deps": {"pouch": {"url": "ftp://x/p.rutbundle"}}}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "line 2: `url` must be an http(s) url — found `ftp://x/p.rutbundle`"
+            "deps.pouch: 'url' must be an http(s) url, found 'ftp://x/p.rutbundle'"
         );
-        // a duplicate source key is a TOML duplicate-key parse error now
-        let err = parse_manifest("[deps]\npouch = { url = \"https://x/a\", url = \"https://x/b\" }\n")
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("line 2"), "{msg}");
-        assert!(msg.contains("duplicate key"), "{msg}");
-        // unknown keys keep the [entry] strictness
-        let err = parse_manifest("[deps]\npouch = { url = \"https://x/p\", feats = \"x\" }\n")
-            .unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown `[deps]` key `feats`");
+        // unknown keys keep the entry strictness
+        let err = parse_manifest(
+            r#"{"deps": {"pouch": {"url": "https://x/p", "feats": "x"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "deps.pouch: unknown key 'feats'");
     }
 
     #[test]
     fn peer_tables_refuse_the_url_kind() {
-        // `[peer-deps]` stays path-only — its path is directory-time
+        // `peer-deps` stays path-only — its path is directory-time
         // metadata for the declarer's own build, nothing to fetch
-        let err = parse_manifest("[peer-deps]\npouch = { url = \"https://x/p.rutbundle\" }\n")
-            .unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown `[peer-deps]` key `url`");
-        let err = parse_manifest("[dev-deps]\npouch = { url = \"https://x/p.rutbundle\" }\n")
-            .unwrap_err();
-        assert_eq!(err.to_string(), "line 2: unknown `[dev-deps]` key `url`");
+        let err =
+            parse_manifest(r#"{"peer-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
+                .unwrap_err();
+        assert_eq!(err.to_string(), "peer-deps.pouch: unknown key 'url'");
+        let err =
+            parse_manifest(r#"{"dev-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
+                .unwrap_err();
+        assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'url'");
     }
 }

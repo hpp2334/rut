@@ -1,36 +1,48 @@
-//! The typed-value laws: what a `key = value` row must BE. Type
-//! mismatches keep today's refusals ("expected a quoted string, found
-//! `X`", "expected an integer", ...); the TOML spellings are the
-//! parser's business, not the laws'.
+//! The typed-value laws: what a key's value must BE. Type mismatches
+//! are PATH-TARGETED — the diagnostic names the key's path (`name`,
+//! `entry` + the key, `deps.pouch`) instead of a line; only the JSON
+//! syntax layer keeps a `line N:` prefix.
 
-use toml_edit::Value;
+use serde_json::Value;
 
 use super::ManifestError;
-use super::walk::{line_of, raw};
 
-// ---- the typed values: the laws the manifest itself owns. Type
-// mismatches keep today's refusals ("expected a quoted string, found
-// `X`", "expected an integer", ...); the TOML spellings are the
-// parser's business, not the laws'. ----
+// ---- the typed values: the laws the manifest itself owns. A type
+// mismatch names the key's path (the plan's `entry: expected a string
+// for 'lib'` shape); the JSON spellings are the parser's business,
+// not the laws'. ----
 
-/// A `key = "string"` value.
-pub(super) fn expect_string(lineno: usize, value: &Value) -> Result<String, ManifestError> {
+/// A top-level `key = "string"` value — the key IS the path.
+pub(super) fn expect_string(path: &str, value: &Value) -> Result<String, ManifestError> {
     match value.as_str() {
         Some(s) => Ok(s.to_string()),
         None => Err(ManifestError(format!(
-            "line {lineno}: expected a quoted string, found `{}`",
-            raw(value)
+            "{path}: expected a string, found {value}"
         ))),
     }
 }
 
 /// A non-negative integer (`format_version`).
-pub(super) fn expect_u64(lineno: usize, value: &Value) -> Result<u64, ManifestError> {
-    match value.as_integer().and_then(|i| u64::try_from(i).ok()) {
+pub(super) fn expect_u64(path: &str, value: &Value) -> Result<u64, ManifestError> {
+    match value.as_u64() {
         Some(v) => Ok(v),
         None => Err(ManifestError(format!(
-            "line {lineno}: expected an integer, found `{}`",
-            raw(value)
+            "{path}: expected an integer, found {value}"
+        ))),
+    }
+}
+
+/// A string field inside a table — the diagnostic names the TABLE's
+/// path and the key (`entry: expected a string for 'lib'`).
+pub(super) fn expect_field_string(
+    table: &str,
+    key: &str,
+    value: &Value,
+) -> Result<String, ManifestError> {
+    match value.as_str() {
+        Some(s) => Ok(s.to_string()),
+        None => Err(ManifestError(format!(
+            "{table}: expected a string for '{key}'"
         ))),
     }
 }
@@ -38,27 +50,31 @@ pub(super) fn expect_u64(lineno: usize, value: &Value) -> Result<u64, ManifestEr
 /// The `entry.libs` string array. Strict: every element a string (the
 /// bare-word and non-string refusals fall out of the same check). An
 /// empty array is nobody's multi-lib entry — drop the key.
-pub(super) fn expect_string_array(
-    text: &str,
-    lineno: usize,
+pub(super) fn expect_field_string_array(
+    table: &str,
+    key: &str,
     value: &Value,
 ) -> Result<Vec<String>, ManifestError> {
     let Some(arr) = value.as_array() else {
         return Err(ManifestError(format!(
-            "line {lineno}: expected a `[\"..\", ..]` string array, found `{}`",
-            raw(value)
+            "{table}: expected a string array for '{key}'"
         )));
     };
     if arr.is_empty() {
         return Err(ManifestError(format!(
-            "line {lineno}: `libs` cannot be empty — drop the key for a single-file module"
+            "{table}.{key}: cannot be empty — drop the key for a single-file module"
         )));
     }
     let mut out = Vec::new();
-    for el in arr.iter() {
-        let eline = el.span().map_or(lineno, |s| line_of(text, s.start));
-        out.push(expect_string(eline, el)?);
+    for el in arr {
+        match el.as_str() {
+            Some(s) => out.push(s.to_string()),
+            None => {
+                return Err(ManifestError(format!(
+                    "{table}.{key}: expected a string, found {el}"
+                )));
+            }
+        }
     }
     Ok(out)
 }
-

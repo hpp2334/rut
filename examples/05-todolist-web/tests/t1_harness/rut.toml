@@ -1,10 +1,18 @@
-# tests/t1_harness/ — the framework harness (the t1 twin gate's
-# probe), its own module dir like every rut program: the manifest names
-# the two-package imports, the load mounts the closure.
-name = "t1_harness"
-entry.lib = "./t1_harness.rut"
-
-[deps]
-ui = { path = "../../rut/ui" }
-pouch = { path = "../../../../rut/pouch" }
-nmapset = { path = "../../../../rut/nmapset" }
+{
+  "_comment": "tests/t1_harness/ — the framework harness (the t1 twin gate's\nprobe), its own module dir like every rut program: the manifest names\nthe two-package imports, the load mounts the closure.",
+  "name": "t1_harness",
+  "entry": {
+    "lib": "./t1_harness.rut"
+  },
+  "deps": {
+    "ui": {
+      "path": "../../rut/ui"
+    },
+    "pouch": {
+      "path": "../../../../rut/pouch"
+    },
+    "nmapset": {
+      "path": "../../../../rut/nmapset"
+    }
+  }
+}

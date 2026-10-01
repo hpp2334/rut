@@ -35,7 +35,7 @@ fn hello_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"hello\"\nentry.lib = \"./main.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
     write(&dir, "main.rut", "pub fn main() -> nil { return; }\n");
     root

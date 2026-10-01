@@ -180,8 +180,8 @@ const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex"
 
 /** A pkg's manifest name (what a deps row spells — the artifact name). */
 function pkgName(dir) {
-  const toml = fs.readFileSync(path.join(RUT, dir, "rut.toml"), "utf8");
-  const m = toml.match(/^name = "([A-Za-z0-9_]+)"$/m);
+  const text = fs.readFileSync(path.join(RUT, dir, "rut.toml"), "utf8");
+  const m = text.match(/"name"\s*:\s*"([A-Za-z0-9_]+)"/);
   if (!m) die(`rut/${dir}/rut.toml has no \`name\` row`);
   return m[1];
 }
@@ -210,14 +210,13 @@ function pinExample(manifestRel, wants, hashes) {
   let text = fs.readFileSync(p, "utf8");
   for (const key of wants) {
     if (!hashes[key]) die(`no artifact for \`${key}\` — pack first`);
-    // the row: `key = { url = "…", sha256 = "…" }` — path or url flavor,
+    // the row: `"key": { "url": "…", "sha256": "…" }` — path or url flavor,
     // whole-row replace (the key names the row start; the row ends at
-    // the line's closing brace)
-    const rowRe = new RegExp(`^(${key})\\s*=\\s*\\{.*\\}`, "m");
-    if (!rowRe.test(text)) die(`${manifestRel}: no \`[deps]\` row for \`${key}\``);
+    // the object's closing brace)
+    const rowRe = new RegExp(`("${key}")\\s*:\\s*\\{[^}]*\\}`);
+    if (!rowRe.test(text)) die(`${manifestRel}: no \`deps\` row for \`${key}\``);
     const url = urlRow(key);
-    // align the closing brace with however the file spells it
-    text = text.replace(rowRe, (_m, k) => `${k} = { url = "${url}", sha256 = "${hashes[key]}" }`);
+    text = text.replace(rowRe, (_m, k) => `${k}: { "url": "${url}", "sha256": "${hashes[key]}" }`);
   }
   fs.writeFileSync(p, text);
   info(`pinned ${dim(manifestRel)} → ${wants.map((k) => `${k}@${tag}`).join(", ")}`);
@@ -291,15 +290,15 @@ if (doCheck) {
     if (!fs.existsSync(p)) continue; // the phase that lands it owns the row
     const text = fs.readFileSync(p, "utf8");
     for (const key of deps) {
-      const rowRe = new RegExp(`${key}\\s*=\\s*\\{[^}]*\\}`, "m");
+      const rowRe = new RegExp(`"${key}"\\s*:\\s*\\{[^}]*\\}`);
       const row = rowRe.test(text) && text.match(rowRe)[0];
       if (!row) {
         console.error(`  ${red("pin")}: ${manifest} has no \`${key}\` row`);
         drift++;
         continue;
       }
-      const url = (row.match(/url = "([^"]+)"/) || [])[1];
-      const pin = (row.match(/sha256 = "([0-9a-f]{64})"/) || [])[1];
+      const url = (row.match(/"url"\s*:\s*"([^"]+)"/) || [])[1];
+      const pin = (row.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/) || [])[1];
       const wantUrl = urlRow(key);
       if (url !== wantUrl) {
         console.error(`  ${red("pin")}: ${manifest} \`${key}\` url is \`${url}\`, want \`${wantUrl}\``);

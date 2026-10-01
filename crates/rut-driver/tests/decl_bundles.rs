@@ -41,7 +41,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// A v6-shaped host manifest — the keys PREPEND (before any table).
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        "format = \"rutbundle\"\nformat_version = 6\nname = \"{name}\"\ntype = \"host\"\nentry.type = \"./{surface}\"\n"
+        r#"{{"format": "rutbundle", "format_version": 6, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -147,7 +147,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
         &app,
         "rut.toml",
         &format!(
-            "name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\nlogger_host = {{ url = \"{url}\", sha256 = \"{pin}\" }}\n"
+            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{pin}"}}}}}}"#
         ),
     );
     write(
@@ -233,7 +233,7 @@ fn v5_byte_stability_writers_emit_6_only_for_decl_roots() {
     let base = scratch("v5stable");
     let lib = base.join("util");
     write(&lib, "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"util\"\nentry.lib = \"./util.rut\"\n");
+        r#"{"format": "rutbundle", "format_version": 5, "name": "util", "entry": {"lib": "./util.rut"}}"#);
     write(&lib, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
@@ -263,7 +263,7 @@ fn the_v5_v6_pairing_is_total() {
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
     let v5_manifest = format!(
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n"
+        r#"{{"format": "rutbundle", "format_version": 5, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
     );
     let err = load_bundle_bytes(&resealed(&bytes, "rut.toml", &v5_manifest), Path::new("mem"))
         .unwrap_err()
@@ -272,7 +272,7 @@ fn the_v5_v6_pairing_is_total() {
     assert!(err.contains("a v5 bundle's root is compiled"), "{err}");
 
     // v6 + lib manifest: the other broken half — lib roots stay v5
-    let v6_lib = "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\nentry.lib = \"./h.rut\"\n";
+    let v6_lib = r#"{"format": "rutbundle", "format_version": 6, "name": "h", "entry": {"lib": "./h.rut"}}"#;
     let err = load_bundle_bytes(&resealed(&bytes, "rut.toml", v6_lib), Path::new("mem"))
         .unwrap_err()
         .to_string();
@@ -300,7 +300,7 @@ fn v6_refuses_compiled_shaped_entries() {
     // a dep group: single-package law
     let group_manifest = rut_driver::bundle::write_bundle(&[(
         "g/rut.toml".into(),
-        b"name = \"g\"\nentry.lib = \"./g.rut\"\n".to_vec(),
+        br#"{"name": "g", "entry": {"lib": "./g.rut"}}"#.to_vec(),
     )])
     .unwrap();
     let entries: Vec<(String, Vec<u8>)> =
@@ -338,7 +338,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         &app,
         "rut.toml",
         &format!(
-            "name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\nlogger_host = {{ url = \"{url}\", sha256 = \"{wrong}\" }}\n"
+            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{wrong}"}}}}}}"#
         ),
     );
     write(&app, "app.rut", "entry fn main() -> nil {}\n");
@@ -355,7 +355,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         &app2,
         "rut.toml",
         &format!(
-            "name = \"app2\"\nentry.lib = \"./app2.rut\"\n\n[deps]\nnot_logger = {{ url = \"{url}\" }}\n"
+            r#"{{"name": "app2", "entry": {{"lib": "./app2.rut"}}, "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#
         ),
     );
     write(&app2, "app2.rut", "entry fn main() -> nil {}\n");
@@ -381,7 +381,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
         &app,
         "rut.toml",
         &format!(
-            "name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\npouch = {{ path = \"../pouch\" }}\nlogger_host = {{ url = \"{url}\" }}\n"
+            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"pouch": {{"path": "../pouch"}}, "logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
     write(&app, "app.rut", "entry fn main() -> nil {}\n");
@@ -389,7 +389,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     // url row goes through the fetcher)
     let pouch = root_dir.join("pouch");
     std::fs::create_dir_all(&pouch).unwrap();
-    write(&pouch, "rut.toml", "name = \"pouch\"\nentry.lib = \"./pouch.rut\"\n");
+    write(&pouch, "rut.toml", r#"{"name": "pouch", "entry": {"lib": "./pouch.rut"}}"#);
     write(&pouch, "pouch.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
 
     struct Counting(BTreeMap<String, Vec<u8>>);
@@ -436,7 +436,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
         &app,
         "rut.toml",
         &format!(
-            "name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\nlogger_host = {{ url = \"{url}\" }}\n"
+            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
     write(

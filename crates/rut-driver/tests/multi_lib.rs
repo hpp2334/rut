@@ -45,16 +45,14 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
     let kid = root.join("kid");
     let bundle_keys = match version {
         None => String::new(),
-        Some(v) => format!("format = \"rutbundle\"\nformat_version = {v}\n"),
+        Some(v) => format!(r#""format": "rutbundle", "format_version": {v}, "#),
     };
-    let libs_row = libs
-        .map(|l| format!("entry.libs = [{l}]\n"))
-        .unwrap_or_default();
+    let libs_row = libs.map(|l| format!(r#", "libs": [{l}]"#)).unwrap_or_default();
     write(
         &kid,
         "rut.toml",
         &format!(
-            "{bundle_keys}name = \"kid\"\nentry.lib = \"./kid.rut\"\n{libs_row}"
+            r#"{{{bundle_keys}"name": "kid", "entry": {{"lib": "./kid.rut"{libs_row}}}}}"#
         ),
     );
     write(&kid, "kid.rut", BASE);
@@ -65,7 +63,7 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
         &app,
         "rut.toml",
         &format!(
-            "{bundle_keys}name = \"app\"\nentry.lib = \"./entry.rut\"\n[deps]\nkid = {{ path = \"../kid\" }}\n"
+            r#"{{{bundle_keys}"name": "app", "entry": {{"lib": "./entry.rut"}}, "deps": {{"kid": {{"path": "../kid"}}}}}}"#
         ),
     );
     write(
@@ -121,7 +119,7 @@ fn manifest_libs_laws_are_loud() {
     let root = world("nolib", Some("\"./part_b.rut\""), None);
     let kid = root.join("kid");
     let text = std::fs::read_to_string(kid.join("rut.toml")).unwrap();
-    std::fs::write(&kid.join("rut.toml"), text.replacen("entry.lib = \"./kid.rut\"\n", "", 1)).unwrap();
+    std::fs::write(&kid.join("rut.toml"), text.replacen(r#""lib": "./kid.rut", "#, "", 1)).unwrap();
     let err = load_dir_session(&kid, &FsSource).unwrap_err().to_string();
     assert!(err.contains("needs `entry.lib`"), "{err}");
 

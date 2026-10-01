@@ -8,19 +8,21 @@ use std::path::Path;
 use rut_driver::bundle::FsSource;
 use rut_driver::{load_bundle_session, load_bundle_bytes, load_dir_session, load_path_session, pack_dir};
 
+/// The make_dir manifest's text — also the corruption test's offset
+/// reference (the first zip entry's payload).
+fn make_dir_manifest() -> String {
+    // bundle-shaped: the keys a `rut pack` needs are already there,
+    // and directory loading ignores them (layout v5 — the compiled
+    // format; the packer emits v5 and the loader reads v5 only)
+    r#"{"format": "rutbundle", "format_version": 5, "name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_string()
+}
+
 /// A one-file module in a temp dir (one directory, one entry file).
 fn make_dir(base: &Path) -> std::path::PathBuf {
     let dir = base.join("mod");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("rut.toml"),
-        // bundle-shaped: the keys a `rut pack` needs are already there,
-        // and directory loading ignores them (layout v5 — the compiled
-        // format; the packer emits v5 and the loader reads v5 only)
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("rut.toml"), make_dir_manifest()).unwrap();
     std::fs::write(
         dir.join("mod.rut"),
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
@@ -93,7 +95,7 @@ fn refusals() {
     // know, before reading anything else (refuse, never guess)
     for v in [1u8, 2, 3, 4, 7, 99] {
         let manifest = format!(
-            "format = \"rutbundle\"\nformat_version = {v}\nname = \"x\"\nentry.lib = \"./x.rut\"\n"
+            r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"lib": "./x.rut"}}}}"#
         );
         let old = rut_driver::bundle::write_bundle(&[
             ("rut.toml".into(), manifest.as_bytes().to_vec()),
@@ -107,7 +109,7 @@ fn refusals() {
     }
 
     // missing `format = "rutbundle"`
-    let manifest = "format_version = 5\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
+    let manifest = r#"{"format_version": 5, "name": "x", "entry": {"lib": "./x.rut"}}"#;
     let no_format = rut_driver::bundle::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -120,7 +122,7 @@ fn refusals() {
     // before any manifest is read)
     let dir = make_dir(&base);
     let mut bytes = pack_dir(&dir).unwrap();
-    let at = 30 + "name = \"mod\"\nentry.lib = \"./mod.rut\"\n".len();
+    let at = 30 + make_dir_manifest().len();
     bytes[at] ^= 0x01;
     let err = rut_driver::load_bundle_bytes(&bytes, Path::new("h")).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
@@ -132,7 +134,7 @@ fn refusals() {
     std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"mod\"\nentry.lib = \"./mod.rut\"\nentry.type = \"./surface.d.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "mod", "entry": {"lib": "./mod.rut", "type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
@@ -161,7 +163,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&s).unwrap();
     std::fs::write(
         s.join("rut.toml"),
-        "name = \"s\"\ntype = \"host\"\nentry.type = \"./s.d.rut\"\n",
+        r#"{"name": "s", "type": "host", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
     std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
@@ -170,7 +172,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"main\"\nentry.lib = \"./main.rut\"\n[deps]\ns = { path = \"../s\" }\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -186,7 +188,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     // host rows refuse at load, naming the fix
     let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     let lib_manifest =
-        "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n".as_bytes().to_vec();
+        r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#.as_bytes().to_vec();
     let respelled: Vec<(String, Vec<u8>)> = entries
         .iter()
         .map(|(n, b)| {
@@ -209,7 +211,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&s2).unwrap();
     std::fs::write(
         s2.join("rut.toml"),
-        "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n",
+        r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
     std::fs::write(s2.join("s.d.rut"), "/// documented surface, no body yet.\n").unwrap();
@@ -217,7 +219,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"main\"\nentry.lib = \"./main.rut\"\n[deps]\ns = { path = \"../s2\" }\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -264,21 +266,21 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the dep: a linkable source pkg → a compiled group
     let m = base.join("m");
     std::fs::create_dir_all(&m).unwrap();
-    std::fs::write(m.join("rut.toml"), "name = \"m\"\nentry.lib = \"./m.rut\"\n").unwrap();
+    std::fs::write(m.join("rut.toml"), r#"{"name": "m", "entry": {"lib": "./m.rut"}}"#).unwrap();
     std::fs::write(m.join("m.rut"), "pub fn four() -> i32 { return 4; }\n").unwrap();
     // the dep's dep: a host pkg (declaration-only surface) → source
     let s = base.join("s");
     std::fs::create_dir_all(&s).unwrap();
     std::fs::write(
         s.join("rut.toml"),
-        "name = \"s\"\ntype = \"host\"\nentry.type = \"./s.d.rut\"\n",
+        r#"{"name": "s", "type": "host", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
     std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
     // m uses s
     std::fs::write(
         m.join("rut.toml"),
-        "name = \"m\"\nentry.lib = \"./m.rut\"\n[deps]\ns = { path = \"../s\" }\n",
+        r#"{"name": "m", "entry": {"lib": "./m.rut"}, "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
 
@@ -287,7 +289,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\nm = { path = \"../m\" }\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "main", "entry": {"lib": "./entry.rut"}, "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
     std::fs::write(

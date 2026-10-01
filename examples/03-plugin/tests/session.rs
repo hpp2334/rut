@@ -134,8 +134,7 @@ fn bad_bundles_are_refused_at_load() {
     std::fs::create_dir_all(&base).unwrap();
 
     // unknown format_version — refused before anything else is read
-    let manifest =
-        "format = \"rutbundle\"\nformat_version = 99\nname = \"plugin\"\nentry.lib = \"./plugin.rut\"\n";
+    let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin", "entry": {"lib": "./plugin.rut"}}"#;
     let bytes = rut_driver::bundle::write_bundle(&[
         ("rut.toml".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
@@ -151,7 +150,7 @@ fn bad_bundles_are_refused_at_load() {
 
     // a corrupted payload byte fails the CRC check
     let mut bytes = pack_seeded().unwrap();
-    let at = 30 + "format = \"rutbundle\"\n".len();
+    let at = 30 + r#"{"format": "rutbundle","#.len();
     bytes[at] ^= 0x01;
     let path = base.join("corrupt.rutbundle");
     std::fs::write(&path, &bytes).unwrap();

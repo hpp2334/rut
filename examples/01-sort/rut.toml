@@ -1,25 +1,10 @@
-# 01-sort — the app is a module dir, like every rut program: the
-# manifest carries the deps, and the embedder (`src/main.rs`,
-# `tests/session.rs`) loads this dir through the manifest lane
-# (`load_dir_session_with`) — same host half, new mount lane.
-#
-# THE CDN ROW: `pouch` ships as a COMMITTED v5 compiled bundle
-# (dist/std/pouch.rutbundle, jsDelivr-served at the tag, sha256-pinned
-# here — the pin is law at the mount door on every load). pouch is a
-# GENERIC owner, and since the generic-source riding law its bundle
-# carries the source beside the binary: this app's consumer-spelled
-# `Vec<i32>` compiles from the bundle at the link. The embedder names
-# its remote policy (Loader + HttpRemote::project_local) — a cold start
-# networks on the miss, a warm start is pure cache; the TESTS prime an
-# offline remote from the committed artifacts (dist/std plays the
-# wire), so the gates never touch the network.
-#
-# THE ABSENT ROW: `calc` takes none — it is ambient. The embedder mounts
-# std (`mount_std`), and nothing in the engine knows a harness's ambient
-# set (the bench workloads' rule); a `use calc::` resolves against that
-# mount at compile time, never through a dep row.
-name = "sort"
-entry.lib = "./sort.rut"
-
-[deps]
-pouch = { url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", sha256 = "6e70234d1dc2d9cbac7a033d2a35b795dcbd6883750ecd4785acd0dfc9d3763e" }
+{
+  "_comment": "01-sort — the app is a module dir, like every rut program: the\nmanifest carries the deps, and the embedder (`src/main.rs`,\n`tests/session.rs`) loads this dir through the manifest lane\n(`load_dir_session_with`) — same host half, new mount lane.\n\nTHE CDN ROW: `pouch` ships as a COMMITTED v5 compiled bundle\n(dist/std/pouch.rutbundle, jsDelivr-served at the tag, sha256-pinned\nhere — the pin is law at the mount door on every load). pouch is a\nGENERIC owner, and since the generic-source riding law its bundle\ncarries the source beside the binary: this app's consumer-spelled\n`Vec<i32>` compiles from the bundle at the link. The embedder names\nits remote policy (Loader + HttpRemote::project_local) — a cold start\nnetworks on the miss, a warm start is pure cache; the TESTS prime an\noffline remote from the committed artifacts (dist/std plays the\nwire), so the gates never touch the network.\n\nTHE ABSENT ROW: `calc` takes none — it is ambient. The embedder mounts\nstd (`mount_std`), and nothing in the engine knows a harness's ambient\nset (the bench workloads' rule); a `use calc::` resolves against that\nmount at compile time, never through a dep row.",
+  "name": "sort",
+  "entry": {
+    "lib": "./sort.rut"
+  },
+  "deps": {
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/pouch.rutbundle", "sha256": "2ce488b4b345e137803965d124bc09b2c0aa2b5924bc2b9253e874d2d6da9832" }
+  }
+}

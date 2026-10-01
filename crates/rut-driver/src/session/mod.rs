@@ -356,10 +356,11 @@ mod tests {
     use super::*;
 
     const POUCH: &str = r#"
-# rut/pouch/rut.toml
-name = "pouch"
-entry.type = "./pouch.d.rut"
-entry.lib = "./pouch.rut"
+{
+  "_comment": "rut/pouch manifest — the surface + the body",
+  "name": "pouch",
+  "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
+}
 "#;
 
     #[test]
@@ -380,16 +381,20 @@ entry.lib = "./pouch.rut"
 
     /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
     const JSON: &str = r#"
-name = "json"
-entry.lib = "./json.rut"
+{
+  "name": "json",
+  "entry": { "lib": "./json.rut" },
 
-[peer-deps]
-pouch   = { path = "../pouch",   optional = true, lib = "./serde_pouch.rut" }
-nmapset = { path = "../nmapset", optional = true, lib = "./serde_nmapset.rut" }
+  "peer-deps": {
+    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./serde_pouch.rut" },
+    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./serde_nmapset.rut" }
+  },
 
-[dev-deps]
-pouch   = { path = "../pouch" }
-nmapset = { path = "../nmapset" }
+  "dev-deps": {
+    "pouch":   { "path": "../pouch" },
+    "nmapset": { "path": "../nmapset" }
+  }
+}
 "#;
 
     #[test]
@@ -412,7 +417,7 @@ nmapset = { path = "../nmapset" }
         // reached gate-less it stays the bare miss, not a false D2
         let mut s = Session::new();
         s.load_manifest(
-            "name = \"j\"\nentry.lib = \"./j.rut\"\n[peer-deps]\nnmapset = { path = \"../nmapset\" }\n",
+            r#"{"name": "j", "entry": {"lib": "./j.rut"}, "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
         )
         .unwrap();
         let err = s.resolve("nmapset").unwrap_err();

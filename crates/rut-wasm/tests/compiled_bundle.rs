@@ -15,13 +15,13 @@ fn pack_world() -> Vec<u8> {
     let _ = std::fs::remove_dir_all(&base);
     let lib = base.join("lib");
     std::fs::create_dir_all(&lib).unwrap();
-    std::fs::write(lib.join("rut.toml"), "name = \"lib\"\nentry.lib = \"./lib.rut\"\n").unwrap();
+    std::fs::write(lib.join("rut.toml"), r#"{"name": "lib", "entry": {"lib": "./lib.rut"}}"#).unwrap();
     std::fs::write(lib.join("lib.rut"), "pub fn four() -> i64 { return 4; }\n").unwrap();
     let app = base.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n[deps]\nlib = { path = \"../lib\" }\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}, "deps": {"lib": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(

@@ -30,7 +30,12 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!("name = \"{name}\"\nentry.lib = \"./{entry}\"\n{extra}")
+    format!(r#"{{"name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+}
+
+/// The bundle-shaped spelling: the pack gate's keys ride inside.
+fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// One session, one in-memory module set (no filesystem): the specs'
@@ -273,10 +278,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     write(
         &pairz,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("pairz", "pairz.rut", "")
-        ),
+        &bundle_manifest("pairz", "pairz.rut", ""),
     );
     write(
         &pairz,
@@ -290,10 +292,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\npairz = { path = \"../pairz\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
@@ -411,10 +410,7 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\npairz = { path = \"../pairz\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
@@ -451,10 +447,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\npairz = { path = \"../pairz\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,

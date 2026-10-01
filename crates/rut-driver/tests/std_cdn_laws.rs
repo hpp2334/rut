@@ -72,7 +72,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.toml"),
-        format!("name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\n{rows}"),
+        format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
@@ -140,7 +140,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
     for key in ["async_host", "http", "json", "nmapset", "pouch"] {
         let (url, bytes) = artifact(key);
         rows.push_str(&format!(
-            "{key} = {{ url = \"{url}\", sha256 = \"{}\" }}\n",
+            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
             sha256_hex(&bytes)
         ));
         table.insert(url, bytes);
@@ -187,7 +187,7 @@ fn a_legacy_bundle_without_ridden_source_refuses_consumer_shapes() {
     let diags = load_and_compile(
         &base,
         &format!(
-            "pouch = {{ url = \"{url}\", sha256 = \"{}\" }}",
+            "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
             sha256_hex(&legacy_bytes)
         ),
         table,
@@ -216,7 +216,7 @@ fn load_compile_run(
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.toml"),
-        format!("name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\n{rows}"),
+        format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
@@ -243,7 +243,7 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
     let (diags, program, _session) = load_compile_run(
         &base,
         &format!(
-            "pouch = {{ url = \"{url}\", sha256 = \"{}\" }}",
+            "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
             sha256_hex(&bytes)
         ),
         table,
@@ -284,7 +284,7 @@ fn a_json_peer_shape_compiles_with_the_consumer_type() {
     for key in ["json", "pouch", "nmapset"] {
         let (url, bytes) = artifact(key);
         rows.push_str(&format!(
-            "{key} = {{ url = \"{url}\", sha256 = \"{}\" }}\n",
+            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
             sha256_hex(&bytes)
         ));
         table.insert(url, bytes);
@@ -381,13 +381,13 @@ fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
     for key in ["json", "pouch", "nmapset"] {
         let (url, bytes) = artifact(key);
         rows.push_str(&format!(
-            "{key} = {{ url = \"{url}\", sha256 = \"{}\" }}\n",
+            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
             sha256_hex(&bytes)
         ));
         table.insert(url, bytes);
     }
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join("strbuild");
-    rows.push_str(&format!("strbuild = {{ path = \"{}\" }}\n", tree.display()));
+    rows.push_str(&format!("\"strbuild\": {{\"path\": \"{}\"}},\n", tree.display()));
     let base = std::env::temp_dir().join(format!("rut-std-cdn-mixed-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (diags, program, session) = load_compile_run(
@@ -426,7 +426,7 @@ fn the_load_time_compile_is_deterministic() {
         let (diags, program, _session) = load_compile_run(
             &base,
             &format!(
-                "pouch = {{ url = \"{url}\", sha256 = \"{}\" }}",
+                "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
                 sha256_hex(&bytes)
             ),
             table,
@@ -457,7 +457,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     std::fs::write(
         app.join("rut.toml"),
         format!(
-            "name = \"app\"\nentry.lib = \"./app.rut\"\n\n[deps]\nstrbuild = {{ url = \"{url}\", sha256 = \"{}\" }}\n",
+            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"strbuild": {{"url": "{url}", "sha256": "{}"}}}}}}"#,
             sha256_hex(&std::fs::read(dist_std().join("strbuild.rutbundle")).unwrap())
         ),
     )
@@ -516,7 +516,7 @@ fn ambient_std_and_a_url_std_bundle_coexist() {
     let diags = load_and_compile(
         &base,
         &format!(
-            "core = {{ url = \"{url}\", sha256 = \"{}\" }}",
+            "\"core\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
             sha256_hex(&bytes)
         ),
         table,

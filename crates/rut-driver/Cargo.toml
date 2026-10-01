@@ -17,9 +17,9 @@ rut-parser = { path = "../rut-parser" }
 rut-lir = { path = "../rut-lir" }
 rut-vm = { path = "../rut-vm" }
 # the `.rutbundle` container — a module of this crate (`bundle/`), not a
-# separate crate: toml_edit parses the manifest grammar, zip carries the
+# separate crate: serde_json parses the manifest grammar, zip carries the
 # deterministic archive subset
-toml_edit = { workspace = true }
+serde_json = "1" # user-approved: the manifest's JSON syntax lane (no features)
 zip = { workspace = true }
 thiserror = { workspace = true }
 # the pin law's arithmetic: the sha256 pin is manifest law, verified at

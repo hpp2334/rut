@@ -33,7 +33,12 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!("name = \"{name}\"\nentry.lib = \"./{entry}\"\n{extra}")
+    format!(r#"{{"name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+}
+
+/// The bundle-shaped spelling: the pack gate's keys ride inside.
+fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linkable
@@ -50,10 +55,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\nutil = { path = \"../util\" }\nboxy = { path = \"../boxy\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#,)
     );
     write(
         &app,
@@ -73,7 +75,7 @@ fn mixed_world(tag: &str) -> PathBuf {
          }\n",
     );
     let boxy = root.join("boxy");
-    write(&boxy, "rut.toml", &manifest("boxy", "boxy.rut", "inline = true\n"));
+    write(&boxy, "rut.toml", &manifest("boxy", "boxy.rut", r#", "inline": true"#));
     write(
         &boxy,
         "boxy.rut",
@@ -235,7 +237,7 @@ fn generic_and_trait_param_roots_publish_compiled() {
     write(
         &app,
         "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     write(
         &app,
@@ -272,7 +274,7 @@ fn generic_and_trait_param_roots_publish_compiled() {
     write(
         &app,
         "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     write(
         &app,
@@ -305,10 +307,7 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\nlibbed = { path = \"../libbed\" }\np = { path = \"../p\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"libbed": {"path": "../libbed"}, "p": {"path": "../p"}}"#,)
     );
     write(&app, "app.rut", "use libbed::{ f };\nentry fn go() -> i32 { return f(); }\n");
     let libbed = root.join("libbed");
@@ -318,7 +317,7 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
         &manifest(
             "libbed",
             "libbed.rut",
-            "[peer-deps]\np = { path = \"../p\", optional = true, lib = \"./ser_p.rut\" }\n",
+            r#", "peer-deps": {"p": {"path": "../p", "optional": true, "lib": "./ser_p.rut"}}"#,
         ),
     );
     write(&libbed, "libbed.rut", "pub fn f() -> i32 { return 7; }\n");
@@ -362,7 +361,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
         &manifest(
             "peered",
             "peered.rut",
-            "[peer-deps]\ntagger = { path = \"../tagger\", optional = true, lib = \"./ser_tag.rut\" }\n",
+            r#", "peer-deps": {"tagger": {"path": "../tagger", "optional": true, "lib": "./ser_tag.rut"}}"#,
         ),
     );
     write(
@@ -404,10 +403,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\npeered = { path = \"../peered\" }\ntagger = { path = \"../tagger\" }\nbase = { path = \"../base\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"peered": {"path": "../peered"}, "tagger": {"path": "../tagger"}, "base": {"path": "../base"}}"#,)
     );
     write(
         &app,
@@ -450,17 +446,14 @@ fn required_peer_absent_is_d1_at_pack() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\nreq = { path = \"../req\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"req": {"path": "../req"}}"#,)
     );
     write(&app, "app.rut", "use req::{ f };\nentry fn go() -> i32 { return f(); }\n");
     let req = root.join("req");
     write(
         &req,
         "rut.toml",
-        &manifest("req", "req.rut", "[peer-deps]\nmissing = { path = \"../missing\" }\n"),
+        &manifest("req", "req.rut", r#", "peer-deps": {"missing": {"path": "../missing"}}"#,)
     );
     write(&req, "req.rut", "pub fn f() -> i32 { return 7; }\n");
     let err = pack_dir(&app).unwrap_err().to_string();

@@ -1,9 +1,13 @@
-# sib_b — T10's second sibling: same shape as
-# sib_a, its own class over the SAME pouch. The consumer imports both
-# siblings separately — two uses whose splices both contain pouch.
-name = "sib_b"
-entry.lib = "./sib_b.rut"
-inline = true
-
-[deps]
-pouch = { path = "../pouch" }
+{
+  "_comment": "sib_b — T10's second sibling: same shape as\nsib_a, its own class over the SAME pouch. The consumer imports both\nsiblings separately — two uses whose splices both contain pouch.",
+  "name": "sib_b",
+  "entry": {
+    "lib": "./sib_b.rut"
+  },
+  "inline": true,
+  "deps": {
+    "pouch": {
+      "path": "../pouch"
+    }
+  }
+}

@@ -1,13 +1,10 @@
-# bench-cross/ — the crossing-tax benchmark's host pkg (the
-# crossing-fastpath plan, phase 0): `pub host fn` decls only — the
-# bodies live in rut-std's `bench_cross::pkg()` (the
-# mounting shape). Deliberately EMPTY bodies: whatever a call costs
-# beyond the callee's own work IS the crossing, so the bench row that
-# mounts this pkg (benches/workloads/crossing-nop) measures exactly
-# that. Mounted via `[deps]` like any tree pkg.
-
-format = "rutbundle"
-format_version = 6
-name = "bench_cross"
-type = "host"
-entry.type = "./bench_cross.d.rut"
+{
+  "_comment": "bench-cross/ — the crossing-tax benchmark's host pkg (the\ncrossing-fastpath plan, phase 0): `pub host fn` decls only — the\nbodies live in rut-std's `bench_cross::pkg()` (the\nmounting shape). Deliberately EMPTY bodies: whatever a call costs\nbeyond the callee's own work IS the crossing, so the bench row that\nmounts this pkg (benches/workloads/crossing-nop) measures exactly\nthat. Mounted via `[deps]` like any tree pkg.",
+  "format": "rutbundle",
+  "format_version": 6,
+  "name": "bench_cross",
+  "type": "host",
+  "entry": {
+    "type": "./bench_cross.d.rut"
+  }
+}

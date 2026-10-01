@@ -32,7 +32,7 @@ fn host_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 6\nname = \"logger_host\"\ntype = \"host\"\nentry.type = \"./logger_host.d.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 6, "name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
     );
     write(&dir, "logger_host.d.rut", "pub host fn log(line: str);\n");
     root

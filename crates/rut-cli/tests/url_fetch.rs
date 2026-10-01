@@ -77,7 +77,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!("format = \"rutbundle\"\nformat_version = 5\nname = \"{name}\"\nentry.lib = \"./{entry}\"\n{extra}")
+    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// `rut <args>` with this test's cache dir, env-cleaned (no XDG/HOME
@@ -102,7 +102,7 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\nutil = {{ url = \"{url}\", sha256 = \"{pin}\" }}\n"),
+            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(

@@ -301,7 +301,7 @@ fn loads_a_directory_graph() {
     std::fs::create_dir_all(&lib).unwrap();
     std::fs::write(
         app.join("rut.toml"),
-        "name = \"app_main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"math\" = { path = \"../lib\" }\n",
+        r#"{"name": "app_main", "entry": {"lib": "./entry.rut"}, "deps": {"math": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -311,7 +311,7 @@ fn loads_a_directory_graph() {
     .unwrap();
     std::fs::write(
         lib.join("rut.toml"),
-        "name = \"math\"\nentry.lib = \"./lib.rut\"\n",
+        r#"{"name": "math", "entry": {"lib": "./lib.rut"}}"#,
     )
     .unwrap();
     std::fs::write(lib.join("lib.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();

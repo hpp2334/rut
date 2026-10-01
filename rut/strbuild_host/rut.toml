@@ -1,12 +1,10 @@
-# strbuild_host/ — the string builder's host rows (the ink/Logger
-# pattern): a pure declaration surface. The embedding Rust binds the
-# bodies (`rut_std::strbuild::pkg()`); the `strbuild`
-# package wraps them in the `StringBuilder` class.
-#
-# The registration scope IS the package name; the use path spells it
-# too (`use strbuild_host::{ sb_new, .. }`).
-format = "rutbundle"
-format_version = 6
-name = "strbuild_host"
-type = "host"
-entry.type = "./strbuild_host.d.rut"
+{
+  "_comment": "strbuild_host/ — the string builder's host rows (the ink/Logger\npattern): a pure declaration surface. The embedding Rust binds the\nbodies (`rut_std::strbuild::pkg()`); the `strbuild`\npackage wraps them in the `StringBuilder` class.\n\nThe registration scope IS the package name; the use path spells it\ntoo (`use strbuild_host::{ sb_new, .. }`).",
+  "format": "rutbundle",
+  "format_version": 6,
+  "name": "strbuild_host",
+  "type": "host",
+  "entry": {
+    "type": "./strbuild_host.d.rut"
+  }
+}

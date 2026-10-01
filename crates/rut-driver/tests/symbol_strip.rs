@@ -31,7 +31,12 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!("name = \"{name}\"\nentry.lib = \"./{entry}\"\n{extra}")
+    format!(r#"{{"name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+}
+
+/// The bundle-shaped spelling: the pack gate's keys ride inside.
+fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// The fully-compiled closure: `app` (linkable root) uses `util`
@@ -42,10 +47,7 @@ fn fc_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\nutil = { path = \"../util\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#,)
     );
     write(
         &app,
@@ -81,7 +83,7 @@ fn trace_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.toml",
-        "format = \"rutbundle\"\nformat_version = 5\nname = \"app\"\nentry.lib = \"./app.rut\"\n",
+        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     let mut src = String::from("fn boom() -> str {\n");
     src.push_str(&pad(25));
@@ -106,13 +108,10 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest(
-                "app",
-                "app.rut",
-                "[deps]\nutil = { path = \"../util\" }\nboxy = { path = \"../boxy\" }\n"
-            )
+        &bundle_manifest(
+            "app",
+            "app.rut",
+            r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#
         ),
     );
     write(
@@ -132,7 +131,7 @@ fn mixed_world(tag: &str) -> PathBuf {
         "rut.toml",
         &format!(
             "{}",
-            manifest("boxy", "boxy.rut", "inline = true\n[deps]\nutil = { path = \"../util\" }\n")
+            manifest("boxy", "boxy.rut", r#", "inline": true, "deps": {"util": {"path": "../util"}}"#)
         ),
     );
     write(
@@ -265,10 +264,7 @@ fn strip_refuses_a_generic_owning_closure() {
     write(
         &lib,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("pairz", "pairz.rut", "")
-        ),
+        &bundle_manifest("pairz", "pairz.rut", ""),
     );
     write(
         &lib,
@@ -282,10 +278,7 @@ fn strip_refuses_a_generic_owning_closure() {
     write(
         &app,
         "rut.toml",
-        &format!(
-            "format = \"rutbundle\"\nformat_version = 5\n{}",
-            manifest("app", "app.rut", "[deps]\npairz = { path = \"../pairz\" }\n")
-        ),
+        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,

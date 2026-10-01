@@ -1,11 +1,15 @@
-# cons_sibs — T10's consumer: imports BOTH
-# pouch-riding siblings separately — the exact t1 collision shape (two
-# pkgs both riding a shared transitive inline pkg, imported
-# separately). Dedup-by-origin makes it structurally impossible; the
-# `appkit` workaround retires as a NECESSITY (it stays legal).
-name = "cons_sibs"
-entry.lib = "./cons.rut"
-
-[deps]
-sib_a = { path = "../sib_a" }
-sib_b = { path = "../sib_b" }
+{
+  "_comment": "cons_sibs — T10's consumer: imports BOTH\npouch-riding siblings separately — the exact t1 collision shape (two\npkgs both riding a shared transitive inline pkg, imported\nseparately). Dedup-by-origin makes it structurally impossible; the\n`appkit` workaround retires as a NECESSITY (it stays legal).",
+  "name": "cons_sibs",
+  "entry": {
+    "lib": "./cons.rut"
+  },
+  "deps": {
+    "sib_a": {
+      "path": "../sib_a"
+    },
+    "sib_b": {
+      "path": "../sib_b"
+    }
+  }
+}

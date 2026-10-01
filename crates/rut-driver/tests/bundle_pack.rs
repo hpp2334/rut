@@ -31,7 +31,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let mut files = MapSource::default();
     files.0.insert(
         root.join("rut.toml"),
-        b"name = \"json\"\nentry.lib = \"./json.rut\"\nentry.libs = [\"./store.rut\"]\n\n[peer-deps]\npouch = { path = \"../pouch\", optional = true, lib = \"./serde_pouch.rut\" }\n"
+        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./serde_pouch.rut"}}}"#
             .to_vec(),
     );
     files.0.insert(root.join("json.rut"), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
@@ -64,9 +64,9 @@ fn a_manifest_named_file_the_map_lacks_is_a_read_error() {
     let mut files = MapSource::default();
     files.0.insert(
         root.join("rut.toml"),
-        b"name = \"mod\"\nentry.lib = \"./mod.rut\"\n".to_vec(),
+        br#"{"name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_vec(),
     );
-    let manifest = parse_manifest("name = \"mod\"\nentry.lib = \"./mod.rut\"\n").unwrap();
+    let manifest = parse_manifest(r#"{"name": "mod", "entry": {"lib": "./mod.rut"}}"#).unwrap();
     let mut out = Vec::new();
     let err = collect_source_group(&root, &manifest, "", &files, &mut out).unwrap_err();
     assert!(err.contains("cannot read"), "{err}");

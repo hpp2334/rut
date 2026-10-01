@@ -1,5 +1,9 @@
-format = "rutbundle"
-format_version = 6
-name = "nmap_host"
-type = "host"
-entry.type = "./nmap.d.rut"
+{
+  "format": "rutbundle",
+  "format_version": 6,
+  "name": "nmap_host",
+  "type": "host",
+  "entry": {
+    "type": "./nmap.d.rut"
+  }
+}

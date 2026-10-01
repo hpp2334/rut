@@ -1,5 +1,9 @@
-format = "rutbundle"
-format_version = 6
-name = "core"
-type = "host"
-entry.type = "./core.d.rut"
+{
+  "format": "rutbundle",
+  "format_version": 6,
+  "name": "core",
+  "type": "host",
+  "entry": {
+    "type": "./core.d.rut"
+  }
+}

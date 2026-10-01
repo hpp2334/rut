@@ -40,7 +40,8 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!("format = \"rutbundle\"\nformat_version = 5\nname = \"{name}\"\nentry.lib = \"./{entry}\"\n{extra}")
+    // `extra` is the fragment after the entry object (`, "deps": { … }`)
+    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
@@ -137,7 +138,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\nutil = {{ url = \"{url}\", sha256 = \"{pin}\" }}\n"),
+            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(
@@ -162,7 +163,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     // the pinned equivalence: the url lane and the path lane link to
     // the identical binary
     let twin = root.join("app_path");
-    write(&twin, "rut.toml", &manifest("app", "app.rut", "[deps]\nutil = { path = \"../util\" }\n"));
+    write(&twin, "rut.toml", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
     write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
     let (dir_session, dir_root) = load_dir_session(&twin, &FsSource).expect("dir load");
     assert_eq!(
@@ -192,7 +193,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\nutil = {{ url = \"{url}\", sha256 = \"{wrong}\" }}\n"),
+            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{wrong}"}}}}"#),
         ),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -226,7 +227,7 @@ fn name_vs_key_refuses() {
     write(
         &app,
         "rut.toml",
-        &manifest("app", "app.rut", &format!("[deps]\nnot_util = {{ url = \"{url}\" }}\n")),
+        &manifest("app", "app.rut", &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
@@ -255,7 +256,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
         &manifest(
             "util",
             "util.rut",
-            "[deps]\nghost = { url = \"https://fixtures.test/ghost.rutbundle\" }\n",
+            r#", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}"#,
         ),
     );
 
@@ -274,7 +275,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(
         &app,
         "rut.toml",
-        &manifest("app", "app.rut", &format!("[deps]\nutil = {{ url = \"{url}\" }}\n")),
+        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
@@ -300,7 +301,7 @@ fn embedder_mount_outranks_the_url_dep() {
     write(
         &app,
         "rut.toml",
-        &manifest("app", "app.rut", &format!("[deps]\nutil = {{ url = \"{url}\" }}\n")),
+        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
@@ -336,7 +337,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("pouch"),
         "rut.toml",
-        &manifest("pouch", "pouch.rut", "inline = true\n"),
+        &manifest("pouch", "pouch.rut", r#", "inline": true"#),
     );
     write(
         &root.join("pouch"),
@@ -351,7 +352,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
         &manifest(
             "codec",
             "codec.rut",
-            "inline = true\n\n[peer-deps]\npouch = { path = \"../pouch\", optional = true, lib = \"./codec_pouch.rut\" }\n\n[dev-deps]\npouch = { path = \"../pouch\" }\n",
+            r#", "inline": true, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./codec_pouch.rut"}}, "dev-deps": {"pouch": {"path": "../pouch"}}"#,
         ),
     );
     write(
@@ -368,7 +369,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("zeta"),
         "rut.toml",
-        &manifest("zeta", "zeta.rut", "[deps]\ncodec = { path = \"../codec\" }\n"),
+        &manifest("zeta", "zeta.rut", r#", "deps": {"codec": {"path": "../codec"}}"#),
     );
     write(&root.join("zeta"), "zeta.rut", "pub fn ping() -> i32 {\n    return 7;\n}\n");
     let bytes = pack_dir(&root.join("zeta")).expect("pack zeta");
@@ -390,7 +391,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\npouch = {{ path = \"../pouch\" }}\nzeta = {{ url = \"{url}\" }}\n"),
+            &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
         ),
     );
     write(
@@ -433,7 +434,7 @@ fn mixed_dir_and_archive_peer_gate() {
     write(
         &app2,
         "rut.toml",
-        &manifest("app2", "app2.rut", &format!("[deps]\nzeta = {{ url = \"{url}\" }}\n")),
+        &manifest("app2", "app2.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
     let (session2, _) = block_on(rut_driver::load_dir_session_with(&app2, &Table::from(table)))
@@ -466,7 +467,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
         &manifest(
             "app",
             "app.rut",
-            "[deps]\nutil_a = { url = \"https://fixtures.test/a.rutbundle\" }\nutil_b = { url = \"https://fixtures.test/b.rutbundle\" }\n",
+            r#", "deps": {"util_a": {"url": "https://fixtures.test/a.rutbundle"}, "util_b": {"url": "https://fixtures.test/b.rutbundle"}}"#,
         ),
     );
     write(
@@ -502,7 +503,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     write(
         &app,
         "rut.toml",
-        &manifest("app", "app.rut", &format!("[deps]\nutil = {{ url = \"{url}\" }}\n")),
+        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
@@ -527,7 +528,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\nutil = {{ url = \"{url}\", sha256 = \"{pin}\" }}\n"),
+            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(
@@ -557,7 +558,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
         .unwrap()
         .read("rut.toml")
         .unwrap();
-    assert!(out_manifest.contains(&format!("url = \"{url}\"")), "{out_manifest}");
+    assert!(out_manifest.contains(&format!(r#""url": "{url}""#)), "{out_manifest}");
     assert!(out_manifest.contains(&pin), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
@@ -583,7 +584,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
         &manifest(
             "app",
             "app.rut",
-            &format!("[deps]\npouch = {{ path = \"../pouch\" }}\nzeta = {{ url = \"{url}\" }}\n"),
+            &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
         ),
     );
     write(
@@ -614,7 +615,7 @@ fn pack_refuses_unused_compiled_url_dep() {
     write(
         &app,
         "rut.toml",
-        &manifest("app", "app.rut", &format!("[deps]\nutil = {{ url = \"{url}\" }}\n")),
+        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
