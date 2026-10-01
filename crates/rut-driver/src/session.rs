@@ -32,6 +32,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use thiserror::Error;
+
 use crate::bundle::{parse_manifest, valid_spec, Entry, ManifestError};
 
 /// What a mounted module's body IS. The graph dispatches on this:
@@ -156,39 +158,22 @@ impl PeerDecl {
 /// unless the missed name is a declared optional peer of a mounted pkg
 ///: then the dedicated missing-peer error answers, never
 /// the bare text.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ResolveError {
     /// not `[a-zA-Z0-9_]+`
+    #[error("malformed package name `{spec}` — package names are bare `[a-zA-Z0-9_]+` identifiers")]
     BadSpec { spec: String },
     /// no module with that exact name is mounted
+    #[error("cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.toml` `[deps]`")]
     NoModule { spec: String },
     /// D2: the name is an OPTIONAL peer some mounted pkg
     /// declared, and the peer is absent — its integration group never
     /// mounted. Names the pkg, the peer, the integration it unlocks,
     /// and the fix. (A REQUIRED peer's absence is louder still: D1 at
     /// mount, so it never reaches resolve through the loader.)
+    #[error("cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`")]
     PeerMissing { spec: String, pkg: String },
 }
-
-impl std::fmt::Display for ResolveError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolveError::BadSpec { spec } => write!(
-                f,
-                "malformed package name `{spec}` — package names are bare `[a-zA-Z0-9_]+` identifiers"
-            ),
-            ResolveError::NoModule { spec } => write!(
-                f,
-                "cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.toml` `[deps]`"
-            ),
-            ResolveError::PeerMissing { spec, pkg } => write!(
-                f,
-                "cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`"
-            ),
-        }
-    }
-}
-impl std::error::Error for ResolveError {}
 
 /// The business-owned mount table. The host decides what exists; the
 /// resolver maps exact specifiers. Mirrors the runtime

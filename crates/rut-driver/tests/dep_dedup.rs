@@ -23,7 +23,8 @@ use rut_parser::Mode;
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
 fn load(rel: &str) -> Result<(Session, String), String> {
-    rut_driver::load_dir_session(Path::new(&format!("{PEERS}/{rel}")))
+    rut_driver::load_dir_session(Path::new(&format!("{PEERS}/{rel}")), &rut_driver::bundle::FsSource)
+    .map_err(|e| e.to_string())
 }
 
 /// Compile, flatten, verify, and run `main` — the i64 result.

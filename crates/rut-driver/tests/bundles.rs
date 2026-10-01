@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use rut_driver::bundle::FsSource;
 use rut_driver::{load_bundle_session, load_bundle_bytes, load_dir_session, load_path_session, pack_dir};
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -40,7 +41,7 @@ fn bundle_round_trip_matches_the_directory() {
     let dir = make_dir(&base);
 
     // the directory form
-    let (session, root) = load_dir_session(&dir).unwrap();
+    let (session, root) = load_dir_session(&dir, &FsSource).unwrap();
     let from_dir = linked_binary(&session, &root);
 
     // the packed form: same sources, same linked bytes
@@ -84,7 +85,7 @@ fn refusals() {
 
     // no rut.toml entry at all
     let not_a_bundle = rut_driver::bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();
-    let err = rut_driver::load_bundle_bytes(&not_a_bundle, Path::new("a")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&not_a_bundle, Path::new("a")).unwrap_err().to_string();
     assert!(err.contains("rut.toml"), "{err}");
 
     // v1–v4 layouts are refused by the one-line version gate — the
@@ -99,7 +100,7 @@ fn refusals() {
             ("x.rut".into(), src.to_vec()),
         ])
         .unwrap();
-        let err = rut_driver::load_bundle_bytes(&old, Path::new("b")).unwrap_err();
+        let err = rut_driver::load_bundle_bytes(&old, Path::new("b")).unwrap_err().to_string();
         assert!(err.contains("format_version"), "{err}");
         assert!(err.contains("reads bundle format_version 5 (compiled) and 6 (decl) only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
@@ -112,7 +113,7 @@ fn refusals() {
         ("x.rut".into(), src.to_vec()),
     ])
     .unwrap();
-    let err = rut_driver::load_bundle_bytes(&no_format, Path::new("c")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&no_format, Path::new("c")).unwrap_err().to_string();
     assert!(err.contains("rutbundle"), "{err}");
 
     // corruption: flip a payload byte, the CRC check fires (gate 1 —
@@ -121,7 +122,7 @@ fn refusals() {
     let mut bytes = pack_dir(&dir).unwrap();
     let at = 30 + "name = \"mod\"\nentry.lib = \"./mod.rut\"\n".len();
     bytes[at] ^= 0x01;
-    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("h")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("h")).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a pack whose declared surface file is missing refuses loudly
@@ -197,7 +198,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         })
         .collect();
     let respelled_bytes = rut_driver::bundle::write_bundle(&respelled).unwrap();
-    let err = rut_driver::load_bundle_bytes(&respelled_bytes, Path::new("respelled")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&respelled_bytes, Path::new("respelled")).unwrap_err().to_string();
     assert!(err.contains("s/s.d.rut"), "{err}");
     assert!(err.contains("`host fn ping`"), "{err}");
     assert!(err.contains("`type = \"host\"`"), "{err}");
@@ -333,7 +334,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         .cloned()
         .collect();
     let bytes = rut_driver::bundle::write_bundle(&stripped).unwrap();
-    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("stripped")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("stripped")).unwrap_err().to_string();
     assert!(err.contains("missing its `m` dependency group"), "{err}");
 
     let _ = std::fs::remove_dir_all(&base);

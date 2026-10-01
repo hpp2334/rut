@@ -11,7 +11,10 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rut-driver = { path = "../rut-driver" }
+# default-features = false: the `http` wire (reqwest + tokio) does not
+# build on wasm32-unknown-unknown — this graph loads url-free projects
+# and bundles only, so it never needs a remote
+rut-driver = { path = "../rut-driver", default-features = false }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std" }

@@ -441,7 +441,7 @@ fn an_event_without_a_door_traps_loud() {
 /// widgets (no crossings declared or used is the fixture's point).
 fn make_fixture() -> WebHost<FakeDom> {
     let (mut session, root) =
-        rut_driver::load_dir_session(&mount::probe_dir("softfail"))
+        rut_driver::load_dir_session(&mount::probe_dir("softfail"), &rut_driver::bundle::FsSource)
             .expect("the fixture mounts");
     rut_driver::mount_std_core(&mut session);
     let ctx = session.host_pkg_context();

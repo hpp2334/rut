@@ -21,7 +21,7 @@ const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonpkg");
 const LIGHT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonlight");
 
 fn vm_at(dir: &str) -> Vm {
-    let (mut session, root) = rut_driver::load_dir_session(Path::new(dir)).expect("mount");
+    let (mut session, root) = rut_driver::load_dir_session(Path::new(dir), &rut_driver::bundle::FsSource).expect("mount");
     rut_driver::mount_std(&mut session);
     let g = rut_driver::compile_graph(&session, &root);
     assert!(
@@ -598,7 +598,7 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
     let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>.new();\n    v.push(1);\n}\n";
-    let (mut light, _) = rut_driver::load_dir_session(Path::new(LIGHT)).expect("mount light");
+    let (mut light, _) = rut_driver::load_dir_session(Path::new(LIGHT), &rut_driver::bundle::FsSource).expect("mount light");
     rut_driver::mount_std(&mut light);
     let out = rut_driver::compile_module_in(&mut light, src, rut_parser::Mode::Impl, "d2probe");
     assert!(
@@ -608,7 +608,7 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     let msg = out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
     assert!(msg.contains("pouch"), "the D2 miss names the peer: {msg}");
 
-    let (mut full, _) = rut_driver::load_dir_session(Path::new(PKG)).expect("mount full");
+    let (mut full, _) = rut_driver::load_dir_session(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount full");
     rut_driver::mount_std(&mut full);
     let out = rut_driver::compile_module_in(&mut full, src, rut_parser::Mode::Impl, "d2probe");
     assert!(

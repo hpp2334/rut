@@ -43,13 +43,16 @@ use rut_vm::Trap;
 /// bodies.
 struct Table(BTreeMap<String, Vec<u8>>);
 
-impl rut_driver::DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+impl rut_driver::DepRemote for Table {
+    fn fetch(
+        &self,
+        url: &str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
         let r = match self.0.get(url) {
             Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no seeded bytes for {url}")),
+            None => Err(rut_driver::RemoteError::new(format!("no seeded bytes for {url}"))),
         };
-        std::future::ready(r)
+        Box::pin(std::future::ready(r))
     }
 }
 
@@ -83,8 +86,8 @@ fn load_rgh_session() -> Result<(rut_driver::Session, String), String> {
             .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
         table.insert(url.clone(), bytes);
     }
-    let (mut session, root) =
-        block_on(rut_driver::load_dir_session_with(&base, &Table(table)))?;
+    let (mut session, root) = block_on(rut_driver::load_dir_session_with(&base, &Table(table)))
+        .map_err(|e| e.to_string())?;
     // the example's own CLI-I/O rows (nothing fetches — the embedder
     // binds the bodies)
     rut_driver::mount_dir(

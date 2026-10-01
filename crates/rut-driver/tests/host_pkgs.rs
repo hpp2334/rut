@@ -129,7 +129,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
             ("s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
         ],
     );
-    let err = load_path_session(&dir).unwrap_err();
+    let err = load_path_session(&dir).unwrap_err().to_string();
     assert!(err.contains("s.d.rut"), "{err}");
     assert!(err.contains("`host fn ping`"), "{err}");
     assert!(err.contains("`type = \"host\"`"), "{err}");

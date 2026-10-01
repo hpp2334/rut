@@ -3,7 +3,7 @@ name = "rut-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the `rut` binary — run / dump"
+description = "the `rut` binary — run / pack / fetch"
 
 [[bin]]
 name = "rut"
@@ -20,15 +20,8 @@ rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std", features = ["http"] }
 rut-lexer = { path = "../rut-lexer" }
 rut-parser = { path = "../rut-parser" }
-# the url-dep lane's transport: the same reqwest pin as rut-std's HTTP
-# lane MINUS `blocking` (the CLI block_on's one tokio thread instead),
-# so the lock keeps ONE reqwest entry. Cache-first: a hit never
-# touches the network.
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
-    "gzip",
-    "brotli",
-] }
-tokio = { version = "1", default-features = false, features = [
-    "rt-multi-thread",
-] }
+# the url-dep lane's transport lives in rut-driver now (`HttpRemote`,
+# behind its default-on `http` feature — the lock keeps ONE reqwest
+# entry); the CLI names the cache root (`RUT_CACHE_DIR` override /
+# project-local) and block_on's the READY fetch futures with a noop
+# waker.

@@ -11,11 +11,13 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::task::{Context, Poll};
+
+mod common;
+use common::block_on;
 
 use rut_driver::{
     compile_graph, load_bundle_bytes, load_dir_session_with, mount_std, pack_dir, pack_dir_opts,
-    sha256_hex, DepFetch, ModuleBody, PackOpts,
+    sha256_hex, DepRemote, ModuleBody, PackOpts, RemoteError,
 };
 
 // ------------------------------------------------------------------
@@ -81,31 +83,8 @@ fn entry_names(bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
-// the std-only harness: a table fetcher + a noop-waker `block_on`
-// (the url_deps.rs pattern — the fetched futures are `ready`)
-
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no fixture bytes for {url}")),
-        };
-        std::future::ready(r)
-    }
-}
-
-fn block_on<F: Future>(fut: F) -> F::Output {
-    let mut fut = std::pin::pin!(fut);
-    let mut cx = Context::from_waker(std::task::Waker::noop());
-    loop {
-        match fut.as_mut().poll(&mut cx) {
-            Poll::Ready(v) => return v,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
+// the shared harness's Table serves the url rows here; `Counting`
+// (below) stays LOCAL — it counts.
 
 // ------------------------------------------------------------------
 // the tests
@@ -179,7 +158,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let (session, root) = block_on(load_dir_session_with(&app, &Table(table))).expect("url load");
+    let (session, root) = block_on(load_dir_session_with(&app, &common::Table::from(table))).expect("url load");
     assert_eq!(root, "app");
     assert!(matches!(
         session.resolve("logger_host").unwrap().body,
@@ -287,14 +266,16 @@ fn the_v5_v6_pairing_is_total() {
         "format = \"rutbundle\"\nformat_version = 5\nname = \"h\"\ntype = \"host\"\nentry.type = \"./h.d.rut\"\n"
     );
     let err = load_bundle_bytes(&resealed(&bytes, "rut.toml", &v5_manifest), Path::new("mem"))
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("packs at format_version 6"), "{err}");
     assert!(err.contains("a v5 bundle's root is compiled"), "{err}");
 
     // v6 + lib manifest: the other broken half — lib roots stay v5
     let v6_lib = "format = \"rutbundle\"\nformat_version = 6\nname = \"h\"\nentry.lib = \"./h.rut\"\n";
     let err = load_bundle_bytes(&resealed(&bytes, "rut.toml", v6_lib), Path::new("mem"))
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("decl-root layout"), "{err}");
     assert!(err.contains("a lib root packs at 5"), "{err}");
 }
@@ -307,13 +288,13 @@ fn v6_refuses_compiled_shaped_entries() {
     // a root `.rutc` in a v6 host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "h.rutc", b"not a real program");
-    let err = load_bundle_bytes(&with_rutc, Path::new("mem")).unwrap_err();
+    let err = load_bundle_bytes(&with_rutc, Path::new("mem")).unwrap_err().to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
     assert!(err.contains("h.rutc"), "{err}");
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
-    let err = load_bundle_bytes(&with_ledger, Path::new("mem")).unwrap_err();
+    let err = load_bundle_bytes(&with_ledger, Path::new("mem")).unwrap_err().to_string();
     assert!(err.contains("no programs"), "{err}");
 
     // a dep group: single-package law
@@ -327,7 +308,7 @@ fn v6_refuses_compiled_shaped_entries() {
             rut_driver::bundle::parse_bundle(&group_manifest).unwrap(),
         ).collect();
     let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = load_bundle_bytes(&with_group, Path::new("mem")).unwrap_err();
+    let err = load_bundle_bytes(&with_group, Path::new("mem")).unwrap_err().to_string();
     assert!(err.contains("single-package"), "{err}");
 
     // a missing surface: the root IS the surface — no entry, no bundle
@@ -338,7 +319,8 @@ fn v6_refuses_compiled_shaped_entries() {
         .collect();
     let err =
         load_bundle_bytes(&rut_driver::bundle::write_bundle(&stripped).unwrap(), Path::new("mem"))
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
 }
 
@@ -362,7 +344,9 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
     write(&app, "app.rut", "entry fn main() -> nil {}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let err = block_on(load_dir_session_with(&app, &Table(table.clone()))).unwrap_err();
+    let err = block_on(load_dir_session_with(&app, &common::Table::from(table.clone())))
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
 
     // name-vs-key: the key spells the mounted name
@@ -375,7 +359,9 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         ),
     );
     write(&app2, "app2.rut", "entry fn main() -> nil {}\n");
-    let err = block_on(load_dir_session_with(&app2, &Table(table))).unwrap_err();
+    let err = block_on(load_dir_session_with(&app2, &common::Table::from(table)))
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("the bundle names itself `logger_host`"), "{err}");
 }
 
@@ -407,13 +393,16 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     write(&pouch, "pouch.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
 
     struct Counting(BTreeMap<String, Vec<u8>>);
-    impl DepFetch for Counting {
-        fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+    impl DepRemote for Counting {
+        fn fetch(
+            &self,
+            url: &str,
+        ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>> {
             let r = match self.0.get(url) {
                 Some(bytes) => Ok(bytes.clone()),
-                None => Err(format!("no fixture bytes for {url}")),
+                None => Err(RemoteError::new(format!("no fixture bytes for {url}"))),
             };
-            std::future::ready(r)
+            Box::pin(std::future::ready(r))
         }
     }
     let mut table = BTreeMap::new();
@@ -457,7 +446,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     );
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let (mut session, root) = block_on(load_dir_session_with(&app, &Table(table))).expect("load");
+    let (mut session, root) = block_on(load_dir_session_with(&app, &common::Table::from(table))).expect("load");
     mount_std(&mut session);
     let g = compile_graph(&session, &root);
     assert!(

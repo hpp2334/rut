@@ -20,17 +20,12 @@
 //! compiler.
 
 use super::zip::{self, ZipLayerError};
+use thiserror::Error;
 
 /// A malformed or unsupported bundle — a load error, never a runtime trap.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[error("{0}")]
 pub struct BundleError(pub String);
-
-impl std::fmt::Display for BundleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl std::error::Error for BundleError {}
 
 /// CRC-32 (IEEE 802.3), the zip entry checksum — table-driven.
 pub fn crc32(data: &[u8]) -> u32 {

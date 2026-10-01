@@ -21,10 +21,28 @@ rut-vm = { path = "../rut-vm" }
 # deterministic archive subset
 toml_edit = { workspace = true }
 zip = { workspace = true }
+thiserror = { workspace = true }
 # the pin law's arithmetic: the sha256 pin is manifest law, verified at
 # the mount door on EVERY load — so the dependency is unconditional and
 # wasm-clean (pure Rust; no features, no I/O)
 sha2 = "0.10"
+# the url-dep lane's transport, behind the default-on `http` feature
+# (the wasm graphs opt out — same reqwest pin as rut-std's HTTP lane
+# MINUS `blocking`; the wire runs on the remote's own private worker
+# thread, one tokio runtime per request, so ANY executor works: the
+# fetch futures come back READY)
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "gzip",
+    "brotli",
+], optional = true }
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+], optional = true }
+
+[features]
+default = ["http"]
+http = ["dep:reqwest", "dep:tokio"]
 
 [dev-dependencies]
 rut-std = { path = "../rut-std" }

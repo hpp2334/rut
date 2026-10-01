@@ -12,6 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rut_driver::bundle::FsSource;
 use rut_driver::{
     compile_graph, load_bundle_bytes, load_dir_session, mount_std, pack_dir, ModuleBody,
 };
@@ -120,7 +121,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     let root = mixed_world("mixed");
     // THE pinned equivalence: the compiled bundle and its source
     // directory link to the identical binary
-    let (dir_session, dir_root) = load_dir_session(&root.join("app")).expect("dir load");
+    let (dir_session, dir_root) = load_dir_session(&root.join("app"), &FsSource).expect("dir load");
     let from_dir = linked_binary(&dir_session, &dir_root);
 
     let bytes = pack_dir(&root.join("app")).expect("pack");
@@ -421,7 +422,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
 
     // the directory world first (the load-time peer gate rides the same
     // compile — the rows land in the declarer's unit there too)
-    let (dir_session, dir_root) = load_dir_session(&app).expect("dir load");
+    let (dir_session, dir_root) = load_dir_session(&app, &FsSource).expect("dir load");
     let from_dir = linked_binary(&dir_session, &dir_root);
 
     let bytes = pack_dir(&app).expect("pack");
@@ -487,8 +488,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = load_bundle_bytes(&rut_driver::bundle::write_bundle(&stale).unwrap(), Path::new("stale"))
-        .unwrap_err();
+    let err = load_bundle_bytes(&rut_driver::bundle::write_bundle(&stale).unwrap(), Path::new("stale"))        .unwrap_err().to_string();
     assert!(err.contains("util/util.rutc"), "{err}");
     assert!(err.contains("version"), "{err}");
 
@@ -503,7 +503,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         .expect("the entry name rides the container");
     let data_at = at + needle.len() + 30; // local header: fixed 30 bytes + name
     corrupt[data_at] ^= 0x01;
-    let err = load_bundle_bytes(&corrupt, Path::new("crc")).unwrap_err();
+    let err = load_bundle_bytes(&corrupt, Path::new("crc")).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a doctored scope ledger: the group's binary carries its own
@@ -530,7 +530,8 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         .collect();
     let err =
         load_bundle_bytes(&rut_driver::bundle::write_bundle(&doctored).unwrap(), Path::new("ledger"))
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
     assert!(
         err.contains("ledger") || err.contains("scope"),
         "{err}"

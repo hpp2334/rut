@@ -115,7 +115,7 @@ pub fn project_dir() -> std::path::PathBuf {
 /// `tests/mount_lane.rs` pins the two lanes together.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = rut_driver::load_dir_session(&project_dir())?;
+    let (mut session, root) = rut_driver::load_dir_session(&project_dir(), &rut_driver::bundle::FsSource).map_err(|e| e.to_string())?;
     rut_driver::mount_std_core(&mut session);
     register_web_surface(&mut session)?;
     Ok((session, root))
@@ -137,7 +137,7 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
 /// its dir bare + `mount_std_core` (its test spells that shape).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_probe_session(probe: &str) -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = rut_driver::load_dir_session(&probe_dir(probe))?;
+    let (mut session, root) = rut_driver::load_dir_session(&probe_dir(probe), &rut_driver::bundle::FsSource).map_err(|e| e.to_string())?;
     rut_driver::mount_std_core(&mut session);
     register_web_surface(&mut session)?;
     Ok((session, root))
@@ -245,7 +245,7 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     // the nmap host surface, from the CDN artifact (the v6 decl bundle)
     // — the wasm lane's url-dep mount; the registration scope IS the
     // package name the bundle answers to
-    let mounted = rut_driver::mount_bundle_bytes(session, NMAP_HOST_BUNDLE)?;
+    let mounted = rut_driver::mount_bundle_bytes(session, NMAP_HOST_BUNDLE).map_err(|e| e.to_string())?;
     debug_assert_eq!(mounted, "nmap_host");
     session
         .register_module(

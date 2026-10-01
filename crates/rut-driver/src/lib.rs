@@ -32,7 +32,8 @@ pub use loader::{
     apply_symbols_to_session, assemble_peers, compile_dir, load_bundle_bytes,
     load_bundle_session, load_dir_session, load_dir_session_fetched, load_dir_session_with,
     load_module_source, load_path_session, load_path_session_with, mount_bundle_bytes,
-    mount_dir, mount_dir_with, sha256_hex, Archive, DepFetch, LoadedDir,
+    mount_dir, mount_dir_with, sha256_hex, Archive, DepRemote, HttpRemote, LoadError, Loaded,
+    LoadedDir, Loader, RemoteError,
 };
 
 fn respell_surface_ty(

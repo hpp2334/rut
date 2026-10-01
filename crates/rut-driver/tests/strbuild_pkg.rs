@@ -35,7 +35,7 @@ fn vm() -> Vm {
 /// A VM over the fixture with a caller-chosen heap budget — the
 /// charge-hook test grows the builder past a SMALL budget on purpose.
 fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
-    let (mut session, root) = rut_driver::load_dir_session(Path::new(PKG)).expect("mount");
+    let (mut session, root) = rut_driver::load_dir_session(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount");
     rut_driver::mount_std(&mut session);
     let g = rut_driver::compile_graph(&session, &root);
     assert!(

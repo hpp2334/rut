@@ -1,9 +1,19 @@
 //! the `rut` binary — run / pack / fetch.
 
-mod fetch;
-
-use fetch::CacheFetch;
 use std::future::Future;
+use std::path::PathBuf;
+use std::task::{Context, Poll};
+
+/// The remote for a project: `RUT_CACHE_DIR` overrides the root (the
+/// CLI-side override — the driver never reads env), otherwise the
+/// project-local cache (`<project>/.rut/cache`). Cache-first either
+/// way: a hit never touches the network.
+fn remote_for(project: &std::path::Path) -> rut_driver::HttpRemote {
+    match std::env::var_os("RUT_CACHE_DIR") {
+        Some(dir) => rut_driver::HttpRemote::at(PathBuf::from(dir)),
+        None => rut_driver::HttpRemote::project_local(project),
+    }
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -99,12 +109,18 @@ fn usage() {
     );
 }
 
-/// The block_on seam for the `_with` lanes: one tokio runtime, one
-/// thread's worth of waiting — the CLI's own boundary, where a
-/// `!Send`-tolerant contract meets a plain synchronous binary.
-fn block_on<F: Future>(fut: F) -> Result<F::Output, String> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("tokio runtime: {e}"))?;
-    Ok(rt.block_on(fut))
+/// The block_on seam for the `_with` lanes: the fetch futures come
+/// back READY (the remote's wire runs on its own worker thread), so a
+/// noop-waker poll loop settles them — no runtime dep of our own.
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
 }
 
 /// The eviction law: a driver pin error names dep + url; the cache
@@ -112,18 +128,16 @@ fn block_on<F: Future>(fut: F) -> Result<F::Output, String> {
 /// the mount door on every load, so a bad entry reloads bad forever) —
 /// delete it, and the next run re-fetches. Idempotent: any other error
 /// evicts nothing.
-fn evict_poisoned_cache(err: &str) {
+fn evict_poisoned_cache(project: &std::path::Path, err: &str) {
     let Some(rest) = err.split("sha256 pin mismatch for ").nth(1) else {
         return;
     };
     let Some(url) = rest.split(": ").next() else {
         return;
     };
-    let Ok(fetch) = CacheFetch::new() else {
-        return;
-    };
-    let path = fetch.cache_path(url);
-    if std::fs::remove_file(&path).is_ok() {
+    let remote = remote_for(project);
+    let path = remote.path_for(url);
+    if remote.evict(url) {
         eprintln!(
             "evicted the poisoned cache entry for {url} ({}) — it re-fetches on the next run",
             path.display()
@@ -132,10 +146,10 @@ fn evict_poisoned_cache(err: &str) {
 }
 
 /// The fetched load lane for `run`/`fetch`: a module dir or a
-/// `.rutbundle`, with url deps served by the cache-first fetcher.
+/// `.rutbundle`, with url deps served by the cache-first remote.
 fn load_with_cache(path: &std::path::Path) -> Result<(rut_driver::Session, String), String> {
-    let fetch = CacheFetch::new()?;
-    block_on(rut_driver::load_path_session_with(path, &fetch))?
+    let remote = remote_for(path);
+    block_on(rut_driver::load_path_session_with(path, &remote)).map_err(|e| e.to_string())
 }
 
 fn load(path: &str) -> String {
@@ -197,7 +211,7 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
-            evict_poisoned_cache(&e);
+            evict_poisoned_cache(p, &e);
             std::process::exit(2);
         }
     };
@@ -334,26 +348,16 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
 /// host root: no programs, no sidecar).
 fn pack(dir: &str, out: Option<&str>, strip: bool) {
     let p = std::path::Path::new(dir);
-    let fetch = match CacheFetch::new() {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("pack: {e}");
-            std::process::exit(2);
-        }
-    };
+    let remote = remote_for(p);
     let (bytes, symtab) = match block_on(rut_driver::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts { strip },
-        &fetch,
+        &remote,
     )) {
-        Ok(Ok(b)) => b,
-        Ok(Err(e)) => {
-            eprintln!("pack: {e}");
-            evict_poisoned_cache(&e);
-            std::process::exit(2);
-        }
+        Ok(b) => b,
         Err(e) => {
             eprintln!("pack: {e}");
+            evict_poisoned_cache(p, &e);
             std::process::exit(2);
         }
     };
@@ -391,7 +395,7 @@ fn fetch_cmd(dir: &str) {
         Ok((_, root)) => println!("fetch: {dir} — all url deps are cached (root `{root}`)"),
         Err(e) => {
             eprintln!("{e}");
-            evict_poisoned_cache(&e);
+            evict_poisoned_cache(p, &e);
             std::process::exit(2);
         }
     }

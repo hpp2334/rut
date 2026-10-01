@@ -1,9 +1,9 @@
 //! url deps — `[deps]` rows naming a remote `.rutbundle` url, an
-//! optional `sha256` pin, and the injected `dep_fetch`. The layer
-//! split under test: the CALL SITE owns HOW bytes arrive (here: a
-//! `HashMap` fixture behind `std::future::ready` — no network, no
-//! runtime dep), the LOADER owns WHAT they are — the pin is manifest
-//! law, verified at the mount door on every load.
+//! optional `sha256` pin, and the injected remote. The layer
+//! split under test: the CALL SITE owns HOW bytes arrive (here: the
+//! shared ready-map fixture — no network, no runtime dep), the LOADER
+//! owns WHAT they are — the pin is manifest law, verified at the mount
+//! door on every load.
 //!
 //! Fixtures are real packed bundles (`pack_dir`, no net); the consumer
 //! worlds mount them through the fetcher. Bundles stay CLOSED: no test
@@ -11,44 +11,15 @@
 //! loader refuses rather than fetches.
 
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::task::{Context, Poll};
+
+mod common;
+use common::{block_on, Table};
 
 use rut_driver::{
-    compile_graph, load_bundle_bytes, load_dir_session, load_dir_session_fetched,
-    mount_std, pack_dir, sha256_hex, DepFetch, ModuleBody,
+    bundle::FsSource, compile_graph, load_bundle_bytes, load_dir_session,
+    load_dir_session_fetched, mount_std, pack_dir, sha256_hex, ModuleBody,
 };
-
-// ------------------------------------------------------------------
-// the std-only harness: a table fetcher + a noop-waker `block_on`
-// (the loader's futures are sync-ready fixtures; nothing ever parks)
-
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no fixture bytes for {url}")),
-        };
-        std::future::ready(r)
-    }
-}
-
-/// The std-only driver for the `_with` lanes: the fetched futures are
-/// `ready`, so one noop-waker poll settles them; a Pending here would
-/// spin — and there is nothing async behind these fixtures to park on.
-fn block_on<F: Future>(fut: F) -> F::Output {
-    let mut fut = std::pin::pin!(fut);
-    let mut cx = Context::from_waker(std::task::Waker::noop());
-    loop {
-        match fut.as_mut().poll(&mut cx) {
-            Poll::Ready(v) => return v,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
 
 // ------------------------------------------------------------------
 // the fixture world: real dirs, real packed bundles
@@ -177,7 +148,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let (session, app_root) = block_on(rut_driver::load_dir_session_with(&app, &Table(table)))
+    let (session, app_root) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
         .expect("url load");
     assert_eq!(app_root, "app");
     // the url dep is a leaf: mounted, not walked — its body is the
@@ -193,13 +164,13 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     let twin = root.join("app_path");
     write(&twin, "rut.toml", &manifest("app", "app.rut", "[deps]\nutil = { path = \"../util\" }\n"));
     write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
-    let (dir_session, dir_root) = load_dir_session(&twin).expect("dir load");
+    let (dir_session, dir_root) = load_dir_session(&twin, &FsSource).expect("dir load");
     assert_eq!(
         linked_binary(&dir_session, &dir_root),
         {
             let mut table = BTreeMap::new();
             table.insert(url.to_string(), bytes);
-            let (s, r) = block_on(rut_driver::load_dir_session_with(&app, &Table(table))).unwrap();
+            let (s, r) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table))).unwrap();
             linked_binary(&s, &r)
         },
         "dir and url lanes compile identically"
@@ -229,7 +200,9 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     let err =
-        block_on(rut_driver::load_dir_session_with(&app, &Table(table.clone()))).unwrap_err();
+        block_on(rut_driver::load_dir_session_with(&app, &Table::from(table.clone())))
+            .unwrap_err()
+            .to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
     assert!(err.contains("util"), "{err}");
     assert!(err.contains(url), "{err}");
@@ -239,7 +212,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     // the law runs on EVERY load — a correct pin passes (the happy
     // path's twin), and the same wrong pin refuses the vendored-map
     // lane identically: the door, not the fetcher, holds the lock
-    let err = load_dir_session_fetched(&app, &table).unwrap_err();
+    let err = load_dir_session_fetched(&app, &FsSource, &table).unwrap_err().to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
 }
 
@@ -259,7 +232,9 @@ fn name_vs_key_refuses() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let err = block_on(rut_driver::load_dir_session_with(&app, &Table(table))).unwrap_err();
+    let err = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains(&format!("dep `not_util` points at {url}")),
         "{err}"
@@ -285,7 +260,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
 
     // the direct bundle lane
-    let err = load_bundle_bytes(&doctored, Path::new("mem")).unwrap_err();
+    let err = load_bundle_bytes(&doctored, Path::new("mem")).unwrap_err().to_string();
     assert!(
         err.contains("the bundle is missing its `ghost` dependency group"),
         "{err}"
@@ -304,7 +279,9 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
-    let err = block_on(rut_driver::load_dir_session_with(&app, &Table(table))).unwrap_err();
+    let err = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("the bundle is missing its `ghost` dependency group"),
         "{err}"
@@ -340,7 +317,7 @@ fn embedder_mount_outranks_the_url_dep() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
     let name =
-        block_on(rut_driver::mount_dir_with(&mut session, &app, &Table(table))).expect("mount");
+        block_on(rut_driver::mount_dir_with(&mut session, &app, &Table::from(table))).expect("mount");
     assert_eq!(name, "app");
     match &session.resolve("util").unwrap().body {
         ModuleBody::Source { text, .. } => assert_eq!(text, "// the embedder's"),
@@ -425,7 +402,7 @@ fn mixed_dir_and_archive_peer_gate() {
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes);
     let (session, app_root) =
-        block_on(rut_driver::load_dir_session_with(&app, &Table(table.clone())))
+        block_on(rut_driver::load_dir_session_with(&app, &Table::from(table.clone())))
             .expect("url load");
     assert_eq!(app_root, "app");
     // zeta: compiled; codec: the archive's source group; pouch: the DIR
@@ -459,7 +436,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest("app2", "app2.rut", &format!("[deps]\nzeta = {{ url = \"{url}\" }}\n")),
     );
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
-    let (session2, _) = block_on(rut_driver::load_dir_session_with(&app2, &Table(table)))
+    let (session2, _) = block_on(rut_driver::load_dir_session_with(&app2, &Table::from(table)))
         .expect("light load");
     let impls2 = impls_of(&session2, "app2", "codec");
     assert!(
@@ -501,7 +478,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
     let mut table = BTreeMap::new();
     table.insert("https://fixtures.test/a.rutbundle".to_string(), bytes_a);
     table.insert("https://fixtures.test/b.rutbundle".to_string(), bytes_b);
-    let (session, root) = block_on(rut_driver::load_dir_session_with(&app, &Table(table)))
+    let (session, root) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
     assert!(matches!(session.resolve("util_a").unwrap().body, ModuleBody::Compiled(_)));
     assert!(matches!(session.resolve("util_b").unwrap().body, ModuleBody::Compiled(_)));
@@ -529,7 +506,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
-    let err = load_dir_session(&app).unwrap_err();
+    let err = load_dir_session(&app, &FsSource).unwrap_err().to_string();
     assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
     assert!(err.contains("`load_dir_session_with`"), "{err}");
     assert!(err.contains("vendor the dep"), "{err}");
@@ -589,7 +566,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert_eq!(run_entry::<i64>(session, "app", "go"), 42);
 
     // the async lane settles identically through the noop-waker driver
-    let via_with = block_on(rut_driver::pack_dir_with(&app, &Table(map))).expect("pack_with");
+    let via_with = block_on(rut_driver::pack_dir_with(&app, &Table::from(map))).expect("pack_with");
     assert_eq!(packed, via_with);
 }
 

@@ -19,7 +19,8 @@ use rut_driver::Session;
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
 fn load(rel: &str) -> Result<(Session, String), String> {
-    rut_driver::load_dir_session(Path::new(&format!("{DATA}/{rel}")))
+    rut_driver::load_dir_session(Path::new(&format!("{DATA}/{rel}")), &rut_driver::bundle::FsSource)
+        .map_err(|e| e.to_string())
 }
 
 fn compile(rel: &str) -> Result<rut_driver::GraphOutput, String> {

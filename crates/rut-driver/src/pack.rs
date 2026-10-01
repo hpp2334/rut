@@ -148,7 +148,7 @@ pub fn pack_dir_opts_fetched(
     // the closure's session: the [deps] walk + the dev pass + the peer
     // gate, then the engine mounts the closure's code needs (the
     // prelude always; `calc` when a program reaches `Math`)
-    let loaded = load_dir_session_fetched(dir, map)?;
+    let loaded = load_dir_session_fetched(dir, &FsSource, map).map_err(|e| e.to_string())?;
     let (mut session, root, archives) = (loaded.session, loaded.root, loaded.archives);
     crate::mount_std(&mut session);
     if root != name {
@@ -194,7 +194,7 @@ pub fn pack_dir_opts_fetched(
         match source {
             PkgSource::Dir(gdir) => {
                 let dm = crate::bundle::read_manifest(gdir, &FsSource)?;
-                mount_dev_table_fetched(&mut session, gdir, &dm, map)?;
+                mount_dev_table_fetched(&mut session, gdir, &dm, map).map_err(|e| e.to_string())?;
             }
             PkgSource::Archive { .. } => {
                 let dm = group_manifest(source, &archives)?;
@@ -221,7 +221,7 @@ pub fn pack_dir_opts_fetched(
             prefix: prefix.clone(),
         });
     }
-    run_peer_gate(&mut session, &root, &sources_all, &archives)?;
+    run_peer_gate(&mut session, &root, &sources_all, &archives).map_err(|e| e.to_string())?;
     let mut units = compile_units(&session, &root);
     if !units.diags.is_empty() || !units.ok {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
@@ -644,7 +644,7 @@ fn group_file(
 /// `[pack_dir]` with a url-dep fetcher — the `*_with` lane: collect the
 /// url rows, await `dep_fetch` per url sequentially, pack over the
 /// bytes map.
-pub async fn pack_dir_with(dir: &Path, fetch: &impl crate::loader::DepFetch) -> Result<Vec<u8>, String> {
+pub async fn pack_dir_with(dir: &Path, fetch: &dyn crate::loader::DepRemote) -> Result<Vec<u8>, String> {
     Ok(pack_dir_opts_with(dir, &PackOpts::default(), fetch).await?.0)
 }
 
@@ -652,9 +652,11 @@ pub async fn pack_dir_with(dir: &Path, fetch: &impl crate::loader::DepFetch) -> 
 pub async fn pack_dir_opts_with(
     dir: &Path,
     opts: &PackOpts,
-    fetch: &impl crate::loader::DepFetch,
+    fetch: &dyn crate::loader::DepRemote,
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
-    let map = crate::loader::prefetch_urls(dir, fetch).await?;
+    let map = crate::loader::prefetch_urls(dir, &FsSource, fetch)
+        .await
+        .map_err(|e| e.to_string())?;
     pack_dir_opts_fetched(dir, opts, &map)
 }
 

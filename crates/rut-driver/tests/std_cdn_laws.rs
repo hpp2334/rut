@@ -24,13 +24,12 @@
 //!    (first-mount-wins).
 
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::task::{Context, Poll};
 
-use rut_driver::{
-    compile_graph, load_dir_session_with, mount_std, sha256_hex, DepFetch, ModuleBody,
-};
+mod common;
+use common::{block_on, Table};
+
+use rut_driver::{compile_graph, load_dir_session_with, mount_std, sha256_hex, ModuleBody};
 
 fn dist_std() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"))
@@ -56,30 +55,6 @@ const PKGS: &[(&str, &str)] = &[
     ("bench-cross", "bench_cross"),
 ];
 
-// the std-only harness (the url_deps.rs pattern)
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no fixture bytes for {url}")),
-        };
-        std::future::ready(r)
-    }
-}
-
-fn block_on<F: Future>(fut: F) -> F::Output {
-    let mut fut = std::pin::pin!(fut);
-    let mut cx = Context::from_waker(std::task::Waker::noop());
-    loop {
-        match fut.as_mut().poll(&mut cx) {
-            Poll::Ready(v) => return v,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
 /// One artifact's bytes + its jsDelivr url, keyed by the DEPS KEY a
 /// consumer row spells (the manifest name).
 fn artifact(key: &str) -> (String, Vec<u8>) {
@@ -101,7 +76,8 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
-    let (mut session, root) = block_on(load_dir_session_with(&app, &Table(table)))?;
+    let (mut session, root) =
+        block_on(load_dir_session_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     mount_std(&mut session);
     let g = compile_graph(&session, &root);
     Ok(g.diags.iter().map(|d| d.msg.clone()).collect())
@@ -244,7 +220,8 @@ fn load_compile_run(
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
-    let (mut session, root) = block_on(load_dir_session_with(&app, &Table(table)))?;
+    let (mut session, root) =
+        block_on(load_dir_session_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     mount_std(&mut session);
     let g = compile_graph(&session, &root);
     let diags: Vec<String> = g.diags.iter().map(|d| d.msg.clone()).collect();
@@ -491,7 +468,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     )
     .unwrap();
     let (mut session, root) =
-        block_on(load_dir_session_with(&app, &Table(table))).expect("strbuild bundle loads");
+        block_on(load_dir_session_with(&app, &Table::from(table))).expect("strbuild bundle loads");
     mount_std(&mut session);
     // the builder's host rows demand bodies — the embedder half
     // (math too: mount_std mounted calc's surface)

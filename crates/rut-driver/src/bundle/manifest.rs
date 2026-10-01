@@ -51,6 +51,7 @@
 
 use std::collections::BTreeMap;
 
+use thiserror::Error;
 use toml_edit::{Document, Item, Table, TableLike, TomlError, Value};
 
 /// A module's entry points: where its surface and body live, relative to
@@ -118,15 +119,9 @@ pub struct Manifest {
 }
 
 /// A malformed manifest — a load error, never a runtime trap.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[error("{0}")]
 pub struct ManifestError(pub String);
-
-impl std::fmt::Display for ManifestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl std::error::Error for ManifestError {}
 
 /// A bare package name: `[a-zA-Z0-9_]+`, non-empty. The same charset
 /// governs manifest `name` values and `[deps]` keys.

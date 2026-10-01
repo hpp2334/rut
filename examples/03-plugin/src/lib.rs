@@ -24,13 +24,16 @@ use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 /// network; the lib's `Plugin::load` owns the seeding).
 struct Table(std::collections::BTreeMap<String, Vec<u8>>);
 
-impl rut_driver::DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+impl rut_driver::DepRemote for Table {
+    fn fetch(
+        &self,
+        url: &str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
         let r = match self.0.get(url) {
             Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no seeded bytes for {url}")),
+            None => Err(rut_driver::RemoteError::new(format!("no seeded bytes for {url}"))),
         };
-        std::future::ready(r)
+        Box::pin(std::future::ready(r))
     }
 }
 
@@ -85,6 +88,7 @@ impl Plugin {
             }
             let fetcher = Table(table);
             let fut = rut_driver::load_path_session_with(path, &fetcher);
+            let fut = async move { fut.await.map_err(|e| e.to_string()) };
             // the std-only driver for the `_with` lane: the fetched
             // futures are `ready`, so one noop-waker poll settles them
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
@@ -96,7 +100,7 @@ impl Plugin {
                 }
             }
         } else {
-            rut_driver::load_path_session(path)
+            rut_driver::load_path_session(path).map_err(|e| e.to_string())
         }
         .map_err(|e| Trap::new(TrapKind::Invalid, e))?;
         // the embedder mounts what the plugin uses: `core` only —

@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rut_driver::bundle::FsSource;
 use rut_driver::{
     compile_graph, load_bundle_bytes, load_dir_session, mount_std, pack_dir, ModuleBody, Module,
     Session,
@@ -464,7 +465,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
          \x20   return p.fst * 2;\n\
          }\n",
     );
-    let (dir_session, dir_root) = load_dir_session(&app).expect("dir load");
+    let (dir_session, dir_root) = load_dir_session(&app, &FsSource).expect("dir load");
     let from_dir = {
         let g = compile_graph(&dir_session, &dir_root);
         assert!(g.diags.is_empty(), "{:?}", g.diags);

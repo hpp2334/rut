@@ -18,13 +18,16 @@ use std::task::{Context, Poll};
 /// load; the four passes (deps walk, peer gate included) run for real.
 struct Table(BTreeMap<String, Vec<u8>>);
 
-impl rut_driver::DepFetch for Table {
-    fn dep_fetch(&self, url: &str) -> impl Future<Output = Result<Vec<u8>, String>> {
+impl rut_driver::DepRemote for Table {
+    fn fetch(
+        &self,
+        url: &str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
         let r = match self.0.get(url) {
             Some(bytes) => Ok(bytes.clone()),
-            None => Err(format!("no seeded bytes for {url}")),
+            None => Err(rut_driver::RemoteError::new(format!("no seeded bytes for {url}"))),
         };
-        std::future::ready(r)
+        Box::pin(std::future::ready(r))
     }
 }
 
@@ -59,6 +62,7 @@ fn load_sort_session() -> Result<(rut_driver::Session, String), String> {
         table.insert(url.clone(), bytes);
     }
     block_on(rut_driver::load_dir_session_with(base, &Table(table)))
+        .map_err(|e| e.to_string())
 }
 
 fn main() {
