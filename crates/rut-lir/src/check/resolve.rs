@@ -160,7 +160,7 @@ impl<'a> Ctx<'a> {
     /// instantiates from its AST. The `trait_inst` cache is shared, so
     /// an instantiation the ordinary trait-ref resolution minted
     /// earlier is fetched, never duplicated.
-    pub(crate) fn mint_impl_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+    pub fn mint_impl_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
         if self.extern_traits.get(&name).copied()
             == Some(rut_core::binary::NativeTrait::Iterable)
         {

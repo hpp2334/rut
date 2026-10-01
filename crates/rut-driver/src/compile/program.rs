@@ -188,7 +188,7 @@ pub fn compile_program_resolved(
     // exact locals the un-seeded compile gave it, or every surface id
     // an earlier-compiled consumer already bound goes stale.
     // ---- pass 3: fns, consts, types, impls, natives
-    for (dep_scope, surface, _, origin) in trait_maps.iter() {
+    for (dep_scope, surface, tmap, origin) in trait_maps.iter() {
         let dep_scope = *dep_scope;
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
@@ -295,10 +295,54 @@ pub fn compile_program_resolved(
         // a missing concrete list falls back at the call site.
         for im in &surface.impls {
             let text = surface.names.name(im.trait_name);
-            // an impl of a native trait (`Iterable`) stays in its
-            // declaring module — the consumer instantiates its own
-            // trait per element type (v1)
+            // an impl of a NATIVE trait (`Iterable`) has no surface decl
+            // to bind — the trait is core's, engine-minted per type
+            // argument list. The SHAPE-ONLY row: the descriptor is the
+            // carried inst-shape (`Iterable<#E>` — pass 1 registered it
+            // nameless), the impl registers against it with the exporter
+            // anchored as the mint owner, and the CONCRETE descriptor
+            // mints per element at the dispatch sites (the for-of weave,
+            // the widening probe — `mint_impl_trait_inst`'s iterator
+            // lane). The row carries the template target + zero fn ids
+            // exactly like a generic-target impl of a declared trait —
+            // the consumer mirrors the request instead of binding ids.
             let Some(&tid) = ext_trait.get(text) else {
+                // the native lane: core's engine-minted trait. The row
+                // registers whenever the exporter's surface carries it —
+                // a chain consumer drives `for..of` through flow's API
+                // without ever spelling `Iterable` — and dispatch gates
+                // at the sites (the widening probe's tbase bridge, the
+                // weave's row match) are self-gating on the carried
+                // signatures that name the trait.
+                let native_name = ctx.intern(text);
+                if native_name != rut_core::sym::ITERABLE {
+                    continue;
+                }
+                let shape = surface.traits.iter().find(|t| {
+                    let tn = surface.names.name(t.name);
+                    tn.contains('<') && tn.split('<').next() == Some(text)
+                });
+                let Some(shape) = shape else { continue };
+                let Some(&cid) = tmap.get(&shape.local) else { continue };
+                let methods = im
+                    .methods
+                    .iter()
+                    .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
+                    .collect();
+                let methods_concrete = im
+                    .methods_concrete
+                    .iter()
+                    .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
+                    .collect();
+                ctx.add_extern_impl(
+                    native_name,
+                    cid,
+                    im.target,
+                    methods,
+                    methods_concrete,
+                    vec![],
+                    Some(origin.clone()),
+                );
                 continue;
             };
             let tname = ctx.intern(text);
@@ -343,7 +387,7 @@ pub fn compile_program_resolved(
                     }
                 })
                 .collect();
-            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, trait_args);
+            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, trait_args, None);
         }
         
         // inherent method surfaces (the linkable-classes phase): the
@@ -1176,7 +1220,7 @@ pub fn compile_program_resolved(
             .into_iter()
             .map(|(n, f)| (ctx.intern(&n), f))
             .collect();
-        ctx.add_extern_impl(tname, tid, target, methods, methods_concrete, vec![]);
+        ctx.add_extern_impl(tname, tid, target, methods, methods_concrete, vec![], None);
     }
     let mut seeded_bodies: Vec<Inst> = Vec::new();
     // the graph-seeded instantiations (the owner side of consumer
@@ -1192,9 +1236,17 @@ pub fn compile_program_resolved(
             );
             continue;
         };
-        ctx.mk_data_inst(dname, args.clone(), rut_lexer::span::Span::new(0, 0));
-        if let Some(d) = ctx.find_data(dname).cloned() {
-            // a generic CLASS's bodies substitute the class parameters;
+        let d = ctx.find_data(dname).cloned();
+        // a generic class's instantiation carries ONLY the class's own
+        // arguments — a generic method's ride the request tail (below)
+        let class_arity = d.as_ref().map_or(0, |d| d.generics.len());
+        ctx.mk_data_inst(dname, args[..class_arity.min(args.len())].to_vec(), rut_lexer::span::Span::new(0, 0));
+        if let Some(d) = d {
+            // a generic CLASS's bodies substitute the class parameters
+            // (a generic METHOD's own parameters ride the request's
+            // tail — the caller's full substitution flattened: class
+            // parameters first, the method's appended in declaration
+            // order — `Flow<i32>.map<R>` crosses `[i32, i32]`);
             // a PLAIN class's seeded method (`MutCtx::set<A, R>`) reads
             // the args as the METHOD's own parameters, in declaration
             // order
@@ -1213,9 +1265,21 @@ pub fn compile_program_resolved(
                     d.generics.iter().cloned().zip(args.iter().cloned()).collect();
                 for m in &methods {
                     let Some(mname) = ctx.lookup_name(m) else { continue };
+                    let mgen = d
+                        .methods
+                        .iter()
+                        .find(|(n, _)| *n == mname)
+                        .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
+                        .unwrap_or_default();
+                    let mut full = env.clone();
+                    for (g, t) in mgen.iter().zip(args[class_arity.min(args.len())..].iter()) {
+                        if !full.iter().any(|(n, _)| n == g) {
+                            full.push((*g, *t));
+                        }
+                    }
                     seeded_bodies.push(Inst {
                         key: FnKey::Method { data: dname, name: mname },
-                        subst: env.clone(),
+                        subst: full,
                         trait_origins: vec![],
                     });
                 }
@@ -1335,22 +1399,78 @@ pub fn compile_program_resolved(
     // the mirrored GENERIC-TARGET impl methods: the owner mints its
     // template impl at the concrete target (the requesters' rows are
     // registered above, so the target's shape answers here) and queues
-    // the method body at the target's substitution
+    // the method body at the target's substitution. The trait answers
+    // by NAME (a trait name is unique in a unit): a DECLARED trait's
+    // minted registration carries the decl's id — a GENERIC trait's
+    // (or a NATIVE trait's, `Iterable`) the CONCRETE instantiation,
+    // minted from the template's trait arguments under the target
+    // substitution (`mint_impl_trait_inst` routes the native lane
+    // through the iterator lane).
     let impl_seed_count = ctx.seeded_impl_methods.len();
-    
+
     for (trait_text, target, method_text) in std::mem::take(&mut ctx.seeded_impl_methods) {
         let tname = ctx.intern(&trait_text);
-        let Some(info) = ctx.find_trait(tname) else { continue };
-        let tid = info.id;
-        if tid == u32::MAX {
+        let decl_id = ctx.find_trait(tname).map(|i| i.id);
+        let is_native =
+            decl_id.is_none() && ctx.extern_traits.get(&tname).copied() == Some(rut_core::binary::NativeTrait::Iterable);
+        if decl_id.is_none() && !is_native {
             continue;
         }
         // the concrete target's shape: a structural row (?T / [T]) or a
-        // class instantiation already in inst_data (the seeded rows above)
+        // class instantiation already in inst_data (the seeded rows above).
+        // A LOCAL decl's instantiation spells its name on the
+        // requester's mirror row — this unit's own row materialized in
+        // the class-seed half under a DIFFERENT id (mk_data_inst's own)
+        // — so the name normalizes onto the local row first; a used
+        // generic's row the seed block registered answers in place.
         let shape = match ctx.types.kind(target).clone() {
             TyKind::Opt { elem } => Some((rut_core::sym::OPT, vec![elem])),
             TyKind::Array { elem } => Some((rut_core::sym::ARRAY, vec![elem])),
-            _ => ctx.inst_data.get(&target).cloned(),
+            _ => {
+                let text = ctx.type_name(target).to_string();
+                let mut direct = ctx.inst_data.get(&target).cloned();
+                if direct.is_none() {
+                    if let Some((base_text, args_text)) = text.split_once('<') {
+                        let args_text = args_text.strip_suffix('>').unwrap_or(args_text);
+                        if let Some(dname) = ctx.lookup_name(base_text) {
+                            if ctx.find_data(dname).is_some() {
+                                let mut ok = true;
+                                let mut cargs = Vec::new();
+                                let mut depth = 0usize;
+                                let mut cur = String::new();
+                                let mut arg_texts: Vec<String> = Vec::new();
+                                for ch in args_text.chars() {
+                                    match ch {
+                                        '<' => { depth += 1; cur.push(ch); }
+                                        '>' => { depth = depth.saturating_sub(1); cur.push(ch); }
+                                        ',' if depth == 0 => { arg_texts.push(cur.trim().to_string()); cur = String::new(); }
+                                        _ => cur.push(ch),
+                                    }
+                                }
+                                if !cur.trim().is_empty() {
+                                    arg_texts.push(cur.trim().to_string());
+                                }
+                                for at in arg_texts {
+                                    let resolved = if let Some(bare) = at.strip_prefix('?') {
+                                        ctx.interner.lookup(bare).and_then(|bid| ctx.types.dense_id_of_name(bid)).map(|e| ctx.mk_opt(e))
+                                    } else {
+                                        ctx.interner.lookup(&at).and_then(|iid| ctx.types.dense_id_of_name(iid))
+                                    };
+                                    match resolved {
+                                        Some(a) => cargs.push(a),
+                                        None => { ok = false; break; }
+                                    }
+                                }
+                                if ok {
+                                    let canonical = ctx.mk_data_inst(dname, cargs.clone(), rut_lexer::span::Span::new(0, 0));
+                                    direct = ctx.inst_data.get(&canonical).cloned();
+                                }
+                            }
+                        }
+                    }
+                }
+                direct
+            }
         };
         let Some((dname, cargs)) = shape else { continue };
         // the mint's target materializes as THIS unit's instantiation
@@ -1358,9 +1478,15 @@ pub fn compile_program_resolved(
         // inst_types ledger carries (the seed-block copy has no ledger
         // row of its own, so link's canonical key would miss it).
         // mk_data_inst routes the owning package's request — already
-        // seeded, deduped by the graph's request keys.
-        let target = ctx.mk_data_inst(dname, cargs.clone(), rut_lexer::span::Span::new(0, 0));
-        
+        // seeded, deduped by the graph's request keys. A STRUCTURAL
+        // shape (?T / [T]) keeps the requester's row verbatim — boot
+        // structural rows are universal ids, and mk_data_inst has no
+        // decl to route to for a shape.
+        let target = match ctx.types.kind(target).clone() {
+            TyKind::Opt { .. } | TyKind::Array { .. } => target,
+            _ => ctx.mk_data_inst(dname, cargs.clone(), rut_lexer::span::Span::new(0, 0)),
+        };
+
         // the local TEMPLATE impl answering (trait, shape)
         let templates: Vec<(usize, rut_lir::check::ImplDecl)> = ctx
             .impls
@@ -1368,8 +1494,7 @@ pub fn compile_program_resolved(
             .enumerate()
             .filter(|(_, im)| {
                 !im.inherent
-                    && !im.is_template
-                    && im.trait_id == tid
+                    && im.trait_name == tname
                     && matches!(&im.target_data, Some((d, ps)) if *d == dname && ps.len() == cargs.len())
             })
             .map(|(i, im)| (i, im.clone()))
@@ -1380,10 +1505,27 @@ pub fn compile_program_resolved(
             .as_ref()
             .map(|(_, ps)| ps.iter().cloned().zip(cargs.iter().cloned()).collect())
             .unwrap_or_default();
+        // the minted registration's trait id: the decl's own row for a
+        // non-generic declared trait; the CONCRETE instantiation
+        // otherwise (the template's trait arguments re-resolved under
+        // the target substitution — `FromFlow<T>` over `Vec<i32>` mints
+        // `FromFlow<i32>`; `Iterable<E>` over `Flow<i32>` mints through
+        // the iterator lane)
+        let trait_id = match decl_id {
+            Some(id) if id != u32::MAX && template.trait_arg_nodes.is_empty() => id,
+            _ => {
+                let args: Vec<rut_core::types::TypeId> = template
+                    .trait_arg_nodes
+                    .iter()
+                    .map(|g| ctx.resolve_type(*g, &env))
+                    .collect();
+                ctx.mint_impl_trait_inst(tname, args)
+            }
+        };
         // mint the concrete registration (the template's clone at the
         // concrete target — the phase-2 dispatch door's mint)
         ctx.impls.push(rut_lir::check::ImplDecl {
-            trait_id: tid,
+            trait_id,
             trait_name: template.trait_name,
             target,
             target_data: template.target_data.clone(),

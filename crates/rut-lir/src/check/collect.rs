@@ -622,8 +622,78 @@ impl<'a> Ctx<'a> {
         if let Some(&arg) = env.get(&text) {
             return arg;
         }
+        // a BARE method-generic leaf (`fn(E) -> nil` spells the
+        // parameter without the `#` — the method-generic placeholder
+        // materializes both spellings across a signature): the env keys
+        // are the `#name` placeholders, so match the stripped text
+        if !text.starts_with('#') && !text.contains('<') {
+            if let Some(&arg) = env.get(&format!("#{text}")) {
+                return arg;
+            }
+        }
         let kind = self.types.kind(id).clone();
         let rebuilt = match kind {
+            // a carried NAME-ONLY row (the field lists did not cross —
+            // the surface's carried layout skipped it) whose text
+            // mentions a placeholder: re-mint from the spelling. A
+            // TUPLE (`fn((i32, #E)) -> nil`'s element pair) rebuilds at
+            // the substituted elements; the nominal `Base<..>` shapes
+            // fall through to the mirror re-mint below.
+            TyKind::Data { fields } if fields.is_empty() && text.contains('#') && text.starts_with('(') => {
+                let inner = text.trim_start_matches('(').trim_end_matches(')');
+                let mut parts: Vec<String> = Vec::new();
+                let mut depth = 0usize;
+                let mut cur = String::new();
+                for ch in inner.chars() {
+                    match ch {
+                        '<' | '(' => { depth += 1; cur.push(ch); }
+                        '>' | ')' => { depth = depth.saturating_sub(1); cur.push(ch); }
+                        ',' if depth == 0 => { parts.push(cur.trim().to_string()); cur = String::new(); }
+                        _ => cur.push(ch),
+                    }
+                }
+                if !cur.trim().is_empty() {
+                    parts.push(cur.trim().to_string());
+                }
+                let mut ok = true;
+                let mut etys: Vec<TypeId> = Vec::new();
+                for (i, pt) in parts.iter().enumerate() {
+                    let t = if let Some(&a) = env.get(pt.as_str()) {
+                        a
+                    } else if let Some(bare) = pt.strip_prefix('?') {
+                        match env.get(bare).copied().or_else(|| {
+                            self.interner.lookup(bare).and_then(|bid| self.types.dense_id_of_name(bid))
+                        }) {
+                            Some(t) => self.mk_opt(t),
+                            None => { ok = false; break; }
+                        }
+                    } else {
+                        match env.get(pt.as_str())
+                            .copied()
+                            .or_else(|| self.interner.lookup(pt).and_then(|iid| self.types.dense_id_of_name(iid)))
+                        {
+                            Some(t) => t,
+                            None => { ok = false; break; }
+                        }
+                    };
+                    let _ = i;
+                    etys.push(t);
+                }
+                if ok && !etys.is_empty() {
+                    let fs: Vec<FieldInfo> = etys
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &t)| FieldInfo { name: self.intern(&i.to_string()), ty: t })
+                        .collect();
+                    let name = self.intern(&format!(
+                        "({})",
+                        etys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ")
+                    ));
+                    Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                } else {
+                    None
+                }
+            }
             TyKind::Array { elem } => {
                 let e = self.subst_template_ty(elem, env);
                 Some(self.mk_array(e))
@@ -654,8 +724,7 @@ impl<'a> Ctx<'a> {
             // mirror law — the owner request rides along). A row whose
             // fields substitute to themselves (a used class's own row,
             // say) passes through unchanged.
-            TyKind::Data { fields } if !fields.is_empty() => {
-                if text.starts_with('(') {
+            TyKind::Data { fields } if !fields.is_empty() => {                if text.starts_with('(') {
                     let fs: Vec<FieldInfo> = fields
                         .iter()
                         .map(|f| FieldInfo { name: f.name, ty: self.subst_template_ty(f.ty, env) })
@@ -685,6 +754,43 @@ impl<'a> Ctx<'a> {
                         if let Some(&t) = env.get(a.as_str()) {
                             args.push(t);
                             continue;
+                        }
+                        // a tuple ARGUMENT spelling (`Flow<(i32, #E)>`'s
+                        // `(i32, #E)`) resolves STRUCTURALLY — each
+                        // element substitutes (or resolves), and the
+                        // tuple re-mints — never a dense hit on the
+                        // carried placeholder spelling, which would pin
+                        // the `#leaf` into the re-minted instantiation
+                        if a.starts_with('(') && a.ends_with(')') {
+                            let inner = &a[1..a.len() - 1];
+                            let parts = split_top_commas(inner);
+                            let mut etys = Vec::with_capacity(parts.len());
+                            let mut ok = true;
+                            for p in &parts {
+                                let et = if let Some(&t) = env.get(p.as_str()) {
+                                    t
+                                } else if let Some(bare) = p.strip_prefix('?') {
+                                    match env.get(bare).copied().or_else(|| {
+                                        self.interner.lookup(bare).and_then(|bid| self.types.dense_id_of_name(bid))
+                                    }) {
+                                        Some(t) => self.mk_opt(t),
+                                        None => { ok = false; break; }
+                                    }
+                                } else {
+                                    match env.get(p.as_str()).copied()
+                                        .or_else(|| self.interner.lookup(p).and_then(|iid| self.types.dense_id_of_name(iid)))
+                                    {
+                                        Some(t) => t,
+                                        None => { ok = false; break; }
+                                    }
+                                };
+                                etys.push(et);
+                            }
+                            if ok && !etys.is_empty() {
+                                args.push(self.mk_tuple(etys));
+                                continue;
+                            }
+                            return id;
                         }
                         let aid = self.intern(a);
                         match self.types.dense_id_of_name(aid) {

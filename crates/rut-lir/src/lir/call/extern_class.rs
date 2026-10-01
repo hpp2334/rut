@@ -59,7 +59,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// k-th class argument (the v1 template law: the trait arguments
     /// ARE the target's parameters — `impl<E> IntoFlow<E> for Vec<E>`
     /// over `Vec<i32>` spells `#E := i32`).
-    fn descriptor_leaf_env(
+    pub(crate) fn descriptor_leaf_env(
         &self,
         tm: &rut_core::binary::TraitMethod,
         trait_id: u32,
@@ -114,16 +114,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a core `Iterable<#leaf>` parameter re-mints through the
         // iterator lane: `from_flow(it: Iterable<#E>)` over the
         // `Vec<i32>` target answers `Iterable<i32>` — the sink's
-        // contract parameter at the concrete element
+        // contract parameter at the concrete element. The NAME is the
+        // gate, not a `use`: a carried `[trait] Iterable<#leaf>` row
+        // exists only because a mounted pkg's signature named it (the
+        // tbase-bridge acknowledgment), and the mint binds no name —
+        // the descriptor joins the trait table shape-only.
         if let Some(rest) = text.strip_prefix("[trait] ") {
             if let Some((tname, args)) = rest.split_once('<') {
                 let tname_id = self.ctx.intern(tname);
-                let is_iterable = self
-                    .ctx
-                    .extern_traits
-                    .get(&tname_id)
-                    .copied()
-                    == Some(rut_core::binary::NativeTrait::Iterable);
+                let is_iterable = tname_id == rut_core::sym::ITERABLE
+                    || self
+                        .ctx
+                        .extern_traits
+                        .get(&tname_id)
+                        .copied()
+                        == Some(rut_core::binary::NativeTrait::Iterable);
                 if is_iterable {
                     let a = args.strip_suffix('>').unwrap_or(args).trim();
                     let concrete_arg = match env.get(a) {
@@ -137,7 +142,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                     };
                     let tname_id = self.ctx.intern(tname);
-                    return self.ctx.mk_iterator_inst(tname_id, concrete_arg);
+                    let tid = self.ctx.mk_iterator_inst(tname_id, concrete_arg);
+                    return self.ctx.mk_trait_obj(tid);
                 }
             }
         }
@@ -205,6 +211,43 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         if !mgen.is_empty() && generics.is_empty() {
+            // the unannotated-lambda diagnosis (v1): a fully unannotated
+            // lambda cannot drive the placeholder signature's unification
+            // (its shape hint's `#leaf` placeholders would leak into the
+            // checks) — diagnose with the fix, mirroring the local inline
+            // path's gate
+            let mparams = self.ctx.extern_inherents[ih].methods[midx].1.clone();
+            for (i, a) in args.iter().enumerate() {
+                let mentions_leaf = mparams.get(i).map_or(false, |&p| {
+                    self.ctx.type_name(p).to_string().contains('#')
+                });
+                if !mentions_leaf {
+                    continue;
+                }
+                if let ExprKind::Lambda { params: lps, ret: lret, .. } = self.ctx.ast.expr(*a) {
+                    let fully_unannotated = lps.iter().all(|p| {
+                        matches!(
+                            self.ctx.ast.param(*p),
+                            MemberKind::Param(ParamData { ty: None, .. })
+                        )
+                    }) && lret.is_none();
+                    if fully_unannotated {
+                        let free_names = mgen
+                            .iter()
+                            .map(|g| self.ctx.name(*g).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let recv = dname
+                            .map(|d| self.ctx.name(d).to_string())
+                            .unwrap_or_else(|| self.ctx.type_name(rt).to_string());
+                        self.ctx.err(sp, format!(
+                            "cannot infer `{}` of `{}.{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`.{}<{}>(..)`)",
+                            free_names, recv, self.ctx.name(name), self.ctx.name(name), free_names,
+                        ));
+                        return Err(());
+                    }
+                }
+            }
             // inference: compile args against the placeholder signature,
             // binding the method's generics from the arguments
             let env0: HashMap<String, TypeId> = full_subst

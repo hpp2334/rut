@@ -217,7 +217,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
-pub fn main() {
+pub fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
@@ -228,19 +228,21 @@ pub fn main() {
         .filter(fn(x: i32) -> bool { return x > 4; })
         .take(3));
     let joined: Vec<str> = Vec.new();
-    picked.for_each(fn(x: i32) -> nil { joined.push(f"{x}"); });
+    for (let x of picked.into_flow()) {
+        joined.push(f"{x}");
+    }
 
     // chains feed plain for..of (Flow is an Iterable)
     let mut sum = 0;
     for (let x of nums.into_flow().skip(1)) {
         sum += x;
     }
-    log.info(f"picked={picked.len()} first={picked[0]} sum={sum}");
+    log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]} sum={sum}");
 }
 ```
 
 ```text
-picked=3 first=6 sum=14
+picked=3 first=6 last=10 sum=14
 ```
 
 Three laws to know:

@@ -2,7 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00
+"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -1577,7 +1578,7 @@ msgstr ""
 #: src/tutorial/functions.md:240 src/tutorial/types.md:280
 #: src/tutorial/traits.md:325 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
-#: src/tutorial/stdlib.md:385
+#: src/tutorial/stdlib.md:387
 msgid "Put it together"
 msgstr ""
 
@@ -4532,7 +4533,7 @@ msgid ""
 "use flow::{ Flow, IntoFlow, FromFlow };\n"
 "use ink::{ Logger };\n"
 "\n"
-"pub fn main() {\n"
+"pub fn main() -> nil {\n"
 "    let log = Logger.new(\"flow\");\n"
 "    let nums: Vec<i32> = Vec.new();\n"
 "    nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);\n"
@@ -4543,23 +4544,26 @@ msgid ""
 "        .filter(fn(x: i32) -> bool { return x > 4; })\n"
 "        .take(3));\n"
 "    let joined: Vec<str> = Vec.new();\n"
-"    picked.for_each(fn(x: i32) -> nil { joined.push(f\"{x}\"); });\n"
+"    for (let x of picked.into_flow()) {\n"
+"        joined.push(f\"{x}\");\n"
+"    }\n"
 "\n"
 "    // chains feed plain for..of (Flow is an Iterable)\n"
 "    let mut sum = 0;\n"
 "    for (let x of nums.into_flow().skip(1)) {\n"
 "        sum += x;\n"
 "    }\n"
-"    log.info(f\"picked={picked.len()} first={picked[0]} sum={sum}\");\n"
+"    log.info(f\"picked={picked.len} first={picked[0]} "
+"last={picked[picked.len-1]} sum={sum}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:246
+#: src/tutorial/stdlib.md:248
 msgid "Three laws to know:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:248
+#: src/tutorial/stdlib.md:250
 msgid ""
 "**The entries and sinks are traits** — `IntoFlow<E>` rows exist for the "
 "builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for `Flow<E>` "
@@ -4569,14 +4573,14 @@ msgid ""
 "(a `CountUp`\\-shape, no Flow involved) widens straight into them."
 msgstr ""
 
-#: src/tutorial/stdlib.md:255
+#: src/tutorial/stdlib.md:257
 msgid ""
 "**`map` introduces a new type variable.** Annotate the lambda, spell the "
 "type argument (`.map<i32>(..)`), or pass a fn path — a lambda that spells "
 "nothing diagnoses with the fix."
 msgstr ""
 
-#: src/tutorial/stdlib.md:258
+#: src/tutorial/stdlib.md:260
 msgid ""
 "**Stateful stages are single-shot.** `take`/`skip` hold their counter in a "
 "record the drive mutates; a drained stage stays drained. `take` answers "
@@ -4584,7 +4588,7 @@ msgid ""
 "never driven."
 msgstr ""
 
-#: src/tutorial/stdlib.md:263
+#: src/tutorial/stdlib.md:265
 msgid ""
 "Pipelines are the clarity tier: each stage costs one indirect call per "
 "element, and the fused builtin loops stay the perf tier. The full member "
@@ -4592,11 +4596,11 @@ msgid ""
 "reference](../reference/stdlib.md#flow-the-push-pipeline)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:268
+#: src/tutorial/stdlib.md:270
 msgid "`strbuild` — the string builder"
 msgstr ""
 
-#: src/tutorial/stdlib.md:270
+#: src/tutorial/stdlib.md:272
 msgid ""
 "```rut\n"
 "use strbuild::{ StringBuilder };\n"
@@ -4616,17 +4620,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:290
+#: src/tutorial/stdlib.md:292
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the "
 "builder appends into one growable cell and copies once, at `build()`."
 msgstr ""
 
-#: src/tutorial/stdlib.md:294
+#: src/tutorial/stdlib.md:296
 msgid "`calc` — float math"
 msgstr ""
 
-#: src/tutorial/stdlib.md:296
+#: src/tutorial/stdlib.md:298
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -4649,17 +4653,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:319
+#: src/tutorial/stdlib.md:321
 msgid ""
 "rut has no overloading, so the width lives in the name. The integer ladder "
 "is _not_ here — those are core's, always available."
 msgstr ""
 
-#: src/tutorial/stdlib.md:322
+#: src/tutorial/stdlib.md:324
 msgid "`json` — encode and decode"
 msgstr ""
 
-#: src/tutorial/stdlib.md:324
+#: src/tutorial/stdlib.md:326
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson };\n"
@@ -4679,7 +4683,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:343
+#: src/tutorial/stdlib.md:345
 msgid ""
 "Decode is direct and schema-driven: your type's `impl JsonDeserialize` reads "
 "exactly the fields it expects, no intermediate tree. Your types opt in with "
@@ -4689,15 +4693,15 @@ msgid ""
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:351
+#: src/tutorial/stdlib.md:353
 msgid "`ink` — logging"
 msgstr ""
 
-#: src/tutorial/stdlib.md:353
+#: src/tutorial/stdlib.md:355
 msgid "There is no `console`, no `print` — all output goes through a logger:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:355
+#: src/tutorial/stdlib.md:357
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4711,7 +4715,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:373
+#: src/tutorial/stdlib.md:375
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder "
 "chooses the sink (the `rut` CLI prints to stdout). The same pattern — "
@@ -4720,18 +4724,18 @@ msgid ""
 "modules](../reference/embedding.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:379
+#: src/tutorial/stdlib.md:381
 msgid "`http`"
 msgstr ""
 
-#: src/tutorial/stdlib.md:381
+#: src/tutorial/stdlib.md:383
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: tasks, workers, and channels](async.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:387
+#: src/tutorial/stdlib.md:389
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4777,7 +4781,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:438
+#: src/tutorial/stdlib.md:440
 msgid ""
 "That completes the tutorial. From here, the [core "
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
@@ -10871,7 +10875,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:356
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:363
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -18776,7 +18780,7 @@ msgstr ""
 
 #: src/reference/host-fns.md:279 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:204 src/reference/stdlib.md:350
+#: src/reference/stdlib.md:211 src/reference/stdlib.md:357
 #: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
 #: src/reference/cli.md:170
 msgid "meaning"
@@ -19988,7 +19992,7 @@ msgid "trait"
 msgstr ""
 
 #: src/reference/stdlib.md:79 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:350
+#: src/reference/stdlib.md:357
 msgid "member"
 msgstr ""
 
@@ -20190,7 +20194,7 @@ msgstr ""
 msgid "kind"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/stdlib.md:204
+#: src/reference/stdlib.md:128 src/reference/stdlib.md:211
 msgid "surface"
 msgstr ""
 
@@ -20430,87 +20434,91 @@ msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
 "use flow::{ Flow, IntoFlow, FromFlow };\n"
+"use ink::{ Logger };\n"
 "\n"
-"pub fn main() -> Vec<i32> {\n"
+"pub fn main() -> nil {\n"
+"    let log = Logger.new(\"flow\");\n"
 "    let nums: Vec<i32> = Vec.new();\n"
 "    nums.push(1); nums.push(2); nums.push(3); nums.push(4);\n"
 "    // entry → adapters → sink: one drive, stage by stage\n"
-"    return Vec.from_flow(nums.into_flow()\n"
+"    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()\n"
 "        .map(fn(x: i32) -> i32 { return x * 10; })\n"
 "        .filter(fn(x: i32) -> bool { return x > 15; }));\n"
+"    log.info(f\"picked={picked.len} first={picked[0]} "
+"last={picked[picked.len-1]}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:206
+#: src/reference/stdlib.md:213
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:206
+#: src/reference/stdlib.md:213
 msgid ""
 "the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and "
 "`Flow<E>` itself (the identity row: a chain re-enters as a source)"
 msgstr ""
 
-#: src/reference/stdlib.md:207
+#: src/reference/stdlib.md:214
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:207
+#: src/reference/stdlib.md:214
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:208
+#: src/reference/stdlib.md:215
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:208
+#: src/reference/stdlib.md:215
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:209
+#: src/reference/stdlib.md:216
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:209
+#: src/reference/stdlib.md:216
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:210
+#: src/reference/stdlib.md:217
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:210
+#: src/reference/stdlib.md:217
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:211
+#: src/reference/stdlib.md:218
 msgid "`T::from_flow(it: Iterable<E>) -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:211
+#: src/reference/stdlib.md:218
 msgid ""
 "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` "
 "(empty is `[]`; non-empty seeds from element 0, so the source must re-drive)"
 msgstr ""
 
-#: src/reference/stdlib.md:212
+#: src/reference/stdlib.md:219
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:212
+#: src/reference/stdlib.md:219
 msgid ""
 "chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:221
 msgid ""
 "**Import the traits you spell and the pipeline type**: `use flow::{ Flow, "
 "IntoFlow, FromFlow }` — the use-both law names each one; the sink's "
@@ -20519,7 +20527,7 @@ msgid ""
 "`CountUp`\\-shape — widens straight into them)."
 msgstr ""
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:227
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
 "host-table walk — json's map encode grows with it) and `HashMap::from_flow` "
@@ -20527,17 +20535,17 @@ msgid ""
 "carrier yet; it compiles and dispatches inside flow's own unit)."
 msgstr ""
 
-#: src/reference/stdlib.md:226
+#: src/reference/stdlib.md:233
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:228
+#: src/reference/stdlib.md:235
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:238
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -20556,7 +20564,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:244
+#: src/reference/stdlib.md:251
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -20567,11 +20575,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:252
+#: src/reference/stdlib.md:259
 msgid "`calc` — the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:254
+#: src/reference/stdlib.md:261
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -20590,7 +20598,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:273
+#: src/reference/stdlib.md:280
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, "
 "`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, "
@@ -20601,31 +20609,31 @@ msgid ""
 "methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:281
+#: src/reference/stdlib.md:288
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:283
+#: src/reference/stdlib.md:290
 msgid ""
 "Pure rut, `inline = true`, zero host fns — a json mount adds no host "
 "bindings."
 msgstr ""
 
-#: src/reference/stdlib.md:295
+#: src/reference/stdlib.md:302
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:298
+#: src/reference/stdlib.md:305
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:301
+#: src/reference/stdlib.md:308
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -20633,13 +20641,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:312
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:307
+#: src/reference/stdlib.md:314
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -20648,11 +20656,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:312
+#: src/reference/stdlib.md:319
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:313
+#: src/reference/stdlib.md:320
 msgid ""
 "**Ownership**: json owns the traits; all container impls live in json, gated "
 "by peer groups — `Vec` rows activate when `pouch` is anywhere in the "
@@ -20660,17 +20668,17 @@ msgid ""
 "kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:325
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:329
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:331
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -20680,7 +20688,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:338
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -20698,53 +20706,53 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:352
+#: src/reference/stdlib.md:359
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:352
+#: src/reference/stdlib.md:359
 msgid "grow from small"
 msgstr ""
 
-#: src/reference/stdlib.md:353
+#: src/reference/stdlib.md:360
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:353
+#: src/reference/stdlib.md:360
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:354
+#: src/reference/stdlib.md:361
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:354
+#: src/reference/stdlib.md:361
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:355
+#: src/reference/stdlib.md:362
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:355
+#: src/reference/stdlib.md:362
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:356
+#: src/reference/stdlib.md:363
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:364
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:364
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:359
+#: src/reference/stdlib.md:366
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -20754,25 +20762,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:366
+#: src/reference/stdlib.md:373
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. "
 "Mounting `strbuild` pulls `strbuild_host` along (`deps`); mounting `json` "
 "pulls both (its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:371
+#: src/reference/stdlib.md:378
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:375
+#: src/reference/stdlib.md:382
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:377
+#: src/reference/stdlib.md:384
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
@@ -20782,14 +20790,14 @@ msgid ""
 "has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:391
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); "
 "`http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / "
 "`Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 
-#: src/reference/stdlib.md:389
+#: src/reference/stdlib.md:396
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -20804,18 +20812,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:408
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:405
+#: src/reference/stdlib.md:412
 msgid "Mounting"
 msgstr ""
 
-#: src/reference/stdlib.md:407
+#: src/reference/stdlib.md:414
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. "
 "Swappable packages mount by directory or bundle ([module "
@@ -20823,7 +20831,7 @@ msgid ""
 "names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:411
+#: src/reference/stdlib.md:418
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
 "are source-inlined into each consumer — required for class-method surfaces, "
@@ -20831,7 +20839,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:415
+#: src/reference/stdlib.md:422
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "

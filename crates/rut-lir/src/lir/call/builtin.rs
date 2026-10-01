@@ -298,25 +298,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) = if !base_generics.is_empty() {
                     let args: Vec<TypeId> = base_generics.iter().map(|g| self.resolve_type_now(*g)).collect();
                     (dname, d.clone(), fmnode, args)
-                } else if !d.generics.is_empty() && self.current_class == Some(dname) {
-                    // a `Self`-ish call inside the class body: the enclosing
-                    // method's class args
-                    let args: Vec<TypeId> = d
-                        .generics
-                        .iter()
-                        .map(|g| {
-                            self.subst
-                                .iter()
-                                .find(|(n, _)| n == g)
-                                .map(|(_, t)| *t)
-                                .unwrap_or(TY_I32)
-                        })
-                        .collect();
-                    (dname, d.clone(), fmnode, args)
                 } else if !d.generics.is_empty() {
-                    // infer from the expected type: `let b: Box<i32> = Box.new(..)`
+                    // infer from the expected type first: a method whose
+                    // return elem DIFFERS from the class's (`enumerate ->
+                    // Flow<(i32, E)>` on a `Flow<i32>` receiver)
+                    // constructs at the RETURN's arguments — the
+                    // enclosing method's class args would mint the wrong
+                    // instantiation. `Self`-shaped returns carry the
+                    // same args, so the ordinary `Flow.new` shape mints
+                    // identically; the `Self`-ish arm stays as the
+                    // fallback (`new` with no expected in sight).
                     match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
                         Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
+                        _ if self.current_class == Some(dname) => {
+                            let args: Vec<TypeId> = d
+                                .generics
+                                .iter()
+                                .map(|g| {
+                                    self.subst
+                                        .iter()
+                                        .find(|(n, _)| n == g)
+                                        .map(|(_, t)| *t)
+                                        .unwrap_or(TY_I32)
+                                })
+                                .collect();
+                            (dname, d.clone(), fmnode, args)
+                        }
                         _ => {
                             self.ctx.err(sp, format!(
                                 "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",

@@ -190,15 +190,22 @@ the clarity tier; the fused builtin loops stay the perf tier.
 ```rut
 use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
+use ink::{ Logger };
 
-pub fn main() -> Vec<i32> {
+pub fn main() -> nil {
+    let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4);
     // entry → adapters → sink: one drive, stage by stage
-    return Vec.from_flow(nums.into_flow()
+    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()
         .map(fn(x: i32) -> i32 { return x * 10; })
         .filter(fn(x: i32) -> bool { return x > 15; }));
+    log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]}");
 }
+```
+
+```text
+picked=3 first=20 last=30
 ```
 
 | surface | meaning |

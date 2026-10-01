@@ -162,6 +162,7 @@ impl<'a> Ctx<'a> {
         methods: Vec<(IdentId, u32)>,
         methods_concrete: Vec<(IdentId, u32)>,
         trait_args: Vec<TypeId>,
+        origin: Option<String>,
     ) {
         self.extern_impls.push(ExternImpl {
             trait_id,
@@ -170,6 +171,7 @@ impl<'a> Ctx<'a> {
             methods,
             methods_concrete,
             trait_args,
+            origin,
         });
     }
 

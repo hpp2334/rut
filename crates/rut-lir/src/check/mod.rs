@@ -491,6 +491,13 @@ pub struct ExternImpl {
     pub methods_concrete: Vec<(IdentId, u32)>,
     /// a parameterized impl head's trait arguments as placeholder rows
     pub trait_args: Vec<TypeId>,
+    /// the pkg that mints this impl's per-instantiation bodies. A
+    /// DECLARED trait's row leaves it None — the owner is the trait's
+    /// declaring pkg, read off `extern_origins`. A NATIVE trait's row
+    /// (`impl Iterable<E> for Flow<E>`) carries it: no decl names an
+    /// owner, and the impl's exporter is the pkg that compiles the
+    /// bodies (the shape-only row's mint anchor).
+    pub origin: Option<String>,
 }
 
 /// One used class's inherent method surface (the linkable-classes

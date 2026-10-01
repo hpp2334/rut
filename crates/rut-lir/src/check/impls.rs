@@ -129,31 +129,45 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// The structural shape a type spells, recognizing BOTH the real
+    /// rows (`?T`/`[T]` kinds) and the minted template fingerprints
+    /// (a fieldless Data row named `Opt`/`Array` — the collect side's
+    /// template id for `impl I for ?T` / `[T]` targets, which crosses
+    /// the surface verbatim).
+    fn structural_shape(&self, t: TypeId) -> Option<IdentId> {
+        match self.types.kind(t) {
+            TyKind::Opt { .. } => Some(rut_core::sym::OPT),
+            TyKind::Array { .. } => Some(rut_core::sym::ARRAY),
+            TyKind::Data { fields } if fields.is_empty() => {
+                let n = self.types.type_at(t).name;
+                if n == rut_core::sym::ARRAY || n == rut_core::sym::OPT {
+                    Some(n)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// Does the extern impl row's target spell a STRUCTURAL template
     /// (`?T` / `[T]` — the elem is a `#param` placeholder row) that
-    /// answers `target`'s same-shape structural row (`?Json` / `[u8]`)?
-    /// The linkable-classes phase's cross-module shape dispatch.
+    /// answers `target`'s same-shape structural row? The linkable-classes
+    /// phase's cross-module shape dispatch: the ROW is the template (the
+    /// substitution reads the receiver's own element at the call), so a
+    /// concrete receiver (`[i32]` against flow's `IntoFlow<T> for [T]`)
+    /// answers exactly like a carried placeholder-spelled one (`?Json`).
     pub(crate) fn impl_target_is_structural_template_for(&self, im_target: TypeId, target: TypeId) -> bool {
-        let placeholder_elem = |e: TypeId| -> bool {
-            self.interner.name(self.types.type_at(e).name).starts_with('#')
-        };
-        let tpl = self.types.kind(im_target);
-        let recv = self.types.kind(target);
-        matches!((tpl, recv),
-            (TyKind::Opt { elem: pe }, TyKind::Opt { elem: re }) if placeholder_elem(*pe) && placeholder_elem(*re))
-            || matches!((tpl, recv),
-            (TyKind::Array { elem: pe }, TyKind::Array { elem: re }) if placeholder_elem(*pe) && placeholder_elem(*re))
+        let (tpl, recv) = (self.structural_shape(im_target), self.structural_shape(target));
+        match (tpl, recv) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
     }
 
     /// Is the extern impl row's target a structural template at all?
     pub fn impl_target_is_structural_template(&self, im_target: TypeId) -> bool {
-        let placeholder_elem = |e: TypeId| -> bool {
-            self.interner.name(self.types.type_at(e).name).starts_with('#')
-        };
-        match self.types.kind(im_target) {
-            TyKind::Opt { elem } | TyKind::Array { elem } => placeholder_elem(*elem),
-            _ => false,
-        }
+        self.structural_shape(im_target).is_some()
     }
 
     // ---- parameterized trait impls: the dispatch half (phase 2) ----

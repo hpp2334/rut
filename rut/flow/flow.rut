@@ -65,7 +65,7 @@ impl<E> Flow<E> {
     // record mutated through the captured handle: a primitive counter
     // would copy per emit call and never move.
     pub fn take(self, n: i32) -> Self {
-        let st: TakeState = TakeState { n: n };
+        let mut st: TakeState = TakeState { n: n };
         return
             Flow.new(
                 fn (emit: fn(E) -> bool) -> nil {
@@ -84,7 +84,7 @@ impl<E> Flow<E> {
 
     // Drop the first `n` elements; pass the rest through.
     pub fn skip(self, n: i32) -> Self {
-        let st: TakeState = TakeState { n: n };
+        let mut st: TakeState = TakeState { n: n };
         return
             Flow.new(
                 fn (emit: fn(E) -> bool) -> nil {
@@ -108,21 +108,21 @@ impl<E> Flow<E> {
 
     // Count the elements: one drive, no per-element cost beyond the call.
     pub fn count(self) -> i32 {
-        let total: CountState = CountState { n: 0 };
+        let mut total: CountState = CountState { n: 0 };
         (self.drive)(fn (x: E) -> bool { total.n += 1; return true; });
         return total.n;
     }
 
     // Left fold: `f(acc, x)` across one drive, the accumulator seeded.
     pub fn fold<R>(self, init: R, f: fn(R, E) -> R) -> R {
-        let st: FoldState<R> = FoldState { acc: init };
+        let mut st: FoldState<R> = FoldState { acc: init };
         (self.drive)(fn (x: E) -> bool { st.acc = f(st.acc, x); return true; });
         return st.acc;
     }
 
     // Pair each element with its zero-based index.
     pub fn enumerate(self) -> Flow<(i32, E)> {
-        let st: CountState = CountState { n: 0 };
+        let mut st: CountState = CountState { n: 0 };
         return
             Flow.new(
                 fn (emit: fn((i32, E)) -> bool) -> nil {

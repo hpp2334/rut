@@ -8,6 +8,15 @@ use rut_core::sym;
 use rut_core::types::*;
 use super::*;
 
+/// Where a for-of's `iterate` binds: this unit's own impl block
+/// (the method monomorphizes here) or another module's registry row
+/// (the body mints in its owner — the mirror-request twin of the
+/// declared-trait extern template calls).
+pub(crate) enum IterSource {
+    Local { impl_idx: usize, env: Vec<(IdentId, TypeId)> },
+    Extern { eidx: usize, subst: Vec<TypeId>, owner: String, concrete: TypeId },
+}
+
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- statements ----
 
@@ -355,8 +364,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
-                if let Some((idx, env, elem_ty)) = self.iterate_impl(it) {
-                    return self.compile_for_of_iterate(var, iter_reg, idx, env, elem_ty, body, sp);
+                if let Some((src, elem_ty)) = self.iterate_impl(it) {
+                    return self.compile_for_of_iterate(var, iter_reg, src, elem_ty, body, sp);
                 }
                 self.ctx.err(sp, format!(
                     "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterable<E> for {}`",
@@ -453,11 +462,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
 
     /// The registered `impl Iterable<E> for T` on `ty` (nominal):
-    /// `(impl index, target substitution, element type)`. The element
-    /// type is read off the impl's trait instantiation — the `iterate`
-    /// emit parameter. Built-in sequences never reach here (their fused
-    /// loops lower first).
-    fn iterate_impl(&mut self, ty: TypeId) -> Option<(usize, Vec<(IdentId, TypeId)>, TypeId)> {
+    /// where the weave's `xs.iterate(emit)` binds, and the element
+    /// type. Built-in sequences never reach here (their fused loops
+    /// lower first). LOCAL first — this unit's own impl blocks; then
+    /// the cross-package rows (the template-impl registry): another
+    /// module's registered impl, a shape-only row whose per-instantiation
+    /// bodies live in its owner.
+    fn iterate_impl(&mut self, ty: TypeId) -> Option<(IterSource, TypeId)> {
         if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
             // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
@@ -506,7 +517,57 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if fps.len() != 1 || ret != TY_BOOL {
                 continue;
             }
-            return Some((idx, env, fps[0]));
+            return Some((IterSource::Local { impl_idx: idx, env }, fps[0]));
+        }
+        self.iterate_impl_extern(ty)
+    }
+
+    /// The cross-package half of the registry: another module's
+    /// registered `impl Iterable<E> for T` — a SHAPE-ONLY row (the
+    /// descriptor is the carried inst-shape `Iterable<#E>`, the fn ids
+    /// are placeholders). A template-target row (flow's `impl<E>
+    /// Iterable<E> for Flow<E>`) answers the receiver's instantiation of
+    /// the same used generic — the element reads off the shape
+    /// descriptor's emit parameter under the target substitution (the
+    /// k-th distinct `#leaf` is the target's k-th class argument), the
+    /// mint owner is the row's exporter, and the concrete
+    /// `Iterable<E>` descriptor need not exist here at all: the weave
+    /// lowers to the mirror request and link binds the owner's
+    /// compiled body.
+    fn iterate_impl_extern(&mut self, ty: TypeId) -> Option<(IterSource, TypeId)> {
+        let rows = self.ctx.extern_impls.clone();
+        for (eidx, im) in rows.iter().enumerate() {
+            if im.trait_name != sym::ITERABLE {
+                continue;
+            }
+            // target match: the receiver instantiates the row's template
+            // target (a used generic class)
+            let class_args: Vec<TypeId> = match self.ctx.inst_data.get(&ty).cloned() {
+                Some((d, args)) => {
+                    let hits = self.ctx.extern_generics.get(&d).map_or(false, |g| g.template == im.target);
+                    if !hits {
+                        continue;
+                    }
+                    args
+                }
+                None => continue,
+            };
+            // the element: the shape descriptor's emit parameter, its
+            // `#leaf` re-spelled under the target substitution
+            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            let Some(tm) = tdesc.methods.first() else { continue };
+            let env = self.descriptor_leaf_env(&tm, im.trait_id, &class_args);
+            let TyKind::Fn { params: fps, ret } = self.ctx.types.kind(tm.params[0]).clone() else {
+                continue;
+            };
+            if fps.len() != 1 || ret != TY_BOOL {
+                continue;
+            }
+            let leaf = self.ctx.type_name(fps[0]).to_string();
+            let Some(&elem) = env.get(&leaf) else { continue };
+            let subst = class_args.clone();
+            let owner = im.origin.clone().unwrap_or_else(|| self.ctx.own_spec.clone());
+            return Some((IterSource::Extern { eidx, subst, owner, concrete: ty }, elem));
         }
         None
     }
@@ -527,8 +588,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         var: IdentId,
         rreg: u16,
-        impl_idx: usize,
-        env: Vec<(IdentId, TypeId)>,
+        src: IterSource,
         elem_ty: TypeId,
         body: NodeHandle<BlockNode>,
         sp: rut_lexer::span::Span,
@@ -604,14 +664,37 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo);
         }
         // `xs.iterate(emit)` — the impl's method, statically bound to
-        // this impl (nominal registry)
-        let mfid = self
-            .ctx
-            .ensure_inst(crate::check::Inst {
-                key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: sym::ITERATE, slot_abi: false },
-                subst: env,
-                trait_origins: vec![],
-            });
+        // this impl (nominal registry); a cross-package row binds the
+        // mirror stub instead — the owner mints the template impl at
+        // the concrete target and compiles the body (link canonicalizes
+        // the ledger keys, the call lands on the owner's fn)
+        let mfid = match src {
+            IterSource::Local { impl_idx, env } => self
+                .ctx
+                .ensure_inst(crate::check::Inst {
+                    key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: sym::ITERATE, slot_abi: false },
+                    subst: env,
+                    trait_origins: vec![],
+                }),
+            IterSource::Extern { eidx, subst, owner, concrete } => {
+                // the mirror claims under the ROW's target — the
+                // template, for a template-target row — plus the
+                // substitution: the OWNER's compiled bodies ledger under
+                // the same (trait, impl-decl target, subst) key, so link
+                // binds the call to the real body (a concrete target here
+                // would spell a key no owner row claims and the bodyless
+                // stub would survive the merge). The body REQUEST still
+                // names the concrete instantiation — that is what the
+                // owner mints at.
+                let (trait_name, template) = {
+                    let im = &self.ctx.extern_impls[eidx];
+                    (im.trait_name, im.target)
+                };
+                let fid = self.ctx.mirror_impl_method(owner.clone(), trait_name, template, sym::ITERATE, subst.clone());
+                self.ctx.request_inst_impl_method(owner, trait_name, concrete, sym::ITERATE);
+                fid
+            }
+        };
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo])); self.emit(Op::CallM { func: mfid, argv_off, argc, dst: NOREG }, sp.lo); }
         Ok(())
     }

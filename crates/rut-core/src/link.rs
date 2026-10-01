@@ -459,6 +459,21 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             return Err(LinkError(format!("link: duplicate module `{}`", m.name)));
         }
     }
+    // the mirror-stub law: a consumer's mirrored instantiation fn is a
+    // BODYLESS stub (the ledger row keys it; link binds the call to the
+    // owner's compiled body). A stub that plans before the body-carrier
+    // would WIN the claim and ship an empty fn — so stub-carriers plan
+    // after the clean modules, and every stub redirect lands on a real
+    // body whichever round the owner compiled in (a re-seeded owner
+    // re-emits as a later module; its bodies claim the same keys).
+    let is_stub_carrier = |m: &Program| -> bool {
+        m.inst_fns.iter().any(|r| {
+            m.funcs.get(r.fid as usize)
+                .map_or(false, |f| f.code.is_empty() && f.host_id.is_none())
+        })
+    };
+    let mut modules: Vec<Program> = modules;
+    modules.sort_by_key(is_stub_carrier); // stable: false (bodies) first
 
     let boot = boot_len();
     let mut out = Program {
