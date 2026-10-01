@@ -12,7 +12,7 @@ use crate::session::{Module, ModuleBody, Session};
 /// helpers to source (deferred with the numeric-methods phase).
 
 /// Mount `core` — the prelude surface: the erasure
-/// primitive (`opaque`), the builtin trait (`Iterator`), and
+/// primitive (`opaque`), the builtin trait (`Iterable`), and
 /// the compiler-lowered functions (`panic`, the
 /// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
 /// sites diagnose with the removal. A

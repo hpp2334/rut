@@ -52,7 +52,7 @@ area = 3
   pairing is rejected outright; there is no orphan rule beyond that.
 - **Any nominal type can be a target** — classes, structs, and even
   primitives (`impl MyTrait for i32` registers like any other impl).
-  Traits may be generic (`Wrap<T>`, `Iterator<E>`); each instantiation
+  Traits may be generic (`Wrap<T>`, `Iterable<E>`); each instantiation
   has its own identity and its own method slots, and an impl may be
   parameterized by the target's own type parameters — `impl
   Encode<T> for Store<T>` registers a template that serves every
@@ -174,19 +174,19 @@ call site means.
 
 ## The iteration protocol
 
-A type is iterable when it implements the builtin `Iterator<E>` trait
+A type is iterable when it implements the builtin `Iterable<E>` trait
 (a `pub builtin` core name — an `impl` block names it, so the module
-imports it, `use core::{ Iterator }`):
+imports it, `use core::{ Iterable }`):
 
 ```rut
-use core::{ Iterator };
+use core::{ Iterable };
 use ink::{ Logger };
 
 class CountUp {
     n: i32;
 }
 
-impl Iterator<i32> for CountUp {
+impl Iterable<i32> for CountUp {
     fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
@@ -226,7 +226,7 @@ The async machinery is spelled as builtin traits — `Future<T>` and
 `RunContext` — which the engine *names* but does not close: a
 hand-written type can `impl Future<nil> for MyFuture` through the same
 registry as any other impl and be driven by the same loop. Like
-`Iterator`, both are `pub builtin` core names: the engine's weave never
+`Iterable`, both are `pub builtin` core names: the engine's weave never
 needs the import, but source that spells the names does
 (`use core::{ Future, RunContext }`). See
 [the async model](async-model.md) and the worked example in

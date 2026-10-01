@@ -108,7 +108,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Bind a used core builtin trait (`Disposal`/`Index`/
-    /// `Iterator`): registered as a trait on first reference, like a
+    /// `Iterable`): registered as a trait on first reference, like a
     /// declared one — but only for modules that named it.
     pub fn add_extern_trait(&mut self, name: IdentId, native: rut_core::binary::NativeTrait) {
         self.extern_traits.insert(name, native);

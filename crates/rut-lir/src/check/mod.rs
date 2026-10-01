@@ -157,7 +157,7 @@ pub struct Capture {
 #[derive(Clone, Debug)]
 pub struct ImplDecl {
     pub trait_id: u32,
-    /// the trait's source name (`Iterator`, a user trait); for an inherent
+    /// the trait's source name (`Iterable`, a user trait); for an inherent
     /// impl, the target type's name
     pub trait_name: IdentId,
     pub target: TypeId,
@@ -167,7 +167,7 @@ pub struct ImplDecl {
     /// concrete impls.
     pub target_data: Option<(IdentId, Vec<IdentId>)>,
     /// the trait ref's type arguments, as written (`impl Iter<T>` →
-    /// `[T]`, `impl Iterator<char>` → `[char]`). The element type of the
+    /// `[T]`, `impl Iterable<char>` → `[char]`). The element type of the
     /// sequence/iterator contracts is argument 0, resolved at the use site
     /// under the target substitution.
     pub trait_arg_nodes: Vec<NodeHandle<AnyTy>>,
@@ -261,8 +261,8 @@ pub struct Ctx<'a> {
     /// the sequence-contract trait id once referenced (`Iter`) —
     /// the sequence-lowering path keys on this, never on the trait's name
 
-    /// the iterator-contract trait id once referenced (`Iterator`)
-    /// — `for..of` lowers to `next` when a type implements it and not `Iter`
+    /// the iterable-contract trait id once referenced (`Iterable`)
+    /// — `for..of` lowers through the registered impl
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
     pub exports: Vec<(IdentId, u32)>,
@@ -307,7 +307,7 @@ pub struct Ctx<'a> {
     /// only through this map
     pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
     /// used core builtin traits: name -> contract
-    /// (`Disposal`/`Index`/`Iterator`)
+    /// (`Disposal`/`Index`/`Iterable`)
     pub extern_traits: std::collections::HashMap<IdentId, rut_core::binary::NativeTrait>,
     /// traits exported by used modules' surfaces:
     /// name -> the descriptor registered in this module's table. The

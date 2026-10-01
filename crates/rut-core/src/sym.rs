@@ -142,7 +142,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "u64",        // U64
     "Array",      // ARRAY
     "opaque",     // OPAQUE
-    "Iterator",   // ITERATOR
+    "Iterable",   // ITERABLE
     "downcast",   // DOWNCAST
     "assert",     // ASSERT
     "panic",      // PANIC
@@ -245,7 +245,10 @@ pub const U32: IdentId = IdentId(24);
 pub const U64: IdentId = IdentId(25);
 pub const ARRAY: IdentId = IdentId(26);
 pub const OPAQUE: IdentId = IdentId(27);
-pub const ITERATOR: IdentId = IdentId(28);
+/// The iteration contract's name — the push contract: a type is
+/// iterable when it registers `impl Iterable<E> for T`. The old
+/// `Iterator` spelling retired (it suggested a pull cursor).
+pub const ITERABLE: IdentId = IdentId(28);
 pub const DOWNCAST: IdentId = IdentId(29);
 pub const ASSERT: IdentId = IdentId(30);
 pub const PANIC: IdentId = IdentId(31);
@@ -404,7 +407,7 @@ mod tests {
             ("u64", U64),
             ("Array", ARRAY),
             ("opaque", OPAQUE),
-            ("Iterator", ITERATOR),
+            ("Iterable", ITERABLE),
             ("downcast", DOWNCAST),
             ("assert", ASSERT),
             ("panic", PANIC),

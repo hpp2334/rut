@@ -136,12 +136,12 @@ Trait impls make enum values iterable — `for (let v of c)` rides the
 same desugar as a class's (see [The iteration protocol](traits.md)):
 
 ```rut
-use core::{ Iterator };
+use core::{ Iterable };
 use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-impl Iterator<Light> for Light {
+impl Iterable<Light> for Light {
     fn iterate(self, emit: fn(Light) -> bool) {
         let mut cur = self;
         for (let i = 0; i < 3; i += 1) {

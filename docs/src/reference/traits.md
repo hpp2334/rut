@@ -102,7 +102,7 @@ pub fn main() {
   are legal. Each trait argument must be a concrete type or a declared
   binder that names one of the target's own parameters.
 - **The element is a type argument, not an associated type**:
-  `impl Iterator<char> for Counter` — there are no associated `type`
+  `impl Iterable<char> for Counter` — there are no associated `type`
   members.
 - **`Self` in impl signatures** names the impl's target under the impl's
   substitution: `-> Self` returns, `Self { .. }` constructs.
@@ -171,10 +171,10 @@ trait name/instantiation.
 
 ## The iteration protocol
 
-A type is iterable when it registers `impl Iterator<E> for T`:
+A type is iterable when it registers `impl Iterable<E> for T`:
 
 ```rut
-use core::{ Iterator };
+use core::{ Iterable };
 use ink::{ Logger };
 
 class CountUp {
@@ -185,7 +185,7 @@ impl CountUp {
     pub fn new(n: i32) -> Self { return Self { n: n }; }
 }
 
-impl Iterator<i32> for CountUp {
+impl Iterable<i32> for CountUp {
     fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
@@ -207,7 +207,7 @@ tick 2
 tick 3
 ```
 
-An enum value iterates the same way: `impl Iterator<E> for Color`
+An enum value iterates the same way: `impl Iterable<E> for Color`
 makes `for (let v of c)` walk whatever the impl's `iterate` emits —
 the desugar is the trait, the target's kind is irrelevant (see
 [Enums](enums.md)).
@@ -229,7 +229,7 @@ engine-closed** — users implement them through the ordinary nominal
 path:
 
 ```rut
-pub builtin trait Iterator<E> {
+pub builtin trait Iterable<E> {
     fn iterate(self, emit: fn(E) -> bool);
 }
 pub builtin trait Future<T> { fn yield(cx: RunContext); }
@@ -248,7 +248,7 @@ any other impl. Every builtin trait is the import-gated `pub builtin`
 spelling: the ENGINE weaves on the native-trait symbols — async frames,
 the minted cx, and the fused `for..of` loops never consult user scope —
 but source that SPELLS a trait name resolves it only through
-`use core::{ .. }` (`Iterator` for an `impl Iterator<E> for T` or a
+`use core::{ .. }` (`Iterable` for an `impl Iterable<E> for T` or a
 trait-typed parameter; `Future` for a user impl, a launcher's
 `f: Future<T>`, or `downcast<Future<..>>`; `RunContext` for a yield
 signature or an `async fn` head; the `Disposal` pair through

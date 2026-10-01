@@ -66,8 +66,8 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
     // the native fns (panic/string_join) and the native
     // containers still bind with no `use` statement anywhere in this
     // source. The `for..of` here runs over `[i32]` — a builtin
-    // sequence's FUSED loop, which never names `Iterator` — so it works
-    // without the import too; an `impl Iterator<E> for T` or a
+    // sequence's FUSED loop, which never names `Iterable` — so it works
+    // without the import too; an `impl Iterable<E> for T` or a
     // trait-typed parameter WOULD gate (see the_gated_traits_require_the_import below).
     let v = run_main(
         "fn total(v: [i32]) -> i32 {\n\
@@ -86,17 +86,17 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
 }
 
 /// The import-gated builtin traits (the `pub builtin` spellings):
-/// naming `Iterator`/`Future`/`RunContext` in source resolves ONLY
+/// naming `Iterable`/`Future`/`RunContext` in source resolves ONLY
 /// through `use core::{ .. }` — the bare spelling names the fix
 /// exactly — while the engine's weave never consults user scope: the
 /// fused `for..of` over `[i32]` above and every launched host frame
-/// run with no import at all. With the import, an `impl Iterator<i32>
+/// run with no import at all. With the import, an `impl Iterable<i32>
 /// for CountUp` compiles and the duck-typed `for..of` drives it.
 #[test]
 fn the_gated_traits_require_the_import() {
     // no use: each bare spelling names its fix
     for (src, name) in [
-        ("class C { }\nimpl Iterator<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterator"),
+        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterable"),
         ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\npub fn main() -> i32 { return f(nil); }\n", "RunContext"),
         ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\npub fn main() -> i32 { return 0; }\n", "Future"),
     ] {
@@ -113,10 +113,10 @@ fn the_gated_traits_require_the_import() {
 
     // with the import: the impl registers and for..of drives it
     let v = run_main(
-        "use core::{ Iterator };\n\
+        "use core::{ Iterable };\n\
          class CountUp { n: i32 = 0; }\n\
          impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
-         impl Iterator<i32> for CountUp {\n\
+         impl Iterable<i32> for CountUp {\n\
              fn iterate(self, emit: fn(i32) -> bool) {\n\
                  for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
              }\n\

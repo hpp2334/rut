@@ -90,7 +90,8 @@ def esc(s):
 
 # the mechanical cutover — the ONLY auto-carried diffs (the JSONC
 # cutover's textual shapes, applied identically to msgid and msgstr;
-# the vocabulary purge's shape: the legacy word IS `struct` now)
+# the vocabulary purge's shape: the legacy word IS `struct` now;
+# the push-contract rename: the trait's name IS `Iterable` now)
 MECH = [
     (re.compile(r'\bdataclasses\b'), 'structs'),
     (re.compile(r'\bdataclass\b'), 'struct'),
@@ -100,6 +101,7 @@ MECH = [
     (re.compile(r'\bv8\b'), 'v10'),
     (re.compile(r'format_version 7\b'), 'format_version 9'),
     (re.compile(r'format_version 8\b'), 'format_version 10'),
+    (re.compile(r'\bIterator\b'), 'Iterable'),
 ]
 
 

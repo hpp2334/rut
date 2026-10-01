@@ -390,7 +390,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The orphan classification of the impl's TRAIT name:
-    /// the pkg whose source declares it. A builtin trait (`Iterator`,
+    /// the pkg whose source declares it. A builtin trait (`Iterable`,
     /// `Index`, `Disposal`) is core's decl like every prelude name (RFC
     /// 0012 §2) — its origin is `core`, never "no pkg". Every shape that
     /// reaches the orphan gate resolved, so the own-spec fallback never
@@ -738,7 +738,7 @@ impl<'a> Ctx<'a> {
             }
             out
         } else {
-            // engine-named contract (e.g. `Iterator<E>`): signatures from
+            // engine-named contract (e.g. `Iterable<E>`): signatures from
             // the instantiated descriptor
             let tdesc = self.traits[trait_id as usize].clone();
             let mut out = Vec::new();

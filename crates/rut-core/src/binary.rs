@@ -259,8 +259,11 @@ pub enum NativeTrait {
     Disposal,
     /// `Index<T>` — the random-access contract
     Index,
-    /// `Iterator<T>` — the cursor contract
-    Iterator,
+    /// `Iterable<E> { fn iterate(self, emit: fn(E) -> bool) }` — the
+    /// push contract: a type is iterable when it registers
+    /// `impl Iterable<E> for T`; `for..of` desugars to
+    /// `it.iterate(emit)`. The old `Iterator` spelling retired.
+    Iterable,
     /// `Future<T> { fn yield(cx: RunContext) }` — the async protocol's
     /// driven half. Engine-named, user-open:
     /// the compiler weaves `impl Future<T>` for every async fn's hidden
@@ -409,7 +412,7 @@ impl Surface {
                 // the fused `for..of` loops key on the native-trait
                 // symbols); only source that SPELLS a name resolves it
                 // through `use core::{ .. }`.
-                (sym::ITERATOR, NativeTrait::Iterator, false),
+                (sym::ITERABLE, NativeTrait::Iterable, false),
                 (sym::FUTURE, NativeTrait::Future, false),
                 (sym::RUN_CONTEXT, NativeTrait::RunContext, false),
                 (sym::DISPOSAL, NativeTrait::Disposal, false),
@@ -438,7 +441,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
 /// A core builtin trait by name, if it is one.
 pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
     match name {
-        sym::ITERATOR => Some(NativeTrait::Iterator),
+        sym::ITERABLE => Some(NativeTrait::Iterable),
         sym::DISPOSAL => Some(NativeTrait::Disposal),
         _ => None,
     }
@@ -1119,7 +1122,7 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u8(match k {
             NativeTrait::Disposal => 0,
             NativeTrait::Index => 1,
-            NativeTrait::Iterator => 2,
+            NativeTrait::Iterable => 2,
             NativeTrait::Future => 3,
             NativeTrait::RunContext => 4,
         });
@@ -1594,7 +1597,7 @@ fn decode_surface(
         let kind = match d.u8()? {
             0 => NativeTrait::Disposal,
             1 => NativeTrait::Index,
-            2 => NativeTrait::Iterator,
+            2 => NativeTrait::Iterable,
             3 => NativeTrait::Future,
             4 => NativeTrait::RunContext,
             t => return Err(format!("bad native trait tag {t}")),
@@ -2236,7 +2239,7 @@ mod tests {
             (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
         ];
         p.surface.native_traits = vec![
-            (sym::ITERATOR, NativeTrait::Iterator, true),
+            (sym::ITERABLE, NativeTrait::Iterable, true),
             (sym::DISPOSAL, NativeTrait::Disposal, false),
         ];
         p.surface.native_fns = vec![(sym::ASSERT, true)];

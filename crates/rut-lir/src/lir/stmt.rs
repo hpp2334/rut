@@ -351,7 +351,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
         // the builtin sequences (Vec, Array, str, bytes) keep their fused
         // loops; a user type iterates through its registered
-        // `impl Iterator<E> for T` (nominal)
+        // `impl Iterable<E> for T` (nominal)
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
@@ -359,7 +359,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return self.compile_for_of_iterate(var, iter_reg, idx, env, elem_ty, body, sp);
                 }
                 self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterator<E> for {}`",
+                    "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterable<E> for {}`",
                     self.ctx.type_name(it), self.ctx.type_name(it)
                 ));
                 return Err(());
@@ -452,7 +452,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
 
-    /// The registered `impl Iterator<E> for T` on `ty` (nominal):
+    /// The registered `impl Iterable<E> for T` on `ty` (nominal):
     /// `(impl index, target substitution, element type)`. The element
     /// type is read off the impl's trait instantiation — the `iterate`
     /// emit parameter. Built-in sequences never reach here (their fused
@@ -466,7 +466,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // snapshot: the template re-resolution runs under &mut self.ctx
         let impls = self.ctx.impls.clone();
         for (idx, im) in impls.iter().enumerate() {
-            if im.inherent || im.trait_name != sym::ITERATOR {
+            if im.inherent || im.trait_name != sym::ITERABLE {
                 continue;
             }
             // target match + substitution
@@ -483,7 +483,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 None if im.target == ty => Vec::new(),
                 None => continue,
             };
-            // a parameterized trait impl (`impl Iterator<E> for C<E>`) —
+            // a parameterized trait impl (`impl Iterable<E> for C<E>`) —
             // the trait's element type reads off the CONCRETE
             // instantiation of the trait, re-resolved under the target
             // substitution (the phase-2 dispatch law; the placeholder

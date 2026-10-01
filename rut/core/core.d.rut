@@ -1,6 +1,6 @@
 // core/core.d.rut — the prelude surface: what the language
 // itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
-// lowered fns, and the engine-woven traits `Iterator` and `Disposal`
+// lowered fns, and the engine-woven traits `Iterable` and `Disposal`
 // (the `Index` contract is gone, v1.1). The array `[T]` is pure
 // grammar — no decl carries it.
 //
@@ -287,15 +287,15 @@ prelude builtin impl u64 {
 // returning `false` stops the iteration (a `break`). `pub builtin`
 // (the import-gated spelling): the builtin sequences (`[T]`, `Vec`,
 // `str`, `bytes`) keep their fused loops and never name the trait —
-// only source that SPELLS `Iterator` (an `impl Iterator<E> for T`, a
-// trait-typed parameter) resolves it, through `use core::{ Iterator }`.
-pub builtin trait Iterator<E> {
+// only source that SPELLS `Iterable` (an `impl Iterable<E> for T`, a
+// trait-typed parameter) resolves it, through `use core::{ Iterable }`.
+pub builtin trait Iterable<E> {
     fn iterate(self, emit: fn(E) -> bool);
 }
 
 // The async protocol, the Future-only vocabulary. Two engine-named
 // traits, user-open (ordinary `impl` blocks register through the same
-// path as `Iterator` impls). Both are `pub builtin` (the import-gated
+// path as `Iterable` impls). Both are `pub builtin` (the import-gated
 // spelling): the ENGINE weaves without them — every `async fn`'s
 // hidden frame gets its `impl Future<T>` and every drive mints the cx
 // record internally, keyed on the native-trait symbols, never on

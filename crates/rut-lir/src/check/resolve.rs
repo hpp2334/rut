@@ -27,9 +27,9 @@ impl<'a> Ctx<'a> {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
                 // a used core trait — the prelude's
-                // only builtin trait is the `Iterator<E>` protocol
+                // only builtin trait is the `Iterable<E>` protocol
                 let core_trait = self.extern_traits.get(&tname).copied();
-                if core_trait == Some(rut_core::binary::NativeTrait::Iterator) {
+                if core_trait == Some(rut_core::binary::NativeTrait::Iterable) {
                     let args: Vec<TypeId> = segs[0]
                         .generics
                         .iter()
@@ -37,7 +37,7 @@ impl<'a> Ctx<'a> {
                         .collect();
                     if args.len() != 1 {
                         self.err(self.ast.span(node.id()), format!(
-                            "`Iterator` takes 1 type parameter, {} given — `Iterator<E>`",
+                            "`Iterable` takes 1 type parameter, {} given — `Iterable<E>`",
                             args.len()
                         ));
                         return None;
@@ -128,7 +128,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The `Iterator<E>` protocol contract: one trait per
+    /// The `Iterable<E>` protocol contract: one trait per
     /// type-argument list, its single method `iterate(emit: fn(E) -> bool)`.
     /// Duck-typed satisfaction fills its vtable slot from the iterable's own
     /// member — the contract is engine-woven, not user-declarable.
@@ -137,7 +137,7 @@ impl<'a> Ctx<'a> {
             return id;
         }
         let id = self.traits.len() as u32;
-        let tname = self.intern(&format!("Iterator<{}>", self.elem_spelling(arg)));
+        let tname = self.intern(&format!("Iterable<{}>", self.elem_spelling(arg)));
         let emit = self.mk_fn_ty(vec![arg], TY_BOOL);
         self.traits.push(TraitDesc {
             name: tname,
@@ -392,11 +392,11 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
-                        // the `Iterator<E>` protocol:
+                        // the `Iterable<E>` protocol:
                         // engine-woven — its trait is built directly per
                         // type-argument list, before the AST-decl lookup
                         if self.extern_traits.get(&name).copied()
-                            == Some(rut_core::binary::NativeTrait::Iterator)
+                            == Some(rut_core::binary::NativeTrait::Iterable)
                         {
                             let args: Vec<TypeId> = seg
                                 .generics
@@ -405,7 +405,7 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             if args.len() != 1 {
                                 self.err(sp, format!(
-                                    "`Iterator` takes 1 type parameter, {} given — `Iterator<E>`",
+                                    "`Iterable` takes 1 type parameter, {} given — `Iterable<E>`",
                                     args.len()
                                 ));
                                 return TY_I32;

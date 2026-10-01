@@ -356,7 +356,7 @@ return c.;
         // `use` names them — the compiler's ambient split, mirrored so a
         // completion never offers a name the compile rejects. Ambient
         // core rows (`prelude builtin`) stay ungated.
-        let core_src = "pub builtin trait Iterator<E> {\nfn next(mut self) -> ?E;\n}\n\
+        let core_src = "pub builtin trait Iterable<E> {\nfn next(mut self) -> ?E;\n}\n\
                         pub builtin trait Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
                         pub builtin class DisposalContext { }\n\
                         prelude builtin class Weak { }\n";
@@ -380,15 +380,15 @@ return c.;
         let ls = labels(&items);
         assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");
         assert!(!ls.contains(&"DisposalContext"), "unused `pub builtin` must not complete: {ls:?}");
-        assert!(!ls.contains(&"Iterator"), "the gated builtin trait must not complete: {ls:?}");
+        assert!(!ls.contains(&"Iterable"), "the gated builtin trait must not complete: {ls:?}");
         assert!(ls.contains(&"Weak"), "the ambient row still completes: {ls:?}");
 
-        let imported = "use core::{ Disposal, DisposalContext, Iterator };\nfn main() -> nil { }\n";
+        let imported = "use core::{ Disposal, DisposalContext, Iterable };\nfn main() -> nil { }\n";
         let items = mk(imported);
         let ls = labels(&items);
         assert!(ls.contains(&"Disposal"), "the imported trait completes: {ls:?}");
         assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
-        assert!(ls.contains(&"Iterator"), "the imported builtin trait completes: {ls:?}");
+        assert!(ls.contains(&"Iterable"), "the imported builtin trait completes: {ls:?}");
     }
 
     #[test]

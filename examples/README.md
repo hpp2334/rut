@@ -132,7 +132,7 @@ trait, `Json` is that file's).
   `opaque`. Only a trait of your own pkg may be implemented for them
   (json's twelve base impls — prims, `?T`, `[T]` — are the sanctioned
   shape); a foreign trait over a builtin head is an orphan. The
-  asymmetry is deliberate: builtin *traits* (`Iterator`, `Index`,
+  asymmetry is deliberate: builtin *traits* (`Iterable`, `Index`,
   `Disposal`) are core's decls, so implementing one for your own type
   is the ordinary local case. `opaque` is a builtin too — a foreign
   trait can never be implemented for it, so a capability probe on a box

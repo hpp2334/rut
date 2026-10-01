@@ -1384,7 +1384,7 @@ impl FnFrame {
 //     prelude builtin class Name<T> { methods } engine type's member
 //                                       contract
 //     prelude builtin trait Name<T> { .. }      engine-woven contract
-//                                       (Index, Iterator, Disposal)
+//                                       (Index, Iterable, Disposal)
 //
 // `host class` and `extern` are gone: native state crosses as `opaque`
 // and rut wraps it in a class (the `Logger` pattern).

@@ -21,7 +21,7 @@ compilation unit; no `use` is needed. A `use core::{ … };` statement
 stays legal but is redundant for them. The exceptions — the
 **import-gated** spellings, resolving only through
 `use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`,
-`DisposalContext`), and every engine-woven trait (`Iterator`,
+`DisposalContext`), and every engine-woven trait (`Iterable`,
 `Future`, `RunContext`) — the engine's weave itself never needs the
 import, only source that spells the names (an `impl` block, a
 trait-typed signature, a `downcast<Future<..>>`). The two builtin
@@ -78,7 +78,7 @@ wraps (the class-method construction) ([opaque](opaque.md),
 
 | trait | member | notes |
 |---|---|---|
-| `Iterator<E>` | `fn iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops. **import-gated** — `use core::{ Iterator }` (an `impl Iterator<E> for T` names it); the builtin sequences' fused loops never do |
+| `Iterable<E>` | `fn iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops. **import-gated** — `use core::{ Iterable }` (an `impl Iterable<E> for T` names it); the builtin sequences' fused loops never do |
 | `Future<T>` | `fn yield(cx: RunContext)` | every `async fn`'s hidden frame implements it; `await` consumes it. **import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: Future<T>`, `downcast<Future<..>>`) |
 | `RunContext` | `checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool` | the async protocol's cx record ([async and await](async.md)); **import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield signature spells it) |
 | `Disposal` | `fn dispose(mut self, cx: DisposalContext)` | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, DisposalContext }` |

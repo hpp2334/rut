@@ -295,7 +295,7 @@ pub fn compile_program_resolved(
         // a missing concrete list falls back at the call site.
         for im in &surface.impls {
             let text = surface.names.name(im.trait_name);
-            // an impl of a native trait (`Iterator`) stays in its
+            // an impl of a native trait (`Iterable`) stays in its
             // declaring module — the consumer instantiates its own
             // trait per element type (v1)
             let Some(&tid) = ext_trait.get(text) else {

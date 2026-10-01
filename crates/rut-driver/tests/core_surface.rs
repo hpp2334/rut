@@ -378,7 +378,7 @@ fn unresolved_strbuf_names_the_recipe() {
 /// `Linkage::Builtin { ambient }` matches the ambient bit on its
 /// `Surface::core()` row (checked set-wise by the lockstep above); this
 /// pin fixes the phase's intent — the disposal pair and the
-/// engine-woven trio (`Iterator`/`Future`/`RunContext`) are the
+/// engine-woven trio (`Iterable`/`Future`/`RunContext`) are the
 /// import-gated spelling (`pub builtin`, ambient=false; the engine
 /// weaves on the symbols regardless), the native types gate only
 /// `DisposalContext`, and every fn row stays ambient (`prelude

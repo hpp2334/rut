@@ -94,7 +94,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// Resolve the `Iterator` impl for `ty`, if any: `(impl index, Item,
+    /// Resolve the `Iterable` impl for `ty`, if any: `(impl index, Item,
     /// target subst)`. The subst resolves the `next` body and its return
     /// `s.len()` — the element count.
     pub(crate) fn emit_slice_len(&mut self, recv: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {

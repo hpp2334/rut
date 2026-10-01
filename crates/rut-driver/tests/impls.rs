@@ -199,7 +199,7 @@ fn for_of_without_an_impl_names_the_missing_contract() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl Iterator<E> for Count")),
+        ds.iter().any(|d| d.contains("impl Iterable<E> for Count")),
         "missing iterable impl must diagnose: {ds:?}"
     );
 }
@@ -641,7 +641,7 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
 // ---- enums as impl targets ------------------------------------------
 // `impl Color { .. }` attaches to the enum's decl slot: non-self
 // statics (`Color.default()`), self methods (`c.label()`), and trait
-// impls (`impl Iterator<E> for Color` — `for (let v of c)` rides the
+// impls (`impl Iterable<E> for Color` — `for (let v of c)` rides the
 // same desugar as a class's).
 
 #[test]
@@ -671,10 +671,10 @@ fn enum_iterator_impl_drives_for_break_continue() {
     // the for-of desugar is the trait: `for (let v of c)` calls the
     // impl's `iterate` with a synthetic emit closure — `break` returns
     // false, `continue` returns true — exactly the class semantics
-    let src = "use core::{ Iterator };\n\
+    let src = "use core::{ Iterable };\n\
                enum Light { Green, Yellow, Red }\n\
                struct Acc { hits: i32 = 0; }\n\
-               impl Iterator<Light> for Light {\n\
+               impl Iterable<Light> for Light {\n\
                \x20   fn iterate(self, emit: fn(Light) -> bool) {\n\
                \x20       if (!emit(Light.Green)) { return; }\n\
                \x20       if (!emit(Light.Yellow)) { return; }\n\
@@ -706,9 +706,9 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
     // enums are concrete: `Light<E>` is a spelled-arity error, and a
     // foreign name keeps the fallthrough diagnosis (now naming enums)
     let ds = diags_of(
-        "use core::{ Iterator };\n\
+        "use core::{ Iterable };\n\
          enum Light { Green, Red }\n\
-         impl Iterator<i32> for Light<i32> { fn iterate(self, emit: fn(i32) -> bool) { } }\n\
+         impl Iterable<i32> for Light<i32> { fn iterate(self, emit: fn(i32) -> bool) { } }\n\
          fn main() -> i32 { return 0; }\n",
     );
     assert!(

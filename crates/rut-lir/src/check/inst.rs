@@ -248,7 +248,7 @@ impl<'a> Ctx<'a> {
     /// after all instantiations: fill per-(type × trait) vtables from the
     /// registered impls (nominal satisfaction — a slot is
     /// filled exactly when an impl exists). Engine-named contracts
-    /// (`Iterator`) flow through the same registry. Each slot's method
+    /// (`Iterable`) flow through the same registry. Each slot's method
     /// compiles here (with its transitive calls) so every reachable slot
     /// carries a real function id. A fill body that cannot compile (a
     /// nominal pair whose element type misses a member impl) is a unit

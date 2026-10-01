@@ -1762,7 +1762,7 @@ pub fn main() -> nil {
 #[test]
 fn for_of_user_iterate_protocol() {
     // a type is iterable when it registers
-    // `impl Iterator<E> for T`; `for (v of it)` desugars to
+    // `impl Iterable<E> for T`; `for (v of it)` desugars to
     // `it.iterate(emit)` — the loop var is the emit closure's parameter
     // (fresh per iteration); `break` returns `false`, `continue` returns
     // `true`; captures are by value, so the accumulator is a shared cell
@@ -1770,7 +1770,7 @@ fn for_of_user_iterate_protocol() {
     // per concrete argument, so its call binds statically.
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterator };
+use core::{ Iterable };
 
 struct Acc { total: i32 = 0; }
 
@@ -1780,7 +1780,7 @@ class CountUp {
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iterator<i32> for CountUp {
+impl Iterable<i32> for CountUp {
     fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
@@ -1788,7 +1788,7 @@ impl Iterator<i32> for CountUp {
     }
 }
 
-fn total(it: Iterator<i32>) -> i32 {
+fn total(it: Iterable<i32>) -> i32 {
     let mut acc: ?Acc = Acc { };
     it.iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
@@ -2507,7 +2507,7 @@ fn capture_rebind_inside_for_of_body_propagates() {
     // is visible after the loop (it stayed invisible under the copy law)
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterator };
+use core::{ Iterable };
 
 struct Box2 { v: i32 }
 
@@ -2517,7 +2517,7 @@ class Gen {
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iterator<i32> for Gen {
+impl Iterable<i32> for Gen {
     fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 0;
         while (i < self.n) {
@@ -2634,7 +2634,7 @@ fn nested_desugared_for_of_shares_slots() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-use core::{ Iterator };
+use core::{ Iterable };
 
 struct Box2 { v: i32 }
 
@@ -2644,7 +2644,7 @@ class Gen {
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iterator<i32> for Gen {
+impl Iterable<i32> for Gen {
     fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 0;
         while (i < self.n) {
@@ -2684,18 +2684,18 @@ fn sugar_law_fused_and_desugared_loop_var_agree() {
     // case 7 — the loop var is ONE variable reassigned per iteration in
     // BOTH loop forms: a stashed lambda capturing it sees the value
     // current at call time — the last element after the loop. The fused
-    // (builtin sequence) and desugared (user `Iterator`) forms answer
+    // (builtin sequence) and desugared (user `Iterable`) forms answer
     // identically.
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterator };
+use core::{ Iterable };
 
 class Count3 {
 }
 impl Count3 {
     fn new() -> Self { return Self { }; }
 }
-impl Iterator<i32> for Count3 {
+impl Iterable<i32> for Count3 {
     fn iterate(self, emit: fn(i32) -> bool) {
         emit(7); emit(8); emit(9);
         return;

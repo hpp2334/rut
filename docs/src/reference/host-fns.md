@@ -98,7 +98,7 @@ diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
   `capture_stacktrace` are all ambient.
 - **`pub builtin`** — the **import-gated** engine surface: the name
   resolves only through `use core::{ .. }`, the way a package's names
-  do. Today's rows are every builtin trait — `Iterator`, `Future`,
+  do. Today's rows are every builtin trait — `Iterable`, `Future`,
   `RunContext` — and the disposal pair, `Disposal` and
   `DisposalContext` ([traits](traits.md), [async and
   await](async.md), [the Rc heap](rc-heap.md)). The engine's weave

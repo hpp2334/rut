@@ -46,7 +46,7 @@ the rest continue from there.
 arm (see [control flow and when](control-flow.md)). Enums render as
 their member name in format strings. Enums take `impl` blocks —
 non-self methods on the name, `self` methods on a value, and trait
-impls (`impl Iterator<E> for Light` makes `for (let v of l)` walk) —
+impls (`impl Iterable<E> for Light` makes `for (let v of l)` walk) —
 see [enums](../reference/enums.md).
 
 ## Structs — open records

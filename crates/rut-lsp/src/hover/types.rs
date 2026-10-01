@@ -17,7 +17,7 @@ pub enum TyForm {
     /// (`str`/`bytes`/`opaque`); members are compiler-lowered
     Primitive,
     /// `builtin trait Name<..>` — an engine-woven contract (Index,
-    /// Iterator, Disposal); users implement it with ordinary impl blocks
+    /// Iterable, Disposal); users implement it with ordinary impl blocks
     BuiltinTrait,
     /// `host struct Name { fields }` — a flat host-constructed record
     HostStruct,

@@ -404,7 +404,7 @@ pub enum ItemKind {
     /// `builtin trait Name<..>` — .d.rut only, core only: a
     /// trait the ENGINE is woven into (compiler-backed impls /
     /// lowering hooks — `x[i]` through `Index`, `for (x of it)` through
-    /// `Iterator`, rc-0 `Disposal`). Users still implement it with
+    /// `Iterable`, rc-0 `Disposal`). Users still implement it with
     /// ordinary `impl` blocks; the `builtin` marker is the engine's
     /// reservation, not an access rule. Library contracts without
     /// engine knowledge (`Hashable`) stay plain `trait`.
