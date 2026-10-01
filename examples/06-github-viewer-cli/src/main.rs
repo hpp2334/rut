@@ -23,7 +23,6 @@
 //! this file never branches on test env, and nothing here touches the
 //! network at test time.
 
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::Write as _;
 use std::rc::Rc;
@@ -32,32 +31,9 @@ use std::task::{Context, Poll};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
-/// The std closure mounts through the PROJECT MANIFEST (`rut.toml`) —
-/// the manifest is the ONLY url carrier: it is parsed here, and every
-/// url row's bytes seed the fetcher from the committed artifact
-/// (offline: the seed IS the cache — the human `rut fetch` lane fills
-/// the same shape over the network). Path rows mount natively inside
-/// the same load; the four passes (deps walk, peer gate included) run
-/// for real. The example's own CLI-I/O rows (`rgh_host`) mount beside
-/// the closure — nothing fetches for them; the embedder binds the
-/// bodies.
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl rut_driver::DepRemote for Table {
-    fn fetch(
-        &self,
-        url: &str,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(rut_driver::RemoteError::new(format!("no seeded bytes for {url}"))),
-        };
-        Box::pin(std::future::ready(r))
-    }
-}
-
-/// The std-only driver for the `_with` lane: the fetched futures are
-/// `ready`, so one noop-waker poll settles them.
+/// The std-only driver for the Loader's future: the remote's fetch
+/// futures come back READY (its wire runs on its own worker thread),
+/// so one noop-waker poll settles them.
 fn block_on<F: Future>(fut: F) -> F::Output {
     let mut fut = std::pin::pin!(fut);
     let mut cx = Context::from_waker(std::task::Waker::noop());
@@ -69,25 +45,17 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-/// The manifest lane's mount: load the project root with the seeded
-/// fetcher, then the embedder half every lane owns (rgh_host's rows).
+/// The manifest lane's mount: load the project root through the
+/// Loader door with the project-local remote named (the manifest is
+/// the ONLY url carrier — a cold start networks on its one miss, the
+/// pinned `http` bundle; a warm start is pure cache), then the
+/// embedder half every lane owns (rgh_host's rows).
 fn load_rgh_session() -> Result<(rut_driver::Session, String), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let manifest_text = std::fs::read_to_string(base.join("rut.toml"))
-        .map_err(|e| format!("rut.toml: {e}"))?;
-    let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
-    let dist = base.join("../../dist/std");
-    let mut table = BTreeMap::new();
-    for desc in manifest.deps.values() {
-        let Some(url) = desc.get("url") else { continue };
-        let artifact = url.rsplit('/').next().unwrap_or_default();
-        let bytes = std::fs::read(dist.join(artifact))
-            .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
-        table.insert(url.clone(), bytes);
-    }
-    let (mut session, root) = block_on(rut_driver::load_dir_session_with(&base, &Table(table)))
-        .map_err(|e| e.to_string())?;
+    let app = rut_driver::Loader::new(base)
+        .dep_remote(rut_driver::HttpRemote::project_local(base))
+        .build();
+    let (mut session, root) = block_on(app.load()).map_err(|e| e.to_string())?;
     // the example's own CLI-I/O rows (nothing fetches — the embedder
     // binds the bodies)
     rut_driver::mount_dir(

@@ -1,28 +1,38 @@
 //! The example's gate: drive the rut library from the host side and
 //! assert the full CRUD session — `cargo test --workspace` runs it.
 
-use std::collections::BTreeMap;
 use std::future::Future;
+use std::path::Path;
 use std::rc::Rc;
 use std::task::{Context, Poll};
 use rut_vm::OpaqueRef;
 
-/// The manifest lane's url rows seed the fetcher from the committed
-/// artifacts (the seed IS the cache — the gates never touch the
-/// network; see src/main.rs for the annotated shape).
-struct Table(BTreeMap<String, Vec<u8>>);
-
-impl rut_driver::DepRemote for Table {
-    fn fetch(
-        &self,
-        url: &str,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
-        let r = match self.0.get(url) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => Err(rut_driver::RemoteError::new(format!("no seeded bytes for {url}"))),
-        };
-        Box::pin(std::future::ready(r))
+/// dist/std plays the wire: the committed artifacts prime an OFFLINE
+/// remote (`DepRemote::write` is the stand-in for the GET), so this
+/// gate cannot network by construction — no env, no set_var races.
+/// The Loader + the warmed remote are the same embedder shape
+/// src/main.rs spells, with the offline flavor swapped in.
+fn warm(base: &Path) -> rut_driver::HttpRemote {
+    // a unique root per call: the tests run in parallel threads, and a
+    // shared root would race the prime (remove/write/rename)
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let root = std::env::temp_dir()
+        .join(format!("rut-00-todolist-cache-{}-{n}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = rut_driver::HttpRemote::offline(&root);
+    let manifest_text = std::fs::read_to_string(base.join("rut.toml")).expect("rut.toml");
+    let manifest =
+        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+    let dist = base.join("../../dist/std");
+    for desc in manifest.deps.values() {
+        let Some(url) = desc.get("url") else { continue };
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
+        rut_driver::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
     }
+    remote
 }
 
 fn block_on<F: Future>(fut: F) -> F::Output {
@@ -37,23 +47,9 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 fn load_session() -> (rut_driver::Session, String) {
-    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let manifest_text =
-        std::fs::read_to_string(base.join("rut.toml")).expect("rut.toml");
-    let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
-    let dist = base.join("../../dist/std");
-    let mut table = BTreeMap::new();
-    for desc in manifest.deps.values() {
-        let Some(url) = desc.get("url") else { continue };
-        let artifact = url.rsplit('/').next().unwrap_or_default();
-        let bytes = std::fs::read(dist.join(artifact))
-            .unwrap_or_else(|e| panic!("the seed is the cache — {artifact}: {e}"));
-        table.insert(url.clone(), bytes);
-    }
-    block_on(rut_driver::load_dir_session_with(base, &Table(table)))
-        .map_err(|e| e.to_string())
-        .expect("load the module dir")
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let app = rut_driver::Loader::new(base).dep_remote(warm(base)).build();
+    block_on(app.load()).expect("load the module dir")
 }
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {

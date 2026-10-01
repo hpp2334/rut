@@ -9,9 +9,11 @@
 # All three are GENERIC owners, and since the generic-source riding law
 # their bundles carry the source beside the binaries: this consumer
 # spells `Vec<opaque>` and drives json's traits + writer directly, and
-# the shapes compile from the bundles at the link. The embedder seeds
-# the fetcher from the committed artifacts (the seed IS the cache — the
-# gates never touch the network). `nmapset` rides because a
+# the shapes compile from the bundles at the link. The embedder names
+# its remote policy (Loader + HttpRemote::project_local) — a cold start
+# networks on its misses, a warm start is pure cache; the TESTS prime
+# an offline remote from the committed artifacts (dist/std plays the
+# wire), so the gates never touch the network. `nmapset` rides because a
 # bundle-mounted json's pack-time ledger names its dev closure — the
 # compiled rows reference the peer scopes, so the closure must contain
 # them (the six-pin law); json's optional integration groups mount only

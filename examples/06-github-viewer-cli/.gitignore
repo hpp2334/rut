@@ -1,0 +1,3 @@
+# the project-local dep cache (`HttpRemote::project_local` — a run's
+# misses land here; hermetic per project, never committed)
+.rut/

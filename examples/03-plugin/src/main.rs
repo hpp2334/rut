@@ -11,6 +11,7 @@
 //! Both run the identical scripted session; the transcript printed at
 //! the end is what `tests/session.rs` asserts.
 
+use std::future::Future;
 use std::path::Path;
 
 use rut_vm::interp::Limits;
@@ -54,25 +55,26 @@ fn main() {
     };
 
     // form 2: the same directory, packed — deterministically. The pack
-    // lane takes the SAME seeded fetcher the load lane does (the url
-    // dep's bytes come from the committed artifact), and the rode-along
-    // law carries the pouch group inside the output, so the packed form
-    // stays closed (loading it never fetches).
+    // lane takes the SAME remote the load lane does (the url dep's
+    // bytes come from the project-local cache, a miss over the wire),
+    // and the rode-along law carries the pouch group inside the
+    // output, so the packed form stays closed (loading it never
+    // fetches).
     let bytes = {
-        let manifest_text =
-            std::fs::read_to_string(dir.join("rut.toml")).expect("rut.toml");
-        let manifest =
-            rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
-        let dist = dir.join("../../../dist/std");
-        let mut table = std::collections::BTreeMap::new();
-        for desc in manifest.deps.values() {
-            let Some(url) = desc.get("url") else { continue };
-            let artifact = url.rsplit('/').next().unwrap_or_default();
-            let b = std::fs::read(dist.join(artifact))
-                .unwrap_or_else(|e| panic!("the seed is the cache — {artifact}: {e}"));
-            table.insert(url.clone(), b);
-        }
-        rut_driver::pack_dir_fetched(dir, &table).unwrap()
+        let remote = rut_driver::HttpRemote::project_local(dir);
+        let opts = rut_driver::PackOpts::default();
+        // the remote's fetch futures come back READY: one noop-waker
+        // poll settles the pack lane's prefetch
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        let mut pinned =
+            std::pin::pin!(rut_driver::pack_dir_opts_with(dir, &opts, &remote));
+        let (bytes, _) = loop {
+            match pinned.as_mut().poll(&mut cx) {
+                std::task::Poll::Ready(v) => break v.unwrap(),
+                std::task::Poll::Pending => std::thread::yield_now(),
+            }
+        };
+        bytes
     };
     let bundle = std::env::temp_dir().join("rut-03-plugin-demo.rutbundle");
     std::fs::write(&bundle, &bytes).unwrap();

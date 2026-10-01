@@ -8,9 +8,11 @@
 # here — the pin is law at the mount door on every load). pouch is a
 # GENERIC owner, and since the generic-source riding law its bundle
 # carries the source beside the binary: this app's consumer-spelled
-# `Vec<Todo>` compiles from the bundle at the link. The embedder seeds
-# the fetcher from the committed artifact (the seed IS the cache — the
-# gates never touch the network).
+# `Vec<Todo>` compiles from the bundle at the link. The embedder names
+# its remote policy (Loader + HttpRemote::project_local) — a cold start
+# networks on the miss, a warm start is pure cache; the TESTS prime an
+# offline remote from the committed artifacts (dist/std plays the
+# wire), so the gates never touch the network.
 name = "todolist"
 entry.lib = "./todolist.rut"
 

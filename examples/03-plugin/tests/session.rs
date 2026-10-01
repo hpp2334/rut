@@ -4,28 +4,48 @@
 //! and from a packed `.rutbundle`; both forms must behave
 //! identically.
 
+use std::future::Future;
 use std::path::Path;
 
 use plugin::Plugin;
 
-/// The pack lane with the url dep's bytes seeded from the committed
-/// artifact (the seed IS the cache — the gates never touch the network;
-/// the rode-along law carries the pouch group inside the output).
+/// The pack lane with the url dep's bytes primed from the committed
+/// artifacts — dist/std plays the wire: an OFFLINE remote is warmed
+/// via `DepRemote::write` (the stand-in for the GET), so the gate
+/// cannot network by construction. The rode-along law carries the
+/// pouch group inside the output.
 fn pack_seeded() -> Result<Vec<u8>, String> {
     let d = dir();
-    let manifest_text = std::fs::read_to_string(d.join("rut.toml"))
-        .map_err(|e| format!("rut.toml: {e}"))?;
+    // a unique root per call: the tests run in parallel threads, and a
+    // shared root would race the prime (remove/write/rename)
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let cache = std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&cache);
+    let remote = rut_driver::HttpRemote::offline(&cache);
+    let manifest_text =
+        std::fs::read_to_string(d.join("rut.toml")).map_err(|e| format!("rut.toml: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = d.join("../../../dist/std");
-    let mut table = std::collections::BTreeMap::new();
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
         let artifact = url.rsplit('/').next().unwrap_or_default();
-        let bytes = std::fs::read(dist.join(artifact))
-            .map_err(|e| format!("the seed is the cache — cannot read {artifact}: {e}"))?;
-        table.insert(url.clone(), bytes);
+        let bytes = std::fs::read(dist.join(artifact)).map_err(|e| {
+            format!("the committed artifact is the cache — cannot read {artifact}: {e}")
+        })?;
+        rut_driver::DepRemote::write(&remote, url, &bytes).map_err(|e| e.to_string())?;
     }
-    rut_driver::pack_dir_fetched(&d, &table)
+    // the pack lane over the warmed remote: the prefetch hits only the
+    // cache — one noop-waker poll settles the READY futures
+    let opts = rut_driver::PackOpts::default();
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    let mut pinned = std::pin::pin!(rut_driver::pack_dir_opts_with(d, &opts, &remote));
+    loop {
+        match pinned.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(v) => break v.map(|(bytes, _)| bytes),
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    }
 }
 
 fn dir() -> &'static Path {

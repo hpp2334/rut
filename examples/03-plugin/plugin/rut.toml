@@ -11,9 +11,11 @@
 # here — the pin is law at the mount door on every load). pouch is a
 # GENERIC owner, and since the generic-source riding law its bundle
 # carries the source beside the binary — the plugin's consumer-spelled
-# `Vec<..>` shapes compile from the bundle at the link. The pack lane
-# and the loader take a seeded fetcher (src/main.rs, src/lib.rs — the
-# seed IS the cache; the gates never touch the network), and the pack's
+# `Vec<..>` shapes compile from the bundle at the link. The loader is
+# the Loader door with the project-local remote (src/lib.rs); the pack
+# lane takes the same remote (src/main.rs). The TESTS prime an offline
+# remote from the committed artifacts (dist/std plays the wire), so the
+# gates never touch the network — and the pack's
 # rode-along law carries the pouch group inside the plugin's own
 # bundle, so the packed form stays closed.
 format = "rutbundle"
