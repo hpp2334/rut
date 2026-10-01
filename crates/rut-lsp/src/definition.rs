@@ -9,7 +9,7 @@
 //!    recovered name idents), all recorded by the phase-0/1 index;
 //! 3. **cross-file through the use graph** — a name the document imports
 //!    (`use pouch::Vec;`) resolves only inside indexes whose origin
-//!    matches the named pkg (path segment or file stem — how `rut.toml`
+//!    matches the named pkg (path segment or file stem — how `rut.json`
 //!    `name` works, without re-implementing the manifest loader);
 //!    un-imported names keep hover's flat-chain semantics;
 //! 4. **stdlib** through the embedded surface — the `include_str!`

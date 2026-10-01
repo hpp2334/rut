@@ -1,0 +1,15 @@
+{
+  "_comment": "nmap-knucleotide/ — the HOST-backed twin of the removed `knucleotide`\nmapset row: the\nidentical k-mer counting over `nmapset::HashMap<str, i32>` (the\nnative-key experiment pkg) instead of the removed pure-rut `mapset`.\nModule dir\nbecause it mounts `nmapset` (which pulls the `nmap_host` host pkg); see\nnmapset-int/rut.json. The checksum must equal the pinned 2198604\n(same FNV-1a values — the nmapset pkg ships the mapset-exact\nconstants).",
+  "name": "nmap_knucleotide",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "nmapset": {
+      "path": "../../../rut/nmapset"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

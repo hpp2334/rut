@@ -24,13 +24,13 @@ impl Source for MapSource {
 
 #[test]
 fn bundles_the_source_file_set_in_manifest_order() {
-    // a package's file set: its `rut.toml` byte-for-byte, the entry,
+    // a package's file set: its `rut.json` byte-for-byte, the entry,
     // each `entry.libs` file in manifest order, and each `[peer-deps]`
     // `lib` group file — the exact shape the loader splices back
     let root = PathBuf::from("json");
     let mut files = MapSource::default();
     files.0.insert(
-        root.join("rut.toml"),
+        root.join("rut.json"),
         br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./serde_pouch.rut"}}}"#
             .to_vec(),
     );
@@ -39,7 +39,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
     files.0.insert(root.join("serde_pouch.rut"), b"impl J for Vec<T>".to_vec());
 
     let manifest = parse_manifest(
-        &String::from_utf8(files.0.get(&root.join("rut.toml")).unwrap().clone()).unwrap(),
+        &String::from_utf8(files.0.get(&root.join("rut.json")).unwrap().clone()).unwrap(),
     )
     .unwrap();
     let mut out = Vec::new();
@@ -47,14 +47,14 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let names: Vec<&str> = out.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
-        vec!["json/rut.toml", "json/json.rut", "json/store.rut", "json/serde_pouch.rut"],
+        vec!["json/rut.json", "json/json.rut", "json/store.rut", "json/serde_pouch.rut"],
         "manifest order IS the archive order"
     );
     // the manifest rides byte-for-byte
     assert_eq!(
         out[0].1,
-        files.0.get(&root.join("rut.toml")).unwrap().as_slice(),
-        "rut.toml verbatim"
+        files.0.get(&root.join("rut.json")).unwrap().as_slice(),
+        "rut.json verbatim"
     );
 }
 
@@ -63,7 +63,7 @@ fn a_manifest_named_file_the_map_lacks_is_a_read_error() {
     let root = PathBuf::from("mod");
     let mut files = MapSource::default();
     files.0.insert(
-        root.join("rut.toml"),
+        root.join("rut.json"),
         br#"{"name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_vec(),
     );
     let manifest = parse_manifest(r#"{"name": "mod", "entry": {"lib": "./mod.rut"}}"#).unwrap();

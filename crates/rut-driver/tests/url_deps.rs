@@ -41,14 +41,14 @@ fn write(dir: &Path, rel: &str, text: &str) {
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the entry object (`, "deps": { … }`)
-    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 7, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
 fn leaf_world(tag: &str, name: &str, body: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join(name);
-    write(&dir, "rut.toml", &manifest(name, &format!("{name}.rut"), ""));
+    write(&dir, "rut.json", &manifest(name, &format!("{name}.rut"), ""));
     write(&dir, &format!("{name}.rut"), body);
     root
 }
@@ -134,7 +134,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -163,7 +163,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     // the pinned equivalence: the url lane and the path lane link to
     // the identical binary
     let twin = root.join("app_path");
-    write(&twin, "rut.toml", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
+    write(&twin, "rut.json", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
     write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
     let (dir_session, dir_root) = load_dir_session(&twin, &FsSource).expect("dir load");
     assert_eq!(
@@ -189,7 +189,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -226,7 +226,7 @@ fn name_vs_key_refuses() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest("app", "app.rut", &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -252,7 +252,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     let bytes = pack_dir(&root.join("util")).expect("pack util");
     let doctored = resealed(
         &bytes,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "util",
             "util.rut",
@@ -274,7 +274,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -300,7 +300,7 @@ fn embedder_mount_outranks_the_url_dep() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -336,7 +336,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     let root = scratch(tag);
     write(
         &root.join("pouch"),
-        "rut.toml",
+        "rut.json",
         &manifest("pouch", "pouch.rut", r#", "inline": true"#),
     );
     write(
@@ -348,7 +348,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     // the impl-only group beside it, dev-deps for its own build
     write(
         &root.join("codec"),
-        "rut.toml",
+        "rut.json",
         &manifest(
             "codec",
             "codec.rut",
@@ -368,7 +368,7 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     // zeta — packs codec as a declared-but-unused (source) group
     write(
         &root.join("zeta"),
-        "rut.toml",
+        "rut.json",
         &manifest("zeta", "zeta.rut", r#", "deps": {"codec": {"path": "../codec"}}"#),
     );
     write(&root.join("zeta"), "zeta.rut", "pub fn ping() -> i32 {\n    return 7;\n}\n");
@@ -387,7 +387,7 @@ fn mixed_dir_and_archive_peer_gate() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -433,7 +433,7 @@ fn mixed_dir_and_archive_peer_gate() {
     let app2 = root.join("app2");
     write(
         &app2,
-        "rut.toml",
+        "rut.json",
         &manifest("app2", "app2.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
@@ -463,7 +463,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
     let app = a.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -502,7 +502,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -524,7 +524,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -556,7 +556,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
     let out_manifest = rut_driver::bundle::Bundle::parse(&packed)
         .unwrap()
-        .read("rut.toml")
+        .read("rut.json")
         .unwrap();
     assert!(out_manifest.contains(&format!(r#""url": "{url}""#)), "{out_manifest}");
     assert!(out_manifest.contains(&pin), "{out_manifest}");
@@ -580,7 +580,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -614,7 +614,7 @@ fn pack_refuses_unused_compiled_url_dep() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");

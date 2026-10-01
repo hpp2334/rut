@@ -1,6 +1,6 @@
 //! The example's gate: drive the moderator through the typed `Plugin`
 //! surface and assert the exact transcript — `cargo test --workspace`
-//! runs it. The plugin loads from a module directory (`plugin/rut.toml`)
+//! runs it. The plugin loads from a module directory (`plugin/rut.json`)
 //! and from a packed `.rutbundle`; both forms must behave
 //! identically.
 
@@ -24,7 +24,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let _ = std::fs::remove_dir_all(&cache);
     let remote = rut_driver::HttpRemote::offline(&cache);
     let manifest_text =
-        std::fs::read_to_string(d.join("rut.toml")).map_err(|e| format!("rut.toml: {e}"))?;
+        std::fs::read_to_string(d.join("rut.json")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = d.join("../../../dist/std");
     for desc in manifest.deps.values() {
@@ -136,7 +136,7 @@ fn bad_bundles_are_refused_at_load() {
     // unknown format_version — refused before anything else is read
     let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin", "entry": {"lib": "./plugin.rut"}}"#;
     let bytes = rut_driver::bundle::write_bundle(&[
-        ("rut.toml".to_string(), manifest.as_bytes().to_vec()),
+        ("rut.json".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
     ])
     .unwrap();

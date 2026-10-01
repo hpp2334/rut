@@ -77,7 +77,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 7, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// `rut <args>` with this test's cache dir, env-cleaned (no XDG/HOME
@@ -98,7 +98,7 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "app",
             "app.rut",
@@ -116,7 +116,7 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
 fn leaf_bundle(tag: &str) -> Vec<u8> {
     let root = scratch(tag);
     let util = root.join("util");
-    write(&util, "rut.toml", &manifest("util", "util.rut", ""));
+    write(&util, "rut.json", &manifest("util", "util.rut", ""));
     write(&util, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     rut_driver::pack_dir(&util).expect("pack util")
 }

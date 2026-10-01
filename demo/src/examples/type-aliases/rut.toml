@@ -1,6 +1,0 @@
-# type-aliases/ — transparent aliases, bound-only unions, inline `requires` at the call site.
-name = "type_aliases"
-entry.lib = "./main.rut"
-
-[deps]
-ink = { path = "../../../../rut/ink" }

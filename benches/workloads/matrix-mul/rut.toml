@@ -1,9 +1,0 @@
-# matrix-mul/ — dense n x n f64 multiply-add over flat buffers (n = 128).
-# A module dir because it mounts `pouch`; `ink` is declared for the
-# logger. The JS twin is ../matrix-mul.js.
-name = "matrix_mul"
-entry.lib = "./main.rut"
-
-[deps]
-pouch = { path = "../../../rut/pouch" }
-ink = { path = "../../../rut/ink" }

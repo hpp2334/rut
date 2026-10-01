@@ -3,8 +3,8 @@
 //! 1. **Freshness** — `pack_dir(rut/<pkg>)` is byte-identical to the
 //!    committed bundle, for all 15 (the Q4 determinism law turned into
 //!    a pure equality gate; CI never touches the network).
-//! 2. **The version pairing** — lib roots at 5 (compiled), host roots
-//!    at 6 (decl), read from the committed bytes.
+//! 2. **The version pairing** — lib roots at 7 (compiled), host roots
+//!    at 8 (decl), read from the committed bytes.
 //! 3. **The duplicate-mount law** — two archives in one session:
 //!    first-mount-wins, and the scope ledgers namespace per archive
 //!    (independently packed bundles never argue about a number).
@@ -60,7 +60,7 @@ const PKGS: &[(&str, &str)] = &[
 fn artifact(key: &str) -> (String, Vec<u8>) {
     let bytes = std::fs::read(dist_std().join(format!("{key}.rutbundle")))
         .unwrap_or_else(|e| panic!("dist/std/{key}.rutbundle: {e}"));
-    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v1/dist/std/{key}.rutbundle");
+    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v2/dist/std/{key}.rutbundle");
     (url, bytes)
 }
 
@@ -71,7 +71,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
-        app.join("rut.toml"),
+        app.join("rut.json"),
         format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
@@ -101,16 +101,16 @@ fn every_committed_artifact_is_byte_fresh() {
 
 #[test]
 fn the_artifact_set_spells_the_version_pairing() {
-    // lib roots at 5 (compiled), host roots at 6 (decl) — read from the
+    // lib roots at 7 (compiled), host roots at 8 (decl) — read from the
     // committed bytes, the exact pairing the reader refuses to break
     for (dir, name) in PKGS {
         let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
         let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
-        let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.toml").unwrap()).unwrap();
+        let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.json").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
             m.format_version,
-            Some(if is_host { 6 } else { 5 }),
+            Some(if is_host { 8 } else { 7 }),
             "rut/{dir}: the riding manifest's version must match its kind"
         );
         if is_host {
@@ -176,7 +176,7 @@ fn a_legacy_bundle_without_ridden_source_refuses_consumer_shapes() {
     );
     let legacy: Vec<(String, Vec<u8>)> = parsed
         .into_iter()
-        .filter(|(n, _)| !(n.ends_with(".rut") && n != "rut.toml"))
+        .filter(|(n, _)| !(n.ends_with(".rut") && n != "rut.json"))
         .collect();
     let legacy_bytes =
         rut_driver::bundle::write_bundle(&legacy).expect("re-write the legacy archive");
@@ -215,7 +215,7 @@ fn load_compile_run(
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
-        app.join("rut.toml"),
+        app.join("rut.json"),
         format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
@@ -455,7 +455,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     let app = base.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
-        app.join("rut.toml"),
+        app.join("rut.json"),
         format!(
             r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"strbuild": {{"url": "{url}", "sha256": "{}"}}}}}}"#,
             sha256_hex(&std::fs::read(dist_std().join("strbuild.rutbundle")).unwrap())

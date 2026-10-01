@@ -1,0 +1,14 @@
+{
+  "_comment": "ink/ — the logger package: rut source wrapping the `ink_host`\nhost surface in the `Logger` class. Publishes COMPILED (the\nlinkable-classes phase): the class's methods cross on the surface's\ninherent rows, so `Logger.new(..)` and `logger.log(..)` bind in every\nconsumer from this pkg's binary — no source ever crosses.",
+  "format": "rutbundle",
+  "format_version": 7,
+  "name": "ink",
+  "entry": {
+    "lib": "./ink.rut"
+  },
+  "deps": {
+    "ink_host": {
+      "path": "../ink_host"
+    }
+  }
+}

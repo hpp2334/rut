@@ -1,7 +1,0 @@
-# the extension suites' symbol fixture (test/runTest.js +
-# test/e2e-wasm.js read the entry source directly — a parse/symbol
-# fixture, no lane needed). Dir + manifest for the shape law: every rut
-# program the repo carries is a module dir with a `rut.toml`. Dep-free:
-# the fixture has no `use` statements.
-name = "symbols"
-entry.lib = "./symbols.rut"

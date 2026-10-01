@@ -1,0 +1,7 @@
+{
+  "_comment": "empty/ — the startup floor: parse/compile/run of a trivial program.\nEvery runtime's baseline row folds into this one, so it mounts\nnothing and needs no deps.",
+  "name": "empty",
+  "entry": {
+    "lib": "./main.rut"
+  }
+}

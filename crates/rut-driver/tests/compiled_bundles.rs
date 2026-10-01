@@ -38,7 +38,7 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 5, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 7, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linkable
@@ -54,7 +54,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &bundle_manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#,)
     );
     write(
@@ -66,7 +66,7 @@ fn mixed_world(tag: &str) -> PathBuf {
          }\n",
     );
     let util = root.join("util");
-    write(&util, "rut.toml", &manifest("util", "util.rut", ""));
+    write(&util, "rut.json", &manifest("util", "util.rut", ""));
     write(
         &util,
         "util.rut",
@@ -75,7 +75,7 @@ fn mixed_world(tag: &str) -> PathBuf {
          }\n",
     );
     let boxy = root.join("boxy");
-    write(&boxy, "rut.toml", &manifest("boxy", "boxy.rut", r#", "inline": true"#));
+    write(&boxy, "rut.json", &manifest("boxy", "boxy.rut", r#", "inline": true"#));
     write(
         &boxy,
         "boxy.rut",
@@ -147,7 +147,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     ));
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    for key in ["rut.toml", "rut.scopes", "app.rutc", "util/util.rutc", "boxy/rut.toml", "boxy/boxy.rut"] {
+    for key in ["rut.json", "rut.scopes", "app.rutc", "util/util.rutc", "boxy/rut.json", "boxy/boxy.rut"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
     assert!(!names.iter().any(|n| n == "boxy/boxy.rutc"), "the inline pkg rides source, not a binary");
@@ -236,8 +236,8 @@ fn generic_and_trait_param_roots_publish_compiled() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
-        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        "rut.json",
+        r#"{"format": "rutbundle", "format_version": 7, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     write(
         &app,
@@ -273,8 +273,8 @@ fn generic_and_trait_param_roots_publish_compiled() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
-        r#"{"format": "rutbundle", "format_version": 5, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        "rut.json",
+        r#"{"format": "rutbundle", "format_version": 7, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     write(
         &app,
@@ -306,14 +306,14 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &bundle_manifest("app", "app.rut", r#", "deps": {"libbed": {"path": "../libbed"}, "p": {"path": "../p"}}"#,)
     );
     write(&app, "app.rut", "use libbed::{ f };\nentry fn go() -> i32 { return f(); }\n");
     let libbed = root.join("libbed");
     write(
         &libbed,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "libbed",
             "libbed.rut",
@@ -322,7 +322,7 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
     );
     write(&libbed, "libbed.rut", "pub fn f() -> i32 { return 7; }\n");
     write(&libbed, "ser_p.rut", "// an impl-only group file\n");
-    write(&root.join("p"), "rut.toml", &manifest("p", "p.rut", ""));
+    write(&root.join("p"), "rut.json", &manifest("p", "p.rut", ""));
     write(&root.join("p"), "p.rut", "pub class K { x: i32; }\n");
 
     // the pack succeeds: the closure has the peer, the gate recorded the
@@ -357,7 +357,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     let peered = root.join("peered");
     write(
         &peered,
-        "rut.toml",
+        "rut.json",
         &manifest(
             "peered",
             "peered.rut",
@@ -383,7 +383,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
 
     // the peer: a concrete class
     let tagger = root.join("tagger");
-    write(&tagger, "rut.toml", &manifest("tagger", "tagger.rut", ""));
+    write(&tagger, "rut.json", &manifest("tagger", "tagger.rut", ""));
     write(
         &tagger,
         "tagger.rut",
@@ -395,14 +395,14 @@ fn peer_groups_ride_v5_as_compiled_rows() {
 
     // a linkable dep on the side: the compiled group in the same world
     let base = root.join("base");
-    write(&base, "rut.toml", &manifest("base", "base.rut", ""));
+    write(&base, "rut.json", &manifest("base", "base.rut", ""));
     write(&base, "base.rut", "pub fn b() -> i32 { return 7; }\n");
 
     // the consumer: all three in [deps]; the group's impl dispatches
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &bundle_manifest("app", "app.rut", r#", "deps": {"peered": {"path": "../peered"}, "tagger": {"path": "../tagger"}, "base": {"path": "../base"}}"#,)
     );
     write(
@@ -445,14 +445,14 @@ fn required_peer_absent_is_d1_at_pack() {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &bundle_manifest("app", "app.rut", r#", "deps": {"req": {"path": "../req"}}"#,)
     );
     write(&app, "app.rut", "use req::{ f };\nentry fn go() -> i32 { return f(); }\n");
     let req = root.join("req");
     write(
         &req,
-        "rut.toml",
+        "rut.json",
         &manifest("req", "req.rut", r#", "peer-deps": {"missing": {"path": "../missing"}}"#,)
     );
     write(&req, "req.rut", "pub fn f() -> i32 { return 7; }\n");

@@ -7,8 +7,8 @@
  * publish ADVANCES the number, never rewrites a tag).
  *
  * The bundle set is exhaustive over `rut/` (15 pkgs): lib pkgs pack as
- * compiled v5 roots (their closures ride inside), host pkgs pack as
- * decl v6 roots (single-package — the surface IS the root). Same
+ * compiled v7 roots (their closures ride inside), host pkgs pack as
+ * decl v8 roots (single-package — the surface IS the root). Same
  * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
  * PURE EQUALITY gate — CI never touches the network.
  *
@@ -32,7 +32,7 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG, default std-v1). An ADVANCING
+ *                    RUT_STD_TAG, default std-v2). An ADVANCING
  *                    number: never re-point a published tag (jsDelivr
  *                    caches aggressively; a re-pointed tag lies).
  *   -h, --help
@@ -52,7 +52,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const DEFAULT_TAG = "std-v1";
+const DEFAULT_TAG = "std-v2";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ if ([doPins, doCheck, doTag].filter(Boolean).length > 1) {
 // ---------------------------------------------------------------------------
 
 const PKGS = [
-  // lib pkgs — compiled v5 roots; each closure rides inside
+  // lib pkgs — compiled v7 roots; each closure rides inside
   { dir: "pouch" },
   { dir: "nmapset" },
   { dir: "strbuild" },
@@ -126,7 +126,7 @@ const PKGS = [
   { dir: "ink" },
   { dir: "http" },
   { dir: "async_host" },
-  // host pkgs — decl v6 roots, single-package
+  // host pkgs — decl v8 roots, single-package
   { dir: "ink_host" },
   { dir: "http_host" },
   { dir: "nmap_host" },
@@ -151,23 +151,23 @@ const PKGS = [
 // section).
 const EXAMPLES = [
   {
-    manifest: "examples/00-todolist/rut.toml",
+    manifest: "examples/00-todolist/rut.json",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/01-sort/rut.toml",
+    manifest: "examples/01-sort/rut.json",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/02-digest/rut.toml",
+    manifest: "examples/02-digest/rut.json",
     deps: ["pouch", "json", "nmapset"],
   },
   {
-    manifest: "examples/03-plugin/plugin/rut.toml",
+    manifest: "examples/03-plugin/plugin/rut.json",
     deps: ["pouch"],
   },
   {
-    manifest: "examples/06-github-viewer-cli/rut.toml",
+    manifest: "examples/06-github-viewer-cli/rut.json",
     deps: ["http"],
   },
 ];
@@ -180,9 +180,9 @@ const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex"
 
 /** A pkg's manifest name (what a deps row spells — the artifact name). */
 function pkgName(dir) {
-  const text = fs.readFileSync(path.join(RUT, dir, "rut.toml"), "utf8");
+  const text = fs.readFileSync(path.join(RUT, dir, "rut.json"), "utf8");
   const m = text.match(/"name"\s*:\s*"([A-Za-z0-9_]+)"/);
-  if (!m) die(`rut/${dir}/rut.toml has no \`name\` row`);
+  if (!m) die(`rut/${dir}/rut.json has no \`name\` row`);
   return m[1];
 }
 

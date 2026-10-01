@@ -1,5 +1,5 @@
 //! The run lane's door through the binary: `rut run` accepts a module
-//! directory (`rut.toml`) or a packed `.rutbundle` — an explicit
+//! directory (`rut.json`) or a packed `.rutbundle` — an explicit
 //! allowlist, checked up front. A loose `.rut` file is not a runnable
 //! unit (exit 2, the allowlist message), a `.d.rut` is refused as the
 //! surface it is (its own pointed message), and a typo/non-rut path
@@ -34,8 +34,8 @@ fn hello_world(tag: &str) -> PathBuf {
     let dir = root.join("hello");
     write(
         &dir,
-        "rut.toml",
-        r#"{"format": "rutbundle", "format_version": 5, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        "rut.json",
+        r#"{"format": "rutbundle", "format_version": 7, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
     write(&dir, "main.rut", "pub fn main() -> nil { return; }\n");
     root
@@ -91,7 +91,7 @@ fn a_loose_file_is_not_a_runnable_unit() {
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("not a runnable unit"), "{stderr}");
-    assert!(stderr.contains("rut.toml"), "{stderr}");
+    assert!(stderr.contains("rut.json"), "{stderr}");
     assert!(stderr.contains(".rutbundle"), "{stderr}");
     let _ = std::fs::remove_dir_all(&root);
 }

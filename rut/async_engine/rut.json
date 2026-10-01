@@ -1,0 +1,10 @@
+{
+  "_comment": "async_engine/ — the async host surface's engine rows: the\ncrossing signature set the standard launcher needs. The embedding Rust\nbuilds the bodies (`rut_std::async_host::pkg()`); the\n`async_host` package wraps them in the typed surface\n(`launch_future` / `LaunchedFutureHandle::abort` / `sleep`).\n\nThe registration scope IS the package name; the use path spells it\ntoo (`use async_engine::{ __launch, __abort, __sleep }`).",
+  "format": "rutbundle",
+  "format_version": 8,
+  "name": "async_engine",
+  "type": "host",
+  "entry": {
+    "type": "./engine.d.rut"
+  }
+}

@@ -1,4 +1,4 @@
-//! Filesystem loader — read a module directory (`rut.toml`) or a packed
+//! Filesystem loader — read a module directory (`rut.json`) or a packed
 //! `.rutbundle` into a [`Session`].
 //!
 //! One module is one directory with ONE entry file: its `use` statements
@@ -33,7 +33,7 @@ use crate::bundle::{
 };
 use crate::session::{Module, ModuleBody, Session};
 
-/// Read a directory's `rut.toml` — the real-filesystem lane of
+/// Read a directory's `rut.json` — the real-filesystem lane of
 /// [`crate::bundle::read_manifest`] (the module itself never touches the
 /// filesystem).
 fn read_manifest(dir: &Path, src: &dyn Source) -> Result<Manifest, LoadError> {
@@ -257,7 +257,7 @@ pub fn load_module_source(path: &Path) -> Result<String, LoadError> {
 }
 
 /// Mount a directory's consumer manifest: its own module (if named) and
-/// every `[deps]` module, reading each dep's `rut.toml` and entry source,
+/// every `[deps]` module, reading each dep's `rut.json` and entry source,
 /// then the mount passes over the finished closure. Returns the
 /// session and the root spec (the directory's own `name`).
 ///
@@ -300,7 +300,7 @@ pub fn load_dir_session_fetched(
     let root = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.toml").display())))?;
+        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.json").display())))?;
     let root_module = load_entry_module(dir, &manifest, src)?;
     session.register_module(&root, root_module)?;
     // the root's dir rides the session's map too, so a later
@@ -463,12 +463,12 @@ fn riding_gen_source(
     Ok(Some(crate::session::GenSource { text, peers }))
 }
 
-/// Mount a `.rutbundle` — a **v5 compiled** bundle (the root's `.rutc`
+/// Mount a `.rutbundle` — a **v7 compiled** bundle (the root's `.rutc`
 /// binary, its pack-time scope ledger, and each dep group as a compiled
-/// `.rutc` or a source file set) or a **v6 decl** bundle (a host root:
+/// `.rutc` or a source file set) or a **v8 decl** bundle (a host root:
 /// the declaration surface mounts as the pkg's host rows — the same
 /// lane a host group rides). The gate order is the law: container CRC
-/// ([`Bundle::parse`]), manifest + exact `format_version` 5|6
+/// ([`Bundle::parse`]), manifest + exact `format_version` 7|8
 /// ([`Layout::parse`]), then each kind's payload checks (compiled:
 /// per-group decode and verification; decl: the single-package law) —
 /// then, and only then, the mount. Older layouts are refused with the
@@ -500,11 +500,11 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         Layout::Decl { manifest, .. } => {
             // the decl root: a host pkg — the surface mounts as the
             // pkg's host rows through `bundle_entry_module` (the lane a
-            // host group rides inside a v5 bundle). Single-package: no
+            // host group rides inside a v7 bundle). Single-package: no
             // groups, no ledger, no closure — a LEAF, done.
             let entries = bundle.entries();
             let root_spec = manifest.name.clone().ok_or_else(|| {
-                LoadError::law(format!("{}: rut.toml has no `name`", origin.display()))
+                LoadError::law(format!("{}: rut.json has no `name`", origin.display()))
             })?;
             let mut session = Session::new();
             let module = bundle_entry_module(entries, "", &manifest)
@@ -518,7 +518,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     let root_spec = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{}: rut.toml has no `name`", origin.display())))?;
+        .ok_or_else(|| LoadError::law(format!("{}: rut.json has no `name`", origin.display())))?;
     let mut session = Session::new();
     // the scope ledger first, namespaced: the rows shift into a fresh
     // range of this session and the root's program rebases with the
@@ -551,13 +551,13 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
-        let dep_toml = read_entry(entries, &format!("{prefix}/rut.toml"))
+        let dep_toml = read_entry(entries, &format!("{prefix}/rut.json"))
             .map_err(|e| LoadError::Bundle { origin: origin.display().to_string(), message: e })?;
         let dm = parse_manifest(&dep_toml).map_err(|e| {
-            LoadError::law(format!("{}: {prefix}/rut.toml: {e}", origin.display()))
+            LoadError::law(format!("{}: {prefix}/rut.json: {e}", origin.display()))
         })?;
         let name = dm.name.clone().ok_or_else(|| {
-            LoadError::law(format!("{}: {prefix}/rut.toml has no `name`", origin.display()))
+            LoadError::law(format!("{}: {prefix}/rut.json has no `name`", origin.display()))
         })?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (the root, an earlier group)
@@ -720,7 +720,7 @@ pub(crate) fn run_peer_gate(
                 }
                 // D1: loud at mount, naming pkg + peer + fix
                 return Err(LoadError::law(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]`"
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.json` `deps`"
                 )));
             }
             if compiled {
@@ -771,7 +771,7 @@ pub(crate) fn run_peer_gate(
     Ok(())
 }
 
-/// Load a module directory (`rut.toml`) or a `.rutbundle` file — the two
+/// Load a module directory (`rut.json`) or a `.rutbundle` file — the two
 /// packed forms of the same contract. A loose `.rut` file is NOT this: it
 /// is a single-file module with no manifest.
 pub fn load_path_session(path: &Path) -> Result<(Session, String), LoadError> {
@@ -1019,7 +1019,7 @@ fn resolve_table(
 ///    by grammar law) — a mismatch names the dep, the url, and BOTH
 ///    hashes;
 /// 1. the container (every entry CRC-verified) — origin is the url;
-/// 2. the layout: manifest + exact `format_version` 5|6 (compiled or
+/// 2. the layout: manifest + exact `format_version` 7|8 (compiled or
 ///    decl root), every group decode + verified;
 /// 3. name-vs-key: the bundle's `name` must equal the `[deps]` key
 ///    (the path flavor's twin);
@@ -1028,8 +1028,8 @@ fn resolve_table(
 ///    its compiled programs rebase with the same map BEFORE mounting —
 ///    two independently packed bundles never argue about a number
 ///    (each binary's ids resolve through its own archive's rows);
-/// 5. the root mounts (first-mount-wins) — compiled for a v5 bundle,
-///    the decl-surface host rows for a v6 bundle
+/// 5. the root mounts (first-mount-wins) — compiled for a v7 bundle,
+///    the decl-surface host rows for a v8 bundle
 ///    (`bundle_entry_module`, the group lane); `record_peers`;
 /// 6. the group loop = `load_bundle_bytes`'s (first-mount-wins,
 ///    own-scope vs ledger consistency for compiled groups,
@@ -1037,7 +1037,7 @@ fn resolve_table(
 ///    archives record for the ONE pass-3 gate;
 /// 7. the closure check against the COMBINED session — bundles are
 ///    closed: every declared dep rides in-archive (or mounted earlier).
-///    No fetching at bundle load, ever. A v6 host bundle is a LEAF:
+///    No fetching at bundle load, ever. A v8 host bundle is a LEAF:
 ///    single-package, no groups, the closure check trivially true.
 fn mount_url_dep(
     session: &mut Session,
@@ -1083,7 +1083,7 @@ fn mount_url_dep(
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law(format!("{url}: rut.toml has no `name`")))?;
+                .ok_or_else(|| LoadError::law(format!("{url}: rut.json has no `name`")))?;
             if root_spec != spec {
                 return Err(LoadError::law(format!(
                     "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
@@ -1105,7 +1105,7 @@ fn mount_url_dep(
     let root_spec = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{url}: rut.toml has no `name`")))?;
+        .ok_or_else(|| LoadError::law(format!("{url}: rut.json has no `name`")))?;
     if root_spec != spec {
         return Err(LoadError::law(format!(
             "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
@@ -1145,14 +1145,14 @@ fn mount_url_dep(
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
-        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.toml"))
+        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.json"))
             .map_err(|e| LoadError::Bundle { origin: url.to_string(), message: e })?;
         let dm = parse_manifest(&dep_toml)
-            .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.toml: {e}")))?;
+            .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.json: {e}")))?;
         let name = dm
             .name
             .clone()
-            .ok_or_else(|| LoadError::law(format!("{url}: {prefix}/rut.toml has no `name`")))?;
+            .ok_or_else(|| LoadError::law(format!("{url}: {prefix}/rut.json has no `name`")))?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (an earlier archive, or a dir dep)
         }
@@ -1253,7 +1253,7 @@ pub(crate) fn mount_dir_fetched(
     let name = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.toml").display())))?;
+        .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.json").display())))?;
     if session.resolve(&name).is_ok() {
         return Ok(name); // the embedder's mount outranks the directory
     }
@@ -1279,9 +1279,9 @@ pub(crate) fn mount_dir_fetched(
 /// no closure check either (presence is the program's own compile's
 /// business; `assemble_peers` answers for the recorded declarations).
 /// Returns the bundle root's package name; a name already mounted
-/// wins. Both root kinds mount: a v5 compiled root (plus its groups,
+/// wins. Both root kinds mount: a v7 compiled root (plus its groups,
 /// first-mount-wins, the scope ledger namespaced into this session) or
-/// a v6 decl root (the host rows). No archive locations are recorded —
+/// a v8 decl root (the host rows). No archive locations are recorded —
 /// a declarer whose peer-gate group files would need reading from the
 /// archive wants the load/pack lanes, which own an archive list. Wasm
 /// hosts mount `include_bytes!`-d CDN artifacts through this.
@@ -1302,7 +1302,7 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.toml has no `name`".to_string()))?;
+                .ok_or_else(|| LoadError::law("bundle: rut.json has no `name`".to_string()))?;
             // the ledger, namespaced into THIS session's numbering, and
             // the root rebased with the same map before mounting
             let remap = namescope_ledger(session, &scopes)?;
@@ -1325,7 +1325,7 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
             let root_spec = manifest
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.toml has no `name`".to_string()))?;
+                .ok_or_else(|| LoadError::law("bundle: rut.json has no `name`".to_string()))?;
             let module = bundle_entry_module(entries, "", &manifest)?;
             (root_spec, module, None, manifest)
         }
@@ -1340,14 +1340,14 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
         // the group loop — load_bundle_bytes' law, minus the archive
         // recording (see the doc comment)
         for (prefix, kind) in &groups {
-            let dep_toml = read_entry(entries, &format!("{prefix}/rut.toml"))
+            let dep_toml = read_entry(entries, &format!("{prefix}/rut.json"))
                 .map_err(|e| LoadError::law(format!("bundle: {e}")))?;
             let dm = parse_manifest(&dep_toml)
-                .map_err(|e| LoadError::law(format!("bundle: {prefix}/rut.toml: {e}")))?;
+                .map_err(|e| LoadError::law(format!("bundle: {prefix}/rut.json: {e}")))?;
             let name = dm
                 .name
                 .clone()
-                .ok_or_else(|| LoadError::law(format!("bundle: {prefix}/rut.toml has no `name`")))?;
+                .ok_or_else(|| LoadError::law(format!("bundle: {prefix}/rut.json has no `name`")))?;
             if session.resolve(&name).is_ok() {
                 continue; // first mount wins
             }
@@ -1452,7 +1452,7 @@ pub async fn mount_dir_with(
     mount_dir_fetched(session, dir, &map)
 }
 
-/// Read a directory's `rut.toml` graph and compile it to one linked program.
+/// Read a directory's `rut.json` graph and compile it to one linked program.
 pub fn compile_dir(dir: &Path) -> Result<crate::graph::GraphOutput, LoadError> {
     let (session, root) = load_dir_session(dir, &FsSource)?;
     Ok(crate::compile_graph(&session, &root))

@@ -1,6 +1,6 @@
 //! `.d.rut` surface lowering: a declaration
 //! file's `host fn`s become a mounted module's HOST surface, so a host
-//! pkg is a real package directory — `rut.toml` (`entry.type`, no
+//! pkg is a real package directory — `rut.json` (`entry.type`, no
 //! `entry.lib`) plus the `.d.rut` itself. The compiler-limitation rule
 //! holds at LOAD time: every signature must be concrete
 //! over the crossing set, or the load refuses naming the offender.

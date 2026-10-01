@@ -1,7 +1,7 @@
 //! Module mounts & resolution — the compile-time half
 //! (loading model: `docs/src/reference/loading.md`).
 //!
-//! **One directory is one module.** Its `rut.toml` names the exact
+//! **One directory is one module.** Its `rut.json` names the exact
 //! package it answers to and how to reach its surface and body; the
 //! manifest grammar itself — the parsed [`crate::bundle::Manifest`], its
 //! dep tables and its error shapes — lives in the [`crate::bundle`]
@@ -62,7 +62,7 @@ pub struct Session {
     /// pass over the same session (the graph load ran one, an
     /// `assemble_peers` call adds another) never double-appends.
     groups_mounted: std::collections::BTreeSet<String>,
-    /// A mounted v5 compiled bundle's pack-time scope ledger (scope →
+    /// A mounted v7 compiled bundle's pack-time scope ledger (scope →
     /// the spec that owned it when the closure was packed, engine
     /// mounts included). A decoded program's foreign ids spell these
     /// pack-time scopes; the graph's compiled-mount arm resolves each
@@ -247,7 +247,7 @@ impl Session {
         self.groups_mounted.contains(pkg)
     }
 
-    /// Record one row of a v5 bundle's pack-time scope ledger (the
+    /// Record one row of a v7 bundle's pack-time scope ledger (the
     /// loader reads every row of `rut.scopes` at mount).
     pub fn record_bundle_scope(&mut self, scope: rut_core::id::ScopeId, spec: &str) {
         self.bundle_scopes.insert(scope, spec.to_string());
@@ -376,7 +376,7 @@ mod tests {
         let s = Session::new();
         let err = s.resolve("missing").unwrap_err();
         assert_eq!(err, ResolveError::NoModule { spec: "missing".into() });
-        assert!(err.to_string().contains("`rut.toml` `[deps]`"), "{}", err);
+        assert!(err.to_string().contains("`rut.json` `deps`"), "{}", err);
     }
 
     /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
@@ -408,7 +408,7 @@ mod tests {
         let err = s.resolve("pouch").unwrap_err();
         assert_eq!(
             err.to_string(),
-            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]`"
+            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.json` `deps`"
         );
         // a name NO pkg declares as a peer stays the bare miss
         let err = s.resolve("stranger").unwrap_err();

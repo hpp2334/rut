@@ -1,0 +1,15 @@
+{
+  "_comment": "quicksort/ — in-place Vec<i32> mutation (handles, shared with the caller), recursion.",
+  "name": "quicksort",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../../rut/ink"
+    }
+  }
+}

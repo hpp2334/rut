@@ -1,0 +1,15 @@
+{
+  "_comment": "opaque/ — opaque / opaque.downcast<T> -> ?T / is: erasure and checked recovery.",
+  "name": "opaque",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../../rut/ink"
+    }
+  }
+}

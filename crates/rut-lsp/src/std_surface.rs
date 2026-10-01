@@ -1,10 +1,10 @@
 //! The toolchain's std surface — embedded source, indexed once and
 //! consulted by hover/completion after the open document (one directory
-//! per module: `rut/pouch/rut.toml` names `"pouch"`). Shared by both
+//! per module: `rut/pouch/rut.json` names `"pouch"`). Shared by both
 //! faces: the stdio server (`server`, native) and the wasm shim
 //! (`rut-lsp-wasm`) — one index, no drift.
 //!
-//! ALL ELEVEN stdlib packages are embedded (the `rut.toml` `name`
+//! ALL ELEVEN stdlib packages are embedded (the `rut.json` `name`
 //! fields — what a `use` path spells): the six `entry.type` declaration
 //! surfaces (`core`, `calc`, `nmap_host`, `ink_host`, `bench_cross`,
 //! `strbuild_host`) and the five `entry.lib` sources (`pouch`,

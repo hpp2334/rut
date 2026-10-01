@@ -12,7 +12,7 @@ fn examples_dir() -> std::path::PathBuf {
 #[test]
 fn classics_run_clean() {
     let dir = examples_dir();
-    // the dir-shaped classics: one module dir (rut.toml + main.rut) per
+    // the dir-shaped classics: one module dir (rut.json + main.rut) per
     // name — the snippet identity is the DIRECTORY name
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))

@@ -55,7 +55,7 @@ pub enum LoadError {
         actual: String,
     },
     /// the input path is neither of the two loadable shapes
-    #[error("{path} is neither a module directory (no `rut.toml`) nor a `.rutbundle`")]
+    #[error("{path} is neither a module directory (no `rut.json`) nor a `.rutbundle`")]
     Shape { path: String },
     /// the session refused a mount (a duplicate name, a bad spec)
     #[error(transparent)]

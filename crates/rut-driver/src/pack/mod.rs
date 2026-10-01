@@ -1,9 +1,9 @@
-//! The packer: a module directory (+ its whole `[deps]` closure) →
+//! The packer: a module directory (+ its whole `deps` closure) →
 //! one deterministic `.rutbundle`. TWO root kinds, paired with the
-//! format version: a **lib** root packs **compiled** (v5 — the root and
+//! format version: a **lib** root packs **compiled** (v7 — the root and
 //! every source dep ride as `.rutc` binaries (bodies + surface — the
 //! linking truth); host/decl pkgs ride as their declaration file sets),
-//! and a **host** root packs as a **v6 decl root** (single-package: its
+//! and a **host** root packs as a **v8 decl root** (single-package: its
 //! `.d.rut` surface rides as source, nothing to compile — the surface
 //! verifies at pack time by parsing + lowering once, then the module
 //! is discarded).
@@ -24,7 +24,7 @@
 //! recursion). `.rutc` emission stays ONE path: archive-backed
 //! compiled modules were rebased onto this session's numbering by the
 //! mount→compile pipeline, so they encode from `units` exactly like
-//! dir deps; only the group's FILE reads (`rut.toml`, `.d.rut`, source
+//! dir deps; only the group's FILE reads (`rut.json`, `.d.rut`, source
 //! sets) dispatch on the source. The manifest rides byte-for-byte (the
 //! law) — url+sha256 rows carry into the output satisfied by the
 //! rode-along groups.
@@ -54,14 +54,14 @@ use crate::loader::{
 };
 use crate::session::ModuleBody;
 
-/// The v5 bundle layout version — a **compiled** root (a lib pkg).
-pub const FORMAT_VERSION: u64 = 5;
+/// The v7 bundle layout version — a **compiled** root (a lib pkg).
+pub const FORMAT_VERSION: u64 = 7;
 
-/// The v6 bundle layout version — a **decl** root (a `type = "host"`
+/// The v8 bundle layout version — a **decl** root (a `type = "host"`
 /// pkg: its `.d.rut` surface rides as source, single-package). Writers
-/// emit 6 ONLY for decl roots; readers accept 5|6 — the pairing is
+/// emit 8 ONLY for decl roots; readers accept 7|8 — the pairing is
 /// total, both directions refused at the gate.
-pub const FORMAT_VERSION_DECL: u64 = 6;
+pub const FORMAT_VERSION_DECL: u64 = 8;
 
 /// The `rut.scopes` ledger: one `<scope> = "<spec>"` row per linked
 /// module of the packed closure (engine mounts included), ascending by
@@ -75,10 +75,10 @@ fn ledger_text(rows: &[(rut_core::id::ScopeId, String)]) -> String {
     out
 }
 
-/// Pack a `type = "host"` directory as a **v6 decl root** —
+/// Pack a `type = "host"` directory as a **v8 decl root** —
 /// single-package, byte-deterministic: the manifest byte-for-byte plus
 /// its declaration surface file(s) (the same file-set shape a host
-/// group rides inside a v5 bundle). The pack-time VERIFICATION is the
+/// group rides inside a v7 bundle). The pack-time VERIFICATION is the
 /// surface's own parse + lower (the exact lane a mount runs) — the
 /// lowered module is discarded; decls ride as source and the embedding
 /// Rust binds the bodies. A host pkg has no deps, no programs, no
@@ -89,7 +89,7 @@ fn pack_host_root(
     manifest_bytes: Vec<u8>,
 ) -> Result<Vec<u8>, PackError> {
     let rel = manifest.entry.type_path.as_deref().ok_or_else(|| {
-        PackError::law(format!("{} is a host pkg with no `entry.type`", dir.join("rut.toml").display()))
+        PackError::law(format!("{} is a host pkg with no `entry.type`", dir.join("rut.json").display()))
     })?;
     let rel = rel.strip_prefix("./").unwrap_or(rel);
     let src_path = dir.join(rel);
@@ -99,17 +99,17 @@ fn pack_host_root(
     // a broken `.d.rut` refuses to pack (discard the output)
     crate::decl::lower_decl_module(&src, &src_path.display().to_string())
         .map_err(PackError::law)?;
-    // entries = rut.toml + the surface (the root file set, prefix "") —
+    // entries = rut.json + the surface (the root file set, prefix "") —
     // the exact shape `bundle_entry_module` reads back at load
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-    entries.push(("rut.toml".into(), manifest_bytes));
+    entries.push(("rut.json".into(), manifest_bytes));
     let key = bundle_key(rel).map_err(PackError::law)?;
     entries.push((key, src.into_bytes()));
     write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
 }
 
-/// Pack a lib directory into a deterministic v5 `.rutbundle` (compiled
-/// root), or a `type = "host"` directory into a v6 decl root.
+/// Pack a lib directory into a deterministic v7 `.rutbundle` (compiled
+/// root), or a `type = "host"` directory into a v8 decl root.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, PackError> {
     Ok(pack_dir_opts(dir, &PackOpts::default())?.0)
 }
@@ -148,19 +148,19 @@ pub fn pack_dir_opts_fetched(
     opts: &PackOpts,
     map: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    let manifest_bytes = std::fs::read(dir.join("rut.toml"))
-        .map_err(|e| PackError::io(dir.join("rut.toml").display(), e))?;
+    let manifest_bytes = std::fs::read(dir.join("rut.json"))
+        .map_err(|e| PackError::io(dir.join("rut.json").display(), e))?;
     let manifest = parse_manifest(&String::from_utf8(manifest_bytes.clone()).map_err(
-        |_| PackError::law(format!("{}: not UTF-8", dir.join("rut.toml").display())),
+        |_| PackError::law(format!("{}: not UTF-8", dir.join("rut.json").display())),
     )?)?;
     let name = manifest
         .name
         .clone()
-        .ok_or_else(|| PackError::law(format!("{} has no `name`", dir.join("rut.toml").display())))?;
-    // the packed rut.toml is the directory's rut.toml byte-for-byte, so
+        .ok_or_else(|| PackError::law(format!("{} has no `name`", dir.join("rut.json").display())))?;
+    // the packed rut.json is the directory's rut.json byte-for-byte, so
     // the bundle keys must already be there — directory loading ignores
     // them, but a bundle loader refuses without them (refuse, never
-    // guess): v5 since the compiled-bundle batch, v6 for a host root
+    // guess): v7 since the json-manifest cutover, v8 for a host root
     // (its surface rides as source — there is nothing to compile)
     let want_version = match manifest.pkg_type {
         crate::bundle::PkgType::Host => FORMAT_VERSION_DECL,
@@ -170,7 +170,7 @@ pub fn pack_dir_opts_fetched(
     {
         return Err(PackError::law(format!(
             "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = {want_version}`",
-            dir.join("rut.toml").display()
+            dir.join("rut.json").display()
         )));
     }
     // the host-root arm: no closure (the grammar refuses a host
@@ -194,7 +194,7 @@ pub fn pack_dir_opts_fetched(
     if root != name {
         return Err(PackError::law(format!(
             "{} names itself `{root}` — expected `{name}`",
-            dir.join("rut.toml").display()
+            dir.join("rut.json").display()
         )));
     }
     // the closure's group set: dir deps as directories, url deps as
@@ -286,7 +286,7 @@ pub fn pack_dir_opts_fetched(
     }
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     // the manifest byte-for-byte, then the scope ledger
-    entries.push(("rut.toml".into(), manifest_bytes));
+    entries.push(("rut.json".into(), manifest_bytes));
     let mut ledger: Vec<(rut_core::id::ScopeId, String)> = units
         .linked
         .iter()
@@ -410,7 +410,7 @@ pub fn pack_dir_opts_fetched(
             .map_err(|e| PackError::io(dir.join(rel).display(), e))?;
         entries.push((bundle_key(&format!("{name}.d.rut")).map_err(PackError::law)?, text));
     }
-    // the generic-source riding law (v5, additive): a compiled pkg whose
+    // the generic-source riding law (v7, additive): a compiled pkg whose
     // surface exports generics ALSO rides the source that serves
     // consumer-spelled shapes — the entry lib + `entry.libs` + the
     // `[peer-deps]` group files, verbatim, beside the binary. The entry
@@ -435,8 +435,8 @@ pub fn pack_dir_opts_fetched(
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
             // its name, mount flags, and peer declarations from it
-            let toml = group_file(source, "rut.toml", &archives).map_err(PackError::law)?;
-            entries.push((bundle_key(&format!("{prefix}rut.toml")).map_err(PackError::law)?, toml));
+            let toml = group_file(source, "rut.json", &archives).map_err(PackError::law)?;
+            entries.push((bundle_key(&format!("{prefix}rut.json")).map_err(PackError::law)?, toml));
             entries.push((bundle_key(&format!("{prefix}{spec}.rutc")).map_err(PackError::law)?, rut_core::binary::encode(&units.programs[idx])));
             if let Some(rel) = &dm.entry.type_path {
                 let rel = rel.strip_prefix("./").unwrap_or(rel);

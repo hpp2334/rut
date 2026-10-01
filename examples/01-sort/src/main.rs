@@ -37,7 +37,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 fn main() {
-    // the manifest lane: this dir's `rut.toml` carries the deps, the
+    // the manifest lane: this dir's `rut.json` carries the deps, the
     // load mounts the closure and runs the mount passes — then the same
     // embedder half as before (mount, compile, verify, drive)
     let (mut session, root) =

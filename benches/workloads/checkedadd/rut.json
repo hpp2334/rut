@@ -1,0 +1,12 @@
+{
+  "_comment": "checkedadd/ — the `(T, ok)` pair economy, isolated: a hot loop of\n`a.checked_add(b)` through a helper fn, destructured at the call site.\nA module dir like the rest of the workloads; the JS twin is\n../checkedadd.js.",
+  "name": "checkedadd",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

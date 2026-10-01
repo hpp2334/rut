@@ -40,7 +40,7 @@ pub struct Plugin {
 }
 
 impl Plugin {
-    /// Load the plugin module from a module directory (`rut.toml`) or a
+    /// Load the plugin module from a module directory (`rut.json`) or a
     /// packed `.rutbundle` — the two forms of the same
     /// contract; the root spec comes from the manifest, not the caller.
     /// ONE shape for both: the Loader door with the project-local

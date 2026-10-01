@@ -1,6 +1,0 @@
-# tree/ — recursive structs (?Node nullable fields), composite fields as handle slots.
-name = "tree"
-entry.lib = "./main.rut"
-
-[deps]
-ink = { path = "../../../../rut/ink" }

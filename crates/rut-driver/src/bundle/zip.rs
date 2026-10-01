@@ -119,7 +119,7 @@ mod tests {
 
     fn entries() -> Vec<(String, Vec<u8>)> {
         vec![
-            ("rut.toml".to_string(), b"name = \"x\"\n".to_vec()),
+            ("rut.json".to_string(), br#"{"name": "x"}"#.to_vec()),
             ("x.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
         ]
     }
@@ -129,9 +129,9 @@ mod tests {
         let bytes = write_archive(&entries()).unwrap();
         let parsed = read_archive(&bytes).unwrap();
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].name, "rut.toml");
+        assert_eq!(parsed[0].name, "rut.json");
         assert_eq!(parsed[0].method, 0);
-        assert_eq!(parsed[0].bytes, b"name = \"x\"\n");
+        assert_eq!(parsed[0].bytes, br#"{"name": "x"}"#);
         assert_eq!(parsed[1].name, "x.rut");
         assert_eq!(parsed[1].bytes, entries()[1].1);
     }

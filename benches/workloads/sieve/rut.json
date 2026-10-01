@@ -1,0 +1,15 @@
+{
+  "_comment": "sieve/ — Sieve of Eratosthenes over a flat Vec<u8>, limit = 500_000.\nA module dir because it mounts `pouch`; `ink` is declared for the\nlogger. The JS twin is ../sieve.js.",
+  "name": "sieve",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

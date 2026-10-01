@@ -220,7 +220,7 @@ fn page_state() -> Result<StateRc, String> {
 /// page is purely event-driven — the host owns the loop.
 fn boot_page(src: &str) -> Result<(), String> {
     let mut session = rut_driver::Session::new();
-    // THE MIRROR (rut/rut.toml by hand — the Session is I/O-free):
+    // THE MIRROR (rut/rut.json by hand — the Session is I/O-free):
     // every package the manifest names; the loader hands over the biz
     // module's spliced source (base + entry.libs)
     crate::mount::mount_app_session(&mut session)?;

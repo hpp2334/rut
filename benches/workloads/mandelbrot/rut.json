@@ -1,0 +1,12 @@
+{
+  "_comment": "mandelbrot/ — escape-time iteration count over a 400 x 300 grid,\nmax_iter = 500. A module dir like the rest of the workloads; the JS\ntwin is ../mandelbrot.js.",
+  "name": "mandelbrot",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

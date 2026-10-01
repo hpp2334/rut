@@ -121,7 +121,7 @@ fn main() {
     // ---- compile (frontend + LIR + binary emit) ----
     // A loose `.rut` workload uses the toolchain libs (`ink`+`ink_host`,
     // `pouch`) — third-party pkgs mounted from the tree, plus the
-    // engine's core/calc. A module-DIR workload (`rut.toml`, the
+    // engine's core/calc. A module-DIR workload (`rut.json`, the
     // `nmapset` bench dirs) loads its own `[deps]` graph instead and
     // yields an already-linked program.
     let t0 = Instant::now();

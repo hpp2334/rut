@@ -14,7 +14,7 @@ pub enum ModuleBody {
     /// module (a `.d.rut` surface parsed as its own unit):
     /// nothing to compile or run, but `rut dump` shows the AST.
     Source { text: String, is_decl: bool },
-    /// a decoded `.rutc` program (a v5 compiled bundle's payload): the
+    /// a decoded `.rutc` program (a v7 compiled bundle's payload): the
     /// body already exists — the graph assigns it a fresh scope,
     /// rebases its packed ids, and pushes it. The loader's decode gate
     /// (version + surface verification) has passed.

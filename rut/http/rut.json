@@ -1,0 +1,17 @@
+{
+  "_comment": "http/ — the std HTTP lane's rut face: the async-only client, builder\nand response classes over the `http_host` rows (the ink pattern).\nPublishes COMPILED (the linkable-classes phase): the classes' methods\ncross on the surface's inherent rows, so every consumer's call site\nbinds them from this pkg's binary.",
+  "format": "rutbundle",
+  "format_version": 7,
+  "name": "http",
+  "entry": {
+    "lib": "./http.rut"
+  },
+  "deps": {
+    "http_host": {
+      "path": "../http_host"
+    },
+    "strbuild": {
+      "path": "../strbuild"
+    }
+  }
+}

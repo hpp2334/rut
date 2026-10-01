@@ -27,9 +27,9 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
         .join(format!("rut-02-digest-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let remote = rut_driver::HttpRemote::offline(&root);
-    let manifest_text = std::fs::read_to_string(base.join("rut.toml")).expect("rut.toml");
+    let manifest_text = std::fs::read_to_string(base.join("rut.json")).expect("rut.json");
     let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.json");
     let dist = base.join("../../dist/std");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
@@ -59,7 +59,7 @@ fn load_session() -> (rut_driver::Session, String) {
 }
 
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
-    // the manifest lane: `rut.toml` carries pouch + json (CDN bundles
+    // the manifest lane: `rut.json` carries pouch + json (CDN bundles
     // — the LIGHT consumer world — the manifest header owns that
     // story), the load mounts the closure and runs the mount passes —
     // then the same embedder half as before

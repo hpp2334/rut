@@ -1,6 +1,6 @@
 //! Manifest- and file-set helpers over a [`Source`]: reading a
-//! directory's `rut.toml`, normalizing bundle entry names, and
-//! collecting a package's **source file set** — the `rut.toml` +
+//! directory's `rut.json`, normalizing bundle entry names, and
+//! collecting a package's **source file set** — the `rut.json` +
 //! entry + `libs` + peer-group files shape a source group rides inside
 //! a v5 compiled bundle. The packer itself (which compiles the closure
 //! and emits the `.rutc` groups) lives in [`crate::pack`] — it needs
@@ -44,14 +44,14 @@ pub(crate) fn read_text(path: &Path, src: &dyn Source) -> Result<String, String>
     String::from_utf8(bytes).map_err(|_| "stream did not contain valid UTF-8".to_string())
 }
 
-/// Read a directory's `rut.toml` through `src` and parse it.
+/// Read a directory's `rut.json` through `src` and parse it.
 pub fn read_manifest(dir: &Path, src: &dyn Source) -> Result<Manifest, String> {
-    let text = read_text(&dir.join("rut.toml"), src)?;
+    let text = read_text(&dir.join("rut.json"), src)?;
     parse_manifest(&text).map_err(|e| e.to_string())
 }
 
 /// Collect a package's SOURCE file set — the v4 group shape — under
-/// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.toml`
+/// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.json`
 /// byte-for-byte, its entry file, each `entry.libs` file beside the
 /// entry, and each `[peer-deps]` descriptor's `lib` group file.
 /// Descriptor order is the manifest's (BTreeMap), so the archive stays
@@ -65,8 +65,8 @@ pub fn collect_source_group(
     src: &dyn Source,
     out: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), String> {
-    let text = read_text(&dir.join("rut.toml"), src)?;
-    out.push((format!("{prefix}rut.toml"), text.into_bytes()));
+    let text = read_text(&dir.join("rut.json"), src)?;
+    out.push((format!("{prefix}rut.json"), text.into_bytes()));
     let rel = entry_rel(manifest)
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
     // normalize the entry's `./` prefix before the group prefix joins it

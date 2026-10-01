@@ -125,7 +125,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.toml", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            ("rut.json", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
             ("s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
         ],
     );
@@ -139,7 +139,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.toml", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            ("rut.json", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
             ("s.d.rut", "this is not rut source at all <<<\n"),
         ],
     );
@@ -163,7 +163,7 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.toml", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            ("rut.json", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
             ("s.d.rut", "/// documented surface, no body yet.\n"),
         ],
     );

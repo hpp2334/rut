@@ -1,8 +1,0 @@
-# fasta/ — LCG-driven nucleotide string building: the accumulate-into
-# `out` concat shape at n = 10000. A module dir like the rest of the
-# workloads; the JS twin is ../fasta.js.
-name = "fasta"
-entry.lib = "./main.rut"
-
-[deps]
-ink = { path = "../../../rut/ink" }

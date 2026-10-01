@@ -1,0 +1,15 @@
+{
+  "_comment": "fannkuch/ — fannkuch-redux: pancake flips over all n! permutations\n(n = 7), checksum folded with max-flips. A module dir because it\nmounts `pouch`; `ink` is declared for the logger. The JS twin is\n../fannkuch.js.",
+  "name": "fannkuch",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

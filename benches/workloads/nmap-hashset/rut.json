@@ -1,0 +1,15 @@
+{
+  "_comment": "nmap-hashset/ — the HOST-backed twin of the removed `hashset` mapset\nrow: the identical\nHashSet<i32> churn over `nmapset::HashSet` (the native-key experiment\npkg) instead of the removed pure-rut `mapset`. Module dir because it\nmounts\n`nmapset` (which pulls the `nmap_host` host pkg); see\nnmapset-int/rut.json. The checksum must equal the pinned 21500055\n(same hash values — the nmapset pkg ships the mapset-exact mix64\nconstants).",
+  "name": "nmap_hashset",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "nmapset": {
+      "path": "../../../rut/nmapset"
+    },
+    "ink": {
+      "path": "../../../rut/ink"
+    }
+  }
+}

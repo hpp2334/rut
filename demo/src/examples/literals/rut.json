@@ -1,0 +1,15 @@
+{
+  "_comment": "literals/ — numeric suffixes, plain/raw/format strings, fixed [T], bytes buffers.",
+  "name": "literals",
+  "entry": {
+    "lib": "./main.rut"
+  },
+  "deps": {
+    "pouch": {
+      "path": "../../../../rut/pouch"
+    },
+    "ink": {
+      "path": "../../../../rut/ink"
+    }
+  }
+}

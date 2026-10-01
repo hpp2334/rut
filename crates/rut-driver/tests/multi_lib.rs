@@ -50,7 +50,7 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
     let libs_row = libs.map(|l| format!(r#", "libs": [{l}]"#)).unwrap_or_default();
     write(
         &kid,
-        "rut.toml",
+        "rut.json",
         &format!(
             r#"{{{bundle_keys}"name": "kid", "entry": {{"lib": "./kid.rut"{libs_row}}}}}"#
         ),
@@ -61,7 +61,7 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
     let app = root.join("app");
     write(
         &app,
-        "rut.toml",
+        "rut.json",
         &format!(
             r#"{{{bundle_keys}"name": "app", "entry": {{"lib": "./entry.rut"}}, "deps": {{"kid": {{"path": "../kid"}}}}}}"#
         ),
@@ -118,8 +118,8 @@ fn manifest_libs_laws_are_loud() {
     // `libs` without `lib` — the base is what the tail is a tail ON
     let root = world("nolib", Some("\"./part_b.rut\""), None);
     let kid = root.join("kid");
-    let text = std::fs::read_to_string(kid.join("rut.toml")).unwrap();
-    std::fs::write(&kid.join("rut.toml"), text.replacen(r#""lib": "./kid.rut", "#, "", 1)).unwrap();
+    let text = std::fs::read_to_string(kid.join("rut.json")).unwrap();
+    std::fs::write(&kid.join("rut.json"), text.replacen(r#""lib": "./kid.rut", "#, "", 1)).unwrap();
     let err = load_dir_session(&kid, &FsSource).unwrap_err().to_string();
     assert!(err.contains("needs `entry.lib`"), "{err}");
 
@@ -141,7 +141,7 @@ fn manifest_libs_laws_are_loud() {
 
 #[test]
 fn multi_lib_packs_compiled_and_loads_identically() {
-    let root = world("v5", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(5));
+    let root = world("v7", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(7));
     let bytes = pack_dir(&root.join("app")).expect("pack");
     // determinism: same dir ⇒ byte-identical bundle
     assert_eq!(bytes, pack_dir(&root.join("app")).unwrap());

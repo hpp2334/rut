@@ -61,7 +61,7 @@ fn uses_of_an_unmounted_module_error() {
         "app",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`rut.toml` `[deps]`") || d.msg.contains("`math`")),
+        out.diags.iter().any(|d| d.msg.contains("`rut.json` `deps`") || d.msg.contains("`math`")),
         "{:?}",
         out.diags
     );
@@ -300,7 +300,7 @@ fn loads_a_directory_graph() {
     std::fs::create_dir_all(&app).unwrap();
     std::fs::create_dir_all(&lib).unwrap();
     std::fs::write(
-        app.join("rut.toml"),
+        app.join("rut.json"),
         r#"{"name": "app_main", "entry": {"lib": "./entry.rut"}, "deps": {"math": {"path": "../lib"}}}"#,
     )
     .unwrap();
@@ -310,7 +310,7 @@ fn loads_a_directory_graph() {
     )
     .unwrap();
     std::fs::write(
-        lib.join("rut.toml"),
+        lib.join("rut.json"),
         r#"{"name": "math", "entry": {"lib": "./lib.rut"}}"#,
     )
     .unwrap();
@@ -405,7 +405,7 @@ fn graph_reports_a_missing_dependency() {
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.program.is_none());
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`rut.toml` `[deps]`")),
+        out.diags.iter().any(|d| d.msg.contains("`rut.json` `deps`")),
         "{:?}",
         out.diags
     );

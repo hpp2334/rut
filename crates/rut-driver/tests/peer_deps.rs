@@ -153,7 +153,7 @@ fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
     let err = s.resolve("pouch").unwrap_err();
     assert_eq!(
         err.to_string(),
-        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]`",
+        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.json` `deps`",
         "the dedicated diag, exact survey text"
     );
     // the same text surfaces at the reference site through the graph
@@ -190,7 +190,7 @@ fn t5_required_peer_missing_is_loud_d1() {
     assert!(err.contains("and `nmapset` is not in this program's closure"), "{err}");
     assert!(err.contains("peers are not pulled transitively"), "{err}");
     assert!(
-        err.contains("add `nmapset = { path = \"..\" }` to your `rut.toml` `[deps]`"),
+        err.contains("add `nmapset = { path = \"..\" }` to your `rut.json` `deps`"),
         "{err}"
     );
     assert!(err.contains(""), "{err}");
