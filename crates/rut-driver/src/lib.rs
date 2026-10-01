@@ -14,6 +14,7 @@ use rut_core::{IdentId, sym};
 pub mod session;
 pub use session::{Module, ModuleBody, PeerDecl, ResolveError, Session};
 
+pub mod bundle;
 pub mod decl;
 pub use decl::lower_decl_module;
 

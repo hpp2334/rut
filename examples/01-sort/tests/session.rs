@@ -40,7 +40,7 @@ fn load_session() -> (rut_driver::Session, String) {
     let manifest_text =
         std::fs::read_to_string(base.join("rut.toml")).expect("rut.toml");
     let manifest =
-        rut_bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
     let dist = base.join("../../dist/std");
     let mut table = BTreeMap::new();
     for desc in manifest.deps.values() {

@@ -143,14 +143,14 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
         ModuleBody::Source { .. }
     ));
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     for key in ["rut.toml", "rut.scopes", "app.rutc", "util/util.rutc", "boxy/rut.toml", "boxy/boxy.rut"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
     assert!(!names.iter().any(|n| n == "boxy/boxy.rutc"), "the inline pkg rides source, not a binary");
 
     // the ledger names every linked module of the packed closure
-    let ledger = rut_bundle::parse_bundle(&bytes).unwrap();
+    let ledger = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     let ledger = ledger.iter().find(|(n, _)| n == "rut.scopes").unwrap();
     let ledger = std::str::from_utf8(&ledger.1).unwrap();
     assert!(ledger.contains("= \"app\""), "{ledger}");
@@ -250,7 +250,7 @@ fn generic_and_trait_param_roots_publish_compiled() {
     );
     let bytes = pack_dir(&app).expect("a generic root publishes compiled");
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
     // generic-source riding: the exported template crosses compiled AND
     // the source rides beside it, so consumer-spelled shapes stay
@@ -330,7 +330,7 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
     // here is impl-only — no rows to carry; the shape is the pin)
     let bytes = pack_dir(&app).expect("peer-deps publish compiled");
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"libbed/libbed.rutc".to_string()), "{names:?}");
     assert!(!names.contains(&"libbed/ser_p.rut".to_string()), "{names:?}");
     let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
@@ -432,7 +432,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     // is compiled, no source group travels
     assert!(matches!(session.resolve("peered").unwrap().body, ModuleBody::Compiled(_)));
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(!names.contains(&"peered/ser_tag.rut".to_string()), "{names:?}");
     assert!(names.contains(&"base/base.rutc".to_string()), "{names:?}");
     assert!(names.contains(&"tagger/tagger.rutc".to_string()), "{names:?}");
@@ -474,7 +474,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
 
     // a pre-v16 `.rutc` (no surface section) inside the archive: the
     // decode gate refuses it loudly, before any mount
-    let stale: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(&bytes)
+    let stale: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
         .map(|(n, mut b)| {
@@ -487,7 +487,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = load_bundle_bytes(&rut_bundle::write_bundle(&stale).unwrap(), Path::new("stale"))
+    let err = load_bundle_bytes(&rut_driver::bundle::write_bundle(&stale).unwrap(), Path::new("stale"))
         .unwrap_err();
     assert!(err.contains("util/util.rutc"), "{err}");
     assert!(err.contains("version"), "{err}");
@@ -509,7 +509,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
     // a doctored scope ledger: the group's binary carries its own
     // scope, and the ledger row must AGREE with it (refuse, never
     // guess — a mismatch is a corrupt or doctored bundle)
-    let doctored: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(&bytes)
+    let doctored: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
         .map(|(n, mut b)| {
@@ -529,7 +529,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         })
         .collect();
     let err =
-        load_bundle_bytes(&rut_bundle::write_bundle(&doctored).unwrap(), Path::new("ledger"))
+        load_bundle_bytes(&rut_driver::bundle::write_bundle(&doctored).unwrap(), Path::new("ledger"))
             .unwrap_err();
     assert!(
         err.contains("ledger") || err.contains("scope"),

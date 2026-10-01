@@ -8,9 +8,9 @@
 //! layout verifies what each kind carries, so a bad archive never
 //! reaches the session.
 
-use crate::container::{parse_bundle, BundleError};
-use crate::manifest::{parse_manifest, Manifest};
-use crate::pack::read_entry;
+use super::container::{parse_bundle, BundleError};
+use super::manifest::{parse_manifest, Manifest};
+use super::files::read_entry;
 use rut_core::binary::{decode, Program};
 
 /// A parsed `.rutbundle`: its entries in archive order. Loaders pick
@@ -114,7 +114,7 @@ impl Layout {
     /// broken pairing (v5's root must be a `.rutc` a host pkg cannot
     /// have) — refuse, never guess.
     fn parse_compiled(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        if manifest.pkg_type == crate::manifest::PkgType::Host {
+        if manifest.pkg_type == super::manifest::PkgType::Host {
             return Err(
                 "a `type = \"host\"` root packs at format_version 6 — a v5 bundle's root is compiled, and a host pkg has nothing to compile; re-pack the directory"
                     .into(),
@@ -143,7 +143,7 @@ impl Layout {
                 return Err(bad());
             }
             let spec = spec[1..spec.len() - 1].to_string();
-            if !crate::manifest::valid_spec(&spec) {
+            if !super::manifest::valid_spec(&spec) {
                 return Err(format!(
                     "rut.scopes line {}: `{spec}` is not a bare package name",
                     lineno + 1
@@ -199,7 +199,7 @@ impl Layout {
     /// (a host bundle is single-package — the grammar refuses a host
     /// manifest's deps tables, so there is nothing for a group to be).
     fn parse_decl(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        if manifest.pkg_type != crate::manifest::PkgType::Host {
+        if manifest.pkg_type != super::manifest::PkgType::Host {
             return Err(
                 "format_version 6 is the decl-root layout — a lib root packs at 5, compiled; re-pack the directory"
                     .into(),

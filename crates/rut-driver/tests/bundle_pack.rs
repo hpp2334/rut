@@ -2,12 +2,12 @@
 //! splice-needed dep rides inside a v5 bundle), entry-name
 //! normalization, and the in-memory [`Source`] — the wasm/test shape of
 //! the dependency injection. The compiled-bundle pack/load round trips
-//! live with rut-driver — this crate never builds a session.
+//! live in the sibling driver tests — this file never builds a session.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use rut_bundle::{bundle_key, collect_source_group, default_out_path, parse_manifest, Source};
+use rut_driver::bundle::{bundle_key, collect_source_group, default_out_path, parse_manifest, Source};
 
 /// The in-memory [`Source`] — a path→bytes map.
 #[derive(Default)]

@@ -129,9 +129,9 @@ fn the_artifact_set_spells_the_version_pairing() {
     // committed bytes, the exact pairing the reader refuses to break
     for (dir, name) in PKGS {
         let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
-        let bundle = rut_bundle::Bundle::parse(&bytes).unwrap();
-        let m = rut_bundle::parse_manifest(&bundle.read("rut.toml").unwrap()).unwrap();
-        let is_host = m.pkg_type == rut_bundle::PkgType::Host;
+        let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
+        let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.toml").unwrap()).unwrap();
+        let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
             m.format_version,
             Some(if is_host { 6 } else { 5 }),
@@ -193,7 +193,7 @@ fn a_legacy_bundle_without_ridden_source_refuses_consumer_shapes() {
     // The fixture is the honest legacy artifact: the fresh pack, minus
     // its riding source entries, re-written into an archive.
     let (url, bytes) = artifact("pouch");
-    let parsed = rut_bundle::parse_bundle(&bytes).expect("parse the committed pouch");
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
     assert!(
         parsed.iter().any(|(n, _)| n == "pouch.rut"),
         "the fresh pack rides its source (the riding law moved; this fixture strips it)"
@@ -203,7 +203,7 @@ fn a_legacy_bundle_without_ridden_source_refuses_consumer_shapes() {
         .filter(|(n, _)| !(n.ends_with(".rut") && n != "rut.toml"))
         .collect();
     let legacy_bytes =
-        rut_bundle::write_bundle(&legacy).expect("re-write the legacy archive");
+        rut_driver::bundle::write_bundle(&legacy).expect("re-write the legacy archive");
     let base = std::env::temp_dir().join(format!("rut-std-cdn-wall-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let mut table = BTreeMap::new();

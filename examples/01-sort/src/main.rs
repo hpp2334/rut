@@ -48,7 +48,7 @@ fn load_sort_session() -> Result<(rut_driver::Session, String), String> {
     let manifest_text = std::fs::read_to_string(base.join("rut.toml"))
         .map_err(|e| format!("rut.toml: {e}"))?;
     let manifest =
-        rut_bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+        rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = base.join("../../dist/std");
     let mut table = BTreeMap::new();
     for desc in manifest.deps.values() {

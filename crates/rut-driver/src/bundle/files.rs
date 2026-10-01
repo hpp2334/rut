@@ -3,15 +3,15 @@
 //! collecting a package's **source file set** — the `rut.toml` +
 //! entry + `libs` + peer-group files shape a source group rides inside
 //! a v5 compiled bundle. The packer itself (which compiles the closure
-//! and emits the `.rutc` groups) lives in `rut-driver` — it needs the
-//! compiler, and this crate stays compiler-free. Same input ⇒ same
-//! bytes; the packer only ever reads manifest-named paths, never lists
-//! directories.
+//! and emits the `.rutc` groups) lives in [`crate::pack`] — it needs
+//! the compiler, and this module stays compiler-free. Same input ⇒
+//! same bytes; the packer only ever reads manifest-named paths, never
+//! lists directories.
 
 use std::path::{Path, PathBuf};
 
-use crate::manifest::{parse_manifest, Manifest};
-use crate::Source;
+use super::manifest::{parse_manifest, Manifest};
+use super::Source;
 
 /// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
 /// outside the archive root is refused (entries are archive-relative).

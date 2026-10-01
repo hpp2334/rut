@@ -11,12 +11,16 @@ path = "src/lib.rs"
 
 [dependencies]
 rut-core = { path = "../rut-core" }
-rut-bundle = { path = "../rut-bundle" }
 rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-parser = { path = "../rut-parser" }
 rut-lir = { path = "../rut-lir" }
 rut-vm = { path = "../rut-vm" }
+# the `.rutbundle` container — a module of this crate (`bundle/`), not a
+# separate crate: toml_edit parses the manifest grammar, zip carries the
+# deterministic archive subset
+toml_edit = { workspace = true }
+zip = { workspace = true }
 # the pin law's arithmetic: the sha256 pin is manifest law, verified at
 # the mount door on EVERY load — so the dependency is unconditional and
 # wasm-clean (pure Rust; no features, no I/O)

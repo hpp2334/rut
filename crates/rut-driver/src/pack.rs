@@ -37,7 +37,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rut_bundle::{bundle_key, collect_source_group, parse_manifest, read_entry, write_bundle, FsSource};
+use crate::bundle::{bundle_key, collect_source_group, parse_manifest, read_entry, write_bundle, FsSource};
 
 use crate::graph::compile_units;
 use crate::loader::{
@@ -122,8 +122,8 @@ pub fn pack_dir_opts_fetched(
     // guess): v5 since the compiled-bundle batch, v6 for a host root
     // (its surface rides as source — there is nothing to compile)
     let want_version = match manifest.pkg_type {
-        rut_bundle::PkgType::Host => FORMAT_VERSION_DECL,
-        rut_bundle::PkgType::Lib => FORMAT_VERSION,
+        crate::bundle::PkgType::Host => FORMAT_VERSION_DECL,
+        crate::bundle::PkgType::Lib => FORMAT_VERSION,
     };
     if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
     {
@@ -135,7 +135,7 @@ pub fn pack_dir_opts_fetched(
     // the host-root arm: no closure (the grammar refuses a host
     // manifest's deps tables), no compile walk — the surface verifies
     // by parsing + lowering once, then rides as source
-    if manifest.pkg_type == rut_bundle::PkgType::Host {
+    if manifest.pkg_type == crate::bundle::PkgType::Host {
         if opts.strip {
             return Err(
                 "a host bundle has no symbols to strip — its root is a declaration surface, \
@@ -193,7 +193,7 @@ pub fn pack_dir_opts_fetched(
     for (spec, source) in &sources {
         match source {
             PkgSource::Dir(gdir) => {
-                let dm = rut_bundle::read_manifest(gdir, &FsSource)?;
+                let dm = crate::bundle::read_manifest(gdir, &FsSource)?;
                 mount_dev_table_fetched(&mut session, gdir, &dm, map)?;
             }
             PkgSource::Archive { .. } => {
@@ -449,7 +449,7 @@ pub fn pack_dir_opts_fetched(
 /// ledger — nothing else to emit.
 fn pack_host_root(
     dir: &Path,
-    manifest: &rut_bundle::Manifest,
+    manifest: &crate::bundle::Manifest,
     manifest_bytes: Vec<u8>,
 ) -> Result<Vec<u8>, String> {
     let rel = manifest.entry.type_path.as_deref().ok_or_else(|| {
@@ -574,7 +574,7 @@ fn is_placeholder(name: &str) -> bool {
 /// manifest-named path — the same file set a source group rides, minus
 /// the manifest (this pkg's manifest already rode).
 fn ride_generic_source(
-    manifest: &rut_bundle::Manifest,
+    manifest: &crate::bundle::Manifest,
     prefix: &str,
     entries: &mut Vec<(String, Vec<u8>)>,
     read: &impl Fn(&str) -> Result<Vec<u8>, String>,
@@ -605,9 +605,9 @@ fn ride_generic_source(
 }
 
 /// A group's parsed manifest, read from wherever its files live.
-fn group_manifest(source: &PkgSource, archives: &[Archive]) -> Result<rut_bundle::Manifest, String> {
+fn group_manifest(source: &PkgSource, archives: &[Archive]) -> Result<crate::bundle::Manifest, String> {
     match source {
-        PkgSource::Dir(gdir) => rut_bundle::read_manifest(gdir, &FsSource),
+        PkgSource::Dir(gdir) => crate::bundle::read_manifest(gdir, &FsSource),
         PkgSource::Archive { slot, prefix } => {
             let archive = &archives[*slot];
             let text = read_entry(&archive.entries, &format!("{prefix}rut.toml"))
@@ -667,7 +667,7 @@ pub async fn pack_dir_opts_with(
 /// ever reads manifest-named paths).
 fn collect_group_sources(
     dir: &Path,
-    manifest: &rut_bundle::Manifest,
+    manifest: &crate::bundle::Manifest,
     session: &crate::session::Session,
     out: &mut BTreeMap<String, PkgSource>,
     seen: &mut std::collections::BTreeSet<String>,
@@ -705,7 +705,7 @@ fn collect_group_sources(
             .get("path")
             .ok_or_else(|| format!("dep `{spec}` has no `path`"))?;
         let dep_dir = dir.join(rel);
-        let dm = rut_bundle::read_manifest(&dep_dir, &FsSource)?;
+        let dm = crate::bundle::read_manifest(&dep_dir, &FsSource)?;
         if dm.name.as_deref() != Some(spec.as_str()) {
             return Err(format!(
                 "dep `{spec}` points at `{}` — the manifest there names it `{}`",

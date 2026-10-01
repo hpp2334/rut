@@ -15,7 +15,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let d = dir();
     let manifest_text = std::fs::read_to_string(d.join("rut.toml"))
         .map_err(|e| format!("rut.toml: {e}"))?;
-    let manifest = rut_bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+    let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = d.join("../../../dist/std");
     let mut table = std::collections::BTreeMap::new();
     for desc in manifest.deps.values() {
@@ -116,7 +116,7 @@ fn bad_bundles_are_refused_at_load() {
     // unknown format_version — refused before anything else is read
     let manifest =
         "format = \"rutbundle\"\nformat_version = 99\nname = \"plugin\"\nentry.lib = \"./plugin.rut\"\n";
-    let bytes = rut_bundle::write_bundle(&[
+    let bytes = rut_driver::bundle::write_bundle(&[
         ("rut.toml".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
     ])

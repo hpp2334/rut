@@ -3,9 +3,9 @@
 //!
 //! **One directory is one module.** Its `rut.toml` names the exact
 //! package it answers to and how to reach its surface and body; the
-//! manifest grammar itself — the parsed [`rut_bundle::Manifest`], its
-//! dep tables and its error shapes — lives in `rut-bundle`
-//! ([`rut_bundle::parse_manifest`]). This module is the mount table
+//! manifest grammar itself — the parsed [`crate::bundle::Manifest`], its
+//! dep tables and its error shapes — lives in the [`crate::bundle`]
+//! module ([`crate::bundle::parse_manifest`]). This module is the mount table
 //! that parsed manifest feeds:
 //!
 //! ```toml
@@ -27,12 +27,12 @@
 //!
 //! The `Session` itself does no I/O (wasm hosts mount in memory); the
 //! native file readers are the counterparts that read files (the
-//! loader, over `rut-bundle`'s [`rut_bundle::Source`]).
+//! loader, over the [`crate::bundle::Source`] trait).
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rut_bundle::{parse_manifest, valid_spec, Entry, ManifestError};
+use crate::bundle::{parse_manifest, valid_spec, Entry, ManifestError};
 
 /// What a mounted module's body IS. The graph dispatches on this:
 /// a source body compiles (and may splice), a compiled body pushes as

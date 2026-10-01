@@ -55,26 +55,26 @@ fn host_world(tag: &str, name: &str, surface: &str, decls: &str) -> PathBuf {
 /// Rewrite one archive entry and re-seal the container — the
 /// doctored-bundle fixtures.
 fn resealed(bytes: &[u8], key: &str, text: &str) -> Vec<u8> {
-    let mut entries: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(bytes).unwrap();
+    let mut entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(bytes).unwrap();
     for (n, b) in entries.iter_mut() {
         if n == key {
             *b = text.as_bytes().to_vec();
         }
     }
-    rut_bundle::write_bundle(&entries).unwrap()
+    rut_driver::bundle::write_bundle(&entries).unwrap()
 }
 
 /// Append one archive entry and re-seal — the fabricated-payload
 /// fixtures.
 fn appended(bytes: &[u8], key: &str, payload: &[u8]) -> Vec<u8> {
-    let mut entries: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(bytes).unwrap();
+    let mut entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(bytes).unwrap();
     entries.push((key.to_string(), payload.to_vec()));
-    rut_bundle::write_bundle(&entries).unwrap()
+    rut_driver::bundle::write_bundle(&entries).unwrap()
 }
 
 /// Entry names of a bundle, in archive order.
 fn entry_names(bytes: &[u8]) -> Vec<String> {
-    rut_bundle::parse_bundle(bytes)
+    rut_driver::bundle::parse_bundle(bytes)
         .unwrap()
         .into_iter()
         .map(|(n, _)| n)
@@ -128,12 +128,12 @@ fn host_root_packs_v6_and_loads_back() {
         "a host bundle is its manifest + its surface, nothing else: {names:?}"
     );
     // the riding manifest is byte-for-byte the directory's (v6 declared)
-    let toml = rut_bundle::Bundle::parse(&bytes)
+    let toml = rut_driver::bundle::Bundle::parse(&bytes)
         .unwrap()
         .read("rut.toml")
         .unwrap();
     assert_eq!(toml, std::fs::read_to_string(dir.join("rut.toml")).unwrap());
-    let m = rut_bundle::parse_manifest(&toml).unwrap();
+    let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
     assert_eq!(m.format_version, Some(6), "a decl root declares 6");
 
     // load: the root mounts as the pkg's host rows
@@ -257,8 +257,8 @@ fn v5_byte_stability_writers_emit_6_only_for_decl_roots() {
         "format = \"rutbundle\"\nformat_version = 5\nname = \"util\"\nentry.lib = \"./util.rut\"\n");
     write(&lib, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
-    let m = rut_bundle::parse_manifest(
-        &rut_bundle::Bundle::parse(&bytes).unwrap().read("rut.toml").unwrap(),
+    let m = rut_driver::bundle::parse_manifest(
+        &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.toml").unwrap(),
     )
     .unwrap();
     assert_eq!(m.format_version, Some(5), "a lib root's manifest still declares 5");
@@ -317,27 +317,27 @@ fn v6_refuses_compiled_shaped_entries() {
     assert!(err.contains("no programs"), "{err}");
 
     // a dep group: single-package law
-    let group_manifest = rut_bundle::write_bundle(&[(
+    let group_manifest = rut_driver::bundle::write_bundle(&[(
         "g/rut.toml".into(),
         b"name = \"g\"\nentry.lib = \"./g.rut\"\n".to_vec(),
     )])
     .unwrap();
     let entries: Vec<(String, Vec<u8>)> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().chain(
-            rut_bundle::parse_bundle(&group_manifest).unwrap(),
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().chain(
+            rut_driver::bundle::parse_bundle(&group_manifest).unwrap(),
         ).collect();
-    let with_group = rut_bundle::write_bundle(&entries).unwrap();
+    let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
     let err = load_bundle_bytes(&with_group, Path::new("mem")).unwrap_err();
     assert!(err.contains("single-package"), "{err}");
 
     // a missing surface: the root IS the surface — no entry, no bundle
-    let stripped: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(&bytes)
+    let stripped: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
         .filter(|(n, _)| n != "h.d.rut")
         .collect();
     let err =
-        load_bundle_bytes(&rut_bundle::write_bundle(&stripped).unwrap(), Path::new("mem"))
+        load_bundle_bytes(&rut_driver::bundle::write_bundle(&stripped).unwrap(), Path::new("mem"))
             .unwrap_err();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
 }

@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/rut-core",
-    "crates/rut-bundle",
     "crates/rut-vm",
     "crates/rut-vm-threaded",
     "crates/rut-std",
@@ -33,6 +32,9 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 toml_edit = "0.25"
 zip = { version = "8", default-features = false }
+# the error idiom crate-wide (build-time proc-macro, zero runtime
+# footprint — wasm unaffected); the driver's errors derive it
+thiserror = "2"
 
 [profile.release]
 opt-level = 3

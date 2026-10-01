@@ -62,7 +62,7 @@ fn main() {
         let manifest_text =
             std::fs::read_to_string(dir.join("rut.toml")).expect("rut.toml");
         let manifest =
-            rut_bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
+            rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.toml");
         let dist = dir.join("../../../dist/std");
         let mut table = std::collections::BTreeMap::new();
         for desc in manifest.deps.values() {

@@ -149,7 +149,7 @@ fn multi_lib_packs_compiled_and_loads_identically() {
     // the archive carries the compiled binaries — the splice already
     // happened at pack time, so the lib FILES do not ride
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     for key in ["app.rutc", "rut.scopes", "kid/kid.rutc"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }

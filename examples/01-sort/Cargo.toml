@@ -9,7 +9,6 @@ description = "01-sort — a Rust app embedding rut: the rut side is a five-algo
 rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
 rut-parser = { path = "../../crates/rut-parser" }
-rut-bundle = { path = "../../crates/rut-bundle" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-vm = { path = "../../crates/rut-vm" }
 rut-std = { path = "../../crates/rut-std" }

@@ -9,7 +9,6 @@ description = "06-github-viewer-cli — a GitHub viewer CLI whose brain is rut (
 rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
 rut-parser = { path = "../../crates/rut-parser" }
-rut-bundle = { path = "../../crates/rut-bundle" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-vm = { path = "../../crates/rut-vm" }
 # the std HTTP lane: reqwest lives behind the DEFAULT-OFF `http`

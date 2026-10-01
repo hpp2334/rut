@@ -83,7 +83,7 @@ fn refusals() {
     let src = "fn main() -> i32 { return 7; }\n".as_bytes();
 
     // no rut.toml entry at all
-    let not_a_bundle = rut_bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();
+    let not_a_bundle = rut_driver::bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();
     let err = rut_driver::load_bundle_bytes(&not_a_bundle, Path::new("a")).unwrap_err();
     assert!(err.contains("rut.toml"), "{err}");
 
@@ -94,7 +94,7 @@ fn refusals() {
         let manifest = format!(
             "format = \"rutbundle\"\nformat_version = {v}\nname = \"x\"\nentry.lib = \"./x.rut\"\n"
         );
-        let old = rut_bundle::write_bundle(&[
+        let old = rut_driver::bundle::write_bundle(&[
             ("rut.toml".into(), manifest.as_bytes().to_vec()),
             ("x.rut".into(), src.to_vec()),
         ])
@@ -107,7 +107,7 @@ fn refusals() {
 
     // missing `format = "rutbundle"`
     let manifest = "format_version = 5\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
-    let no_format = rut_bundle::write_bundle(&[
+    let no_format = rut_driver::bundle::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
     ])
@@ -183,7 +183,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     // TWIN 1 — the same group re-spelled `type = "lib"` (and nothing
     // else changed): the group's surface now rides the LIB arm, and its
     // host rows refuse at load, naming the fix
-    let entries = rut_bundle::parse_bundle(&bytes).unwrap();
+    let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     let lib_manifest =
         "name = \"s\"\ntype = \"lib\"\nentry.type = \"./s.d.rut\"\n".as_bytes().to_vec();
     let respelled: Vec<(String, Vec<u8>)> = entries
@@ -196,7 +196,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
             }
         })
         .collect();
-    let respelled_bytes = rut_bundle::write_bundle(&respelled).unwrap();
+    let respelled_bytes = rut_driver::bundle::write_bundle(&respelled).unwrap();
     let err = rut_driver::load_bundle_bytes(&respelled_bytes, Path::new("respelled")).unwrap_err();
     assert!(err.contains("s/s.d.rut"), "{err}");
     assert!(err.contains("`host fn ping`"), "{err}");
@@ -296,7 +296,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     .unwrap();
 
     let bytes = pack_dir(&main).unwrap();
-    let entries = rut_bundle::parse_bundle(&bytes).unwrap();
+    let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     let mut names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
     names.sort();
     assert_eq!(
@@ -332,7 +332,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         .filter(|(n, _)| !n.starts_with("m/"))
         .cloned()
         .collect();
-    let bytes = rut_bundle::write_bundle(&stripped).unwrap();
+    let bytes = rut_driver::bundle::write_bundle(&stripped).unwrap();
     let err = rut_driver::load_bundle_bytes(&bytes, Path::new("stripped")).unwrap_err();
     assert!(err.contains("missing its `m` dependency group"), "{err}");
 

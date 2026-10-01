@@ -188,7 +188,7 @@ fn stripped_bundle_loads_verifies_and_runs_like_the_plain_pack() {
     assert!(!symtab.is_empty());
     // the sidecar is the PRIVATE half — never an entry inside the bundle
     let names: Vec<String> =
-        rut_bundle::parse_bundle(&stripped).unwrap().into_iter().map(|(n, _)| n).collect();
+        rut_driver::bundle::parse_bundle(&stripped).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(!names.iter().any(|n| n.contains("rutsym")), "{names:?}");
 
     let got: i64 = load_and_run(&plain, "go", None);

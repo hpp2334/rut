@@ -1,7 +1,7 @@
 //! The `.rutbundle` container — a deterministic zip archive
 //! carrying a module's `rut.toml` and its rut sources (the packaging
 //! reference lives at `docs/src/reference/bundles.md`). The archive
-//! mechanics live in [`crate::zip`] (the community `zip` crate behind
+//! mechanics live in [`super::zip`] (the community `zip` crate behind
 //! a thin layer); this module is the format's POLICY: which entries
 //! may ride, which methods v1 accepts, and where the zip64 refusal
 //! sits — the crate reads zip64 transparently, v1 refuses it.
@@ -19,7 +19,7 @@
 //! load error naming the problem — a bad bundle never reaches the
 //! compiler.
 
-use crate::zip::{self, ZipLayerError};
+use super::zip::{self, ZipLayerError};
 
 /// A malformed or unsupported bundle — a load error, never a runtime trap.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn zip64_sentinels_are_refused() {
         // a bundle whose EOCD carries the zip64 sentinel fields is a
-        // v1 refusal even though the crate would read it fine
+        // v1 refusal even though the zip crate would read it fine
         let mut bytes = write_bundle(&[("x.rut".to_string(), b"hi".to_vec())]).unwrap();
         let eocd = bytes
             .windows(4)

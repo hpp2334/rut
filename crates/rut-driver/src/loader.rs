@@ -18,17 +18,17 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::Path;
 
-use rut_bundle::{
+use crate::bundle::{
     bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, GroupKind, Layout,
     Manifest, PkgType,
 };
 use crate::session::{Module, ModuleBody, Session};
 
 /// Read a directory's `rut.toml` — the real-filesystem lane of
-/// [`rut_bundle::read_manifest`] (the crate itself never touches the
+/// [`crate::bundle::read_manifest`] (the module itself never touches the
 /// filesystem).
 fn read_manifest(dir: &Path) -> Result<Manifest, String> {
-    rut_bundle::read_manifest(dir, &FsSource)
+    crate::bundle::read_manifest(dir, &FsSource)
 }
 
 /// HOW url-dep bytes arrive — the call site's half of the layer split.

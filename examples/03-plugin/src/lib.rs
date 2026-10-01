@@ -68,7 +68,7 @@ impl Plugin {
         let (mut session, root) = if path.is_dir() {
             let manifest_text = std::fs::read_to_string(path.join("rut.toml"))
                 .map_err(|e| Trap::new(TrapKind::Invalid, format!("rut.toml: {e}")))?;
-            let manifest = rut_bundle::parse_manifest(&manifest_text)
+            let manifest = rut_driver::bundle::parse_manifest(&manifest_text)
                 .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
             let dist = path.join("../../../dist/std");
             let mut table = std::collections::BTreeMap::new();

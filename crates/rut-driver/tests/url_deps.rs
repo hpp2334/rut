@@ -86,13 +86,13 @@ const UTIL_BODY: &str = "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n";
 /// Rewrite one archive entry (the manifest, say) and re-seal the
 /// container — the doctored-closure fixtures.
 fn resealed(bytes: &[u8], key: &str, text: &str) -> Vec<u8> {
-    let mut entries: Vec<(String, Vec<u8>)> = rut_bundle::parse_bundle(bytes).unwrap();
+    let mut entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(bytes).unwrap();
     for (n, b) in entries.iter_mut() {
         if n == key {
             *b = text.as_bytes().to_vec();
         }
     }
-    rut_bundle::write_bundle(&entries).unwrap()
+    rut_driver::bundle::write_bundle(&entries).unwrap()
 }
 
 fn linked_binary(session: &rut_driver::Session, root: &str) -> Vec<u8> {
@@ -569,14 +569,14 @@ fn pack_url_dep_rode_along_and_deterministic() {
     // the rode-along group: the output carries util as a compiled group
     // re-encoded from THIS session's units (the one .rutc path), and
     // the url+sha256 rows rode byte-for-byte inside its manifest
-    let names: Vec<String> = rut_bundle::parse_bundle(&packed)
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&packed)
         .unwrap()
         .into_iter()
         .map(|(n, _)| n)
         .collect();
     assert!(names.contains(&"util/util.rutc".to_string()), "{names:?}");
     assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
-    let out_manifest = rut_bundle::Bundle::parse(&packed)
+    let out_manifest = rut_driver::bundle::Bundle::parse(&packed)
         .unwrap()
         .read("rut.toml")
         .unwrap();

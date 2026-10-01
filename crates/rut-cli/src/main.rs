@@ -359,7 +359,7 @@ fn pack(dir: &str, out: Option<&str>, strip: bool) {
     };
     let out = out
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| rut_bundle::default_out_path(p));
+        .unwrap_or_else(|| rut_driver::bundle::default_out_path(p));
     if let Err(e) = std::fs::write(&out, &bytes) {
         eprintln!("pack: cannot write {}: {e}", out.display());
         std::process::exit(1);
@@ -507,7 +507,7 @@ fn style_for(f: &std::path::Path) -> Result<rut_fmt::Style, String> {
         let manifest = dir.join("rut.toml");
         if manifest.is_file() {
             let text = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
-            let m = rut_bundle::parse_manifest(&text).map_err(|e| e.to_string())?;
+            let m = rut_driver::bundle::parse_manifest(&text).map_err(|e| e.to_string())?;
             return rut_fmt::style::from_manifest(&m.style);
         }
         if !dir.pop() {
