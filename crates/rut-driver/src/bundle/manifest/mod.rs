@@ -46,18 +46,23 @@
 //! only while building the pkg itself (the loader's law — the Session
 //! never sees a dev table).
 //!
-//! The manifest text is standard JSON, parsed with `serde_json`. The
-//! syntax lane keeps a location: a malformed file's error carries the
-//! parser's own wording under a `line N:` prefix. Everything above the
-//! syntax is PATH-TARGETED — a value-law error names the key's path
-//! (`deps.pouch: unknown key 'feats'`, `entry: expected a string for
-//! 'lib'`), never a line. JSON has no comments, so keys starting with
-//! `_` (e.g. `"_comment"`) ride IGNORED in every table — the prose
-//! stays in the file; and duplicate keys are last-wins (standard JSON
-//! semantics — the grammar adds no machinery).
+//! The manifest text is **JSONC** — `//` line comments, `/* */` block
+//! comments, and trailing commas are all legal — parsed by
+//! `serde_json` behind a syntax-stripping front stage
+//! ([`jsonc::strip`], the position law lives there): the comment and
+//! comma bytes become spaces, `serde_json` sees plain JSON, and a
+//! malformed file's error keeps the parser's own wording under a
+//! `line N:` prefix that names the ORIGINAL file's line. Everything
+//! above the syntax is PATH-TARGETED — a value-law error names the
+//! key's path (`deps.pouch: unknown key 'feats'`, `entry: expected a
+//! string for 'lib'`), never a line. Keys starting with `_` (e.g.
+//! `"_comment"`) ride IGNORED in every table — the prose stays in the
+//! file; and duplicate keys are last-wins (standard JSON semantics —
+//! the grammar adds no machinery).
 
 mod descriptor;
 mod expect;
+mod jsonc;
 mod walk;
 
 use std::collections::BTreeMap;
@@ -142,13 +147,17 @@ pub fn valid_spec(spec: &str) -> bool {
     !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Parse the manifest: standard JSON (`serde_json`), then this
+/// Parse the manifest: **JSONC** syntax (comments + trailing commas,
+/// stripped by [`jsonc::strip`] before the parser sees them — the
+/// positions never move), then standard JSON (`serde_json`), then this
 /// format's value laws — top-level `name`, `type` (the declared kind),
 /// the `entry` object, and the dep objects `deps` / `peer-deps` /
 /// `dev-deps` whose values are descriptor objects. Syntax errors keep
-/// the `line N:` prefix; value laws are path-targeted.
+/// the `line N:` prefix (the ORIGINAL file's line); value laws are
+/// path-targeted.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
-    let root: Value = serde_json::from_str(text).map_err(|e| syntax_error(&e))?;
+    let plain = jsonc::strip(text);
+    let root: Value = serde_json::from_str(&plain).map_err(|e| syntax_error(&e))?;
     let Some(root) = root.as_object() else {
         return Err(ManifestError("manifest: expected a JSON object".into()));
     };
@@ -437,14 +446,66 @@ mod tests {
     #[test]
     fn syntax_errors_normalize_to_line_n() {
         // the syntax lane keeps the location: serde_json's message
-        // under a `line N:` prefix
-        let err = parse_manifest("{\n  \"name\": \"x\",\n}\n").unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.starts_with("line 3: "), "{msg}");
-        assert!(msg.contains("trailing comma"), "{msg}");
+        // under a `line N:` prefix — naming the ORIGINAL file's line
+        // (the JSONC front stage never moves one)
         let err = parse_manifest("{\"name\": six}").unwrap_err();
         let msg = err.to_string();
         assert!(msg.starts_with("line 1: "), "{msg}");
+        assert!(msg.contains("expected value"), "{msg}");
+        let err = parse_manifest("{\n  \"name\": \"x\",\n  /\n}").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("line 3: "), "{msg}");
+    }
+
+    #[test]
+    fn jsonc_comments_and_trailing_commas_parse() {
+        // the full JSONC leniency: `//`, `/* */`, trailing commas —
+        // at every table, the same value laws underneath
+        let m = parse_manifest(
+            r#"
+// pouch — the growable sequence package
+{
+  // the header prose
+  "name": "pouch", /* beside the value */
+  "entry": {
+    // the surface and the body
+    "type": "./pouch.d.rut",
+    "lib": "./pouch.rut", // trailing prose
+  },
+  "deps": {
+    "core": { "path": "rut/core", }, // the descriptor's tail
+  },
+  "style": { "indent": "2", },
+}"#,
+        )
+        .unwrap();
+        assert_eq!(m.name.as_deref(), Some("pouch"));
+        assert_eq!(m.entry.type_path.as_deref(), Some("./pouch.d.rut"));
+        assert_eq!(m.entry.lib.as_deref(), Some("./pouch.rut"));
+        assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
+        assert_eq!(m.style.get("indent").map(String::as_str), Some("2"));
+    }
+
+    #[test]
+    fn trailing_commas_are_legal_everywhere_json_was_not() {
+        // the old syntax law refused these; the JSONC law parses them
+        let m = parse_manifest(
+            r#"{"name": "x", "entry": {"lib": "./x.rut", "libs": ["./a.rut",],},}"#,
+        )
+        .unwrap();
+        assert_eq!(m.entry.libs, vec!["./a.rut".to_string()]);
+    }
+
+    #[test]
+    fn a_syntax_error_after_jsonc_syntax_names_the_original_line() {
+        // the front stage's position law, through parse_manifest: the
+        // comment block and the elided comma above do not move the line
+        let err = parse_manifest(
+            "{\n  // the header\n  /* multi\n     line */\n  \"name\": \"x\",\n  \"entry\": {\"lib\": six},\n}",
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("line 6: "), "{msg}");
         assert!(msg.contains("expected value"), "{msg}");
     }
 
