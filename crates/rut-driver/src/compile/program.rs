@@ -312,7 +312,38 @@ pub fn compile_program_resolved(
                 .iter()
                 .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
                 .collect();
-            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, im.trait_args.clone());
+            // a parameterized impl head's trait arguments (`impl<T>
+            // IntoFlow<T> for Vec<T>` → the `#T` placeholder rows) —
+            // carried ids name the EXPORTER's table (packed scope), so
+            // each re-interns structurally into THIS table from the
+            // carried type block (the use_types law): the call sites'
+            // template substitution maps leaves by the row's name text.
+            let trait_args: Vec<TypeId> = im
+                .trait_args
+                .iter()
+                .map(|&ph| {
+                    // the carried block indexes from the boot table's end
+                    // (the surface's type vec IS types[boot_len..]); the
+                    // ids at surface-build time are this unit's own —
+                    // try both the raw local and the boot-shifted one
+                    let raw = rut_core::local_of(ph) as usize;
+                    let shifted = raw.checked_sub(ctx.types.boot_len as usize).unwrap_or(raw);
+                    let idx = Some(shifted);
+                    match idx.and_then(|i| surface.types.get(i)) {
+                        Some(row0) => {
+                            // the row's name re-interns from the surface's
+                            // interner (the use_types law) — the consumer's
+                            // template substitution matches leaves by the
+                            // name text
+                            let mut row = row0.clone();
+                            row.name = ctx.intern(surface.names.name(row0.name));
+                            ctx.types.intern(row)
+                        }
+                        None => ph,
+                    }
+                })
+                .collect();
+            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, trait_args);
         }
         
         // inherent method surfaces (the linkable-classes phase): the
@@ -779,6 +810,29 @@ pub fn compile_program_resolved(
         });
     }
 
+    // the GENERIC traits' declaration descriptors: the placeholder
+    // instantiation of each (`IntoFlow<#E>`-shaped) — minted BEFORE the
+    // type snapshot below so the descriptor's structural rows (`Flow<#E>`,
+    // the fn-typed field spellings) ride the carried block. The trait
+    // surface reads these ids.
+    let mut generic_trait_rows: Vec<(IdentId, u32, usize)> = Vec::new();
+    {
+        let decls: Vec<(IdentId, u32, Vec<IdentId>)> = ctx
+            .trait_decls
+            .iter()
+            .map(|(n, i)| (*n, i.id, i.generics.clone()))
+            .collect();
+        for (name, id, generics) in decls {
+            if id != u32::MAX {
+                continue;
+            }
+            let ph_args: Vec<TypeId> =
+                generics.iter().map(|&g| ctx.param_placeholder(g)).collect();
+            let ph_id = ctx.mk_trait_inst(name, ph_args);
+            generic_trait_rows.push((name, ph_id, generics.len()));
+        }
+    }
+
     // type surface: the whole non-boot block (so `(scope, local)` ids and
     // field layouts resolve in a using module) + the exported names.
     // The inherent surface above ran FIRST: its template signature rows
@@ -891,24 +945,44 @@ pub fn compile_program_resolved(
         // row carries none) but the DECLARATION itself crosses: a
         // consumer binds the trait's parameterized impls (`impl
         // Readable<T> for Source<T>`) through it.
-        for (name, info) in &ctx.trait_decls {
-            if info.id == u32::MAX {
+        let trait_decls_snapshot: Vec<(IdentId, u32, Vec<IdentId>)> = ctx
+            .trait_decls
+            .iter()
+            .map(|(n, i)| (*n, i.id, i.generics.clone()))
+            .collect();
+        for (name, id, generics) in &trait_decls_snapshot {
+            if *id == u32::MAX {
+                // a GENERIC trait's declaration row: the placeholder
+                // instantiation's descriptor is the row that crosses —
+                // `local` names a real trait-table entry (the reader
+                // validates it) whose method signatures spell the
+                // trait's `#<param>` placeholder leaves, so the consumer
+                // binds the shape its dispatch and mirror requests need.
+                // The name stays the clean trait name — the consumer's
+                // use-gate binding, not a nameless inst-descriptor row.
+                // (The mint itself ran BEFORE the type snapshot — the
+                // `generic_trait_rows` pass above.)
+                let Some(&(_, ph_id, generics_len)) =
+                    generic_trait_rows.iter().find(|(n, _, _)| n == name)
+                else {
+                    continue;
+                };
                 surface.traits.push(rut_core::binary::SurfaceTrait {
-                    local: u32::MAX,
+                    local: ph_id,
                     name: *name,
-                    generics: info.generics.len(),
-                    methods: Vec::new(),
+                    generics: generics_len,
+                    methods: ctx.traits[ph_id as usize].methods.clone(),
                 });
                 continue;
             }
-            if info.id as usize >= ctx.traits.len() {
+            if *id as usize >= ctx.traits.len() {
                 continue;
             }
             surface.traits.push(rut_core::binary::SurfaceTrait {
-                local: info.id,
+                local: *id,
                 name: *name,
-                generics: info.generics.len(),
-                methods: ctx.traits[info.id as usize].methods.clone(),
+                generics: generics.len(),
+                methods: ctx.traits[*id as usize].methods.clone(),
             });
         }
         // impl registrations: `(trait, target, method → fn
@@ -951,24 +1025,38 @@ pub fn compile_program_resolved(
                     methods_concrete.push((*mname, fid));
                 }
             }
-            // a parameterized impl head's trait arguments (`impl
-            // Readable<T> for Source<T>` → the `#T` placeholder rows),
-            // resolved under the target's own placeholder env — the
-            // consumer unifies its call's trait inst against these
+            // a parameterized impl head's trait arguments (`impl<T>
+            // IntoFlow<T> for Vec<T>` → the `#E` placeholder rows — the
+            // TRAIT DECL's own generic names): the descriptor's method
+            // leaves spell the trait's generics, and the impl head's
+            // binders are POSITIONAL over them (the template law), so
+            // each head binder maps to the trait's positional
+            // placeholder. The consumer's call sites re-spell the
+            // descriptor leaves by mapping these rows to the concrete
+            // target arguments.
+            let trait_decl_generics: Vec<IdentId> = ctx
+                .trait_decls
+                .iter()
+                .find(|(n, _)| *n == im.trait_name)
+                .map(|(_, i)| i.generics.clone())
+                .unwrap_or_default();
             let trait_args: Vec<TypeId> = im
                 .trait_arg_nodes
                 .iter()
-                .map(|g| {
-                    let env: Vec<(IdentId, TypeId)> = im
-                        .target_data
-                        .as_ref()
-                        .map(|(_, ps)| {
-                            ps.iter()
-                                .map(|&p| (p, ctx.param_placeholder(p)))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    ctx.resolve_type(*g, &env)
+                .zip(trait_decl_generics.iter())
+                .map(|(g, &tg)| {
+                    let bare = match ctx.ast.ty(*g) {
+                        rut_ast::ast::TypeKind::TyPath { segs, .. }
+                            if segs.len() == 1 && segs[0].generics.is_empty() =>
+                        {
+                            Some(segs[0].name)
+                        }
+                        _ => None,
+                    };
+                    match bare {
+                        Some(b) if !ctx.node_is_known_type(*g) => ctx.param_placeholder(tg),
+                        _ => ctx.resolve_type(*g, &[]),
+                    }
                 })
                 .collect();
             surface.impls.push(rut_core::binary::SurfaceImpl {

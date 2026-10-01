@@ -494,7 +494,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .iter()
                     .map(|g| self.ctx.resolve_type(*g, &env))
                     .collect();
-                self.ctx.mk_trait_inst(im.trait_name, args)
+                self.ctx.mint_impl_trait_inst(im.trait_name, args)
             } else {
                 im.trait_id
             };

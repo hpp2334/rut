@@ -1897,7 +1897,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/functions.md:240 src/tutorial/types.md:280
 #: src/tutorial/traits.md:325 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
-#: src/tutorial/stdlib.md:323
+#: src/tutorial/stdlib.md:385
 msgid "Put it together"
 msgstr "综合运用"
 
@@ -6007,12 +6007,88 @@ msgstr ""
 "键来自一个固定集合——整数、`bool`、`str`、`bytes`（没有浮点数：它们没有稳定的相等契约）——由宿主做哈希；用户自定义的键以规范编码成 `bytes` 的方式破例。命中返回的是存储的单元，不是副本。没有迭代表面：map 和 set 回答问题，不做遍历。"
 
 
-#: src/tutorial/stdlib.md:206
+#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:183
+msgid "`flow` — the push pipeline"
+msgstr "`flow` —— 推送管线"
+
+
+#: src/tutorial/stdlib.md:208
+msgid ""
+"`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`, a fixed array), and everything between is chaining:"
+msgstr ""
+"`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`、定长数组），中间全是链式拼接："
+
+
+#: src/tutorial/stdlib.md:215
+msgid ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use flow::{ Flow, IntoFlow, FromFlow };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"flow\");\n"
+"    let nums: Vec<i32> = Vec.new();\n"
+"    nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);\n"
+"\n"
+"    // entry → adapters → sink\n"
+"    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()\n"
+"        .map(fn(x: i32) -> i32 { return x * 2; })\n"
+"        .filter(fn(x: i32) -> bool { return x > 4; })\n"
+"        .take(3));\n"
+"    let joined: Vec<str> = Vec.new();\n"
+"    picked.for_each(fn(x: i32) -> nil { joined.push(f\"{x}\"); });\n"
+"\n"
+"    // chains feed plain for..of (Flow is an Iterable)\n"
+"    let mut sum = 0;\n"
+"    for (let x of nums.into_flow().skip(1)) {\n"
+"        sum += x;\n"
+"    }\n"
+"    log.info(f\"picked={picked.len()} first={picked[0]} sum={sum}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/tutorial/stdlib.md:246
+msgid "Three laws to know:"
+msgstr "三条要知道的法则："
+
+
+#: src/tutorial/stdlib.md:248
+msgid ""
+"**The entries and sinks are traits** — `IntoFlow<E>` rows exist for the builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for `Flow<E>` itself (the identity row: a chain re-enters as a source), so generic code bounded on `IntoFlow<E>` takes chains and sources alike. The sinks (`FromFlow<E>`) take the CONTRACT — `it: Iterable<E>` — so a user iterable (a `CountUp`\\-shape, no Flow involved) widens straight into them."
+msgstr ""
+"**延后但有记载**：mapset 的 `IntoFlow`（nmapset 尚无宿主表遍历——json 的 map 编码将与它一同成长）和 `HashMap::from_flow`（其 `(K, V)` 元组 trait 实参尚无法跨越编译包的 impl 行载体；它在 flow 自己的单元内编译并分派）。"
+
+
+#: src/tutorial/stdlib.md:255
+msgid ""
+"**`map` introduces a new type variable.** Annotate the lambda, spell the type argument (`.map<i32>(..)`), or pass a fn path — a lambda that spells nothing diagnoses with the fix."
+msgstr ""
+"**`map` 引入新的类型变量。** 给 lambda 标注类型、写明类型实参（`.map<i32>(..)`），或传入具名 fn——什么都不标注的 lambda 会得到指明修复方式的诊断。"
+
+
+#: src/tutorial/stdlib.md:258
+msgid ""
+"**Stateful stages are single-shot.** `take`/`skip` hold their counter in a record the drive mutates; a drained stage stays drained. `take` answers `false` at its stop, which stops the SOURCE — the elements after it are never driven."
+msgstr ""
+"**有状态的阶段是一次性的。** `take`/`skip` 把计数器放在一个记录里由 drive 改动；耗尽的阶段保持耗尽。`take` 在停止点回答 `false`，这会停下源——其后的元素永不被驱动。"
+
+
+#: src/tutorial/stdlib.md:263
+msgid ""
+"Pipelines are the clarity tier: each stage costs one indirect call per element, and the fused builtin loops stay the perf tier. The full member table lives in [the standard library reference](../reference/stdlib.md#flow-the-push-pipeline)."
+msgstr ""
+"管线是清晰度档位：每个阶段对每个元素付出一次间接调用，融合的内建循环仍是性能档位。完整成员表见[标准库参考](../reference/stdlib.md#flow-the-push-pipeline)。"
+
+
+#: src/tutorial/stdlib.md:268
 msgid "`strbuild` — the string builder"
 msgstr "`strbuild`——字符串构建器"
 
 
-#: src/tutorial/stdlib.md:208
+#: src/tutorial/stdlib.md:270
 msgid ""
 "```rut\n"
 "use strbuild::{ StringBuilder };\n"
@@ -6047,19 +6123,19 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/stdlib.md:228
+#: src/tutorial/stdlib.md:290
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the builder appends into one growable cell and copies once, at `build()`."
 msgstr ""
 "每个 `out = f\"{out}{chunk}\"` 循环都要把整个前缀复制一遍；构建器在一个可增长的单元里追加，只在 `build()` 时复制一次。"
 
 
-#: src/tutorial/stdlib.md:232
+#: src/tutorial/stdlib.md:294
 msgid "`calc` — float math"
 msgstr "`calc`——浮点数学"
 
 
-#: src/tutorial/stdlib.md:234
+#: src/tutorial/stdlib.md:296
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -6098,18 +6174,18 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/stdlib.md:257
+#: src/tutorial/stdlib.md:319
 msgid ""
 "rut has no overloading, so the width lives in the name. The integer ladder is _not_ here — those are core's, always available."
 msgstr "rut 没有重载，所以宽度活在名字里。整数阶梯_不_在这里——那些是 core 的方法，永远可用。"
 
 
-#: src/tutorial/stdlib.md:260
+#: src/tutorial/stdlib.md:322
 msgid "`json` — encode and decode"
 msgstr "`json`——编码与解码"
 
 
-#: src/tutorial/stdlib.md:262
+#: src/tutorial/stdlib.md:324
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson };\n"
@@ -6142,24 +6218,24 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/stdlib.md:281
+#: src/tutorial/stdlib.md:343
 msgid ""
 "Decode is direct and schema-driven: your type's `impl JsonDeserialize` reads exactly the fields it expects, no intermediate tree. Your types opt in with two small impls; the container impls (`Vec<T>`, the map/set family) mount automatically when those packages are in your program. Error values are a kind enum plus a struct with `.at`/`.got`/`.expected` — see [errors and optionality](errors.md)."
 msgstr ""
 "解码是直接的、按模式驱动的：你的类型的 `impl JsonDeserialize` 恰好读取它期望的字段，没有中间树。你的类型用两个小 impl 选择加入；容器 impl（`Vec<T>`、map/set 家族）在这些包进入你的程序时自动挂载。错误值是一个种类枚举，外加一个带 `.at`/`.got`/`.expected` 的结构体——参见[错误与可空性](errors.md)。"
 
 
-#: src/tutorial/stdlib.md:289
+#: src/tutorial/stdlib.md:351
 msgid "`ink` — logging"
 msgstr "`ink`——日志"
 
 
-#: src/tutorial/stdlib.md:291
+#: src/tutorial/stdlib.md:353
 msgid "There is no `console`, no `print` — all output goes through a logger:"
 msgstr "没有 `console`，也没有 `print`——所有输出都经过一个 logger："
 
 
-#: src/tutorial/stdlib.md:293
+#: src/tutorial/stdlib.md:355
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -6184,26 +6260,26 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/stdlib.md:311
+#: src/tutorial/stdlib.md:373
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder chooses the sink (the `rut` CLI prints to stdout). The same pattern — declare a host surface in a `.d.rut`, wrap it in a rut class — is how _any_ embedder package reaches rut code; see [embedding and native modules](../reference/embedding.md)."
 msgstr ""
 "`Logger` 是架在宿主提供的句柄之上的普通 rut 类；嵌入方选择输出去向（`rut` CLI 打印到 stdout）。同一个模式——在 `.d.rut` 里声明宿主表面，再用一个 rut 类把它包起来——就是_任何_嵌入方包抵达 rut 代码的方式；参见[嵌入与原生模块](../reference/embedding.md)。"
 
 
-#: src/tutorial/stdlib.md:317
+#: src/tutorial/stdlib.md:379
 msgid "`http`"
 msgstr "`http`"
 
 
-#: src/tutorial/stdlib.md:319
+#: src/tutorial/stdlib.md:381
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder construction, `send(cx)` resolving at headers, body drains and byte streams — in [async: tasks, workers, and channels](async.md)."
 msgstr ""
 "异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：任务、worker 与通道](async.md)。"
 
 
-#: src/tutorial/stdlib.md:325
+#: src/tutorial/stdlib.md:387
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -6292,7 +6368,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/stdlib.md:376
+#: src/tutorial/stdlib.md:438
 msgid ""
 "That completes the tutorial. From here, the [core concepts](../core-concepts/design-goals.md) explain _why_ the language is shaped the way it is, and the [reference](../reference/lexical-structure.md) pins down every rule."
 msgstr ""
@@ -13248,7 +13324,7 @@ msgid "element access; out-of-bounds traps"
 msgstr "元素访问；越界陷阱"
 
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:313
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:356
 msgid "`len() -> i32`"
 msgstr "`len() -> i32`"
 
@@ -22319,8 +22395,9 @@ msgstr "生成行"
 
 #: src/reference/host-fns.md:279 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:307 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:43 src/reference/cli.md:170
+#: src/reference/stdlib.md:204 src/reference/stdlib.md:350
+#: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
+#: src/reference/cli.md:170
 msgid "meaning"
 msgstr "含义"
 
@@ -23719,7 +23796,7 @@ msgstr "trait"
 
 
 #: src/reference/stdlib.md:79 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:307
+#: src/reference/stdlib.md:350
 msgid "member"
 msgstr "成员"
 
@@ -23951,7 +24028,7 @@ msgid "kind"
 msgstr "种类"
 
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:128 src/reference/stdlib.md:204
 msgid "surface"
 msgstr "表面"
 
@@ -24234,18 +24311,136 @@ msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr "编译器下降的 O(1) 定长窗口；增长时脱离"
 
 
-#: src/reference/stdlib.md:183
+#: src/reference/stdlib.md:185
+msgid ""
+"`Flow<E>` chains the push contract: a type is iterable when it registers `impl Iterable<E> for T`, and a Flow wraps one drive in adapter stages — a closure per STAGE, never per element. Pipelines are the clarity tier; the fused builtin loops stay the perf tier."
+msgstr ""
+"`Flow<E>` 把推送契约串成链：一个类型在注册了 `impl Iterable<E> for T` 时即可迭代，而 Flow 把同一次 drive 包进适配器阶段——每个阶段一个闭包，绝非每个元素一个。管线是清晰度档位；融合的内建循环仍是性能档位。"
+
+
+#: src/reference/stdlib.md:190
+msgid ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use flow::{ Flow, IntoFlow, FromFlow };\n"
+"\n"
+"pub fn main() -> Vec<i32> {\n"
+"    let nums: Vec<i32> = Vec.new();\n"
+"    nums.push(1); nums.push(2); nums.push(3); nums.push(4);\n"
+"    // entry → adapters → sink: one drive, stage by stage\n"
+"    return Vec.from_flow(nums.into_flow()\n"
+"        .map(fn(x: i32) -> i32 { return x * 10; })\n"
+"        .filter(fn(x: i32) -> bool { return x > 15; }));\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/stdlib.md:206
+msgid "`x.into_flow() -> Flow<E>`"
+msgstr "`x.into_flow() -> Flow<E>`"
+
+
+#: src/reference/stdlib.md:206
+msgid ""
+"the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and `Flow<E>` itself (the identity row: a chain re-enters as a source)"
+msgstr ""
+"入口——`IntoFlow<E>` 行：`[T]`、`str`、`bytes`、`Vec<T>`，以及 `Flow<E>` 自身（同一性行：一条链重新作为源进入）"
+
+
+#: src/reference/stdlib.md:207
+msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
+msgstr "`map<R>(f: fn(E) -> R) -> Flow<R>`"
+
+
+#: src/reference/stdlib.md:207
+msgid ""
+"transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers"
+msgstr "变换——引入新的类型变量，因此请标注 lambda 或写明类型实参；具名 fn 可自动推断"
+
+
+#: src/reference/stdlib.md:208
+msgid "`filter(p: fn(E) -> bool) -> Self`"
+msgstr "`filter(p: fn(E) -> bool) -> Self`"
+
+
+#: src/reference/stdlib.md:208
+msgid "keep the elements the predicate admits"
+msgstr "保留谓词放行的元素"
+
+
+#: src/reference/stdlib.md:209
+msgid "`take(n)` / `skip(n)`"
+msgstr "`take(n)` / `skip(n)`"
+
+
+#: src/reference/stdlib.md:209
+msgid ""
+"the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained"
+msgstr "前 `n` 个 / 跳过前 `n` 个之后的全部——计数器是一个由 drive 改动的记录，耗尽的阶段保持耗尽"
+
+
+#: src/reference/stdlib.md:210
+msgid ""
+"`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
+msgstr ""
+"`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
+
+
+#: src/reference/stdlib.md:210
+msgid "the one-drive consumers"
+msgstr "单次 drive 的消费者"
+
+
+#: src/reference/stdlib.md:211
+msgid "`T::from_flow(it: Iterable<E>) -> T`"
+msgstr "`T::from_flow(it: Iterable<E>) -> T`"
+
+
+#: src/reference/stdlib.md:211
+msgid ""
+"the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` (empty is `[]`; non-empty seeds from element 0, so the source must re-drive)"
+msgstr ""
+"汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`，以及定长 `[E]`（空即 `[]`；非空以元素 0 作种子，因此源必须可重新驱动）"
+
+
+#: src/reference/stdlib.md:212
+msgid "`for (x of chain)`"
+msgstr "`for (x of chain)`"
+
+
+#: src/reference/stdlib.md:212
+msgid ""
+"chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar"
+msgstr "链即可迭代对象——`impl Iterable<E> for Flow<E>` 行进入普通的脱糖"
+
+
+#: src/reference/stdlib.md:214
+msgid ""
+"**Import the traits you spell and the pipeline type**: `use flow::{ Flow, IntoFlow, FromFlow }` — the use-both law names each one; the sink's `Iterable<E>` parameter re-mints through `use core::{ Iterable }` (the `from_flow` sinks take the CONTRACT, not Flow, so a user iterable — a `CountUp`\\-shape — widens straight into them)."
+msgstr ""
+"**拼写了什么就导入什么，连同管线类型**：`use flow::{ Flow, IntoFlow, FromFlow }`——使用即导入法则逐一点名；汇的 `Iterable<E>` 参数经 `use core::{ Iterable }` 重铸（`from_flow` 汇取的是契约而非 Flow，因此用户可迭代对象——`CountUp`\\ 形状——直接加宽进入）。"
+
+
+#: src/reference/stdlib.md:220
+msgid ""
+"**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no host-table walk — json's map encode grows with it) and `HashMap::from_flow` (its `(K, V)` tuple trait argument cannot cross the compiled-bundle impl-row carrier yet; it compiles and dispatches inside flow's own unit)."
+msgstr ""
+"**延后但有记载**：mapset 的 `IntoFlow`（nmapset 尚无宿主表遍历——json 的 map 编码将与它一同成长）和 `HashMap::from_flow`（其 `(K, V)` 元组 trait 实参尚无法跨越编译包的 impl 行载体；它在 flow 自己的单元内编译并分派）。"
+
+
+#: src/reference/stdlib.md:226
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr "`nmapset`——`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:185
+#: src/reference/stdlib.md:228
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state is one `opaque` handle, every method one host call."
 msgstr "架在原生键表（`nmap_host` 行）之上的薄包装：全部状态就是一个 `opaque` 句柄，每个方法一次宿主调用。"
 
 
-#: src/reference/stdlib.md:188
+#: src/reference/stdlib.md:231
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {\n"
@@ -24274,19 +24469,19 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:201
+#: src/reference/stdlib.md:244
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom key canonically to `bytes`); `get` answers the stored cell, so two gets of one key name one value until a replace; values release host-side. `str` keys hash by content; `str` keys also carry `*_range(parent, off, len)` members keyed by a byte range of the parent string — a range key is the same key as its content, with no key cell minted on a probe ([string views](string-views.md))."
 msgstr ""
 "法则：键集合是封闭的（没有浮点数——没有稳定的相等契约；自定义键以规范编码成 `bytes` 的方式破例）；`get` 应答的是存储的单元，因此对同一个键的两次 get 在替换之前指名同一个值；值在宿主侧释放。`str` 键按内容哈希；`str` 键还携带以父串字节范围为键的 `*_range(parent, off, len)` 成员——范围键与其内容是同一个键，探查时不铸造任何键单元（[字符串视图](string-views.md)）。"
 
 
-#: src/reference/stdlib.md:209
+#: src/reference/stdlib.md:252
 msgid "`calc` — the `Math` namespace"
 msgstr "`calc`——`Math` 命名空间"
 
 
-#: src/reference/stdlib.md:211
+#: src/reference/stdlib.md:254
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -24319,91 +24514,91 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:273
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`, `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`. Constants: `Math.PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE`. Integer numeric methods are core's, not `calc`'s."
 msgstr ""
 "函数（各带一个 `_f` 的 f32 孪生）：`sqrt`、`floor`、`ceil`、`round`、`trunc`、`exp`、`ln`、`log2`、`log10`、`sin`、`cos`、`tan`、`asin`、`acos`、`atan`、`sinh`、`cosh`、`tanh`、`pow`、`atan2`、`hypot`、`copysign`、`fma`，外加浮点辅助 `abs`、`min`、`max`、`signum`。常量：`Math.PI`、`TAU`、`E`、`SQRT_2`、`LN_2`、`LN_10`、`LOG2_E`、`LOG10_E`、`INFINITY`、`NEG_INFINITY`、`EPSILON`、`MAX`、`MIN`、`MIN_POSITIVE`。整数的数值方法是 core 的，不是 `calc` 的。"
 
 
-#: src/reference/stdlib.md:238
+#: src/reference/stdlib.md:281
 msgid "`json` — the serde package"
 msgstr "`json`——serde 包"
 
 
-#: src/reference/stdlib.md:240
+#: src/reference/stdlib.md:283
 msgid ""
 "Pure rut, `inline = true`, zero host fns — a json mount adds no host bindings."
 msgstr "纯 rut，`inline = true`，零宿主函数——挂载 json 不添加任何宿主绑定。"
 
 
-#: src/reference/stdlib.md:252
+#: src/reference/stdlib.md:295
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 "**对偶法则**：`(?T, ?E)` 恰好一个 nil——成功 = `(value, nil)`，失败 = `(nil, err)`。Encode 返回 `?EncodeJsonError`，因为循环结构被预期为可恢复的数据，而不是陷阱。"
 
 
-#: src/reference/stdlib.md:255
+#: src/reference/stdlib.md:298
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its expectations straight off the cursor. A `Vec<Row>` decode mints exactly the program's values, once."
 msgstr ""
 "**直接解码**：没有中间文档；类型的 `decode` 直接从游标上读取它期望的东西。一次 `Vec<Row>` 解码恰好铸造程序需要的值，且只铸一次。"
 
 
-#: src/reference/stdlib.md:258
+#: src/reference/stdlib.md:301
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = `WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common range, ±1 ulp beyond (disclosed); encode renders the shortest round-trip decimal."
 msgstr ""
 "**数字**：`i64` 只接受整型词素（溢出/带小数点的词素 = `WrongType`，绝不无声回绕）；`f64` 在常见范围内按 IEEE 精确解析，范围之外误差 ±1 ulp（明示）；encode 渲染最短往返十进制。"
 
 
-#: src/reference/stdlib.md:262
+#: src/reference/stdlib.md:305
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable (`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 "**深度**：两个方向都以 128 封顶，可恢复（`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`）。"
 
 
-#: src/reference/stdlib.md:264
+#: src/reference/stdlib.md:307
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, `EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`; decode details carry `at`/`got`/`expected`, encode details carry `at` and the lazily built `$.rows[3].name` path."
 msgstr ""
 "**错误**：无载荷的种类枚举 + 固定字段结构体——`DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`、`EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`；decode 细节携带 `at`/`got`/`expected`，encode 细节携带 `at` 和惰性构建的 `$.rows[3].name` 路径。"
 
 
-#: src/reference/stdlib.md:269
+#: src/reference/stdlib.md:312
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr "`decodeJsonBytes` 是严格 UTF-8（`InvalidUtf8`），绝不有损。"
 
 
-#: src/reference/stdlib.md:270
+#: src/reference/stdlib.md:313
 msgid ""
 "**Ownership**: json owns the traits; all container impls live in json, gated by peer groups — `Vec` rows activate when `pouch` is anywhere in the consumer's closure, the map/set rows when `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 "**所有权**：trait 归 json 所有；所有容器 impl 都住在 json 里，由 peer 组把门——当 `pouch` 出现在消费方闭包的任何角落时 `Vec` 行激活，`nmapset` 在场时 map/set 行激活（[依赖种类](dependency-kinds.md)）。没有这些 peer 的消费方挂载的是轻量版 json。"
 
 
-#: src/reference/stdlib.md:275
+#: src/reference/stdlib.md:318
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 "写入器经由 `strbuild` 的 `StringBuilder` 累积；读取器搭载 core 的 `str.scan`/`starts_with` 原语和 O(1) 字符串视图。"
 
 
-#: src/reference/stdlib.md:279
+#: src/reference/stdlib.md:322
 msgid "`strbuild` — the builder"
 msgstr "`strbuild`——构建器"
 
 
-#: src/reference/stdlib.md:281
+#: src/reference/stdlib.md:324
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`, registered under the pkg-name scope), and the `strbuild` package wraps them in the `StringBuilder` class. Core ships no string-building machinery; a strbuild mount pairs with the bodies:"
 msgstr ""
 "构建器现在是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` 声明包声明五个行（`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，以包名作用域注册），`strbuild` 包把它们包进 `StringBuilder` 类。核心不内置任何字符串构建机制；挂载 strbuild 即与函数体配对："
 
 
-#: src/reference/stdlib.md:288
+#: src/reference/stdlib.md:331
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -24436,103 +24631,103 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:309
+#: src/reference/stdlib.md:352
 msgid "`new()`"
 msgstr "`new()`"
 
 
-#: src/reference/stdlib.md:309
+#: src/reference/stdlib.md:352
 msgid "grow from small"
 msgstr "从小处开始增长"
 
 
-#: src/reference/stdlib.md:310
+#: src/reference/stdlib.md:353
 msgid "`with_cap(cap: i32)`"
 msgstr "`with_cap(cap: i32)`"
 
 
-#: src/reference/stdlib.md:310
+#: src/reference/stdlib.md:353
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap)"
 msgstr "按八位组提示预定尺寸（负数触发陷阱；提示仅供参考 —— 每个容量值的行为完全相同）"
 
 
-#: src/reference/stdlib.md:311
+#: src/reference/stdlib.md:354
 msgid "`append(mut self, value: str)`"
 msgstr "`append(mut self, value: str)`"
 
 
-#: src/reference/stdlib.md:311
+#: src/reference/stdlib.md:354
 msgid "amortized O(\\|s\\|), in place"
 msgstr "均摊 O(\\|s\\|)，就地追加"
 
 
-#: src/reference/stdlib.md:312
+#: src/reference/stdlib.md:355
 msgid "`append_code(mut self, cp: u32)`"
 msgstr "`append_code(mut self, cp: u32)`"
 
 
-#: src/reference/stdlib.md:312
+#: src/reference/stdlib.md:355
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr "一个码点；无效标量铸造 U+FFFD"
 
 
-#: src/reference/stdlib.md:313
+#: src/reference/stdlib.md:356
 msgid "codepoints so far, O(1)"
 msgstr "迄今为止的码点数，O(1)"
 
 
-#: src/reference/stdlib.md:314
+#: src/reference/stdlib.md:357
 msgid "`build() -> str`"
 msgstr "`build() -> str`"
 
 
-#: src/reference/stdlib.md:314
+#: src/reference/stdlib.md:357
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr "全新的不可变 str；构建器保留自己的缓冲区"
 
 
-#: src/reference/stdlib.md:316
+#: src/reference/stdlib.md:359
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land in the caller's document; copies happen at exactly two engineered points — `build`'s materialization and growth's prefix move. Growth consults the embedder's heap budget BEFORE growing (the geometric next-capacity is charged), so the wasm 4 MiB cap governs builder growth exactly as it governs engine allocations."
 msgstr ""
 "共享是默认：经由别名（或 `mut` 参数）做出的追加落进调用方的文档；复制恰好发生在两个刻意设计的位置——`build` 的实体化和增长时的前缀搬移。增长在发生之前先询问嵌入方的堆预算（几何下一容量按记账收取），因此 wasm 的 4 MiB 上限对构建器增长的约束与对引擎分配完全一致。"
 
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:366
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting `strbuild` pulls `strbuild_host` along (`deps`); mounting `json` pulls both (its writer rides the builder)."
 msgstr ""
 "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`。挂载 `strbuild` 顺带拉来 `strbuild_host`（`deps`）；挂载 `json` 则两个都来（它的 writer 骑在构建器上）。"
 
 
-#: src/reference/stdlib.md:328
+#: src/reference/stdlib.md:371
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = f\"{out}{t}\"` appends in place, linear in the total output ([f-strings](literals-and-inference.md))."
 msgstr ""
 "对常见的累加器形状，完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性（[f 字符串](literals-and-inference.md)）。"
 
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:375
 msgid "`calc`'s company: `async` and `http`"
 msgstr "`calc` 的同伴：`async` 与 `http`"
 
 
-#: src/reference/stdlib.md:334
+#: src/reference/stdlib.md:377
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
 msgstr ""
 "`async_engine` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`async_host` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[任务](tasks.md)、[宿主 future](host-futures.md)）。"
 
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:384
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 "`http_host` 声明传输各行（三个异步，五个同步读回）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的："
 
 
-#: src/reference/stdlib.md:346
+#: src/reference/stdlib.md:389
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -24559,33 +24754,33 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:358
+#: src/reference/stdlib.md:401
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; `byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for transport failure. The reqwest lane is native-only."
 msgstr ""
 "`send` 在响应头处解析；`body(cx)` 排干线上的响应体；`byte_stream()`/`next(cx)` 逐块行走。状态 `0` 保留给传输失败。reqwest 链路仅限原生构建。"
 
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:405
 msgid "Mounting"
 msgstr "挂载"
 
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:407
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. Swappable packages mount by directory or bundle ([module bundles](bundles.md)); the `rut` CLI mounts the tree packages a loose file names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 "`mount_std` 挂载 `core` + `calc`；`mount_std_async` 加上异步那一对。可换包按目录或捆绑包挂载（[模块捆绑包](bundles.md)）；`rut` CLI 会为散文件挂载它按 `use` 点名的树内包（[rut CLI](cli.md)）。"
 
 
-#: src/reference/stdlib.md:368
+#: src/reference/stdlib.md:411
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
 msgstr ""
 "`inline = true` 的包（ink、pouch、nmapset、json、strbuild、async_host）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
 
 
-#: src/reference/stdlib.md:372
+#: src/reference/stdlib.md:415
 msgid ""
 "Generic exports link on their own: instantiation happens where the body lives, consumers request it, and `Vec<i64>` is one type program-wide ([the compiler pipeline](compiler.md))."
 msgstr ""

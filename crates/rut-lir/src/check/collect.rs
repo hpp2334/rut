@@ -560,7 +560,7 @@ impl<'a> Ctx<'a> {
     /// land on the rows the unit already uses. A row-kinded field
     /// (`Node<#T>` spelled inside the template) keeps the template's row —
     /// the mirror law covers the direct-argument shapes.
-    fn mk_extern_data_inst(&mut self, data: IdentId, g: &ExternGeneric, args: Vec<TypeId>) -> TypeId {
+    pub fn mk_extern_data_inst(&mut self, data: IdentId, g: &ExternGeneric, args: Vec<TypeId>) -> TypeId {
         if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
             return t;
         }
@@ -738,7 +738,7 @@ impl<'a> Ctx<'a> {
 /// Split a type-argument list at top-level commas (`Vec<Vec<i64>>, str`
 /// → two arguments); nesting depth tracks `<`/`>` and `( )` (a tuple
 /// argument's comma is not a separator).
-pub(crate) fn split_top_commas(s: &str) -> Vec<String> {
+pub fn split_top_commas(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut depth = 0usize;
     let mut paren = 0usize;

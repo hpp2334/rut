@@ -326,7 +326,7 @@ impl<'a> Ctx<'a> {
                                 .iter()
                                 .map(|g| self.resolve_type(*g, &env))
                                 .collect();
-                            let cid = self.mk_trait_inst(im.trait_name, args);
+                            let cid = self.mint_impl_trait_inst(im.trait_name, args);
                             let concrete_wins = self
                                 .find_impl(cid, ty)
                                 .map(|i| !self.impls[i].is_template)

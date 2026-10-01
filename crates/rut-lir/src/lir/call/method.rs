@@ -581,9 +581,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // a registered TRAIT impl over the array shape (`impl I for
             // [T]` — the rut-json batch phase 1): the same static bind the
             // Data/Prim arms answer, after the inherent surface misses —
-            // the receiver stays raw, the element instantiates the template
+            // the receiver stays raw, the element instantiates the template.
+            // Another module's registration (flow's `IntoFlow<T> for [T]`)
+            // routes through the same extern door the Data arm answers.
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
                 return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+            }
+            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
             }
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {

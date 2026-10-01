@@ -1583,6 +1583,10 @@ impl<'a> P<'a> {
             ExprKind::Is { .. } => L_CMP < parent || (L_CMP == parent && rhs),
             ExprKind::Cast { .. } => L_CAST < parent || (L_CAST == parent && rhs),
             ExprKind::Assign { .. } => true,
+            // a FIELD/INDEX chain as a CALLEE names the value through the
+            // chain — the call grammar takes an operand, so the chain
+            // needs its parens back (`(self.drive)(emit)`, `(xs[i])(a)`)
+            ExprKind::Field { .. } | ExprKind::Index { .. } if parent == L_POSTFIX => true,
             _ => false,
         }
     }

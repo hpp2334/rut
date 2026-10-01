@@ -324,7 +324,7 @@ impl<'a> Ctx<'a> {
     /// Is the node's head name a KNOWN type (primitive, declared,
     /// used)? The impl-row matcher's parameter test — an unknown bare
     /// name is the impl's own generic.
-    fn node_is_known_type(&self, node: NodeHandle<AnyTy>) -> bool {
+    pub fn node_is_known_type(&self, node: NodeHandle<AnyTy>) -> bool {
         let Some(n) = self.node_head_ident(node) else { return true };
         sym::primitive_ty(n).is_some()
             || self.find_enum(n).is_some()
@@ -604,6 +604,58 @@ impl<'a> Ctx<'a> {
                                     ),
                                 );
                                 return;
+                            }
+                        }
+                        TypeKind::TyTuple { elems } => {
+                            // a STRUCTURAL tuple carrying the target's
+                            // parameters (`FromFlow<(K, V)> for
+                            // HashMap<K, V>`, the flow mapset sink):
+                            // the tuple's bare parameters join the
+                            // placeholder env (mk_tuple of placeholders
+                            // resolves the shape), and the template law's
+                            // per-instantiation re-resolution substitutes
+                            // the concrete pair. Anything else nested (a
+                            // record, a generic head) stays the loud v1
+                            // rejection.
+                            let mut seen: Vec<IdentId> = Vec::new();
+                            for e in elems {
+                                match self.ast.ty(*e) {
+                                    TypeKind::TyPath { segs, .. }
+                                        if segs.len() == 1 && segs[0].generics.is_empty() =>
+                                    {
+                                        let n = segs[0].name;
+                                        if self.node_is_known_type(*e) {
+                                            // a concrete element — as always
+                                        } else if params.contains(&n) && declared.contains(&n) {
+                                            if !seen.contains(&n) {
+                                                seen.push(n);
+                                                env.push((n, self.param_placeholder(n)));
+                                            }
+                                        } else {
+                                            self.err(
+                                                self.ast.span(e.id()),
+                                                format!(
+                                                    "`{}` is neither a type in scope nor a declared type parameter of the impl target — a tuple trait argument takes concrete elements or the target's own declared parameters",
+                                                    self.name(n),
+                                                ),
+                                            );
+                                            return;
+                                        }
+                                    }
+                                    _ => {
+                                        if self.ty_mentions_any(*e, params) {
+                                            self.err(
+                                                self.ast.span(e.id()),
+                                                format!(
+                                                    "`{}`: a tuple trait argument takes concrete elements or bare declared parameters — deeper nesting is not supported yet",
+                                                    bound_ty_str(self, *e),
+                                                ),
+                                            );
+                                            return;
+                                        }
+                                        // concrete element — resolved as always
+                                    }
+                                }
                             }
                         }
                         _ => {

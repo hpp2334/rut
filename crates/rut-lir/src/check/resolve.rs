@@ -151,6 +151,27 @@ impl<'a> Ctx<'a> {
         id
     }
 
+    /// Mint (or fetch) the CONCRETE instantiation of an impl's trait
+    /// under a target substitution — the template re-resolution law's
+    /// mint half (the dispatch half that per-instantiation consumers
+    /// run: the for-of weave, the vtable fills). A NATIVE generic trait
+    /// (core's `Iterable`) has no local decl to instantiate from — its
+    /// descriptor mint is the iterator lane's; a local trait
+    /// instantiates from its AST. The `trait_inst` cache is shared, so
+    /// an instantiation the ordinary trait-ref resolution minted
+    /// earlier is fetched, never duplicated.
+    pub(crate) fn mint_impl_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if self.extern_traits.get(&name).copied()
+            == Some(rut_core::binary::NativeTrait::Iterable)
+        {
+            if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
+                return id;
+            }
+            return self.mk_iterator_inst(name, args[0]);
+        }
+        self.mk_trait_inst(name, args)
+    }
+
     /// The element spelling inside a trait-inst NAME: boot optionals'
     /// rows ride the shell convention (the `?bytes` row is named
     /// "bytes"), and the name is the element's only carrier across a

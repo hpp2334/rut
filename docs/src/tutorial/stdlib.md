@@ -203,6 +203,68 @@ user-defined key escapes by encoding canonically to `bytes`. A hit
 returns the stored cell, not a copy. There is no iteration surface:
 maps and sets answer questions, they don't walk.
 
+## `flow` — the push pipeline
+
+`Flow<E>` chains the push contract. A type is iterable when it
+registers `impl Iterable<E> for T` — `for (x of it)` desugars to
+`it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a
+closure per stage, never per element. Entry is `into_flow()`, the exit
+is a sink (`Vec.from_flow`, a fixed array), and everything between is
+chaining:
+
+```rut
+use pouch::{ Vec };
+use flow::{ Flow, IntoFlow, FromFlow };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("flow");
+    let nums: Vec<i32> = Vec.new();
+    nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
+
+    // entry → adapters → sink
+    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()
+        .map(fn(x: i32) -> i32 { return x * 2; })
+        .filter(fn(x: i32) -> bool { return x > 4; })
+        .take(3));
+    let joined: Vec<str> = Vec.new();
+    picked.for_each(fn(x: i32) -> nil { joined.push(f"{x}"); });
+
+    // chains feed plain for..of (Flow is an Iterable)
+    let mut sum = 0;
+    for (let x of nums.into_flow().skip(1)) {
+        sum += x;
+    }
+    log.info(f"picked={picked.len()} first={picked[0]} sum={sum}");
+}
+```
+
+```text
+picked=3 first=6 sum=14
+```
+
+Three laws to know:
+
+- **The entries and sinks are traits** — `IntoFlow<E>` rows exist for
+  the builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for
+  `Flow<E>` itself (the identity row: a chain re-enters as a source),
+  so generic code bounded on `IntoFlow<E>` takes chains and sources
+  alike. The sinks (`FromFlow<E>`) take the CONTRACT —
+  `it: Iterable<E>` — so a user iterable (a `CountUp`-shape, no Flow
+  involved) widens straight into them.
+- **`map` introduces a new type variable.** Annotate the lambda, spell
+  the type argument (`.map<i32>(..)`), or pass a fn path — a lambda
+  that spells nothing diagnoses with the fix.
+- **Stateful stages are single-shot.** `take`/`skip` hold their
+  counter in a record the drive mutates; a drained stage stays
+  drained. `take` answers `false` at its stop, which stops the SOURCE
+  — the elements after it are never driven.
+
+Pipelines are the clarity tier: each stage costs one indirect call per
+element, and the fused builtin loops stay the perf tier. The full
+member table lives in [the standard library
+reference](../reference/stdlib.md#flow-the-push-pipeline).
+
 ## `strbuild` — the string builder
 
 ```rut

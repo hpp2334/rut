@@ -1,7 +1,7 @@
 //! The std-CDN laws over the COMMITTED artifacts (`dist/std/`):
 //!
 //! 1. **Freshness** — `pack_dir(rut/<pkg>)` is byte-identical to the
-//!    committed bundle, for all 15 (the Q4 determinism law turned into
+//!    committed bundle, for all 16 (the Q4 determinism law turned into
 //!    a pure equality gate; CI never touches the network).
 //! 2. **The version pairing** — lib roots at 9 (compiled), host roots
 //!    at 10 (decl), read from the committed bytes.
@@ -35,10 +35,11 @@ fn dist_std() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"))
 }
 
-/// The 15 pkgs: (tree dir, artifact name). Keep in sync with
+/// The 16 pkgs: (tree dir, artifact name). Keep in sync with
 /// scripts/pack-std.cjs's PKGS table.
 const PKGS: &[(&str, &str)] = &[
     ("pouch", "pouch"),
+    ("flow", "flow"),
     ("nmapset", "nmapset"),
     ("strbuild", "strbuild"),
     ("json", "json"),

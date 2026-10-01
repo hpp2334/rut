@@ -6,14 +6,14 @@
  * the publish act is a git tag (`std-vNN`, immutable in practice —
  * publish ADVANCES the number, never rewrites a tag).
  *
- * The bundle set is exhaustive over `rut/` (15 pkgs): lib pkgs pack as
+ * The bundle set is exhaustive over `rut/` (16 pkgs): lib pkgs pack as
  * compiled v9 roots (their closures ride inside), host pkgs pack as
  * decl v10 roots (single-package — the surface IS the root). Same
  * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
  * PURE EQUALITY gate — CI never touches the network.
  *
  * Usage:
- *   node scripts/pack-std.cjs              pack all 15 → dist/std/
+ *   node scripts/pack-std.cjs              pack all 16 → dist/std/
  *   node scripts/pack-std.cjs --pins       rewrite the example
  *                                          manifests' url/sha256 rows
  *                                          (the EXAMPLES map below is
@@ -120,6 +120,7 @@ if ([doPins, doCheck, doTag].filter(Boolean).length > 1) {
 const PKGS = [
   // lib pkgs — compiled v7 roots; each closure rides inside
   { dir: "pouch" },
+  { dir: "flow" },
   { dir: "nmapset" },
   { dir: "strbuild" },
   { dir: "json" },

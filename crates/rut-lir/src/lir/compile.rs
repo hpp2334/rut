@@ -463,15 +463,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the creation site stored only captures. To stay correct, the
         // creation site also stores the resolved param/ret types:
         let saved = c.ctx.lambda_sigs.get(&lambda_node).cloned();
+        // the creation site's substitution re-arms this compiler's type
+        // env: a lambda inside a generic fn/method resolves annotations
+        // against the enclosing generics
+        c.subst = saved.as_ref().map(|s| s.2.clone()).unwrap_or_default();
+        // the creation site resolved every annotation under ITS
+        // substitution — inside a generic fn/method a lambda body
+        // re-resolves under an empty env (the lambda's Inst is
+        // unit-local), so the stored types are the only ones that name
+        // the enclosing generics. Prefer them; re-resolution is the
+        // fallback (and agrees wherever the env is empty anyway).
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
             let ty = match c.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                    saved.as_ref().and_then(|s| s.0.get(i).copied()).unwrap_or_else(|| c.resolve_type_now(*t))
+                }
                 _ => saved.as_ref().and_then(|s| s.0.get(i).copied()).unwrap_or(TY_I32),
             };
             param_tys.push(ty);
         }
-        let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_NIL);
+        let ret_ty = saved.as_ref().map(|s| s.1)
+            .or_else(|| ret.map(|r| c.resolve_type_now(r)))
+            .unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
         // the lambda body's own pre-pass: this frame promotes its own
         // bindings (nested closure sites under the body)

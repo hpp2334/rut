@@ -556,8 +556,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the Lambda node id: find it by body —the caller passes parts; the
         // lambda node is the PARENT of body. Store captures keyed by the
         // body node; FnKey::Lambda uses the body node id (unique).
-        // record the resolved signature for the body compilation
-        self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty));
+        // record the resolved signature for the body compilation —
+        // param/ret types AND the creation site's substitution (the
+        // body compiler re-arms its type env from it, so a lambda
+        // inside a generic fn/method — and any lambda IT creates —
+        // resolves annotations against the enclosing generics)
+        self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty, self.subst.clone()));
         self.ctx.lambda_info.insert(lambda_node, caps.clone());
         let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], trait_origins: vec![] };
         let fid = self.ctx.ensure_inst(inst);

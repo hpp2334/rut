@@ -27,6 +27,21 @@ const SKIP: &[(&str, u32, &str)] = &[
         4,
         "imports `greet`, the package the reader builds earlier in the chapter",
     ),
+    // the flow walkthrough's sink call widens `Flow<i32>` to the core
+    // `Iterable<i32>` contract across the package boundary — the
+    // consumer-side native-trait template-impl mint is the flagged gap
+    // (the same code compiles inside flow's own unit; the widening is
+    // the tail, not the surface)
+    (
+        "docs/src/tutorial/stdlib.md",
+        8,
+        "the flow walkthrough: `Vec.from_flow(chain)` needs the cross-package Iterable widening (the flagged flow tail)",
+    ),
+    (
+        "docs/src/reference/stdlib.md",
+        3,
+        "the flow surface block: `Vec.from_flow(chain)` needs the cross-package Iterable widening (the flagged flow tail)",
+    ),
 ];
 
 fn docs_src() -> std::path::PathBuf {
@@ -115,6 +130,7 @@ fn book_blocks_compile_and_run() {
                 ("ink", "rut/ink"),
                 ("pouch", "rut/pouch"),
                 ("nmapset", "rut/nmapset"),
+                ("flow", "rut/flow"),
                 ("json", "rut/json"),
                 ("strbuild", "rut/strbuild"),
                 ("async_engine", "rut/async_engine"),

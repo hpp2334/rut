@@ -281,8 +281,12 @@ pub struct Ctx<'a> {
     /// (the capture law); `None` is the immediate-slot copy.
     pub lambda_info: std::collections::HashMap<NodeId, Vec<Capture>>,
     /// lambda signatures: body node → (resolved param types incl.
-    /// expected-type inference, ret type)
-    pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
+    /// expected-type inference, ret type, the creation site's
+    /// substitution). The substitution re-arms the body compiler's type
+    /// env — a lambda nested inside a generic fn/method resolves its
+    /// annotations (and any lambda it creates) against the enclosing
+    /// generics, which its own unit-local Inst doesn't carry.
+    pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>)>,
     /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
     /// used functions, bound before body compilation:

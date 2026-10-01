@@ -76,6 +76,47 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => None,
             })
             .collect();
+        // the unannotated-lambda diagnosis (v1): a lambda whose
+        // parameters spell no types cannot drive the method's inference
+        // — its body types never reach unification (the shape hint's
+        // placeholders would leak into the result). Diagnose with the
+        // fix instead of cascading mismatch errors.
+        for (i, a) in args.iter().enumerate() {
+            let Some(tn) = param_nodes[i] else { continue };
+            let free = self.free_generics(tn, &decl_generics, &subst);
+            if free.is_empty() {
+                continue;
+            }
+            if let ExprKind::Lambda { params: lps, ret: lret, .. } = self.ctx.ast.expr(*a) {
+                // FULLY unannotated: no parameter types and no return
+                // type — nothing in the lambda's shape can bind the
+                // generic (a partially annotated one — the store's
+                // `lift(fn (c) -> i64 ..)` — still binds through the
+                // annotated half)
+                let fully_unannotated = lps.iter().all(|p| {
+                    matches!(
+                        self.ctx.ast.param(*p),
+                        MemberKind::Param(ParamData { ty: None, .. })
+                    )
+                }) && lret.is_none();
+                if fully_unannotated {
+                    let free_names = free
+                        .iter()
+                        .map(|g| self.ctx.name(*g).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    self.ctx.err(sp, format!(
+                        "cannot infer `{}` of `{}.{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`.{}<{}>(..)`)",
+                        free_names,
+                        self.ctx.name(dname),
+                        self.ctx.name(mname),
+                        self.ctx.name(mname),
+                        free_names,
+                    ));
+                    return Err(());
+                }
+            }
+        }
         let mut arg_tys: Vec<TypeId> = Vec::new();
         let mut aregs: Vec<u16> = Vec::new();
         for (i, a) in args.iter().enumerate() {

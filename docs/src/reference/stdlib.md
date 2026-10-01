@@ -180,6 +180,49 @@ The growable sequence, written in rut over the fixed `[T]` array:
 | `freeze() -> bytes` | the `Vec<u8>` → immutable `bytes` copy (exactly the live length) |
 | `slice(from, to) -> ?Vec<T>` | compiler-lowered O(1) fixed-length window; detaches on grow |
 
+### `flow` — the push pipeline
+
+`Flow<E>` chains the push contract: a type is iterable when it
+registers `impl Iterable<E> for T`, and a Flow wraps one drive in
+adapter stages — a closure per STAGE, never per element. Pipelines are
+the clarity tier; the fused builtin loops stay the perf tier.
+
+```rut
+use pouch::{ Vec };
+use flow::{ Flow, IntoFlow, FromFlow };
+
+pub fn main() -> Vec<i32> {
+    let nums: Vec<i32> = Vec.new();
+    nums.push(1); nums.push(2); nums.push(3); nums.push(4);
+    // entry → adapters → sink: one drive, stage by stage
+    return Vec.from_flow(nums.into_flow()
+        .map(fn(x: i32) -> i32 { return x * 10; })
+        .filter(fn(x: i32) -> bool { return x > 15; }));
+}
+```
+
+| surface | meaning |
+|---|---|
+| `x.into_flow() -> Flow<E>` | the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and `Flow<E>` itself (the identity row: a chain re-enters as a source) |
+| `map<R>(f: fn(E) -> R) -> Flow<R>` | transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers |
+| `filter(p: fn(E) -> bool) -> Self` | keep the elements the predicate admits |
+| `take(n)` / `skip(n)` | the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained |
+| `count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>` | the one-drive consumers |
+| `T::from_flow(it: Iterable<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` (empty is `[]`; non-empty seeds from element 0, so the source must re-drive) |
+| `for (x of chain)` | chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar |
+
+**Import the traits you spell and the pipeline type**: `use flow::{
+Flow, IntoFlow, FromFlow }` — the use-both law names each one; the
+sink's `Iterable<E>` parameter re-mints through `use core::{
+Iterable }` (the `from_flow` sinks take the CONTRACT, not Flow, so a
+user iterable — a `CountUp`-shape — widens straight into them).
+
+**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no
+host-table walk — json's map encode grows with it) and
+`HashMap::from_flow` (its `(K, V)` tuple trait argument cannot cross
+the compiled-bundle impl-row carrier yet; it compiles and dispatches
+inside flow's own unit).
+
 ### `nmapset` — `HashMap`/`HashSet`
 
 Thin wrappers over the native key table (`nmap_host` rows): the whole

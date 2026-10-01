@@ -124,6 +124,77 @@ FRESH = {
 
  "**Generic traits and generic targets**: `trait Wrap<T>` gives each type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`). Generic binders are **declared after `impl`** — `impl<A, B> Hashable for Pair<A, B>` — and that list is the definition site: a bare parameter name in the head is a use that must resolve against it (an undeclared name is the error it always should have been — \"undeclared type parameter `T` — declare it: `impl<T> ..`\"). The same law covers inherent impls: `impl<T> Vec<T> { .. }`, not `impl Vec<T> { .. }`. Parameterized trait impls are legal: `impl<T> Readable<T> for Source<T>` registers a **template** serving every concrete instantiation; a hand-written concrete impl shadows the template; repeated parameters (`impl<T> W<T, T> for Pair2<T>`) are legal. Each trait argument must be a concrete type or a declared binder that names one of the target's own parameters.":
   "**泛型 trait 与泛型目标**：`trait Wrap<T>` 为每个类型实参列表给出独立的实例化（`Wrap<i32>` ≠ `Wrap<str>`）。泛型绑定器**在 `impl` 之后声明**——`impl<A, B> Hashable for Pair<A, B>`——且这份列表就是定义位置：头部的裸参数名是一次使用，必须能对它解析（未声明的名字终于成为它本该是的错误——\"undeclared type parameter `T` — declare it: `impl<T> ..`\"）。同一条法则也覆盖 inherent impl：`impl<T> Vec<T> { .. }`，而不是 `impl Vec<T> { .. }`。带参数的 trait impl 是合法的：`impl<T> Readable<T> for Source<T>` 注册一个服务每个具体实例化的**模板**；手写的具体 impl 会遮蔽模板；重复的参数（`impl<T> W<T, T> for Pair2<T>`）也合法。每个 trait 实参必须是具体类型，或是命名目标自身某个参数的已声明绑定器。",
+ # ---- the flow package (push pipeline) ----
+
+ "`flow` — the push pipeline":
+  "`flow` —— 推送管线",
+
+ "`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`, a fixed array), and everything between is chaining:":
+  "`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`、定长数组），中间全是链式拼接：",
+
+ "Three laws to know:":
+  "三条要知道的法则：",
+
+ "**`map` introduces a new type variable.** Annotate the lambda, spell the type argument (`.map<i32>(..)`), or pass a fn path — a lambda that spells nothing diagnoses with the fix.":
+  "**`map` 引入新的类型变量。** 给 lambda 标注类型、写明类型实参（`.map<i32>(..)`），或传入具名 fn——什么都不标注的 lambda 会得到指明修复方式的诊断。",
+
+ "**Stateful stages are single-shot.** `take`/`skip` hold their counter in a record the drive mutates; a drained stage stays drained. `take` answers `false` at its stop, which stops the SOURCE — the elements after it are never driven.":
+  "**有状态的阶段是一次性的。** `take`/`skip` 把计数器放在一个记录里由 drive 改动；耗尽的阶段保持耗尽。`take` 在停止点回答 `false`，这会停下源——其后的元素永不被驱动。",
+
+ "Pipelines are the clarity tier: each stage costs one indirect call per element, and the fused builtin loops stay the perf tier. The full member table lives in [the standard library reference](../reference/stdlib.md#flow-the-push-pipeline).":
+  "管线是清晰度档位：每个阶段对每个元素付出一次间接调用，融合的内建循环仍是性能档位。完整成员表见[标准库参考](../reference/stdlib.md#flow-the-push-pipeline)。",
+
+ "`Flow<E>` chains the push contract: a type is iterable when it registers `impl Iterable<E> for T`, and a Flow wraps one drive in adapter stages — a closure per STAGE, never per element. Pipelines are the clarity tier; the fused builtin loops stay the perf tier.":
+  "`Flow<E>` 把推送契约串成链：一个类型在注册了 `impl Iterable<E> for T` 时即可迭代，而 Flow 把同一次 drive 包进适配器阶段——每个阶段一个闭包，绝非每个元素一个。管线是清晰度档位；融合的内建循环仍是性能档位。",
+
+ "`x.into_flow() -> Flow<E>`":
+  "`x.into_flow() -> Flow<E>`",
+
+ "the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and `Flow<E>` itself (the identity row: a chain re-enters as a source)":
+  "入口——`IntoFlow<E>` 行：`[T]`、`str`、`bytes`、`Vec<T>`，以及 `Flow<E>` 自身（同一性行：一条链重新作为源进入）",
+
+ "`map<R>(f: fn(E) -> R) -> Flow<R>`":
+  "`map<R>(f: fn(E) -> R) -> Flow<R>`",
+
+ "transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers":
+  "变换——引入新的类型变量，因此请标注 lambda 或写明类型实参；具名 fn 可自动推断",
+
+ "`filter(p: fn(E) -> bool) -> Self`":
+  "`filter(p: fn(E) -> bool) -> Self`",
+
+ "keep the elements the predicate admits":
+  "保留谓词放行的元素",
+
+ "`take(n)` / `skip(n)`":
+  "`take(n)` / `skip(n)`",
+
+ "the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained":
+  "前 `n` 个 / 跳过前 `n` 个之后的全部——计数器是一个由 drive 改动的记录，耗尽的阶段保持耗尽",
+
+ "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`":
+  "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`",
+
+ "the one-drive consumers":
+  "单次 drive 的消费者",
+
+ "`T::from_flow(it: Iterable<E>) -> T`":
+  "`T::from_flow(it: Iterable<E>) -> T`",
+
+ "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` (empty is `[]`; non-empty seeds from element 0, so the source must re-drive)":
+  "汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`，以及定长 `[E]`（空即 `[]`；非空以元素 0 作种子，因此源必须可重新驱动）",
+
+ "`for (x of chain)`":
+  "`for (x of chain)`",
+
+ "chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar":
+  "链即可迭代对象——`impl Iterable<E> for Flow<E>` 行进入普通的脱糖",
+
+ "**Import the traits you spell and the pipeline type**: `use flow::{ Flow, IntoFlow, FromFlow }` — the use-both law names each one; the sink's `Iterable<E>` parameter re-mints through `use core::{ Iterable }` (the `from_flow` sinks take the CONTRACT, not Flow, so a user iterable — a `CountUp`\\-shape — widens straight into them).":
+  "**拼写了什么就导入什么，连同管线类型**：`use flow::{ Flow, IntoFlow, FromFlow }`——使用即导入法则逐一点名；汇的 `Iterable<E>` 参数经 `use core::{ Iterable }` 重铸（`from_flow` 汇取的是契约而非 Flow，因此用户可迭代对象——`CountUp`\\ 形状——直接加宽进入）。",
+
+ "**The entries and sinks are traits** — `IntoFlow<E>` rows exist for the builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for `Flow<E>` itself (the identity row: a chain re-enters as a source), so generic code bounded on `IntoFlow<E>` takes chains and sources alike. The sinks (`FromFlow<E>`) take the CONTRACT — `it: Iterable<E>` — so a user iterable (a `CountUp`\\-shape, no Flow involved) widens straight into them.":
+  "**延后但有记载**：mapset 的 `IntoFlow`（nmapset 尚无宿主表遍历——json 的 map 编码将与它一同成长）和 `HashMap::from_flow`（其 `(K, V)` 元组 trait 实参尚无法跨越编译包的 impl 行载体；它在 flow 自己的单元内编译并分派）。",
+
 }
 
 

@@ -132,6 +132,120 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(ret_ty)
     }
 
+    /// A trait impl's NO-SELF static called through the TYPE name —
+    /// `Vec.from_flow(it)` (the FromFlow entry/sink surface), the same
+    /// shape `T.decode(r)` serves for type parameters. The type name IS
+    /// the dispatch: the (trait, class) impl answers, the method has no
+    /// receiver, and the call lowers to a plain `Call`. The class
+    /// instantiation comes from explicit base generics or the expected
+    /// type (the `.new` inference law); the trait must be in scope (the
+    /// use-both law, the receiver-dispatch gate's twin).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn compile_trait_name_static_call(
+        &mut self,
+        concrete: TypeId,
+        name: IdentId,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let Some((idx, midx)) = self.find_trait_impl_method(concrete, name) else {
+            return Err(());
+        };
+        let im = self.ctx.impls[idx].clone();
+        // the trait must be callable in scope: a local decl or a bound
+        // (used) name — the use-both law
+        let callable = self.ctx.find_trait(im.trait_name).is_some()
+            || self.ctx.used.contains(&im.trait_name)
+            || self.ctx.extern_traits.contains_key(&im.trait_name);
+        if !callable {
+            return Err(());
+        }
+        let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+        let tm = tdesc.methods[midx].clone();
+        let mnode = im.methods.iter().find(|(n, _)| *n == tm.name).map(|(_, n)| *n);
+        let has_recv = mnode.map_or(false, |mn| {
+            matches!(
+                self.ctx.ast.method_decl(mn).params.first().map(|p| self.ctx.ast.param(*p)),
+                Some(MemberKind::SelfParam(_))
+            )
+        });
+        if has_recv {
+            let t = self.ctx.name(im.trait_name);
+            let m = self.ctx.name(tm.name);
+            self.ctx.err(sp, format!(
+                "`{m}` takes a receiver — `{t}` methods with `self` are called on a value, not the type's name"
+            ));
+            return Err(());
+        }
+        let subst: Vec<(IdentId, TypeId)> = match &im.target_data {
+            Some((_, params)) => match self.ctx.inst_data.get(&concrete).cloned() {
+                Some((_, cargs)) => params.iter().cloned().zip(cargs.into_iter()).collect(),
+                None => match (self.ctx.types.kind(concrete), params.len()) {
+                    (TyKind::Opt { elem }, 1) => vec![(params[0], *elem)],
+                    (TyKind::Array { elem }, 1) => vec![(params[0], *elem)],
+                    _ => vec![],
+                },
+            },
+            None => vec![],
+        };
+        // trait-typed parameters specialize per concrete argument — the
+        // Inst carries one origin per trait-obj param (`it: Iterable<T>`
+        // taking a Flow chain dispatches statically at single origin)
+        let (ptys, ret_ty) = match mnode {
+            Some(mn) => {
+                let md = self.ctx.ast.method_decl(mn).clone();
+                let mut ps = Vec::new();
+                for p in md.params.iter() {
+                    match self.ctx.ast.param(*p) {
+                        MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                            ps.push(self.ctx.resolve_sig_ty(*t, &subst, Some(concrete)))
+                        }
+                        _ => ps.push(TY_I32),
+                    }
+                }
+                let ret = md.ret.map(|r| self.ctx.resolve_sig_ty(r, &subst, Some(concrete))).unwrap_or(TY_NIL);
+                (ps, ret)
+            }
+            None => (tm.params.clone(), tm.ret),
+        };
+        if args.len() != ptys.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+            return Err(());
+        }
+        let mut aregs = Vec::new();
+        let mut trait_origins = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let t = self.compile_expr(*a, Some(ptys[i]))?;
+            if !self.widens(t, ptys[i]) {
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                    "argument {} is `{}`, `{}` expected",
+                    i + 1,
+                    self.ctx.type_name(t),
+                    self.ctx.type_name(ptys[i])
+                ));
+            }
+            self.widen_to_slot(t, ptys[i], sp.lo);
+            aregs.push(self.last_reg);
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
+                && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })
+            {
+                trait_origins.push(t);
+            }
+        }
+        let key = self.ctx.impl_method_key(idx, tm.name, false);
+        let inst = crate::check::Inst {
+            key,
+            subst,
+            trait_origins,
+        };
+        let fid = self.ctx.ensure_inst(inst);
+        let _ = expected;
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        Ok(ret_ty)
+    }
+
     /// A trait method called through a TYPE PARAMETER's name —
     /// `T.decode(r)` inside `fn decodeJson<T requires JsonDeserialize>`
     /// (the rut-json batch phase 1's sanctioned checker gap 2; the
@@ -305,6 +419,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// descriptor spells them as trait objects, so the concrete ABI maps
     /// this trait's trait-object params onto `concrete`).
     #[allow(clippy::too_many_arguments)]
+    fn is_template_probe(ctx: &crate::check::Ctx, im_target: TypeId, concrete: TypeId) -> bool {
+        ctx.extern_generics.values().any(|g| g.template == im_target)
+            || ctx.impl_target_is_structural_template(im_target)
+            || ctx.impl_target_is_template_for(im_target, concrete)
+    }
+
     pub(crate) fn compile_extern_trait_static_call(
         &mut self,
         ext_idx: usize,

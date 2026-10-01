@@ -1,0 +1,283 @@
+// flow/flow.rut — the push pipeline: `Flow<E>` is a chainable wrapper
+// over THE push contract. Rut's iteration is push-style, one schema: a
+// type is iterable when it registers `impl Iterable<E> for T` and a
+// `for..of` desugars to `it.iterate(emit)`; a Flow is the same drive
+// wrapped in adapters — every stage wraps `drive` in one new closure
+// (a closure per STAGE, never per element). Pipelines are the clarity
+// tier: the fused builtin loops stay the perf tier.
+//
+// The base is pouch-free by law (json.rut's base shape): the entry and
+// sink rows for the builtin structural targets (`[T]`, `str`, `bytes`)
+// compile here — the array sink counts and seeds via json's decode
+// technique, no growable needed — while the Vec rows live in
+// group-pouch.rut and the map/set sinks in group-nmapset.rut, the
+// peer-gated integration groups.
+
+use core::{ Iterable };
+
+// The entry trait: a source becomes a pipeline. Builtin sequences
+// (`[T]`, `str`, `bytes`), growable `Vec<T>`, and `Flow` itself (the
+// identity row) all register it — generic `X requires IntoFlow<E>`
+// code accepts chains and sources alike.
+pub trait IntoFlow<E> {
+    fn into_flow(self) -> Flow<E>;
+}
+
+// The sink trait: a pipeline (or any iterable — the parameter takes
+// the CONTRACT, not Flow) materializes into the implementing type.
+pub trait FromFlow<E> {
+    fn from_flow(it: Iterable<E>) -> Self;
+}
+
+// The pipeline class: one field, the drive. A `Flow` is as reusable as
+// its source allows — stateful stages (`take`, `skip`) hold their
+// counter in a record the drive closure mutates, so a drained stage
+// stays drained (one drive per chain end).
+pub class Flow<E> {
+    drive: fn(fn(E) -> bool) -> nil;
+}
+
+impl<E> Flow<E> {
+    // Wrap a raw push fn: the escape hatch for hand-written sources.
+    pub fn new(d: fn(fn(E) -> bool) -> nil) -> Self {
+        return Flow { drive: d };
+    }
+
+    // Keep the elements the predicate admits.
+    pub fn filter(self, p: fn(E) -> bool) -> Self {
+        return
+            Flow.new(
+                fn (emit: fn(E) -> bool) -> nil {
+                    (self.drive)(
+                        fn (x: E) -> bool {
+                            if (p(x)) {
+                                return emit(x);
+                            }
+                            return true;
+                        },
+                    );
+                },
+            );
+    }
+
+    // The first `n` elements — then stop the source (`emit` answering
+    // `false` is the push contract's stop). The counter is a one-field
+    // record mutated through the captured handle: a primitive counter
+    // would copy per emit call and never move.
+    pub fn take(self, n: i32) -> Self {
+        let st: TakeState = TakeState { n: n };
+        return
+            Flow.new(
+                fn (emit: fn(E) -> bool) -> nil {
+                    (self.drive)(
+                        fn (x: E) -> bool {
+                            if (st.n <= 0) {
+                                return false;
+                            }
+                            st.n -= 1;
+                            return emit(x);
+                        },
+                    );
+                },
+            );
+    }
+
+    // Drop the first `n` elements; pass the rest through.
+    pub fn skip(self, n: i32) -> Self {
+        let st: TakeState = TakeState { n: n };
+        return
+            Flow.new(
+                fn (emit: fn(E) -> bool) -> nil {
+                    (self.drive)(
+                        fn (x: E) -> bool {
+                            if (st.n > 0) {
+                                st.n -= 1;
+                                return true;
+                            }
+                            return emit(x);
+                        },
+                    );
+                },
+            );
+    }
+
+    // Run the source for its side effects.
+    pub fn for_each(self, f: fn(E) -> nil) -> nil {
+        (self.drive)(fn (x: E) -> bool { f(x); return true; });
+    }
+
+    // Count the elements: one drive, no per-element cost beyond the call.
+    pub fn count(self) -> i32 {
+        let total: CountState = CountState { n: 0 };
+        (self.drive)(fn (x: E) -> bool { total.n += 1; return true; });
+        return total.n;
+    }
+
+    // Left fold: `f(acc, x)` across one drive, the accumulator seeded.
+    pub fn fold<R>(self, init: R, f: fn(R, E) -> R) -> R {
+        let st: FoldState<R> = FoldState { acc: init };
+        (self.drive)(fn (x: E) -> bool { st.acc = f(st.acc, x); return true; });
+        return st.acc;
+    }
+
+    // Pair each element with its zero-based index.
+    pub fn enumerate(self) -> Flow<(i32, E)> {
+        let st: CountState = CountState { n: 0 };
+        return
+            Flow.new(
+                fn (emit: fn((i32, E)) -> bool) -> nil {
+                    (self.drive)(
+                        fn (x: E) -> bool {
+                            let pair: (i32, E) = (st.n, x);
+                            st.n += 1;
+                            return emit(pair);
+                        },
+                    );
+                },
+            );
+    }
+
+    // Transform each element — introduces a NEW type variable, so the
+    // call either annotates its lambda or spells the type argument
+    // (`.map<i32>(..)`); a fn path infers too.
+    pub fn map<R>(self, f: fn(E) -> R) -> Flow<R> {
+        return
+            Flow.new(
+                fn (emit: fn(R) -> bool) -> nil {
+                    (self.drive)(fn (x: E) -> bool { return emit(f(x)); });
+                },
+            );
+    }
+}
+
+// take/skip's one-field counters — records, so the drive closure's
+// mutations land in shared storage (the capture law: primitives copy,
+// records share their cell).
+struct TakeState {
+    n: i32;
+}
+struct CountState {
+    n: i32;
+}
+struct FoldState<A> {
+    acc: A;
+}
+
+// A Flow IS an iterable — the for..of weave and every
+// `Iterable<E>`-typed parameter widen to it. The template impl on the
+// generic class: the exact shape `iterate_impl` dispatches.
+impl<E> Iterable<E> for Flow<E> {
+    fn iterate(self, emit: fn(E) -> bool) {
+        (self.drive)(emit);
+    }
+}
+
+// ---- the builtin sources enter through IntoFlow rows ----
+
+// The fixed array: a fused loop over the shared handle, the emit's
+// `false` stopping the walk.
+impl<T> IntoFlow<T> for [T] {
+    fn into_flow(self) -> Flow<T> {
+        return
+            Flow.new(
+                fn (emit: fn(T) -> bool) -> nil {
+                    for (let x of self) {
+                        if (!emit(x)) {
+                            return;
+                        }
+                    }
+                },
+            );
+    }
+}
+
+impl IntoFlow<str> for str {
+    fn into_flow(self) -> Flow<str> {
+        return
+            Flow.new(
+                fn (emit: fn(str) -> bool) -> nil {
+                    for (let c of self) {
+                        if (!emit(c)) {
+                            return;
+                        }
+                    }
+                },
+            );
+    }
+}
+
+impl IntoFlow<u8> for bytes {
+    fn into_flow(self) -> Flow<u8> {
+        return
+            Flow.new(
+                fn (emit: fn(u8) -> bool) -> nil {
+                    for (let b of self) {
+                        if (!emit(b)) {
+                            return;
+                        }
+                    }
+                },
+            );
+    }
+}
+
+// The identity row: a chain re-enters as a source, so generic
+// `X requires IntoFlow<E>` code accepts pipelines unchanged.
+impl<E> IntoFlow<E> for Flow<E> {
+    fn into_flow(self) -> Flow<E> {
+        return self;
+    }
+}
+
+// ---- the array SINK ----
+
+// A fixed `[T]` from any iterable, via json's decode technique
+// (json.rut's `[T]` row): a generic T has no zero, so the first
+// element seeds `[seed; n]` and the second pass overwrites each slot.
+// The sink needs a RE-DRIVABLE source (a builtin sequence, a fresh
+// chain's source) — pass 1 counts, pass 2 fills; a source that cannot
+// re-drive answers the seed padded with itself, which `count`-style
+// consumers should treat as the misuse diagnostic it is.
+impl<T> FromFlow<T> for [T] {
+    fn from_flow(it: Iterable<T>) -> Self {
+        // pass 1: the count, and element 0 for the seed
+        let mut n: i32 = 0;
+        let mut first: ?T = nil;
+        it.iterate(
+            fn (x: T) -> bool {
+                if (n == 0) {
+                    first = x;
+                }
+                n += 1;
+                return true;
+            },
+        );
+        if (n == 0) {
+            let empty: [T] = [];
+            return empty;
+        }
+        // materialize: the seed supplies the zero a generic T lacks
+        let seed: T = first;
+        let mut a: [T] = [seed; n];
+        let mut i: FillState = FillState { n: 0 };
+        it.iterate(
+            fn (x: T) -> bool {
+                if (i.n < n) {
+                    (a[i.n]) = x;
+                }
+                i.n += 1;
+                return true;
+            },
+        );
+        if (i.n < n) {
+            panic(
+                "from_flow: the source is not re-drivable — the second pass yielded fewer elements than the count",
+            );
+        }
+        return a;
+    }
+}
+
+struct FillState {
+    n: i32;
+}

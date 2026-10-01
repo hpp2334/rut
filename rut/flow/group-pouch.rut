@@ -1,0 +1,38 @@
+// flow/group-pouch.rut — the pouch-dependent impl group (json's
+// group-pouch.rut is the shape precedent): Vec's entry and sink rows,
+// mounted only when `pouch` is anywhere in the consumer's closure.
+// The trait's module owns its impls — the owning-module law governs
+// INHERENT impls; a local-trait/foreign-type impl group is the
+// json/group-pouch precedent.
+
+use core::{ Iterable };
+use pouch::{ Vec };
+
+// The entry: a growable Vec walks its backing through the fused loop
+// (the same walk `for..of` fuses), the emit's `false` stopping it.
+impl<T> IntoFlow<T> for Vec<T> {
+    fn into_flow(self) -> Flow<T> {
+        return
+            Flow.new(
+                fn (emit: fn(T) -> bool) -> nil {
+                    for (let x of self) {
+                        if (!emit(x)) {
+                            return;
+                        }
+                    }
+                },
+            );
+    }
+}
+
+// The sink: the CONTRACT parameter (not Flow) — every iterable (a
+// chain, a user Iterable, a builtin sequence widened by its row)
+// feeds it in one drive. No new type variables (T is Vec's own), so
+// no generic-method support is needed here.
+impl<T> FromFlow<T> for Vec<T> {
+    fn from_flow(it: Iterable<T>) -> Self {
+        let out: Vec<T> = Vec.new();
+        it.iterate(fn (x: T) -> bool { out.push(x); return true; });
+        return out;
+    }
+}
