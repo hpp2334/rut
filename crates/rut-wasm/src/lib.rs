@@ -160,6 +160,18 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount nmapset");
+    // `flow` mounts AFTER its deps (its generic class + traits ride the
+    // source; the peer groups stay unmounted — the playground consumer's
+    // `Vec` rows answer through the base's carried rows)
+    session
+        .register_module(
+            "flow",
+            rut_driver::Module {
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/flow/flow.rut").to_string(), is_decl: false },
+                ..Default::default()
+            },
+        )
+        .expect("mount flow");
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface mounts as a linked source module —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
