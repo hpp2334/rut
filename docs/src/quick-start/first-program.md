@@ -35,8 +35,9 @@ cat > hello/rut.jsonc <<'EOF'
   "name": "hello",
   "entry": { "lib": "./main.rut" },
   "deps": {
-    // the vendored logger package, from a dir at the repo root
-    "ink": { "path": "../rut/ink" }
+    // ink — the toolchain's logger package, served by jsDelivr at the
+    // std-v3 tag, pinned by sha256
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
   }
 }
 EOF
@@ -47,6 +48,12 @@ rut run hello
 ```text
 hello, rut!
 ```
+
+The run works from ANY directory — nothing about it assumes a clone of
+the toolchain's repo. The url row names the package on jsDelivr; the
+CLI fetches it once into the project's cache (`.rut/cache`), every
+later run is a pure cache hit, and `rut fetch hello` pre-warms the
+cache without running anything.
 
 Three things to notice:
 

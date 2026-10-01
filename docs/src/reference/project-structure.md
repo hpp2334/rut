@@ -24,14 +24,16 @@ toolchain tree.
   "entry": { "type": "./calc.d.rut" }
 }
 
-// a consumer (an app directory)
+// a consumer (an app directory): a `path` row for a sibling package
+// of your own, pinned url rows for the toolchain's packages
 {
   "name": "app",
   "entry": { "lib": "./app.rut" },
 
   "deps": {
-    "pouch": { "path": "../pouch" },
-    "ink":   { "path": "../ink" }
+    "greet": { "path": "../greet" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
   }
 }
 ```

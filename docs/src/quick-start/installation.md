@@ -143,11 +143,13 @@ rut
 ```
 
 The binary embeds the whole engine: lexer, parser, compiler, typed
-bytecode, and the VM. It also carries the vendored packages from the
-repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a program
-says `use ink::{ Logger };` and mounts the package through its
-manifest's `deps` row, since every rut program is a module directory
-([your first rut program](first-program.md)).
+bytecode, and the VM. The toolchain's standard packages (`core`,
+`pouch`, `ink`, `json`, …) ship as compiled `.rutbundle`s on jsDelivr —
+a program says `use ink::{ Logger };` and its manifest's `deps` row
+mounts the package from the CDN, pinned by sha256
+([dependency kinds](../reference/dependency-kinds.md)), since every rut
+program is a module directory ([your first rut
+program](first-program.md)).
 
 Try it:
 
@@ -159,8 +161,9 @@ cat > hello/rut.jsonc <<'EOF'
   "name": "hello",
   "entry": { "lib": "./main.rut" },
   "deps": {
-    // the vendored logger package, from a dir at the repo root
-    "ink": { "path": "../rut/ink" }
+    // ink — the toolchain's logger package, served by jsDelivr at the
+    // std-v3 tag, pinned by sha256
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
   }
 }
 EOF
@@ -178,6 +181,9 @@ rut run hello
 ```text
 hello, rut!
 ```
+
+The first run fetched `ink` from jsDelivr into `hello/.rut/cache`;
+`rut fetch hello` pre-warms that cache without running anything.
 
 If that printed, the CLI is ready. Continue to
 [your first rut program](first-program.md) — and keep the lane's role

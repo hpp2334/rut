@@ -111,13 +111,24 @@ directory:
 
 ### The std tree on jsDelivr
 
+**Which kind, when.** The toolchain's standard packages (`core`,
+`ink`, `pouch`, `json`, …) are consumed as **pinned url rows** from
+this CDN — that is the recommended import for everything the toolchain
+ships. A `path` row is for **your own local packages**: a sibling
+directory in the same project (the modules tutorial's `greet` app
+mounting `../pkg` is the shape). The tag advances with format changes
+(`std-v3` today) and is never re-pointed, so a pin at a tag stays
+honest forever.
+
 The std tree ships as committed per-package bundles —
 `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`,
-pinned by sha256 (placeholders here by law: real pins live only in the
-examples, so docs never rot). Tags advance (`std-vNN`) and are never
-re-pointed — jsDelivr caches aggressively; the artifacts are committed
-at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate
-is a pure byte-equality repack — CI never touches the network).
+pinned by sha256 (the shapes here keep placeholder tags; the worked
+manifests in the quick-start, the tutorial, and the examples carry the
+real pins — a pin at an immutable tag cannot rot). Tags advance
+(`std-vNN`) and are never re-pointed — jsDelivr caches aggressively;
+the artifacts are committed at `dist/std/`, packed by
+`scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality
+repack — CI never touches the network).
 
 **What a url row can deliver** is the engine's instantiation law, read
 from the CDN side: a compiled bundle carries the generic instantiations

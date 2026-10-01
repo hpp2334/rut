@@ -27,7 +27,7 @@ msgstr "你的第一个 rut 程序"
 
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:164
+#: src/reference/project-structure.md:166
 msgid "The playground"
 msgstr "Playground"
 
@@ -423,7 +423,7 @@ msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:115 src/tutorial/modules.md:206
+#: src/SUMMARY.md:115 src/tutorial/modules.md:207
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
@@ -841,17 +841,17 @@ msgstr ""
 
 #: src/quick-start/installation.md:145
 msgid ""
-"The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, and the VM. It also carries the vendored packages from the repo's `rut/` directory (`core`, `pouch`, `ink`, `json`, …) — a program says `use ink::{ Logger };` and mounts the package through its manifest's `deps` row, since every rut program is a module directory ([your first rut program](first-program.md))."
+"The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, and the VM. The toolchain's standard packages (`core`, `pouch`, `ink`, `json`, …) ship as compiled `.rutbundle`s on jsDelivr — a program says `use ink::{ Logger };` and its manifest's `deps` row mounts the package from the CDN, pinned by sha256 ([dependency kinds](../reference/dependency-kinds.md)), since every rut program is a module directory ([your first rut program](first-program.md))."
 msgstr ""
-"这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。它还携带仓库 `rut/` 目录里自带的包（`core`、`pouch`、`ink`、`json` 等）——程序写一行 `use ink::{ Logger };`，再通过清单的 `deps` 行挂载这个包，因为每个 rut 程序都是一个模块目录（[你的第一个 rut 程序](first-program.md)）。"
+"这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。工具链的标准包（`core`、`pouch`、`ink`、`json` 等）以编译好的 `.rutbundle` 交付在 jsDelivr 上——程序写一行 `use ink::{ Logger };`，清单的 `deps` 行就从 CDN 挂载这个包，以 sha256 固定（[依赖种类](../reference/dependency-kinds.md)），因为每个 rut 程序都是一个模块目录（[你的第一个 rut 程序](first-program.md)）。"
 
 
-#: src/quick-start/installation.md:152
+#: src/quick-start/installation.md:154
 msgid "Try it:"
 msgstr "试一下："
 
 
-#: src/quick-start/installation.md:156
+#: src/quick-start/installation.md:158
 msgid ""
 "<<'EOF'\n"
 "// hello/rut.jsonc — the manifest IS the program's door\n"
@@ -859,8 +859,9 @@ msgid ""
 "  \"name\": \"hello\",\n"
 "  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "  \"deps\": {\n"
-"    // the vendored logger package, from a dir at the repo root\n"
-"    \"ink\": { \"path\": \"../rut/ink\" }\n"
+"    // ink — the toolchain's logger package, served by jsDelivr at the\n"
+"    // std-v3 tag, pinned by sha256\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle\", \"sha256\": \"200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -876,48 +877,55 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/installation.md:182
+#: src/quick-start/installation.md:185
+msgid ""
+"The first run fetched `ink` from jsDelivr into `hello/.rut/cache`; `rut fetch hello` pre-warms that cache without running anything."
+msgstr ""
+"第一次运行把 `ink` 从 jsDelivr 拉取进 `hello/.rut/cache`；`rut fetch hello` 可以在不运行任何东西的情况下预热该缓存。"
+
+
+#: src/quick-start/installation.md:188
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（`run`、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 
-#: src/quick-start/installation.md:189
+#: src/quick-start/installation.md:195
 msgid "Optional: the wasm playground"
 msgstr "可选：wasm Playground"
 
 
-#: src/quick-start/installation.md:191
+#: src/quick-start/installation.md:197
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to WebAssembly. Building it needs one extra target:"
 msgstr "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要一个额外的 target："
 
 
-#: src/quick-start/installation.md:199
+#: src/quick-start/installation.md:205
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifact into place:"
 msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 
-#: src/quick-start/installation.md:206
+#: src/quick-start/installation.md:212
 msgid "Optional: build this book"
 msgstr "可选：构建本书"
 
 
-#: src/quick-start/installation.md:208
+#: src/quick-start/installation.md:214
 msgid "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 
-#: src/quick-start/installation.md:213
+#: src/quick-start/installation.md:219
 msgid ""
 "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 "# live-reload preview at http://localhost:3000\n"
 
 
-#: src/quick-start/installation.md:214
+#: src/quick-start/installation.md:220
 msgid ""
 "# static site in docs/book/\n"
 msgstr ""
@@ -980,8 +988,9 @@ msgid ""
 "  \"name\": \"hello\",\n"
 "  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "  \"deps\": {\n"
-"    // the vendored logger package, from a dir at the repo root\n"
-"    \"ink\": { \"path\": \"../rut/ink\" }\n"
+"    // ink — the toolchain's logger package, served by jsDelivr at the\n"
+"    // std-v3 tag, pinned by sha256\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle\", \"sha256\": \"200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -990,47 +999,54 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/first-program.md:51
+#: src/quick-start/first-program.md:52
+msgid ""
+"The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; the CLI fetches it once into the project's cache (`.rut/cache`), every later run is a pure cache hit, and `rut fetch hello` pre-warms the cache without running anything."
+msgstr ""
+"这一运行在任何目录下都能工作——它不假设你克隆了工具链的仓库。url 行写明包在 jsDelivr 上的位置；CLI 把它拉取一次进项目缓存（`.rut/cache`），之后的每次运行都是纯缓存命中，而 `rut fetch hello` 可以在不运行任何东西的情况下预热缓存。"
+
+
+#: src/quick-start/first-program.md:58
 msgid "Three things to notice:"
 msgstr "三个值得注意的点："
 
 
-#: src/quick-start/first-program.md:53
+#: src/quick-start/first-program.md:60
 msgid ""
 "**One directory with a `rut.jsonc` is one program.** The manifest is the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the only run lane. Inside the package, one file is one module; cross-module code is reached through `use` paths (see the [modules tutorial](../tutorial/modules.md))."
 msgstr ""
 "**一个带 `rut.jsonc` 的目录就是一个程序。**清单是可运行单元——`rut run <dir>`（或打包好的 `.rutbundle`）是唯一的车道。在包内，一个文件就是一个模块；跨模块代码经由 `use` 路径到达（参见[模块教程](../tutorial/modules.md)）。"
 
 
-#: src/quick-start/first-program.md:58
+#: src/quick-start/first-program.md:65
 msgid ""
 "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package — and the manifest's `deps` row is what mounts it: a `use` line says _which_ names the program wants, the manifest says _where_ the package lives ([project structure](../reference/project-structure.md))."
 msgstr ""
 "**`use ink::{ Logger };`** 把 `Logger` 从 `ink` 包里取出来——而真正挂载它的是清单的 `deps` 行：一行 `use` 说明程序要_哪些_名字，清单说明包住在_哪里_（[项目结构](../reference/project-structure.md)）。"
 
 
-#: src/quick-start/first-program.md:62
+#: src/quick-start/first-program.md:69
 msgid ""
 "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any expression, rendered through the value's display contract."
 msgstr "**`f\"hello, {name}!\"`** 是格式化字面量：`{expr}` 插值任意表达式，并经由该值的 display 契约渲染。"
 
 
-#: src/quick-start/first-program.md:65
+#: src/quick-start/first-program.md:72
 msgid "`pub fn main()` is the entry the CLI calls."
 msgstr "`pub fn main()` 是 CLI 调用的入口。"
 
 
-#: src/quick-start/first-program.md:67
+#: src/quick-start/first-program.md:74
 msgid "Values, briefly"
 msgstr "值：速览"
 
 
-#: src/quick-start/first-program.md:69
+#: src/quick-start/first-program.md:76
 msgid "Extend the file — rut infers, and every type is known at compile time:"
 msgstr "扩展这个文件——rut 会推断，且每个类型在编译期都已知："
 
 
-#: src/quick-start/first-program.md:71
+#: src/quick-start/first-program.md:78
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1067,104 +1083,104 @@ msgstr ""
 "```"
 
 
-#: src/quick-start/first-program.md:92
+#: src/quick-start/first-program.md:99
 msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values and variables](../tutorial/values-and-variables.md) tutorial, and the exact rules live in [literals and inference](../reference/literals-and-inference.md)."
 msgstr ""
 "完整的巡礼——后缀、类型转换、字符串、`bytes`、结构体——在[值与变量](../tutorial/values-and-variables.md)教程里，确切的规则则在[字面量与推断](../reference/literals-and-inference.md)。"
 
 
-#: src/quick-start/first-program.md:97
+#: src/quick-start/first-program.md:104
 msgid "Format"
 msgstr "格式化"
 
 
-#: src/quick-start/first-program.md:99
+#: src/quick-start/first-program.md:106
 msgid "The formatter is the style — there is no configuration:"
 msgstr "格式化器就是风格——没有任何配置："
 
 
-#: src/quick-start/first-program.md:102 src/reference/cli.md:73
+#: src/quick-start/first-program.md:109 src/reference/cli.md:73
 msgid ""
 "# rewrite in place\n"
 msgstr ""
 "# rewrite in place\n"
 
 
-#: src/quick-start/first-program.md:103
+#: src/quick-start/first-program.md:110
 msgid ""
 "# verify only (note: --check goes AFTER the path)\n"
 msgstr ""
 "# verify only (note: --check goes AFTER the path)\n"
 
 
-#: src/quick-start/first-program.md:104
+#: src/quick-start/first-program.md:111
 msgid ""
 "# walk a directory tree, every *.rut file\n"
 msgstr ""
 "# walk a directory tree, every *.rut file\n"
 
 
-#: src/quick-start/first-program.md:107
+#: src/quick-start/first-program.md:114
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs changes, which makes it a clean CI gate. A file that does not parse is refused loudly rather than half-formatted."
 msgstr ""
 "`--check` 会在文件需要修改时打印 `unformatted: <file>` 并以 `1` 退出，这让它成为一道干净的 CI 门禁。解析不了的文件会被响亮地拒绝，而不是被格式化一半。"
 
 
-#: src/quick-start/first-program.md:111
+#: src/quick-start/first-program.md:118
 msgid "Inspect"
 msgstr "检视"
 
 
-#: src/quick-start/first-program.md:113
+#: src/quick-start/first-program.md:120
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a snippet behaves differently than you expect:"
 msgstr "`dump` 编译单个模块并打印它的结构——当代码片段的表现与你预期不同时很有用："
 
 
-#: src/quick-start/first-program.md:120
+#: src/quick-start/first-program.md:127
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the packages, so it is the tool for surface questions (\"what does this lower to?\") rather than whole-program runs. The playground's **AST** and **IR** panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 "`dump` 让这个孤立的模块走过前端，_不_挂载那些包，因此它是回答“表面问题”（“这段代码被 lower 成了什么？”）的工具，而不是运行整个程序的工具。Playground 的 **AST** 和 **IR** 面板实时展示同样的两个视图——参见 [Playground](playground.md)。"
 
 
-#: src/quick-start/first-program.md:126
+#: src/quick-start/first-program.md:133
 msgid "Budget it"
 msgstr "设定预算"
 
 
-#: src/quick-start/first-program.md:128
+#: src/quick-start/first-program.md:135
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr "每次 `rut run` 默认不设上限——燃料通过 `--fuel N` 显式开启："
 
 
-#: src/quick-start/first-program.md:134
+#: src/quick-start/first-program.md:141
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — the same contract the VM enforces for embedded hosts, along with heap ceilings and depth limits ([resource limits](../reference/resource-limits.md))."
 msgstr ""
 "耗尽燃料的程序会停下，并给出一条写明预算的诊断——这与 VM 为嵌入式宿主执行的契约相同，还有堆上限与深度限制（[资源限制](../reference/resource-limits.md)）。"
 
 
-#: src/quick-start/first-program.md:139
+#: src/quick-start/first-program.md:146
 msgid "Where next"
 msgstr "下一步"
 
 
-#: src/quick-start/first-program.md:141
+#: src/quick-start/first-program.md:148
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language hands-on, one concept per chapter."
 msgstr "[教程](../tutorial/values-and-variables.md)动手实地讲授这门语言，一章一个概念。"
 
 
-#: src/quick-start/first-program.md:143
+#: src/quick-start/first-program.md:150
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run today."
 msgstr "[示例](../examples/index.md)是七个今天就能运行的完整项目。"
 
 
-#: src/quick-start/first-program.md:145
+#: src/quick-start/first-program.md:152
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the language is shaped the way it is."
 msgstr "[核心概念](../core-concepts/design-goals.md)解释这门语言_为何_被塑造成如今的形状。"
@@ -1880,7 +1896,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:220 src/tutorial/types.md:273
 #: src/tutorial/traits.md:318 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:254 src/tutorial/async.md:179
+#: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
 msgid "Put it together"
 msgstr "综合运用"
@@ -1901,8 +1917,8 @@ msgid ""
 "  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
-"    \"pouch\": { \"path\": \"../rut/pouch\" },\n"
-"    \"ink\":   { \"path\": \"../rut/ink\" }\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle\", \"sha256\": \"21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0\" },\n"
+"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle\", \"sha256\": \"200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -5053,8 +5069,8 @@ msgid ""
 "  \"entry\": { \"lib\": \"./greet.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
-"    // the toolchain tree's pouch package\n"
-"    \"pouch\": { \"path\": \"../../rut/pouch\" }\n"
+"    // the toolchain's pouch package, from jsDelivr — pinned by sha256\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle\", \"sha256\": \"21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -5130,8 +5146,9 @@ msgstr ""
 
 #: src/tutorial/modules.md:144
 msgid ""
-"The app names its dependencies in `deps`, by path — each package pulls its own dependencies along (`ink` brings the host surface `ink_host`; you never spell it):"
-msgstr "应用在 `deps` 里写明依赖，按路径——每个包把自己的依赖一并带入（`ink` 会带上宿主面 `ink_host`；你永远不用手写它）："
+"The app names its dependencies in `deps`, by url or path — each package pulls its own dependencies along (`ink` brings the host surface `ink_host`; you never spell it):"
+msgstr ""
+"应用在 `deps` 里写明依赖，按 url 或路径——每个包把自己的依赖一并带入（`ink` 会带上宿主面 `ink_host`；你永远不用手写它）："
 
 
 #: src/tutorial/modules.md:148
@@ -5143,16 +5160,17 @@ msgid ""
 "  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
+"    // your own package: a sibling directory\n"
 "    \"greet\": { \"path\": \"../pkg\" },\n"
-"    // the logger package\n"
-"    \"ink\": { \"path\": \"../../rut/ink\" }\n"
+"    // the toolchain's ink package, from jsDelivr — pinned by sha256\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle\", \"sha256\": \"200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a\" }\n"
 "  }\n"
 "}\n"
 "```"
 msgstr ""
 
 
-#: src/tutorial/modules.md:162
+#: src/tutorial/modules.md:163
 msgid ""
 "```rut\n"
 "// greet/app/main.rut\n"
@@ -5183,30 +5201,30 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/modules.md:176
+#: src/tutorial/modules.md:177
 msgid "Run the app from its directory:"
 msgstr "在应用的目录里运行："
 
 
-#: src/tutorial/modules.md:186
+#: src/tutorial/modules.md:187
 msgid ""
 "Resolution walks `deps` recursively (a dep's own `deps` mount with it), with a cycle guard and first-mount-wins."
 msgstr "解析沿 `deps` 递归进行（依赖自己的 `deps` 随之一起挂载），带有环守卫与先挂载者优先。"
 
 
-#: src/tutorial/modules.md:189
+#: src/tutorial/modules.md:190
 msgid "One package, several files"
 msgstr "一个包，多个文件"
 
 
-#: src/tutorial/modules.md:191
+#: src/tutorial/modules.md:192
 msgid ""
 "A package's body can be split across files. The manifest splices them, base first, in listed order — into **one module**: one namespace, one visibility scope. A name private to one file is visible to every other file of the same package:"
 msgstr ""
 "包的主体可以拆分到多个文件。清单把它们拼接起来——基文件在前，按列出的顺序——拼成**一个模块**：一个命名空间，一个可见性作用域。对其中一个文件私有的名字，对同一个包的每个其他文件都可见："
 
 
-#: src/tutorial/modules.md:196
+#: src/tutorial/modules.md:197
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -5217,31 +5235,31 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:203
+#: src/tutorial/modules.md:204
 msgid ""
 "This is assembly, not an include form — cross-package references still go through `use` paths."
 msgstr "这是组装，不是 include 形式——跨包的引用仍然经由 `use` 路径。"
 
 
-#: src/tutorial/modules.md:208
+#: src/tutorial/modules.md:209
 msgid "Beyond `deps`, a manifest can declare two other relations:"
 msgstr "除 `deps` 之外，清单还能声明另外两种关系："
 
 
-#: src/tutorial/modules.md:210
+#: src/tutorial/modules.md:211
 msgid ""
 "**`peer-deps`** — a package this one _integrates with_ but never pulls: the consumer supplies it, or (with `optional = true`) the integration mounts only if the peer is already in the program's closure. The standard library's `json` package uses this to attach its `Vec`/map serialization impls only for programs that carry the container packages."
 msgstr ""
 "**`peer-deps`**——本包_与之集成_但从不拉取的包：由消费方提供，或者（当 `optional = true` 时）仅当该 peer 已经在程序的闭包里才挂载集成。标准库的 `json` 包正是用它来只为携带容器包的程序附加自己的 `Vec`/map 序列化 impl。"
 
 
-#: src/tutorial/modules.md:216
+#: src/tutorial/modules.md:217
 msgid ""
 "**`dev-deps`** — mounted only when building/testing the package itself, never for a consumer."
 msgstr "**`dev-deps`**——只在构建/测试该包自身时挂载，对消费方从不挂载。"
 
 
-#: src/tutorial/modules.md:219
+#: src/tutorial/modules.md:220
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -5257,58 +5275,58 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:231
+#: src/tutorial/modules.md:232
 msgid "`entry fn` — the host-facing surface"
 msgstr "`entry fn`——面向宿主的表面"
 
 
-#: src/tutorial/modules.md:233
+#: src/tutorial/modules.md:234
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function to the _embedding host_, with its signature checked against the boundary's crossing rules at compile time:"
 msgstr "`pub` 把名字发布给其他 _rut_ 模块。`entry` 把函数发布给_嵌入宿主_，其签名在编译期按边界的穿越规则检查："
 
 
-#: src/tutorial/modules.md:241
+#: src/tutorial/modules.md:242
 msgid ""
 "An embedded application drives these entries; `pub fn main` is the conventional entry the `rut run` CLI calls. See [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
 "嵌入式应用驱动这些入口；`pub fn main` 是 `rut run` CLI 调用的惯例入口。参见[宿主边界](../core-concepts/host-boundary.md)。"
 
 
-#: src/tutorial/modules.md:245
+#: src/tutorial/modules.md:246
 msgid "Tooling"
 msgstr "工具"
 
 
-#: src/tutorial/modules.md:248
-msgid ""
-"# compile + run\n"
-msgstr ""
-"# compile + run\n"
-
-
 #: src/tutorial/modules.md:249
 msgid ""
-"# format in place\n"
+"# compile + run\n"
 msgstr ""
-"# format in place\n"
+"# compile + run\n"
 
 
 #: src/tutorial/modules.md:250
 msgid ""
+"# format in place\n"
+msgstr ""
+"# format in place\n"
+
+
+#: src/tutorial/modules.md:251
+msgid ""
 "# a self-contained bundle\n"
 msgstr ""
 "# a self-contained bundle\n"
 
 
-#: src/tutorial/modules.md:256
+#: src/tutorial/modules.md:257
 msgid ""
 "The `greet` project above is complete as shown — two directories, two manifests, two sources. Copy the trees into files and `rut run .` from `greet/app` to see:"
 msgstr ""
 "上面的 `greet` 项目如所示般完整——两个目录、两份清单、两个源文件。把这些目录树抄进文件，从 `greet/app` 运行 `rut run .`，就会看到："
 
 
-#: src/tutorial/modules.md:264
+#: src/tutorial/modules.md:265
 msgid "Next: [async: tasks, workers, and channels](async.md)."
 msgstr "下一章：[异步：任务、worker 与通道](async.md)。"
 
@@ -12115,7 +12133,7 @@ msgid "Special meaning"
 msgstr "特殊含义"
 
 
-#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:46
+#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:48
 msgid "`type`"
 msgstr "`type`"
 
@@ -19950,7 +19968,7 @@ msgstr ""
 
 
 #: src/reference/embedding.md:118 src/reference/templates.md:17
-#: src/reference/dependency-kinds.md:202 src/reference/cli.md:44
+#: src/reference/dependency-kinds.md:213 src/reference/cli.md:44
 #: src/reference/cli.md:148
 msgid "behavior"
 msgstr "行为"
@@ -21585,7 +21603,7 @@ msgid "need"
 msgstr "需求"
 
 
-#: src/reference/repr-c.md:89 src/reference/project-structure.md:150
+#: src/reference/repr-c.md:89 src/reference/project-structure.md:152
 msgid "shape"
 msgstr "形状"
 
@@ -22157,7 +22175,7 @@ msgstr "生成行"
 #: src/reference/host-fns.md:279 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
 #: src/reference/stdlib.md:307 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:41 src/reference/cli.md:170
+#: src/reference/project-structure.md:43 src/reference/cli.md:170
 msgid "meaning"
 msgstr "含义"
 
@@ -23778,7 +23796,7 @@ msgid "The swappable set"
 msgstr "可换集合"
 
 
-#: src/reference/stdlib.md:128 src/reference/project-structure.md:150
+#: src/reference/stdlib.md:128 src/reference/project-structure.md:152
 msgid "package"
 msgstr "包"
 
@@ -23826,7 +23844,7 @@ msgid "the `Logger` class over `ink_host`"
 msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:156
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:158
 msgid "`pouch`"
 msgstr "`pouch`"
 
@@ -23852,7 +23870,7 @@ msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:134 src/reference/project-structure.md:157
+#: src/reference/stdlib.md:134 src/reference/project-structure.md:159
 msgid "`json`"
 msgstr "`json`"
 
@@ -23877,7 +23895,7 @@ msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:136 src/reference/project-structure.md:153
+#: src/reference/stdlib.md:136 src/reference/project-structure.md:155
 msgid "`calc`"
 msgstr "`calc`"
 
@@ -28643,203 +28661,205 @@ msgid ""
 "  \"entry\": { \"type\": \"./calc.d.rut\" }\n"
 "}\n"
 "\n"
-"// a consumer (an app directory)\n"
+"// a consumer (an app directory): a `path` row for a sibling package\n"
+"// of your own, pinned url rows for the toolchain's packages\n"
 "{\n"
 "  \"name\": \"app\",\n"
 "  \"entry\": { \"lib\": \"./app.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
-"    \"pouch\": { \"path\": \"../pouch\" },\n"
-"    \"ink\":   { \"path\": \"../ink\" }\n"
+"    \"greet\": { \"path\": \"../greet\" },\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle\", \"sha256\": \"21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0\" },\n"
+"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle\", \"sha256\": \"200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a\" }\n"
 "  }\n"
 "}\n"
 "```"
 msgstr ""
 
 
-#: src/reference/project-structure.md:39
+#: src/reference/project-structure.md:41
 msgid "The keys, all of them:"
 msgstr "所有的键："
 
 
-#: src/reference/project-structure.md:41
+#: src/reference/project-structure.md:43
 msgid "key"
 msgstr "键"
 
 
-#: src/reference/project-structure.md:43
+#: src/reference/project-structure.md:45
 msgid "`name`"
 msgstr "`name`"
 
 
-#: src/reference/project-structure.md:43
+#: src/reference/project-structure.md:45
 msgid ""
 "the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error."
 msgstr "包的 use 路径名：只允许裸的 `[a-zA-Z0-9_]+`。带作用域或带引号的写法是清单错误。"
 
 
-#: src/reference/project-structure.md:44
+#: src/reference/project-structure.md:46
 msgid "`entry.lib`"
 msgstr "`entry.lib`"
 
 
-#: src/reference/project-structure.md:44
+#: src/reference/project-structure.md:46
 msgid "the body: one `.rut` file (or `.rutc`\\-style artifacts where supported)"
 msgstr "函数体：一个 `.rut` 文件（或在支持之处的 `.rutc`\\- 式产物）"
 
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:47
 msgid "`entry.libs`"
 msgstr "`entry.libs`"
 
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:47
 msgid "ordered extra `.rut` files — the **multi-lib entry** (below)"
 msgstr "有序的额外 `.rut` 文件——**多库入口**（见下）"
 
 
-#: src/reference/project-structure.md:46
+#: src/reference/project-structure.md:48
 msgid ""
 "the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind is an error naming both fixes"
 msgstr ""
 "声明的种类：宿主**包**用 `type = \"host\"`——纯声明面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；`type = \"lib\"`（或缺省）是普通源码包。种类从不推断——只有 `entry.type` 而无种类的清单是错误，点名两种修法"
 
 
-#: src/reference/project-structure.md:47
+#: src/reference/project-structure.md:49
 msgid "`entry.type`"
 msgstr "`entry.type`"
 
 
-#: src/reference/project-structure.md:47
+#: src/reference/project-structure.md:49
 msgid ""
 "the declaration surface: one `.d.rut` file. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused)"
 msgstr "声明表面：一个 `.d.rut` 文件。在 lib 包上它是文档表面（仅表面的开发态按声明单元挂载；其中的 `host fn` 文本会被拒绝）"
 
 
-#: src/reference/project-structure.md:48 src/reference/dependency-kinds.md:148
+#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:159
 msgid "`deps`"
 msgstr "`deps`"
 
 
-#: src/reference/project-structure.md:48
+#: src/reference/project-structure.md:50
 msgid ""
 "the transitively mounted dependencies — one source per descriptor: `pkg = { path = \"...\" }` (relative to this manifest) or `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here."
 msgstr ""
 "传递挂载的依赖 — 每个描述符一个来源：`pkg = { path = \"...\" }`（相对本清单）或 `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }`（远程 `.rutbundle`，固定值可选但推荐）（[依赖种类](dependency-kinds.md)）。此处拒绝 `optional`。"
 
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:51
 msgid "`peer-deps`"
 msgstr "`peer-deps`"
 
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:51
 msgid ""
 "presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md))"
 msgstr "在场门控的 peer——描述符接受 `path`、`optional`、`lib`（[依赖种类](dependency-kinds.md)）"
 
 
-#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:151
+#: src/reference/project-structure.md:52 src/reference/dependency-kinds.md:162
 msgid "`dev-deps`"
 msgstr "`dev-deps`"
 
 
-#: src/reference/project-structure.md:50
+#: src/reference/project-structure.md:52
 msgid "mounted only while building/testing this pkg itself"
 msgstr "仅在构建/测试本包自身时挂载"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:53
 msgid "`inline`"
 msgstr "`inline`"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:53
 msgid ""
 "`true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package)"
 msgstr ""
 "`true` 强制把源码内联进每个消费方而非链接（其类方法必须在调用点解析的包——固有 impl 尚不能跨表面；泛型导出自己就能链接，其实例化归声明包所有）"
 
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:54
 msgid "`format`, `format_version`"
 msgstr "`format`, `format_version`"
 
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:54
 msgid ""
 "bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md))"
 msgstr "捆绑包键——目录加载忽略，`rut pack` 要求（[模块捆绑包](bundles.md)）"
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:55
 msgid "`style`"
 msgstr ""
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:55
 msgid ""
 "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults."
 msgstr ""
 "格式化器旋钮：`indent_width`（1–8，默认 4）、`max_width`（≥ 20，默认 100）。在清单层无模式——未知键放行；畸形值是格式化器错误，绝不是编译错误。解析：被格式化文件最近的祖先清单；没有清单 → 默认值。"
 
 
-#: src/reference/project-structure.md:55
+#: src/reference/project-structure.md:57
 msgid ""
 "The manifest text is **JSONC** — `//` line comments, `/* */` block comments, and trailing commas are all legal — parsed by `serde_json` behind a syntax-stripping front stage: the comment and comma bytes become spaces before the parser sees them, so a syntax error keeps the parser's own wording under a `line N:` prefix that names the ORIGINAL file's line. The value laws are unchanged. Value errors are path-targeted (`deps.pouch: unknown key 'feats'`). Descriptors are key/value objects; unknown descriptor keys are path-targeted manifest errors. Duplicate keys are last-wins. The old `_`\\-prefixed prose lane (`\"_comment\"`) retired with the JSONC cutover: an `_`\\-key refuses loudly naming the fix — comments are the prose now."
 msgstr ""
 "清单文本是 **JSONC**——`//` 行注释、`/* */` 块注释以及尾随逗号都合法——由 `serde_json` 在一个语法剥离前级之后解析：注释与逗号的字节在解析器看到之前变成空格，因此语法错误保留解析器自己的措辞，带有一个指出原始文件行的 `line N:` 前缀。值法则不变。值错误按路径定位（`deps.pouch: unknown key 'feats'`）。描述符是键/值对象；未知描述符键是按路径定位的清单错误。重复键后者胜。旧的 `_`\\-前缀散文车道（`\"_comment\"`）随 JSONC 切换退役：`_`\\-键大声拒绝并指出修复——注释才是散文。"
 
 
-#: src/reference/project-structure.md:67
+#: src/reference/project-structure.md:69
 msgid "Resolution laws"
 msgstr "解析法则"
 
 
-#: src/reference/project-structure.md:69
+#: src/reference/project-structure.md:71
 msgid ""
 "**Exact, single-step.** A use path resolves only if a module with that `name` is mounted. Nothing is derived from directories or file layouts."
 msgstr "**精确、单步。**一条 use 路径只有在具有该 `name` 的模块已挂载时才解析。任何东西都不从目录或文件布局推导。"
 
 
-#: src/reference/project-structure.md:72
+#: src/reference/project-structure.md:74
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An already-mounted name (the embedder's, the root's, or an earlier dep's) is never overwritten — which is what makes peer presence-by-name sound: the consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 "**遍历递归进行，带环守卫；先挂载者胜。**已挂载的名字（嵌入方的、根的、或更早依赖的）绝不被覆盖——这正是让 peer 按名字判在场得以健全的原因：消费方自己为某个包准备的路径永远压过声明者的 `path`。"
 
 
-#: src/reference/project-structure.md:77
+#: src/reference/project-structure.md:79
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with its key fails, naming both."
 msgstr "**名字不匹配是错误。**清单 `name` 与其键不一致的依赖会失败，并点名双方。"
 
 
-#: src/reference/project-structure.md:79
+#: src/reference/project-structure.md:81
 msgid ""
 "**The cross-table law.** A name in `deps` beside `peer-deps` or `dev-deps` is an error naming both rows; peer + dev together is the sanctioned pairing."
 msgstr ""
 "**跨表法则。**一个名字同时出现在 `deps` 与 `peer-deps` 或 `dev-deps` 里是错误，并点名两行；peer + dev 一起是被认可的组合。"
 
 
-#: src/reference/project-structure.md:82
+#: src/reference/project-structure.md:84
 msgid ""
 "**`core` needs no `deps`** — the driver mounts it unconditionally; every name still requires `use core::{ .. };` per [core and the swappable packages](stdlib.md)."
 msgstr ""
 "**`core` 不需要 `deps`**——driver 无条件挂载它；但每个名字仍需 `use core::{ .. };`，见 [core 与可换包](stdlib.md)。"
 
 
-#: src/reference/project-structure.md:86
+#: src/reference/project-structure.md:88
 msgid "The multi-lib entry"
 msgstr "多库入口"
 
 
-#: src/reference/project-structure.md:88
+#: src/reference/project-structure.md:90
 msgid "A package's body may be split across files:"
 msgstr "包的函数体可以拆分到多个文件："
 
 
-#: src/reference/project-structure.md:90
+#: src/reference/project-structure.md:92
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -28850,107 +28870,107 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/project-structure.md:97
+#: src/reference/project-structure.md:99
 msgid ""
 "The loader splices base-first, then `libs` in listed order, newline-joined, into **one module** — one namespace, one visibility scope. A name private to one file is visible to every other file of the package. The manifest is the canonical order (the splice never reads a directory listing — same manifest ⇒ same module). A `libs` row without `lib`, a `.d.rut` element, or a file named twice is a loud manifest error. This is assembly, not a language include form — use paths stay inter-module."
 msgstr ""
 "加载器以基础文件在前的顺序拼接，然后按列出的顺序拼接 `libs`，以换行连接，拼成**一个模块**——一个命名空间，一个可见性作用域。对一个文件私有的名字，对该包的其他每个文件都可见。清单是规范顺序（拼接从不读取目录列表——相同清单 ⇒ 相同模块）。没有 `lib` 的 `libs` 行、一个 `.d.rut` 元素、或被点名两次的文件，都是响亮的清单错误。这是组装，不是语言层面的 include 形式——use 路径仍限于模块之间。"
 
 
-#: src/reference/project-structure.md:105
+#: src/reference/project-structure.md:107
 msgid ""
 "Contrast with peer groups: group files are _presence-gated_ and therefore impl-only; multi-lib files are unconditional and full module citizens — types, functions, and `pub` surface are legal in any file."
 msgstr ""
 "与 peer 分组对比：分组文件是_在场门控_的，因此只含 impl；多库文件是无条件的、完整的模块公民——类型、函数与 `pub` 表面在任何文件里都合法。"
 
 
-#: src/reference/project-structure.md:109
+#: src/reference/project-structure.md:111
 msgid "The toolchain tree"
 msgstr "工具链树"
 
 
-#: src/reference/project-structure.md:137
+#: src/reference/project-structure.md:139
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the vm's `HostPkgContext`/`HostRegistry` for the installer lane), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the frontend crates only — tokens, diagnostics, and symbols need no VM."
 msgstr ""
 "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后；驱动坐在 vm 的 `HostPkgContext`/`HostRegistry` 上支撑安装者车道），宿主（`rut-std`、`rut-wasm`）在上，`rut-cli`/`demo` 在最上。`rut-lsp` 只坐在前端 crate 上——token、诊断与符号不需要 VM。"
 
 
-#: src/reference/project-structure.md:145
+#: src/reference/project-structure.md:147
 msgid "The in-tree packages"
 msgstr "树内包"
 
 
-#: src/reference/project-structure.md:147
+#: src/reference/project-structure.md:149
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI mounts on demand:"
 msgstr "`rut/` 携带标准包与可换包，CLI 按需挂载它们："
 
 
-#: src/reference/project-structure.md:152
+#: src/reference/project-structure.md:154
 msgid "`core`"
 msgstr "`core`"
 
 
-#: src/reference/project-structure.md:152
+#: src/reference/project-structure.md:154
 msgid "the only standard package — the builtin surface, mounted unconditionally"
 msgstr "唯一的标准包——内建表面，无条件挂载"
 
 
-#: src/reference/project-structure.md:153
+#: src/reference/project-structure.md:155
 msgid "host pkg: math surface (`mount_calc`)"
 msgstr "宿主包：数学表面（`mount_calc`）"
 
 
-#: src/reference/project-structure.md:154
+#: src/reference/project-structure.md:156
 msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
 msgstr "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
 
 
-#: src/reference/project-structure.md:154
+#: src/reference/project-structure.md:156
 msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr "宿主包——纯 `.d.rut` 表面；函数体住在 `rut-std`"
 
 
-#: src/reference/project-structure.md:155
+#: src/reference/project-structure.md:157
 msgid "`ink`, `http`, `strbuild`, `async_host`"
 msgstr "`ink`, `http`, `strbuild`, `async_host`"
 
 
-#: src/reference/project-structure.md:155
+#: src/reference/project-structure.md:157
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr "架在宿主行之上的内联 rut 包装（`inline = true`）"
 
 
-#: src/reference/project-structure.md:156
+#: src/reference/project-structure.md:158
 msgid "the sequence library (plain linked package)"
 msgstr "序列库（普通链接包）"
 
 
-#: src/reference/project-structure.md:157
+#: src/reference/project-structure.md:159
 msgid ""
 "the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md)"
 msgstr "带 `peer-deps`/`dev-deps` 的基础包——[依赖种类](dependency-kinds.md)的参考消费方"
 
 
-#: src/reference/project-structure.md:158
+#: src/reference/project-structure.md:160
 msgid "`nmapset`"
 msgstr "`nmapset`"
 
 
-#: src/reference/project-structure.md:158
+#: src/reference/project-structure.md:160
 msgid "native-key maps/sets over `nmap_host`"
 msgstr "架在 `nmap_host` 之上的原生键 map/set"
 
 
-#: src/reference/project-structure.md:160
+#: src/reference/project-structure.md:162
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps are resolved by name from manifests; a host may replace the non-`core` set wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 "引擎里没有任何东西知道可换包的名字——peer 与依赖都按名字从清单解析；宿主可以整体替换非 `core` 集合（[嵌入与原生模块](embedding.md)）。"
 
 
-#: src/reference/project-structure.md:166
+#: src/reference/project-structure.md:168
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR dump, and an optional binary; `run(binary, budget)` returning output lines, an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the ABI's uncapped encoding) and opts in through the page's fuel box; the heap defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so unbounded loops park and resume instead of hanging the page. The served artifact is deployed at <https://playground.rut.hpp2334.com>."
 msgstr ""
@@ -29116,12 +29136,19 @@ msgstr "jsDelivr 上的 std 树"
 
 #: src/reference/dependency-kinds.md:114
 msgid ""
-"The std tree ships as committed per-package bundles — `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`, pinned by sha256 (placeholders here by law: real pins live only in the examples, so docs never rot). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively; the artifacts are committed at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality repack — CI never touches the network)."
+"**Which kind, when.** The toolchain's standard packages (`core`, `ink`, `pouch`, `json`, …) are consumed as **pinned url rows** from this CDN — that is the recommended import for everything the toolchain ships. A `path` row is for **your own local packages**: a sibling directory in the same project (the modules tutorial's `greet` app mounting `../pkg` is the shape). The tag advances with format changes (`std-v3` today) and is never re-pointed, so a pin at a tag stays honest forever."
 msgstr ""
-"std 树以已提交的按包捆绑包交付——`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`，以 sha256 钉住（此处按法则用占位符：真钉只住在示例里，文档永不腐烂）。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶；工件提交在 `dist/std/`，由 `scripts/pack-std.cjs` 打包（其 `--check` 门是纯字节等值的重打包——CI 永不触网）。"
+"**哪种关系，何时用。**工具链的标准包（`core`、`ink`、`pouch`、`json` 等）都作为来自这个 CDN 的**固定 url 行**来消费——这是工具链交付的一切内容的推荐导入方式。`path` 行用于**你自己的本地包**：同一项目里的一个兄弟目录（模块教程里 `greet` 应用挂载 `../pkg` 就是这个形状）。标签随格式变化前进（今天是 `std-v3`）且永不重指，所以钉在标签上的固定值永不腐烂。"
 
 
-#: src/reference/dependency-kinds.md:122
+#: src/reference/dependency-kinds.md:123
+msgid ""
+"The std tree ships as committed per-package bundles — `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`, pinned by sha256 (the shapes here keep placeholder tags; the worked manifests in the quick-start, the tutorial, and the examples carry the real pins — a pin at an immutable tag cannot rot). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively; the artifacts are committed at `dist/std/`, packed by `scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality repack — CI never touches the network)."
+msgstr ""
+"std 树以已提交的按包捆绑包交付——`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`，以 sha256 固定（此处的形状保留占位标签；快速开始、教程与示例里的实际清单携带真钉——钉在不可变标签上的固定值永不腐烂）。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶；工件提交在 `dist/std/`，由 `scripts/pack-std.cjs` 打包（其 `--check` 门是纯字节等值的重打包——CI 永不触网）。"
+
+
+#: src/reference/dependency-kinds.md:133
 msgid ""
 "**What a url row can deliver** is the engine's instantiation law, read from the CDN side: a compiled bundle carries the generic instantiations its own pack closure spelled **in its ledger**, and — since the generic-source riding law — a compiled pkg whose surface exports generics **also rides the source that serves consumer-spelled shapes**:"
 msgstr ""
@@ -29131,328 +29158,328 @@ msgstr ""
 "- **泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 
-#: src/reference/dependency-kinds.md:128
+#: src/reference/dependency-kinds.md:139
 msgid ""
 "**host surfaces and concrete-class libs deliver** — a `type = \"host\"` bundle is a declaration surface (no generics), and a lib of concrete classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent rows with its whole closure riding inside;"
 msgstr ""
 "**宿主面与具体类 lib 可交付**——`type = \"host\"` 捆绑包是声明面（无泛型），具体类的 lib（`http`、`ink`、`strbuild`）在其面的固有行上交叉，整个闭包随行在内；"
 
 
-#: src/reference/dependency-kinds.md:132
+#: src/reference/dependency-kinds.md:143
 msgid ""
 "**generic owners deliver too** — `pouch`, `nmapset`, `json`, `async_host` ride their entry + group source beside the binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden text lowers in the consumer's session, the monomorphized bodies register under the declaring pkg's spec (one row program-wide, identity by owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that predates the riding — no source beside the binary — refuses a consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json also names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
 "**泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 
-#: src/reference/dependency-kinds.md:144
+#: src/reference/dependency-kinds.md:155
 msgid "Semantics"
 msgstr "语义"
 
 
-#: src/reference/dependency-kinds.md:146
+#: src/reference/dependency-kinds.md:157
 msgid "table"
 msgstr "表"
 
 
-#: src/reference/dependency-kinds.md:146
+#: src/reference/dependency-kinds.md:157
 msgid "who supplies it"
 msgstr "由谁提供"
 
 
-#: src/reference/dependency-kinds.md:146
+#: src/reference/dependency-kinds.md:157
 msgid "transitive?"
 msgstr "传递拉取？"
 
 
-#: src/reference/dependency-kinds.md:146
+#: src/reference/dependency-kinds.md:157
 msgid "missing behavior"
 msgstr "缺席时的行为"
 
 
-#: src/reference/dependency-kinds.md:148
+#: src/reference/dependency-kinds.md:159
 msgid "the declarer's own graph"
 msgstr "声明者自己的图"
 
 
-#: src/reference/dependency-kinds.md:148
+#: src/reference/dependency-kinds.md:159
 msgid "yes — walked recursively"
 msgstr "是——递归遍历"
 
 
-#: src/reference/dependency-kinds.md:148
+#: src/reference/dependency-kinds.md:159
 msgid "mount error"
 msgstr "挂载错误"
 
 
-#: src/reference/dependency-kinds.md:149
+#: src/reference/dependency-kinds.md:160
 msgid "`peer-deps` (required, the default)"
 msgstr "`peer-deps`（必填，默认）"
 
 
-#: src/reference/dependency-kinds.md:149
+#: src/reference/dependency-kinds.md:160
 msgid "the **consumer's** closure"
 msgstr "**消费方的**闭包"
 
 
-#: src/reference/dependency-kinds.md:149 src/reference/dependency-kinds.md:150
+#: src/reference/dependency-kinds.md:160 src/reference/dependency-kinds.md:161
 msgid "never pulled"
 msgstr "绝不拉取"
 
 
-#: src/reference/dependency-kinds.md:149
+#: src/reference/dependency-kinds.md:160
 msgid "loud resolution error at mount"
 msgstr "挂载时响亮的解析错误"
 
 
-#: src/reference/dependency-kinds.md:150
+#: src/reference/dependency-kinds.md:161
 msgid "`peer-deps` with `optional = true`"
 msgstr "设 `optional = true` 的 `peer-deps`"
 
 
-#: src/reference/dependency-kinds.md:150
+#: src/reference/dependency-kinds.md:161
 msgid "the consumer's closure, if anywhere"
 msgstr "消费方的闭包（若在场）"
 
 
-#: src/reference/dependency-kinds.md:150
+#: src/reference/dependency-kinds.md:161
 msgid "inert; referencing the integration is the dedicated missing-peer diagnostic"
 msgstr "惰性；引用集成会触发专门的缺失 peer 诊断"
 
 
-#: src/reference/dependency-kinds.md:151
+#: src/reference/dependency-kinds.md:162
 msgid "the pkg's own self-build"
 msgstr "包自身的自构建"
 
 
-#: src/reference/dependency-kinds.md:151
+#: src/reference/dependency-kinds.md:162
 msgid "root only — never walked for a dep"
 msgstr "仅根——绝不为依赖遍历"
 
 
-#: src/reference/dependency-kinds.md:151
+#: src/reference/dependency-kinds.md:162
 msgid "n/a (they exist to be there)"
 msgstr "不适用（它们的存在就是为了在场）"
 
 
-#: src/reference/dependency-kinds.md:153
+#: src/reference/dependency-kinds.md:164
 msgid "The mount law — four passes, one gate"
 msgstr "挂载法则——四趟，一道门"
 
 
-#: src/reference/dependency-kinds.md:155
+#: src/reference/dependency-kinds.md:166
 msgid ""
 "All loader-owned; the session stays I/O-free and the compile graph never learns what a peer is."
 msgstr "全部由加载器负责；会话保持无 I/O，编译图永远不知道 peer 为何物。"
 
 
-#: src/reference/dependency-kinds.md:158
+#: src/reference/dependency-kinds.md:169
 msgid ""
 "**The `deps` walk — unchanged.** Recursive, name order, first-mount-wins, cycle guard, name-mismatch error. While walking, the loader records each mounted package's `peer-deps` into the session's peer registry (it reads every dep's manifest anyway)."
 msgstr ""
 "**`deps` 遍历——不变。**递归、按名字序、先挂载者胜、环守卫、名字不匹配错误。遍历期间，加载器把每个已挂载包的 `peer-deps` 记录进会话的 peer 注册表（反正它要读每个依赖的清单）。"
 
 
-#: src/reference/dependency-kinds.md:162
+#: src/reference/dependency-kinds.md:173
 msgid ""
 "**The dev pass — root only.** The program root's `dev-deps` mount exactly like `deps`. A dep's dev table is **never** walked — a consumer's world never contains another package's dev table. Embedder mounting (`mount_dir`) offers a package to someone else's program: it mounts no dev-deps and runs no gate (its peer declarations are still recorded)."
 msgstr ""
 "**dev 趟——仅根。**程序根的 `dev-deps` 与 `deps` 完全一样地挂载。依赖的 dev 表**绝不**被遍历——消费方的世界绝不含另一个包的 dev 表。嵌入方挂载（`mount_dir`）是把一个包提供给别人的程序：它不挂载 dev-deps，也不跑门（它的 peer 声明仍会被记录）。"
 
 
-#: src/reference/dependency-kinds.md:168
+#: src/reference/dependency-kinds.md:179
 msgid ""
 "**The peer gate — one post-closure pass.** After the full closure exists, for every mounted package and every `peer-deps` entry:"
 msgstr "**peer 门——闭包后的一趟。**完整闭包形成之后，对每个已挂载包的每个 `peer-deps` 条目："
 
 
-#: src/reference/dependency-kinds.md:170
+#: src/reference/dependency-kinds.md:181
 msgid ""
 "**required**: the peer must resolve in the session, else the D1 error. Never auto-pulled."
 msgstr "**必填**：peer 必须能在会话中解析，否则 D1 错误。绝不自动拉取。"
 
 
-#: src/reference/dependency-kinds.md:172
+#: src/reference/dependency-kinds.md:183
 msgid ""
 "**optional, present** (any reason): the declarer's group file (the descriptor's `lib`, an impl-only `.rut`) is appended to its `Module.source` — groups in peer-name order after the base. The combined text stays one source string, so every consumer of module sources (the splice, bundles, wasm mounts) is untouched."
 msgstr ""
 "**可选且在场**（无论何种原因）：声明者的分组文件（描述符的 `lib`，一个只含 impl 的 `.rut`）被追加到它的 `Module.source`——分组按 peer 名字序排在基础文件之后。合并后的文本仍是一个源码字符串，因此模块源码的每个消费方（拼接、捆绑包、wasm 挂载）都不受触动。"
 
 
-#: src/reference/dependency-kinds.md:177
+#: src/reference/dependency-kinds.md:188
 msgid "**optional, absent**: inert — the group simply never mounts."
 msgstr "**可选且缺席**：惰性——分组就是从不挂载。"
 
 
-#: src/reference/dependency-kinds.md:178
+#: src/reference/dependency-kinds.md:189
 msgid ""
 "**paths**: the program root's own peer paths are read and name-checked even when dev-deps already supplied presence — a broken path is the loud D3 packaging-bug error at the package's own build. A dep's peer paths are never read: presence is by name, so a broken peer path is inert for an optional peer and unreachable for a required one. The gate is post-closure because a peer may mount after its declarer alphabetically; groups add no package names, so one pass is a fixpoint."
 msgstr ""
 "**路径**：即使 dev-deps 已经供给了在场，程序根自己的 peer 路径仍会被读取并做名字检查——坏路径在包自身构建时是响亮的 D3 打包 bug 错误。依赖的 peer 路径从不被读取：在场按名字判定，因此坏 peer 路径对可选 peer 是惰性的，对必填 peer 则不可达。这趟门在闭包之后，因为按字母序 peer 可能在其声明者之后才挂载；分组不添加任何包名，因此一趟就是不动点。"
 
 
-#: src/reference/dependency-kinds.md:187
+#: src/reference/dependency-kinds.md:198
 msgid ""
 "**Compile — unchanged.** The graph splices each compilation unit from its origin-deduplicated leaf list (first position wins, topological order preserved); in the no-collision case the composed text is byte-identical to the pre-peer law."
 msgstr ""
 "**编译——不变。**图从每个编译单元的去重（按来源）叶列表拼接（先到位置获胜，保留拓扑序）；在无冲突的情形下，拼成的文本与 peer 法则之前逐字节相同。"
 
 
-#: src/reference/dependency-kinds.md:192
+#: src/reference/dependency-kinds.md:203
 msgid ""
 "**Groups are impl-only.** A group file contains `impl` blocks (and their private helpers); it declares no new public names — the base owns the trait and every public surface. This is what makes the diagnostic matrix total: the only ways to reference the integration are trait-method dispatch or a `use` of the peer's package name, and both have dedicated peer-aware diagnostics. A group appended to a module with no rut body (a `.d.rut` surface) is a load error — declaration surfaces do not gate."
 msgstr ""
 "**分组只含 impl。**分组文件包含 `impl` 块（及其私有辅助）；它不声明任何新的公开名字——trait 与每个公开表面都归基础文件所有。这正是诊断矩阵得以完备的原因：引用集成的唯一方式是 trait 方法分派或对 peer 包名的 `use`，而两者都有专门的 peer 感知诊断。追加到没有 rut 函数体的模块（一个 `.d.rut` 表面）的分组是加载错误——声明表面不能把门。"
 
 
-#: src/reference/dependency-kinds.md:200
+#: src/reference/dependency-kinds.md:211
 msgid "The missing-peer matrix"
 msgstr "缺失 peer 矩阵"
 
 
-#: src/reference/dependency-kinds.md:202
+#: src/reference/dependency-kinds.md:213
 msgid "case"
 msgstr "情形"
 
 
-#: src/reference/dependency-kinds.md:204
+#: src/reference/dependency-kinds.md:215
 msgid "required peer absent from the consumer's closure"
 msgstr "必填 peer 不在消费方闭包中"
 
 
-#: src/reference/dependency-kinds.md:204
+#: src/reference/dependency-kinds.md:215
 msgid ""
 "**D1** — loud at mount: names the package, the peer, and the fix. Not silent, not auto-pulled."
 msgstr "**D1**——挂载时响亮：点名包、peer 与修复方式。不沉默，也不自动拉取。"
 
 
-#: src/reference/dependency-kinds.md:205
+#: src/reference/dependency-kinds.md:216
 msgid "optional peer absent, integration never touched"
 msgstr "可选 peer 缺席，集成从未被触及"
 
 
-#: src/reference/dependency-kinds.md:205
+#: src/reference/dependency-kinds.md:216
 msgid "nothing — silent success; that _is_ the feature"
 msgstr "无事发生——无声的成功；这_正是_特性本身"
 
 
-#: src/reference/dependency-kinds.md:206
+#: src/reference/dependency-kinds.md:217
 msgid "optional peer absent, integration referenced"
 msgstr "可选 peer 缺席，集成被引用"
 
 
-#: src/reference/dependency-kinds.md:206
+#: src/reference/dependency-kinds.md:217
 msgid ""
 "**D2** — the dedicated missing-peer diagnostic; never a bare unresolved name"
 msgstr "**D2**——专门的缺失 peer 诊断；绝不是光秃秃的 unresolved name"
 
 
-#: src/reference/dependency-kinds.md:207
+#: src/reference/dependency-kinds.md:218
 msgid "peer present (any reason)"
 msgstr "peer 在场（无论何种原因）"
 
 
-#: src/reference/dependency-kinds.md:207
+#: src/reference/dependency-kinds.md:218
 msgid "the integration mounts automatically — presence-based resolution"
 msgstr "集成自动挂载——基于在场的解析"
 
 
-#: src/reference/dependency-kinds.md:208
+#: src/reference/dependency-kinds.md:219
 msgid "self-build / dev mode"
 msgstr "自构建 / dev 模式"
 
 
-#: src/reference/dependency-kinds.md:208
+#: src/reference/dependency-kinds.md:219
 msgid "dev-deps guarantee presence; no missing case exists"
 msgstr "dev-deps 保证在场；不存在缺失情形"
 
 
-#: src/reference/dependency-kinds.md:209
+#: src/reference/dependency-kinds.md:220
 msgid "a `peer-deps` path that does not resolve"
 msgstr "一个解析不了的 `peer-deps` 路径"
 
 
-#: src/reference/dependency-kinds.md:209
+#: src/reference/dependency-kinds.md:220
 msgid ""
 "**D3** — loud manifest error at the pkg's own build; for consumers, required ⇒ D1, optional ⇒ inert"
 msgstr "**D3**——包自身构建时响亮的清单错误；对消费方，必填 ⇒ D1，可选 ⇒ 惰性"
 
 
-#: src/reference/dependency-kinds.md:211
+#: src/reference/dependency-kinds.md:222
 msgid ""
 "The four diagnostics, verbatim shapes (all load/resolution-time errors, never runtime traps):"
 msgstr "四条诊断，逐字形状（全是加载/解析期错误，绝不是运行时陷阱）："
 
 
-#: src/reference/dependency-kinds.md:214
+#: src/reference/dependency-kinds.md:225
 msgid ""
 "**D1** — `pkg \\`json\\` requires the peer \\`nmapset\\`, and \\`nmapset\\` is not in this program's closure — peers are not pulled transitively: add \"nmapset\": { \"path\": \"..\" } to your \\`rut.jsonc\\` \\`deps\\``"
 msgstr ""
 
 
-#: src/reference/dependency-kinds.md:217
+#: src/reference/dependency-kinds.md:228
 msgid ""
 "**D2** — `cannot resolve \\`pouch\\` — \\`json\\`'s pouch integration is not mounted because the optional peer \\`pouch\\` is absent from this program's closure; add \"pouch\": { \"path\": \"..\" } to your \\`rut.jsonc\\` \\`deps\\``. Declaring packages scan in mount order, so the diagnostic is deterministic when several packages declare the same peer. Required peers never reach this path — D1 fires at mount."
 msgstr ""
 
 
-#: src/reference/dependency-kinds.md:223
+#: src/reference/dependency-kinds.md:234
 msgid ""
 "**D3** — three shapes, all _a packaging bug in json_: cannot read a manifest at the peer path; the manifest there names it `other`; cannot read the group file."
 msgstr "**D3**——三种形状，全是 _json 的打包 bug_：读不到 peer 路径处的清单；该处清单把名字写成 `other`；读不到分组文件。"
 
 
-#: src/reference/dependency-kinds.md:226
+#: src/reference/dependency-kinds.md:237
 msgid "**D4** — the cross-table collision (both texts quoted above)."
 msgstr "**D4**——跨表冲突（两段文本均引用于上文）。"
 
 
-#: src/reference/dependency-kinds.md:228
+#: src/reference/dependency-kinds.md:239
 msgid "Interplay"
 msgstr "相互作用"
 
 
-#: src/reference/dependency-kinds.md:230
+#: src/reference/dependency-kinds.md:241
 msgid ""
 "**Placement and orphans — the gate precedes the check.** The peer gate runs at load; impl placement and pair-uniqueness run at compile/link. Peer absent ⇒ the group text was never assembled ⇒ there is no impl anywhere to place. Peer present ⇒ the group's impl is a trait impl in the declaring package — legal placement, since trait impls may live in any module ([Traits and dispatch](traits.md))."
 msgstr ""
 "**放置与孤儿——门先于检查。**peer 门在加载时运行；impl 放置与组合唯一性在编译/链接时运行。peer 缺席 ⇒ 分组文本从未被组装 ⇒ 任何地方都没有 impl 可放置。peer 在场 ⇒ 分组的 impl 是声明包里的一个 trait impl——合法放置，因为 trait impl 可以住在任何模块（[trait 与分派](traits.md)）。"
 
 
-#: src/reference/dependency-kinds.md:236
+#: src/reference/dependency-kinds.md:247
 msgid ""
 "**The duplicate-pair link error is the consumer-side guard**: a consumer who hand-writes the same `impl Trait for Type` in a world where the group mounted gets the link-time duplicate — loud and correct; the group already provides it."
 msgstr ""
 "**重复组合的链接错误是消费方一侧的守卫**：在分组已挂载的世界里，手写同一个 `impl Trait for Type` 的消费方会得到链接期的重复错误——响亮且正确；分组已经提供了它。"
 
 
-#: src/reference/dependency-kinds.md:240
+#: src/reference/dependency-kinds.md:251
 msgid ""
 "**Binary format untouched.** Impl-only groups declare no host fns (no binding obligations appear or vanish), add no binary sections, and touch nothing the verifier reads. A consumer's binary differs only by which impls registered — ordinary program content."
 msgstr ""
 "**二进制格式不受触动。**只含 impl 的分组不声明宿主函数（不出现也不消失任何绑定义务），不添加二进制节，也不触碰校验器读取的任何东西。消费方的二进制只是注册了哪些 impl 有所不同——普通的程序内容。"
 
 
-#: src/reference/dependency-kinds.md:244
+#: src/reference/dependency-kinds.md:255
 msgid ""
 "**Dev-deps are invisible to bundles-as-consumers.** A packed package carries its peer groups; a consumer packing _their_ app never pulls the package's dev table (pass 2 is root-only), so dev-only convenience packages cannot leak into consumer worlds ([Module bundles](bundles.md))."
 msgstr ""
 "**对作为消费方的捆绑包而言 dev-deps 不可见。**打包的包携带自己的 peer 分组；打包_自己_应用的消费方从不拉取该包的 dev 表（第 2 趟仅限根），因此纯 dev 的便利包不会泄漏进消费方世界（[模块捆绑包](bundles.md)）。"
 
 
-#: src/reference/dependency-kinds.md:249
+#: src/reference/dependency-kinds.md:260
 msgid ""
 "**The LSP completes group impls unconditionally.** Peer gating is a resolution-time concept the language server does not model; it embeds the toolchain packages' sources and never parses manifests. Recorded as accepted: the LSP is advisory; the compiler is the law."
 msgstr ""
 "**LSP 无条件补全分组 impl。**peer 门控是语言服务器不建模的解析期概念；它内嵌工具链包的源码，从不解析清单。记录为已接受：LSP 是建议性的；编译器才是法则。"
 
 
-#: src/reference/dependency-kinds.md:254
+#: src/reference/dependency-kinds.md:265
 msgid "Consuming a peer-gated package"
 msgstr "消费一个 peer 门控的包"
 
 
-#: src/reference/dependency-kinds.md:256
+#: src/reference/dependency-kinds.md:267
 msgid ""
 "```jsonc\n"
 "// an app that wants json's pouch integration\n"
@@ -29467,7 +29494,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/dependency-kinds.md:267
+#: src/reference/dependency-kinds.md:278
 msgid ""
 "The group mounts because `pouch` is anywhere in the closure — no extra declaration beyond having the package. Drop the `pouch` row and `json` mounts light; the first `use pouch::` or trait dispatch into the integration produces D2 instead of a mystery."
 msgstr ""

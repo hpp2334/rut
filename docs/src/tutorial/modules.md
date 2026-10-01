@@ -103,8 +103,8 @@ greet/
   "entry": { "lib": "./greet.rut" },
 
   "deps": {
-    // the toolchain tree's pouch package
-    "pouch": { "path": "../../rut/pouch" }
+    // the toolchain's pouch package, from jsDelivr — pinned by sha256
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" }
   }
 }
 ```
@@ -141,9 +141,9 @@ fn shout(msg: str) -> str {   // module-private: no `pub`, never importable
 }
 ```
 
-The app names its dependencies in `deps`, by path — each package
-pulls its own dependencies along (`ink` brings the host surface `ink_host`;
-you never spell it):
+The app names its dependencies in `deps`, by url or path — each
+package pulls its own dependencies along (`ink` brings the host
+surface `ink_host`; you never spell it):
 
 ```jsonc
 // greet/app/rut.jsonc
@@ -152,9 +152,10 @@ you never spell it):
   "entry": { "lib": "./main.rut" },
 
   "deps": {
+    // your own package: a sibling directory
     "greet": { "path": "../pkg" },
-    // the logger package
-    "ink": { "path": "../../rut/ink" }
+    // the toolchain's ink package, from jsDelivr — pinned by sha256
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
   }
 }
 ```
