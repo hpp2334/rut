@@ -10,11 +10,11 @@ example:
 | [`01-sort/`](01-sort/) | `cargo run -p sort` | a sorting library behind one dispatcher entry; `Result` at the boundary, known-input gates |
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions; the pouch dep rides its CDN bundle (pinned) and the moderator's muted list is a consumer-spelled `Vec<str>` — the pack's rode-along law carries the pouch group inside the published bundle |
-| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.toml` for the shape law | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
+| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
-| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.toml` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way since the riding law) |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way since the riding law) |
 
-Every rut program here is a module dir with a `rut.toml` — the
+Every rut program here is a module dir with a `rut.jsonc` — the
 manifest is the deps carrier. `00`/`01`/`02` declare their third-party
 pkgs as URL rows pinned to the committed artifacts (`pouch`, plus
 `json` + `nmapset` for `02` — the generic owners, served since the
@@ -59,7 +59,7 @@ spells — `pouch`, `nmapset` beside it
 
 ## Packages and manifests — the three dep kinds
 
-Every package carries a `rut.toml` (the
+Every package carries a `rut.jsonc` (the
 [project structure reference](../docs/src/reference/project-structure.md)
 — `03-plugin`'s `plugin/` and `server/` are the in-tree examples). Since
 the dep-kinds batch, a manifest relates to other packages through three
@@ -76,7 +76,7 @@ for Vec<T>` written in json must not force every json consumer to
 mount pouch/nmapset. The pinned grammar:
 
 ```toml
-# rut/json/rut.toml
+# rut/json/rut.jsonc
 name = "json"
 
 [peer-deps]
@@ -107,8 +107,9 @@ Decisions this batch landed, visible in the examples:
 - **Required-by-default peers** — a missing required peer is a loud
   mount error naming pkg + peer + the fix; silence is reserved for
   absent *optional* peers, which is the feature.
-- **Bundles pack v3** — [`03-plugin`](03-plugin/)'s `plugin/rut.toml`
-  rides `format_version = 3` ([bundles](../docs/src/reference/bundles.md)):
+- **Bundles pack the manifest as-is** — [`03-plugin`](03-plugin/)'s
+  `plugin/rut.jsonc` rides `format_version = 9`
+  ([bundles](../docs/src/reference/bundles.md)):
   peer groups ride
   the archive; an older loader refuses rather than guess.
 

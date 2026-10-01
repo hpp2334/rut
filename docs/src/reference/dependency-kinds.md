@@ -1,6 +1,6 @@
 # Dependency kinds
 
-Every package's `rut.json` names the packages it relates to, and the
+Every package's `rut.jsonc` names the packages it relates to, and the
 *kind* of each relation decides how — and whether — it mounts. Three
 tables, one grammar:
 
@@ -19,8 +19,8 @@ both.
 
 ## The grammar
 
-```json
-// rut/json/rut.json — the reference shape
+```jsonc
+// rut/json/rut.jsonc — the reference shape
 {
   "name": "json",
   "entry": { "lib": "./json.rut" },
@@ -66,7 +66,7 @@ both.
 A `deps` descriptor may name a remote `.rutbundle` instead of a
 directory:
 
-```json
+```jsonc
 {
   "deps": {
     "pouch": { "url": "https://example.com/pouch.rutbundle", "sha256": "<64-hex>" }
@@ -213,11 +213,11 @@ never runtime traps):
 
 - **D1** — `pkg \`json\` requires the peer \`nmapset\`, and \`nmapset\`
   is not in this program's closure — peers are not pulled transitively:
-  add "nmapset": { "path": ".." } to your \`rut.json\` \`deps\``
+  add "nmapset": { "path": ".." } to your \`rut.jsonc\` \`deps\``
 - **D2** — `cannot resolve \`pouch\` — \`json\`'s pouch integration is
   not mounted because the optional peer \`pouch\` is absent from this
   program's closure; add "pouch": { "path": ".." } to your
-  \`rut.json\` \`deps\``. Declaring packages scan in mount order, so
+  \`rut.jsonc\` \`deps\``. Declaring packages scan in mount order, so
   the diagnostic is deterministic when several packages declare the same
   peer. Required peers never reach this path — D1 fires at mount.
 - **D3** — three shapes, all *a packaging bug in json*: cannot read a
@@ -253,7 +253,7 @@ never runtime traps):
 
 ## Consuming a peer-gated package
 
-```json
+```jsonc
 // an app that wants json's pouch integration
 {
   "deps": {

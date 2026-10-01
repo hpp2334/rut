@@ -20,8 +20,8 @@ bodies plus a hand-written surface.
 A package directory whose manifest declares `type = "host"` is a **host
 pkg** — pure surface, no rut source:
 
-```json
-// server/rut.json
+```jsonc
+// server/rut.jsonc
 {
   "name": "server",
   "type": "host",

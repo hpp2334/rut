@@ -8,7 +8,7 @@ code runs.
 ## From path to machine
 
 ```sh
-rut run app/            # a directory with rut.json
+rut run app/            # a directory with rut.jsonc
 rut run plugin/plugin.rutbundle
 ```
 
@@ -17,7 +17,7 @@ steps:
 
 | step | what happens |
 |---|---|
-| 1. mount | A **directory is one module**: its `rut.json` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.json](project-structure.md)). A `.rutbundle` mounts identically from a zip ([Module bundles](bundles.md)). The graph walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — then runs one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). |
+| 1. mount | A **directory is one module**: its `rut.jsonc` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.jsonc](project-structure.md)). A `.rutbundle` mounts identically from a zip ([Module bundles](bundles.md)). The graph walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — then runs one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). |
 | 2. resolve surfaces | Use paths resolve against mounted modules, exact and single-step: a package name resolves or the diagnostic names the consumer manifest. A `.d.rut` surface compiles through the checker and publishes signatures only. |
 | 3. compile the graph | Each module compiles (sources, in dependency post-order); `inline = true` packages splice into their consumers instead of linking; host packages synthesize bodyless thunks from their declared surfaces; a mounted bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md)). |
 | 4. link + flatten | Module-local type/function/const ids rebase into the global tables; the shared boot prefix passes through; name tables merge; duplicate `(trait, type)` impl pairs and duplicate module names are link errors. Cyclic use is a compile-graph error, never a runtime event. |

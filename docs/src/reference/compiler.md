@@ -107,7 +107,7 @@ That leaves `inline = true` for packages whose methods live on class
 bodies (inherent impls cross no surface yet): the graph compiler splices
 their source into every consumer instead of linking them (`ink`, `json`,
 `nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See
-[Project structure and rut.json](project-structure.md).
+[Project structure and rut.jsonc](project-structure.md).
 
 ## The type lattice
 

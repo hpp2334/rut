@@ -266,12 +266,12 @@ it constantly.
 
 ## Put it together
 
-Put this in a module directory and run it: `literals/rut.json` names
+Put this in a module directory and run it: `literals/rut.jsonc` names
 the two packages the program uses, and the program is
 `literals/main.rut`:
 
-```json
-// literals/rut.json
+```jsonc
+// literals/rut.jsonc
 {
   "name": "literals",
   "entry": { "lib": "./main.rut" },

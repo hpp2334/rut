@@ -20,7 +20,7 @@ benches/
 │   └── build-quickjs.sh    # gcc build → benches/.tools/qjs
 ├── probe/                  # rut-bench-probe: in-process phase/heap probe
 ├── workloads/
-│   ├── NAME/               # the rut program: a module dir (`rut.toml` +
+│   ├── NAME/               # the rut program: a module dir (`rut.jsonc` +
 │   │                       # `main.rut`; mounts its own deps when it has
 │   │                       # any), runs as `rut run <dir>`
 │   ├── NAME.js             # the identical program for node + qjs
@@ -108,7 +108,7 @@ workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
 `nmap-knucleotide`) stress the keyed collections — once over the removed
 pure-rut `mapset` pkg (see the removal note below), now over
 `rut/nmapset` alone: the rut sides ship as module dirs
-(`NAME/{rut.toml, main.rut}` with `[deps] nmapset = …`) and run as
+(`NAME/{rut.jsonc, main.rut}` with `[deps] nmapset = …`) and run as
 `rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
 Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
 has its own fast paths — these rows are not expected to be a win. The
@@ -2183,7 +2183,7 @@ nmapset-int with `PrimMapI64<i32>` — identical keys, values (i64 lane),
 op sequence, and scale; the churn accumulates in i64 and narrows once
 at the return, bit-identical to the i32 wrapping arithmetic
 (two's-complement addition is the same mod 2^32). Files:
-`benches/workloads/nmap-primmap/{rut.toml,main.rut}`,
+`benches/workloads/nmap-primmap/{rut.jsonc,main.rut}`,
 `benches/workloads/nmap-primmap.js` (the qjs/node twin, algorithm
 unchanged), and ONE expected.json line — `"nmap-primmap":
 "734932704"`, the sequence's pinned value. Nothing else in
@@ -2752,9 +2752,9 @@ hashmap-int 63,758,210, alloc 22,000,020/228, sieve 19,592,209). No
 neutral row moved anywhere (fuel/heap deterministic across all
 interleaved rounds — the phase-1 layout lesson's check; nothing needed
 isolating). Files this phase: `rut/nmapset/nmapset.rut` (+94, all
-additive), `benches/workloads/kmer-view/{main.rut,rut.toml}`,
+additive), `benches/workloads/kmer-view/{main.rut,rut.jsonc}`,
 `benches/workloads/kmer-view.js`, `benches/workloads/strview/
-{main.rut,rut.toml}`, `benches/workloads/strview.js`,
+{main.rut,rut.jsonc}`, `benches/workloads/strview.js`,
 `benches/workloads/expected.json` (+1 line), `benches/README.md` (this
 section + the two Workloads-table lines), and
 `crates/rut-driver/tests/nmap_viewkeys.rs`. Scratch:
@@ -3069,7 +3069,7 @@ nmapset pins' checksums `734932704` / `1264308351` / `21500055` /
 `2198604`); full suite rut/qjs/node exit 0, every checksum equal
 `expected.json`; `expected.json` gained exactly one line
 (`refvals`); workspace 525 tests, 0 failures. Files:
-`benches/workloads/refvals/{rut.toml,main.rut}`,
+`benches/workloads/refvals/{rut.jsonc,main.rut}`,
 `benches/workloads/refvals.js`, the `expected.json` line, this
 section. Scratch (stubs, phase clones, pair JSONLs, guard runs):
 `/tmp/opencode/batch-refval-exp/p0/`.
@@ -3484,7 +3484,7 @@ asked for it exactly): (1) `crates/rut-std/src/nmap.rs` — the
 hash-pin test literals (~lines 1727–1743: `alpha`/`beta`/empty-basis +
 the payload-parity asserts) and the two doc-comment sites naming FNV
 as the law (`FNV_OFFSET`'s block ~485–494, `hash_bytes`'s ~496–501);
-(2) prose comments naming FNV-1a in `nmapset-str/{main.rut,rut.toml}`,
+(2) prose comments naming FNV-1a in `nmapset-str/{main.rut,rut.jsonc}`,
 `nmapset.rut`'s header, `kmer-view/main.rut`, `nmap-knucleotide`'s
 docs; (3) `expected.json`: ZERO lines; (4) `.js` twins: ZERO files.
 The one-time re-pin would have been six test literals + comments —
@@ -3552,7 +3552,7 @@ this section is the only committed artifact.
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
-  be a module dir (`NAME/{rut.toml, main.rut}`): the runner spawns
+  be a module dir (`NAME/{rut.jsonc, main.rut}`): the runner spawns
   `rut run <dir>` and the dir's `[deps]` resolve through the module
    loader (RFC 0035) — currently the `nmapset`
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
@@ -3603,7 +3603,7 @@ this section is the only committed artifact.
    computing identical results with the same integer widths / float
    order. If the rut side needs a tree package beyond the CLI's
    single-file auto-mount (`ink`, `pouch`) — e.g. `nmapset` — ship it as
-   a module dir `NAME/{rut.toml, main.rut}` with `[deps]` instead; the
+   a module dir `NAME/{rut.jsonc, main.rut}` with `[deps]` instead; the
    runner then spawns `rut run <dir>`.
 2. Keep the scale as a named constant in both files.
 3. Verify against an independent implementation and add the value to
@@ -4208,7 +4208,7 @@ class) and the `nmap-primmap` twin RETIRED with them: it had measured
 the column lane until the repeal, then the sidecar's i64-val variant
 of `nmapset-int` (fuel 20,903,285 / heap 3,539,324 B at its last
 receipt) — zero coverage lost. The retirement set:
-`workloads/nmap-primmap/{rut.toml,main.rut}`, `workloads/
+`workloads/nmap-primmap/{rut.jsonc,main.rut}`, `workloads/
 nmap-primmap.js`, ONE expected.json line, the examples/README run
 recipe; the historical sections above stay as written.
 

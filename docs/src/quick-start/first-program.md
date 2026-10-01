@@ -23,19 +23,22 @@ pub fn main() {
 }
 ```
 
-Every rut program is a **module directory**: a `rut.json` naming the
+Every rut program is a **module directory**: a `rut.jsonc` naming the
 package and its dependencies, plus the source file the manifest points
 at. Create it and run the directory:
 
 ```sh
 mkdir hello
-cat > hello/rut.json <<'EOF'
-name = "hello"
-entry.lib = "./main.rut"
-
-[deps]
-# the vendored logger package, from a dir at the repo root
-ink = { path = "../rut/ink" }
+cat > hello/rut.jsonc <<'EOF'
+// hello/rut.jsonc — the manifest IS the program's door
+{
+  "name": "hello",
+  "entry": { "lib": "./main.rut" },
+  "deps": {
+    // the vendored logger package, from a dir at the repo root
+    "ink": { "path": "../rut/ink" }
+  }
+}
 EOF
 # save the program above as hello/main.rut, then:
 rut run hello
@@ -47,7 +50,7 @@ hello, rut!
 
 Three things to notice:
 
-- **One directory with a `rut.json` is one program.** The manifest is
+- **One directory with a `rut.jsonc` is one program.** The manifest is
   the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the
   only run lane. Inside the package, one file is one module; cross-module
   code is reached through `use` paths (see the

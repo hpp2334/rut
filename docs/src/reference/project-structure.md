@@ -1,6 +1,6 @@
-# Project structure and rut.json
+# Project structure and rut.jsonc
 
-One directory is one module; its `rut.json` names the exact package it
+One directory is one module; its `rut.jsonc` names the exact package it
 answers to and how to reach its surface and body. The manifest is what
 makes the directory **the runnable unit**: `rut run <dir>` (or its
 packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
@@ -10,14 +10,14 @@ toolchain tree.
 
 ## The manifest
 
-```json
-// rut/pouch/rut.json — a body package
+```jsonc
+// rut/pouch/rut.jsonc — a body package
 {
   "name": "pouch",
   "entry": { "lib": "./pouch.rut" }
 }
 
-// rut/calc/rut.json — a pure declaration surface (a host pkg)
+// rut/calc/rut.jsonc — a pure declaration surface (a host pkg)
 {
   "name": "calc",
   "type": "host",
@@ -52,13 +52,17 @@ The keys, all of them:
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 
-The manifest parses with `serde_json` (standard JSON); the value
-laws are unchanged. Syntax errors keep the parser's `line N:` prefix;
-value laws are path-targeted (`deps.pouch: unknown key 'feats'`).
-Descriptors are key/value objects; unknown descriptor keys are
-path-targeted manifest errors. JSON has no comments, so keys starting
-with `_` (e.g. `"_comment"`) ride ignored in every table — the prose
-stays in the file — and duplicate keys are last-wins.
+The manifest text is **JSONC** — `//` line comments, `/* */` block
+comments, and trailing commas are all legal — parsed by `serde_json`
+behind a syntax-stripping front stage: the comment and comma bytes
+become spaces before the parser sees them, so a syntax error keeps the
+parser's own wording under a `line N:` prefix that names the ORIGINAL
+file's line. The value laws are unchanged. Value errors are
+path-targeted (`deps.pouch: unknown key 'feats'`). Descriptors are
+key/value objects; unknown descriptor keys are path-targeted manifest
+errors. Duplicate keys are last-wins. The old `_`-prefixed prose lane
+(`"_comment"`) retired with the JSONC cutover: an `_`-key refuses
+loudly naming the fix — comments are the prose now.
 
 ## Resolution laws
 
@@ -83,7 +87,7 @@ stays in the file — and duplicate keys are last-wins.
 
 A package's body may be split across files:
 
-```json
+```jsonc
 {
   "name": "ui",
   "entry": { "lib": "./ui.rut", "libs": ["./store.rut", "./t1.rut"] }

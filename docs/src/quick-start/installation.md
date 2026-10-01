@@ -153,13 +153,16 @@ Try it:
 
 ```sh
 mkdir hello
-cat > hello/rut.json <<'EOF'
-name = "hello"
-entry.lib = "./main.rut"
-
-[deps]
-# the vendored logger package, from a dir at the repo root
-ink = { path = "../rut/ink" }
+cat > hello/rut.jsonc <<'EOF'
+// hello/rut.jsonc — the manifest IS the program's door
+{
+  "name": "hello",
+  "entry": { "lib": "./main.rut" },
+  "deps": {
+    // the vendored logger package, from a dir at the repo root
+    "ink": { "path": "../rut/ink" }
+  }
+}
 EOF
 cat > hello/main.rut <<'EOF'
 use ink::{ Logger };

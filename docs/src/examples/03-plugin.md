@@ -164,13 +164,13 @@ pub fn main() {
 
 The plugin is a **module directory** — a manifest naming the entry
 plus its deps, loadable as-is and packable unchanged
-([Project structure and rut.json](../reference/project-structure.md)):
+([Project structure and rut.jsonc](../reference/project-structure.md)):
 
-```json
-// plugin/rut.json
+```jsonc
+// plugin/rut.jsonc
 {
   "format": "rutbundle",
-  "format_version": 7,
+  "format_version": 9,
   "name": "plugin",
   "entry": { "lib": "./plugin.rut" },
 
@@ -192,13 +192,13 @@ pub host fn emit(bus: opaque, topic: str, payload: str);
 ```
 
 `main.rs` packs the same directory with `rut_driver::pack_dir` — a
-v7 **compiled** bundle: the plugin rides as a `.rutc` binary, its host
+v9 **compiled** bundle: the plugin rides as a `.rutc` binary, its host
 pkg `server` as a source group — writes `plugin.rutbundle` to temp, and
 loads it back through the identical `Plugin::load`. The transcript
 equality print is the proof. The CLI drives the same loader for any self-contained module:
 
 ```sh
-rut run path/to/mod            # a module directory (rut.json)
+rut run path/to/mod            # a module directory (rut.jsonc)
 rut pack path/to/mod           # -> mod.rutbundle
 rut run path/to/mod.rutbundle  # the packed form
 ```

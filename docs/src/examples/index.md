@@ -29,13 +29,13 @@ stretches it the farthest.
 
 ## The three dependency kinds
 
-Every package carries a `rut.json` manifest (see
-[Project structure and rut.json](../reference/project-structure.md)),
+Every package carries a `rut.jsonc` manifest (see
+[Project structure and rut.jsonc](../reference/project-structure.md)),
 and a manifest relates a package to other packages through **three
 tables**, all visible in the examples:
 
 - **`deps`** — ordinary dependencies, transitively mounted. The
-  common case: `03-plugin`'s `plugin/rut.json` declares
+  common case: `03-plugin`'s `plugin/rut.jsonc` declares
   `server = { path = "../server" }`, and
   [05 — Todolist web](05-todolist-web.md)'s `biz` package declares
   `ui` (which itself pulls the collection packages).

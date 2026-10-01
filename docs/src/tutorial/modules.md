@@ -1,10 +1,10 @@
 # Modules and packages
 
 A rut file is a module: one namespace, one visibility scope. A
-directory with a `rut.json` is a *package* — the unit you depend on and
+directory with a `rut.jsonc` is a *package* — the unit you depend on and
 share. This chapter walks up those two levels. The reference pages are
 [modules and visibility](../reference/modules-and-visibility.md),
-[project structure and rut.json](../reference/project-structure.md),
+[project structure and rut.jsonc](../reference/project-structure.md),
 and [dependency kinds](../reference/dependency-kinds.md).
 
 ## What lives at module scope
@@ -81,7 +81,7 @@ lint, not an error.
 Within one module, everything is visible — including declarations
 later in the file. Order never matters.
 
-## Packages: `rut.json`
+## Packages: `rut.jsonc`
 
 A package is a directory with a manifest. The small but complete case —
 one library package and one app:
@@ -89,15 +89,15 @@ one library package and one app:
 ```text
 greet/
 ├── pkg/
-│   ├── rut.json
+│   ├── rut.jsonc
 │   └── greet.rut
 └── app/
-    ├── rut.json
+    ├── rut.jsonc
     └── main.rut
 ```
 
-```json
-// greet/pkg/rut.json
+```jsonc
+// greet/pkg/rut.jsonc
 {
   "name": "greet",
   "entry": { "lib": "./greet.rut" },
@@ -145,8 +145,8 @@ The app names its dependencies in `deps`, by path — each package
 pulls its own dependencies along (`ink` brings the host surface `ink_host`;
 you never spell it):
 
-```json
-// greet/app/rut.json
+```jsonc
+// greet/app/rut.jsonc
 {
   "name": "app",
   "entry": { "lib": "./main.rut" },
@@ -193,7 +193,7 @@ base first, in listed order — into **one module**: one namespace, one
 visibility scope. A name private to one file is visible to every other
 file of the same package:
 
-```json
+```jsonc
 {
   "name": "app",
   "entry": { "lib": "./biz.rut", "libs": ["./domain.rut", "./world.rut", "./app.rut"] }
@@ -216,7 +216,7 @@ Beyond `deps`, a manifest can declare two other relations:
 - **`dev-deps`** — mounted only when building/testing the package
   itself, never for a consumer.
 
-```json
+```jsonc
 {
   "peer-deps": {
     "pouch": { "path": "../pouch", "optional": true, "lib": "./group-pouch.rut" }

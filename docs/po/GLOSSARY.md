@@ -37,7 +37,8 @@ source text by design; a partially translated book is a valid book.
 | worker | worker | 保留不译（rut 的独立 VM 隔离单元，非泛指线程） |
 | module | 模块 | |
 | package | 包 | distinct from bundle |
-| manifest | 清单 | the manifest → 清单（`rut.json` stays code） |
+| manifest | 清单 | the manifest → 清单（`rut.jsonc` stays code） |
+| JSONC | JSONC | 保留不译（格式名）；JSONC 切换 → the JSONC cutover；尾随逗号 → trailing commas；`//` 行注释 / `/* */` 块注释 stays code |
 | bundle | 捆绑包 | module bundle → 模块捆绑包（`mod.rutbundle` stays code） |
 | runnable unit | 可运行单元 | the manifest makes the directory THE runnable unit — `rut run` accepts dir-or-bundle only; a loose `.rut` file is not a program |
 | declaration file | 声明文件 | `.d.rut` stays code |
@@ -96,7 +97,7 @@ context; after that, use the zh-CN rendering alone.
 1. **Code never translates.** Inline code spans, fenced code blocks,
    identifiers, type names, field/method names, keywords, numeric
    literals, and URLs stay byte-identical: `rut`, `opaque`,
-   `opaque.downcast<T>`, `pub fn main`, `rut.json`, `.d.rut`,
+   `opaque.downcast<T>`, `pub fn main`, `rut.jsonc`, `.d.rut`,
    `mod.rutbundle`, `rc`, `spawn`, CLI verbs (`rut run`, `rut build`,
    `rut check`, `rut fmt`, `rut doc`, …), package names (`core`,
    `ink`, `pouch`, …).
