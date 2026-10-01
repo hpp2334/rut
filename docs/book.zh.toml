@@ -50,10 +50,11 @@ preferred-dark-theme = "ayu"
 git-repository-url = "https://github.com/hpp2334/rut"
 edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
 # The SAME additional asset set as the en book (see docs/book.toml for
-# the highlight shim / run buttons story) plus the language toggle,
+# the highlight shims / run buttons story — rut-highlight.js AND
+# jsonc-highlight.js ship on both editions) plus the language toggle,
 # which ships on both editions and links between them.
 additional-css = ["theme/rut-book.css"]
-additional-js = ["theme/rut-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
+additional-js = ["theme/rut-highlight.js", "theme/jsonc-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
 # All edition pages live under /zh/ in the deployed merge (en book at
 # the site root, zh book under /zh/) — relative asset and search URLs
 # resolve on their own, this keeps canonical links correct.

@@ -19,14 +19,18 @@ edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
 # source of truth is src/grammar.js): regen with
 #   cd integrations/rut-highlightjs && node scripts/build.mjs
 #   cp register.js ../../docs/theme/rut-highlight.js
+# theme/jsonc-highlight.js is a HAND-WRITTEN shim (not generated): it
+# registers `jsonc` on mdbook's bundled highlight.js 10.1.1, which lacks
+# that grammar (and its `json` has no `jsonc` alias) — without it every
+# rut.jsonc manifest example renders uncolored.
 # mdbook 0.5 does NOT copy cross-tree additional-js into the build (the
-# tag would 404 once deployed), hence the committed shim; the token
+# tag would 404 once deployed), hence the committed shims; the token
 # palette reads well in both the ayu (default) and light themes.
 # rut-book.js (the ▶ Run buttons) runs AFTER the highlighter: it reads
 # block textContent, which spans don't disturb. lang-toggle.js is the
 # EN | 中文 switch shared with the zh edition (docs/book.zh.toml).
 additional-css = ["theme/rut-book.css"]
-additional-js = ["theme/rut-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
+additional-js = ["theme/rut-highlight.js", "theme/jsonc-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
 
 # The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
 # here: mdbook 0.5 dropped `output.html.additional-resources` (the build
