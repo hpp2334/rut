@@ -69,18 +69,16 @@ replacement:
 
 | Reserved | Error replacement |
 |---|---|
-| `switch`, `case`, `match` | `when` — arms are `pattern -> body` |
-| `null`, `undefined`, `void` | absence is `nil` on a `?T` |
-| `any` | a trait type or `opaque` |
-| `typeof`, `instanceof` | `x is T` tests at runtime |
-| `extends` | no inheritance — compose instead |
+| `void` | the empty type spells `nil` |
 | `interface` | rut spells this `trait` |
 | `dataclass` | removed — spell it `struct` |
-| `delete` | no dynamic properties |
 | `in` | iteration is `for (let x of ..)` |
-| `with` | — |
-| `var`, `const` | bindings spell `let` / `let mut` |
 | `private` | members are private by default; add `pub` |
+
+The list is short and closed. Words that are keywords in JavaScript or
+Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … —
+are ordinary identifiers here: `let null = 5;` and `fn match()` are
+legal rut.
 
 ## Naming conventions (enforced)
 

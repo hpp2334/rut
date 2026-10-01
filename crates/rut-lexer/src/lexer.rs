@@ -26,7 +26,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 }
 
 /// Decl-mode lexing: a `.d.rut` surface parses the same
-/// token vocabulary as `.rut` source — the reserved-word law (`any` included since the any-lane removal) is mode-independent.
+/// token vocabulary as `.rut` source — the reserved-word law
+/// (a closed five-word list) is mode-independent.
 pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let normalized = normalize(src);
     let mut lx = Lexer::new(&normalized);
@@ -377,10 +378,10 @@ impl<'a> Lexer<'a> {
             "true" => self.push(Tok::Bool(true), lo),
             "false" => self.push(Tok::Bool(false), lo),
             w => {
-                // the reservation is UNIVERSAL: `any`
-                // draws the diagnostic in every mode — `.rut` source and
-                // `.d.rut` decls alike (the erasure box `opaque` is the
-                // only value lane)
+                // the reservation is mode-independent: the same closed
+                // five-word list draws the diagnostic in `.rut` source
+                // and `.d.rut` decls alike; everything else — including
+                // words like `switch` or `null` — is an ordinary identifier
                 if let Some(msg) = reserved_word_msg(w) {
                     self.err(self.span(lo), msg);
                 }
@@ -637,29 +638,19 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"@", Tok::At),
 ];
 
-/// Reserved words: hard errors naming the rut replacement.
+/// The reserved words — a closed five-word list; hard errors naming
+/// the rut replacement. Everything else, including words that are
+/// keywords in other languages (`switch`, `match`, `null`, `var`, …),
+/// lexes as an ordinary identifier.
 /// NOTE: `super` and `as` are NOT here — they are contextual (`pub(super)`;
 /// `as` binds select arms); the parser rejects
 /// them in every other position.
 fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
-        "switch" => "rut does not have `switch`; use `when`",
-        "case" => "rut does not have `case`; `when` arms are `pattern -> body`",
         "void" => "rut spells the empty type `nil`",
-        "extends" => "rut has no inheritance (`extends`); compose instead",
         "interface" => "rut spells this `trait`",
         "dataclass" => "`dataclass` was removed —spell it `struct`",
-        "match" => "rut does not have `match`; use `when`",
-        "null" => "rut has no `null`; absence is `nil` on a `?T`",
-        "undefined" => "rut has no `undefined`; absence is `nil`",
-        "any" => "rut has no `any`; use a trait type or `opaque`",
-        "typeof" => "rut has no `typeof`; types are static — `x is T` tests at runtime",
-        "instanceof" => "rut has no `instanceof`; use `is`",
-        "delete" => "rut has no `delete`; there are no dynamic properties",
         "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
-        "with" => "rut does not have `with`",
-        "var" => "rut does not have `var`; use `let` / `let mut`",
-        "const" => "rut does not have `const`; use `let`",
         "private" => {
             "members are private by default —add `pub`"
         }

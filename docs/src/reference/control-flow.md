@@ -2,8 +2,8 @@
 
 The structured statements, the indexed and iterating `for` forms, and
 `when` — the one match construct, an exhaustive pattern *expression*.
-`switch`/`case`/`default` do not exist (each is a reserved word whose
-error names `when`).
+Branching on a value is `when`: arms are `pattern -> body`, and the
+construct is exhaustive.
 
 ## Statements
 

@@ -1,6 +1,6 @@
 //! Tokens — one flat exhaustive enum. Keywords are `Ident`s
-//! (the parser matches them by interner text); reserved
-//! words are rejected by the LEXER with a "rut does not have X" message.
+//! (the parser matches them by interner text); the few reserved
+//! words are rejected by the LEXER with a message naming the rut replacement.
 
 use crate::span::Span;
 

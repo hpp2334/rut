@@ -66,18 +66,42 @@ fn depth_budget_is_a_diag_not_a_crash() {
 #[test]
 fn reserved_words_explain_themselves() {
     for (word, want) in [
-        ("switch", "when"),
-        ("match", "when"),
-        ("null", "nil"),
-        ("var", "let"),
-        ("instanceof", "is"),
+        ("dataclass", "struct"),
+        ("private", "pub"),
+        ("void", "nil"),
+        ("interface", "trait"),
+        ("in", "of"),
     ] {
         let src = format!("fn f() -> nil {{ let x = {word}; }}");
         let (_, diags) = parse(&src, Mode::Impl);
         assert!(
             diags.iter().any(|d| d.msg.contains(want)),
-            "`{word}` diag should mention the null-pointer literal; old text mentioned `{want}`: {diags:?}"
+            "`{word}` diag should name its rut replacement `{want}`: {diags:?}"
         );
+    }
+}
+
+#[test]
+fn retired_reservations_are_ordinary_identifiers() {
+    // the 13 absence-phrased reservations retired: the words are plain
+    // identifiers now, in BOTH modes — they parse clean, and the old
+    // hard lex errors (`switch`, `match`, `null`, `var`, `delete`,
+    // `any`, …) are gone. `let x = null;` degrades to an
+    // unresolved-name error at RESOLUTION, not a lex/parse diag.
+    for (label, src, mode) in [
+        ("binding", "fn f() -> nil { let null = 5; let var = null; }", Mode::Impl),
+        ("fn name", "fn match() -> nil { }", Mode::Impl),
+        ("struct name", "struct var { n: i32 }", Mode::Impl),
+        ("method call", "fn f() -> nil { let m = 1; let k = m.delete(m); }", Mode::Impl),
+        ("with ident", "fn f() -> nil { let with = 1; let const = with; }", Mode::Impl),
+        (
+            "decl param + answer",
+            "pub host fn del(m: opaque, k: bytes) -> any;",
+            Mode::Decl,
+        ),
+    ] {
+        let (_, diags) = parse(src, mode);
+        assert!(diags.is_empty(), "{label}: retired reservation drew a diag: {diags:?}");
     }
 }
 

@@ -121,7 +121,6 @@ auto-walkable records.
 
 - **No `extends` for classes** — no base-class constructors
   (`super(..)`), no method overriding, no `super.m()`, no `protected`.
-  (`extends` is a reserved word; its error says: compose instead.)
 - Code sharing is composition (hold a helper object or struct in a
   field) or free functions; subtyping is only class→trait widening
   (see [Traits and dispatch](traits.md)).

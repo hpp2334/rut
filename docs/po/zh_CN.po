@@ -1810,8 +1810,8 @@ msgstr "为什么不用 JavaScript"
 msgid "The case against shipping a JS engine — not just this or that implementation — is fourfold, and each item has a structural answer:"
 msgstr "反对内置 JS 引擎的理由——不针对某个具体实现，而是针对整类引擎——有四条，每一条都有一个结构层面的回答："
 
-msgid "**History debt compounds.** Two nullish values, coercing `==`, `typeof null`, implicit semicolons: each is a permanent liability the ecosystem re-implements forever. rut starts from a closed, small grammar — absence is `nil` on a nullable type, errors are values, and legacy JS keywords are reserved words whose error message tells you what to write instead. Nothing legacy can accrete."
-msgstr "**历史债务复利式累积。**两个表示\"空\"的值、会做转换的 `==`、`typeof null`、隐式分号：每一条都是永久性的负担，生态系统要永远为之重新实现补丁。rut 从一个封闭的小语法出发——缺失即可空类型上的 `nil`，错误是值，遗留的 JS 关键字则是保留字，其错误信息会告诉你该写什么。任何遗留物都无从沉积。"
+msgid "**History debt compounds.** Two nullish values, coercing `==`, `typeof null`, implicit semicolons: each is a permanent liability the ecosystem re-implements forever. rut starts from a closed, small grammar — absence is `nil` on a nullable type, errors are values, and the handful of reserved words each name what to write instead. Nothing legacy can accrete."
+msgstr "**历史债务复利式累积。**两个表示\\\"空\\\"的值、会做转换的 `==`、`typeof null`、隐式分号：每一条都是永久性的负担，生态系统要永远为之重新实现补丁。rut 从一个封闭的小语法出发——缺失即可空类型上的 `nil`，错误是值，仅有的几个保留字各自指明该写什么。任何遗留物都无从沉积。"
 
 msgid "**Conformance means implementing the world.** A compliant engine needs `BigInt`, `Intl`, `Date`'s quirks, microtask ordering — thousands of person-hours before user code runs. rut's built-in contract is deliberately tiny: primitives, sequences, channels, string building. Everything else is library — maps and sets, JSON, logging, and the host's own domain are ordinary packages, several of them written _in rut_ and swappable."
 msgstr "**符合规范等于实现整个世界。**一个合规引擎需要 `BigInt`、`Intl`、`Date` 的种种怪癖、微任务顺序——在用户代码能跑起来之前就要投入数千人时。rut 的内置契约刻意保持极小：原始类型、序列、通道、字符串构建。其余一切都是库——map 与 set、JSON、日志以及宿主自身的领域都是普通的包，其中几个就是_in rut_ 写成的，而且可替换。"
@@ -4006,35 +4006,21 @@ msgstr "保留字"
 msgid "Error replacement"
 msgstr "错误替代"
 
-msgid "`switch`, `case`, `match`"
-msgstr "`switch`, `case`, `match`"
+msgid "`void`"
+msgstr "`void`"
 
-msgid "`when` — arms are `pattern -> body`"
-msgstr "`when` —— 分支写作 `pattern -> body`"
+msgid "the empty type spells `nil`"
+msgstr "空类型拼写作 `nil`"
 
-msgid "`null`, `undefined`, `void`"
-msgstr "`null`, `undefined`, `void`"
 
-msgid "absence is `nil` on a `?T`"
-msgstr "缺失表示为 `?T` 上的 `nil`"
 
-msgid "`any`"
-msgstr "`any`"
 
-msgid "a trait type or `opaque`"
-msgstr "用 trait 类型或 `opaque`"
 
-msgid "`typeof`, `instanceof`"
-msgstr "`typeof`, `instanceof`"
 
-msgid "`x is T` tests at runtime"
-msgstr "运行时测试用 `x is T`"
 
-msgid "`extends`"
-msgstr "`extends`"
 
-msgid "no inheritance — compose instead"
-msgstr "没有继承 —— 请用组合代替"
+
+
 
 msgid "`interface`"
 msgstr "`interface`"
@@ -4048,11 +4034,7 @@ msgstr "`dataclass`"
 msgid "removed — spell it `struct`"
 msgstr "已移除 —— 请拼写作 `struct`"
 
-msgid "`delete`"
-msgstr "`delete`"
 
-msgid "no dynamic properties"
-msgstr "没有动态属性"
 
 msgid "`in`"
 msgstr "`in`"
@@ -4060,23 +4042,20 @@ msgstr "`in`"
 msgid "iteration is `for (let x of ..)`"
 msgstr "迭代写作 `for (let x of ..)`"
 
-msgid "`with`"
-msgstr "`with`"
 
 msgid "—"
 msgstr "—"
 
-msgid "`var`, `const`"
-msgstr "`var`, `const`"
 
-msgid "bindings spell `let` / `let mut`"
-msgstr "绑定拼写作 `let` / `let mut`"
 
 msgid "`private`"
 msgstr "`private`"
 
 msgid "members are private by default; add `pub`"
 msgstr "成员默认私有；要公开就加上 `pub`"
+
+msgid "The list is short and closed. Words that are keywords in JavaScript or Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … — are ordinary identifiers here: `let null = 5;` and `fn match()` are legal rut."
+msgstr "这份列表很短，而且是封闭的。在 JavaScript 或 Rust 中是关键字的那些词 —— `switch`、`match`、`null`、`var`、`const`、`delete`、`new`…… —— 在这里只是普通标识符：`let null = 5;` 和 `fn match()` 都是合法的 rut。"
 
 msgid "Naming conventions (enforced)"
 msgstr "命名约定（强制执行）"
@@ -4816,8 +4795,8 @@ msgstr "其余一切 —— struct/class 值、vec 与定长数组、`?T` 盒、
 msgid "The accumulator idiom `out = f\"{out}{chunk}\"` is recognized by the compiler and appends in place — amortized O(1) instead of copying the whole prefix per step, linear in the total output. Core ships no string-builder class: when a reusable builder reads better (a tokenizer or encoder threading text through many calls), reach for the `strbuild` package's `StringBuilder` ([stdlib](stdlib.md)); when an accumulator binding reads better, the f-string shape IS the optimized path."
 msgstr "累加器惯用法 `out = f\"{out}{chunk}\"` 会被编译器识别并就地追加 —— 均摊 O(1)，而不是每步复制整个前缀，总输出量级为线性。core 不内置字符串构建类：当可复用的构建器更顺手（分词器或编码器在多次调用间穿线文本）时，用 `strbuild` 包的 `StringBuilder`（[标准库](stdlib.md)）；当累加器绑定更顺手时，f 字符串形状本身就是优化路径。"
 
-msgid "The structured statements, the indexed and iterating `for` forms, and `when` — the one match construct, an exhaustive pattern _expression_. `switch`/`case`/`default` do not exist (each is a reserved word whose error names `when`)."
-msgstr "结构化语句、带索引与迭代的 `for` 形式，以及 `when` —— 唯一的匹配构造，一个穷尽式的模式 _表达式_。`switch`/`case`/`default` 不存在（每个都是保留字，其报错信息指向 `when`）。"
+msgid "The structured statements, the indexed and iterating `for` forms, and `when` — the one match construct, an exhaustive pattern _expression_. Branching on a value is `when`: arms are `pattern -> body`, and the construct is exhaustive."
+msgstr "结构化语句、带索引与迭代的 `for` 形式，以及 `when` —— 唯一的匹配构造，一个穷尽式的模式 _表达式_。对值做分支用的是 `when`：分支写作 `pattern -> body`，而且该构造是穷尽的。"
 
 msgid "Statements"
 msgstr "语句"
@@ -5062,8 +5041,8 @@ msgstr "反射是可选加入的：只有当某个序列化契约为一个类手
 msgid "No inheritance"
 msgstr "没有继承"
 
-msgid "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`. (`extends` is a reserved word; its error says: compose instead.)"
-msgstr "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。（`extends` 是保留字；它的报错说：请改用组合。）"
+msgid "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`."
+msgstr "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。"
 
 msgid "Code sharing is composition (hold a helper object or struct in a field) or free functions; subtyping is only class→trait widening (see [Traits and dispatch](traits.md))."
 msgstr "代码共享靠组合（在字段中持有一个辅助对象或结构体）或自由函数；子类型只有类→trait 宽化（参见[trait 与分派](traits.md)）。"
@@ -8290,8 +8269,8 @@ msgstr "```rut\nhost fn name(params) -> T;            // concrete signature; gen
 msgid "**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, `opaque`, tuples/`?T` whose elements cross, and `host struct` records whose fields all cross. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration ([value boundary](value-boundary.md))."
 msgstr "**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes`、`opaque`、元素可跨越的元组/`?T`，以及字段全部可跨越的 `host struct` 记录。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误（[值边界](value-boundary.md)）。"
 
-msgid "**`any` is not in the language.** It is a reserved word; a `.d.rut` spelling it is the reserved-word diagnostic at parse time. Seal polymorphic values with `opaque(v)` / `opaque.downcast<T>(v)` ([opaque](opaque.md))."
-msgstr "**`any` 不在这门语言里。**它是一个保留字；`.d.rut` 里写出它会得到解析期的保留字诊断。用 `opaque(v)` / `opaque.downcast<T>(v)` 封存多态值（[opaque](opaque.md)）。"
+msgid "**`any` is not in the language.** The word is no longer reserved — an `any` spelling now fails at resolution as an unknown type — but there is no `any` type to write. Seal polymorphic values with `opaque(v)` / `opaque.downcast<T>(v)` ([opaque](opaque.md))."
+msgstr "**`any` 不在这门语言里。**这个词已不再是保留字 —— 写出 `any` 现在会在名称解析阶段以未知类型失败 —— 但也不存在可写的 `any` 类型。用 `opaque(v)` / `opaque.downcast<T>(v)` 封存多态值（[opaque](opaque.md)）。"
 
 msgid "**`builtin` is the engine's reservation** — spelled only in the toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder decl is a compile error. Users implement builtin traits with ordinary `impl` blocks; library contracts stay plain `trait` ([traits and dispatch](traits.md))."
 msgstr "**`builtin` 是引擎的保留**——只出现在工具链自己的声明文件里（`core`、`calc`）。嵌入方声明中的 `builtin` 是编译错误。用户用普通的 `impl` 块实现 builtin trait；库契约保持为普通的 `trait`（[trait 与分派](traits.md)）。"
@@ -9601,8 +9580,8 @@ msgstr "词法分析器和语法分析器是纯函数——`lex(src) -> (Vec<Tok
 msgid "The lexer"
 msgstr "词法分析器"
 
-msgid "One flat `Tok` enum for literals, punctuation, and operators. Keywords are ordinary `Ident`s; the parser matches them by interner name. **Reserved words are rejected by the lexer** with a `rut does not have X` message (`new`, `switch`, `case`, `?.`, `??`, `any`, …)."
-msgstr "一个扁平的 `Tok` 枚举覆盖字面量、标点和运算符。关键字就是普通的 `Ident`；语法分析器按驻留名匹配它们。**保留字由词法分析器拒绝**，消息为 `rut does not have X`（`new`、`switch`、`case`、`?.`、`??`、`any`……）。"
+msgid "One flat `Tok` enum for literals, punctuation, and operators. Keywords are ordinary `Ident`s; the parser matches them by interner name. **Reserved words are rejected by the lexer** with a message naming the rut replacement (`interface`, `dataclass`, `private`, `void`, `in`); `?.` and `??` are punctuation-level rejections, a separate mechanism."
+msgstr "一个扁平的 `Tok` 枚举覆盖字面量、标点和运算符。关键字就是普通的 `Ident`；语法分析器按驻留名匹配它们。**保留字由词法分析器拒绝**，消息会指明 rut 的替代写法（`interface`、`dataclass`、`private`、`void`、`in`）；`?.` 与 `??` 是标点层面的拒绝，属于另一套机制。"
 
 msgid "Maximal munch with an explicit longest-match table; `/` vs `//` vs `/*` resolves with one lookahead. Compound assignment operators are one token each (`+=`, `<<=`, `&&=`, …), so there is no munch ambiguity."
 msgstr "最大吞噬（maximal munch）配一张显式的最长匹配表；`/` 与 `//` 与 `/*` 用一次前瞻解决。复合赋值运算符各自是单个记号（`+=`、`<<=`、`&&=`……），因此没有吞噬歧义。"

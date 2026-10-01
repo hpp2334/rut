@@ -66,8 +66,8 @@ implementation — is fourfold, and each item has a structural answer:
    `typeof null`, implicit semicolons: each is a permanent liability the
    ecosystem re-implements forever. rut starts from a closed, small
    grammar — absence is `nil` on a nullable type, errors are values, and
-   legacy JS keywords are reserved words whose error message tells you
-   what to write instead. Nothing legacy can accrete.
+   the handful of reserved words each name what to write instead.
+   Nothing legacy can accrete.
 
 2. **Conformance means implementing the world.** A compliant engine
    needs `BigInt`, `Intl`, `Date`'s quirks, microtask ordering —
