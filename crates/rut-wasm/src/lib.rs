@@ -161,8 +161,15 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         )
         .expect("mount nmapset");
     // `flow` mounts AFTER its deps (its generic class + traits ride the
-    // source; the peer groups stay unmounted — the playground consumer's
-    // `Vec` rows answer through the base's carried rows)
+    // source). The browser keeps no filesystem, so the peer-gate's
+    // directory walk can't run here: the manifest's peer-deps record
+    // directly, and each integration group whose optional peer this
+    // session holds rides its include_str! text — the same append the
+    // gate pass performs from disk (`Vec.from_flow` resolves through
+    // the group rows; the book gate's lane proves the law).
+    session
+        .load_manifest(include_str!("../../../rut/flow/rut.jsonc"))
+        .expect("the flow manifest is valid");
     session
         .register_module(
             "flow",
@@ -172,6 +179,21 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount flow");
+    if session.resolve("pouch").is_ok() {
+        session.record_peer_group(
+            "flow",
+            include_str!("../../../rut/flow/group-pouch.rut"),
+        );
+    }
+    if session.resolve("nmapset").is_ok() {
+        session.record_peer_group(
+            "flow",
+            include_str!("../../../rut/flow/group-nmapset.rut"),
+        );
+    }
+    session.mark_groups_mounted("flow");
+    rut_driver::assemble_peers(&mut session)
+        .expect("assemble peers");
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface mounts as a linked source module —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
