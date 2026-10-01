@@ -150,7 +150,7 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
              buf: [?T];\n\
              len: i32;\n\
          }\n\
-         impl Box2<T> {\n\
+         impl<T> Box2<T> {\n\
              fn new() -> Self { return Self { buf: [nil; 4], len: 0 }; }\n\
              fn push(mut self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
              fn get(self, i: i32) -> T { return self.buf[i]; }\n\
@@ -250,9 +250,9 @@ fn prefix_question_binds_the_following_type_term() {
 
 #[test]
 fn impl_over_the_array_type_still_compiles() {
-    // `impl [T] { .. }` — the generic template through the element
+    // `impl<T> [T] { .. }` — the generic template through the element
     let out = compile(
-        "impl [T] {\n\
+        "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
          fn main() -> i32 {\n\

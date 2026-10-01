@@ -81,8 +81,8 @@ fn source_of(s: &Session, spec: &str) -> String {
     }
 }
 
-const POUCH_GROUP: &str = "impl JsonSerialize for Vec<T>";
-const NMAPSET_GROUP: &str = "impl JsonSerialize for Map<K, V>";
+const POUCH_GROUP: &str = "impl<T> JsonSerialize for Vec<T>";
+const NMAPSET_GROUP: &str = "impl<K, V> JsonSerialize for Map<K, V>";
 
 #[test]
 fn t1_optional_peers_absent_is_silent() {

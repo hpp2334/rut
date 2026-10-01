@@ -22,7 +22,7 @@ fn generic_class_monomorphizes_per_instantiation() {
         "class Box<T> {\n\
              value: T;\n\
          }\n\
-         impl Box<T> {\n\
+         impl<T> Box<T> {\n\
              fn new(v: T) -> Self { return Self { value: v }; }\n\
              fn get(self) -> T { return self.value; }\n\
          }\n\
@@ -48,7 +48,7 @@ fn two_instantiations_are_distinct() {
              a: T;\n\
              b: T;\n\
          }\n\
-         impl Pair<T> {\n\
+         impl<T> Pair<T> {\n\
              fn new(a: T, b: T) -> Self { return Self { a: a, b: b }; }\n\
              fn fst(self) -> T { return self.a; }\n\
          }\n\
@@ -73,7 +73,7 @@ fn recursive_generic_terminates() {
              value: T;\n\
              next: ?Node<T>;\n\
          }\n\
-         impl Node<T> {\n\
+         impl<T> Node<T> {\n\
              fn new(v: T) -> Self { return Self { value: v, next: nil }; }\n\
          }\n\
          fn main() -> i32 { let n: Node<i32> = Node.new(1); return n.value; }\n",
@@ -89,7 +89,7 @@ fn explicit_generic_static_path() {
         "class Box<T> {\n\
              value: T;\n\
          }\n\
-         impl Box<T> {\n\
+         impl<T> Box<T> {\n\
              fn new(v: T) -> Self { return Self { value: v }; }\n\
              fn get(self) -> T { return self.value; }\n\
          }\n\
@@ -111,7 +111,7 @@ fn vec_over_pointer_array_compiles() {
              buf: [?T];\n\
              len: i32;\n\
          }\n\
-         impl Vec<T> {\n\
+         impl<T> Vec<T> {\n\
              fn new() -> Self { return Vec.with_capacity(0); }\n\
              fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }\n\
              fn len(self) -> i32 { return self.len; }\n\

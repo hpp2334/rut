@@ -29,6 +29,6 @@
     "server": {
       "path": "../server"
     },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "5cf36e6a2e8f8acd89e5f0bf74f1b5fb34e8b4533e8487274e026f3c78427df9" }
   }
 }

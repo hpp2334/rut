@@ -36,7 +36,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
     );
     files.0.insert(root.join("json.rut"), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
     files.0.insert(root.join("store.rut"), b"// the store half\n".to_vec());
-    files.0.insert(root.join("serde_pouch.rut"), b"impl J for Vec<T>".to_vec());
+    files.0.insert(root.join("serde_pouch.rut"), b"impl<T> J for Vec<T>".to_vec());
 
     let manifest = parse_manifest(
         &String::from_utf8(files.0.get(&root.join("rut.jsonc")).unwrap().clone()).unwrap(),

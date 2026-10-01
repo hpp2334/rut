@@ -352,7 +352,12 @@ pub enum ItemKind {
     /// The two impl forms: `impl T { .. }` — inherent
     /// (`trait_ref: None`, the type's module only) — and `impl I for T`
     /// { .. } — a trait impl (any module). Bodies are braced, methods only.
+    /// Generic binders are DECLARED after `impl` (`impl<T> Vec<T>`) —
+    /// the definition site; bare params in the head are uses that must
+    /// resolve against the declared list (no implicit inference).
     Impl {
+        generics: Vec<IdentId>,
+        bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
         trait_ref: Option<NodeHandle<AnyTy>>,
         target: NodeHandle<AnyTy>,
         methods: Vec<NodeHandle<MethodDeclNode>>,

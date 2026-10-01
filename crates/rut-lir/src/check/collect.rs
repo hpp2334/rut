@@ -70,9 +70,10 @@ impl<'a> Ctx<'a> {
         for it in &items {
             match self.ast.item(*it) {
                 // the two impl forms: inherent + trait impls
-                ItemKind::Impl { trait_ref, target, methods } => {
+                ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
                     let methods = methods.clone();
-                    self.collect_impl(it.id(), *trait_ref, *target, &methods)
+                    let generics = generics.clone();
+                    self.collect_impl(it.id(), &generics, *trait_ref, *target, &methods)
                 }
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;

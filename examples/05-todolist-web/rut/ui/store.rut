@@ -54,7 +54,7 @@ pub class Mutation<A, R> {
     st: Store;
 }
 
-impl Source<T> {
+impl<T> Source<T> {
     /// THE READ, handle-side: pull-on-read freshness through the store.
     pub fn get(mut self) -> T {
         return self.st.get<T>(self);
@@ -65,7 +65,7 @@ impl Source<T> {
     }
 }
 
-impl Derived<T> {
+impl<T> Derived<T> {
     /// THE READ, handle-side. No set exists here — a derived is not
     /// writable (the type says so; the store says so again, loud).
     pub fn get(mut self) -> T {
@@ -73,7 +73,7 @@ impl Derived<T> {
     }
 }
 
-impl Mutation<A, R> {
+impl<A, R> Mutation<A, R> {
     /// THE INVOCATION, handle-side: the program runs through the ONE
     /// write lane (the cycle guard, the in-flight set, all of it).
     pub fn run(mut self, arg: A) -> R {
@@ -81,23 +81,23 @@ impl Mutation<A, R> {
     }
 }
 
-impl Readable<T> for Source<T> {
+impl<T> Readable<T> for Source<T> {
     fn atom_id(self) -> u32 { return self.id; }
     fn materialize(self, st: Store) -> nil {
         st.kv.put(self.id, self.seed);
     }
 }
 
-impl Readable<T> for Derived<T> {
+impl<T> Readable<T> for Derived<T> {
     fn atom_id(self) -> u32 { return self.id; }
     fn materialize(self, st: Store) -> nil {}
 }
 
-impl Writable<T, T> for Source<T> {
+impl<T> Writable<T, T> for Source<T> {
     fn atom_id(self) -> u32 { return self.id; }
 }
 
-impl Writable<A, R> for Mutation<A, R> {
+impl<A, R> Writable<A, R> for Mutation<A, R> {
     fn atom_id(self) -> u32 { return self.id; }
 }
 

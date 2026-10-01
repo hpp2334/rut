@@ -82,7 +82,7 @@ fn mixed_world(tag: &str) -> PathBuf {
         "pub class Holder<T> {\n\
          \x20   v: T;\n\
          }\n\n\
-         impl Holder<T> {\n\
+         impl<T> Holder<T> {\n\
          \x20   pub fn make(v: T) -> Self { return Self { v: v }; }\n\
          \x20   pub fn get(self) -> T { return self.v; }\n\
          }\n",

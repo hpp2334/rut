@@ -156,7 +156,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "Trait"
             }
-            ItemKind::Impl { trait_ref, target, methods } => {
+            ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
+                if !generics.is_empty() {
+                    fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
+                }
                 if let Some(tr) = trait_ref {
                     fields.push(field("trait", DumpVal::Node(Box::new(node_dump(a, tr.id())))));
                 }

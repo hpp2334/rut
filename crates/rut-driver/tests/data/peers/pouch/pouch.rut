@@ -7,7 +7,7 @@ pub class Vec<T> {
     items: [T];
 }
 
-impl Vec<T> {
+impl<T> Vec<T> {
     pub fn filled(v: T, n: i32) -> Self {
         let mut items: [T] = [v; n];
         return Self { items: items };

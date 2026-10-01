@@ -28,7 +28,10 @@ count(self) -> i32;`, not a field.
 `impl Trait for Type { .. }` registers the pair. Every method must
 match the trait's signature exactly; extra methods don't belong here
 (put those in an inherent block). Trait impl methods carry no `pub` —
-they are as visible as the trait.
+they are as visible as the trait. Generic binders are **declared
+after `impl`** — `impl<T> Readable<T> for Source<T>` — and the
+declared list is the definition site: a bare parameter name in the
+head that it does not declare is an error naming the fix.
 
 ```rut
 use ink::{ Logger };
@@ -74,7 +77,9 @@ Rules worth knowing:
 
 `impl Type { .. }` — no trait — is where a type's own methods live:
 class methods like `new`, instance methods, helpers. It compiles only
-in the module that declares the type.
+in the module that declares the type. A generic type's inherent impl
+declares its binders the same way a trait impl does: `impl<T>
+Vec<T> { .. }`.
 
 ```rut
 use ink::{ Logger };

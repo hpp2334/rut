@@ -14,7 +14,7 @@
     // jsDelivr rows the app's own manifests spell (the tests prime an
     // offline remote from the committed dist/std artifacts, so the gate
     // never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "5cb593f8ef2f352bf600f2cd0b60a621cc9259004dd40a7bb9b13f787a9826c1" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "5cf36e6a2e8f8acd89e5f0bf74f1b5fb34e8b4533e8487274e026f3c78427df9" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "f6a25a44df8c478b5f03244583665e5479a4d9221251dcf542ef9f8fdf714001" }
   }
 }

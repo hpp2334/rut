@@ -751,8 +751,14 @@ impl<'a> P<'a> {
                 }
                 self.trait_body(methods, span);
             }
-            ItemKind::Impl { trait_ref, target, methods } => {
-                self.text("impl ");
+            ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
+                self.text("impl");
+                if !generics.is_empty() {
+                    self.gen_only(&generics);
+                    self.sp();
+                } else {
+                    self.sp();
+                }
                 if let Some(tr) = trait_ref {
                     self.ty(tr);
                     self.sp();

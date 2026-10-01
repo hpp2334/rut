@@ -97,7 +97,7 @@ pub class Cell<T> {
     v: T;
 }
 
-impl Cell<T> {
+impl<T> Cell<T> {
     pub fn make(v: T) -> Self {
         return Self { v: v };
     }
@@ -185,7 +185,7 @@ pub class Cell<T> {
     v: T;
 }
 
-impl Cell<T> {
+impl<T> Cell<T> {
     pub fn make(v: T) -> Self {
         return Self { v: v };
     }
@@ -218,7 +218,7 @@ pub class Boxx<T> {
     v: T;
 }
 
-impl Boxx<T> {
+impl<T> Boxx<T> {
     pub fn make(v: T) -> Self {
         return Self { v: v };
     }

@@ -1158,7 +1158,7 @@ class Vec<T> {
     buf: [?T];
     len: i32;
 }
-impl Vec<T> {
+impl<T> Vec<T> {
     fn new() -> Self { return Vec.with_capacity(0); }
     fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }
     fn len(self) -> i32 { return self.len; }
@@ -2127,7 +2127,7 @@ fn disposal_refuses_a_generic_target() {
     let src = r#"
 use core::{ Disposal, DisposalContext };
 class Box2<T> { v: T; }
-impl Disposal for Box2<T> { fn dispose(mut self, cx: DisposalContext) { } }
+impl<T> Disposal for Box2<T> { fn dispose(mut self, cx: DisposalContext) { } }
 pub fn main() -> nil { }
 "#;
     let out = compile(

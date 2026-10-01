@@ -1895,7 +1895,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:240 src/tutorial/types.md:280
-#: src/tutorial/traits.md:320 src/tutorial/errors.md:233
+#: src/tutorial/traits.md:325 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
 msgid "Put it together"
@@ -3768,12 +3768,12 @@ msgstr "实现 trait"
 
 #: src/tutorial/traits.md:28
 msgid ""
-"`impl Trait for Type { .. }` registers the pair. Every method must match the trait's signature exactly; extra methods don't belong here (put those in an inherent block). Trait impl methods carry no `pub` — they are as visible as the trait."
+"`impl Trait for Type { .. }` registers the pair. Every method must match the trait's signature exactly; extra methods don't belong here (put those in an inherent block). Trait impl methods carry no `pub` — they are as visible as the trait. Generic binders are **declared after `impl`** — `impl<T> Readable<T> for Source<T>` — and the declared list is the definition site: a bare parameter name in the head that it does not declare is an error naming the fix."
 msgstr ""
-"`impl Trait for Type { .. }` 登记这一对组合。每个方法都必须与 trait 的签名完全一致；额外的方法不属于这里（把它们放进固有块）。trait impl 的方法不带 `pub`——它们的可见性与 trait 一致。"
+"`impl Trait for Type { .. }` 注册这一对。每个方法都必须与 trait 的签名完全一致；多余的方法不属于这里（把它们放进 inherent 块）。trait impl 方法不带 `pub`——它们的可见性与 trait 一致。泛型绑定器**在 `impl` 之后声明**——`impl<T> Readable<T> for Source<T>`——且这份声明列表就是定义位置：头部出现的裸参数名若不在其中，就是一个会指明修复方式的错误。"
 
 
-#: src/tutorial/traits.md:33
+#: src/tutorial/traits.md:36
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3820,49 +3820,49 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:59
+#: src/tutorial/traits.md:62
 msgid "Rules worth knowing:"
 msgstr "几条值得知道的规则："
 
 
-#: src/tutorial/traits.md:61
+#: src/tutorial/traits.md:64
 msgid ""
 "**One impl per (trait, type) pair, program-wide.** A duplicate is a link error."
 msgstr "**每个（trait, 类型）组合全程序只能有一个 impl。**重复是链接错误。"
 
 
-#: src/tutorial/traits.md:63
+#: src/tutorial/traits.md:66
 msgid ""
 "**Placement:** an impl may live in a module of the trait's package or the type's package — at least one side must be yours. You cannot implement two foreign types to each other."
 msgstr "**位置：**impl 可以放在 trait 所在包或类型所在包的模块里——至少有一侧必须属于你。你不能给两个外部类型互相实现。"
 
 
-#: src/tutorial/traits.md:66
+#: src/tutorial/traits.md:69
 msgid ""
 "**An empty impl block is legal** and acts as a marker: `impl Serializable for Point {}` says \"this type is in\" when the trait has no required methods."
 msgstr ""
 "**空 impl 块是合法的**，并可充当标记：当 trait 没有必需方法时，`impl Serializable for Point {}` 表示“该类型已加入”。"
 
 
-#: src/tutorial/traits.md:69
+#: src/tutorial/traits.md:72
 msgid ""
 "**Primitives can implement traits too** (in the trait's own package or module) — the standard library uses this to give integer widths a common internal interface."
 msgstr "**基本类型也可以实现 trait**（在 trait 自己的包或模块内）——标准库正是用它给各个整数宽度提供了一个共通的内部接口。"
 
 
-#: src/tutorial/traits.md:73
+#: src/tutorial/traits.md:76
 msgid "Inherent impls"
 msgstr "固有 impl"
 
 
-#: src/tutorial/traits.md:75
+#: src/tutorial/traits.md:78
 msgid ""
-"`impl Type { .. }` — no trait — is where a type's own methods live: class methods like `new`, instance methods, helpers. It compiles only in the module that declares the type."
+"`impl Type { .. }` — no trait — is where a type's own methods live: class methods like `new`, instance methods, helpers. It compiles only in the module that declares the type. A generic type's inherent impl declares its binders the same way a trait impl does: `impl<T> Vec<T> { .. }`."
 msgstr ""
-"`impl Type { .. }`——不带 trait——是类型自身方法的家：`new` 这类类方法、实例方法、辅助方法。它只在声明该类型的模块里编译。"
+"`impl Type { .. }`——不带 trait——是一个类型自有方法的归宿：`new` 这样的类方法、实例方法、辅助方法。它只在声明该类型的模块里编译。泛型类型的 inherent impl 以与 trait impl 相同的方式声明它的绑定器：`impl<T> Vec<T> { .. }`。"
 
 
-#: src/tutorial/traits.md:79
+#: src/tutorial/traits.md:84
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3901,18 +3901,18 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:101
+#: src/tutorial/traits.md:106
 msgid "Using trait values"
 msgstr "使用 trait 值"
 
 
-#: src/tutorial/traits.md:103
+#: src/tutorial/traits.md:108
 msgid ""
 "**Widening is implicit** at any position that expects the trait: an annotated binding, a field, an argument, a return."
 msgstr "**加宽是隐式的**，出现在任何期望该 trait 的位置：带标注的绑定、字段、实参、返回值。"
 
 
-#: src/tutorial/traits.md:106
+#: src/tutorial/traits.md:111
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3959,13 +3959,13 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:132
+#: src/tutorial/traits.md:137
 msgid ""
 "**Trait-typed parameters accept any implementor** — write the function once, call it with each concrete type:"
 msgstr "**trait 类型的参数接受任何实现方**——函数只写一次，用每个具体类型去调用："
 
 
-#: src/tutorial/traits.md:135
+#: src/tutorial/traits.md:140
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4032,14 +4032,14 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:172
+#: src/tutorial/traits.md:177
 msgid ""
 "**Heterogeneous containers** hold mixed implementors behind the trait name. Inside a single-typed context calls bind directly; iterating a collection of `Shape` dispatches through the value's vtable — the compiler picks, and mis-guessing costs one hop, never wrong behavior:"
 msgstr ""
 "**异构容器**在 trait 名字背后容纳混合的实现方。在单一类型的上下文中，调用直接绑定；迭代一个 `Shape` 集合则经由值的 vtable 分派——由编译器挑选，猜错只损失一次跳转，绝不会错行为："
 
 
-#: src/tutorial/traits.md:177
+#: src/tutorial/traits.md:182
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4112,28 +4112,28 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:216
+#: src/tutorial/traits.md:221
 msgid "Type tests: `is`"
 msgstr "类型测试：`is`"
 
 
-#: src/tutorial/traits.md:218
+#: src/tutorial/traits.md:223
 msgid "`expr is Type` answers with a `bool` and never traps:"
 msgstr "`expr is Type` 以一个 `bool` 作答，且从不触发陷阱："
 
 
-#: src/tutorial/traits.md:220
+#: src/tutorial/traits.md:225
 msgid "**Concrete RHS** — `p is Circle`: an exact-type test."
 msgstr "**具体类型在右侧**——`p is Circle`：精确类型测试。"
 
 
-#: src/tutorial/traits.md:221
+#: src/tutorial/traits.md:226
 msgid ""
 "**Trait RHS** — `p is Shape`: a capability probe (\"does this value's type have an impl of `Shape`?\")."
 msgstr "**trait 在右侧**——`p is Shape`：能力探测（“这个值的类型有没有 `Shape` 的 impl？”）。"
 
 
-#: src/tutorial/traits.md:224
+#: src/tutorial/traits.md:229
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4192,38 +4192,38 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:256
+#: src/tutorial/traits.md:261
 msgid ""
 "`is` answers the question; it changes nothing — there is no narrowing and no downcast through a trait. A trait-typed value is used through its trait's methods; if you need the erased-storage version — a value whose type is _forgotten_ until recovered — that is `opaque`, covered in [errors and optionality](errors.md) and [the reference on opaque](../reference/opaque.md)."
 msgstr ""
 "`is` 只回答问题，不改变任何东西——既没有窄化，也没有经由 trait 的向下转型。trait 类型的值经由其 trait 的方法来使用；如果你需要擦除存储的版本——一个在被取回之前_忘记_自身类型的值——那就是 `opaque`，见[错误与可空性](errors.md)与 [opaque 参考](../reference/opaque.md)。"
 
 
-#: src/tutorial/traits.md:263
+#: src/tutorial/traits.md:268
 msgid "Bounds connect traits to generics"
 msgstr "约束把 trait 与泛型连接起来"
 
 
-#: src/tutorial/traits.md:265
+#: src/tutorial/traits.md:270
 msgid ""
 "`fn name<T requires Labeled>(x: T)` admits exactly the instantiations whose concrete type has an impl of `Labeled` — see [functions, closures, and generics](functions.md). The bound is what makes widening legal inside the body: `let w: Labeled = x;`."
 msgstr ""
 "`fn name<T requires Labeled>(x: T)` 只接受具体类型拥有 `Labeled` impl 的那些实例化——参见[函数、闭包与泛型](functions.md)。正是这个约束让函数体内的加宽合法：`let w: Labeled = x;`。"
 
 
-#: src/tutorial/traits.md:270
+#: src/tutorial/traits.md:275
 msgid "Making your type iterable"
 msgstr "让你的类型可迭代"
 
 
-#: src/tutorial/traits.md:272
+#: src/tutorial/traits.md:277
 msgid ""
 "A type becomes a `for..of` target by implementing the builtin `Iterator<E>` contract with its single resumption member (`Iterator` is core's import-gated `pub builtin` trait — an `impl` names it, so bring it in with `use core::{ Iterator }`; the builtin sequences themselves never need it):"
 msgstr ""
 "一个类型通过实现内置的 `Iterator<E>` 契约——及其唯一的恢复成员——成为 `for..of` 的目标（`Iterator` 是 core 的导入把守 `pub builtin` trait——`impl` 块会点名它，因此用 `use core::{ Iterator }` 把它带进来；内置序列本身从不需要它）："
 
 
-#: src/tutorial/traits.md:278
+#: src/tutorial/traits.md:283
 msgid ""
 "```rut\n"
 "use core::{ Iterator };\n"
@@ -4254,20 +4254,20 @@ msgstr ""
 "```rutuse core::{ Iterator };use pouch::{ Vec };use ink::{ Logger };struct CountUp { n: i32 }impl Iterator<i32> for CountUp {    fn iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }   // false = stop        }    }}pub fn main() {    let log = Logger.new(\"iter\");    let ups = CountUp { n: 4 };    let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures    for (let v of ups) {        got.push(v);    }    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");}```"
 
 
-#: src/tutorial/traits.md:308
+#: src/tutorial/traits.md:313
 msgid ""
 "`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure, and the capture law covers it like every closure: scalars copy (a rebind inside the loop stays local), ref-headed bindings share their slot — reassigning one inside the loop moves the original, and the loop variable is ONE variable reassigned per iteration, exactly like a handwritten `while` (see [functions, closures, and generics](functions.md)). Accumulating through a shared `vec.push(v)` works, and so does plain reassignment."
 msgstr ""
 "`for (let v of it)` 会脱糖成 `it.iterate(emit)` 加一个合成闭包，而捕获法则像对待每个闭包一样对待它：标量按复制走（循环内的重绑定只留在局部），以引用为头的绑定共享槽位——在循环内重新赋值会移动原绑定，且循环变量是每一轮被重新赋值的同一个变量，与手写的 `while` 完全一致（参见[函数、闭包与泛型](functions.md)）。通过共享的 `vec.push(v)` 累积可行，直接重新赋值同样可行。"
 
 
-#: src/tutorial/traits.md:317
+#: src/tutorial/traits.md:322
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the trait — their loops are fused, never a per-element call."
 msgstr "内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）无需这个 trait 即可迭代——它们的循环是融合的，绝不是逐元素调用。"
 
 
-#: src/tutorial/traits.md:322
+#: src/tutorial/traits.md:327
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4362,7 +4362,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/traits.md:374
+#: src/tutorial/traits.md:379
 msgid "Next: [errors and optionality](errors.md)."
 msgstr "下一章：[错误与可空性](errors.md)。"
 
@@ -7444,7 +7444,7 @@ msgstr ""
 "调用 trait 方法要求**两个**名字都在作用域内：类型（靠声明或 `use`）_以及_ trait（靠 `use`）。固有方法只要类型在即可。如果一次调用匹配到某个已注册 impl，但其 trait 没有被任何 `use` 引入，就是错误——\"use `I` 才能在 `T` 上调用它的方法\"——因此新增一个 trait 方法永远不可能悄悄改变别人调用点的含义。"
 
 
-#: src/core-concepts/traits-and-dispatch.md:175 src/reference/traits.md:167
+#: src/core-concepts/traits-and-dispatch.md:175 src/reference/traits.md:172
 msgid "The iteration protocol"
 msgstr "迭代协议"
 
@@ -15432,157 +15432,157 @@ msgstr ""
 
 #: src/reference/traits.md:90
 msgid ""
-"**Generic traits and generic targets**: `trait Wrap<T>` gives each type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`); `impl Hashable for Pair<A, B>` binds the target's generic args as the impl's type parameters. Parameterized trait impls are legal: `impl Readable<T> for Source<T>` registers a **template** serving every concrete instantiation; a hand-written concrete impl shadows the template; repeated parameters (`impl W<T, T> for Pair2<T>`) are legal. Each trait-argument must be a concrete type or a bare name of one of the target's own parameters."
+"**Generic traits and generic targets**: `trait Wrap<T>` gives each type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`). Generic binders are **declared after `impl`** — `impl<A, B> Hashable for Pair<A, B>` — and that list is the definition site: a bare parameter name in the head is a use that must resolve against it (an undeclared name is the error it always should have been — \"undeclared type parameter `T` — declare it: `impl<T> ..`\"). The same law covers inherent impls: `impl<T> Vec<T> { .. }`, not `impl Vec<T> { .. }`. Parameterized trait impls are legal: `impl<T> Readable<T> for Source<T>` registers a **template** serving every concrete instantiation; a hand-written concrete impl shadows the template; repeated parameters (`impl<T> W<T, T> for Pair2<T>`) are legal. Each trait argument must be a concrete type or a declared binder that names one of the target's own parameters."
 msgstr ""
-"**泛型 trait 与泛型目标**：`trait Wrap<T>` 为每个类型实参列表提供自己的实例化（`Wrap<i32>` ≠ `Wrap<str>`）；`impl Hashable for Pair<A, B>` 把目标的泛型实参绑定为 impl 的类型参数。参数化的 trait impl 合法：`impl Readable<T> for Source<T>` 注册一个服务所有具体实例化的**模板**；手写的具体 impl 会遮蔽模板；重复的参数（`impl W<T, T> for Pair2<T>`）合法。每个 trait 实参必须是具体类型，或目标自身参数之一的裸名。"
+"**泛型 trait 与泛型目标**：`trait Wrap<T>` 为每个类型实参列表给出独立的实例化（`Wrap<i32>` ≠ `Wrap<str>`）。泛型绑定器**在 `impl` 之后声明**——`impl<A, B> Hashable for Pair<A, B>`——且这份列表就是定义位置：头部的裸参数名是一次使用，必须能对它解析（未声明的名字终于成为它本该是的错误——\"undeclared type parameter `T` — declare it: `impl<T> ..`\"）。同一条法则也覆盖 inherent impl：`impl<T> Vec<T> { .. }`，而不是 `impl Vec<T> { .. }`。带参数的 trait impl 是合法的：`impl<T> Readable<T> for Source<T>` 注册一个服务每个具体实例化的**模板**；手写的具体 impl 会遮蔽模板；重复的参数（`impl<T> W<T, T> for Pair2<T>`）也合法。每个 trait 实参必须是具体类型，或是命名目标自身某个参数的已声明绑定器。"
 
 
-#: src/reference/traits.md:99
+#: src/reference/traits.md:104
 msgid ""
 "**The element is a type argument, not an associated type**: `impl Iterator<char> for Counter` — there are no associated `type` members."
 msgstr "**元素是类型实参，不是关联类型**：`impl Iterator<char> for Counter` —— 不存在关联的 `type` 成员。"
 
 
-#: src/reference/traits.md:102
+#: src/reference/traits.md:107
 msgid ""
 "**`Self` in impl signatures** names the impl's target under the impl's substitution: `-> Self` returns, `Self { .. }` constructs."
 msgstr ""
 "**impl 签名中的 `Self`** 在该 impl 的替换之下指代 impl 的目标：`-> Self` 用于返回，`Self { .. }` 用于构造。"
 
 
-#: src/reference/traits.md:105
+#: src/reference/traits.md:110
 msgid "Dispatch — the two-rule law"
 msgstr "分派 —— 双规则法则"
 
 
-#: src/reference/traits.md:107
+#: src/reference/traits.md:112
 msgid ""
 "Every method call compiles under exactly one of two rules; the rule is a property of the call site, fixed at compile time."
 msgstr "每个方法调用恰好在这两条规则之一之下编译；该规则是调用点的属性，在编译期固定。"
 
 
-#: src/reference/traits.md:110
+#: src/reference/traits.md:115
 msgid ""
 "**Static** — the call site names exactly one concrete type; the call binds directly to the impl's method, no vtable hop:"
 msgstr "**静态** —— 调用点恰好指名一个具体类型；调用直接绑定到 impl 的方法，没有 vtable 跳转："
 
 
-#: src/reference/traits.md:112
+#: src/reference/traits.md:117
 msgid "a concrete receiver — `c.area()` on `c: Circle`;"
 msgstr "具体接收者 —— `c: Circle` 上的 `c.area()`；"
 
 
-#: src/reference/traits.md:113
+#: src/reference/traits.md:118
 msgid ""
 "a trait-typed local of **single concrete origin** — `let d: Shape = Point { .. }; d.area()` binds straight to `Point`'s impl;"
 msgstr ""
 "**单一具体来源**的 trait 类型局部变量 —— `let d: Shape = Point { .. }; d.area()` 直接绑定到 `Point` 的 impl；"
 
 
-#: src/reference/traits.md:116
+#: src/reference/traits.md:121
 msgid ""
 "a trait-typed **parameter** — the callee specializes per concrete argument type (one clone per argument type — finite, terminating), so a trait parameter _is_ an implicit generic bound;"
 msgstr ""
 "trait 类型的**参数** —— 被调用方按具体实参类型特化（每个实参类型一个克隆 —— 有限、会终止），因此 trait 参数 _就是_ 隐式泛型约束；"
 
 
-#: src/reference/traits.md:119
+#: src/reference/traits.md:124
 msgid ""
 "a monomorphized generic — inside `fn first<T>(..)`, `T`'s members are static per instantiation."
 msgstr "单态化的泛型 —— 在 `fn first<T>(..)` 内部，`T` 的成员按实例化静态确定。"
 
 
-#: src/reference/traits.md:121
+#: src/reference/traits.md:126
 msgid ""
 "**Vtable** — the receiver is trait-typed with multiple possible concrete origins; the call consults the value's descriptor and its per-(type × trait) method table:"
 msgstr "**vtable** —— 接收者是 trait 类型且有多个可能的具体来源；调用查询值的描述符及其每（类型 × trait）方法表："
 
 
-#: src/reference/traits.md:124
+#: src/reference/traits.md:129
 msgid "heterogeneous container elements — `for (s of shapes)` over a `Vec<Shape>`;"
 msgstr "异构容器元素 —— 对 `Vec<Shape>` 的 `for (s of shapes)`；"
 
 
-#: src/reference/traits.md:126
+#: src/reference/traits.md:131
 msgid "trait-typed field/element loads;"
 msgstr "trait 类型的字段/元素加载；"
 
 
-#: src/reference/traits.md:127
+#: src/reference/traits.md:132
 msgid ""
 "branch-merged origins — `let s = if (c) { a } else { b };` where the arms carry different concretes into one trait-typed binding."
 msgstr ""
 "分支合并的来源 —— `let s = if (c) { a } else { b };` 其中两个分支把不同的具体类型带入同一个 trait 类型绑定。"
 
 
-#: src/reference/traits.md:130
+#: src/reference/traits.md:135
 msgid ""
 "Origin counting is conservative: any merge, indirection load, or cross-function flow counts as multiple. Mis-analysis cannot produce wrong code — an uncertain origin costs a vtable hop, never a wrong static bind."
 msgstr ""
 "来源计数是保守的：任何合并、间接加载或跨函数流动都计为多个。误分析不会产生错误代码 —— 不确定的来源只会付出一次 vtable 跳转，绝不会错误地静态绑定。"
 
 
-#: src/reference/traits.md:135
+#: src/reference/traits.md:140
 msgid ""
 "**The use-both gate**: `x.trait_method()` requires **both** the type and the trait to be named at the call site's module — the type by declaration or `use`, the trait by `use`. A call that matches a registered impl whose trait no `use` names is an error: \"use `I` to call its methods on `T`\"."
 msgstr ""
 "**use-both 门槛**：`x.trait_method()` 要求类型和 trait **两者**都在调用点所在模块被指名 —— 类型通过声明或 `use`，trait 通过 `use`。调用匹配到一个已注册 impl、但没有任何 `use` 指名其 trait 时报错：\"use `I` to call its methods on `T`\"。"
 
 
-#: src/reference/traits.md:141
+#: src/reference/traits.md:146
 msgid ""
 "**Widening is nominal and implicit**: a value of `T` widens to `I` exactly where the registry holds a visible `impl I for T` — on assignment, argument passing, and returns. The explicit, greppable form is the trait annotation at the receiving position (`let d: Drawable = s;`). There is no `upcast` builtin. A trait-typed value **cannot be downcast**: use it through the trait, or erase explicitly through `opaque`."
 msgstr ""
 "**宽化是名义且隐式的**：`T` 的值在注册表中存在可见的 `impl I for T` 的所有位置宽化为 `I` —— 赋值、传参和返回皆是。显式、可 grep 的形式是接收位置的类型注解（`let d: Drawable = s;`）。没有 `upcast` 内置。trait 类型的值**不能向下转型**：要么透过 trait 使用它，要么通过 `opaque` 显式擦除。"
 
 
-#: src/reference/traits.md:149
+#: src/reference/traits.md:154
 msgid "Type tests — `is`"
 msgstr "类型测试 —— `is`"
 
 
-#: src/reference/traits.md:151
+#: src/reference/traits.md:156
 msgid ""
 "`expr is Type` → `bool`, at relational precedence, non-associative. The right-hand side is a naming position: a concrete type or a bare trait name/instantiation."
 msgstr "`expr is Type` → `bool`，关系运算优先级，非结合。右侧是命名位置：具体类型，或裸 trait 名/实例化。"
 
 
-#: src/reference/traits.md:155
+#: src/reference/traits.md:160
 msgid ""
 "**Concrete RHS — exact-type test**: true when the value's exact class or struct _is_ `T`. With no inheritance this is a single descriptor lookup."
 msgstr "**具体 RHS —— 精确类型测试**：当值的精确类或结构体 _就是_ `T` 时为真。没有继承，这只是一次描述符查找。"
 
 
-#: src/reference/traits.md:158
+#: src/reference/traits.md:163
 msgid ""
 "**Trait RHS — capability probe**: true when the value's exact type has a registered impl for that trait (`k is Hashable`)."
 msgstr "**trait RHS —— 能力探测**：当值的精确类型注册了该 trait 的 impl 时为真（`k is Hashable`）。"
 
 
-#: src/reference/traits.md:160
+#: src/reference/traits.md:165
 msgid ""
 "**No flow sensitivity**: `if (x is Hashable) { .. }` grants nothing — no narrowing, no widening. The keyword answers; it does not admit."
 msgstr "**没有流敏感性**：`if (x is Hashable) { .. }` 什么也不授予 —— 不收窄，不宽化。这个关键字只回答问题；不做准入。"
 
 
-#: src/reference/traits.md:162
+#: src/reference/traits.md:167
 msgid ""
 "**Static folds**: when the receiver's static type already answers, the result is a compile-time constant, with an always-true/false lint."
 msgstr "**静态折叠**：当接收者的静态类型已能回答时，结果是编译期常量，并伴随一条恒真/恒假 lint。"
 
 
-#: src/reference/traits.md:164
+#: src/reference/traits.md:169
 msgid ""
 "`is` is total: never traps, yields only `bool`. The same descriptor answers the vtable and the probe — one runtime truth per value."
 msgstr "`is` 是全函数：绝不陷阱，只产出 `bool`。同一个描述符同时回答 vtable 和探测 —— 每个值只有一份运行时真相。"
 
 
-#: src/reference/traits.md:169
+#: src/reference/traits.md:174
 msgid "A type is iterable when it registers `impl Iterator<E> for T`:"
 msgstr "一个类型注册了 `impl Iterator<E> for T` 即为可迭代的："
 
 
-#: src/reference/traits.md:171
+#: src/reference/traits.md:176
 msgid ""
 "```rut\n"
 "use core::{ Iterator };\n"
@@ -15615,44 +15615,44 @@ msgstr ""
 "```rutuse core::{ Iterator };use ink::{ Logger };class CountUp {    n: i32;}impl CountUp {    pub fn new(n: i32) -> Self { return Self { n: n }; }}impl Iterator<i32> for CountUp {    fn iterate(self, emit: fn(i32) -> bool) {        for (let i = 1; i <= self.n; i += 1) {            if (!emit(i)) { return; }        }    }}pub fn main() {    let log = Logger.new(\"t\");    for (let v of CountUp.new(3)) {        log.info(f\"tick {v}\");    }}```"
 
 
-#: src/reference/traits.md:205
+#: src/reference/traits.md:210
 msgid ""
 "An enum value iterates the same way: `impl Iterator<E> for Color` makes `for (let v of c)` walk whatever the impl's `iterate` emits — the desugar is the trait, the target's kind is irrelevant (see [Enums](enums.md))."
 msgstr ""
 "枚举值以同样的方式迭代：`impl Iterator<E> for Color` 让 `for (let v of c)` 走遍 impl 的 `iterate` 所发射的一切——脱糖的是 trait，目标的种类无关紧要（参见[枚举](enums.md)）。"
 
 
-#: src/reference/traits.md:210
+#: src/reference/traits.md:215
 msgid ""
 "`for (v of it) { body }` desugars to `it.iterate(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false` (stopping the iteration); `continue` returns `true` immediately; a `return` inside the body stops the iteration (not the enclosing function). The loop variable is the closure's parameter — a fresh binding per iteration; captured enclosing locals are copied by value at the desugar, so accumulate through a shared cell or a method. The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
 "`for (v of it) { body }` 脱糖为带合成闭包的 `it.iterate(emit)`：先运行体，然后 `emit` 返回 `true`；`break` 返回 `false`（停止迭代）；`continue` 立即返回 `true`；体内遇到 `return` 会停止迭代（而不是外围函数）。循环变量是闭包的参数 —— 每次迭代一个新绑定；在脱糖时被捕获的外围局部变量按值复制，因此要透过共享单元或方法来累加。内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）保留其融合的索引循环，永远不会走到该协议。"
 
 
-#: src/reference/traits.md:220
+#: src/reference/traits.md:225
 msgid "Engine contracts"
 msgstr "引擎契约"
 
 
-#: src/reference/traits.md:222
+#: src/reference/traits.md:227
 msgid ""
 "`builtin trait` names are compiler-backed but **engine-named, not engine-closed** — users implement them through the ordinary nominal path:"
 msgstr "`builtin trait` 名称由编译器支撑，但**由引擎命名，不对引擎封闭** —— 用户通过普通的名义路径实现它们："
 
 
-#: src/reference/traits.md:241
+#: src/reference/traits.md:246
 msgid ""
 "`impl Future<nil> for CustomFuture` registers in the same registry as any other impl. Every builtin trait is the import-gated `pub builtin` spelling: the ENGINE weaves on the native-trait symbols — async frames, the minted cx, and the fused `for..of` loops never consult user scope — but source that SPELLS a trait name resolves it only through `use core::{ .. }` (`Iterator` for an `impl Iterator<E> for T` or a trait-typed parameter; `Future` for a user impl, a launcher's `f: Future<T>`, or `downcast<Future<..>>`; `RunContext` for a yield signature or an `async fn` head; the `Disposal` pair through `use core::{ Disposal, DisposalContext }` — see [Host fns and declaration files](host-fns.md)). See [Async and await](async.md) and [the Rc heap](rc-heap.md)."
 msgstr ""
 "`impl Future<nil> for CustomFuture` 与任何其他 impl 一样注册进同一个注册表。每个内置 trait 都是导入把守的 `pub builtin` 拼写：引擎在原生 trait 符号上织造——异步帧、铸造的 cx、融合的 `for..of` 循环从不查阅用户作用域——但拼写了 trait 名字的源码只能经 `use core::{ .. }` 解析它（`impl Iterator<E> for T` 或 trait 类型的参数用 `Iterator`；用户 impl、启动器的 `f: Future<T>`、`downcast<Future<..>>` 用 `Future`；yield 签名或 `async fn` 头用 `RunContext`；`Disposal` 对经 `use core::{ Disposal, DisposalContext }`——见[宿主函数与声明文件](host-fns.md)）。参见[异步与 await](async.md)与 [Rc 堆](rc-heap.md)。"
 
 
-#: src/reference/traits.md:254
+#: src/reference/traits.md:259
 msgid "Equality"
 msgstr "相等"
 
 
-#: src/reference/traits.md:256
+#: src/reference/traits.md:261
 msgid ""
 "`==` is a builtin operator with no vtable dispatch: primitives by value, `str`/`bytes` by content, everything else by cell identity — see [Rc, dispose, and identity](rc-dispose-identity.md). Field-wise comparison is a `Hashable`\\-style contract implemented per type; it is not connected to `==`."
 msgstr ""

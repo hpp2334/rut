@@ -87,7 +87,7 @@ fn parameterized_trait_impl_registers_as_a_template() {
     let out = compile(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          impl Readable<i64> for Source<i64> {\n\
@@ -108,7 +108,7 @@ fn trait_parameter_in_the_impl_methods_signature_resolves() {
              fn put(self, k: T, v: u32);\n\
          }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Store<T> for Source<T> {\n\
+         impl<T> Store<T> for Source<T> {\n\
              fn get(self, k: T) -> u32 { return self.id; }\n\
              fn put(self, k: T, v: u32) { }\n\
          }\n\
@@ -122,7 +122,7 @@ fn repeated_parameter_in_two_trait_slots_is_legal() {
     let ds = diags_of(
         "trait Pair2<A, B> { fn one(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Pair2<T, T> for Source<T> {\n\
+         impl<T> Pair2<T, T> for Source<T> {\n\
              fn one(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() {}\n",
@@ -135,7 +135,7 @@ fn parameter_nested_in_a_trait_argument_is_a_v1_error() {
     let ds = diags_of(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<Vec<T>> for Source<T> {\n\
+         impl<T> Readable<Vec<T>> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() {}\n",
@@ -149,20 +149,21 @@ fn parameter_nested_in_a_trait_argument_is_a_v1_error() {
 
 #[test]
 fn trait_argument_naming_no_target_parameter_and_no_type_is_a_v1_error() {
-    // `T` is not a parameter of the target (`Source<U>`) nor a type in
-    // scope — the guard diagnoses the shape, once
+    // `T` is declared but is not a parameter of the target (`Source<U>`)
+    // nor a type in scope — the guard diagnoses the shape, once
     let ds = diags_of(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<U> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<U> {\n\
+         impl<T, U> Readable<T> for Source<U> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() {}\n",
     );
     assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
     assert!(
-        ds[0]
-            .contains("`T` is neither a type in scope nor a type parameter of the impl target"),
+        ds[0].contains(
+            "`T` is declared but is not a type parameter of the impl target"
+        ),
         "{ds:?}"
     );
 }
@@ -177,10 +178,10 @@ fn exact_template_duplicate_still_errors() {
     let ds = diags_of(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() {}\n",
@@ -202,7 +203,7 @@ fn widening_dispatches_to_the_instantiated_template() {
     let mut vm = boot(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() -> u32 {\n\
@@ -225,10 +226,10 @@ fn generic_fn_body_dispatches_per_monomorphization() {
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
          class Derived<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
-         impl Readable<T> for Derived<T> {\n\
+         impl<T> Readable<T> for Derived<T> {\n\
              fn atom_id(self) -> u32 { return self.id + 1; }\n\
          }\n\
          fn read_id<T>(a: Readable<T>) -> u32 { return a.atom_id(); }\n\
@@ -252,10 +253,10 @@ fn vtable_row_is_filled_for_the_instantiation() {
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
          class Derived<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
-         impl Readable<T> for Derived<T> {\n\
+         impl<T> Readable<T> for Derived<T> {\n\
              fn atom_id(self) -> u32 { return self.id + 100; }\n\
          }\n\
          entry fn main() -> u32 {\n\
@@ -283,7 +284,7 @@ fn repeated_trait_parameters_dispatch() {
     let mut vm = boot(
         "trait Writable<A, R> { fn stamp(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Writable<T, T> for Source<T> {\n\
+         impl<T> Writable<T, T> for Source<T> {\n\
              fn stamp(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() -> u32 {\n\
@@ -303,7 +304,7 @@ fn concrete_impl_shadows_the_template_instantiation() {
     let mut vm = boot(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          impl Readable<i64> for Source<i64> {\n\
@@ -329,7 +330,7 @@ fn mixed_concrete_and_parameter_trait_arguments() {
         "trait Store<A, B> { fn mark(self) -> u32; }\n\
          class Bag<T> { n: u32 = 1; }\n\
          class Box2<T> { id: u32 = 0; }\n\
-         impl Store<Bag<i64>, T> for Box2<T> {\n\
+         impl<T> Store<Bag<i64>, T> for Box2<T> {\n\
              fn mark(self) -> u32 { return self.id; }\n\
          }\n\
          entry fn main() -> u32 {\n\
@@ -360,7 +361,7 @@ fn generic_instance_method_frames_compute_like_free_fns() {
     let mut vm = boot(
         "trait Readable<T> { fn atom_id(self) -> u32; }\n\
          class Source<T> { id: u32 = 0; }\n\
-         impl Readable<T> for Source<T> {\n\
+         impl<T> Readable<T> for Source<T> {\n\
              fn atom_id(self) -> u32 { return self.id; }\n\
          }\n\
          class Ctx2 { x: i32 = 6; }\n\
@@ -437,7 +438,7 @@ fn double_compile_of_one_source_emits_identical_bytes() {
     // observable in the emitted trait ids, function ids, and vtable rows
     let src = "trait Readable<T> { fn atom_id(self) -> u32; }\n\
                class Source<T> { id: u32 = 0; }\n\
-               impl Readable<T> for Source<T> {\n\
+               impl<T> Readable<T> for Source<T> {\n\
                    fn atom_id(self) -> u32 { return self.id; }\n\
                }\n\
                pub fn read_id<T>(a: Readable<T>) -> u32 {\n\

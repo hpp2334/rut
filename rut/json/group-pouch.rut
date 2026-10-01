@@ -13,7 +13,7 @@
 
 use pouch::{Vec};
 
-impl JsonSerialize for Vec<T> {
+impl<T> JsonSerialize for Vec<T> {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_array();
         for (let x of self) {
@@ -25,7 +25,7 @@ impl JsonSerialize for Vec<T> {
     }
 }
 
-impl JsonDeserialize for Vec<T> {
+impl<T> JsonDeserialize for Vec<T> {
     fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         let mut v = Vec<T>.new();
         r.begin_array();

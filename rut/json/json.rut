@@ -1462,7 +1462,7 @@ impl JsonDeserialize for str {
 // checker arm (survey §1.4 item 1); the body derefs explicitly — a nil
 // check through `== nil` (the tree's law; the ?bool lane keeps
 // nmapset's disclosed checker limit) — and delegates to T below.
-impl JsonSerialize for ?T {
+impl<T> JsonSerialize for ?T {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         if (self == nil) {
             w.write_raw("null");
@@ -1473,7 +1473,7 @@ impl JsonSerialize for ?T {
     }
 }
 
-impl JsonDeserialize for ?T {
+impl<T> JsonDeserialize for ?T {
     fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         if (r.try_null()) {
             // success with an absent value: (nil, nil) — the pair law's
@@ -1492,7 +1492,7 @@ impl JsonDeserialize for ?T {
 // walks forward; decode counts grammatically (skip_value), rewinds, and
 // decodes into an exactly-sized column — the base is pouch-free by law,
 // so the count comes from the doc, not a growable.
-impl JsonSerialize for [T] {
+impl<T> JsonSerialize for [T] {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_array();
         for (let x of self) {
@@ -1504,7 +1504,7 @@ impl JsonSerialize for [T] {
     }
 }
 
-impl JsonDeserialize for [T] {
+impl<T> JsonDeserialize for [T] {
     fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         let mark = r.here();
         // pass 1: the element count, grammatically

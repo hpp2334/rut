@@ -5,7 +5,7 @@ pub class Map<K, V> {
     vals: [V];
 }
 
-impl Map<K, V> {
+impl<K, V> Map<K, V> {
     pub fn single(k: K, v: V) -> Self {
         return Self { keys: [k], vals: [v] };
     }

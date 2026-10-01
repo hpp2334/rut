@@ -26,6 +26,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn collect_impl(
         &mut self,
         node: NodeId,
+        declared: &[IdentId],
         trait_ref: Option<NodeHandle<AnyTy>>,
         target: NodeHandle<AnyTy>,
         methods: &[NodeHandle<MethodDeclNode>],
@@ -41,11 +42,15 @@ impl<'a> Ctx<'a> {
         // A bare primitive name (`impl T for i32`) is a trait-impl
         // target too — trait impls only: a primitive's inherent surface
         // stays core's `builtin impl`.
+        //
+        // Generic binders are DECLARED after `impl` — the head's bare
+        // parameter names are USES; each must resolve against the
+        // declared list (the undeclared-name diagnostic names the fix).
         let (target_ty, target_data, is_local, is_used, is_prim, spell) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let generics = segs[0].generics.clone();
-                match self.ty_path_impl_target(sp, name, generics) {
+                match self.ty_path_impl_target(sp, declared, name, generics) {
                     Some(arm) => arm,
                     None => return,
                 }
@@ -61,6 +66,14 @@ impl<'a> Ctx<'a> {
                 };
                 if params.len() != 1 {
                     self.err(sp, "`[T]` takes one type parameter");
+                    return;
+                }
+                if let Some(bad) = self.undeclared_binder(declared, &params) {
+                    self.err(sp, format!(
+                        "undeclared type parameter `{}` — declare it: `impl<{}> ..`",
+                        self.name(bad),
+                        self.name(bad),
+                    ));
                     return;
                 }
                 let ph = self.types.intern(RutType {
@@ -81,6 +94,14 @@ impl<'a> Ctx<'a> {
                 };
                 if params.len() != 1 {
                     self.err(sp, "`?T` takes one type parameter");
+                    return;
+                }
+                if let Some(bad) = self.undeclared_binder(declared, &params) {
+                    self.err(sp, format!(
+                        "undeclared type parameter `{}` — declare it: `impl<{}> ..`",
+                        self.name(bad),
+                        self.name(bad),
+                    ));
                     return;
                 }
                 let ph = self.types.intern(RutType {
@@ -129,7 +150,7 @@ impl<'a> Ctx<'a> {
                 }
                 self.collect_impl_inherent(target, spell, target_ty, target_data, is_local, mths, origin)
             }
-            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths, origin),
+            Some(tr) => self.collect_impl_trait(sp, declared, tr, target_ty, target_data, ty_display, ty_origin, mths, origin),
         }
     }
     /// The TyPath impl target, resolved (plus the
@@ -149,6 +170,7 @@ impl<'a> Ctx<'a> {
     fn ty_path_impl_target(
         &mut self,
         sp: rut_lexer::span::Span,
+        declared: &[IdentId],
         name: IdentId,
         generics: Vec<NodeHandle<AnyTy>>,
     ) -> Option<(TypeId, Option<(IdentId, Vec<IdentId>)>, bool, bool, bool, IdentId)> {
@@ -177,6 +199,14 @@ impl<'a> Ctx<'a> {
                     ));
                     return None;
                 }
+                if let Some(bad) = self.undeclared_binder(declared, &params) {
+                    self.err(sp, format!(
+                        "undeclared type parameter `{}` — declare it: `impl<{}> ..`",
+                        self.name(bad),
+                        self.name(bad),
+                    ));
+                    return None;
+                }
                 Some((d.ty, Some((name, params)), true, false, false, name))
             }
         } else if let Some(e) = self.find_enum(name).cloned() {
@@ -201,6 +231,14 @@ impl<'a> Ctx<'a> {
                 self.err(sp, format!(
                     "`{}<..>` takes {} type parameter(s), {} given",
                     self.name(name), g.params.len(), params.len()
+                ));
+                return None;
+            }
+            if let Some(bad) = self.undeclared_binder(declared, &params) {
+                self.err(sp, format!(
+                    "undeclared type parameter `{}` — declare it: `impl<{}> ..`",
+                    self.name(bad),
+                    self.name(bad),
                 ));
                 return None;
             }
@@ -501,6 +539,7 @@ impl<'a> Ctx<'a> {
     fn collect_impl_trait(
         &mut self,
         sp: rut_lexer::span::Span,
+        declared: &[IdentId],
         trait_ref: NodeHandle<AnyTy>,
         target_ty: TypeId,
         target_data: Option<(IdentId, Vec<IdentId>)>,
@@ -544,13 +583,23 @@ impl<'a> Ctx<'a> {
                                 // a type in scope wins even when the name
                                 // doubles as a parameter (the impl-row
                                 // matcher's own law) — concrete, as always
-                            } else if params.contains(&n) {
+                            } else if params.contains(&n) && declared.contains(&n) {
                                 env.push((n, self.param_placeholder(n)));
+                            } else if !declared.contains(&n) {
+                                self.err(
+                                    self.ast.span(g.id()),
+                                    format!(
+                                        "undeclared type parameter `{}` — declare it: `impl<{}> ..` (a trait argument may name a declared binder of the impl target)",
+                                        self.name(n),
+                                        self.name(n),
+                                    ),
+                                );
+                                return;
                             } else {
                                 self.err(
                                     self.ast.span(g.id()),
                                     format!(
-                                        "`{}` is neither a type in scope nor a type parameter of the impl target — a parameterized trait impl (v1) takes only concrete types or the target's own type parameters as trait arguments",
+                                        "`{}` is declared but is not a type parameter of the impl target — a parameterized trait impl (v1) takes only concrete types or the target's own declared type parameters as trait arguments",
                                         self.name(n),
                                     ),
                                 );
@@ -886,5 +935,31 @@ impl<'a> Ctx<'a> {
             }
         }
         Some(out)
+    }
+
+    /// The first head parameter name that is neither in the impl's
+    /// declared binder list nor a known type spelling — the
+    /// explicit-impl-generics law's check. A KNOWN type name (`i32`,
+    /// `str`, a decl in scope) is a concrete argument, not a binder;
+    /// an unknown bare name is the undeclared-binder diagnostic.
+    /// `None` when the head resolves.
+    fn undeclared_binder(&self, declared: &[IdentId], params: &[IdentId]) -> Option<IdentId> {
+        params
+            .iter()
+            .copied()
+            .find(|p| !declared.contains(p) && !self.name_is_known_type(*p))
+    }
+
+    /// Is this bare name a known type in scope? The impl-row matcher's
+    /// own law, factored for the binder check.
+    fn name_is_known_type(&self, n: IdentId) -> bool {
+        sym::primitive_ty(n).is_some()
+            || self.find_enum(n).is_some()
+            || self.find_data(n).is_some()
+            || self.find_trait(n).is_some()
+            || self.find_alias(n).is_some()
+            || self.extern_native_types.contains_key(&n)
+            || self.extern_types.contains_key(&n)
+            || self.extern_generics.contains_key(&n)
     }
 }

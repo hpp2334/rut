@@ -100,14 +100,20 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .collect();
             Some(sym(ast.name(*name), SymKind::Trait, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Impl { trait_ref, target, methods, .. } => {
+        ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
+            let gen_head = if generics.is_empty() {
+                String::new()
+            } else {
+                let gs = generics.iter().map(|&g| ast.name(g).to_string()).collect::<Vec<_>>().join(", ");
+                format!("<{}>", gs)
+            };
             let name = match trait_ref {
-                Some(tr) => format!("impl {} for {}", ty_text(ast, *tr), ty_text(ast, *target)),
-                None => format!("impl {}", ty_text(ast, *target)),
+                Some(tr) => format!("impl{} {} for {}", gen_head, ty_text(ast, *tr), ty_text(ast, *target)),
+                None => format!("impl{} {}", gen_head, ty_text(ast, *target)),
             };
             Some(sym(&name, SymKind::Module, None, children))
         }

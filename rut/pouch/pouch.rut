@@ -27,7 +27,7 @@ pub class Vec<T> {
                         // re-reads the `buf` handle (its GetF is an RC op)
 }
 
-impl Vec<T> {
+impl<T> Vec<T> {
     pub fn new() -> Self {
         return Vec.with_capacity(0);
     }

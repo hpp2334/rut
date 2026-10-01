@@ -29,7 +29,7 @@ pub trait Show { fn show(self) -> str; }
 pub class Box<T> {
     v: T;
 }
-impl Box<T> {
+impl<T> Box<T> {
     pub fn new(v: T) -> Self {
         return Self { v: v };
     }
@@ -43,12 +43,12 @@ use tr::{Mark};
 pub class Set<T> {
     v: T;
 }
-impl Set<T> {
+impl<T> Set<T> {
     pub fn new(v: T) -> Self {
         return Self { v: v };
     }
 }
-impl Mark for Set<T> {
+impl<T> Mark for Set<T> {
     fn mark(self) -> i32 { return 1; }
 }
 ";
@@ -108,7 +108,7 @@ fn foreign_type_and_local_trait_is_legal() {
         ("app", "\
 use coll::{Set};
 trait Named { fn tag(self) -> str; }
-impl Named for Set<T> {
+impl<T> Named for Set<T> {
     fn tag(self) -> str { return \"set\"; }
 }
 fn main() -> i32 { return 0; }
@@ -147,7 +147,7 @@ fn inherent_impl_on_a_used_class_is_the_orphan_error() {
         ("coll", COLL),
         ("app", "\
 use coll::{Set};
-impl Set<T> {
+impl<T> Set<T> {
     pub fn probe_hi(self) -> i64 { return 7; }
 }
 fn main() -> i32 { return 0; }
@@ -174,7 +174,7 @@ fn both_foreign_is_the_orphan_error() {
         ("app", "\
 use fmt::{Show, Box};
 use tr::{Mark};
-impl Mark for Box<T> {
+impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
 fn main() -> i32 { return 0; }
@@ -232,7 +232,7 @@ fn opt_and_array_heads_peel_to_no_pkg() {
             "app",
             "\
 use tr::{Mark};
-impl Mark for ?T {
+impl<T> Mark for ?T {
     fn mark(self) -> i32 { return 1; }
 }
 fn main() -> i32 { return 0; }
@@ -253,7 +253,7 @@ fn main() -> i32 { return 0; }
             "app",
             "\
 use tr::{Mark};
-impl Mark for [T] {
+impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 1; }
 }
 fn main() -> i32 { return 0; }
@@ -272,10 +272,10 @@ fn main() -> i32 { return 0; }
         "app",
         "\
 trait Mark { fn mark(self) -> i32; }
-impl Mark for ?T {
+impl<T> Mark for ?T {
     fn mark(self) -> i32 { return 1; }
 }
-impl Mark for [T] {
+impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 2; }
 }
 fn main() -> i32 { return 0; }
@@ -298,7 +298,7 @@ fn generic_heads_classify_by_the_head() {
             "\
 use fmt::{Box};
 use tr::{Mark};
-impl Mark for Box<T> {
+impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
 fn main() -> i32 { return 0; }
@@ -319,7 +319,7 @@ fn main() -> i32 { return 0; }
             "\
 use fmt::{Box};
 trait Mark { fn mark(self) -> i32; }
-impl Mark for Box<T> {
+impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
 fn main() -> i32 { return 0; }
@@ -344,7 +344,7 @@ fn the_origin_not_the_unit_decides() {
         ("app", "\
 use coll::{Set};
 use tr::{Mark};
-impl Mark for Set<T> {
+impl<T> Mark for Set<T> {
     fn mark(self) -> i32 { return 2; }
 }
 fn main() -> i32 { return 0; }
@@ -384,7 +384,7 @@ fn consumer_impl_of_jsonserialize_for_hashset_errors() {
 use json::{ JsonSerialize, JsonWriter, EncodeJsonError };
 use nmapset::{ HashSet };
 
-impl JsonSerialize for HashSet<T> {
+impl<T> JsonSerialize for HashSet<T> {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError { return nil; }
 }
 
@@ -427,10 +427,10 @@ struct Thing { n: i32 }
 impl Mark for Thing {
     fn mark(self) -> i32 { return self.n; }
 }
-impl Mark for ?T {
+impl<T> Mark for ?T {
     fn mark(self) -> i32 { return 1; }
 }
-impl Mark for [T] {
+impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 2; }
 }
 pub fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }

@@ -36,7 +36,7 @@ class Box<K requires Hash, V> {
     k: K;
     v: V;
 }
-impl Box<K, V> {
+impl<K, V> Box<K, V> {
     pub fn new(k: K, v: V) -> Self {
         return Self { k: k, v: v };
     }
@@ -86,7 +86,7 @@ fn bound_proves_the_widening_inside_the_class_body() {
          \x20   k: K;\n\
          \x20   v: V;\n\
          }\n\
-         impl Box<K, V> {\n\
+         impl<K, V> Box<K, V> {\n\
          \x20   pub fn new(k: K, v: V) -> Self {\n\
          \x20       return Self { k: k, v: v };\n\
          \x20   }\n\
@@ -117,7 +117,7 @@ class Box<K requires Key, V> {
     k: K;
     v: V;
 }
-impl Box<K, V> {
+impl<K, V> Box<K, V> {
     pub fn new(k: K, v: V) -> Self {
         return Self { k: k, v: v };
     }
@@ -156,7 +156,7 @@ class Box<K requires i32 | Token, V> {
     k: K;
     v: V;
 }
-impl Box<K, V> {
+impl<K, V> Box<K, V> {
     pub fn new(k: K, v: V) -> Self {
         return Self { k: k, v: v };
     }

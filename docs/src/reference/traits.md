@@ -88,14 +88,19 @@ pub fn main() {
   inherent `impl i32 { .. }` diagnoses — a primitive's inherent surface
   belongs to the engine.
 - **Generic traits and generic targets**: `trait Wrap<T>` gives each
-  type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`);
-  `impl Hashable for Pair<A, B>` binds the target's generic args as the
-  impl's type parameters. Parameterized trait impls are legal:
-  `impl Readable<T> for Source<T>` registers a **template** serving
+  type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`).
+  Generic binders are **declared after `impl`** — `impl<A, B>
+  Hashable for Pair<A, B>` — and that list is the definition site: a
+  bare parameter name in the head is a use that must resolve against
+  it (an undeclared name is the error it always should have been —
+  "undeclared type parameter `T` — declare it: `impl<T> ..`"). The
+  same law covers inherent impls: `impl<T> Vec<T> { .. }`, not
+  `impl Vec<T> { .. }`. Parameterized trait impls are legal:
+  `impl<T> Readable<T> for Source<T>` registers a **template** serving
   every concrete instantiation; a hand-written concrete impl shadows
-  the template; repeated parameters (`impl W<T, T> for Pair2<T>`) are
-  legal. Each trait-argument must be a concrete type or a bare name of
-  one of the target's own parameters.
+  the template; repeated parameters (`impl<T> W<T, T> for Pair2<T>`)
+  are legal. Each trait argument must be a concrete type or a declared
+  binder that names one of the target's own parameters.
 - **The element is a type argument, not an associated type**:
   `impl Iterator<char> for Counter` — there are no associated `type`
   members.

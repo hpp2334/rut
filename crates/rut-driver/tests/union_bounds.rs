@@ -227,7 +227,7 @@ fn class_body_method_call_through_the_union_bound() {
          \x20   k: K;\n\
          \x20   v: V;\n\
          }}\n\
-         impl Box<K, V> {{\n\
+         impl<K, V> Box<K, V> {{\n\
          \x20   pub fn new(k: K, v: V) -> Self {{ return Self {{ k: k, v: v }}; }}\n\
          \x20   pub fn go(self) -> i32 {{ let kk = self.k; return kk.lane() * 10; }}\n\
          }}\n"
@@ -251,7 +251,7 @@ fn class_body_method_call_through_the_union_bound() {
          \x20   k: K;\n\
          \x20   v: V;\n\
          }}\n\
-         impl Box<K, V> {{\n\
+         impl<K, V> Box<K, V> {{\n\
          \x20   pub fn new(k: K, v: V) -> Self {{ return Self {{ k: k, v: v }}; }}\n\
          \x20   pub fn go(self) -> i32 {{ let kk = self.k; return kk.lane(); }}\n\
          }}\n\

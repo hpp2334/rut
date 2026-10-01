@@ -274,7 +274,7 @@ fn builtin_class_inherent_impls_compile() {
     // `LaunchedTask<T>` pattern): generic through the
     // element parameter, dispatched statically through the shape
     let out = compile(
-        "impl [T] {\n\
+        "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
          fn main() -> i32 {\n\

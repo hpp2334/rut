@@ -317,14 +317,20 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::Impl { trait_ref, target, methods, .. } => {
+            ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
                 let trait_head = trait_ref
                     .map(|tr| ty_head(ast, tr))
                     .unwrap_or_default();
-                let owner = if trait_ref.is_some() {
-                    format!("impl {} for {}", trait_head, ty_head(ast, *target))
+                let gen_head = if generics.is_empty() {
+                    String::new()
                 } else {
-                    format!("impl {}", ty_head(ast, *target))
+                    let gs = generics.iter().map(|&g| ast.name(g).to_string()).collect::<Vec<_>>().join(", ");
+                    format!("<{}>", gs)
+                };
+                let owner = if trait_ref.is_some() {
+                    format!("impl{} {} for {}", gen_head, trait_head, ty_head(ast, *target))
+                } else {
+                    format!("impl{} {}", gen_head, ty_head(ast, *target))
                 };
                 idx.impls.push(ImplDef {
                     trait_name: trait_head,

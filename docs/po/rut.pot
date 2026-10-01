@@ -1575,7 +1575,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:240 src/tutorial/types.md:280
-#: src/tutorial/traits.md:320 src/tutorial/errors.md:233
+#: src/tutorial/traits.md:325 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:255 src/tutorial/async.md:179
 #: src/tutorial/stdlib.md:323
 msgid "Put it together"
@@ -2844,10 +2844,13 @@ msgid ""
 "`impl Trait for Type { .. }` registers the pair. Every method must match the "
 "trait's signature exactly; extra methods don't belong here (put those in an "
 "inherent block). Trait impl methods carry no `pub` — they are as visible as "
-"the trait."
+"the trait. Generic binders are **declared after `impl`** — `impl<T> "
+"Readable<T> for Source<T>` — and the declared list is the definition site: a "
+"bare parameter name in the head that it does not declare is an error naming "
+"the fix."
 msgstr ""
 
-#: src/tutorial/traits.md:33
+#: src/tutorial/traits.md:36
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2872,49 +2875,50 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:59
+#: src/tutorial/traits.md:62
 msgid "Rules worth knowing:"
 msgstr ""
 
-#: src/tutorial/traits.md:61
+#: src/tutorial/traits.md:64
 msgid ""
 "**One impl per (trait, type) pair, program-wide.** A duplicate is a link "
 "error."
 msgstr ""
 
-#: src/tutorial/traits.md:63
+#: src/tutorial/traits.md:66
 msgid ""
 "**Placement:** an impl may live in a module of the trait's package or the "
 "type's package — at least one side must be yours. You cannot implement two "
 "foreign types to each other."
 msgstr ""
 
-#: src/tutorial/traits.md:66
+#: src/tutorial/traits.md:69
 msgid ""
 "**An empty impl block is legal** and acts as a marker: `impl Serializable "
 "for Point {}` says \"this type is in\" when the trait has no required "
 "methods."
 msgstr ""
 
-#: src/tutorial/traits.md:69
+#: src/tutorial/traits.md:72
 msgid ""
 "**Primitives can implement traits too** (in the trait's own package or "
 "module) — the standard library uses this to give integer widths a common "
 "internal interface."
 msgstr ""
 
-#: src/tutorial/traits.md:73
+#: src/tutorial/traits.md:76
 msgid "Inherent impls"
 msgstr ""
 
-#: src/tutorial/traits.md:75
+#: src/tutorial/traits.md:78
 msgid ""
 "`impl Type { .. }` — no trait — is where a type's own methods live: class "
 "methods like `new`, instance methods, helpers. It compiles only in the "
-"module that declares the type."
+"module that declares the type. A generic type's inherent impl declares its "
+"binders the same way a trait impl does: `impl<T> Vec<T> { .. }`."
 msgstr ""
 
-#: src/tutorial/traits.md:79
+#: src/tutorial/traits.md:84
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2935,17 +2939,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:101
+#: src/tutorial/traits.md:106
 msgid "Using trait values"
 msgstr ""
 
-#: src/tutorial/traits.md:103
+#: src/tutorial/traits.md:108
 msgid ""
 "**Widening is implicit** at any position that expects the trait: an "
 "annotated binding, a field, an argument, a return."
 msgstr ""
 
-#: src/tutorial/traits.md:106
+#: src/tutorial/traits.md:111
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2970,13 +2974,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:132
+#: src/tutorial/traits.md:137
 msgid ""
 "**Trait-typed parameters accept any implementor** — write the function once, "
 "call it with each concrete type:"
 msgstr ""
 
-#: src/tutorial/traits.md:135
+#: src/tutorial/traits.md:140
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3011,7 +3015,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:172
+#: src/tutorial/traits.md:177
 msgid ""
 "**Heterogeneous containers** hold mixed implementors behind the trait name. "
 "Inside a single-typed context calls bind directly; iterating a collection of "
@@ -3019,7 +3023,7 @@ msgid ""
 "mis-guessing costs one hop, never wrong behavior:"
 msgstr ""
 
-#: src/tutorial/traits.md:177
+#: src/tutorial/traits.md:182
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -3057,25 +3061,25 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:216
+#: src/tutorial/traits.md:221
 msgid "Type tests: `is`"
 msgstr ""
 
-#: src/tutorial/traits.md:218
+#: src/tutorial/traits.md:223
 msgid "`expr is Type` answers with a `bool` and never traps:"
 msgstr ""
 
-#: src/tutorial/traits.md:220
+#: src/tutorial/traits.md:225
 msgid "**Concrete RHS** — `p is Circle`: an exact-type test."
 msgstr ""
 
-#: src/tutorial/traits.md:221
+#: src/tutorial/traits.md:226
 msgid ""
 "**Trait RHS** — `p is Shape`: a capability probe (\"does this value's type "
 "have an impl of `Shape`?\")."
 msgstr ""
 
-#: src/tutorial/traits.md:224
+#: src/tutorial/traits.md:229
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3106,7 +3110,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:256
+#: src/tutorial/traits.md:261
 msgid ""
 "`is` answers the question; it changes nothing — there is no narrowing and no "
 "downcast through a trait. A trait-typed value is used through its trait's "
@@ -3116,11 +3120,11 @@ msgid ""
 "opaque](../reference/opaque.md)."
 msgstr ""
 
-#: src/tutorial/traits.md:263
+#: src/tutorial/traits.md:268
 msgid "Bounds connect traits to generics"
 msgstr ""
 
-#: src/tutorial/traits.md:265
+#: src/tutorial/traits.md:270
 msgid ""
 "`fn name<T requires Labeled>(x: T)` admits exactly the instantiations whose "
 "concrete type has an impl of `Labeled` — see [functions, closures, and "
@@ -3128,11 +3132,11 @@ msgid ""
 "body: `let w: Labeled = x;`."
 msgstr ""
 
-#: src/tutorial/traits.md:270
+#: src/tutorial/traits.md:275
 msgid "Making your type iterable"
 msgstr ""
 
-#: src/tutorial/traits.md:272
+#: src/tutorial/traits.md:277
 msgid ""
 "A type becomes a `for..of` target by implementing the builtin `Iterator<E>` "
 "contract with its single resumption member (`Iterator` is core's "
@@ -3140,7 +3144,7 @@ msgid ""
 "`use core::{ Iterator }`; the builtin sequences themselves never need it):"
 msgstr ""
 
-#: src/tutorial/traits.md:278
+#: src/tutorial/traits.md:283
 msgid ""
 "```rut\n"
 "use core::{ Iterator };\n"
@@ -3170,7 +3174,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:308
+#: src/tutorial/traits.md:313
 msgid ""
 "`for (let v of it)` desugars to `it.iterate(emit)` with a synthetic closure, "
 "and the capture law covers it like every closure: scalars copy (a rebind "
@@ -3181,13 +3185,13 @@ msgid ""
 "through a shared `vec.push(v)` works, and so does plain reassignment."
 msgstr ""
 
-#: src/tutorial/traits.md:317
+#: src/tutorial/traits.md:322
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the "
 "trait — their loops are fused, never a per-element call."
 msgstr ""
 
-#: src/tutorial/traits.md:322
+#: src/tutorial/traits.md:327
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -3236,7 +3240,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/traits.md:374
+#: src/tutorial/traits.md:379
 msgid "Next: [errors and optionality](errors.md)."
 msgstr ""
 
@@ -5755,7 +5759,7 @@ msgid ""
 "method can never silently change what someone else's call site means."
 msgstr ""
 
-#: src/core-concepts/traits-and-dispatch.md:175 src/reference/traits.md:167
+#: src/core-concepts/traits-and-dispatch.md:175 src/reference/traits.md:172
 msgid "The iteration protocol"
 msgstr ""
 
@@ -12591,96 +12595,101 @@ msgstr ""
 #: src/reference/traits.md:90
 msgid ""
 "**Generic traits and generic targets**: `trait Wrap<T>` gives each "
-"type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`); `impl "
-"Hashable for Pair<A, B>` binds the target's generic args as the impl's type "
-"parameters. Parameterized trait impls are legal: `impl Readable<T> for "
-"Source<T>` registers a **template** serving every concrete instantiation; a "
-"hand-written concrete impl shadows the template; repeated parameters (`impl "
-"W<T, T> for Pair2<T>`) are legal. Each trait-argument must be a concrete "
-"type or a bare name of one of the target's own parameters."
+"type-argument list its own instantiation (`Wrap<i32>` ≠ `Wrap<str>`). "
+"Generic binders are **declared after `impl`** — `impl<A, B> Hashable for "
+"Pair<A, B>` — and that list is the definition site: a bare parameter name in "
+"the head is a use that must resolve against it (an undeclared name is the "
+"error it always should have been — \"undeclared type parameter `T` — declare "
+"it: `impl<T> ..`\"). The same law covers inherent impls: `impl<T> Vec<T> { "
+".. }`, not `impl Vec<T> { .. }`. Parameterized trait impls are legal: "
+"`impl<T> Readable<T> for Source<T>` registers a **template** serving every "
+"concrete instantiation; a hand-written concrete impl shadows the template; "
+"repeated parameters (`impl<T> W<T, T> for Pair2<T>`) are legal. Each trait "
+"argument must be a concrete type or a declared binder that names one of the "
+"target's own parameters."
 msgstr ""
 
-#: src/reference/traits.md:99
+#: src/reference/traits.md:104
 msgid ""
 "**The element is a type argument, not an associated type**: `impl "
 "Iterator<char> for Counter` — there are no associated `type` members."
 msgstr ""
 
-#: src/reference/traits.md:102
+#: src/reference/traits.md:107
 msgid ""
 "**`Self` in impl signatures** names the impl's target under the impl's "
 "substitution: `-> Self` returns, `Self { .. }` constructs."
 msgstr ""
 
-#: src/reference/traits.md:105
+#: src/reference/traits.md:110
 msgid "Dispatch — the two-rule law"
 msgstr ""
 
-#: src/reference/traits.md:107
+#: src/reference/traits.md:112
 msgid ""
 "Every method call compiles under exactly one of two rules; the rule is a "
 "property of the call site, fixed at compile time."
 msgstr ""
 
-#: src/reference/traits.md:110
+#: src/reference/traits.md:115
 msgid ""
 "**Static** — the call site names exactly one concrete type; the call binds "
 "directly to the impl's method, no vtable hop:"
 msgstr ""
 
-#: src/reference/traits.md:112
+#: src/reference/traits.md:117
 msgid "a concrete receiver — `c.area()` on `c: Circle`;"
 msgstr ""
 
-#: src/reference/traits.md:113
+#: src/reference/traits.md:118
 msgid ""
 "a trait-typed local of **single concrete origin** — `let d: Shape = Point { "
 ".. }; d.area()` binds straight to `Point`'s impl;"
 msgstr ""
 
-#: src/reference/traits.md:116
+#: src/reference/traits.md:121
 msgid ""
 "a trait-typed **parameter** — the callee specializes per concrete argument "
 "type (one clone per argument type — finite, terminating), so a trait "
 "parameter _is_ an implicit generic bound;"
 msgstr ""
 
-#: src/reference/traits.md:119
+#: src/reference/traits.md:124
 msgid ""
 "a monomorphized generic — inside `fn first<T>(..)`, `T`'s members are static "
 "per instantiation."
 msgstr ""
 
-#: src/reference/traits.md:121
+#: src/reference/traits.md:126
 msgid ""
 "**Vtable** — the receiver is trait-typed with multiple possible concrete "
 "origins; the call consults the value's descriptor and its per-(type × trait) "
 "method table:"
 msgstr ""
 
-#: src/reference/traits.md:124
+#: src/reference/traits.md:129
 msgid ""
 "heterogeneous container elements — `for (s of shapes)` over a `Vec<Shape>`;"
 msgstr ""
 
-#: src/reference/traits.md:126
+#: src/reference/traits.md:131
 msgid "trait-typed field/element loads;"
 msgstr ""
 
-#: src/reference/traits.md:127
+#: src/reference/traits.md:132
 msgid ""
 "branch-merged origins — `let s = if (c) { a } else { b };` where the arms "
 "carry different concretes into one trait-typed binding."
 msgstr ""
 
-#: src/reference/traits.md:130
+#: src/reference/traits.md:135
 msgid ""
 "Origin counting is conservative: any merge, indirection load, or "
 "cross-function flow counts as multiple. Mis-analysis cannot produce wrong "
 "code — an uncertain origin costs a vtable hop, never a wrong static bind."
 msgstr ""
 
-#: src/reference/traits.md:135
+#: src/reference/traits.md:140
 msgid ""
 "**The use-both gate**: `x.trait_method()` requires **both** the type and the "
 "trait to be named at the call site's module — the type by declaration or "
@@ -12688,7 +12697,7 @@ msgid ""
 "no `use` names is an error: \"use `I` to call its methods on `T`\"."
 msgstr ""
 
-#: src/reference/traits.md:141
+#: src/reference/traits.md:146
 msgid ""
 "**Widening is nominal and implicit**: a value of `T` widens to `I` exactly "
 "where the registry holds a visible `impl I for T` — on assignment, argument "
@@ -12698,52 +12707,52 @@ msgid ""
 "trait, or erase explicitly through `opaque`."
 msgstr ""
 
-#: src/reference/traits.md:149
+#: src/reference/traits.md:154
 msgid "Type tests — `is`"
 msgstr ""
 
-#: src/reference/traits.md:151
+#: src/reference/traits.md:156
 msgid ""
 "`expr is Type` → `bool`, at relational precedence, non-associative. The "
 "right-hand side is a naming position: a concrete type or a bare trait "
 "name/instantiation."
 msgstr ""
 
-#: src/reference/traits.md:155
+#: src/reference/traits.md:160
 msgid ""
 "**Concrete RHS — exact-type test**: true when the value's exact class or "
 "struct _is_ `T`. With no inheritance this is a single descriptor lookup."
 msgstr ""
 
-#: src/reference/traits.md:158
+#: src/reference/traits.md:163
 msgid ""
 "**Trait RHS — capability probe**: true when the value's exact type has a "
 "registered impl for that trait (`k is Hashable`)."
 msgstr ""
 
-#: src/reference/traits.md:160
+#: src/reference/traits.md:165
 msgid ""
 "**No flow sensitivity**: `if (x is Hashable) { .. }` grants nothing — no "
 "narrowing, no widening. The keyword answers; it does not admit."
 msgstr ""
 
-#: src/reference/traits.md:162
+#: src/reference/traits.md:167
 msgid ""
 "**Static folds**: when the receiver's static type already answers, the "
 "result is a compile-time constant, with an always-true/false lint."
 msgstr ""
 
-#: src/reference/traits.md:164
+#: src/reference/traits.md:169
 msgid ""
 "`is` is total: never traps, yields only `bool`. The same descriptor answers "
 "the vtable and the probe — one runtime truth per value."
 msgstr ""
 
-#: src/reference/traits.md:169
+#: src/reference/traits.md:174
 msgid "A type is iterable when it registers `impl Iterator<E> for T`:"
 msgstr ""
 
-#: src/reference/traits.md:171
+#: src/reference/traits.md:176
 msgid ""
 "```rut\n"
 "use core::{ Iterator };\n"
@@ -12774,14 +12783,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/traits.md:205
+#: src/reference/traits.md:210
 msgid ""
 "An enum value iterates the same way: `impl Iterator<E> for Color` makes `for "
 "(let v of c)` walk whatever the impl's `iterate` emits — the desugar is the "
 "trait, the target's kind is irrelevant (see [Enums](enums.md))."
 msgstr ""
 
-#: src/reference/traits.md:210
+#: src/reference/traits.md:215
 msgid ""
 "`for (v of it) { body }` desugars to `it.iterate(emit)` with a synthetic "
 "closure: the body runs, then `emit` returns `true`; `break` returns `false` "
@@ -12793,17 +12802,17 @@ msgid ""
 "`str`, `bytes`) keep their fused index loops and never reach the protocol."
 msgstr ""
 
-#: src/reference/traits.md:220
+#: src/reference/traits.md:225
 msgid "Engine contracts"
 msgstr ""
 
-#: src/reference/traits.md:222
+#: src/reference/traits.md:227
 msgid ""
 "`builtin trait` names are compiler-backed but **engine-named, not "
 "engine-closed** — users implement them through the ordinary nominal path:"
 msgstr ""
 
-#: src/reference/traits.md:241
+#: src/reference/traits.md:246
 msgid ""
 "`impl Future<nil> for CustomFuture` registers in the same registry as any "
 "other impl. Every builtin trait is the import-gated `pub builtin` spelling: "
@@ -12818,11 +12827,11 @@ msgid ""
 "Rc heap](rc-heap.md)."
 msgstr ""
 
-#: src/reference/traits.md:254
+#: src/reference/traits.md:259
 msgid "Equality"
 msgstr ""
 
-#: src/reference/traits.md:256
+#: src/reference/traits.md:261
 msgid ""
 "`==` is a builtin operator with no vtable dispatch: primitives by value, "
 "`str`/`bytes` by content, everything else by cell identity — see [Rc, "

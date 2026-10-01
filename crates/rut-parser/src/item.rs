@@ -615,12 +615,25 @@ impl TraitFrame {
 pub(crate) struct ImplFrame {
     lo: u32,
     stage: ImStage,
+    /// the declared generic binders (`impl<T, U> ..`) — the definition
+    /// site; bare params in the head must resolve against this list
+    generics: Vec<IdentId>,
+    /// bounds accepted for grammar uniformity (`impl<T requires ..>`) —
+    /// std needs none today; the collector ignores them (admission is
+    /// the fn/class machinery's business)
+    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    /// the generic whose `requires` bound is being parsed (GenBound stage)
+    pending: Option<IdentId>,
     trait_ref: Option<NodeHandle<AnyTy>>,
     target: Option<NodeHandle<AnyTy>>,
 }
 
 #[derive(Clone, Copy)]
 enum ImStage {
+    /// the declared `<..>` list (when the head spells one)
+    Generics,
+    /// the bound of a suspended generic — a child Type frame
+    GenBound,
     /// the first type — target or trait ref, decided by `for`
     Head,
     /// the trait impl's target (after `impl Trait for`)
@@ -631,7 +644,15 @@ enum ImStage {
 
 impl ImplFrame {
     pub(crate) fn new() -> Self {
-        ImplFrame { lo: 0, stage: ImStage::Head, trait_ref: None, target: None }
+        ImplFrame {
+            lo: 0,
+            stage: ImStage::Head,
+            generics: Vec::new(),
+            bounds: Vec::new(),
+            pending: None,
+            trait_ref: None,
+            target: None,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -642,11 +663,35 @@ impl ImplFrame {
                 "implementation in a declaration file —`impl` blocks live in `.rut`",
             );
         }
+        // the declared generic binders — the same list grammar the
+        // fn/class routines drive (bounds included, for uniformity)
+        if matches!(p.tok(), Tok::Lt) {
+            let (gens, pending) = generic_params(p, true, "impl");
+            self.generics = gens;
+            if let Some(g) = pending {
+                self.pending = Some(g);
+                self.stage = ImStage::GenBound;
+                return Step::Push(Frame::Type(TypeFrame::new(p)));
+            }
+        }
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (self.stage, d) {
+            (ImStage::GenBound, Done::Ty(t)) => {
+                let g = self.pending.take().expect("bound without a parameter");
+                self.bounds.push((g, t));
+                // continue the list at the next parameter (or close it)
+                let pending = generic_params_more(p, true, "impl", &mut self.generics);
+                if let Some(g) = pending {
+                    self.pending = Some(g);
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+                }
+                self.stage = ImStage::Head;
+                Step::Push(Frame::Type(TypeFrame::new(p)))
+            }
+            (ImStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (ImStage::Head, Done::Ty(t)) => {
                 if p.at_kw("for") {
                     p.bump();
@@ -668,6 +713,8 @@ impl ImplFrame {
             (ImStage::Methods, Done::Body(_, methods)) => {
                 let node = p.item(
                     ItemKind::Impl {
+                        generics: std::mem::take(&mut self.generics),
+                        bounds: std::mem::take(&mut self.bounds),
                         trait_ref: self.trait_ref.take(),
                         target: self.target.take().expect("impl without a target"),
                         methods,
