@@ -252,7 +252,7 @@ fn v5_byte_stability_writers_emit_6_only_for_decl_roots() {
 #[test]
 fn strip_refuses_on_a_host_root() {
     let dir = host_world("strip", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
-    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err();
+    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err().to_string();
     assert!(err.contains("no symbols to strip"), "{err}");
 }
 

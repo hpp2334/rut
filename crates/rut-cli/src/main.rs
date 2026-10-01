@@ -357,7 +357,7 @@ fn pack(dir: &str, out: Option<&str>, strip: bool) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("pack: {e}");
-            evict_poisoned_cache(p, &e);
+            evict_poisoned_cache(p, &e.to_string());
             std::process::exit(2);
         }
     };

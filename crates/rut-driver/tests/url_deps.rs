@@ -594,7 +594,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
 
     let mut map = BTreeMap::new();
     map.insert(url, bytes);
-    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err();
+    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("packed dep `codec` needs its own [dev-deps] directories"),
         "{err}"
@@ -620,7 +620,7 @@ fn pack_refuses_unused_compiled_url_dep() {
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
-    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err();
+    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("compiled group `util`"),
         "{err}"

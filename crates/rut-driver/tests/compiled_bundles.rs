@@ -463,7 +463,7 @@ fn required_peer_absent_is_d1_at_pack() {
         &manifest("req", "req.rut", "[peer-deps]\nmissing = { path = \"../missing\" }\n"),
     );
     write(&req, "req.rut", "pub fn f() -> i32 { return 7; }\n");
-    let err = pack_dir(&app).unwrap_err();
+    let err = pack_dir(&app).unwrap_err().to_string();
     assert!(err.contains("requires the peer `missing`"), "{err}");
     assert!(err.contains("peers are not pulled transitively"), "{err}");
 }

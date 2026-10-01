@@ -245,7 +245,7 @@ fn mixed_closure_with_a_source_group_refuses_strip() {
     let dir = root.join("app");
     // without --strip the mixed world packs as always
     pack_dir_opts(&dir, &PackOpts::default()).expect("plain pack rides mixed");
-    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err();
+    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err().to_string();
     assert!(err.contains("boxy"), "names the source group: {err}");
     assert!(err.contains("util"), "names the compiled dep: {err}");
     assert!(err.contains("fully-compiled"), "says why: {err}");
@@ -298,12 +298,12 @@ fn strip_refuses_a_generic_owning_closure() {
     );
     // the ROOT arm: app itself is concrete — but pairz's group is the
     // generic owner
-    let err = pack_dir_opts(&app, &PackOpts { strip: true }).unwrap_err();
+    let err = pack_dir_opts(&app, &PackOpts { strip: true }).unwrap_err().to_string();
     assert!(err.contains("pairz"), "names the generic owner: {err}");
     assert!(err.contains("generic"), "says why: {err}");
     assert!(err.contains("--strip"), "names the escape hatch: {err}");
     // the root arm: a generic root refuses the same way
-    let err = pack_dir_opts(&lib, &PackOpts { strip: true }).unwrap_err();
+    let err = pack_dir_opts(&lib, &PackOpts { strip: true }).unwrap_err().to_string();
     assert!(err.contains("pairz"), "names the generic root: {err}");
     assert!(err.contains("generic"), "says why: {err}");
     let _ = std::fs::remove_dir_all(&root);

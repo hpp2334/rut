@@ -42,7 +42,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let mut pinned = std::pin::pin!(rut_driver::pack_dir_opts_with(d, &opts, &remote));
     loop {
         match pinned.as_mut().poll(&mut cx) {
-            std::task::Poll::Ready(v) => break v.map(|(bytes, _)| bytes),
+            std::task::Poll::Ready(v) => break v.map(|(bytes, _)| bytes).map_err(|e| e.to_string()),
             std::task::Poll::Pending => std::thread::yield_now(),
         }
     }

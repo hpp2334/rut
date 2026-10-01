@@ -136,7 +136,7 @@ fn refusals() {
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
-    let err = pack_dir(&dir).unwrap_err();
+    let err = pack_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("surface.d.rut"), "{err}");
 
     // a loose .rut file is not a path-form module

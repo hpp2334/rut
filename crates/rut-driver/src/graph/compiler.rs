@@ -1,142 +1,70 @@
-//! Module-graph compilation — the driver half.
-//!
-//! Walks a root module's `use` statements through a [`Session`]. Every
-//! module compiles under its own scope and LINKS: its `Surface` binds
-//! into each using module, class methods cross on the surface's
-//! inherent rows (the linkable-classes phase), and a generic export's
-//! instantiations are requested from the declaring package
-//! (owner-anchored generics). No source crosses a boundary — there is
-//! no splice, no second compilation model.
-//!
-//! The dispatch is on the mounted [`ModuleBody`]: a source body takes
-//! the compile path (its peer-integration groups, presence-gated, ride
-//! the same unit), a host body synthesizes its placeholder program,
-//! and a compiled body (a v5 bundle's decoded `.rutc`) is pushed after
-//! a fresh-scope rebase of its packed ids.
-//!
-//! Programs are pushed in post-order, so the link order registers every
-//! scope before a dependent references it.
+//! The graph walk itself: [`GraphCompiler`] ensures every module in
+//! the closure, compiles each under its own scope, and routes the
+//! owner-anchored instantiation requests.
 
 use std::collections::{HashMap, HashSet};
 
-use rut_ast::ast::{Ast, ItemKind};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 use rut_core::binary::Program;
 use rut_parser::{parse, Mode};
 
+use rut_ast::ast::{Ast, ItemKind};
+
+use super::build_seed_groups;
 use crate::session::{ModuleBody, Session};
 use crate::compile_program_resolved;
 use crate::Seeds;
 
-/// A linked module graph.
-pub struct GraphOutput {
-    pub diags: Vec<Diag>,
-    /// the flattened (dense-id) program — ready for `encode` and the VM
-    pub program: Option<Program>,
-}
-
-/// Compile `root_spec` and its transitive uses from `session`.
-pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
-    let units = compile_units(session, root_spec);
-    if !units.ok {
-        return GraphOutput { diags: units.diags, program: None };
-    }
-    match rut_core::link::link(units.programs) {
-        Ok(p) => GraphOutput { diags: units.diags, program: Some(p) },
-        Err(e) => {
-            let mut diags = units.diags;
-            diags.push(Diag::new(Span::new(0, 0), format!("link: {e}")));
-            GraphOutput { diags, program: None }
-        }
-    }
-}
-
-/// Per-package compile results — [`compile_graph`]'s walk, exposed for
-/// the packer: the pushed programs in post-order, and each linked
-/// module's own program and scope.
-pub struct Units {
-    pub diags: Vec<Diag>,
-    /// every pushed program, post-order (compile_graph links these)
-    pub programs: Vec<Program>,
-    /// each ensured-and-linked module: spec → (index into `programs`, scope)
-    pub linked: HashMap<String, (usize, rut_core::ScopeId)>,
-    /// `true` when the root produced a program (the walk succeeded)
-    pub ok: bool,
-}
-
-/// Compile (or mount) every module in `root_spec`'s use closure — the
-/// packer's view of [`compile_graph`].
-pub fn compile_units(session: &Session, root_spec: &str) -> Units {
-    let mut c = GraphCompiler {
-        session,
-        next_scope: 1,
-        programs: Vec::new(),
-        done: HashMap::new(),
-        visiting: HashSet::new(),
-        diags: Vec::new(),
-        unit_src: HashMap::new(),
-        in_flight: HashMap::new(),
-        body_kind: HashMap::new(),
-        requests: Vec::new(),
-        seed_pool: HashMap::new(),
-        seeded_keys: HashSet::new(),
-        fresh_owners: HashSet::new(),
-    };
-    let ok = c.ensure(root_spec).is_some();
-    c.resolve_requests();
-    let (diags, programs, linked) = c.finish();
-    Units { diags, programs, linked, ok }
-}
-
 /// A resolved module: the claim ticket into the walk's tables — the
 /// pushed program's index and the unit's scope. One compilation model:
 /// every module links.
+
 #[derive(Clone)]
-struct Unit {
-    idx: usize,
-    scope: rut_core::ScopeId,
+pub(super) struct Unit {
+    pub(super) idx: usize,
+    pub(super) scope: rut_core::ScopeId,
 }
 
-struct GraphCompiler<'a> {
-    session: &'a Session,
-    next_scope: rut_core::ScopeId,
+pub(super) struct GraphCompiler<'a> {
+    pub(super) session: &'a Session,
+    pub(super) next_scope: rut_core::ScopeId,
     /// post-order: dependencies precede their users
-    programs: Vec<Program>,
-    done: HashMap<String, Unit>,
-    visiting: HashSet<String>,
-    diags: Vec<Diag>,
+    pub(super) programs: Vec<Program>,
+    pub(super) done: HashMap<String, Unit>,
+    pub(super) visiting: HashSet<String>,
+    pub(super) diags: Vec<Diag>,
     /// linked SOURCE units' exact compile inputs — the recompile a
     /// request-heavy owner gets replays them verbatim, seeds aside
-    unit_src: HashMap<String, UnitSrc>,
+    pub(super) unit_src: HashMap<String, UnitSrc>,
     /// specs mid-`ensure` (a chain can nest several) → the scope their
     /// unit will carry. A compiled module mounted while its CONSUMER is
     /// still being compiled maps the consumer's packed block forward
     /// through this — the requester's rows travel inside the owner's
     /// binary (the seeded instantiations reference them).
-    in_flight: HashMap<String, rut_core::ScopeId>,
+    pub(super) in_flight: HashMap<String, rut_core::ScopeId>,
     /// how each ensured spec is mounted (source / compiled / host) —
     /// the request resolution reads it to pick the owner arm
-    body_kind: HashMap<String, u8>,
+    pub(super) body_kind: HashMap<String, u8>,
     /// instantiation requests routed to declaring packages, with the
     /// requesting unit's spec (its program holds the argument rows the
     /// seed blocks copy)
-    requests: Vec<(String, rut_lir::check::InstRequest)>,
+    pub(super) requests: Vec<(String, rut_lir::check::InstRequest)>,
     /// accumulated seeds per owner across resolution rounds (a second
     /// recompile must keep the first round's seeds)
-    seed_pool: HashMap<String, Vec<(String, rut_lir::check::InstRequest)>>,
+    pub(super) seed_pool: HashMap<String, Vec<(String, rut_lir::check::InstRequest)>>,
     /// request keys already routed to a seed pool: a re-seeded owner's
     /// own mirrors re-emit the same rows every recompile, and feeding
     /// them back would loop the resolution forever
-    seeded_keys: HashSet<String>,
+    pub(super) seeded_keys: HashSet<String>,
     /// owners that received at least one NEW seed this round — the only
     /// units a resolution round re-resolves
-    fresh_owners: HashSet<String>,
+    pub(super) fresh_owners: HashSet<String>,
 }
 
 /// A linked source unit's compile inputs, recorded for the owner-side
 /// recompile (`ensure_source` replays them verbatim, seeds aside).
-struct UnitSrc {
+pub(super) struct UnitSrc {
     text: String,
     is_decl: bool,
     bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)>,
@@ -145,7 +73,7 @@ struct UnitSrc {
 impl<'a> GraphCompiler<'a> {
     /// Decompose the finished walk: diags, pushed programs, and the
     /// linked-units index (spec → program + scope).
-    fn finish(
+    pub(super) fn finish(
         self,
     ) -> (
         Vec<Diag>,
@@ -161,7 +89,7 @@ impl<'a> GraphCompiler<'a> {
     }
 
     /// Compile (or mount) `spec` if needed — every module links.
-    fn ensure(&mut self, spec: &str) -> Option<Unit> {
+    pub(super) fn ensure(&mut self, spec: &str) -> Option<Unit> {
         if let Some(u) = self.done.get(spec) {
             return Some(u.clone());
         }
@@ -537,7 +465,7 @@ impl<'a> GraphCompiler<'a> {
     /// types as the requester spelled them — the owner's recompile
     /// re-derives them from its own source at the same locals, and a
     /// seed copy would collide with the fresh rows (same scope number).
-    fn desc_closure(
+    pub(super) fn desc_closure(
         prog: &Program,
         args: &[rut_core::types::TypeId],
         owner_scope: rut_core::ScopeId,
@@ -595,7 +523,7 @@ impl<'a> GraphCompiler<'a> {
     /// seeded owner's compile may request from further owners — until
     /// the queue drains; every round processes in canonical (sorted)
     /// order.
-    fn resolve_requests(&mut self) {
+    pub(super) fn resolve_requests(&mut self) {
         for _round in 0..32 {
             if self.requests.is_empty() {
                 return;
@@ -814,114 +742,9 @@ impl<'a> GraphCompiler<'a> {
     }
 }
 
-/// One seed group per requester: the descriptor closure of every
-/// request's arguments, sparse at the requester's locals — the attach
-/// side merges the groups into one padded run per scope. The owner-side
-/// input shared by both reseed arms (a directory owner and a
-/// source-riding compiled owner alike).
-fn build_seed_groups<'a>(
-    programs: &'a [Program],
-    done: &HashMap<String, Unit>,
-    owner: &str,
-    seeds: &'a [(String, rut_lir::check::InstRequest)],
-) -> Vec<crate::SeedGroup<'a>> {
-    // one seed group per requester: the descriptor closure of every
-    // request's arguments, sparse at the requester's locals
-    let mut per_requester: std::collections::BTreeMap<
-        String,
-        std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType>,
-    > = std::collections::BTreeMap::new();
-    for (requester, r) in seeds {
-        let Some((ridx, _)) = done.get(requester).map(|u| (u.idx, ())) else {
-            continue;
-        };
-        let entry = per_requester.entry(requester.clone()).or_default();
-        let owner_scope = done.get(owner).map(|u| u.scope).unwrap_or(0);
-        let closure = GraphCompiler::desc_closure(&programs[ridx], &r.args, owner_scope);
-        for ((s, l), row) in closure {
-            entry.insert((s, l), row);
-        }
-    }
-    let mut groups: Vec<crate::SeedGroup> = Vec::new();
-    for (requester, rows) in &per_requester {
-        let Some((ridx, requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else { continue };
-        let prog = &programs[ridx];
-        let rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)> =
-            rows.iter().map(|(k, v)| (*k, v.clone())).collect();
-        let mine: Vec<_> = seeds.iter().filter(|(rq, _)| rq == requester).collect();
-        let insts = mine
-            .iter()
-            .filter(|(_, r)| !r.is_fn)
-            .map(|(_, r)| {
-                (
-                    prog.interner.name(r.decl).to_string(),
-                    r.args.clone(),
-                    r.methods
-                        .iter()
-                        .map(|&m| prog.interner.name(m).to_string())
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect();
-        let fns = mine
-            .iter()
-            .filter(|(_, r)| r.is_fn)
-            .map(|(_, r)| (prog.interner.name(r.decl).to_string(), r.args.clone()))
-            .collect();
-        let impl_methods = mine
-            .iter()
-            .filter(|(_, r)| r.is_impl)
-            .map(|(_, r)| {
-                (
-                    prog.interner.name(r.decl).to_string(),
-                    r.impl_target,
-                    prog.interner.name(r.methods[0]).to_string(),
-                )
-            })
-            .collect();
-        // the requester's own impls, fn ids scope-qualified into the
-        // requester's block. A target spelled under a THIRD scope
-        // (the owner's own block as this requester saw it, another
-        // pkg's) skips with the row drop in desc_closure: the owner
-        // re-derives its own types, and a foreign block it never
-        // bound has no locals to answer.
-        let impls: Vec<crate::SeedImpl> = prog
-            .surface
-            .impls
-            .iter()
-            .filter(|im| {
-                let s = rut_core::id::scope_of(im.target);
-                s == rut_core::id::BOOT_SCOPE || s == requester_scope
-            })
-            .map(|im| crate::SeedImpl {
-                trait_name: prog.interner.name(im.trait_name).to_string(),
-                target: im.target,
-                methods: im
-                    .methods
-                    .iter()
-                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                    .collect(),
-                methods_concrete: im
-                    .methods_concrete
-                    .iter()
-                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                    .collect(),
-            })
-            .collect();
-        groups.push(crate::SeedGroup {
-            rows,
-            names: &prog.interner,
-            insts,
-            fns,
-            impl_methods,
-            impls,
-        });
-    }
-    groups
-}
 
 /// The exact package names a module uses, in source order, deduped.
-fn uses_of(ast: &Ast) -> Vec<String> {
+pub(super) fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         if let ItemKind::Use { pkg, .. } = ast.item(it) {
@@ -933,3 +756,4 @@ fn uses_of(ast: &Ast) -> Vec<String> {
     }
     out
 }
+
