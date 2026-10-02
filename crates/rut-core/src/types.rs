@@ -637,20 +637,29 @@ impl TypeTable {
 
     /// The crossing rule: the value shapes a
     /// host may hold and pass back. `entry fn` is the host-callable surface,
-    /// so **host functions obey the same rule** — primitives, `str`,
-    /// `bytes`, `Opaque`, and `Option`/`Result` over those.
-    pub fn crosses_boundary(&self, id: TypeId) -> bool {
+    /// so **host functions obey the same rule** — primitives, `str`, `nil`,
+    /// `bytes`, `?T` over crossable, anonymous tuples of crossable types,
+    /// and `opaque`. Named records (user structs/classes) never cross. The
+    /// row carries named-ness, so the caller's interner rides along: a
+    /// minted tuple row's name is its `(T, ..)` spelling (the `mk_tuple`
+    /// convention), a declared struct/class row has a real ident.
+    pub fn crosses_boundary(&self, names: &sym::Interner, id: TypeId) -> bool {
         match self.kind(id) {
             TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
             // `?T` crosses nil-flattened when T crosses (the
-            // promise: optionals cross as the v1.1 tuples they were always
-            // spelled as — the implementation only predates the text). The
-            // err-channel entry shape `(?T, err)` is exactly this arm: no
-            // err carve-out, the nullable's element answers the rule.
-            TyKind::Opt { elem } => self.crosses_boundary(*elem),
-            // tuples cross field-by-field: `(bytes, str)`
-            // is the error convention; named records still do not cross
-            TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),
+            // promise: optionals cross as the tuples they are always
+            // spelled as — the implementation only predates the text).
+            // No err carve-out here: the nullable's element answers the
+            // rule, the tuple it rides is just a tuple.
+            TyKind::Opt { elem } => self.crosses_boundary(names, *elem),
+            // ANONYMOUS tuples cross field-by-field — the row name is
+            // the minted `(T, ..)` spelling. A named record of perfectly
+            // crossable fields still does not cross: the arm never
+            // recurses into it.
+            TyKind::Data { fields } => {
+                names.name(self.type_at(id).name).starts_with('(')
+                    && fields.iter().all(|f| self.crosses_boundary(names, f.ty))
+            }
             _ => false,
         }
     }

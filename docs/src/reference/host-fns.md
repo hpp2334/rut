@@ -67,12 +67,13 @@ pub builtin trait Name<T> { .. }           // the import-gated twin (below)
 Rules:
 
 - **The crossing set** — `host fn` signatures are concrete over: nil, the
-  primitives, `str`, `bytes`, `opaque`, tuples/`?T` whose elements cross,
-  and `host struct` records whose fields all cross. Returns may
-  additionally use the answer optionals `?str` / `?bytes` / `?opaque`.
-  Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures)
-  is a compile error on the declaration
-  ([value boundary](value-boundary.md)).
+  primitives, `str`, `bytes`, and `opaque`. Returns may additionally use
+  the answer optionals `?str` / `?bytes` / `?opaque`. Named records never
+  cross — a `host struct` decl is surface, not a signature type — and the
+  anonymous-tuple lane belongs to the `entry fn` surface
+  ([value boundary](value-boundary.md)). Everything else (user classes,
+  `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the
+  declaration.
 - **`any` is not in the language.** The word is no longer reserved — an
   `any` spelling now fails at resolution as an unknown type — but there
   is no `any` type to write. Seal polymorphic values with `opaque(v)` /

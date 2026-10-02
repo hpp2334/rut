@@ -773,12 +773,12 @@ impl<'a> Ctx<'a> {
 
     /// The crossing rule: what an `entry fn` signature may
     /// carry. Primitives, `str`, `nil`, `bytes` (the binary buffer),
-    /// `Option`/`Result` over crossable types — and `Opaque`,
-    /// the host-held box: the ONE cell shape an embedder may
+    /// `?T` over crossable, anonymous tuples of crossable types — and
+    /// `Opaque`, the host-held box: the ONE cell shape an embedder may
     /// keep and pass back. Every other cell (`TodoList`, `Vec<Todo>`,
     /// a trait object, `Vec<u8>` itself, …) stays inside the VM.
     pub fn crosses_boundary(&self, ty: TypeId) -> bool {
-        self.types.crosses_boundary(ty)
+        self.types.crosses_boundary(&self.interner, ty)
     }
 
     /// Compile-time enforcement of the crossing rule on every `entry fn`
@@ -809,7 +809,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(p.id()),
                         format!(
-                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary",
+                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
                             self.name(pd.name),
                             self.type_name(ty)
                         ),
@@ -822,7 +822,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(r.id()),
                         format!(
-                            "`entry fn {fname}` returns `{}` — only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary",
+                            "`entry fn {fname}` returns `{}` — only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
                             self.type_name(ty)
                         ),
                     );

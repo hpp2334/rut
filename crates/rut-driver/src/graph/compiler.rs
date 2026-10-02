@@ -157,14 +157,19 @@ impl<'a> GraphCompiler<'a> {
             // host functions obey the same crossing rule as `entry fn`
             //
             let boot_tt = rut_core::types::TypeTable::boot();
+            // a fresh interner answers the row names: every boot row
+            // carries a well-known symbol, and the named-vs-tuple
+            // question only arises for `Data` rows — a boot signature
+            // spells the fixed crossing table, never a record
+            let names = rut_core::Interner::default();
             for (name, params, ret, _is_async) in host_funcs {
-                let bad = params.iter().any(|p| !boot_tt.crosses_boundary(*p))
-                    || !boot_tt.crosses_boundary(*ret);
+                let bad = params.iter().any(|p| !boot_tt.crosses_boundary(&names, *p))
+                    || !boot_tt.crosses_boundary(&names, *ret);
                 if bad {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary"
+                            "host function `{host_scope}::{name}`: only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary"
                         ),
                     ));
                     return None;

@@ -131,3 +131,5 @@ context; after that, use the zh-CN rendering alone.
 | first-mount-wins | 先挂载者胜 | |
 | inert merge | 惰性合并 | inert extras → 惰性额外物 |
 | decl root / compiled root | 声明根 / 编译根 | the v6/v5 pairing → 配对是完全的（the pairing is total） |
+| named record | 具名记录 | user struct/class rows; never cross → 具名记录永不跨越 |
+| anonymous tuple | 匿名元组 | the `(T, ..)` spelling crosses field-by-field → 匿名元组逐字段跨越 |

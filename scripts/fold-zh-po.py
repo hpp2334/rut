@@ -30,33 +30,19 @@ PO = 'docs/po/zh_CN.po'
 # markdown structure load-bearing). Everything not in FRESH either
 # keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
 # mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. This sweep (the main convention retires) changes FOUR strings
-# non-mechanically — the sentences that described the retired
-# convention (the conventional `main` the CLI called); each is rewritten
-# against the entry-designation law. Every other changed string is the
-# `pub fn main` → `entry fn main` code-span cutover, carried by MECH.
+# DESIGN. This sweep (the crossing rule rejects named records) changes
+# ONE string non-mechanically — the host-fns crossing-set bullet that
+# claimed `host struct` records cross; it now states the true set and
+# points the tuple lane at the entry-fn surface.
 FRESH = {
-    # tutorial/modules.md — the loading paragraph: the convention
-    # sentence becomes the plain entry shape
-    "Module scope contains **declarations only**: `use`, `let`, `fn`, `struct`, `class`, `enum`, `trait`, `impl`. Every statement lives inside a function — and **loading a module executes nothing**. There is no load-time side-effect ordering to reason about; the host loads your module and calls one of its `entry fn`s (`entry fn main` for a plain program).":
-        "模块作用域只包含**声明**：`use`、`let`、`fn`、`struct`、`class`、`enum`、`trait`、`impl`。每条语句都住在函数体内——而且**加载模块不执行任何东西**。没有需要推理的加载期副作用顺序；宿主加载你的模块并调用它的某个 `entry fn`（普通程序就是 `entry fn main`）。",
-    # tutorial/modules.md — the host-facing-surface close: the
-    # convention sentence becomes the designation rule
-    "An embedded application drives these entries; `rut run` executes the program's entry designation — exactly one `entry fn` runs it, several take `--entry <name>`. See [the host boundary](../core-concepts/host-boundary.md).":
-        "嵌入式应用驱动这些入口；`rut run` 执行程序的入口指派——恰好一个 `entry fn` 时运行它，多个时用 `--entry <name>` 指定。参见[宿主边界](../core-concepts/host-boundary.md)。",
-    # reference/modules-and-visibility.md — the entry-points paragraph
-    "The embedder loads a module and then explicitly calls an entry function — `entry fn main` for a script, sync or async. `entry fn` publishes a function to the _embedder_; `entry` is orthogonal to visibility and does not combine with `pub`. Consequences of declarations-only loading: no use side-effect ordering, no load-order bugs, deterministic and cheap loads.":
-        "嵌入方加载模块后会显式调用一个入口函数 —— 脚本就是 `entry fn main`，同步或异步均可。`entry fn` 把函数发布给 _嵌入方_；`entry` 与可见性正交，且不与 `pub` 组合。只含声明的加载带来的结果：不存在 use 副作用的顺序问题，不存在加载顺序 bug，加载行为确定且开销低。",
-    # reference/loading.md — what the host can call: entries, full stop
-    "Callable names are exactly the program's **`entry fn`s**. Their signatures were checked against the host-crossing rule at compile time — primitives, `str`, `bytes`, `opaque`, `?T` over a crossing type, and crossing tuples — so a bad surface can never surprise the embedder at call time. An `entry fn -> (?T, err)` decodes positionally at `vm.call` as a `(value, err)` pair (below).":
-        "可调用的名字恰好就是程序的 **`entry fn`**。它们的签名在编译期就对照宿主跨越规则检查过——基本类型、`str`、`bytes`、`opaque`、跨越类型之上的 `?T`，以及跨越元组——因此坏表面绝不可能在调用时给嵌入方惊喜。`entry fn -> (?T, err)` 在 `vm.call` 处按位置解码为一个 `(value, err)` 对偶（见下）。",
-    # reference/cli.md — the run pipeline row: the designation replaces
-    # the retired "run the root's main"
-    "load the whole graph, compile it, run the entry designation (below) ([project structure](project-structure.md))":
-        "加载整个模块图，编译，运行入口指派（见下）（[项目结构](project-structure.md)）。",
-    # reference/cli.md — the --entry flag row
-    "name the `entry fn` to run. Without the flag: exactly one `entry fn` runs the program; several refuse to guess (exit 1, naming the set); none reports `no `entry fn` — nothing to run` — a library shape compiles clean, the designation is where the run stops. A named fn that is not an entry is a loud error":
-        "指定要运行的 `entry fn`。不带该标志时：恰好一个 `entry fn` 就运行它；多个时拒绝猜测（退出码 1，并列出这一组）；一个都没有则报告 `no `entry fn` — nothing to run`——库形态照常编译，入口指派才是运行停下的地方。指定的名字不是入口时同样报错。",
+    # reference/host-fns.md — the crossing-set bullet: records never
+    # cross, the anonymous-tuple lane is the entry-fn surface's
+    "**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, and `opaque`. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Named records never cross — a `host struct` decl is surface, not a signature type — and the anonymous-tuple lane belongs to the `entry fn` surface ([value boundary](value-boundary.md)). Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration.":
+        "**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes` 和 `opaque`。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。具名记录永不跨越——`host struct` 声明只是表面，不是签名类型——而匿名元组通道属于 `entry fn` 表面（[值边界](value-boundary.md)）。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误。",
+    # reference/host-fns.md — the crossing-set bullet: records never
+    # cross, the anonymous-tuple lane is the entry-fn surface's
+    "**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, and `opaque`. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Named records never cross — a `host struct` decl is surface, not a signature type — and the anonymous-tuple lane belongs to the `entry fn` surface ([value boundary](value-boundary.md)). Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration.":
+        "**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes` 和 `opaque`。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。具名记录永不跨越——`host struct` 声明只是表面，不是签名类型——而匿名元组通道属于 `entry fn` 表面（[值边界](value-boundary.md)）。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误。",
 }
 
 

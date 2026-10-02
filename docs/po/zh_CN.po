@@ -4994,7 +4994,7 @@ msgstr "形式"
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:147 src/reference/host-futures.md:34
 #: src/reference/embedding.md:192 src/reference/embedding.md:223
-#: src/reference/value-boundary.md:96 src/reference/host-fns.md:287
+#: src/reference/value-boundary.md:96 src/reference/host-fns.md:288
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
 msgstr "含义"
@@ -10297,13 +10297,13 @@ msgstr ""
 
 
 #: src/examples/03-plugin.md:122 src/reference/embedding.md:60
-#: src/reference/host-fns.md:157
+#: src/reference/host-fns.md:158
 msgid "\"server\""
 msgstr ""
 
 
 #: src/examples/03-plugin.md:123 src/reference/embedding.md:61
-#: src/reference/host-fns.md:160
+#: src/reference/host-fns.md:161
 msgid "\"emit\""
 msgstr ""
 
@@ -12092,7 +12092,7 @@ msgid "`fn`"
 msgstr "`fn`"
 
 
-#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:137
+#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:138
 msgid "`let`"
 msgstr "`let`"
 
@@ -12127,12 +12127,12 @@ msgid "`of`"
 msgstr "`of`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:138
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:139
 msgid "`enum`"
 msgstr "`enum`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:141
 #: src/reference/reflection.md:31
 msgid "`struct`"
 msgstr "`struct`"
@@ -12143,7 +12143,7 @@ msgid "`class`"
 msgstr "`class`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:139
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
 msgid "`trait`"
 msgstr "`trait`"
 
@@ -21892,7 +21892,7 @@ msgid "bound at link against"
 msgstr "链接时对照什么绑定"
 
 
-#: src/reference/host-fns.md:7 src/reference/host-fns.md:141
+#: src/reference/host-fns.md:7 src/reference/host-fns.md:142
 msgid "`host fn` / `host struct`"
 msgstr "`host fn` / `host struct`"
 
@@ -21907,7 +21907,7 @@ msgid "the load-time contract (below)"
 msgstr "加载期契约（见下）"
 
 
-#: src/reference/host-fns.md:8 src/reference/host-fns.md:142
+#: src/reference/host-fns.md:8 src/reference/host-fns.md:143
 msgid "`prelude builtin` / `pub builtin` rows"
 msgstr "`prelude builtin` / `pub builtin` 行"
 
@@ -22041,301 +22041,301 @@ msgstr ""
 
 #: src/reference/host-fns.md:69
 msgid ""
-"**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, `opaque`, tuples/`?T` whose elements cross, and `host struct` records whose fields all cross. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration ([value boundary](value-boundary.md))."
+"**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, and `opaque`. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Named records never cross — a `host struct` decl is surface, not a signature type — and the anonymous-tuple lane belongs to the `entry fn` surface ([value boundary](value-boundary.md)). Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration."
 msgstr ""
-"**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes`、`opaque`、元素可跨越的元组/`?T`，以及字段全部可跨越的 `host struct` 记录。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误（[值边界](value-boundary.md)）。"
+"**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes` 和 `opaque`。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。具名记录永不跨越——`host struct` 声明只是表面，不是签名类型——而匿名元组通道属于 `entry fn` 表面（[值边界](value-boundary.md)）。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误。"
 
 
-#: src/reference/host-fns.md:76
+#: src/reference/host-fns.md:77
 msgid ""
 "**`any` is not in the language.** The word is no longer reserved — an `any` spelling now fails at resolution as an unknown type — but there is no `any` type to write. Seal polymorphic values with `opaque(v)` / `opaque.downcast<T>(v)` ([opaque](opaque.md))."
 msgstr ""
 "**`any` 不在这门语言里。**这个词已不再是保留字 —— 写出 `any` 现在会在名称解析阶段以未知类型失败 —— 但也不存在可写的 `any` 类型。用 `opaque(v)` / `opaque.downcast<T>(v)` 封存多态值（[opaque](opaque.md)）。"
 
 
-#: src/reference/host-fns.md:80
+#: src/reference/host-fns.md:81
 msgid ""
 "**`builtin` is the engine's reservation** — spelled only in the toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder decl is a compile error. Users implement builtin traits with ordinary `impl` blocks; library contracts stay plain `trait` ([traits and dispatch](traits.md))."
 msgstr ""
 "**`builtin` 是引擎的保留**——只出现在工具链自己的声明文件里（`core`、`calc`）。嵌入方声明中的 `builtin` 是编译错误。用户用普通的 `impl` 块实现 builtin trait；库契约保持为普通的 `trait`（[trait 与分派](traits.md)）。"
 
 
-#: src/reference/host-fns.md:85
+#: src/reference/host-fns.md:86
 msgid ""
 "**`builtin` is a contextual keyword**: `.d.rut`\\-only; elsewhere it is a legal identifier."
 msgstr "**`builtin` 是一个上下文关键字**：仅限 `.d.rut`；在其他地方它是合法的标识符。"
 
 
-#: src/reference/host-fns.md:88
+#: src/reference/host-fns.md:89
 msgid "The two builtin spellings"
 msgstr "两种内建拼写"
 
 
-#: src/reference/host-fns.md:90
+#: src/reference/host-fns.md:91
 msgid ""
 "A `builtin` decl spells one of two strict forms — a bare `builtin` diagnoses _\"`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)\"_:"
 msgstr ""
 "`builtin` 声明拼写成两种严格形式之一——裸写 `builtin` 会得到诊断 _“`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)”_："
 
 
-#: src/reference/host-fns.md:94
+#: src/reference/host-fns.md:95
 msgid ""
 "**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives and their `builtin impl` methods, `opaque`, `Weak`, `StackTrace`, and `panic`/`string_join`/ `capture_stacktrace` are all ambient."
 msgstr ""
 "**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型及其 `builtin impl` 方法、`opaque`、`Weak`、`StackTrace`，以及 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。"
 
 
-#: src/reference/host-fns.md:99
+#: src/reference/host-fns.md:100
 msgid ""
 "**`pub builtin`** — the **import-gated** engine surface: the name resolves only through `use core::{ .. }`, the way a package's names do. Today's rows are every builtin trait — `Iterable`, `Future`, `RunContext` — and the disposal pair, `Disposal` and `DisposalContext` ([traits](traits.md), [async and await](async.md), [the Rc heap](rc-heap.md)). The engine's weave never consults the gate — it keys on the native-trait symbols — so a module with no imports still iterates, awaits, and launches; only spelling a name in source gates."
 msgstr ""
 "**`pub builtin`**——**导入把守**的引擎表面：名字只能经 `use core::{ .. }` 解析，与包名的方式一样。如今的行是每个内置 trait——`Iterable`、`Future`、`RunContext`——以及单元死亡对 `Disposal` 与 `DisposalContext`（[trait](traits.md)、[异步与 await](async.md)、[Rc 堆](rc-heap.md)）。引擎的织造从不查阅这道门——它以原生 trait 符号为键——因此一个没有任何导入的模块仍然可以迭代、await 与启动；把守只落在源码里拼写的名字上。"
 
 
-#: src/reference/host-fns.md:109
+#: src/reference/host-fns.md:110
 msgid ""
 "Using a `pub builtin` name without the use line is a resolution miss that names the fix, never a bare \"unknown name\":"
 msgstr "不写 use 行就使用 `pub builtin` 名字，是一次会说出修法的解析失败，绝不是一句光秃秃的“unknown name”："
 
 
-#: src/reference/host-fns.md:116
+#: src/reference/host-fns.md:117
 msgid ""
 "The split is per name: a unit that imports one gated name still sees every ambient name for free, and an unused name in a `use core` line stays a lint, not an error."
 msgstr ""
 "这个划分按名字进行：导入了一个被把守名字的单元依然免费看到每个环境自带名字，而 `use core` 行里未被使用的名字仍然只是一个 lint，不是错误。"
 
 
-#: src/reference/host-fns.md:120
+#: src/reference/host-fns.md:121
 msgid ""
 "**`opaque` wraps native state; there is no host class.** rut wraps the handle in a class of its own — the wrapper-class pattern ([native containers API surface](native-containers.md)). Destructors still run deterministically: when a box's rc hits 0, the payload's finalize hook runs, then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 "**`opaque` 包装原生状态；没有宿主类。**rut 把句柄包装在自己的类里——包装类模式（[原生容器 API 表面](native-containers.md)）。析构器依然确定性地运行：当一个盒的 rc 降到 0，先运行载荷的 finalize 钩子，然后是 Rust `Drop`（[Rc 堆](rc-heap.md)）。"
 
 
-#: src/reference/host-fns.md:125
+#: src/reference/host-fns.md:126
 msgid ""
 "**Workers**: an `opaque` box crosses isolates only if the host registered the boxed type as `send` — checked at the transfer, by type ([workers and channels](workers-and-channels.md))."
 msgstr ""
 "**worker**：`opaque` 盒只有在宿主把被装盒的类型注册为 `send` 时才能跨越隔离体——在转移时按类型检查（[worker 与通道](workers-and-channels.md)）。"
 
 
-#: src/reference/host-fns.md:129 src/reference/frontend.md:158
+#: src/reference/host-fns.md:130 src/reference/frontend.md:158
 #: src/reference/cli.md:160
 msgid "Declaration mode"
 msgstr "声明模式"
 
 
-#: src/reference/host-fns.md:131
+#: src/reference/host-fns.md:132
 msgid ""
 "A `.d.rut` is parsed in **declaration mode**: declarations only, each complete as a surface."
 msgstr "`.d.rut` 以**声明模式**解析：只有声明，每个声明都自身完整地成为一个表面。"
 
 
-#: src/reference/host-fns.md:134
+#: src/reference/host-fns.md:135
 msgid "allowed"
 msgstr "允许"
 
 
-#: src/reference/host-fns.md:134 src/reference/stdlib.md:79
+#: src/reference/host-fns.md:135 src/reference/stdlib.md:79
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr "说明"
 
 
-#: src/reference/host-fns.md:136
+#: src/reference/host-fns.md:137
 msgid "`use` / `pub`"
 msgstr "`use` / `pub`"
 
 
-#: src/reference/host-fns.md:136
+#: src/reference/host-fns.md:137
 msgid ""
 "visibility exactly as in a module; non-exported decls are known inside the file, nameable nowhere else"
 msgstr "可见性与模块中完全一致；未导出的声明在文件内可知，在其他任何地方都不可提名"
 
 
-#: src/reference/host-fns.md:137
+#: src/reference/host-fns.md:138
 msgid "with load-time constant initializers"
 msgstr "带加载期常量初始化器"
 
 
-#: src/reference/host-fns.md:138
+#: src/reference/host-fns.md:139
 msgid "the member list is the whole definition"
 msgstr "成员列表就是全部定义"
 
 
-#: src/reference/host-fns.md:139
+#: src/reference/host-fns.md:140
 msgid "method signatures (+ `requires`) are the whole definition"
 msgstr "方法签名（+ `requires`）就是全部定义"
 
 
-#: src/reference/host-fns.md:140
+#: src/reference/host-fns.md:141
 msgid "fields only, with load-time initializers"
 msgstr "只有字段，带加载期初始化器"
 
 
-#: src/reference/host-fns.md:141
+#: src/reference/host-fns.md:142
 msgid "signatures only, concrete over the crossing set"
 msgstr "只有签名，在跨越集上是具体的"
 
 
-#: src/reference/host-fns.md:142
+#: src/reference/host-fns.md:143
 msgid "toolchain decl files only — the two spellings above"
 msgstr "仅限工具链的声明文件——上面的两种拼写"
 
 
-#: src/reference/host-fns.md:144
+#: src/reference/host-fns.md:145
 msgid ""
 "Forbidden — the parser errors _\"implementation in a declaration file\"_: any fn/class body, statements. Symmetrically, a `.rut` file that spells `host` errors _\"belongs in a `.d.rut`\"_."
 msgstr ""
 "禁止——解析器报错 _\"implementation in a declaration file\"_：任何 fn/类函数体、语句都是。对称地，写出 `host` 的 `.rut` 文件会报错 _\"belongs in a `.d.rut`\"_。"
 
 
-#: src/reference/host-fns.md:148
+#: src/reference/host-fns.md:149
 msgid "Signatures are derived, not hand-written"
 msgstr "签名是推导的，不是手写的"
 
 
-#: src/reference/host-fns.md:150
+#: src/reference/host-fns.md:151
 msgid ""
 "The registered callable's Rust shape **is** the `.d.rut` row. The **installer lane** is a `HostPkg` builder per pkg — rows under bare names, the scope (the pkg's name) spelled once — installed through `HostRegistry::install_host_pkg`:"
 msgstr ""
 "注册可调用物的 Rust 形状**就是** `.d.rut` 行。**安装者车道**是每包一个 `HostPkg` 构建器——行用裸名，作用域（即包名）只拼写一次——经 `HostRegistry::install_host_pkg` 安装："
 
 
-#: src/reference/host-fns.md:156
+#: src/reference/host-fns.md:157
 msgid ""
 "// one builder per host pkg; the scope string appears exactly once\n"
 msgstr ""
 
 
-#: src/reference/host-fns.md:158
+#: src/reference/host-fns.md:159
 msgid "\"make\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:162
+#: src/reference/host-fns.md:163
 msgid ""
 "// the session's mount snapshot — built once, owned, shared by every install\n"
 msgstr ""
 
 
-#: src/reference/host-fns.md:169
+#: src/reference/host-fns.md:170
 msgid ""
 "`pkg_async_fn!` is the async twin: one row spelling emits the five-row family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap), the same expansion the ctx declares. The raw macros — `register!` / `register_async!` on the bare registry (see [embedding and native modules](embedding.md)) — remain the escape hatch (hand-spelled `<scope>::<name>` strings, the flat table's own responsibility); everything above them is the same derived-signature machinery:"
 msgstr ""
 "`pkg_async_fn!` 是异步孪生：一次行拼写发射五行家族（`__start`/`__yield`/`__take`/`__cancel` + 声明行陷阱），与 ctx 声明的展开相同。原生宏——裸注册表上的 `register!` / `register_async!`（见[嵌入与原生模块](embedding.md)）——仍是逃生口（手写 `<scope>::<name>` 字符串，扁平表自己负责）；它们之上的一切都是同一套派生签名机制："
 
 
-#: src/reference/host-fns.md:181
+#: src/reference/host-fns.md:182
 msgid "\"server::make\""
 msgstr "\"server::make\""
 
 
-#: src/reference/host-fns.md:185
+#: src/reference/host-fns.md:186
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's parameter and return types; a param type with no crossing impl is a **compile error at the register site**."
 msgstr "签名是从闭包的参数与返回类型推导出的一个固定类型 id 数组；没有跨越 impl 的参数类型是**注册点的编译错误**。"
 
 
-#: src/reference/host-fns.md:188
+#: src/reference/host-fns.md:189
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` (fallible). Errors travel an explicit trap channel — a trapped body propagates as `Err(Trap)` with a rut backtrace ([embedding and native modules](embedding.md))."
 msgstr ""
 "两种函数体形状都适用：`-> R`（不会失败）与 `-> Result<R, Trap>`（可能失败）。错误走一条显式的陷阱通道——被陷阱打断的函数体以 `Err(Trap)` 连同 rut 回溯传播（[嵌入与原生模块](embedding.md)）。"
 
 
-#: src/reference/host-fns.md:192
+#: src/reference/host-fns.md:193
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call ([value boundary](value-boundary.md))."
 msgstr "`&str` / `&[u8]` 参数是以恰好这一次调用为作用域的零复制借用（[值边界](value-boundary.md)）。"
 
 
-#: src/reference/host-fns.md:194
+#: src/reference/host-fns.md:195
 msgid ""
 "One installer per pkg: a duplicate row name inside a builder panics, a second `install_host_pkg` for the same scope panics, and a pkg cannot spell another pkg's rows — the scope comes solely from `HostPkg::new`."
 msgstr ""
 "每包一个安装者：构建器内重复的行名会 panic，对同一作用域第二次 `install_host_pkg` 会 panic，且一个包不能拼写另一个包的行——作用域只来自 `HostPkg::new`。"
 
 
-#: src/reference/host-fns.md:199
+#: src/reference/host-fns.md:200
 msgid "The load-time contract — asymmetric, by design"
 msgstr "加载期契约——非对称，有意为之"
 
 
-#: src/reference/host-fns.md:201
+#: src/reference/host-fns.md:202
 msgid ""
 "Mounting a host pkg **declares**; the embedding Rust **binds**. The `install_host_pkg` call checks the two sides against each other, per pkg, against the mount snapshot (`session.host_pkg_context()`):"
 msgstr ""
 "挂载宿主包是**声明**；嵌入的 Rust 是**绑定**。`install_host_pkg` 调用按包、对照挂载快照（`session.host_pkg_context()`）互查两侧："
 
 
-#: src/reference/host-fns.md:205
+#: src/reference/host-fns.md:206
 msgid ""
 "**scope mounted, a declared row never bound** — a panic naming the pkg (the installer left it out), and the `Vm` constructor refuses a boot naming it again when the installer never ran at all;"
 msgstr "**作用域已挂载，声明行从未绑定**——panic 并点名该包（安装者漏了它）；安装者从未运行时，`Vm` 构造器拒绝再次点名它的启动；"
 
 
-#: src/reference/host-fns.md:208
+#: src/reference/host-fns.md:209
 msgid ""
 "**signature drift** on a declared row — a panic; this is the only drift gate on the boot path;"
 msgstr "**已声明行上的签名漂移**——panic；这是启动路径上唯一的漂移门；"
 
 
-#: src/reference/host-fns.md:210
+#: src/reference/host-fns.md:211
 msgid ""
 "**scope NOT mounted** — the whole pkg merges **inert**: no panic, no gate. Blanket installs are legal (the CLI installs all of them; a program that mounts a subset carries the rest as dead bindings), and rows the decl does not name ride as inert extras."
 msgstr ""
 "**作用域未挂载**——整个包按**惰性**合并：不 panic，无门。整表安装是合法的（CLI 就全部安装；只挂载子集的程序把其余行作为死绑定携带），声明未点名的行作为惰性额外物随行。"
 
 
-#: src/reference/host-fns.md:215
+#: src/reference/host-fns.md:216
 msgid ""
 "The raw lane's `verify_against(&ctx.flatten())` — or `session.expected_host_fns()` — re-checks the whole flat table and panics on all three mismatch classes:"
 msgstr ""
 "原生车道的 `verify_against(&ctx.flatten())`——或 `session.expected_host_fns()`——重查整张扁平表，对全部三类不匹配 panic："
 
 
-#: src/reference/host-fns.md:219
+#: src/reference/host-fns.md:220
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr "**已声明未绑定**——rut 调用会在运行中途触发陷阱；"
 
 
-#: src/reference/host-fns.md:220
+#: src/reference/host-fns.md:221
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr "**已绑定未声明**——没有任何表面声明宿主安装的东西；"
 
 
-#: src/reference/host-fns.md:221
+#: src/reference/host-fns.md:222
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding took `(opaque, i64, str)`."
 msgstr "**签名漂移**——声明写的是 `(opaque, str, str) -> nil`，绑定收的却是 `(opaque, i64, str)`。"
 
 
-#: src/reference/host-fns.md:224
+#: src/reference/host-fns.md:225
 msgid ""
 "The law follows the mount: **mount what you bind** — with the asymmetry the mount law needs: rut-declares-but-host-never-binds is loud; host-binds-but-rut-never-declares rides inert."
 msgstr ""
 "法则随挂载：**绑定你所挂载的**——带着挂载法则需要的不对称：rut 声明了而宿主从不绑定，是响亮的错误；宿主绑定了而 rut 从未声明，按惰性随行。"
 
 
-#: src/reference/host-fns.md:228
+#: src/reference/host-fns.md:229
 msgid "Slots, not strings"
 msgstr "槽位，而不是字符串"
 
 
-#: src/reference/host-fns.md:230
+#: src/reference/host-fns.md:231
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in declaration order; the module binary carries the slot table. Calls compile to `callnat { slot }` — names are binding-time labels, resolved once at boot, never dispatch keys, never in IR. A typo'd binding is a startup error, never a runtime one. IR cannot inline into native bodies; if a body should be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 "编译声明文件会按声明顺序给每个宿主函数分配一个**稳定槽位 id**；模块二进制携带槽位表。调用编译成 `callnat { slot }`——名字是绑定期的标签，启动时解析一次，绝不是分派键，也绝不出现在 IR 里。拼错的绑定是启动错误，绝不是运行时错误。IR 不能内联进原生函数体；如果某个函数体应当是可优化的，那它就该是 rut 源码——包装类正是那个地方。"
 
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:239
 msgid "Async host fns"
 msgstr "异步宿主函数"
 
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:241
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -22350,33 +22350,33 @@ msgstr ""
 "```"
 
 
-#: src/reference/host-fns.md:246
+#: src/reference/host-fns.md:247
 msgid ""
 "The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row names are bare and the scope prefixes at the install:"
 msgstr "嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上行名是裸名，作用域在安装时加前缀："
 
 
-#: src/reference/host-fns.md:251
+#: src/reference/host-fns.md:252
 msgid "\"http_host\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:252
+#: src/reference/host-fns.md:253
 msgid "\"http_send\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:266
+#: src/reference/host-fns.md:267
 msgid "/* optional abort hook: */"
 msgstr "/* optional abort hook: */"
 
 
-#: src/reference/host-fns.md:266
+#: src/reference/host-fns.md:267
 msgid "/* best-effort cancel */"
 msgstr "/* best-effort cancel */"
 
 
-#: src/reference/host-fns.md:269
+#: src/reference/host-fns.md:270
 msgid ""
 "// the raw lane (bare registry, full `scope::name` strings) — the\n"
 "// escape hatch, same emitter:\n"
@@ -22384,19 +22384,19 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/host-fns.md:275
+#: src/reference/host-fns.md:276
 msgid ""
 "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw twin `register_async!(hosts, …)`) emits the family the compiler's weave joins:"
 msgstr ""
 "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])`（及其原生孪生 `register_async!(hosts, …)`）发射编译器织入所连接的家族："
 
 
-#: src/reference/host-fns.md:279
+#: src/reference/host-fns.md:280
 msgid "emitted row"
 msgstr "生成行"
 
 
-#: src/reference/host-fns.md:279 src/reference/reflection.md:75
+#: src/reference/host-fns.md:280 src/reference/reflection.md:75
 #: src/reference/stdlib.md:33 src/reference/stdlib.md:174
 #: src/reference/stdlib.md:211 src/reference/stdlib.md:357
 #: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
@@ -22405,211 +22405,211 @@ msgid "meaning"
 msgstr "含义"
 
 
-#: src/reference/host-fns.md:281
+#: src/reference/host-fns.md:282
 msgid "`<name>`"
 msgstr "`<name>`"
 
 
-#: src/reference/host-fns.md:281
+#: src/reference/host-fns.md:282
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future at the call site"
 msgstr "声明行本身；直接调用它触发陷阱——织入在调用点铸造 future"
 
 
-#: src/reference/host-fns.md:282
+#: src/reference/host-fns.md:283
 msgid "`<name>__start(P…) -> opaque`"
 msgstr "`<name>__start(P…) -> opaque`"
 
 
-#: src/reference/host-fns.md:282
+#: src/reference/host-fns.md:283
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr "运行闭包，把 `Completer` 装盒作为 future 的状态单元"
 
 
-#: src/reference/host-fns.md:283
+#: src/reference/host-fns.md:284
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr "`<name>__yield(state, cx) -> i32`"
 
 
-#: src/reference/host-fns.md:283
+#: src/reference/host-fns.md:284
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr "恢复探针：`0` pending，`1` ready，`2` failed"
 
 
-#: src/reference/host-fns.md:284
+#: src/reference/host-fns.md:285
 msgid "`<name>__take(state) -> R`"
 msgstr "`<name>__take(state) -> R`"
 
 
-#: src/reference/host-fns.md:284
+#: src/reference/host-fns.md:285
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr "把答案编组到 VM 线程上；已失败的 completer 在这里触发陷阱"
 
 
-#: src/reference/host-fns.md:285
+#: src/reference/host-fns.md:286
 msgid "`<name>__cancel(state)`"
 msgstr "`<name>__cancel(state)`"
 
 
-#: src/reference/host-fns.md:285
+#: src/reference/host-fns.md:286
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr "给定了 abort 钩子时就是它；否则是明示的空操作"
 
 
-#: src/reference/host-fns.md:287
+#: src/reference/host-fns.md:288
 msgid "`Completer<T>` API"
 msgstr "`Completer<T>` API"
 
 
-#: src/reference/host-fns.md:289
+#: src/reference/host-fns.md:290
 msgid "`Completer::new()`"
 msgstr "`Completer::new()`"
 
 
-#: src/reference/host-fns.md:289
+#: src/reference/host-fns.md:290
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr "一个新单元；`clone()` 共享它（一个 `Arc`）"
 
 
-#: src/reference/host-fns.md:290
+#: src/reference/host-fns.md:291
 msgid "`complete(v)` / `fail(msg)`"
 msgstr "`complete(v)` / `fail(msg)`"
 
 
-#: src/reference/host-fns.md:290
+#: src/reference/host-fns.md:291
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr "从**任意线程**落定（只用原子量 + 互斥锁）"
 
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:292
 msgid "`poll() -> i32`"
 msgstr "`poll() -> i32`"
 
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:292
 msgid "the driving loop's probe"
 msgstr "驱动循环的探针"
 
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:293
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr "`take_result() -> Result<T, Trap>`"
 
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:293
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr "仅限 VM 线程；`fail` 消息成为 `await` 处的陷阱"
 
 
-#: src/reference/host-fns.md:294
+#: src/reference/host-fns.md:295
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. Cancellation is best-effort — a worker runs to its blocking completion and the late answer is discarded. See [the host futures bridge](host-futures.md) and [async and await](async.md)."
 msgstr ""
 "线程法则：VM 保持单线程；worker 只触碰 completer。取消是尽力而为的——worker 跑到它的阻塞式完成，迟到的答案被丢弃。见[宿主 future 桥](host-futures.md)与[异步与 await](async.md)。"
 
 
-#: src/reference/host-fns.md:299
+#: src/reference/host-fns.md:300
 msgid "Declaration files as artifacts"
 msgstr "作为产物的声明文件"
 
 
-#: src/reference/host-fns.md:301
+#: src/reference/host-fns.md:302
 msgid "A published package ships:"
 msgstr "已发布的包交付："
 
 
-#: src/reference/host-fns.md:303
+#: src/reference/host-fns.md:304
 msgid "artifact"
 msgstr "产物"
 
 
-#: src/reference/host-fns.md:303 src/reference/symbol-stripping.md:26
+#: src/reference/host-fns.md:304 src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr "角色"
 
 
-#: src/reference/host-fns.md:305
+#: src/reference/host-fns.md:306
 msgid "`mod.rutc`"
 msgstr "`mod.rutc`"
 
 
-#: src/reference/host-fns.md:305
+#: src/reference/host-fns.md:306
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module binary and verification](module-binary.md))"
 msgstr "编译好的模块二进制：函数体 + 表面，链接的真相（[模块二进制与验证](module-binary.md)）"
 
 
-#: src/reference/host-fns.md:306
+#: src/reference/host-fns.md:307
 msgid "`mod.d.rut`"
 msgstr "`mod.d.rut`"
 
 
-#: src/reference/host-fns.md:306
+#: src/reference/host-fns.md:307
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); documentation only, never the loader's source of truth"
 msgstr "表面文本——手写、可编辑、可发布（面向人类与 LSP）；仅作文档，绝不是加载器的真相来源"
 
 
-#: src/reference/host-fns.md:308
+#: src/reference/host-fns.md:309
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, trait-table indices, and namespace/host rows are not derivable from text without guesswork."
 msgstr ""
 "表面随二进制同行：使用方仅凭 `mod.rutc` 就能绑定 `p` 的导出。没有任何东西会从 `.d.rut` 文本重建——impl 到 fn 的 id、trait 表索引、命名空间/宿主行，都无法靠猜测从文本推导。"
 
 
-#: src/reference/host-fns.md:312
+#: src/reference/host-fns.md:313
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table — a pure data compare. Drift is a load error naming both modules, never a runtime surprise."
 msgstr "链接把使用方绑定到的表面与二进制的导出表做比较——一次纯粹的数据比对。漂移是点出两个模块的加载错误，绝不会是运行时的惊吓。"
 
 
-#: src/reference/host-fns.md:315
+#: src/reference/host-fns.md:316
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are stripped (`--release` drops member-name strings), but code is recoverable with effort. What publishing guarantees is API discipline."
 msgstr "发布不是加密：函数体被编译、本地名字被剥离（`--release` 丢弃成员名字符串），但花力气仍可复原代码。发布所保证的是 API 纪律。"
 
 
-#: src/reference/host-fns.md:319
+#: src/reference/host-fns.md:320
 msgid "Surface resolution during compilation"
 msgstr "编译期间的表面解析"
 
 
-#: src/reference/host-fns.md:321
+#: src/reference/host-fns.md:322
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first hit wins:"
 msgstr "当模块 `M` 使用包 `p` 时，编译器解析 `p` 的表面，先命中者胜："
 
 
-#: src/reference/host-fns.md:324
+#: src/reference/host-fns.md:325
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr "**source**——源码路径上 `p` 的 rut 源码：正常编译它；"
 
 
-#: src/reference/host-fns.md:325
+#: src/reference/host-fns.md:326
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface on the wire) — or its bundled source for a splice-needed group; explicit mounts outrank stray sources, never dev source;"
 msgstr ""
 "**捆绑包**——一个已挂载的 `.rutbundle`：它编译好的 `.rutc`（函数体 + 线上的表面）——需要拼接的组则是它随包的源码；显式挂载压过散落的源码，但绝不压过开发源码；"
 
 
-#: src/reference/host-fns.md:328
+#: src/reference/host-fns.md:329
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside the registered implementation."
 msgstr "**host registry**——对宿主包而言，嵌入方随注册实现一起交付的那份 `.d.rut`。"
 
 
-#: src/reference/host-fns.md:331
+#: src/reference/host-fns.md:332
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose implementation is absent is legal and complete — checking passes; only running requires the bodies."
 msgstr "函数体只在链接/运行时解析。针对一个实现缺席的包编译 `M` 是合法且完整的——检查通过；只有运行才需要函数体。"
 
 
-#: src/reference/host-fns.md:335
+#: src/reference/host-fns.md:336
 msgid "End-to-end shape"
 msgstr "端到端形状"
 
 
-#: src/reference/host-fns.md:337
+#: src/reference/host-fns.md:338
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds `server::subscribe`/`server::emit` over its own `EventBus` box, the plugin subscribes rut export names per topic, and every `emit` re-enters rut to format the wire line — see [03 — Plugin](../examples/03-plugin.md). For a full application host with mounted std packages and an async entry, see [06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md)."
 msgstr ""

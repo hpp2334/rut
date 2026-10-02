@@ -883,9 +883,11 @@ entry fn checked(v: i32) -> (i32, str) {
 
 #[test]
 fn entry_crossing_rule_is_compile_time() {
-    // v1.1 crossing rule: structs of crossing fields DO cross (copy-by-value
-    // makes them safe); Vec<T> of non-crossing types still does not.
-    // `struct Row { id: i32 }` now crosses fine (all fields are prims).
+    // the crossing rule: ONLY primitives, `str`, `nil`, `bytes`, `?T`
+    // over those, anonymous tuples of crossable types, and `opaque`
+    // cross. A named record never does — not even one whose every field
+    // would cross (the row is named; the rule never recurses into it).
+    // `Vec<T>` of non-crossing types never did.
     let src = r#"
 use pouch::{ Vec };
 struct Row { id: i32; }
@@ -894,6 +896,52 @@ entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
     let out = compile(src, "m");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
+        "{:?}",
+        out.diags
+    );
+
+    // a prim-field struct return rejects: the field types would cross
+    // tuple-ish, but the row is named — `Point` used to slip through
+    let src = r#"
+struct Point { x: i32; y: i32 }
+entry fn get_point() -> Point { return Point { x: 1, y: 2 }; }
+"#;
+    let out = compile(src, "m");
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let d = out
+        .diags
+        .iter()
+        .find(|d| d.msg.contains("returns `Point`"))
+        .expect("the named-record return rejects");
+    // span'd source diagnostic: the span starts at the return type's
+    // spelling (the parser's type-node span carries one trailing token
+    // char, the start is the pin)
+    assert_eq!(&combined[d.span.lo as usize..d.span.lo as usize + 5], "Point");
+
+    // and the parameter side rejects the same way
+    let src = r#"
+struct Point { x: i32; y: i32 }
+entry fn put_point(p: Point) -> nil { }
+"#;
+    let out = compile(src, "m");
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let d = out
+        .diags
+        .iter()
+        .find(|d| d.msg.contains("parameter `p` is `Point`"))
+        .expect("the named-record param rejects");
+    // the span starts at the parameter's spelling, naming it and its type
+    assert_eq!(&combined[d.span.lo as usize..d.span.lo as usize + 8], "p: Point");
+
+    // an anonymous tuple carrying a named record rejects too: the
+    // recursion descends and the record's row answers
+    let src = r#"
+struct Row { id: i32; }
+entry fn pair() -> (Row, i32) { return (Row { id: 1 }, 2); }
+"#;
+    let out = compile(src, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("returns `(Row, i32)`")),
         "{:?}",
         out.diags
     );
@@ -920,6 +968,32 @@ entry fn generic<T>(v: T) -> T { return v; }
         "{:?}",
         out.diags
     );
+}
+
+#[test]
+fn anonymous_tuples_still_cross_the_digest_shape() {
+    // the lanes the tightening must not close: anonymous tuples of
+    // crossable types cross field-by-field (02-digest rides `(bytes,
+    // str)`), `?T` over crossable, plain prims, `bytes`, `opaque` —
+    // every one of these compiles clean
+    let cases = [
+        "entry fn pair(data: bytes) -> (bytes, str) { return (data, \"\"); }",
+        "entry fn opt_pair(i: i32) -> (i32, ?str) { return (i, nil); }",
+        "entry fn mixed(i: i32) -> (i32, str, ?bytes) { return (i, \"\", nil); }",
+        "entry fn opt() -> ?str { return nil; }",
+        "entry fn prims(i: i64, f: f64, ok: bool) -> i64 { return i; }",
+        "entry fn buf(v: bytes) -> bytes { return v; }",
+        "entry fn box_(o: opaque) -> opaque { return o; }",
+    ];
+    for src in cases {
+        let out = compile(src, "m");
+        assert!(
+            out.diags.is_empty(),
+            "`{src}` must keep crossing:\n{:?}",
+            out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        );
+        assert!(out.binary.is_some(), "`{src}` produces a binary");
+    }
 }
 
 #[test]
@@ -2818,20 +2892,34 @@ pub fn main() -> Point {
         prog.exports.iter().map(|(n, _)| prog.name_of(*n)).collect::<Vec<_>>()
     );
 
-    // the same shape spelled `entry fn main` IS host-callable — the
-    // door the convention used to fake, reached only through the
-    // crossing-checked entry table
-    let good = r#"
+    // the same shape spelled `entry fn main` IS the host-callable door —
+    // and the crossing rule is the wall in that door now: a record
+    // return rejects at the declaration (the S12b shape is
+    // unconstructible through either spelling), a crossable signature
+    // exports
+    let record = r#"
 struct Point { x: i32; y: i32 }
 
 entry fn main() -> Point {
     return Point { x: 1, y: 2 };
 }
 "#;
+    let out = compile(record, "main");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("returns `Point`")),
+        "a named-record return rejects at the declaration: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+
+    let good = r#"
+entry fn main() -> (i32, i32) {
+    return (1, 2);
+}
+"#;
     let out = compile(good, "main");
     assert!(
         out.diags.is_empty(),
-        "the checked twin compiles: {:?}",
+        "the crossable twin compiles: {:?}",
         out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
     let prog = rut_core::binary::decode(&out.binary.expect("binary")).expect("decode");
