@@ -79,7 +79,7 @@
 ## Async and concurrency
 
 - [Async and await](reference/async.md)
-- [Launched futures](reference/tasks.md)
+- [Launched futures](reference/launched-futures.md)
 - [The host futures bridge](reference/host-futures.md)
 - [Workers and channels](reference/workers-and-channels.md)
 

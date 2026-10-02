@@ -249,7 +249,7 @@ msgstr ""
 msgid "Async and await"
 msgstr ""
 
-#: src/SUMMARY.md:82 src/reference/tasks.md:1
+#: src/SUMMARY.md:82 src/reference/launched-futures.md:1
 msgid "Launched futures"
 msgstr ""
 
@@ -3994,7 +3994,8 @@ msgid ""
 "the host owns time, and code progresses only when a driving loop pumps it. "
 "The model is described in [the async "
 "model](../core-concepts/async-model.md), with the full surface in [async and "
-"await](../reference/async.md) and [launched futures](../reference/tasks.md)."
+"await](../reference/async.md) and [launched "
+"futures](../reference/launched-futures.md)."
 msgstr ""
 
 #: src/tutorial/async.md:12 src/reference/async.md:18
@@ -4213,7 +4214,7 @@ msgid ""
 "in this build — the compiler gates them. Cancellation _is_ here: "
 "`handle.abort()` flags the frame, and the probe at its next checkpoint "
 "unwinds it deterministically, running cleanup in reverse declaration order. "
-"See [launched futures](../reference/tasks.md) for the roadmap."
+"See [launched futures](../reference/launched-futures.md) for the roadmap."
 msgstr ""
 
 #: src/tutorial/async.md:169
@@ -6221,7 +6222,7 @@ msgid ""
 "background work, and drop-based cancellation gives it a clean off switch — "
 "but nothing in the model silently cancels siblings on your behalf. See the "
 "reference on [async and await](../reference/async.md), [launched "
-"futures](../reference/tasks.md), and the [host futures "
+"futures](../reference/launched-futures.md), and the [host futures "
 "bridge](../reference/host-futures.md); the [GitHub viewer "
 "CLI](../examples/06-github-viewer-cli.md) example shows a full program "
 "living inside this loop."
@@ -9011,7 +9012,7 @@ msgid ""
 "single `\\n"
 "`\\-joined string (no arg lists in the crossing set), and `boot` launches "
 "the brain with the standard launcher ([launched "
-"futures](../reference/tasks.md)):"
+"futures](../reference/launched-futures.md)):"
 msgstr ""
 
 #: src/examples/06-github-viewer-cli.md:54
@@ -10083,7 +10084,8 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:11
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/by-reference-and-nullable.md:61 src/reference/tasks.md:10
+#: src/reference/by-reference-and-nullable.md:61
+#: src/reference/launched-futures.md:10
 msgid "Spelling"
 msgstr ""
 
@@ -14366,7 +14368,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/rc-heap.md:80 src/reference/tasks.md:27
+#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:27
 #: src/reference/reflection.md:97
 msgid "Laws:"
 msgstr ""
@@ -14402,7 +14404,7 @@ msgstr ""
 #: src/reference/rc-heap.md:95
 msgid ""
 "Cancellation drops locals at the suspension point through the same machinery "
-"([launched futures](tasks.md)) — no special case."
+"([launched futures](launched-futures.md)) — no special case."
 msgstr ""
 
 #: src/reference/rc-heap.md:98
@@ -15449,7 +15451,7 @@ msgstr ""
 #: src/reference/async.md:62
 msgid ""
 "`launch_future(launch_future(f))` is a **type error**: the receipt is not a "
-"`Future` ([launched futures](tasks.md))."
+"`Future` ([launched futures](launched-futures.md))."
 msgstr ""
 
 #: src/reference/async.md:64
@@ -15730,153 +15732,153 @@ msgstr ""
 
 #: src/reference/async.md:179
 msgid ""
-"See [launched futures](tasks.md) for receipts, cancellation, and the "
-"join/select tier; [the host futures bridge](host-futures.md) for backing a "
-"host async fn with Rust; [workers and channels](workers-and-channels.md) for "
-"isolate parallelism. A worked user-defined future lives in [the custom-async "
-"example](../examples/04-custom-async.md)."
+"See [launched futures](launched-futures.md) for receipts, cancellation, and "
+"the join/select tier; [the host futures bridge](host-futures.md) for backing "
+"a host async fn with Rust; [workers and channels](workers-and-channels.md) "
+"for isolate parallelism. A worked user-defined future lives in [the "
+"custom-async example](../examples/04-custom-async.md)."
 msgstr ""
 
-#: src/reference/tasks.md:3
+#: src/reference/launched-futures.md:3
 msgid ""
 "A launched future's receipt — `LaunchedFutureHandle<T>` — is its own type, "
 "and it is the entire management surface. Everything in this chapter is "
 "spelled in that vocabulary ([async and await](async.md))."
 msgstr ""
 
-#: src/reference/tasks.md:8
+#: src/reference/launched-futures.md:8
 msgid "Surface status"
 msgstr ""
 
-#: src/reference/tasks.md:10
+#: src/reference/launched-futures.md:10
 msgid "Feature"
 msgstr ""
 
-#: src/reference/tasks.md:10
+#: src/reference/launched-futures.md:10
 msgid "Status"
 msgstr ""
 
-#: src/reference/tasks.md:12
+#: src/reference/launched-futures.md:12
 msgid "launch"
 msgstr ""
 
-#: src/reference/tasks.md:12
+#: src/reference/launched-futures.md:12
 msgid "`launch_future(f)`"
 msgstr ""
 
-#: src/reference/tasks.md:12 src/reference/tasks.md:13
+#: src/reference/launched-futures.md:12 src/reference/launched-futures.md:13
 msgid "live"
 msgstr ""
 
-#: src/reference/tasks.md:13
+#: src/reference/launched-futures.md:13
 msgid "cancel"
 msgstr ""
 
-#: src/reference/tasks.md:13
+#: src/reference/launched-futures.md:13
 msgid "`h.abort()`"
 msgstr ""
 
-#: src/reference/tasks.md:14
+#: src/reference/launched-futures.md:14
 msgid "join"
 msgstr ""
 
-#: src/reference/tasks.md:14
+#: src/reference/launched-futures.md:14
 msgid "`await h` on a receipt"
 msgstr ""
 
-#: src/reference/tasks.md:14
+#: src/reference/launched-futures.md:14
 msgid "compile-gated — \"not in this build\""
 msgstr ""
 
-#: src/reference/tasks.md:15
+#: src/reference/launched-futures.md:15
 msgid "race"
 msgstr ""
 
-#: src/reference/tasks.md:15
+#: src/reference/launched-futures.md:15
 msgid "`await select { .. }`"
 msgstr ""
 
-#: src/reference/tasks.md:15
+#: src/reference/launched-futures.md:15
 msgid "parses; semantics compile-gated"
 msgstr ""
 
-#: src/reference/tasks.md:16
+#: src/reference/launched-futures.md:16
 msgid "first-of"
 msgstr ""
 
-#: src/reference/tasks.md:16
+#: src/reference/launched-futures.md:16
 msgid "`select_all(futs)` (stdlib)"
 msgstr ""
 
-#: src/reference/tasks.md:16
+#: src/reference/launched-futures.md:16
 msgid "lands with `select`"
 msgstr ""
 
-#: src/reference/tasks.md:17
+#: src/reference/launched-futures.md:17
 msgid "structured scopes"
 msgstr ""
 
-#: src/reference/tasks.md:17
+#: src/reference/launched-futures.md:17
 msgid "`scope { .. }`"
 msgstr ""
 
-#: src/reference/tasks.md:17
+#: src/reference/launched-futures.md:17
 msgid "specified, not built"
 msgstr ""
 
-#: src/reference/tasks.md:19
+#: src/reference/launched-futures.md:19
 msgid "The receipt — `LaunchedFutureHandle<T>`"
 msgstr ""
 
-#: src/reference/tasks.md:29
+#: src/reference/launched-futures.md:29
 msgid ""
 "The receipt is **not a `Future`**: `await h` diagnoses — the type system "
 "rejects it, never a runtime check."
 msgstr ""
 
-#: src/reference/tasks.md:31
+#: src/reference/launched-futures.md:31
 msgid ""
 "It is **not re-launchable**: `launch_future(h)` is a type error for the same "
 "reason. A future is consumed exactly once — by `await` or by "
 "`launch_future`, never both, never twice."
 msgstr ""
 
-#: src/reference/tasks.md:34
+#: src/reference/launched-futures.md:34
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, "
 "`false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 
-#: src/reference/tasks.md:38
+#: src/reference/launched-futures.md:38
 msgid "Cancellation"
 msgstr ""
 
-#: src/reference/tasks.md:40
+#: src/reference/launched-futures.md:40
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at "
 "its next checkpoint is the only place cancellation becomes observable** — it "
 "never interrupts mid-expression."
 msgstr ""
 
-#: src/reference/tasks.md:44
+#: src/reference/launched-futures.md:44
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr ""
 
-#: src/reference/tasks.md:46
+#: src/reference/launched-futures.md:46
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr ""
 
-#: src/reference/tasks.md:47
+#: src/reference/launched-futures.md:47
 msgid ""
 "every local releases **deterministically, in reverse declaration order** "
 "(`Disposal` impls run, [the Rc heap](rc-heap.md));"
 msgstr ""
 
-#: src/reference/tasks.md:49
+#: src/reference/launched-futures.md:49
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr ""
 
-#: src/reference/tasks.md:51
+#: src/reference/launched-futures.md:51
 msgid ""
 "Inside a future impl, `cx.cancelled()` reads the same flag as data, so a "
 "hand-written frame can honor cancellation at its own pace ([the host futures "
@@ -15885,7 +15887,7 @@ msgid ""
 "when the loop drives it again."
 msgstr ""
 
-#: src/reference/tasks.md:57
+#: src/reference/launched-futures.md:57
 msgid ""
 "```rut\n"
 "use core::{ Disposal, DisposalContext, RunContext };\n"
@@ -15908,18 +15910,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/tasks.md:77
+#: src/reference/launched-futures.md:77
 msgid "Join (specified)"
 msgstr ""
 
-#: src/reference/tasks.md:79
+#: src/reference/launched-futures.md:79
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and "
 "produces its completion value. Until the join tier lands, `await h` "
 "diagnoses with the join law and the receipt stays non-awaitable."
 msgstr ""
 
-#: src/reference/tasks.md:84
+#: src/reference/launched-futures.md:84
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled "
 "case, never a trap; join re-enqueues the awaiter the same way an in-body "
@@ -15927,61 +15929,61 @@ msgid ""
 "callback."
 msgstr ""
 
-#: src/reference/tasks.md:89
+#: src/reference/launched-futures.md:89
 msgid "`select` (specified)"
 msgstr ""
 
-#: src/reference/tasks.md:98
+#: src/reference/launched-futures.md:98
 msgid ""
 "`await select { .. }` races futures; the **winner's value drives its arm**; "
 "the losers are dropped — which means **cancelled** (their drop paths run, "
 "pending sleeps die with them)."
 msgstr ""
 
-#: src/reference/tasks.md:101
+#: src/reference/launched-futures.md:101
 msgid ""
 "Arms use `->` like `when`: `fut -> expr` discards the resolved value; `fut x "
 "-> expr` binds it to `x` (arm-local binding)."
 msgstr ""
 
-#: src/reference/tasks.md:103
+#: src/reference/launched-futures.md:103
 msgid ""
 "`select_all(futs)` (stdlib, built on `select`) resolves with the first ready "
 "value."
 msgstr ""
 
-#: src/reference/tasks.md:106
+#: src/reference/launched-futures.md:106
 msgid ""
 "The grammar parses today; the semantics are gated with \"`await select` is "
 "not in this build\"."
 msgstr ""
 
-#: src/reference/tasks.md:109
+#: src/reference/launched-futures.md:109
 msgid "Structure and fairness"
 msgstr ""
 
-#: src/reference/tasks.md:111
+#: src/reference/launched-futures.md:111
 msgid ""
 "v1 launched futures are **unstructured**: aborting a frame does not abort "
 "frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
 "exit — are the specified remedy."
 msgstr ""
 
-#: src/reference/tasks.md:114
+#: src/reference/launched-futures.md:114
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
 "or completion, so one greedy future cannot starve the queue. Priorities are "
 "not in the model."
 msgstr ""
 
-#: src/reference/tasks.md:117
+#: src/reference/launched-futures.md:117
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
 "parked on Completers — the embedder's idle test ([async and "
 "await](async.md))."
 msgstr ""
 
-#: src/reference/tasks.md:120
+#: src/reference/launched-futures.md:120
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
 "the frame is retired either way, and its locals ran their drop path."
@@ -20613,7 +20615,7 @@ msgid ""
 "Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> "
 "bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair "
 "**and** installs `rut_std::async_host::pkg()`; a session that mounts neither "
-"has no launcher ([launched futures](tasks.md), [host "
+"has no launcher ([launched futures](launched-futures.md), [host "
 "futures](host-futures.md))."
 msgstr ""
 
@@ -21746,7 +21748,7 @@ msgid ""
 "become frame fields, and suspension is a plain return. The op set grows zero "
 "rows for this — the driven half is an ordinary trait-vtable call through the "
 "future's `yield` row. The full protocol lives in [Async and await](async.md) "
-"and [launched futures](tasks.md)."
+"and [launched futures](launched-futures.md)."
 msgstr ""
 
 #: src/reference/compiler.md:180 src/reference/module-binary.md:102
@@ -23316,7 +23318,7 @@ msgstr ""
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and "
 "tests virtualize time by advancing the clock — full determinism ([Async and "
-"await](async.md), [Launched futures](tasks.md))."
+"await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 
 #: src/reference/vm-core.md:158

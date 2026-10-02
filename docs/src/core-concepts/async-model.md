@@ -172,7 +172,7 @@ enough to structure real programs — the launch/abort receipt gives you
 explicit ownership of background work, and drop-based cancellation gives
 it a clean off switch — but nothing in the model silently cancels
 siblings on your behalf. See the reference on [async and
-await](../reference/async.md), [launched futures](../reference/tasks.md), and the
+await](../reference/async.md), [launched futures](../reference/launched-futures.md), and the
 [host futures bridge](../reference/host-futures.md); the
 [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a
 full program living inside this loop.

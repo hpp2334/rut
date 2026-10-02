@@ -195,7 +195,7 @@ walked, never printed):
   answers the io error + exit 1);
 - no pagination or limits — the tree endpoint returns the whole tree;
 - no concurrency — the brain awaits its fetches sequentially
-  (join/select is the [tasks](../../docs/src/reference/tasks.md) lane);
+  (join/select is the [launched futures](../../docs/src/reference/launched-futures.md) lane);
 - **`rut run` cannot host rgh itself** — its `rgh_host` rows are
   example-local, so only this embedder (or your own, binding the same
   rows) can run the brain. Ordinary HTTP programs do run under

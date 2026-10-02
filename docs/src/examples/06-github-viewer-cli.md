@@ -43,7 +43,7 @@ downloads verified byte-verbatim, wire deaths, and status mappings.
 `rgh.rut` — the entry point is one `boot` fn: the host crosses argv
 in as a single `\n`-joined string (no arg lists in the crossing set),
 and `boot` launches the brain with the standard launcher
-([launched futures](../reference/tasks.md)):
+([launched futures](../reference/launched-futures.md)):
 
 ```rut
 entry fn boot(args: str) -> nil {
