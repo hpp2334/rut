@@ -10988,29 +10988,31 @@ msgstr ""
 
 #: src/reference/builtin-generic-types.md:164
 msgid ""
-"There are no `Option`/`Result` builtins — the spellings diagnose with their "
-"replacements:"
+"There are no `Option`/`Result` builtins — the spellings are ordinary "
+"identifiers, and an unresolved use diagnoses as the unknown name it is. The "
+"[standard library](stdlib.md#what-core-does-not-have)'s removed-surface "
+"table maps each retired spelling to its replacement:"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:167
+#: src/reference/builtin-generic-types.md:169
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means "
 "\"not found\"."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:169
+#: src/reference/builtin-generic-types.md:171
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive "
 "types](primitive-types.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:173
 msgid ""
 "**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see [opaque — "
 "erasure and downcast](opaque.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:174
+#: src/reference/builtin-generic-types.md:176
 msgid ""
 "`==` on the removed sum spellings is a compile error. Compare structurally: "
 "`when`, a `nil`/`!= nil` guard, or the payload."

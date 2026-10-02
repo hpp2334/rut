@@ -161,8 +161,10 @@ copy (the aliasing law).
 
 ## Absence and errors
 
-There are no `Option`/`Result` builtins — the spellings diagnose with
-their replacements:
+There are no `Option`/`Result` builtins — the spellings are ordinary
+identifiers, and an unresolved use diagnoses as the unknown name it
+is. The [standard library](stdlib.md#what-core-does-not-have)'s
+removed-surface table maps each retired spelling to its replacement:
 
 - **Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil`
   means "not found".

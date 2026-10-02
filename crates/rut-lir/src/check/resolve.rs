@@ -321,11 +321,6 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // primitives & builtins — names compare as symbols
-                // v1.1 removals first: a removed type explains itself
-                if let Some(msg) = self.removed_core(name) {
-                    self.err(sp, msg);
-                    return TY_I32;
-                }
                 let prim = sym::primitive_ty(name);
                 if let Some(p) = prim {
                     if !seg.generics.is_empty() {

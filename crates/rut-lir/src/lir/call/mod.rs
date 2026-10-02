@@ -134,25 +134,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // only when the name was used from the core surface — the
         // prelude is used, never ambient. A local fn of the same name
         // wins when the use statement is absent (fallthrough below).
-        // Removed prelude spellings (`assert`, `own`, …) diagnose at the
-        // resolution miss at the bottom (`not_in_core_scope` consults
-        // the removal table first) — the removal fires only on an
-        // otherwise-UNRESOLVED name, so a module's own fn of a removed
-        // name (the `assert`-over-`panic` helper) compiles and wins.
+        // Retired prelude spellings (`assert`, `print`, `i32(x)`, …)
+        // are ordinary identifiers: they fall to the resolution miss
+        // at the bottom and diagnose as the unknown names they are.
         let core_fn = self.ctx.extern_native_fns.contains(&name);
-        if name == sym::PRINT {
-            self.ctx.err(sp, "`print` was removed — use a logger (`use ink::{log}`)");
-            return Err(());
-        }
-        if matches!(name, sym::SIZE_OF | sym::ALIGN_OF) {
-            // the repr-C layout contract was removed: records are slot
-            // arrays, not byte blocks, so there is no value size/alignment
-            self.ctx.err(sp, format!(
-                "`{}` was removed — records are stored as one slot per field, not a repr-C block",
-                self.ctx.name(name)
-            ));
-            return Err(());
-        }
         match name {
             sym::OPAQUE => {
                 // `opaque(v)`: the erasure box. The payload IS `v` —
@@ -253,14 +238,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let k = self.konst(ConstVal::TypeId(t));
                 self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
                 return Ok(TY_U32);
-            }
-            sym::I8 | sym::I16 | sym::I32 | sym::I64 | sym::U8 | sym::U16 | sym::U32 | sym::U64
-            | sym::F32 | sym::F64 => {
-                // removed when the `as` cast landed — the
-                // conversion family is spelled `x as T` now. The message
-                // mirrors the `size_of` removal above.
-                self.ctx.err(sp, format!("`{}(x)` was removed — use `x as {}`", self.ctx.name(name), self.ctx.name(name)));
-                return Err(());
             }
             sym::STR => {
                 if args.len() != 1 {

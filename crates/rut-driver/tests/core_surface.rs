@@ -114,8 +114,8 @@ fn core_decl_matches_the_compilers_surface() {
     // functions: the decl's builtin fns are exactly the compiler-lowered
     // native fns (name AND ambient bit) — all of them
     // (own/downcast/panic/str/bytes — `assert` left the surface: it is
-    // plain rut code over `panic` now, pinned by tests/ambient.rs and
-    // the removal row in REMOVED_CORE)
+    // plain rut code over `panic` now, pinned by tests/ambient.rs; the
+    // bare spelling is an ordinary unknown name)
     let mut decl_fns = builtin_fns;
     decl_fns.sort();
     let mut surf_fns: Vec<(String, bool)> =
@@ -167,11 +167,12 @@ fn core_decl_matches_the_compilers_surface() {
 }
 
 #[test]
-fn removed_names_self_diagnose_with_or_without_use() {
-    // `Option` is a v1.1 removal: use-sites diagnose with the removal and
-    // its replacement — with or without the use statement. (The LIVE builtin names are ambient now —
-    // builtin-surface — so the removals are the only names a `use` still
-    // has anything to say about; see tests/ambient.rs.)
+fn retired_names_are_ordinary_unknown_names() {
+    // `Option` retired in v1.1: the name is an ordinary identifier now,
+    // with or without the use statement — an unresolved use falls to
+    // the plain unknown-name diagnostic, exactly like a never-existing
+    // name. (The LIVE builtin names are ambient now —
+    // builtin-surface — see tests/ambient.rs.)
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(
@@ -187,7 +188,7 @@ fn removed_names_self_diagnose_with_or_without_use() {
     .unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
+        out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
         "diags: {:?}",
         out.diags
     );
@@ -209,52 +210,18 @@ fn removed_names_self_diagnose_with_or_without_use() {
     .unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
+        out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
         "diags: {:?}",
         out.diags
     );
 }
 
-/// The char exorcism's type-position pin (nmap-hostvals P1, §0.8 l): the
-/// surface died at v1.1 and the enumerated kind is now GONE from
-/// the IR (`PrimTy::Char` deleted) — but `char` in a type position must
-/// still diagnose with the dedicated removal message, never "unknown type".
-/// The resolver consults `removed_core` BEFORE the primitive table, so the
-/// diagnostic path works without any char kind existing (the probe that
-/// decided the pin: `let x: char = 65;` and a `char` param on a REACHABLE
-/// fn, both carrying the diagnostic verbatim).
-#[test]
-fn removed_char_type_positions_diagnose_without_the_kind() {
-    for src in [
-        "fn main() -> i32 { let x: char = 65; return 0; }\n",
-        "fn f(c: char) -> u32 { return c; }\n\
-         fn main() -> i32 { return f(65) as i32; }\n",
-    ] {
-        let mut s = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut s);
-        s.register_module(
-            "app_main",
-            rut_driver::Module { body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
-        let out = rut_driver::compile_graph(&s, "app_main");
-        assert!(
-            out.diags.iter().any(|d| d.msg.contains(
-                "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one"
-            )),
-            "src: {src}\ndiags: {:?}",
-            out.diags
-        );
-    }
-}
-
 /// `assert` left the core surface (the builtin's removal): it is plain
-/// rut code the business writes over `panic`. THE LAW the removal must
-/// keep: `REMOVED_CORE` fires only on otherwise-UNRESOLVED names — a
-/// module's own `fn assert` resolves, compiles, and works (a failing
-/// condition traps with the given message through the user fn's
-/// `panic`), while the bare unresolved spelling diagnoses with the
-/// removal row's recipe.
+/// rut code the business writes over `panic`. The law that outlives the
+/// removal table's deletion: a module's own `fn assert` resolves,
+/// compiles, and works (a failing condition traps with the given
+/// message through the user fn's `panic`), while the bare unresolved
+/// spelling is an ordinary unknown function.
 fn compile_with_core(src: &str) -> rut_driver::GraphOutput {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
@@ -313,24 +280,37 @@ fn own_assert_helper_still_resolves() {
     assert_eq!(v, 5);
 }
 
-/// The unresolved bare spelling — NO local helper — diagnoses with the
-/// removal row's exact recipe, never "unknown function".
+/// The unresolved bare spelling — NO local helper — is an ordinary
+/// unknown function, exactly like a never-existing name.
 #[test]
-fn unresolved_assert_names_the_recipe() {
-    const REMOVED: &str = "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`";
+fn unresolved_assert_is_an_ordinary_unknown_fn() {
     let out = compile_with_core("pub fn main() -> i32 { assert(1 == 1, \"fine\"); return 0; }\n");
     assert!(
-        out.diags.iter().any(|d| d.msg == REMOVED),
-        "the bare assert miss carries the recipe: {:?}",
+        out.diags.iter().any(|d| d.msg.contains("unknown function `assert`")),
+        "the bare assert miss carries the plain unknown-fn diag: {:?}",
         out.diags
     );
     assert!(out.program.is_none(), "the unresolved spelling must not compile");
 }
 
-/// The strbuild removal's twin of the assert pin: a module's OWN
-/// `StrBuf`-named class resolves, compiles, and works — the removal row
-/// fires only on otherwise-UNRESOLVED names, so a user type may take
-/// the retired name.
+/// The numeric-conversion CALL spellings (`i32(x)` …) retired with the
+/// `as` cast: the names are ordinary identifiers now, and the call
+/// falls to the plain unknown-function diagnostic (pinned: `i32` is a
+/// type, never a fn).
+#[test]
+fn numeric_conversion_call_is_an_ordinary_unknown_fn() {
+    let out = compile_with_core("pub fn main() -> i32 { return i32(5); }\n");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("unknown function `i32`")),
+        "i32(x) falls to the plain unknown-fn diag: {:?}",
+        out.diags
+    );
+    assert!(out.program.is_none(), "the unresolved spelling must not compile");
+}
+
+/// Twin of the assert pin: a module's OWN
+/// `StrBuf`-named class resolves, compiles, and works — retired names
+/// are ordinary identifiers, so a user type may take the retired name.
 #[test]
 fn own_strbuf_named_type_still_resolves() {
     let out = compile_with_core(
@@ -356,22 +336,6 @@ fn own_strbuf_named_type_still_resolves() {
     )
     .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 4);
-}
-
-/// The unresolved bare spelling — no local type — diagnoses with the
-/// removal row's exact recipe, never "unknown type".
-#[test]
-fn unresolved_strbuf_names_the_recipe() {
-    const REMOVED: &str = "`StrBuf` was removed — `use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` is engine-optimized";
-    let out = compile_with_core(
-        "pub fn main() -> str { let b = StrBuf(0); b.push(\"x\"); return b.finish(); }\n",
-    );
-    assert!(
-        out.diags.iter().any(|d| d.msg == REMOVED),
-        "the bare StrBuf miss carries the recipe: {:?}",
-        out.diags
-    );
-    assert!(out.program.is_none(), "the unresolved spelling must not compile");
 }
 
 /// VISIBILITY AGREEMENT, spelled out per row: each decl's

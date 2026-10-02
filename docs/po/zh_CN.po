@@ -13462,30 +13462,31 @@ msgstr "缺失与错误"
 
 #: src/reference/builtin-generic-types.md:164
 msgid ""
-"There are no `Option`/`Result` builtins — the spellings diagnose with their replacements:"
-msgstr "没有 `Option`/`Result` 内置物 —— 这些写法会连同替代方案一起报错："
+"There are no `Option`/`Result` builtins — the spellings are ordinary identifiers, and an unresolved use diagnoses as the unknown name it is. The [standard library](stdlib.md#what-core-does-not-have)'s removed-surface table maps each retired spelling to its replacement:"
+msgstr ""
+"没有 `Option`/`Result` 内置物 —— 这些写法现在是普通标识符，未解析的使用会如实诊断为未知名称。[标准库](stdlib.md#what-core-does-not-have)的已移除表面表给出了每个退役写法的替代方案："
 
 
-#: src/reference/builtin-generic-types.md:167
+#: src/reference/builtin-generic-types.md:169
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means \"not found\"."
 msgstr "**缺失**是可空类型上的 `nil`：查找返回 `?V`，`nil` 表示“未找到”。"
 
 
-#: src/reference/builtin-generic-types.md:169
+#: src/reference/builtin-generic-types.md:171
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive types](primitive-types.md)."
 msgstr "**错误**走应答通道：`(?T, err)` —— 参见[基本类型](primitive-types.md)。"
 
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:173
 msgid ""
 "**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see [opaque — erasure and downcast](opaque.md)."
 msgstr ""
 "**类型擦除后的恢复**是 `opaque.downcast<T>(o) -> ?T` —— 参见[opaque —— 擦除与向下转型](opaque.md)。"
 
 
-#: src/reference/builtin-generic-types.md:174
+#: src/reference/builtin-generic-types.md:176
 msgid ""
 "`==` on the removed sum spellings is a compile error. Compare structurally: `when`, a `nil`/`!= nil` guard, or the payload."
 msgstr "在已移除的 sum 写法上使用 `==` 是编译错误。请做结构化比较：`when`、`nil`/`!= nil` 守卫，或检查载荷。"

@@ -26,13 +26,18 @@ PO = 'docs/po/zh_CN.po'
 
 # Fresh translations for the strings this sweep changed non-mechanically
 # (terminology per docs/po/GLOSSARY.md; code spans byte-identical;
-# markdown structure load-bearing). The vocabulary purge's zh shape
-# rides MECH (数据类 → 结构体 alongside dataclass → struct); everything
-# below is new or non-mechanically changed prose. The three new ```rut
-# blocks fold to "" — the untranslated set is code-only, by doctrine.
-# This sweep (std-v5 repin) is PURELY MECHANICAL: the pin rows ride the
-# new tag spelling + the two advanced sha256 values; MECH carries the zh.
+# markdown structure load-bearing). Everything not in FRESH either
+# keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
+# mechanical cutover shapes), or folds to "" — the English fallback BY
+# DESIGN. This sweep (retired-builtins purge) changes ONE string
+# non-mechanically: the Option/Result paragraph in
+# builtin-generic-types.md — the spellings diagnose as ordinary
+# unknown names now, and the stdlib.md migration table carries the
+# mapping. FRESH carries its zh; everything else in the sweep is
+# reference-line-only (byte-identical msgids keep their msgstr).
 FRESH = {
+    "There are no `Option`/`Result` builtins — the spellings are ordinary identifiers, and an unresolved use diagnoses as the unknown name it is. The [standard library](stdlib.md#what-core-does-not-have)'s removed-surface table maps each retired spelling to its replacement:":
+        "没有 `Option`/`Result` 内置物 —— 这些写法现在是普通标识符，未解析的使用会如实诊断为未知名称。[标准库](stdlib.md#what-core-does-not-have)的已移除表面表给出了每个退役写法的替代方案：",
 }
 
 

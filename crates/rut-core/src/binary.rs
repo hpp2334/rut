@@ -357,7 +357,7 @@ pub struct Surface {
 /// rut-lir still lowers the free spelling as a phase-1 alias until the
 /// phase-2 sweep retires the call sites. `assert` is likewise no
 /// longer declared — it is plain rut code over `panic` now, and the
-/// removal table diagnoses the bare spelling.)
+/// bare spelling is an ordinary unknown name.)
 pub const CORE_FNS: &[IdentId] = &[
     sym::PANIC,
     sym::STRING_JOIN,
@@ -457,43 +457,9 @@ pub fn is_core_name(name: IdentId) -> bool {
     is_core_fn(name) || core_native_type(name).is_some() || core_native_trait(name).is_some()
 }
 
-/// core names removed from the surface, each with its replacement.
-/// Use sites diagnose with these instead of "unknown" — a removed surface
-/// explains itself (`unit` in v1.2).
-pub const REMOVED_CORE: &[(&str, &str)] = &[
-    ("own", "`own` was removed — bindings share by reference now; `bytes.clone()` is the one copy escape hatch"),
-    ("Option", "`Option` was removed — absence is `nil` on a `?T`, or a `(T, err)` tuple (v1.1)"),
-    ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
-    ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one"),
-    ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape"),
-    ("string_len", "`string_len(s)` was removed — use `s.len()`"),
-    ("string_encode", "`string_encode(s)` was removed — use `s.encode()`"),
-    ("bytes_len", "`bytes_len(b)` was removed — use `b.len()`"),
-    ("bytes_decode", "`bytes_decode(b)` was removed — use `b.decode()`"),
-    ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)`"),
-    ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)`"),
-    ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
-    ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]`"),
-    ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null"),
-    ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
-    ("on_drop", "`on_drop` was removed — implement `Disposal` for the type; the engine calls `dispose` at refcount zero"),
-    ("assert", "`assert` was removed — write it over `panic` where you need it: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }`"),
-    ("StrBuf", "`StrBuf` was removed — `use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` is engine-optimized"),
-];
-
-/// The removal table keyed by [`IdentId`] — interned once per compiler
-/// context (`Ctx::new_scoped`), so call sites compare symbols, never
-/// `&str` (this table stays the text-level source of truth).
-pub fn removed_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentId, &'static str> {
-    REMOVED_CORE
-        .iter()
-        .map(|(n, msg)| (interner.intern(n), *msg))
-        .collect()
-}
-
 /// The import-gated core names — `Surface::core`'s NON-ambient rows
-/// (the `pub builtin` spellings), keyed by [`IdentId`] exactly like
-/// [`removed_core_map`]. A resolution miss that hits this table names
+/// (the `pub builtin` spellings), keyed by [`IdentId`]. A resolution
+/// miss that hits this table names
 /// the fix: `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
 /// The ambient rows never land here — they bind in every unit, so they
 /// cannot produce the miss the table answers.

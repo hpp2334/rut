@@ -544,11 +544,11 @@ pub fn main() -> nil {
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     // no backward compat: a removed head is an unknown name, full stop
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
-    // the plain (non-generic) spelling still reaches the removal diag —
-    // that one lives on the ordinary name-resolution path
+    // and the plain (non-generic) spelling is the same ordinary miss —
+    // every retired spelling falls to the normal resolution path
     let unused = "pub fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
     let out = rut_driver::compile_module(unused, rut_parser::Mode::Impl, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("`Option` was removed")));
+    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
 }
 
 #[test]
@@ -2487,15 +2487,16 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn unit_type_name_explains_itself() {
-    // the removed `unit` name diagnoses with its replacement (v1.2)
+fn retired_unit_name_is_an_ordinary_unknown_type() {
+    // the removed `unit` name is an ordinary identifier now: the type
+    // position falls to the plain unknown-type diagnostic (the book's
+    // migration table — stdlib.md — carries the `nil` mapping)
     let out = rut_driver::compile_module(
         "pub fn main() -> unit { }",
         rut_parser::Mode::Impl,
         "main",
     );
-    assert!(out.diags.iter().any(|d| d.msg.contains("`unit` was removed")));
-    assert!(out.diags.iter().any(|d| d.msg.contains("`nil`")));
+    assert!(out.diags.iter().any(|d| d.msg.contains("unknown type `unit`")));
 }
 
 // ---- the capture law: primitives copy, ref-headed bindings share the slot ----

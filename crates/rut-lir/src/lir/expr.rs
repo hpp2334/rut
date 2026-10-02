@@ -507,7 +507,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // a builtin fn name in value position — point at the call form
             if (self.ctx.extern_native_fns.contains(&name)
                 && name == sym::PANIC)
-                || matches!(name, sym::TYPE_ID | sym::PRINT)
+                || name == sym::TYPE_ID
             {
                 self.ctx.err(sp, format!("`{}` is a function —call it: `{}(..)`", self.ctx.name(name), self.ctx.name(name)));
                 return Err(());

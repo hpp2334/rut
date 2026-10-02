@@ -165,9 +165,9 @@ pub const WELL_KNOWN: &[&str] = &[
     "checked_sub",      // CHECKED_SUB
     "checked_mul",      // CHECKED_MUL
     "NAN",        // NAN
-    "print",      // PRINT
-    "size_of",    // SIZE_OF
-    "align_of",   // ALIGN_OF
+    "print",      // retired rows: ids stay fixed (append-only), the
+    "size_of",    // consts died with the removal diagnostics
+    "align_of",   // they served
     "clone",      // CLONE
     "capture_stacktrace", // CAPTURE_STACKTRACE
     "StackTrace", // STACK_TRACE
@@ -211,8 +211,10 @@ pub const WELL_KNOWN: &[&str] = &[
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
-/// every interner instance. Removed names (`Option`, `Result`)
-/// are deliberately absent: their diagnostics stay text-based. (`Weak`
+/// every interner instance. Retired names are ordinary identifiers:
+/// `Option`/`Result` never joined the table, and `print`/`size_of`/
+/// `align_of` kept their rows (append-only) but lost their consts once
+/// nothing compared them by symbol. (`Weak`
 /// joined the table in the weak batch — it was absent
 /// while the M5 stub diagnosed it.)
 ///
@@ -273,11 +275,10 @@ pub const CHECKED_ADD: IdentId = IdentId(47);
 pub const CHECKED_SUB: IdentId = IdentId(48);
 pub const CHECKED_MUL: IdentId = IdentId(49);
 pub const NAN: IdentId = IdentId(50);
-// removed-surface names the compiler diagnoses by id — the removal
-// diagnostics compare symbols, never text
-pub const PRINT: IdentId = IdentId(51);
-pub const SIZE_OF: IdentId = IdentId(52);
-pub const ALIGN_OF: IdentId = IdentId(53);
+// `print`/`size_of`/`align_of` (ids 51–53) are retired names — the
+// removal diagnostics that compared them by symbol are gone, and the
+// consts died with them. The WELL_KNOWN rows STAY (append-only: the
+// ids are baked), they just have no named handles anymore.
 // the one copy escape hatch — `bytes.clone()` (every other
 // binding shares its cell)
 pub const CLONE: IdentId = IdentId(54);
@@ -430,9 +431,6 @@ mod tests {
             ("checked_sub", CHECKED_SUB),
             ("checked_mul", CHECKED_MUL),
             ("NAN", NAN),
-            ("print", PRINT),
-            ("size_of", SIZE_OF),
-            ("align_of", ALIGN_OF),
             ("clone", CLONE),
             ("capture_stacktrace", CAPTURE_STACKTRACE),
             ("StackTrace", STACK_TRACE),
@@ -476,7 +474,10 @@ mod tests {
             assert_eq!(i.lookup(text), Some(*id));
             assert_eq!(i.intern(text), *id, "intern must not re-assign");
         }
-        assert_eq!(WELL_KNOWN.len(), cases.len(), "table and cases disagree");
+        // the retired rows (`print`/`size_of`/`align_of`, ids 51–53)
+        // carry no consts — the ids stay fixed (append-only law), the
+        // consts died with the removal diagnostics they served
+        assert_eq!(WELL_KNOWN.len(), cases.len() + 3, "table and cases disagree");
     }
 
     #[test]

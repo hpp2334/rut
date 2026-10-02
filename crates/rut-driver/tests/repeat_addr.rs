@@ -82,41 +82,6 @@ fn address_of_boxes_the_operand() {
 }
 
 #[test]
-fn the_array_name_diagnoses_with_the_removal() {
-    // type position
-    let ds = diags_of(
-        "pub fn f(a: Array<i32>) -> i32 { return a.len(); }\n\
-         fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("`Array` was removed")),
-        "type-position Array must self-diagnose: {ds:?}"
-    );
-    // the old type-call construction
-    let ds = diags_of(
-        "fn main() -> i32 {\n\
-             let a = Array<i32>(4);\n\
-             return a.len();\n\
-         }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("`Array` was removed") && d.contains("[v; n]")),
-        "Array<T>(n) must point at `[v; n]`: {ds:?}"
-    );
-    // and the removed make_ptr spelling
-    let ds = diags_of(
-        "fn main() -> i32 {\n\
-             let p = make_ptr(7);\n\
-             return p;\n\
-         }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("`make_ptr(v)` was removed") && d.contains("`?T`")),
-        "make_ptr must point at `?T`: {ds:?}"
-    );
-}
-
-#[test]
 fn bracket_types_need_no_use_statement() {
     // `[T]` is grammar — a module that never named `Array` still spells it.
     // Builtin fns are AMBIENT now:

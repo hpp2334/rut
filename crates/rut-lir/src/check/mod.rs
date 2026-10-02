@@ -393,11 +393,8 @@ pub struct Ctx<'a> {
     /// the origin map covers only spliced text, a linked dep contributes
     /// no text, so its names carry their exporter's spec here
     pub extern_origins: std::collections::HashMap<IdentId, String>,
-    /// core's removed-name table, keyed by IdentId — interned once at
-    /// construction, so removal diagnostics compare symbols, never text
-    pub removed: std::collections::HashMap<IdentId, &'static str>,
     /// core's import-gated names (the `pub builtin` rows of
-    /// `Surface::core`), keyed by IdentId like `removed` — a resolution
+    /// `Surface::core`), keyed by IdentId — a resolution
     /// miss that hits it names the fix: `use core::{ Name }`
     pub pub_core: std::collections::HashMap<IdentId, &'static str>,
     // instantiation queue
@@ -583,10 +580,8 @@ impl<'a> Ctx<'a> {
     /// A module compiled under its own scope.
     pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
         // the interner clones the AST's — every source id resolves
-        // identically; synthesized names intern here only. The removed-
-        // name table interns into the same interner (one copy per Ctx).
+        // identically; synthesized names intern here only.
         let mut interner = ast.interner.clone();
-        let removed = rut_core::binary::removed_core_map(&mut interner);
         let pub_core = rut_core::binary::pub_core_map(&mut interner);
         Ctx {
             ast,
@@ -638,7 +633,6 @@ impl<'a> Ctx<'a> {
             allow_uses: false,
             own_spec: String::new(),
             extern_origins: std::collections::HashMap::new(),
-            removed,
             pub_core,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
@@ -655,17 +649,14 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The `core` not-in-scope diagnostic: a v1.1-removed name
-    /// diagnoses with its replacement, and an import-gated core name
+    /// The `core` not-in-scope diagnostic: an import-gated core name
     /// (the `pub builtin` spellings) names the fix exactly —
     /// `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
-    /// `None` when `n` is neither — the caller keeps its ordinary
-    /// message.
+    /// `None` when `n` is not one — the caller keeps its ordinary
+    /// message (retired names are ordinary identifiers: they fall to
+    /// the caller's plain unknown-name diagnostic).
     pub fn not_in_core_scope(&self, n: IdentId) -> Option<String> {
         let text = self.interner.name(n);
-        if let Some(msg) = self.removed_core(n) {
-            return Some(msg.to_string());
-        }
         if let Some(name) = self.pub_core.get(&n) {
             return Some(format!("`{name}` is not in scope — `use core::{{ {name} }}`"));
         }
@@ -674,12 +665,6 @@ impl<'a> Ctx<'a> {
                 "`{text}` is not in scope — `use core::{{{text}}}` (the prelude is used, never implicit)"
             )
         })
-    }
-
-    /// The removal message for a removed `core` name, by symbol — the
-    /// table was interned once at construction (`removed_core_map`).
-    pub fn removed_core(&self, n: IdentId) -> Option<&'static str> {
-        self.removed.get(&n).copied()
     }
 
     /// Use another module's type descriptors so `(scope, local)` ids
