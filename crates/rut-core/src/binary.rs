@@ -137,7 +137,10 @@ pub struct SurfaceTrait {
     pub name: IdentId,
     /// generic parameters (`trait Foo<T>`) — the trait's signatures are
     /// only meaningful per instantiation, so a generic trait's methods
-    /// are empty here and it cannot be implemented across modules (v1)
+    /// carry the `#<param>` placeholder shapes here and every
+    /// instantiation mints from them where it is used (an impl head, a
+    /// type position); the orphan rule — not genericity — is the one
+    /// cross-module impl restriction
     pub generics: usize,
     pub methods: Vec<TraitMethod>,
 }

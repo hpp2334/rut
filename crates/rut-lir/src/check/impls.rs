@@ -259,8 +259,10 @@ impl<'a> Ctx<'a> {
         let resolved = self.template_trait_args(tname, targs.len(), target)?;
         // the unification must PRODUCE the requested instantiation —
         // `Readable<T>` over `Source<str>` yields `Readable<str>`; any
-        // other resolution is a different impl, not this one
-        if resolved != targs || self.mk_trait_inst(tname, resolved.clone()) != trait_id {
+        // other resolution is a different impl, not this one. The mint
+        // is the unified lane: a local trait instantiates from its AST,
+        // a foreign one from the carried descriptor.
+        if resolved != targs || self.mint_impl_trait_inst(tname, resolved.clone()) != trait_id {
             return None;
         }
         let Some((_, params)) = im.target_data.clone() else {

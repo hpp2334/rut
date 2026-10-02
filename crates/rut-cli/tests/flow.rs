@@ -225,6 +225,51 @@ entry fn main() -> nil {
 }
 
 #[test]
+fn consumer_impls_flow_generic_trait_for_local_type() {
+    // the generic foreign-trait crossing, std-shaped: the consumer
+    // implements FLOW's generic `IntoFlow<T>` (the trait's declaration
+    // crosses the flow bundle; the trait is foreign to this unit) for a
+    // LOCAL generic type, and the pipeline drives through it — the impl
+    // head registers against the carried `IntoFlow<#T>` descriptor, the
+    // concrete `IntoFlow<i32>` mints at the call, and `map`/`count` run
+    // on the returned chain (flow's own rows answer downstream).
+    let lines = run(
+        r#"
+use pouch::{ Vec };
+use flow::{ Flow, IntoFlow };
+use ink::{ Logger };
+
+class Tube<T> {
+    items: Vec<T>;
+}
+impl<T> Tube<T> {
+    fn of(items: Vec<T>) -> Self { return Tube { items: items }; }
+}
+impl<T> IntoFlow<T> for Tube<T> {
+    fn into_flow(self) -> Flow<T> {
+        let src: Vec<T> = self.items;
+        return Flow.new(fn (emit: fn(T) -> bool) -> nil {
+            for (let x of src) {
+                if (!emit(x)) { return; }
+            }
+        });
+    }
+}
+
+entry fn main() -> nil {
+    let log = Logger.new("foreign");
+    let nums: Vec<i32> = Vec.new();
+    nums.push(5); nums.push(6); nums.push(7);
+    let n: i32 = Tube<i32>.of(nums).into_flow().map(fn(x: i32) -> i32 { return x * 10; }).count();
+    log.info(f"tube n={n}");
+}
+"#,
+    );
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains("tube n=3"), "{lines:?}");
+}
+
+#[test]
 fn array_entry_empty_and_nonempty() {
     // DECISION RECORD (the `[T]` sink is gone): the fixed-array sink's
     // only call spelling (`[i32].from_flow(..)`) needed a type-path

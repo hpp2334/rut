@@ -744,15 +744,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        // the mirror: owner = the trait's declaring pkg (the impl is
-        // its to compile), target = the receiver's mirror row (its
-        // ledger row keys the instantiation), subst = the class's
-        // concrete arguments
-        let owner = self
-            .ctx
-            .extern_origins
-            .get(&im.trait_name)
-            .cloned()
+        // the mirror: owner = the ROW's mint anchor when it carries one
+        // (the consumer-registered foreign-trait rows — the impl's home
+        // compiles the bodies), else the trait's declaring pkg (the
+        // impl is its to compile), else this unit
+        let owner = im
+            .origin
+            .clone()
+            .or_else(|| self.ctx.extern_origins.get(&im.trait_name).cloned())
             .unwrap_or_else(|| self.ctx.own_spec.clone());
         let fid = self
             .ctx
@@ -841,11 +840,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let owner = self
-            .ctx
-            .extern_origins
-            .get(&im.trait_name)
-            .cloned()
+        // the same owner law the receiver route runs: the row's mint
+        // anchor first (the consumer-registered rows), the trait's
+        // declaring pkg otherwise
+        let owner = im
+            .origin
+            .clone()
+            .or_else(|| self.ctx.extern_origins.get(&im.trait_name).cloned())
             .unwrap_or_else(|| self.ctx.own_spec.clone());
         let fid = self
             .ctx

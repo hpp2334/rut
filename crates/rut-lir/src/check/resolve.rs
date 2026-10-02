@@ -102,15 +102,40 @@ impl<'a> Ctx<'a> {
                         }
                     }
                 } else if let Some(ext) = self.extern_trait(tname).cloned() {
-                    // a used module's exported trait
-                    if !segs[0].generics.is_empty() || ext.generics > 0 {
-                        self.err(self.ast.span(node.id()), format!(
-                            "generic trait `{}` cannot be implemented across modules — implement it in its declaring module (v1)",
-                            self.name(tname)
-                        ));
-                        None
+                    // a used module's exported trait. A non-generic trait
+                    // binds the carried descriptor; a GENERIC trait
+                    // instantiates it — the head's arguments resolve under
+                    // `env` (the target's parameter placeholders ride in),
+                    // and the carried placeholder descriptor substitutes
+                    // per argument list (the same mint the dispatch sites
+                    // run). Genericity is no longer a cross-module gate:
+                    // the one restriction on an `impl` head is the orphan
+                    // rule (collect_impl_trait's placement gate).
+                    if segs[0].generics.is_empty() {
+                        if ext.generics > 0 {
+                            self.err(self.ast.span(node.id()), format!(
+                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
+                                self.name(tname), self.name(tname)
+                            ));
+                            None
+                        } else {
+                            Some(ext.id)
+                        }
                     } else {
-                        Some(ext.id)
+                        let args: Vec<TypeId> = segs[0]
+                            .generics
+                            .iter()
+                            .map(|g| self.resolve_type(*g, env))
+                            .collect();
+                        if args.len() != ext.generics {
+                            self.err(self.ast.span(node.id()), format!(
+                                "`{}` takes {} type parameter(s), {} given",
+                                self.name(tname), ext.generics, args.len()
+                            ));
+                            None
+                        } else {
+                            Some(self.mint_extern_trait_inst(tname, args))
+                        }
                     }
                 } else {
                     let msg = self
@@ -169,7 +194,93 @@ impl<'a> Ctx<'a> {
             }
             return self.mk_iterator_inst(name, args[0]);
         }
+        // a used module's exported GENERIC trait: the carried descriptor
+        // mints the instantiation (no local AST exists)
+        if self.extern_trait(name).is_some() {
+            return self.mint_extern_trait_inst(name, args);
+        }
         self.mk_trait_inst(name, args)
+    }
+
+    /// The FOREIGN generic trait's mint half: one descriptor per
+    /// type-argument list, built out of the CARRIED placeholder
+    /// descriptor (the declaration crossed the used module's surface
+    /// with its signatures spelling the trait's parameters as `#<param>`
+    /// placeholder rows). The substitution maps the placeholder leaves
+    /// to the arguments by the crossing template law — the k-th DISTINCT
+    /// leaf in signature walk order is the trait's k-th generic, the
+    /// same first-appearance reading the dispatch sites run
+    /// (`descriptor_leaf_env`) — and the trait's own object leaves
+    /// (`?Self`-spelled parameters) re-spell to the NEW instantiation's
+    /// object. Cached in `trait_inst` alongside the local mints, so a
+    /// spelling and an impl head land on one descriptor.
+    pub fn mint_extern_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
+            return id;
+        }
+        let base_id = self
+            .extern_trait(name)
+            .map(|e| e.id)
+            .unwrap_or(u32::MAX);
+        let id = self.traits.len() as u32;
+        let tname = if args.is_empty() {
+            self.interner.name(name).to_string()
+        } else {
+            format!(
+                "{}<{}>",
+                self.interner.name(name),
+                args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
+            )
+        };
+        let tname = self.intern(&tname);
+        self.traits.push(TraitDesc { name: tname, methods: vec![] });
+        self.trait_inst.insert((name, args.clone()), id);
+        let Some(base) = (base_id != u32::MAX)
+            .then(|| self.traits.get(base_id as usize).cloned())
+            .flatten()
+        else {
+            return id; // unreachable — extern_trait guarantees the row
+        };
+        let leaves = self.carried_trait_leaves(&base);
+        let mut env: std::collections::HashMap<String, TypeId> = std::collections::HashMap::new();
+        for (i, leaf) in leaves.iter().enumerate() {
+            if let Some(&a) = args.get(i) {
+                env.insert(leaf.clone(), a);
+            }
+        }
+        let mut methods = Vec::with_capacity(base.methods.len());
+        for tm in &base.methods {
+            let params = tm
+                .params
+                .iter()
+                .map(|&p| self.subst_carried_sig(p, base_id, id, &env))
+                .collect();
+            let ret = self.subst_carried_sig(tm.ret, base_id, id, &env);
+            methods.push(rut_core::binary::TraitMethod { name: tm.name, params, ret });
+        }
+        self.traits[id as usize].methods = methods;
+        id
+    }
+
+    /// One carried signature under the mint's substitution: the
+    /// placeholder leaves rebuild structurally (`subst_template_ty` —
+    /// the shared crossing substitute), and a `?Self` leaf (the BASE
+    /// placeholder descriptor's object type, at any depth) re-spells to
+    /// the minted instantiation's object — the impl-side law's mint
+    /// twin (`resolve_trait_sig_ty` spells `Self` the same way for a
+    /// local trait).
+    fn subst_carried_sig(
+        &mut self,
+        t: TypeId,
+        base_id: u32,
+        minted: u32,
+        env: &std::collections::HashMap<String, TypeId>,
+    ) -> TypeId {
+        let s = self.subst_template_ty(t, env);
+        if matches!(self.types.kind(s), TyKind::TraitObj { trait_id } if *trait_id == base_id) {
+            return self.mk_trait_obj(minted);
+        }
+        s
     }
 
     /// The element spelling inside a trait-inst NAME: boot optionals'
@@ -495,16 +606,38 @@ impl<'a> Ctx<'a> {
                             return self.mk_trait_obj(id);
                         }
                         // a used module's exported trait:
-                        // the object type here, exactly like a declared one
+                        // the object type here, exactly like a declared
+                        // one. A GENERIC head instantiates the carried
+                        // placeholder descriptor — the trait's shape
+                        // crosses the surface, so the spelling dispatches
+                        // by the existing law (single concrete origin ⇒
+                        // static, merged origins ⇒ vtable).
                         if let Some(ext) = self.extern_trait(name).cloned() {
-                            if !seg.generics.is_empty() || ext.generics > 0 {
+                            if seg.generics.is_empty() && ext.generics == 0 {
+                                return self.mk_trait_obj(ext.id);
+                            }
+                            if seg.generics.is_empty() {
                                 self.err(sp, format!(
-                                    "generic trait `{}` cannot be spelled across modules — use it in its declaring module (v1)",
+                                    "generic trait `{}` needs type arguments (e.g. `{}<i32>`)",
+                                    self.name(name),
                                     self.name(name)
                                 ));
                                 return TY_I32;
                             }
-                            return self.mk_trait_obj(ext.id);
+                            if seg.generics.len() != ext.generics {
+                                self.err(sp, format!(
+                                    "`{}` takes {} type argument(s), {} given", self.name(name),
+                                    ext.generics, seg.generics.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            let id = self.mint_extern_trait_inst(name, args);
+                            return self.mk_trait_obj(id);
                         }
                         // used type: the exporter's
                         // scope-qualified id; link rebases it

@@ -136,3 +136,105 @@ entry fn main() -> i32 {
     ]);
     assert_eq!(out, 42, "extras' impl answered for extras' Point");
 }
+
+// ---- generic foreign traits (the v1 gates lifted) ----
+
+const WRAP: &str = "trait Wrap<T> { fn unwrap_or(self, d: T) -> T; }\n";
+
+#[test]
+fn generic_foreign_trait_impl_for_local_type_static_dispatch() {
+    // the consumer unit implements a FOREIGN generic trait for its own
+    // generic type, and a call site in the SAME unit dispatches
+    // statically through the template: `impl<T> Wrap<T> for Box2<T>`
+    // registers against the carried `Wrap` descriptor, the concrete
+    // `Wrap<i32>` mints per instantiation, and the method body
+    // monomorphizes here. A second unit then reaches the SAME impl
+    // through the consumer-registered surface row (the mirror lane —
+    // the row's mint owner is the impl's home, not the trait's pkg).
+    let extras = "\
+use traits::Wrap;
+struct Box2<T> { v: T }
+impl<T> Wrap<T> for Box2<T> {
+    fn unwrap_or(self, d: T) -> T { return self.v; }
+}
+pub fn make() -> Box2<i32> { return Box2 { v: 7 }; }
+pub fn try_get(b: Box2<i32>) -> i32 { return b.unwrap_or(-1); }
+";
+    let out = run_graph(&[
+        ("traits", WRAP),
+        ("extras", extras),
+        ("app", "\
+use traits::Wrap;
+use extras::{Box2, make, try_get};
+entry fn main() -> i32 {
+    let b: Box2<i32> = make();
+    if (b.unwrap_or(0) != 7) { return 1; }
+    return try_get(b);
+}
+"),
+    ]);
+    assert_eq!(out, 7, "the consumer unit's impl answered both call sites");
+}
+
+#[test]
+fn generic_foreign_trait_spelled_in_param_type() {
+    // the spelling half: a foreign generic trait in type position
+    // (`fn describe(w: Wrap<i32>)`) — the carried descriptor mints the
+    // instantiation, the argument widens through the registered impl,
+    // and the call dispatches by the ordinary law (single concrete
+    // origin ⇒ static, else the vtable the fill registered).
+    let extras = "\
+use traits::Wrap;
+struct Box2<T> { v: T }
+impl<T> Wrap<T> for Box2<T> {
+    fn unwrap_or(self, d: T) -> T { return self.v; }
+}
+pub fn make() -> Box2<i32> { return Box2 { v: 9 }; }
+pub fn describe(w: Wrap<i32>) -> i32 { return w.unwrap_or(0); }
+";
+    let out = run_graph(&[
+        ("traits", WRAP),
+        ("extras", extras),
+        ("app", "\
+use traits::Wrap;
+use extras::{Box2, describe, make};
+entry fn main() -> i32 {
+    let b: Box2<i32> = make();
+    return describe(b);
+}
+"),
+    ]);
+    assert_eq!(out, 9, "the spelled foreign trait type answered the call");
+}
+
+#[test]
+fn orphan_generic_impl_still_rejected() {
+    // foreign trait + foreign type: the ONE cross-module impl
+    // restriction — the orphan rule — stands unchanged under the lifted
+    // genericity gates, with its existing diagnostic.
+    let mut session = rut_driver::Session::new();
+    for (spec, src) in [
+        ("traits", WRAP),
+        ("types", "pub struct Cell<T> { v: T }\n"),
+        (
+            "extras",
+            "\
+use traits::Wrap;
+use types::Cell;
+impl<T> Wrap<T> for Cell<T> {
+    fn unwrap_or(self, d: T) -> T { return self.v; }
+}
+",
+        ),
+    ] {
+        session
+            .register_module(spec, rut_driver::Module { body: rut_driver::ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() })
+            .expect("mount");
+    }
+    let g = rut_driver::compile_graph(&session, "extras");
+    assert!(
+        g.diags.iter().any(|d| d.msg.contains("orphan impl")),
+        "the orphan gate rejects the foreign pair: {:?}",
+        g.diags
+    );
+}

@@ -499,6 +499,32 @@ impl<'a> Ctx<'a> {
         self.extern_trait_decls.get(&name)
     }
 
+    /// The carried placeholder descriptor's generic-parameter leaves, in
+    /// signature walk order: methods in order, each method's parameters
+    /// then return, the DISTINCT `#`-prefixed leaf texts in
+    /// first-appearance order. The k-th leaf binds the k-th trait
+    /// argument — the crossing template law the dispatch sites read by
+    /// (`descriptor_leaf_env`'s per-method walk, lifted to the whole
+    /// descriptor so a mint substitutes every signature at once).
+    pub fn carried_trait_leaves(&self, base: &TraitDesc) -> Vec<String> {
+        let mut leaves: Vec<String> = Vec::new();
+        let mut scan = |text: &str, leaves: &mut Vec<String>| {
+            for piece in text.split(|c: char| !c.is_alphanumeric() && c != '#') {
+                let piece = piece.trim();
+                if piece.len() > 1 && piece.starts_with('#') && !leaves.iter().any(|l| l == piece) {
+                    leaves.push(piece.to_string());
+                }
+            }
+        };
+        for tm in &base.methods {
+            for &p in &tm.params {
+                scan(&self.type_name(p).to_string(), &mut leaves);
+            }
+            scan(&self.type_name(tm.ret).to_string(), &mut leaves);
+        }
+        leaves
+    }
+
     /// Bind a used core compiler-lowered function (`own`,
     /// `downcast`, `assert`/`panic`, the `str`/`bytes` natives).
     pub fn add_extern_native_fn(&mut self, name: IdentId) {

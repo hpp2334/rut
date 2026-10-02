@@ -387,7 +387,27 @@ pub fn compile_program_resolved(
                     }
                 })
                 .collect();
-            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete, trait_args, None);
+            // the row's MINT OWNER: a trait this surface declares leaves
+            // the owner to the trait's declaring pkg (the extern_origins
+            // law — impl and trait compile in one unit, json's group
+            // rows). Any OTHER row is the exporter's own impl of a
+            // FOREIGN trait — the consumer-registered row — and its
+            // per-instantiation bodies compile in the exporter: the
+            // shape-only rows' anchoring law (the native lane above),
+            // now for declared foreign traits too.
+            let declared_here = surface
+                .traits
+                .iter()
+                .any(|t| surface.names.name(t.name) == text);
+            ctx.add_extern_impl(
+                tname,
+                tid,
+                im.target,
+                methods,
+                methods_concrete,
+                trait_args,
+                (!declared_here).then(|| origin.clone()),
+            );
         }
         
         // inherent method surfaces (the linkable-classes phase): the
@@ -1408,7 +1428,11 @@ pub fn compile_program_resolved(
         let decl_id = ctx.find_trait(tname).map(|i| i.id);
         let is_native =
             decl_id.is_none() && ctx.extern_traits.get(&tname).copied() == Some(rut_core::binary::NativeTrait::Iterable);
-        if decl_id.is_none() && !is_native {
+        // a FOREIGN trait's impl this unit registered (the
+        // consumer-registered row): the trait's decl lives in another
+        // pkg, but the IMPL is this unit's — the bodies answer here
+        let is_foreign = decl_id.is_none() && !is_native && ctx.extern_trait(tname).is_some();
+        if decl_id.is_none() && !is_native && !is_foreign {
             continue;
         }
         // the concrete target's shape: a structural row (?T / [T]) or a
