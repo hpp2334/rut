@@ -704,7 +704,7 @@ impl<'a> Ctx<'a> {
             };
             let tail = match ty_origin {
                 Some(_) => {
-                    "an `impl Trait for Type` needs at least one of the pair declared in its own pkg"
+                    "an `impl Trait for Type` needs at least one of the pair declared in its own pkg — the one cross-module impl restriction (generic foreign traits cross freely)"
                 }
                 None => "only a trait of this pkg may be implemented for a builtin",
             };

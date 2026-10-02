@@ -146,7 +146,7 @@ trait, `Json` is that file's).
 - **Both foreign is an error**, named plainly:
 
   ```
-  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg
+  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg — the one cross-module impl restriction (generic foreign traits cross freely)
   ```
 
 The guarantee you get: a pkg's impl set is auditable — "who implements

@@ -65,7 +65,11 @@ Rules worth knowing:
   link error.
 - **Placement:** an impl may live in a module of the trait's package or
   the type's package — at least one side must be yours. You cannot
-  implement two foreign types to each other.
+  implement two foreign types to each other. This is the **only**
+  cross-module rule: a foreign trait crosses freely for your own type,
+  generic traits included — `impl<T> Wrap<T> for Box2<T>` against a
+  used pkg's `trait Wrap<T>` is legal, and so is spelling `Wrap<i32>`
+  as a parameter type.
 - **An empty impl block is legal** and acts as a marker: `impl
   Serializable for Point {}` says "this type is in" when the trait has
   no required methods.

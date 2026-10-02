@@ -30,19 +30,26 @@ PO = 'docs/po/zh_CN.po'
 # markdown structure load-bearing). Everything not in FRESH either
 # keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
 # mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. This sweep (the `[T]` FromFlow sink is dropped — the
-# type-path receiver grammar will not grow) changes TWO strings: both
-# are pure clause drops, so each fresh zh is the old translation with
-# the same clause removed.
+# DESIGN. This sweep (generic foreign traits cross modules — the v1
+# gates lift) changes FOUR strings: three are the traits pages'
+# placement/satisfaction bullets gaining the "the one cross-module
+# restriction" clause, one is the new crossing bullet.
 FRESH = {
-    # reference/stdlib.md — the sink row: the fixed `[E]` impl and its
-    # seeding parenthetical are gone; the sinks are Vec + HashSet.
-    "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`":
-        "汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`",
-    # tutorial/stdlib.md — the flow paragraph: the exit sink enumerates
-    # `Vec.from_flow` only now.
-    "`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`), and everything between is chaining:":
-        "`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`），中间全是链式拼接：",
+    # tutorial/traits.md — the placement bullet: the only-rule clause
+    # and the generic crossing sentence extend the old translation.
+    "**Placement:** an impl may live in a module of the trait's package or the type's package — at least one side must be yours. You cannot implement two foreign types to each other. This is the **only** cross-module rule: a foreign trait crosses freely for your own type, generic traits included — `impl<T> Wrap<T> for Box2<T>` against a used pkg's `trait Wrap<T>` is legal, and so is spelling `Wrap<i32>` as a parameter type.":
+        "**位置：**impl 可以放在 trait 所在包或类型所在包的模块里——至少有一侧必须属于你。你不能给两个外部类型互相实现。这是**唯一的**跨模块规则：外部 trait 可以自由地为你自己的类型实现，泛型 trait 也不例外——对着 `use` 进来的包写 `impl<T> Wrap<T> for Box2<T>`（其 `trait Wrap<T>`）是合法的，把 `Wrap<i32>` 拼写成参数类型同样合法。",
+    # core-concepts/traits-and-dispatch.md — the placement bullet: the
+    # closing clause names placement the only cross-module restriction.
+    "**Placement is pair-local.** A trait impl may live in the trait's package or the type's package — at least one side of every `(trait, type)` pair must be yours. Implementing two foreign types' pairing is rejected outright; there is no orphan rule beyond that — placement is the only cross-module restriction, and a foreign trait crosses freely for a local type (generic traits included).":
+        "**放置位置对组合局部。**trait impl 可以放在 trait 所在的包或类型所在的包——每个 `(trait, type)` 组合至少有一侧属于你自己。实现两个外部类型的组合会被直接拒绝；除此之外没有别的孤儿规则——放置是唯一的跨模块限制，外部 trait 可以为本地类型自由实现（泛型 trait 也不例外）。",
+    # reference/traits.md — the satisfaction bullet: the closing clause
+    # names the placement rule the only cross-module impl restriction.
+    "**Satisfaction is nominal.** A type that declares every member by shape is still not an `I` until some module writes `impl I for T`. There is no duck typing and no orphan rule beyond placement: for every `impl Trait for Type`, **at least one of `Type` or `Trait` must be defined in the current pkg** — both foreign is a compile error. Builtin types (`[T]`, the primitives, `?T`, `opaque`) are in no pkg: only a _local trait_ may be implemented for a builtin. This placement rule is the **only** cross-module impl restriction — a foreign trait crosses freely for a local type, generic or not.":
+        "**满足是名义性的。** 一个按形状声明了全部成员的类型，在某些模块写出 `impl I for T` 之前仍不是 `I`。没有鸭子类型，除了位置之外也没有孤儿规则：对每个 `impl Trait for Type`，**`Type` 或 `Trait` 至少一个必须定义在当前包** —— 两者都是外来的就是编译错误。内建类型（`[T]`、各原语、`?T`、`opaque`）不属于任何包：只有_本包的 trait_ 才能为内建类型实现。这条放置规则是**唯一的**跨模块 impl 限制——外部 trait 可以为本地类型自由实现，泛型与否皆可。",
+    # reference/traits.md — the new crossing bullet.
+    "**Generic traits cross modules.** A consumer implements a foreign generic trait for its own type — `impl<T> Wrap<T> for Box2<T>` against a `use`d pkg's `trait Wrap<T>` — and spells the trait in type position (`fn describe(w: Wrap<i32>) -> i32`). The trait's declaration crosses the used pkg's surface, each type-argument list instantiates it where it is used, and dispatch is the ordinary law: one concrete origin binds statically, merged origins consult the vtable. The orphan rule above is the only gate.":
+        "**泛型 trait 跨模块。**使用者为自己的类型实现一个外部的泛型 trait——对着 `use` 进来的包的 `trait Wrap<T>` 写 `impl<T> Wrap<T> for Box2<T>`——并把该 trait 拼写进类型位置（`fn describe(w: Wrap<i32>) -> i32`）。trait 的声明随被使用包的表面跨越而来，每个类型实参列表在使用的位置实例化它，而分派仍是常规法则：单一具体来源静态绑定，来源合并则查 vtable。上面的孤儿规则是唯一的门。",
 }
 
 

@@ -77,6 +77,8 @@ entry fn main() {
   or `Trait` must be defined in the current pkg** — both foreign is a
   compile error. Builtin types (`[T]`, the primitives, `?T`, `opaque`)
   are in no pkg: only a *local trait* may be implemented for a builtin.
+  This placement rule is the **only** cross-module impl restriction —
+  a foreign trait crosses freely for a local type, generic or not.
 - **One impl per `(trait, type)` pair, program-wide.** A duplicate —
   two modules, or two blocks in one — is a link error.
 - **Bodies match the trait exactly**: receiver form (`self`/`mut
@@ -101,6 +103,14 @@ entry fn main() {
   the template; repeated parameters (`impl<T> W<T, T> for Pair2<T>`)
   are legal. Each trait argument must be a concrete type or a declared
   binder that names one of the target's own parameters.
+- **Generic traits cross modules.** A consumer implements a foreign
+  generic trait for its own type — `impl<T> Wrap<T> for Box2<T>`
+  against a `use`d pkg's `trait Wrap<T>` — and spells the trait in
+  type position (`fn describe(w: Wrap<i32>) -> i32`). The trait's
+  declaration crosses the used pkg's surface, each type-argument list
+  instantiates it where it is used, and dispatch is the ordinary law:
+  one concrete origin binds statically, merged origins consult the
+  vtable. The orphan rule above is the only gate.
 - **The element is a type argument, not an associated type**:
   `impl Iterable<char> for Counter` — there are no associated `type`
   members.

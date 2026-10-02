@@ -49,7 +49,9 @@ area = 3
 - **Placement is pair-local.** A trait impl may live in the trait's
   package or the type's package — at least one side of every
   `(trait, type)` pair must be yours. Implementing two foreign types'
-  pairing is rejected outright; there is no orphan rule beyond that.
+  pairing is rejected outright; there is no orphan rule beyond that —
+  placement is the only cross-module restriction, and a foreign trait
+  crosses freely for a local type (generic traits included).
 - **Any nominal type can be a target** — classes, structs, and even
   primitives (`impl MyTrait for i32` registers like any other impl).
   Traits may be generic (`Wrap<T>`, `Iterable<E>`); each instantiation
