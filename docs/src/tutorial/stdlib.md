@@ -209,7 +209,7 @@ maps and sets answer questions, they don't walk.
 registers `impl Iterable<E> for T` — `for (x of it)` desugars to
 `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a
 closure per stage, never per element. Entry is `into_flow()`, the exit
-is a sink (`Vec.from_flow`, a fixed array), and everything between is
+is a sink (`Vec.from_flow`), and everything between is
 chaining:
 
 ```rut

@@ -6014,9 +6014,9 @@ msgstr "`flow` —— 推送管线"
 
 #: src/tutorial/stdlib.md:208
 msgid ""
-"`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`, a fixed array), and everything between is chaining:"
+"`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`), and everything between is chaining:"
 msgstr ""
-"`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`、定长数组），中间全是链式拼接："
+"`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`），中间全是链式拼接："
 
 
 #: src/tutorial/stdlib.md:215
@@ -24404,10 +24404,8 @@ msgstr "`T::from_flow(it: Iterable<E>) -> T`"
 
 
 #: src/reference/stdlib.md:218
-msgid ""
-"the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` (empty is `[]`; non-empty seeds from element 0, so the source must re-drive)"
-msgstr ""
-"汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`，以及定长 `[E]`（空即 `[]`；非空以元素 0 作种子，因此源必须可重新驱动）"
+msgid "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`"
+msgstr "汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`"
 
 
 #: src/reference/stdlib.md:219

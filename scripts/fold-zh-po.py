@@ -30,19 +30,19 @@ PO = 'docs/po/zh_CN.po'
 # markdown structure load-bearing). Everything not in FRESH either
 # keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
 # mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. This sweep (the crossing rule rejects named records) changes
-# ONE string non-mechanically — the host-fns crossing-set bullet that
-# claimed `host struct` records cross; it now states the true set and
-# points the tuple lane at the entry-fn surface.
+# DESIGN. This sweep (the `[T]` FromFlow sink is dropped — the
+# type-path receiver grammar will not grow) changes TWO strings: both
+# are pure clause drops, so each fresh zh is the old translation with
+# the same clause removed.
 FRESH = {
-    # reference/host-fns.md — the crossing-set bullet: records never
-    # cross, the anonymous-tuple lane is the entry-fn surface's
-    "**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, and `opaque`. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Named records never cross — a `host struct` decl is surface, not a signature type — and the anonymous-tuple lane belongs to the `entry fn` surface ([value boundary](value-boundary.md)). Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration.":
-        "**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes` 和 `opaque`。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。具名记录永不跨越——`host struct` 声明只是表面，不是签名类型——而匿名元组通道属于 `entry fn` 表面（[值边界](value-boundary.md)）。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误。",
-    # reference/host-fns.md — the crossing-set bullet: records never
-    # cross, the anonymous-tuple lane is the entry-fn surface's
-    "**The crossing set** — `host fn` signatures are concrete over: nil, the primitives, `str`, `bytes`, and `opaque`. Returns may additionally use the answer optionals `?str` / `?bytes` / `?opaque`. Named records never cross — a `host struct` decl is surface, not a signature type — and the anonymous-tuple lane belongs to the `entry fn` surface ([value boundary](value-boundary.md)). Everything else (user classes, `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the declaration.":
-        "**跨越集合**——`host fn` 签名在以下类型上是具体的：nil、基本类型、`str`、`bytes` 和 `opaque`。返回值还可以使用应答可空类型 `?str` / `?bytes` / `?opaque`。具名记录永不跨越——`host struct` 声明只是表面，不是签名类型——而匿名元组通道属于 `entry fn` 表面（[值边界](value-boundary.md)）。其余一切（用户类、`Vec<T>`、`[T]`、trait 对象、闭包）都是声明上的编译错误。",
+    # reference/stdlib.md — the sink row: the fixed `[E]` impl and its
+    # seeding parenthetical are gone; the sinks are Vec + HashSet.
+    "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`":
+        "汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`",
+    # tutorial/stdlib.md — the flow paragraph: the exit sink enumerates
+    # `Vec.from_flow` only now.
+    "`Flow<E>` chains the push contract. A type is iterable when it registers `impl Iterable<E> for T` — `for (x of it)` desugars to `it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a closure per stage, never per element. Entry is `into_flow()`, the exit is a sink (`Vec.from_flow`), and everything between is chaining:":
+        "`Flow<E>` 把推送契约串成链。一个类型在注册了 `impl Iterable<E> for T` 时即可迭代——`for (x of it)` 脱糖为 `it.iterate(emit)`——而 Flow 把同一次 drive 包进适配器阶段：每个阶段一个闭包，绝非每个元素一个。入口是 `into_flow()`，出口是汇（`Vec.from_flow`），中间全是链式拼接：",
 }
 
 

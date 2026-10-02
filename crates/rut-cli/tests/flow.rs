@@ -5,7 +5,7 @@
 //! interpret. The surface: `into_flow` entries (Vec / `[T]` / `str` /
 //! `bytes`), the adapters (`map`/`filter`/`take`/`skip`/`count`/
 //! `fold`/`enumerate`/`for_each`), the `Vec.from_flow` sink, the
-//! `HashSet::from_flow` sink, the `[E]` array sink, chains feeding
+//! `HashSet::from_flow` sink, chains feeding
 //! `for..of` (the `impl Iterable` path), the identity row, and
 //! stop-propagation through `take`.
 
@@ -225,18 +225,19 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn array_sink_empty_and_nonempty() {
-    // adapted at landing: the `[E]` sink's static spelling
-    // (`[i32].from_flow(..)`) does not parse yet — no array-typed
-    // receiver form reaches the no-self static — so the case drives the
-    // STRUCTURAL rows that DO answer a consumer: the `[T]` entry (a
-    // drained empty array and a full one, one drive each). The sink
-    // spelling itself is flagged for the parser tail.
+fn array_entry_empty_and_nonempty() {
+    // DECISION RECORD (the `[T]` sink is gone): the fixed-array sink's
+    // only call spelling (`[i32].from_flow(..)`) needed a type-path
+    // receiver form the grammar will not grow — the owner dropped that
+    // surface, and the `impl<T> FromFlow<T> for [T]` row was removed
+    // with it (an impl whose call cannot be spelled is dead surface).
+    // The case drives the `[T]` ENTRY, which stays: a drained empty
+    // array and a full one, one drive each.
     let lines = run(
         r#"
 use pouch::{ Vec };
 use core::{ Iterable };
-use flow::{ Flow, FromFlow, IntoFlow };
+use flow::{ Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {

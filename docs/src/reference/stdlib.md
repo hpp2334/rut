@@ -215,7 +215,7 @@ picked=3 first=20 last=30
 | `filter(p: fn(E) -> bool) -> Self` | keep the elements the predicate admits |
 | `take(n)` / `skip(n)` | the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained |
 | `count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>` | the one-drive consumers |
-| `T::from_flow(it: Iterable<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`, and the fixed `[E]` (empty is `[]`; non-empty seeds from element 0, so the source must re-drive) |
+| `T::from_flow(it: Iterable<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>` |
 | `for (x of chain)` | chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar |
 
 **Import the traits you spell and the pipeline type**: `use flow::{
