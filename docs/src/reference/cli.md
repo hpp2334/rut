@@ -62,7 +62,7 @@ Bodies bound by `run`:
 
 Execution: `main` is called with no arguments; then the async driving
 loop runs — drain the ready queue, advance the virtual clock to the next
-timer deadline, repeat until no frames and no tasks remain. The loop is
+timer deadline, repeat until no frames and no pending work remain. The loop is
 capped, so a program that never idles fails loudly instead of hanging.
 
 A `.d.rut` input is refused: a declaration file is a surface, not a

@@ -264,4 +264,4 @@ manifests, two sources. Copy the trees into files and `rut run .` from
 dear rut, hello from a package
 ```
 
-Next: [async: tasks, workers, and channels](async.md).
+Next: [async: futures, workers, and channels](async.md).

@@ -1,4 +1,4 @@
-# Async: tasks, workers, and channels
+# Async: futures, workers, and channels
 
 rut's concurrency is **pull-based**. An `async fn` compiles into a
 *future* — a cold value that runs nothing until something drives it.
@@ -7,7 +7,7 @@ implicit scheduling: the host owns time, and code progresses only when
 a driving loop pumps it. The model is described in
 [the async model](../core-concepts/async-model.md), with the full
 surface in [async and await](../reference/async.md) and
-[tasks](../reference/tasks.md).
+[launched futures](../reference/tasks.md).
 
 ## `async fn` and `await`
 
@@ -161,7 +161,7 @@ joining a launched future's value (`await handle`) are spelled in the
 grammar but not in this build — the compiler gates them. Cancellation
 *is* here: `handle.abort()` flags the frame, and the probe at its next
 checkpoint unwinds it deterministically, running cleanup in reverse
-declaration order. See [tasks](../reference/tasks.md) for the
+declaration order. See [launched futures](../reference/tasks.md) for the
 roadmap.
 
 ## Workers and channels

@@ -231,10 +231,10 @@ one-method `Source` trait.
 | `Vm::new(prog, &limits, hooks, hosts)` | boot; joins every declared host thunk to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call::<A, R>(export, args)` | call an export with Rust values, get a Rust value back ([value boundary](value-boundary.md)) |
 | `vm.resume::<R>()` | resume a budget-parked call after refueling |
-| `vm.run_ready()` | drain the async ready queue once; returns tasks run |
+| `vm.run_ready()` | drain the async ready queue once; returns frames run |
 | `vm.next_deadline() -> Option<u64>` | the earliest timer deadline, if any |
 | `vm.set_now(t_ms)` | advance the virtual clock |
-| `vm.pending_tasks() -> usize` | unfinished async tasks |
+| `vm.pending_tasks() -> usize` | unfinished async work |
 | `vm.fuel_used` / `vm.heap_usage()` | budget meters |
 | `vm.alloc_opaque_str(s)` | mint an `opaque` box over host-built text (the logger's named logger) |
 | `vm.call_host_row(row, &[Value])` | dispatch a registered row by name (test/tooling reads) |

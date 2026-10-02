@@ -35,104 +35,78 @@ PO = 'docs/po/zh_CN.po'
 # msgid), rides MECH (the mechanical cutover shapes), or folds to ""
 # — the English fallback BY DESIGN.
 FRESH = {
-    'There is no character type. A `str` iterates as one-codepoint `str`s, and codepoints read as `u32` (`s.code()`, `s.code_at(i)`) — see [string slicing and views](../reference/string-views.md).':
-        '没有字符类型。`str` 以单码点 `str` 的形式迭代，码点以 `u32` 读取（`s.code()`、`s.code_at(i)`）——参见[字符串切片与视图](../reference/string-views.md)。',
+    # -- the tasks cutover: the book speaks of launched futures, not tasks ----
+    'Launched futures':
+        '已启动的 future',
 
-    'rut has the classic structured statements — `if`/`else`, `while`, `for` — and exactly one match construct: `when`, an exhaustive pattern _expression_. The full rules live in [the reference on control flow](../reference/control-flow.md).':
-        'rut 有经典的结构化语句——`if`/`else`、`while`、`for`——以及恰好一个匹配构造：`when`，一个穷尽式的模式_表达式_。完整的规则见[控制流参考](../reference/control-flow.md)。',
+    'Async: futures, workers, and channels':
+        '异步：future、worker 与通道',
 
-    "A class adds two things to a struct: module-private fields and construction gated through class methods. There is no outside literal — the only way to build a class value from outside is to call a class method that chooses to. (Cleanup hooks are not a class privilege: implement `Disposal` for either shape, and the engine calls `dispose` when the value's cell refcount reaches zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)":
-        '类在结构体之上加两样东西：模块私有的字段，以及经由类方法把守的构造。不存在外部字面量——从外部构建类值的唯一途径，是调用一个愿意为你构建的类方法。（清理钩子并不是类的特权：为任一形态实现 `Disposal`，引擎就会在该值的单元引用计数归零时调用 `dispose`——参见[Rc、dispose 与同一性](../reference/rc-dispose-identity.md)。）',
+    'Next: [async: futures, workers, and channels](async.md).':
+        '下一章：[异步：future、worker 与通道](async.md)。',
 
-    '**Instance methods spell `self` explicitly** as the first parameter; `mut self` marks methods that write. A computed property is a method (`c.count()`).':
-        '**实例方法把 `self` 显式写成第一个参数**；`mut self` 标记会写入的方法。计算属性就是一个方法（`c.count()`）。',
+    "rut's concurrency is **pull-based**. An `async fn` compiles into a _future_ — a cold value that runs nothing until something drives it. There are no promises that start on creation, no microtask queue, no implicit scheduling: the host owns time, and code progresses only when a driving loop pumps it. The model is described in [the async model](../core-concepts/async-model.md), with the full surface in [async and await](../reference/async.md) and [launched futures](../reference/tasks.md).":
+        'rut 的并发是**拉取式**的。`async fn` 编译成一个 _future_——一个冷的值，在被某种东西驱动之前什么也不做。没有一创建就启动的 promise，没有微任务队列，没有隐式调度：时间由宿主掌握，代码只有在驱动循环泵动它时才前进。这个模型在[异步模型](../core-concepts/async-model.md)中描述，完整表面见[异步与 await](../reference/async.md)与[已启动的 future](../reference/tasks.md)。',
 
-    'rut has no exceptions you catch. Two mechanisms cover everything:':
-        'rut 没有你能捕获的异常。两个机制覆盖一切：',
+    "Racing futures (`await select { fut1 -> .., fut2 x -> .. }`) and joining a launched future's value (`await handle`) are spelled in the grammar but not in this build — the compiler gates them. Cancellation _is_ here: `handle.abort()` flags the frame, and the probe at its next checkpoint unwinds it deterministically, running cleanup in reverse declaration order. See [launched futures](../reference/tasks.md) for the roadmap.":
+        '竞速 future（`await select { fut1 -> .., fut2 x -> .. }`）与接取已 launch 的 future 的值（`await handle`）在语法里写得出来，但在当前构建中不可用——编译器把它们拦下。取消_已经落地_：`handle.abort()` 给帧打上标记，下一个检查点处的探针确定性地将它展开，按声明的逆序运行清理。路线图见[已启动的 future](../reference/tasks.md)。',
 
-    '`s.slice` deserves a second look: no octets move; the view records a window over the parent, prints, compares by content, iterates, and can re-slice. Codepoint access is spelled with integers — `str.from_code(n)` builds the 1-codepoint `str` for a `u32`. Tokenizing rides `s.scan(from, set)` over a caller-owned `[u8]` class table. See [string slicing and views](../reference/string-views.md).':
-        '`s.slice` 值得再看一眼：没有任何八位组移动；视图在父串之上记录一个窗口，它可以打印、按内容比较、迭代，还可以再切片。码点访问以整数书写——`str.from_code(n)` 用一个 `u32` 构建出单码点的 `str`。分词依靠 `s.scan(from, set)`，配一张调用方自备的 `[u8]` 类别表。参见[字符串切片与视图](../reference/string-views.md)。',
+    'The async HTTP client lives with the concurrency chapter — builder construction, `send(cx)` resolving at headers, body drains and byte streams — in [async: futures, workers, and channels](async.md).':
+        '异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：future、worker 与通道](async.md)。',
 
-    'All output goes through a logger:':
-        '所有输出都经过一个 logger：',
+    "**The first parameter is the context.** `async fn f(cx: RunContext, ..)` — the engine mints it at call sites and per drive, the way it mints `self`. It carries the frame edge: `checkpoint()` reads the resume state, `cancelled()` reads the frame's abort flag. The spelled `RunContext` name is core's, imported like any package name: `use core::{ RunContext }` — the engine's weave itself never needs the import, only source that names the trait does.":
+        '**第一个参数是上下文。**`async fn f(cx: RunContext, ..)`——引擎在调用点和每次驱动时铸造它，如同铸造 `self`。它携带帧边：`checkpoint()` 读取恢复状态，`cancelled()` 读取帧的取消标志。拼写的 `RunContext` 名字属于 core，像任何包名一样导入：`use core::{ RunContext }`——引擎的织造本身从不需要导入，需要它的是点名该 trait 的源码。',
 
-    "**Fully static, reified types.** There is no dynamic typing and no gradual typing. Every value's exact type is known to the compiler and carried at runtime — type tests, checked erasure, and host-boundary checks all read the same runtime truth. See [reified types and layouts](reified-types.md).":
-        '**完全静态、具体化的类型。**没有动态类型，也没有渐进类型。每个值的确切类型为编译器所知，并在运行时携带——类型测试、受检擦除与宿主边界检查读取的都是同一份运行时事实。参见[具体化类型与布局](reified-types.md)。',
+    'The language today keeps the vocabulary deliberately small: launch, abort, and await. Racing (`await select { .. }`) and joining a launched future (`await handle`) parse but are compile-gated — the diagnostics name them as future work, and structured scopes (a block that cancels its children on exit) are the same story. What exists now is already enough to structure real programs — the launch/abort receipt gives you explicit ownership of background work, and drop-based cancellation gives it a clean off switch — but nothing in the model silently cancels siblings on your behalf. See the reference on [async and await](../reference/async.md), [launched futures](../reference/tasks.md), and the [host futures bridge](../reference/host-futures.md); the [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a full program living inside this loop.':
+        '这门语言今天刻意保持很小的词汇表：launch、abort 和 await。竞速（`await select { .. }`）与 join 已启动的 future（`await handle`）能解析但被编译期闸住——诊断把它们标为未来工作，结构化作用域（一个在退出时取消其子帧的块）也是同样的情况。现有机制已足以组织真实的程序——launch/abort 回执让你对后台工作拥有显式所有权，基于 drop 的取消给了它一个干净的开关——但模型中没有任何东西会替你悄悄取消兄弟 future。参见关于[异步与 await](../reference/async.md)、[已启动的 future](../reference/tasks.md)与[宿主 future 桥](../reference/host-futures.md)的参考章节；[GitHub 查看器 CLI](../examples/06-github-viewer-cli.md) 示例展示了一个完整程序如何活在这个循环里。',
 
-    'There is no exception type. Failures are data in the second element of a record — `(value, err)` — with one documented convention:':
-        '没有异常类型。失败是对偶——`(value, err)`——第二个元素里的数据，配一条成文的约定：',
+    "The receiver **is** the frame — the machine's fields are its state — and the context is the only handle a resumption needs. The frozen context protocol reads as data: `checkpoint` answers this frame's resume state, `cancelled` answers the frame's abort flag. Cancellation is a value the frame inspects, not an exception it catches.":
+        '接收者**就是**帧——机器的字段就是它的状态——而上下文是一次恢复所需的唯一句柄。冻结的上下文协议按数据来读：`checkpoint` 回答本帧的恢复状态，`cancelled` 回答帧的中止标志。取消是帧检查的一个值，不是它捕获的异常。',
 
-    'There is no runtime layout introspection — the descriptors serve the VM, the checks, and tooling, not userland metaprogramming. Reflection over data (walking fields to serialize) is a library facility built on the same tables; see the reference on [reflection](../reference/reflection.md).':
-        '这里没有运行时布局内省——描述符服务于 VM、各项检查与工具链，而不是用户态元编程。对数据做反射（遍历字段以序列化）是一个建立在同一批表之上的库设施；参见关于[反射](../reference/reflection.md)的参考章节。',
+    "The returned `CustomLaunched` receipt is deliberately **not** a future — it cannot be awaited, and it is not re-launchable (that is a type error, never a runtime check). Its one real member is the cancel edge, which flags the frame and lets the loop's re-drive run the probe:":
+        '返回的 `CustomLaunched` 回执刻意**不是** future——它不能被 await，也不能再次启动（那是类型错误，绝不是运行时检查）。它唯一真正的成员是取消边：标记帧，让循环的再驱动去跑那个探测：',
 
-    'Everything else — user structs and classes, `Vec`s, trait-typed values, closures — stays inside the VM. A declaration that violates the set is a compile error at the declaration, not a failed call at 2 a.m. A polymorphic crossing seals its value in an erasure box (`opaque(v)` at the call, `opaque.downcast<T>` after), checked, never silent — see [reified types](reified-types.md).':
-        '其余一切——用户的 struct 与 class、`Vec`、trait 类型的值、闭包——都留在 VM 内部。违反该集合的声明在声明处就是编译错误，而不是凌晨两点的失败调用。多态跨越把它的值封进擦除盒（调用处 `opaque(v)`，之后 `opaque.downcast<T>`），受检、绝不无声——参见[具体化类型](reified-types.md)。',
+    '`rgh.rut` — the entry point is one `boot` fn: the host crosses argv in as a single `\\n`\\-joined string (no arg lists in the crossing set), and `boot` launches the brain with the standard launcher ([launched futures](../reference/tasks.md)):':
+        '`rgh.rut` ——入口是一个 `boot` fn：宿主把 argv 以单个 `\\n`\\-连接的字符串跨越进来（可跨越集合里没有参数列表），`boot` 用标准启动器启动大脑（[已启动的 future](../reference/tasks.md)）：',
 
-    'not special — the conventional construction-method name (`Rect.new(..)`)':
-        '并非特殊关键字 —— 只是约定俗成的构造方法名（`Rect.new(..)`）',
+    'Cancellation drops locals at the suspension point through the same machinery ([launched futures](tasks.md)) — no special case.':
+        '取消在挂起点透过同一机制丢弃局部变量（[已启动的 future](tasks.md)）—— 没有特例。',
 
-    '**Types are PascalCase** — user types and parameterized builtins: `Vec<T>`, `[T]`, `Weak<T>`, `opaque`, `LaunchedFutureHandle<T>`, `Point`, `Drawable`. Scalars and simple buffers stay lowercase: `i32`, `u8`, `f32`, `bool`, `str`, `bytes`.':
-        '**类型采用 PascalCase** —— 用户类型与参数化的内置类型：`Vec<T>`、`[T]`、`Weak<T>`、`opaque`、`LaunchedFutureHandle<T>`、`Point`、`Drawable`。标量与简单缓冲区保持小写：`i32`、`u8`、`f32`、`bool`、`str`、`bytes`。',
+    '`launch_future(launch_future(f))` is a **type error**: the receipt is not a `Future` ([launched futures](tasks.md)).':
+        '`launch_future(launch_future(f))` 是一个**类型错误**：回执不是 `Future`（[已启动的 future](tasks.md)）。',
 
-    'Unannotated = `pub(self)`: nothing leaks unless it says `pub`.':
-        '未加注解即等同 `pub(self)`：除非显式写明 `pub`，否则任何东西都不会泄漏。',
+    'See [launched futures](tasks.md) for receipts, cancellation, and the join/select tier; [the host futures bridge](host-futures.md) for backing a host async fn with Rust; [workers and channels](workers-and-channels.md) for isolate parallelism. A worked user-defined future lives in [the custom-async example](../examples/04-custom-async.md).':
+        '回执、取消与 join/select 层见[已启动的 future](tasks.md)；用 Rust 支撑宿主 async fn 见[宿主 future 桥](host-futures.md)；隔离体并行见 [worker 与通道](workers-and-channels.md)。一个完整可运行的用户自定义 future 在[自定义异步示例](../examples/04-custom-async.md)里。',
 
-    'Absence is `nil` on a nullable `?T`.':
-        '缺失用可空类型 `?T` 上的 `nil` 表示。',
+    "A launched future's receipt — `LaunchedFutureHandle<T>` — is its own type, and it is the entire management surface. Everything in this chapter is spelled in that vocabulary ([async and await](async.md)).":
+        '已启动 future 的回执——`LaunchedFutureHandle<T>`——是它自己的类型，也是管理表面的全部。本章的一切都用这套词汇书写（[异步与 await](async.md)）。',
 
-    '`.len()` is the sequence member shared by every sequence: `[T]`, `Vec<T>`, `str` (codepoints), `bytes` (octets).':
-        '`.len()` 是所有序列共享的序列成员：`[T]`、`Vec<T>`、`str`（码点数）、`bytes`（字节数）。',
+    'v1 launched futures are **unstructured**: aborting a frame does not abort frames it awaits. Structured scopes — `scope { .. }` cancelling children on exit — are the specified remedy.':
+        'v1 已启动的 future 是**非结构化的**：abort 一个帧不会 abort 它所 await 的帧。结构化作用域——`scope { .. }` 在退出时取消子帧——是已规定的补救。',
 
-    'Construction is the **repeat expression** `[v; n]` — a value and a count. A scalar/`nil` fill is the memset-class op; a ref fill retains the cell handle `n` times — every slot aliases the one cell (the sharing law: the repeat never copies).':
-        '构造使用**重复表达式** `[v; n]` —— 一个值和一个数量。标量/`nil` 填充属于 memset 类操作；引用填充会把单元句柄保留 `n` 次 —— 每个槽都是同一单元的别名（共享法则：重复构造绝不复制）。',
+    'The ready ring is **round-robin**: each drive runs a frame to its next park or completion, so one greedy future cannot starve the queue. Priorities are not in the model.':
+        '就绪环是**轮转（round-robin）**的：每次驱动把一个帧运行到它的下一次停放或完成，因此一个贪婪的 future 无法饿死队列。优先级不在模型之中。',
 
-    'Explicit type arguments may be spelled at the call: `Vec<i32>.from([1, 2, 3])`. Construction is always a method call (see [Classes and constructors](classes.md)).':
-        '显式类型实参可以写在调用处：`Vec<i32>.from([1, 2, 3])`。构造总是方法调用（参见[类与构造器](classes.md)）。',
+    'drain the async ready queue once; returns frames run':
+        '排空一次异步就绪队列；返回运行的帧数',
 
-    '**Classes construct through their own class methods — nothing else is constructible.** No outside literal exists:':
-        '**类通过自己的类方法构造 —— 其他任何东西都不可构造。** 不存在外部字面量：',
+    'unfinished async work':
+        '未完成的异步工作',
 
-    '**The receiver is explicit.** An instance method spells its receiver as the first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields through `self`. A method that mutates declares `mut self` and requires a `let mut` receiver (see [Modules and visibility](modules-and-visibility.md)).':
-        '**接收者是显式的。** 实例方法把接收者写为第一个参数 —— `fn add(self, x: i32, y: i32)` —— 体内透过 `self` 读取字段。会做修改的方法声明 `mut self`，并要求 `let mut` 接收者（参见[模块与可见性](modules-and-visibility.md)）。',
+    '`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([launched futures](tasks.md), [host futures](host-futures.md)).':
+        '`async_engine` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`async_host` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[已启动的 future](tasks.md)、[宿主 future](host-futures.md)）。',
 
-    'A method **without** a `self` parameter is a **class method** — invoked on the class itself (`Rect.new(..)`, `Self.new(..)` inside the body). Presence or absence of `self` is the whole distinction. Class methods are ordinary functions: they validate, default, cache, register, or hand out singletons.':
-        '**没有** `self` 参数的方法是**类方法** —— 在类本身上调用（`Rect.new(..)`，体内为 `Self.new(..)`）。有或没有 `self` 就是全部区别。类方法就是普通函数：它们做校验、给默认值、缓存、注册或发放单例。',
+    "`async fn` compiles to a state machine: each `await` is a checkpoint state in the hidden frame, resume dispatch is the existing jump-table op, locals become frame fields, and suspension is a plain return. The op set grows zero rows for this — the driven half is an ordinary trait-vtable call through the future's `yield` row. The full protocol lives in [Async and await](async.md) and [launched futures](tasks.md).":
+        '`async fn` 编译成一个状态机：每个 `await` 是隐藏帧里的一个检查点状态，恢复分派是现有的跳转表操作，局部变量成为帧字段，挂起是一次普通的返回。为此操作集零新增——被驱动的那一半是一次普通的 trait-vtable 调用，走 future 的 `yield` 行。完整协议见[异步与 await](async.md)与[已启动的 future](tasks.md)。',
 
-    '**A computed property is a method** (`c.count()`), and a settable one takes an argument (`c.set_count(n)`). One member kind, one call convention.':
-        '**计算属性就是一个方法**（`c.count()`），可写的属性则接受一个参数（`c.set_count(n)`）。一种成员类别，一种调用约定。',
+    'Every async entry runs as a root frame, parked when `await` returns pending. There is no microtask queue and no job executor — two queues and a virtual clock:':
+        '每个异步入口都作为一个根帧运行，在 `await` 返回 pending 时停放。没有微任务队列，也没有作业执行器——只有两条队列和一个虚拟时钟：',
 
-    '**Methods only, no bodies.** No fields, no properties, and **no default implementations, ever** — one member kind, one dispatch candidate per call. Anything that reads like a property is a method.':
-        '**只有方法，没有方法体。** 没有字段，没有属性，并且**永远没有默认实现** —— 一种成员类别，每次调用一个分派候选。任何读起来像属性的东西都是方法。',
+    'The engine never owns a wall clock: sleeps are virtual-clock deadlines, and tests virtualize time by advancing the clock — full determinism ([Async and await](async.md), [Launched futures](tasks.md)).':
+        '引擎从不拥有墙上时钟：sleep 是虚拟时钟期限，测试通过推进时钟来虚拟化时间——完全确定性（[异步与 await](async.md)、[已启动的 future](tasks.md)）。',
 
-    '**Widening is nominal and implicit**: a value of `T` widens to `I` exactly where the registry holds a visible `impl I for T` — on assignment, argument passing, and returns. The explicit, greppable form is the trait annotation at the receiving position (`let d: Drawable = s;`). A trait-typed value **cannot be downcast**: use it through the trait, or erase explicitly through `opaque`.':
-        '**宽化是名义且隐式的**：`T` 的值在注册表中存在可见的 `impl I for T` 的所有位置宽化为 `I` —— 赋值、传参和返回皆是。显式、可 grep 的形式是接收位置的类型注解（`let d: Drawable = s;`）。trait 类型的值**不能向下转型**：要么透过 trait 使用它，要么通过 `opaque` 显式擦除。',
-
-    'Value size and alignment are implementation details, not a language surface.':
-        '值的大小与对齐是实现细节，不是语言接口面。',
-
-    "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot deep copy, the **only copy syntax in the language**. `bytes.from(a)` also deep-copies. Every other type shares on binding, and a divergent value of any other type is unreachable — build a new one instead.":
-        '`b.clone() -> bytes` 铸造一个带 `b` 字节的新缓冲 —— 一次性深复制，是**这门语言唯一的复制语法**。`bytes.from(a)` 同样深复制。其他每个类型在绑定时都共享，任何其他类型的分歧值都不可达 —— 需要不同值就新建一个。',
-
-    '`Trap::OutOfFuel` parks the frame exactly like any resumable stop: nothing is unwound. Resumption is `vm.add_fuel(n)` then `vm.resume()` — the frame _is_ the loop state. Fuel is chosen at construction: `add_fuel` is a no-op on an unbounded machine, and the runtime budget is read-only — by design.':
-        '`Trap::OutOfFuel` 像任何可恢复停止一样停放帧：没有任何东西被展开。恢复是 `vm.add_fuel(n)` 然后 `vm.resume()` —— 帧 _就是_ 循环状态。燃料在构造时选定：`add_fuel` 在无界机器上是空操作，且运行时预算只读——有意为之。',
-
-    "The crossings cross as **`opaque`**: `opaque(f)` seals a frame on the way out, `opaque.downcast<Future<nil>>(b) -> ?Future<nil>` recovers it on the way in ([opaque — erasure and downcast](opaque.md)). `sleep(ms)` is literally that downcast over the engine's minted sleep frame.":
-        '跨越值以 **`opaque`** 的形态跨越：`opaque(f)` 在出去的路上封存帧，`opaque.downcast<Future<nil>>(b) -> ?Future<nil>` 在回来的路上取回它（[opaque —— 擦除与向下转型](opaque.md)）。`sleep(ms)` 正是这个向下转型，作用在引擎铸造的 sleep 帧之上。',
-
-    "A launched future's receipt — `LaunchedFutureHandle<T>` — is its own type, and it is the entire task-management surface. Everything in this chapter is spelled in that vocabulary ([async and await](async.md)).":
-        '已启动 future 的回执——`LaunchedFutureHandle<T>`——是它自己的类型，也是任务管理表面的全部。本章的一切都用这套词汇书写（[异步与 await](async.md)）。',
-
-    'The receipt is the join surface: `await h` joins the launched future and produces its completion value. Until the join tier lands, `await h` diagnoses with the join law and the receipt stays non-awaitable.':
-        '回执就是 join 表面：`await h` join 已启动的 future 并产出其完成值。在 join 层落地之前，`await h` 会以 join 法则被诊断，回执保持不可 await。',
-
-    'rut→rut names resolve through use paths ([modules and visibility](modules-and-visibility.md)); host→rut entry points are `entry fn` ([loading and the embed loop](loading.md)).':
-        'rut→rut 的名字经由 use 路径解析（[模块与可见性](modules-and-visibility.md)）；host→rut 的入口点是 `entry fn`（[加载与嵌入循环](loading.md)）。',
-
-    'A `Template` is `{ parts: [str], args: [opaque] }` — the literal chunks, and the interpolated values **boxed with their runtime types** through the erasure box ([opaque — erasure and downcast](opaque.md)). Construction is an internal native call — the only way to mint one.':
-        '一个 `Template` 就是 `{ parts: [str], args: [opaque] }`——字面量块，以及**连同运行时类型一起装盒**、穿过擦除盒的插值（[opaque —— 擦除与向下转型](opaque.md)）。构建是一次内部原生调用——也是铸造它的唯一方式。',
-
-    "There is no global output builtin. All logging goes through a used logger; the host owns the sink, and an uninstalled sink is a silent no-op — a script cannot accidentally spam an embedded host's stdout.":
-        '没有全局输出内建。所有日志都经过一个被使用的 logger；汇点由宿主拥有，未安装的汇点是无声的空操作——脚本不可能意外刷屏嵌入式宿主的 stdout。',
+    'Execution: `main` is called with no arguments; then the async driving loop runs — drain the ready queue, advance the virtual clock to the next timer deadline, repeat until no frames and no pending work remain. The loop is capped, so a program that never idles fails loudly instead of hanging.':
+        '执行：`main` 无实参调用；然后异步驱动循环运行——排空就绪队列、把虚拟时钟推进到下一个定时器期限，如此往复，直到没有帧也没有待处理的工作残留。循环设有上限，因此永不空闲的程序会响亮失败而不是挂死。',
 }
 
 

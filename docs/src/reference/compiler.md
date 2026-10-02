@@ -175,7 +175,7 @@ state in the hidden frame, resume dispatch is the existing jump-table op,
 locals become frame fields, and suspension is a plain return. The op set
 grows zero rows for this — the driven half is an ordinary trait-vtable
 call through the future's `yield` row. The full protocol lives in
-[Async and await](async.md) and [Tasks](tasks.md).
+[Async and await](async.md) and [launched futures](tasks.md).
 
 ## Determinism
 

@@ -30,7 +30,7 @@ source text by design; a partially translated book is a valid book.
 | trait | trait | 保留不译（Rust 中文社区惯例；勿译作"特征/特质"） |
 | impl block | impl 块 | `impl` is a keyword and stays code |
 | dispatch | 分派 | dynamic dispatch → 动态分派；method dispatch → 方法分派 |
-| task | 任务 | |
+| launched future | 已启动的 future | launch → 启动（launch_future stays code） |
 | future | future | 保留不译（概念/类型名；勿译作"未来"） |
 | cancellation | 取消 | cancellation flag → 取消标志；checkpoint → 检查点 |
 | channel | 通道 | workers and channels → worker 与通道 |

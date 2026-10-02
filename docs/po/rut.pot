@@ -72,7 +72,7 @@ msgid "Modules and packages"
 msgstr ""
 
 #: src/SUMMARY.md:22 src/tutorial/async.md:1
-msgid "Async: tasks, workers, and channels"
+msgid "Async: futures, workers, and channels"
 msgstr ""
 
 #: src/SUMMARY.md:23 src/tutorial/stdlib.md:1
@@ -250,7 +250,7 @@ msgid "Async and await"
 msgstr ""
 
 #: src/SUMMARY.md:82 src/reference/tasks.md:1
-msgid "Tasks"
+msgid "Launched futures"
 msgstr ""
 
 #: src/SUMMARY.md:83 src/reference/host-futures.md:1
@@ -3983,7 +3983,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/modules.md:267
-msgid "Next: [async: tasks, workers, and channels](async.md)."
+msgid "Next: [async: futures, workers, and channels](async.md)."
 msgstr ""
 
 #: src/tutorial/async.md:3
@@ -3994,7 +3994,7 @@ msgid ""
 "the host owns time, and code progresses only when a driving loop pumps it. "
 "The model is described in [the async "
 "model](../core-concepts/async-model.md), with the full surface in [async and "
-"await](../reference/async.md) and [tasks](../reference/tasks.md)."
+"await](../reference/async.md) and [launched futures](../reference/tasks.md)."
 msgstr ""
 
 #: src/tutorial/async.md:12 src/reference/async.md:18
@@ -4213,7 +4213,7 @@ msgid ""
 "in this build — the compiler gates them. Cancellation _is_ here: "
 "`handle.abort()` flags the frame, and the probe at its next checkpoint "
 "unwinds it deterministically, running cleanup in reverse declaration order. "
-"See [tasks](../reference/tasks.md) for the roadmap."
+"See [launched futures](../reference/tasks.md) for the roadmap."
 msgstr ""
 
 #: src/tutorial/async.md:169
@@ -4730,7 +4730,7 @@ msgstr ""
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
-"— in [async: tasks, workers, and channels](async.md)."
+"— in [async: futures, workers, and channels](async.md)."
 msgstr ""
 
 #: src/tutorial/stdlib.md:389
@@ -6055,7 +6055,7 @@ msgid ""
 "**The first parameter is the context.** `async fn f(cx: RunContext, ..)` — "
 "the engine mints it at call sites and per drive, the way it mints `self`. It "
 "carries the frame edge: `checkpoint()` reads the resume state, `cancelled()` "
-"reads the task's abort flag. The spelled `RunContext` name is core's, "
+"reads the frame's abort flag. The spelled `RunContext` name is core's, "
 "imported like any package name: `use core::{ RunContext }` — the engine's "
 "weave itself never needs the import, only source that names the trait does."
 msgstr ""
@@ -6220,8 +6220,8 @@ msgid ""
 "real programs — the launch/abort receipt gives you explicit ownership of "
 "background work, and drop-based cancellation gives it a clean off switch — "
 "but nothing in the model silently cancels siblings on your behalf. See the "
-"reference on [async and await](../reference/async.md), "
-"[tasks](../reference/tasks.md), and the [host futures "
+"reference on [async and await](../reference/async.md), [launched "
+"futures](../reference/tasks.md), and the [host futures "
 "bridge](../reference/host-futures.md); the [GitHub viewer "
 "CLI](../examples/06-github-viewer-cli.md) example shows a full program "
 "living inside this loop."
@@ -8553,7 +8553,7 @@ msgid ""
 "The receiver **is** the frame — the machine's fields are its state — and the "
 "context is the only handle a resumption needs. The frozen context protocol "
 "reads as data: `checkpoint` answers this frame's resume state, `cancelled` "
-"answers the task's abort flag. Cancellation is a value the frame inspects, "
+"answers the frame's abort flag. Cancellation is a value the frame inspects, "
 "not an exception it catches."
 msgstr ""
 
@@ -8574,7 +8574,7 @@ msgid ""
 "The returned `CustomLaunched` receipt is deliberately **not** a future — it "
 "cannot be awaited, and it is not re-launchable (that is a type error, never "
 "a runtime check). Its one real member is the cancel edge, which flags the "
-"task and lets the loop's re-drive run the probe:"
+"frame and lets the loop's re-drive run the probe:"
 msgstr ""
 
 #: src/examples/04-custom-async.md:182
@@ -9010,7 +9010,8 @@ msgid ""
 "`rgh.rut` — the entry point is one `boot` fn: the host crosses argv in as a "
 "single `\\n"
 "`\\-joined string (no arg lists in the crossing set), and `boot` launches "
-"the brain with the standard launcher ([Tasks](../reference/tasks.md)):"
+"the brain with the standard launcher ([launched "
+"futures](../reference/tasks.md)):"
 msgstr ""
 
 #: src/examples/06-github-viewer-cli.md:54
@@ -14401,7 +14402,7 @@ msgstr ""
 #: src/reference/rc-heap.md:95
 msgid ""
 "Cancellation drops locals at the suspension point through the same machinery "
-"([tasks](tasks.md)) — no special case."
+"([launched futures](tasks.md)) — no special case."
 msgstr ""
 
 #: src/reference/rc-heap.md:98
@@ -15448,7 +15449,7 @@ msgstr ""
 #: src/reference/async.md:62
 msgid ""
 "`launch_future(launch_future(f))` is a **type error**: the receipt is not a "
-"`Future` ([tasks](tasks.md))."
+"`Future` ([launched futures](tasks.md))."
 msgstr ""
 
 #: src/reference/async.md:64
@@ -15729,17 +15730,17 @@ msgstr ""
 
 #: src/reference/async.md:179
 msgid ""
-"See [tasks](tasks.md) for receipts, cancellation, and the join/select tier; "
-"[the host futures bridge](host-futures.md) for backing a host async fn with "
-"Rust; [workers and channels](workers-and-channels.md) for isolate "
-"parallelism. A worked user-defined future lives in [the custom-async "
+"See [launched futures](tasks.md) for receipts, cancellation, and the "
+"join/select tier; [the host futures bridge](host-futures.md) for backing a "
+"host async fn with Rust; [workers and channels](workers-and-channels.md) for "
+"isolate parallelism. A worked user-defined future lives in [the custom-async "
 "example](../examples/04-custom-async.md)."
 msgstr ""
 
 #: src/reference/tasks.md:3
 msgid ""
 "A launched future's receipt — `LaunchedFutureHandle<T>` — is its own type, "
-"and it is the entire task-management surface. Everything in this chapter is "
+"and it is the entire management surface. Everything in this chapter is "
 "spelled in that vocabulary ([async and await](async.md))."
 msgstr ""
 
@@ -15961,16 +15962,16 @@ msgstr ""
 
 #: src/reference/tasks.md:111
 msgid ""
-"v1 tasks are **unstructured**: aborting a frame does not abort frames it "
-"awaits. Structured scopes — `scope { .. }` cancelling children on exit — are "
-"the specified remedy."
+"v1 launched futures are **unstructured**: aborting a frame does not abort "
+"frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
+"exit — are the specified remedy."
 msgstr ""
 
 #: src/reference/tasks.md:114
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
-"or completion, so one greedy future cannot starve the queue. Task priorities "
-"are not in the model."
+"or completion, so one greedy future cannot starve the queue. Priorities are "
+"not in the model."
 msgstr ""
 
 #: src/reference/tasks.md:117
@@ -17155,7 +17156,7 @@ msgid "`vm.run_ready()`"
 msgstr ""
 
 #: src/reference/embedding.md:234
-msgid "drain the async ready queue once; returns tasks run"
+msgid "drain the async ready queue once; returns frames run"
 msgstr ""
 
 #: src/reference/embedding.md:235
@@ -17171,7 +17172,7 @@ msgid "advance the virtual clock"
 msgstr ""
 
 #: src/reference/embedding.md:237
-msgid "unfinished async tasks"
+msgid "unfinished async work"
 msgstr ""
 
 #: src/reference/embedding.md:238
@@ -20612,7 +20613,8 @@ msgid ""
 "Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> "
 "bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair "
 "**and** installs `rut_std::async_host::pkg()`; a session that mounts neither "
-"has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
+"has no launcher ([launched futures](tasks.md), [host "
+"futures](host-futures.md))."
 msgstr ""
 
 #: src/reference/stdlib.md:375
@@ -21744,7 +21746,7 @@ msgid ""
 "become frame fields, and suspension is a plain return. The op set grows zero "
 "rows for this — the driven half is an ordinary trait-vtable call through the "
 "future's `yield` row. The full protocol lives in [Async and await](async.md) "
-"and [Tasks](tasks.md)."
+"and [launched futures](tasks.md)."
 msgstr ""
 
 #: src/reference/compiler.md:180 src/reference/module-binary.md:102
@@ -23264,9 +23266,9 @@ msgstr ""
 
 #: src/reference/vm-core.md:132
 msgid ""
-"Every async entry runs as a task: a root frame parked when `await` returns "
-"pending. There is no microtask queue and no job executor — two queues and a "
-"virtual clock:"
+"Every async entry runs as a root frame, parked when `await` returns pending. "
+"There is no microtask queue and no job executor — two queues and a virtual "
+"clock:"
 msgstr ""
 
 #: src/reference/vm-core.md:136
@@ -23314,7 +23316,7 @@ msgstr ""
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and "
 "tests virtualize time by advancing the clock — full determinism ([Async and "
-"await](async.md), [Tasks](tasks.md))."
+"await](async.md), [Launched futures](tasks.md))."
 msgstr ""
 
 #: src/reference/vm-core.md:158
@@ -23600,7 +23602,7 @@ msgid "// input, network, ...\n"
 msgstr ""
 
 #: src/reference/loading.md:74
-msgid "// drive ready tasks to completion\n"
+msgid "// drive ready frames to completion\n"
 msgstr ""
 
 #: src/reference/loading.md:75
@@ -25696,8 +25698,8 @@ msgstr ""
 msgid ""
 "Execution: `main` is called with no arguments; then the async driving loop "
 "runs — drain the ready queue, advance the virtual clock to the next timer "
-"deadline, repeat until no frames and no tasks remain. The loop is capped, so "
-"a program that never idles fails loudly instead of hanging."
+"deadline, repeat until no frames and no pending work remain. The loop is "
+"capped, so a program that never idles fails loudly instead of hanging."
 msgstr ""
 
 #: src/reference/cli.md:68

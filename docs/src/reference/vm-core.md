@@ -129,7 +129,7 @@ pub struct Limits {
 
 ## Coroutines and the driving loop
 
-Every async entry runs as a task: a root frame parked when `await`
+Every async entry runs as a root frame, parked when `await`
 returns pending. There is no microtask queue and no job executor — two
 queues and a virtual clock:
 
@@ -153,7 +153,7 @@ queues and a virtual clock:
 
 The engine never owns a wall clock: sleeps are virtual-clock deadlines,
 and tests virtualize time by advancing the clock — full determinism
-([Async and await](async.md), [Tasks](tasks.md)).
+([Async and await](async.md), [Launched futures](tasks.md)).
 
 ## Heap integration
 

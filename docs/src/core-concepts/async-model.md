@@ -48,7 +48,7 @@ The rules:
 - **The first parameter is the context.** `async fn f(cx: RunContext,
   ..)` — the engine mints it at call sites and per drive, the way it
   mints `self`. It carries the frame edge: `checkpoint()` reads the
-  resume state, `cancelled()` reads the task's abort flag. The spelled
+  resume state, `cancelled()` reads the frame's abort flag. The spelled
   `RunContext` name is core's, imported like any package name:
   `use core::{ RunContext }` — the engine's weave itself never needs
   the import, only source that names the trait does.
@@ -70,7 +70,7 @@ resumption:
 
 ```text
 frame:  [0]=state      the checkpoint enum's member — the pc
-        [1]=cancelled  the task's abort flag
+        [1]=cancelled  the frame's abort flag
         [2]=awaiter    the frame awaiting THIS one
         [3]=pending    the future THIS one parks on
         [4..]=locals   every binding, mirrored into the frame
@@ -172,7 +172,7 @@ enough to structure real programs — the launch/abort receipt gives you
 explicit ownership of background work, and drop-based cancellation gives
 it a clean off switch — but nothing in the model silently cancels
 siblings on your behalf. See the reference on [async and
-await](../reference/async.md), [tasks](../reference/tasks.md), and the
+await](../reference/async.md), [launched futures](../reference/tasks.md), and the
 [host futures bridge](../reference/host-futures.md); the
 [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a
 full program living inside this loop.

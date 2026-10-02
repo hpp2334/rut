@@ -19,7 +19,7 @@
 - [Traits and impl blocks](tutorial/traits.md)
 - [Errors and optionality](tutorial/errors.md)
 - [Modules and packages](tutorial/modules.md)
-- [Async: tasks, workers, and channels](tutorial/async.md)
+- [Async: futures, workers, and channels](tutorial/async.md)
 - [The standard library](tutorial/stdlib.md)
 
 # Core Concepts
@@ -79,7 +79,7 @@
 ## Async and concurrency
 
 - [Async and await](reference/async.md)
-- [Tasks](reference/tasks.md)
+- [Launched futures](reference/tasks.md)
 - [The host futures bridge](reference/host-futures.md)
 - [Workers and channels](reference/workers-and-channels.md)
 

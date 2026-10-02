@@ -93,7 +93,7 @@ Laws:
 - The context `cx` is engine-minted and empty today; it grows
   additively, never by touching the trait signature.
 - Cancellation drops locals at the suspension point through the same
-  machinery ([tasks](tasks.md)) — no special case.
+  machinery ([launched futures](tasks.md)) — no special case.
 
 Note the difference from finalizer-based runtimes: `dispose` always
 runs, exactly once, at a knowable point. There is no "later or never".

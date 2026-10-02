@@ -371,7 +371,7 @@ For the common accumulator shape no builder is needed at all:
   `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
   Each embedder mounts the pair **and** installs
   `rut_std::async_host::pkg()`; a session that mounts neither
-  has no launcher ([tasks](tasks.md), [host futures](host-futures.md)).
+  has no launcher ([launched futures](tasks.md), [host futures](host-futures.md)).
 - `http_host` declares the transport rows (three async, five sync
   readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` /
   `Request` / `Response` / `ByteStream` — async only at the points that

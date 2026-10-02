@@ -71,7 +71,7 @@ runs one engine frame per tick:
 ```rust
 fn on_vsync(&mut self) {
     self.process_host_events();                 // input, network, ...
-    self.rut.run_ready()?;                      // drive ready tasks to completion
+    self.rut.run_ready()?;                      // drive ready frames to completion
     if let Some(d) = self.rut.next_deadline() { // earliest armed sleep
         self.schedule_wake(d);                  // host parks until then,
     }                                           // then advances the clock

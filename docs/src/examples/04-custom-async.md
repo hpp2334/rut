@@ -134,7 +134,7 @@ impl Future<nil> for CustomFuture {
 The receiver **is** the frame — the machine's fields are its state —
 and the context is the only handle a resumption needs. The frozen
 context protocol reads as data: `checkpoint` answers this frame's
-resume state, `cancelled` answers the task's abort flag. Cancellation
+resume state, `cancelled` answers the frame's abort flag. Cancellation
 is a value the frame inspects, not an exception it catches.
 
 ### The user launcher
@@ -151,14 +151,14 @@ use async_engine::{ __abort, __launch };
 fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
     __launch(opaque(f));
     log.note_launch();
-    return CustomLaunched { task: f, log: log, alive: true };
+    return CustomLaunched { fut: f, log: log, alive: true };
 }
 ```
 
 The returned `CustomLaunched` receipt is deliberately **not** a
 future — it cannot be awaited, and it is not re-launchable (that is
 a type error, never a runtime check). Its one real member is the
-cancel edge, which flags the task and lets the loop's re-drive run
+cancel edge, which flags the frame and lets the loop's re-drive run
 the probe:
 
 ```rut
@@ -167,7 +167,7 @@ the probe:
             return false;
         }
         self.alive = false;
-        let t = self.task;
+        let t = self.fut;
         if (t == nil) {
             return false;
         }

@@ -60,7 +60,7 @@ Rules:
   consumes it. Driving one frame from two paths is a disclosed misuse,
   not a soundness hole.
 - `launch_future(launch_future(f))` is a **type error**: the receipt is
-  not a `Future` ([tasks](tasks.md)).
+  not a `Future` ([launched futures](tasks.md)).
 - Async **methods** are not woven in this build — async points are free
   fns. A sync method may mint the future internally and return it typed
   `Future<T>` (the standard HTTP face does exactly this).
@@ -176,7 +176,7 @@ Fuel rides the existing per-op budget
 the frame and propagates `OutOfFuel`; a re-drive re-enters at the
 frame's checkpoint.
 
-See [tasks](tasks.md) for receipts, cancellation, and the join/select
+See [launched futures](tasks.md) for receipts, cancellation, and the join/select
 tier; [the host futures bridge](host-futures.md) for backing a host
 async fn with Rust; [workers and channels](workers-and-channels.md) for
 isolate parallelism. A worked user-defined future lives in

@@ -1,8 +1,8 @@
-# Tasks
+# Launched futures
 
 A launched future's receipt —
-`LaunchedFutureHandle<T>` — is its own type, and it is the entire
-task-management surface. Everything in this chapter is spelled in that
+`LaunchedFutureHandle<T>` — is its own type, and it is the
+entire management surface. Everything in this chapter is spelled in that
 vocabulary ([async and await](async.md)).
 
 ## Surface status
@@ -108,12 +108,12 @@ The grammar parses today; the semantics are gated with
 
 ## Structure and fairness
 
-- v1 tasks are **unstructured**: aborting a frame does not abort frames
+- v1 launched futures are **unstructured**: aborting a frame does not abort frames
   it awaits. Structured scopes — `scope { .. }` cancelling children on
   exit — are the specified remedy.
 - The ready ring is **round-robin**: each drive runs a frame to its
   next park or completion, so one greedy future cannot starve the
-  queue. Task priorities are not in the model.
+  queue. Priorities are not in the model.
 - `vm.pending_tasks()` counts ready frames, armed timers, and host
   futures parked on Completers — the embedder's idle test
   ([async and await](async.md)).

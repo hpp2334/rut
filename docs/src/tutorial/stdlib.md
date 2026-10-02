@@ -382,7 +382,7 @@ is how *any* embedder package reaches rut code; see
 
 The async HTTP client lives with the concurrency chapter —
 builder construction, `send(cx)` resolving at headers, body drains and
-byte streams — in [async: tasks, workers, and channels](async.md).
+byte streams — in [async: futures, workers, and channels](async.md).
 
 ## Put it together
 
