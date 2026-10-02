@@ -23,7 +23,7 @@ impl Shape for Point {
     fn scale(v: f64) { }    // the impl must list every trait method
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let p = Point { x: 3, y: 4 };
     log.info(f"area = {p.area()}");     // a concrete receiver: static
@@ -94,7 +94,7 @@ impl Canvas {
 
 fn blit(g: Canvas, s: Shape) { g.render(s.area()); }   // a parameter over any Shape
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("shapes");
     let g = Canvas { log: log };
     let mut mixed: Vec<Shape> = Vec.new();   // heterogeneous storage
@@ -194,7 +194,7 @@ impl Iterable<i32> for CountUp {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("iter");
     for (let v of CountUp { n: 3 }) {
         log.info(f"tick {v}");

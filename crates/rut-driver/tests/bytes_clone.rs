@@ -72,7 +72,7 @@ fn clone_content_compares_equal_and_runs() {
     // is equal to its original, and a different buffer is not. The
     // clone decodes and lenses exactly like the original.
     let sum = run_main(
-        "pub fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let a = bytes.from([1u8, 2, 3]);\n\
              let b = a.clone();\n\
              let c = bytes.from([1u8, 2, 4]);\n\

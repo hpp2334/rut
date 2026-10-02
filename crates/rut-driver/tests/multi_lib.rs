@@ -69,7 +69,7 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
     write(
         &app,
         "entry.rut",
-        "use kid::{lib_sum};\npub fn main() -> i32 { return lib_sum(); }\n",
+        "use kid::{lib_sum};\nentry fn main() -> i32 { return lib_sum(); }\n",
     );
     root
 }

@@ -263,7 +263,7 @@ fn own_assert_helper_still_resolves() {
     let err = vm_for(
         "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          fn check(total: i32) { assert(total == 42, \"checksum failed\"); }\n\
-         pub fn main() -> i32 { check(7); return 0; }\n",
+         entry fn main() -> i32 { check(7); return 0; }\n",
     )
     .call::<_, i32>("main", ())
     .expect_err("the failing assert must trap");
@@ -273,7 +273,7 @@ fn own_assert_helper_still_resolves() {
     // the passing side stays silent
     let v = vm_for(
         "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
-         pub fn main() -> i32 { assert(1 == 1, \"never\"); return 5; }\n",
+         entry fn main() -> i32 { assert(1 == 1, \"never\"); return 5; }\n",
     )
     .call::<_, i32>("main", ())
     .expect("run");
@@ -284,7 +284,7 @@ fn own_assert_helper_still_resolves() {
 /// unknown function, exactly like a never-existing name.
 #[test]
 fn unresolved_assert_is_an_ordinary_unknown_fn() {
-    let out = compile_with_core("pub fn main() -> i32 { assert(1 == 1, \"fine\"); return 0; }\n");
+    let out = compile_with_core("entry fn main() -> i32 { assert(1 == 1, \"fine\"); return 0; }\n");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("unknown function `assert`")),
         "the bare assert miss carries the plain unknown-fn diag: {:?}",
@@ -299,7 +299,7 @@ fn unresolved_assert_is_an_ordinary_unknown_fn() {
 /// type, never a fn).
 #[test]
 fn numeric_conversion_call_is_an_ordinary_unknown_fn() {
-    let out = compile_with_core("pub fn main() -> i32 { return i32(5); }\n");
+    let out = compile_with_core("entry fn main() -> i32 { return i32(5); }\n");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("unknown function `i32`")),
         "i32(x) falls to the plain unknown-fn diag: {:?}",
@@ -318,7 +318,7 @@ fn own_strbuf_named_type_still_resolves() {
          impl StrBuf {\n    pub fn new() -> Self { return Self { n: 0 }; }\n\
          \x20   pub fn push(mut self, k: i32) { self.n += k; }\n\
          \x20   pub fn len(self) -> i32 { return self.n; }\n}\n\
-         pub fn main() -> i32 { let b = StrBuf.new(); b.push(4); return b.len(); }\n",
+         entry fn main() -> i32 { let b = StrBuf.new(); b.push(4); return b.len(); }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>());
     let flat = rut_core::link::flatten(out.program.expect("linked program"));

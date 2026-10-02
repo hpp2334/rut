@@ -12,7 +12,7 @@ Braces are always required, whatever the body length:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("flow");
     for (let hits of [0, 5, 12]) {
         let mut first = false;
@@ -46,7 +46,7 @@ no parenthesized-assignment footgun.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sieve");
     let i = 2;
     let limit = 12;
@@ -70,7 +70,7 @@ marks[4]=1 marks[5]=0 stopped at m=14
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("loops");
     let mut n = 0;
     for (let w of ["rut", "runs", "rut"]) {
@@ -95,7 +95,7 @@ the update clause (and the body) may assign it without `mut`.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("loops");
     let xs = [3, 1, 4];
     let n = xs.len();
@@ -130,7 +130,7 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
     // no return — the function's type is nil
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("swap");
     let xs = Vec<i32>.from([1, 2, 3]);
     swap(xs, 0, 2);
@@ -158,7 +158,7 @@ fn classify(n: i32) -> str {
     };
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("when");
     for (let n of [0, 2, 9]) {
         log.info(f"{n}: {classify(n)}");
@@ -183,7 +183,7 @@ fn go()    { Logger.new("light").info("go"); }
 fn brake() { Logger.new("light").info("brake"); }
 fn stop()  { Logger.new("light").info("stop"); }
 
-pub fn main() {
+entry fn main() {
     let l = Light.Yellow;
     when (l) {
         Light.Green  -> { go(); },
@@ -239,7 +239,7 @@ fn describe(n: i32) -> str {
     };
 }
 
-pub fn main() {
+entry fn main() {
     drive(Light.Red);
     let log = Logger.new("light");
     log.info(describe(0));
@@ -260,7 +260,7 @@ use ink::{ Logger };
 
 struct Point { x: i32; y: i32 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("nullable");
     let p: ?Point = Point { x: 1, y: 2 };
     when (p != nil) {
@@ -296,7 +296,7 @@ fn light_for(i: i32) -> Light {
     };
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("light");
     log.info(f"{light_for(0)} {light_for(1)} {light_for(5)}");
 }
@@ -337,7 +337,7 @@ fn classify(n: i32) -> str {
     };
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("lights");
 
     for (let n of [0, 2, 9]) {

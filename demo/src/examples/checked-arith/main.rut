@@ -14,7 +14,7 @@ fn show(name: str, r: (u8, bool)) -> str {
     return f"{name}=({r.0}, {r.1})";
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("checked");
 
     // wrapping: two's-complement, always defined

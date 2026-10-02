@@ -107,7 +107,7 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) {
     quicksort(xs, p + 1, hi);
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sort");
     let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
@@ -161,7 +161,7 @@ fn erase_and_recover() {
     log.info(f"is str: {box3 is str}");   // `is` names the box — misses every payload type; downcast recovers
 }
 
-pub fn main() {
+entry fn main() {
     erase_and_recover();
 }
 ```

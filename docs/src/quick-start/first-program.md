@@ -16,7 +16,7 @@ language, the types, and the workflow below are the same either way.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("hello");
     let name = "rut";
     log.info(f"hello, {name}!");
@@ -69,7 +69,7 @@ Three things to notice:
 - **`f"hello, {name}!"`** is a format literal: `{expr}` interpolates any
   expression, rendered through the value's display contract.
 
-`pub fn main()` is the entry the CLI calls.
+`entry fn main()` is the entry the CLI calls.
 
 ## Values, briefly
 
@@ -78,7 +78,7 @@ Extend the file — rut infers, and every type is known at compile time:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("hello");
     let n = 10;            // i32 — the integer default
     let scale = 1.5;       // f32 — the float default

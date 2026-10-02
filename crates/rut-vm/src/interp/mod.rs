@@ -1500,7 +1500,7 @@ mod tests {
         let mut vm = empty_vm();
         let mut prog = (*vm.prog).clone();
         prog.funcs.push(rut_core::binary::FuncCode {
-            name: rut_core::sym::MAIN,
+            name: prog.interner.intern("main"),
             params: vec![],
             ret: TY_I32,
             is_method: false,

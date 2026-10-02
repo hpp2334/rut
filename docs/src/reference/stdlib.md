@@ -147,7 +147,7 @@ no-op — a script cannot accidentally spam an embedded host's stdout.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("app");
     log.info(f"started");
 }
@@ -192,7 +192,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4);
@@ -262,7 +262,7 @@ the same key as its content, with no key cell minted on a probe
 use calc::{ Math };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let x = 3.0f64;
     let y = 4.0f64;
@@ -339,7 +339,7 @@ strbuild mount pairs with the bodies:
 use ink::{ Logger };
 use strbuild::{ StringBuilder };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let k = "name";
     let mut b = StringBuilder.with_cap(1024);   // octet hint

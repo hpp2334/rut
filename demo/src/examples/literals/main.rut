@@ -38,6 +38,6 @@ fn literals(name: str) {
     log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}");
 }
 
-pub fn main() {
+entry fn main() {
     literals("rut");
 }

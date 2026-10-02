@@ -61,8 +61,8 @@ fuel used: 680 of Some(1000000)
   rule **at compile time**: a `TodoList` parameter on an entry is a
   source diagnostic, never a call-time failure.
 - **module shape** — entries are compilation roots, so a library module
-  with no `main` still emits every entry (`pub fn main` stays the
-  conventional entry for scripts)
+  with no entry still emits every entry it declares (`entry fn main`
+  stays the ordinary script name)
 - **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the
   session runs under fuel + heap limits;
   embedder mistakes (wrong value shape) come back as named traps, never

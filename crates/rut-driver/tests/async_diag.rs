@@ -25,7 +25,7 @@ fn await_outside_an_async_fn_diagnoses() {
     let msg = one_diag(r#"
 use async_host::sleep;
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     await sleep(5);
 }
 "#);
@@ -44,7 +44,7 @@ async fn work(cx: RunContext) -> nil {
     await 7;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     work();
 }
 "#);
@@ -65,7 +65,7 @@ async fn work(cx: RunContext, f: NotWoven) -> nil {
     await f;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     work(NotWoven { });
 }
 "#);
@@ -87,7 +87,7 @@ async fn awaiter(cx: RunContext, h: LaunchedFutureHandle<nil>) -> nil {
     await h;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     awaiter(launch_future(work()));
 }
 "#);
@@ -107,7 +107,7 @@ use async_host::launch_future;
 
 async fn work(cx: RunContext) -> nil { }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     launch_future(launch_future(work()));
 }
 "#);
@@ -129,7 +129,7 @@ async fn work(cx: RunContext) -> nil {
     };
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     work();
 }
 "#);
@@ -141,7 +141,7 @@ fn an_async_fn_demands_the_cx_first_parameter() {
     let msg = one_diag(r#"
 async fn work(n: u32) -> nil { }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     work(7);
 }
 "#);
@@ -157,7 +157,7 @@ async fn work(cx: RunContext) -> nil {
     let x = cx.bogus();
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     work();
 }
 "#);
@@ -197,7 +197,7 @@ fn launch(f: Future<nil>) -> MyHandle {
 
 async fn tick(cx: RunContext) -> nil { }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     launch(tick());
 }
 "#;

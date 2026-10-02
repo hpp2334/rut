@@ -60,6 +60,6 @@ fn aliases() {
     // let bad: Meters = u;         // ERROR: a struct is not i64
 }
 
-pub fn main() {
+entry fn main() {
     aliases();
 }

@@ -166,7 +166,7 @@ fn the_some_shapes_cross_back_through_compiled_rut() {
     // bytes answer's length rides home (3 octets)
     let (answer, delta) = run_app(
         "use rets::{ qstr_pick, qbytes_pick, qopaque_pick, bytes_give };\n\
-         pub fn main() -> i64 {\n\
+         entry fn main() -> i64 {\n\
          \x20   let s = qstr_pick();\n\
          \x20   if (s == nil) { return 1; }\n\
          \x20   let b = qbytes_pick();\n\
@@ -188,7 +188,7 @@ fn the_nil_shapes_answer_the_flat_nil_through_compiled_rut() {
     // return — the flat nil is what the caller's test reads
     let (answer, delta) = run_app(
         "use rets::{ qstr_pick, qbytes_pick, qopaque_pick, bytes_give };\n\
-         pub fn main() -> i64 {\n\
+         entry fn main() -> i64 {\n\
          \x20   let s = qstr_pick();\n\
          \x20   if (s == nil) { return 1; }\n\
          \x20   return 0;\n\

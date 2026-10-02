@@ -92,7 +92,7 @@ impl TodoList {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("todos");
     let mut list = TodoList.new();
     list.add("implement the VM");

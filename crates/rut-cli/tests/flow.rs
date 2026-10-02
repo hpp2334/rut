@@ -72,7 +72,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5); nums.push(6);
@@ -103,7 +103,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     let mut i = 0;
@@ -137,7 +137,7 @@ fn builtin_sources_array_str_bytes() {
 use flow::{ Flow, IntoFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let a: [i32] = [7, 8, 9];
     let n1: i32 = a.into_flow().count();
@@ -161,7 +161,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(10); nums.push(20); nums.push(30);
@@ -205,7 +205,7 @@ impl Iterable<i32> for CountUp {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2);
@@ -239,7 +239,7 @@ use core::{ Iterable };
 use flow::{ Flow, FromFlow, IntoFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let empty: [i32] = [];
     log.info(f"empty n={empty.len()} walked={empty.into_flow().count()}");
@@ -264,7 +264,7 @@ use flow::{ Flow, FromFlow, IntoFlow };
 use nmapset::{ HashSet };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let words: [str] = ["a", "b", "a", "c"];
     let set: HashSet<str> = HashSet.from_flow(words.into_flow());
@@ -314,7 +314,7 @@ impl Iterable<i32> for Counting {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let mut c: Counting = Counting.new();
     let stopped: Vec<i32> = Vec.new();
@@ -354,7 +354,7 @@ use ink::{ Logger };
 
 fn double(x: i32) -> i32 { return x * 2; }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2);
@@ -385,7 +385,7 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
 use pouch::{ Vec };
 use flow::{ Flow, FromFlow, IntoFlow };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     let out: Vec<i32> = Vec.from_flow(nums.into_flow().map(fn(x) { return x * 2; }));
 }

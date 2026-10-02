@@ -79,7 +79,7 @@ fn pack_strip_writes_and_prints_the_sidecar() {
 fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     let root = scratch("usage");
     let src = root.join("main.rut");
-    write(&root, "main.rut", "pub fn main() -> i32 { return 4; }\n");
+    write(&root, "main.rut", "entry fn main() -> i32 { return 4; }\n");
     // a directory input reaches the pairing check: `--symbols` is a
     // compiled-bundle-only restore
     let out = Command::new(rut())

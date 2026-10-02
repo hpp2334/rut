@@ -67,7 +67,7 @@ fn precedence_matrix_survives_formatting() {
         "precedence",
         r#"
 use ink::{ Logger };
-pub fn main() {
+entry fn main() {
     let log = Logger.new("p");
     let a = 1 + 2 * 3 - 4 / 2;          // 5
     let b = (1 + 2) * (3 - 4) / 2;      // -1.5 → int -1
@@ -89,7 +89,7 @@ fn unary_chains_and_as_survive_formatting() {
         "unary-as",
         r#"
 use ink::{ Logger };
-pub fn main() {
+entry fn main() {
     let log = Logger.new("u");
     let x = 7;
     let a = -x + -(-x);                 // -7 + 7 = 0
@@ -112,7 +112,7 @@ use ink::{ Logger };
 class Box {
     v: i32;
 }
-pub fn main() {
+entry fn main() {
     let log = Logger.new("b");
     let bx = Box { v: 9 };
     let t = bx is Box;                   // the class check
@@ -130,7 +130,7 @@ fn when_arms_trailing_commas_and_else_survive_formatting() {
         "when",
         r#"
 use ink::{ Logger };
-pub fn main() {
+entry fn main() {
     let log = Logger.new("w");
     let describe = fn (n: i32) -> str {
         return when (n) {
@@ -153,7 +153,7 @@ fn fstring_holes_and_escapes_survive_formatting() {
         "fstring",
         r#"
 use ink::{ Logger };
-pub fn main() {
+entry fn main() {
     let log = Logger.new("f");
     let name = "fmt";
     let n = 42;
@@ -174,7 +174,7 @@ class P {
     x: i32;
     y: i32;
 }
-pub fn main() {
+entry fn main() {
     let log = Logger.new("c");
     let empty: Vec<i32> = Vec.new();
     let xs = [1, 2, 3];
@@ -195,7 +195,7 @@ fn comments_around_everything_survive_formatting() {
 use ink::{ Logger };
 
 // a fn with comments EVERYWHERE
-pub fn main() {
+entry fn main() {
     // before a statement
     let log = Logger.new("cm"); // trailing on a statement
     /* a block comment
@@ -223,7 +223,7 @@ pub fn pick(xs: Vec<i32>, i: i32) -> (i32, bool) {
     }
     return (0, false);
 }
-pub fn main() {
+entry fn main() {
     let log = Logger.new("px");
     let xs = Vec<i32>.from([10, 20, 30]);
     let a = xs[1] + xs.len();            // index + method

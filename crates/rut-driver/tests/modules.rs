@@ -9,7 +9,7 @@ fn uses_and_links_a_function() {
     // dependency "math" under scope 1 (main keeps `add` monomorphized)
     let dep = rut_driver::compile_program(
         "pub fn add(a: i32, b: i32) -> i32 { return a + b; }\n\
-         pub fn main() -> i32 { return add(1, 2); }\n",
+         entry fn main() -> i32 { return add(1, 2); }\n",
         Mode::Impl,
         "math",
         1,

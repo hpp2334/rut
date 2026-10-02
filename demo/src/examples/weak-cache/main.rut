@@ -29,7 +29,7 @@ fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
     return nil;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("weak");
     let cache: Vec<?Tile> = Vec.new();
 

@@ -60,7 +60,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
                 body: ModuleBody::Source {
                     text: "\n\
                      use server::{ subscribe, emit };\n\
-                     pub fn main() -> nil {\n\
+                     entry fn main() -> nil {\n\
                      \x20   let bus: opaque = opaque(0);\n\
                      \x20   subscribe(bus, \"join\", \"on_join\");\n\
                      \x20   emit(bus, \"join\", \"ada\");\n\
@@ -84,7 +84,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
                 body: ModuleBody::Source {
                     text: "\n\
                      use server::{ subscribe };\n\
-                     pub fn main() -> nil {\n\
+                     entry fn main() -> nil {\n\
                      \x20   subscribe(\"not a bus\", \"join\", \"on_join\");\n\
                      }\n"
                         .into(),
@@ -183,7 +183,7 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
             "app",
             rut_driver::Module {
                 body: ModuleBody::Source {
-                    text: "use s::{ ping };\npub fn main() -> nil { ping(1); }\n".into(),
+                    text: "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n".into(),
                     is_decl: false,
                 },
                 ..Default::default()
@@ -467,7 +467,7 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
         "app",
         rut_driver::Module {
             body: ModuleBody::Source {
-                text: "use ink_host::{ create_logger };\nuse server::{ subscribe };\npub fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n".into(),
+                text: "use ink_host::{ create_logger };\nuse server::{ subscribe };\nentry fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n".into(),
                 is_decl: false,
             },
             ..Default::default()

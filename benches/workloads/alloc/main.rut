@@ -9,7 +9,7 @@ struct Point {
     y: i32,
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 2000000; i += 1) {
         let p = Point { x: i, y: i.wrapping_add(1) };

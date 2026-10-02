@@ -96,7 +96,7 @@ fn chain_src() -> String {
     s.push_str(&pad(25));
     s.push_str("    return b_big();\n"); // line 84, col 12
     s.push_str("}\n");
-    s.push_str("pub fn main() -> str {\n    return a_big();\n}\n"); // call at line 87, col 12
+    s.push_str("entry fn main() -> str {\n    return a_big();\n}\n"); // call at line 87, col 12
     s
 }
 
@@ -104,7 +104,7 @@ fn chain_src() -> String {
 fn capture_lowers_to_the_capture_native() {
     let collection = rut_core::binary::Surface::default();
     let out = rut_driver::compile_program(
-        "fn go() -> i32 {\n    let t = capture_stacktrace();\n    return t.len();\n}\npub fn main() -> i32 {\n    return go();\n}\n",
+        "fn go() -> i32 {\n    let t = capture_stacktrace();\n    return t.len();\n}\nentry fn main() -> i32 {\n    return go();\n}\n",
         Mode::Impl,
         "test",
         1,
@@ -146,7 +146,7 @@ fn frame_names_order_and_depth_are_exact() {
         s2.push_str(&pad(25));
         s2.push_str("    return b_big();\n");
         s2.push_str("}\n");
-        s2.push_str("pub fn main() -> i32 {\n");
+        s2.push_str("entry fn main() -> i32 {\n");
         s2.push_str("    return a_big();\n");
         s2.push_str("}\n");
         s2
@@ -185,7 +185,7 @@ fn members_report_positions_individually() {
     sum.push_str("    if (t.col(1) != 12) { return 4; }\n");
     sum.push_str("    return 9;\n");
     sum.push_str("}\n"); // line 29
-    sum.push_str("pub fn main() -> i32 {\n    return c_big();\n}\n"); // call at line 30, col 12
+    sum.push_str("entry fn main() -> i32 {\n    return c_big();\n}\n"); // call at line 30, col 12
     assert_eq!(run_main(&sum), 9);
 }
 
@@ -193,7 +193,7 @@ fn members_report_positions_individually() {
 fn out_of_range_index_traps_loud() {
     // `grab` is tiny, so it checker-inlines into main — the trace has one
     // frame (see the inline-law test); the LOUD part is what's pinned:
-    let src = "fn grab() -> i32 {\n    let t = capture_stacktrace();\n    return t.name(5).len();\n}\npub fn main() -> i32 {\n    return grab();\n}\n";
+    let src = "fn grab() -> i32 {\n    let t = capture_stacktrace();\n    return t.name(5).len();\n}\nentry fn main() -> i32 {\n    return grab();\n}\n";
     let (_flat, mut vm) = compile_vm(src);
     let err = vm.call::<_, i32>("main", ()).unwrap_err();
     assert_eq!(err.kind, rut_vm::TrapKind::IndexOutOfBounds);
@@ -205,7 +205,7 @@ fn out_of_range_index_traps_loud() {
     assert!(err.msg.contains("len is 1"), "the trace's real depth is disclosed: {}", err.msg);
 
     // a negative index is out of range too — the index is a bug, not data
-    let src = "fn grab() -> i32 {\n    let t = capture_stacktrace();\n    return t.line(-1);\n}\npub fn main() -> i32 {\n    return grab();\n}\n";
+    let src = "fn grab() -> i32 {\n    let t = capture_stacktrace();\n    return t.line(-1);\n}\nentry fn main() -> i32 {\n    return grab();\n}\n";
     let (_flat, mut vm) = compile_vm(src);
     let err = vm.call::<_, i32>("main", ()).unwrap_err();
     assert_eq!(err.kind, rut_vm::TrapKind::IndexOutOfBounds);
@@ -278,7 +278,7 @@ fn grab() -> i32 {
     let b = read(t, 1);
     return a * 1000 + b;
 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     return grab();
 }
 "#;
@@ -292,7 +292,7 @@ fn capture_reflects_the_pipelines_frames_the_inline_law() {
     // statements): the capture inside it reports the frame it LANDED in
     // — `main` — with the ORIGINAL capture-site position. The trace is
     // the pipeline's truth, not the source's shape.
-    let src = "fn tiny() -> i32 {\n    let t = capture_stacktrace();\n    if (t.len() != 1) { return 1; }\n    if (t.name(0) != \"main\") { return 2; }\n    if (t.line(0) != 2) { return 3; }\n    if (t.col(0) != 13) { return 4; }\n    return 5;\n}\npub fn main() -> i32 {\n    return tiny();\n}\n";
+    let src = "fn tiny() -> i32 {\n    let t = capture_stacktrace();\n    if (t.len() != 1) { return 1; }\n    if (t.name(0) != \"main\") { return 2; }\n    if (t.line(0) != 2) { return 3; }\n    if (t.col(0) != 13) { return 4; }\n    return 5;\n}\nentry fn main() -> i32 {\n    return tiny();\n}\n";
     assert_eq!(run_main(src), 5);
 }
 
@@ -305,7 +305,7 @@ fn recursion_pads_every_frame() {
     src.push_str("    if (n == 0) {\n        let t = capture_stacktrace();\n        return t.len() * 100 + t.name(0).len();\n    }\n");
     src.push_str("    return down(n - 1);\n");
     src.push_str("}\n");
-    src.push_str("pub fn main() -> i32 {\n    return down(2);\n}\n");
+    src.push_str("entry fn main() -> i32 {\n    return down(2);\n}\n");
     // frames: down, down, down, main → len 4; name(0) is "down" (4 chars)
     assert_eq!(run_main(&src), 404);
 }
@@ -354,7 +354,7 @@ fn discarded_capture_releases_cleanly() {
     src.push_str("    capture_stacktrace();\n");
     src.push_str("    return 3;\n");
     src.push_str("}\n");
-    src.push_str("pub fn main() -> i32 {\n    let a = noiser();\n    capture_stacktrace();\n    return a;\n}\n");
+    src.push_str("entry fn main() -> i32 {\n    let a = noiser();\n    capture_stacktrace();\n    return a;\n}\n");
     assert_eq!(run_main(&src), 3);
 }
 
@@ -384,7 +384,7 @@ fn version_nine_rejects_stale_artifacts() {
     // builder's engine-surface withdrawal)
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: "pub fn main() -> i32 { return 4; }".into(), is_decl: false }, ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: "entry fn main() -> i32 { return 4; }".into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);

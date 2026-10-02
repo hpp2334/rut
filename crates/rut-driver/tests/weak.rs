@@ -157,7 +157,7 @@ impl Tile {
 fn upgrade_round_trips_while_alive() {
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(41);
     let w = Weak.new(t);
     let b = w.upgrade();
@@ -175,7 +175,7 @@ pub fn main() -> i32 {{
 fn death_answers_nil_forever() {
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let mut t = Tile.new(7);
     let w = Weak.new(t);
     t = Tile.new(99);       // the old cell loses its last strong handle: it dies NOW
@@ -201,7 +201,7 @@ fn alive_n(w: Weak<Tile>) -> i32 {{
     if (b == nil) {{ return 0; }}
     return b.n;
 }}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let a = Tile.new(10);
     let mut retired = Tile.new(20);
     let mut fresh = Tile.new(30);
@@ -257,7 +257,7 @@ fn build() -> ?Node {
     c.back = wp;                   // the WEAK edge — the cycle cannot close
     return p;                      // the parent handle crosses; the child rides p.other
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut parent = build();      // fused: parent is the ONLY reference
     parent = nil;                  // sever: the whole shape must free, in order
 }
@@ -278,7 +278,7 @@ pub fn main() -> nil {
 fn weak_over_immortal_enum_member_upgrades_forever() {
     let src = r#"
 enum E { A, B }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let e = E.A;              // the immortal singleton cell
     let w = Weak.new(e);          // never dies: the list is never nulled
     let b = w.upgrade();
@@ -304,7 +304,7 @@ fn weak_over_nullable_answers_double_optional_and_dies_with_the_box() {
 fn probe_ot(w: Weak<?Tile>) -> ??Tile {{
     return w.upgrade();        // MakeOpt wraps the box — the sticky-? law
 }}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let mut ot: ?Tile = Tile.new(5);   // the OPT BOX is the referent
     let w = Weak.new(ot);              // Weak<?Tile>: legal (D2)
     ot = nil;                          // the box loses its only strong handle: it dies
@@ -334,7 +334,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {{
     if (b == nil) {{ return 42; }}
     return 0;
 }}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(8);
     let mut o = opaque(t);      // a Rut store entry — the TAGGED-word referent
     let w = Weak.new(o);
@@ -365,7 +365,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {
     if (b == nil) { return 42; }
     return 0;
 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut b = make_box(41);
     let w = Weak.new(b);
     b = make_box(42);      // the first host box is released: the weak goes dead
@@ -404,7 +404,7 @@ fn weak_inside_a_generic_fn_instantiates_per_concrete_t() {
 fn watch<T>(v: T) -> Weak<T> {{
     return Weak.new(v);
 }}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(3);
     let w = watch(t);          // Weak<Tile> at this instantiation
     let b = w.upgrade();
@@ -422,7 +422,7 @@ pub fn main() -> i32 {{
 fn weak_boxes_compare_by_cell_identity() {
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w1 = Weak.new(t);
     let w2 = Weak.new(t);      // a SECOND box over the same referent
@@ -441,7 +441,7 @@ pub fn main() -> i32 {{
 #[test]
 fn weak_of_a_primitive_diagnoses_at_the_instantiation() {
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let w = Weak.new(5);
     return 0;
 }
@@ -459,7 +459,7 @@ fn weak_of_a_fn_value_diagnoses() {
     // cell" — fn values are the one non-prim non-cell, so the admission
     // refuses them with the same law.
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let f: fn(i32) -> i32 = fn (x: i32) -> i32 { return x + 1; };
     let w = Weak.new(f);
     return 0;
@@ -476,7 +476,7 @@ fn weak_of_a_fn_value_diagnoses() {
 fn weak_on_nil_traps() {
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t: ?Tile = nil;
     let w = Weak.new(t);      // no cell to point at: the loud trap
     return 0;
@@ -498,7 +498,7 @@ fn upgrade_on_a_non_weak_traps() {
 #[test]
 fn construction_and_type_position_arity_diagnose() {
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let a = 1;
     let w = Weak.new(a, a);
     return 0;
@@ -510,7 +510,7 @@ fn construction_and_type_position_arity_diagnose() {
         "{diags:?}"
     );
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let w = Weak.new();
     return 0;
 }
@@ -521,7 +521,7 @@ fn construction_and_type_position_arity_diagnose() {
         "{diags:?}"
     );
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let w: Weak<i32, i32> = Weak.new(5);
     return 0;
 }
@@ -539,7 +539,7 @@ fn the_retired_type_call_spell_names_the_class_method_fix() {
     // became the class method: the diagnostic is loud and actionable,
     // naming the fix.
     let diags = compile_diags(
-        r#"pub fn main() -> i32 {
+        r#"entry fn main() -> i32 {
     let s = "x";
     let w = Weak(s);
     return 0;
@@ -569,7 +569,7 @@ class Gad { n: i32; }
 impl Gad {
     fn make(n: i32) -> Self { return Self { n: n }; }
 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut v = Gad.make(9);
     let w = Weak.new(v);            // the mint consumes the temporary
     v = Gad.make(10);               // the binding dies: the old referent with it
@@ -590,7 +590,7 @@ fn weak_takes_no_impl_blocks() {
     let diags = compile_diags(
         r#"impl Weak {
 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     return 0;
 }
 "#,
@@ -605,7 +605,7 @@ pub fn main() -> i32 {
 fn weak_has_no_other_members() {
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w = Weak.new(t);
     let b = w.sniff();
@@ -629,7 +629,7 @@ fn heap_usage_returns_to_baseline_after_a_weak_churn() {
     rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let mut live = 0;
     for (let i = 0; i < 50; i += 1) {{
         let t = Tile.new(i);
@@ -673,7 +673,7 @@ fn oom_at_the_weak_mint_traps_before_registration() {
     rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w = Weak.new(t);
     return 0;

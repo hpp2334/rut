@@ -35,7 +35,7 @@ fn describe(f: Flavor) -> str {
         Flavor.Sour  -> "sour",
     };
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let name = "rut";
     let n = 41 + 1;
     let log = Logger.new("smoke");
@@ -106,7 +106,7 @@ ${pad}    return c_big();
 fn a_big() -> str {
 ${pad}    return b_big();
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let r = a_big();
     let log = Logger.new("trace");
     log.info(r);
@@ -136,7 +136,7 @@ pub fn main() -> nil {
     let t = capture_stacktrace();
     return t.name(9).len();
 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     return grab();
 }
 `;

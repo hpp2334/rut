@@ -35,7 +35,7 @@ trap on overflow; these never do:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("ladder");
     let mut v: u8 = 250;
     v = v.wrapping_add(10);            // 4 — two's-complement wrap
@@ -57,7 +57,7 @@ way. Pick per call site: a checksum wraps, a length checks.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("str");
     let s = "héllo rut";
     log.info(f"len={s.len()} first={s.code()}");
@@ -93,7 +93,7 @@ table. See [string slicing and views](../reference/string-views.md).
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("bytes");
     let b = "rut runs".encode();
     log.info(f"len={b.len()} decode={b.decode()}");
@@ -140,7 +140,7 @@ the total output.
 use pouch::{ Vec };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("pouch");
     let mut xs: Vec<i32> = Vec.new();         // or Vec.with_capacity(64)
     xs.push(10);                              // amortized O(1)
@@ -173,7 +173,7 @@ an O(1) view that writes through to the parent vector.
 use nmapset::{ HashMap, HashSet };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("nmapset");
     let mut counts: HashMap<str, i32> = HashMap.new();
     let fresh = counts.put("rut", 1);          // answers true when the key was NEWLY added
@@ -217,7 +217,7 @@ use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
@@ -273,7 +273,7 @@ reference](../reference/stdlib.md#flow-the-push-pipeline).
 use strbuild::{ StringBuilder };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("strbuild");
     let n = 3;
     let mut b = StringBuilder.new();     // or StringBuilder.with_cap(1024)
@@ -299,7 +299,7 @@ the builder appends into one growable cell and copies once, at
 use calc::{ Math };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("calc");
     let x: f64 = -2.0;
     let a: f64 = 3.0;
@@ -327,7 +327,7 @@ ladder is *not* here — those are core's, always available.
 use json::{ decodeJson, encodeJson };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("json");
     let (n, e) = decodeJson<i64>("42");            // (?T, ?E) — see errors
     let (s, ee) = encodeJson<[i64]>([1, 2, 3]);    // (?str, ?EncodeJsonError)
@@ -357,7 +357,7 @@ There is no `console`, no `print` — all output goes through a logger:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let n = 3;
     let log = Logger.new("app");
     log.info(f"started with {n} items");
@@ -395,7 +395,7 @@ use ink::{ Logger };
 // assert is plain rut code now: the helper a package writes over panic
 fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("std");
 
     // Vec: build, pop, read

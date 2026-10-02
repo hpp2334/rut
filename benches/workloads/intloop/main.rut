@@ -4,7 +4,7 @@ use calc::{ Math };
 // intloop — integer hot loop: wrapping add/mul, loop counter, compare/branch.
 // Scale: 5_000_000 iterations. Canonical reference: 628038624.
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 5000000; i += 1) {
         s = (s.wrapping_add(i.wrapping_mul(3))).wrapping_sub(1);

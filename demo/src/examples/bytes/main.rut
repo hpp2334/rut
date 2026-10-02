@@ -11,7 +11,7 @@
 
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("bytes");
 
     // text <-> octets

@@ -67,7 +67,7 @@ fn work() {
     log.info("working — 4 octets in flight");
 }   // buf's count reaches zero here
 
-pub fn main() {
+entry fn main() {
     work();   // the boundary drains: dispose runs after main's body
 }
 ```

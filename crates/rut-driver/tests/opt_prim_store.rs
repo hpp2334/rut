@@ -73,7 +73,7 @@ fn ir_dump(app_src: &str) -> String {
 #[test]
 fn opt_prim_element_ops_lower_to_the_prim_store() {
     let src = r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut a: [?i64] = [nil; 8];
             a[0] = 5;
             a[1] = 6;
@@ -115,7 +115,7 @@ fn opt_prim_element_ops_lower_to_the_prim_store() {
 #[test]
 fn reference_elements_keep_the_cell_backing() {
     let src = r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut a: [?str] = [nil; 4];
             a[0] = "x";
             let mut n: i64 = 0;
@@ -147,7 +147,7 @@ fn reference_elements_keep_the_cell_backing() {
 fn i64_nil_round_trip_and_extremes() {
     let checksum = run_main(
         r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut a: [?i64] = [nil; 16];
             for (let i = 0; i < 16; i += 1) {
                 if (i % 2 == 0) {
@@ -194,7 +194,7 @@ fn i64_nil_round_trip_and_extremes() {
 fn u64_high_bit_payloads_round_trip() {
     let checksum = run_main(
         r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut u: [?u64] = [nil; 4];
             u[0] = 9223372036854775808u64;
             u[1] = 18446744073709551615u64;
@@ -223,7 +223,7 @@ fn u64_high_bit_payloads_round_trip() {
 fn float_and_narrow_int_payloads_round_trip() {
     let checksum = run_main(
         r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let f: [?f64] = [3.5, -0.25, nil];
             let mut fs: f64 = 0.0;
             for (let i = 0; i < 3; i += 1) {
@@ -269,7 +269,7 @@ fn float_and_narrow_int_payloads_round_trip() {
 fn iteration_order_unchanged() {
     let checksum = run_main(
         r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut a: [?i32] = [nil; 12];
             for (let i = 0; i < 12; i += 1) {
                 if (i % 3 != 0) {
@@ -305,7 +305,7 @@ fn vec_backing_rides_the_prim_store() {
     let checksum = run_main(
         r#"
         use pouch::{ Vec };
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut v: Vec<i64> = Vec.new();
             for (let i = 0; i < 5000; i += 1) {
                 v.push((i as i64).wrapping_mul(3));
@@ -342,7 +342,7 @@ fn vec_backing_rides_the_prim_store() {
 fn reads_are_values_not_handles() {
     let checksum = run_main(
         r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut a: [?i64] = [nil; 2];
             a[0] = 10;
             let x = a[0];
@@ -385,7 +385,7 @@ const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapse
 fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let src = r#"
         use nmapset::{ HashMap };
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut m: HashMap<i32, i64> = HashMap.new();
             for (let i = 0; i < 1000; i += 1) {
                 if (m.put(i, (i as i64).wrapping_mul(1000003i64))) {
@@ -468,7 +468,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
 fn prim_store_release_walk_skips_element_slots() {
     let src = r#"
         use pouch::{ Vec };
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let mut v: Vec<i64> = Vec.new();
             for (let i = 0; i < 100000; i += 1) {
                 v.push(i as i64);
@@ -558,7 +558,7 @@ fn version_gate_rejects_stale_artifacts() {
     // `Nat::StrBuf*` rows — every later nat's tag shifts down)
     assert_eq!(VERSION, 19, "the builder's engine-surface withdrawal owns this VERSION bump");
     let out = rut_driver::compile_module(
-        "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
+        "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,
         "gate",
     );

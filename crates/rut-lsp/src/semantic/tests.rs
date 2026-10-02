@@ -156,7 +156,7 @@ fn bare_calls_color_their_callee_as_function() {
 
 #[test]
 fn symbols_outline() {
-    let src = "trait Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\npub fn main() -> nil {}\n";
+    let src = "trait Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\nentry fn main() -> nil {}\n";
     let (toks, _) = rut_lexer::lexer::lex(src);
     let (ast, _) = parse(src, Mode::Impl);
     let syms = symbols(&toks, &ast);

@@ -68,7 +68,7 @@ entry fn serialize(c: opaque) -> str {
     return f"{out}]";
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sort");
     let bank: ?Bank = Bank { data: Vec<i32>.from([5, 2, 9, 2]) };
     let c = opaque(bank);
@@ -138,7 +138,7 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
     b.data = fresh;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sort");
     let bank: ?Bank = Bank { data: nil };
     let c = opaque(bank);

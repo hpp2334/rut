@@ -71,7 +71,7 @@ fn destructured_checked_pair_elides() {
         fn pair(a: i64, b: i64) -> (i64, bool) {
             return a.checked_add(b);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let b: i64 = 9223372036854774807i64;
             let mut s: i64 = 0;
             let mut bad: i64 = 0;
@@ -112,7 +112,7 @@ fn bound_pair_destructured_elides() {
         fn pair(a: i64, b: i64) -> (i64, bool) {
             return a.checked_add(b);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let t = pair(5, 3);
             let (v, ok) = t;
             if (ok == false) {
@@ -144,7 +144,7 @@ fn ref_component_pair_elides_to_one_retain_per_read() {
             }
             return (n, name);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let (v, name) = tag(7);
             let (w, other) = tag(0i64 - 4);
             return v + w + name.len() as i64 + other.len() as i64;
@@ -166,7 +166,7 @@ fn three_field_return_family_elides() {
         fn stats(a: i64, b: i64) -> (i64, i64, i64) {
             return (a.wrapping_add(b), a.wrapping_sub(b), a.wrapping_mul(b));
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let (s, d, p) = stats(7, 3);
             return s + d + p;
         }
@@ -215,7 +215,7 @@ fn returned_pair_from_a_non_inlined_callee_still_mints() {
             let t25 = t24.wrapping_add(b);
             return a.checked_add(b);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let (v, ok) = big(2, 3);
             if (ok == false) {
                 return 0 - 1;
@@ -247,7 +247,7 @@ fn pair_into_a_call_argument_still_mints() {
             }
             return eat(t, n - 1);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             return eat((41i64, true), 2);
         }
     "#;
@@ -271,7 +271,7 @@ fn two_return_join_declines_and_still_mints() {
             }
             return (0i64 - 1i64, false);
         }
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let (v, ok) = pick(3);
             if (ok == false) {
                 return 0 - 100;
@@ -292,7 +292,7 @@ fn two_return_join_declines_and_still_mints() {
 #[test]
 fn boxed_opt_mint_unchanged() {
     let src = r#"
-        pub fn main() -> i64 {
+        entry fn main() -> i64 {
             let x: ?i64 = 5;
             let mut s: i64 = 0;
             if (x != nil) {
@@ -331,7 +331,7 @@ fn disposal_record_keeps_its_mint_plain_class_still_elides() {
         use core::{ Disposal, DisposalContext };
         class A { pub n: i32 = 0; }
         impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
-        pub fn main() -> i32 {
+        entry fn main() -> i32 {
             let a = A { n: 1 };
             let x = a.n;
             return x;
@@ -345,7 +345,7 @@ fn disposal_record_keeps_its_mint_plain_class_still_elides() {
 
     let plain_src = r#"
         class P { pub n: i32 = 0; }
-        pub fn main() -> i32 {
+        entry fn main() -> i32 {
             let p = P { n: 1 };
             let x = p.n;
             return x;

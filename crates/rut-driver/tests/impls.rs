@@ -329,7 +329,7 @@ fn prim_trait_impl_compiles_and_dispatches_statically() {
     // the scalar receiver crosses as an ordinary argument
     let src = "trait T { fn m(self) -> i32; }\n\
                impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
-               pub fn main() -> i32 {\n\
+               entry fn main() -> i32 {\n\
                    let w: T = 5;\n\
                    return w.m();\n\
                }\n";
@@ -347,7 +347,7 @@ fn prim_is_probe_answers_the_registered_impl() {
     let src = "trait T { fn m(self) -> i32; }\n\
                trait U { fn n(self) -> i32; }\n\
                impl T for i32 { fn m(self) -> i32 { return 1; } }\n\
-               pub fn main() -> i32 {\n\
+               entry fn main() -> i32 {\n\
                    let mut acc = 0;\n\
                    if (5 is T) { acc = acc + 1; }\n\
                    if (5 is U) { acc = acc + 10; }\n\
@@ -415,7 +415,7 @@ fn foreign_trait_for_a_builtin_is_an_orphan() {
     let app = rut_driver::compile_program(
         "use dep::{T};\n\
          impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
-         pub fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
         Mode::Impl,
         "app",
         2,
@@ -490,7 +490,7 @@ fn prim_vtable_fill_survives_the_link() {
 
     let app = rut_driver::compile_program(
         "use dep::{T};\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let mut w: T = 5;\n\
              return w.m();\n\
          }\n",
@@ -555,7 +555,7 @@ fn widened_scalar_slots_survive_calls_and_vtable_dispatch() {
                \x20   if (k) { return 5; }\n\
                \x20   return 9u8;\n\
                }\n\
-               pub fn main() -> i32 {\n\
+               entry fn main() -> i32 {\n\
                \x20   let w: K = 5;\n\
                \x20   if (!probe(w, 35)) { return -1; }\n\
                \x20   let v: K = pick(true);\n\
@@ -593,7 +593,7 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
     // standard no-method error (visibility enforcement is structural)
     let pub_only = rut_driver::compile_program(
         "use counter::{Counter, fresh, peek};\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let c = fresh().bump();\n\
          \x20   if (peek(c) != 1) { return -1; }\n\
          \x20   return 0;\n\
@@ -657,7 +657,7 @@ fn enum_inherent_statics_and_self_calls_compile() {
                \x20       };\n\
                \x20   }\n\
                }\n\
-               pub fn main() -> i32 {\n\
+               entry fn main() -> i32 {\n\
                \x20   let d: Color = Color.default();\n\
                \x20   if (d.label() != \"green\") { return -1; }\n\
                \x20   if (Color.Red.label() != \"red\") { return -2; }\n\
@@ -681,7 +681,7 @@ fn enum_iterator_impl_drives_for_break_continue() {
                \x20       emit(Light.Red);\n\
                \x20   }\n\
                }\n\
-               pub fn main() -> i32 {\n\
+               entry fn main() -> i32 {\n\
                \x20   // the capture law: scalars copy into the emit closure,\n\
                \x20   // so the accumulator is a shared cell\n\
                \x20   let mut acc: ?Acc = Acc { };\n\
@@ -755,7 +755,7 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
 
     let pub_only = rut_driver::compile_program(
         "use dial::{Dial};\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let d = Dial.default().flipped();\n\
          \x20   return when (d) { Dial.Low -> 1, Dial.High -> 2 };\n\
          }\n",
@@ -770,7 +770,7 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
 
     let private = rut_driver::compile_program(
         "use dial::{Dial};\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   return Dial.High.hidden();\n\
          }\n",
         Mode::Impl,

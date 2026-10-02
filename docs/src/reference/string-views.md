@@ -10,7 +10,7 @@ view can never observe mutation, so no pointer spelling is needed.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let s = "hello world";
     let w = s.slice(6, 11);        // "world" — no copy
@@ -39,7 +39,7 @@ world
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let accented = "héllo!";
     log.info(f"{accented.len()} {accented.encode().len()} {accented.slice(1, 2)}");

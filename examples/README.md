@@ -512,7 +512,7 @@ async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {
     log.info(f"status={r.status()} ok={r.ok()} len={b.len()}");
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("demo");
     launch_future(fetch(log, "https://example.com"));
 }

@@ -34,7 +34,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     return primes;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sieve");
     let primes = sieve(100);
     log.info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");

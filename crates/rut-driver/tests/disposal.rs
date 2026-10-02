@@ -65,7 +65,7 @@ impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t"
 fn the_heap_returns_to_baseline_through_the_disposal_drain() {
     let src = format!(
         r#"{DISP}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let mut acc = 0;
     for (let i = 0; i < 50; i += 1) {{
         let mut a = A {{ n: i }};
@@ -110,7 +110,7 @@ pub fn main() -> i32 {{
 fn a_field_read_after_the_mint_does_not_elide_dispose() {
     let src = format!(
         r#"{DISP}
-pub fn main() -> i32 {{
+entry fn main() -> i32 {{
     let a = A {{ n: 1 }};
     let x = a.n;
     return x;
@@ -127,7 +127,7 @@ fn the_disposal_row_rides_the_binary() {
 use core::{ Disposal, DisposalContext };
 struct A { n: i32 = 0; }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
-pub fn main() -> i32 { let a = A { n: 9 }; return 0; }
+entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "app_main");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
@@ -162,7 +162,7 @@ fn disposal_requires_the_import() {
     let body = r#"
 struct A { n: i32 = 0; }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
-pub fn main() -> i32 { let a = A { n: 9 }; return a.n; }
+entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
 "#;
     // no use at all: the trait miss names the fix
     let out = rut_driver::compile_module(body, rut_parser::Mode::Impl, "app_main");

@@ -18,7 +18,7 @@ use ink::{ Logger };
 enum Color { Red, Green, Blue }              // 0, 1, 2
 enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     log.info(f"{Color.Blue} {Direction.Right}");
 }
@@ -44,7 +44,7 @@ use ink::{ Logger };
 
 enum Light { Red, Yellow, Green }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let l = Light.Yellow;
     log.info(f"{l == Light.Yellow}");   // true — members are immortal singleton cells
@@ -74,7 +74,7 @@ fn go() { let log = Logger.new("t"); log.info("go"); }
 fn brake() { let log = Logger.new("t"); log.info("brake"); }
 fn stop() { let log = Logger.new("t"); log.info("stop"); }
 
-pub fn main() {
+entry fn main() {
     let l = Light.Yellow;
     when (l) {
         Light.Green  -> { go(); },
@@ -109,7 +109,7 @@ impl Dial {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let d = Dial.default().flipped();
     log.info(when (d) {
@@ -155,7 +155,7 @@ impl Iterable<Light> for Light {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     for (let l of Light.Red) {
         log.info(f"{l}");

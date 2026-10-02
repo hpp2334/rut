@@ -102,6 +102,6 @@ fn main_checksum(n: i32) -> i32 {
     return c;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(f"CHECKSUM {main_checksum(200000)}");
 }

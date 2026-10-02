@@ -63,7 +63,7 @@ fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> nil
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let pi: f64 = 3.141592653589793;
     let solar_mass: f64 = 4.0 * pi * pi;
     let days_per_year: f64 = 365.24;

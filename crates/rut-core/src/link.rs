@@ -1330,7 +1330,6 @@ mod tests {
     use super::*;
     use crate::binary::FuncCode;
     use crate::ops::Op;
-    use crate::sym::MAIN;
     use crate::types::{FieldInfo, TY_I32};
 
     fn module(name: &str, with_point: bool) -> Program {
@@ -1384,7 +1383,8 @@ mod tests {
         assert_eq!(out.consts[1], ConstVal::TypeId(boot as u32 + 1));
         // func/const ids offset per module
         assert_eq!(out.funcs.len(), 2);
-        assert_eq!(out.exports, vec![(MAIN, 0), (MAIN, 1)]);
+        let main = out.interner.lookup("main").unwrap();
+        assert_eq!(out.exports, vec![(main, 0), (main, 1)]);
         assert_eq!(out.funcs[1].code[0], Op::Const { dst: 0, k: 1 });
         // boot prefix is not duplicated
         assert_eq!(out.type_name(TY_I32), "i32");

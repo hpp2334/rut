@@ -189,7 +189,7 @@ fn churn_slice(p: str, n: i32) -> i64 {
     return c;
 }
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let n = 2000;
     let p = build_parent(n);
     let a = churn_range(p, n);
@@ -218,7 +218,7 @@ fn range_methods_match_slice_then_put_through_the_churn() {
 const INTERLEAVE_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let seq = "ACGTTCAGGCATXZ";
     let mut m: HashMap<str, i32> = HashMap.new();
     let mut f: i64 = 0;
@@ -269,7 +269,7 @@ fn lane_interchange_both_directions_on_one_table() {
 const GROW_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     // one parent of 4-char injective decimal slots (1000 + i)
     let mut p = "";
     for (let i = 0; i < 600; i += 1) {
@@ -314,7 +314,7 @@ fn vals_survive_multi_grow_through_put_range() {
 const EMPTY_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let s = "abc";
     let mut a: HashMap<str, i32> = HashMap.new();
     let mut b: HashMap<str, i32> = HashMap.new();
@@ -353,7 +353,7 @@ fn boundary_trap_surfaces_the_house_invalid_through_the_wrapper() {
 const TRAP_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let mut m: HashMap<str, i32> = HashMap.new();
     m.put("ok", 1);
     let utf8 = "héllo";
@@ -378,7 +378,7 @@ fn past_end_trap_surfaces_through_remove_range() {
 const PAST_END_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let mut m: HashMap<str, i32> = HashMap.new();
     m.put("ok", 1);
     let s = "abc";

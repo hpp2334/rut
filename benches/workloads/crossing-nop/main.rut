@@ -24,7 +24,7 @@ fn nop4_rut(a: i64, b: i64, c: i64, d: i64) -> i64 {
     return a + b + c + d;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let n: i64 = 2000000;
     let mut acc: i64 = 0;
     // A: the host nop — one crossing per call

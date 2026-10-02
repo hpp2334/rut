@@ -78,6 +78,6 @@ fn classes() {
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }
 
-pub fn main() {
+entry fn main() {
     classes();
 }

@@ -37,7 +37,7 @@ fn hello_world(tag: &str) -> PathBuf {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
-    write(&dir, "main.rut", "pub fn main() -> nil { return; }\n");
+    write(&dir, "main.rut", "entry fn main() -> nil { return; }\n");
     root
 }
 
@@ -83,7 +83,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
 #[test]
 fn a_loose_file_is_not_a_runnable_unit() {
     let root = scratch("loose");
-    write(&root, "main.rut", "pub fn main() -> nil { return; }\n");
+    write(&root, "main.rut", "entry fn main() -> nil { return; }\n");
     let out = Command::new(rut())
         .args(["run", root.join("main.rut").to_str().unwrap()])
         .output()
@@ -123,5 +123,109 @@ fn a_typo_path_never_gets_past_the_door() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(stderr.contains("not a runnable unit"), "probe {probe}: {stderr}");
     }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A world with several `entry fn`s in the entry lib (the 02-digest
+/// shape) — `rut run` refuses to guess; `--entry <name>` designates.
+fn two_entries(tag: &str) -> PathBuf {
+    let root = scratch(tag);
+    let dir = root.join("hello");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+    );
+    write(
+        &dir,
+        "main.rut",
+        "entry fn main() -> nil { return; }\nentry fn other() -> nil { return; }\n",
+    );
+    root
+}
+
+#[test]
+fn several_entry_fns_refuse_to_guess_and_entry_designates() {
+    let root = two_entries("designation");
+    let dir = root.join("hello");
+
+    // no --entry: ambiguous, loud, nothing runs
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <dir>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("entry fns"), "{stderr}");
+    assert!(stderr.contains("main") && stderr.contains("other"), "{stderr}");
+    assert!(stderr.contains("--entry"), "{stderr}");
+
+    // --entry <name>: the designated entry runs
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap(), "--entry", "other"])
+        .output()
+        .expect("run rut run --entry other");
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn entry_naming_a_non_entry_fn_is_loud() {
+    let root = two_entries("misdesignated");
+    let dir = root.join("hello");
+    write(&dir, "main.rut", "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n");
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap(), "--entry", "plain"])
+        .output()
+        .expect("run rut run --entry plain");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("no `entry fn plain`"), "{stderr}");
+    assert!(stderr.contains("main"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
+    let root = scratch("entryless");
+    let dir = root.join("hello");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+    );
+    // a pure library shape compiles clean — the designation is where
+    // the run stops, never a source diagnostic
+    write(
+        &dir,
+        "main.rut",
+        "pub fn helper() -> i32 { return 7; }\n",
+    );
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <dir>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("no `entry fn`"), "{stderr}");
+    assert!(stderr.contains("nothing to run"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_dangling_entry_value_is_a_usage_error() {
+    let root = hello_world("dangling-entry");
+    let dir = root.join("hello");
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap(), "--entry"])
+        .output()
+        .expect("run rut run --entry");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--entry"), "{stderr}");
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -9,14 +9,14 @@
 //!
 //! The interner pre-interns a fixed **well-known table**, so
 //! ids `0..WELL_KNOWN.len()` mean the same name in every interner instance.
-//! Special names (`self`, `Self`, `nil`, `main`, the builtin members, the
+//! Special names (`self`, `Self`, `nil`, the builtin members, the
 //! primitives) compare as `IdentId` equality — never by text:
 //!
 //! ```
 //! use rut_core::{Interner, sym};
 //! let mut i = Interner::default();
 //! assert_eq!(i.intern("Self"), sym::SELF_TY); // already interned
-//! assert_eq!(i.name(sym::MAIN), "main");
+//! assert_eq!(i.name(sym::ITERATE), "iterate");
 //! ```
 
 /// An interned name — an index into an [`Interner`]. Ids below
@@ -117,7 +117,8 @@ pub const WELL_KNOWN: &[&str] = &[
     "self",       // SELF
     "Self",       // SELF_TY
     "nil",        // NIL
-    "main",       // MAIN
+    "main",       // retired row: the id stays fixed (append-only); the
+                  // MAIN const died with the main convention
     "iterate",    // ITERATE
     "len",        // LEN
     "set",        // SET
@@ -213,8 +214,9 @@ pub const WELL_KNOWN: &[&str] = &[
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
 /// every interner instance. Retired names are ordinary identifiers:
 /// `Option`/`Result` never joined the table, and `print`/`size_of`/
-/// `align_of` kept their rows (append-only) but lost their consts once
-/// nothing compared them by symbol. (`Weak`
+/// `align_of`/`main` kept their rows (append-only) but lost their consts
+/// once nothing compared them by symbol — `main`'s const died with the
+/// main convention (the `entry fn` surface replaced it). (`Weak`
 /// joined the table in the weak batch — it was absent
 /// while the M5 stub diagnosed it.)
 ///
@@ -222,7 +224,6 @@ pub const WELL_KNOWN: &[&str] = &[
 pub const SELF: IdentId = IdentId(0); // `self`
 pub const SELF_TY: IdentId = IdentId(1); // `Self`
 pub const NIL: IdentId = IdentId(2);
-pub const MAIN: IdentId = IdentId(3);
 pub const ITERATE: IdentId = IdentId(4); // `iterate`
 pub const LEN: IdentId = IdentId(5);
 pub const SET: IdentId = IdentId(6);
@@ -383,7 +384,6 @@ mod tests {
             ("self", SELF),
             ("Self", SELF_TY),
             ("nil", NIL),
-            ("main", MAIN),
             ("iterate", ITERATE),
             ("len", LEN),
             ("set", SET),
@@ -529,8 +529,8 @@ mod tests {
         assert_eq!(i.lookup("%Vec"), Some(vec));
         assert_eq!(i.lookup("Point"), None);
         // the well-known range is untouched
-        assert_eq!(i.name(crate::sym::MAIN), "main");
-        assert_eq!(i.lookup("main"), Some(crate::sym::MAIN));
+        assert_eq!(i.name(crate::sym::ITERATE), "iterate");
+        assert_eq!(i.lookup("iterate"), Some(crate::sym::ITERATE));
         // distinct inputs stay distinct outputs (the injective-closure law)
         assert_ne!(i.name(point), i.name(vec));
         // append-only after a remap: new interns never renumber

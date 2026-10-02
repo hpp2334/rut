@@ -88,7 +88,7 @@ impl CustomFuture {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("future");
     let mut f = CustomFuture.new(3, "poll");
     let mut polls = 0;

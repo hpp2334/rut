@@ -100,7 +100,7 @@ fn run_main(app_src: &str) -> i32 {
 fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
     let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
          \x20   let mut m: HashMap<i32, str> = HashMap.new();\n\
          \x20   for (let i = 0; i < 64; i += 1) {\n\
@@ -143,7 +143,7 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
 fn hashmap_str_keys_and_hashset() {
     let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap, HashSet };\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
          \x20   let mut sm: HashMap<str, i32> = HashMap.new();\n\
          \x20   for (let i = 0; i < 48; i += 1) {\n\
@@ -195,7 +195,7 @@ fn hashmap_str_keys_and_hashset() {
 fn str_key_remove_readd_get_tombstone_round_trip() {
     let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
          \x20   assert(m.put(\"alpha\", \"one\"), \"first put adds\");\n\
          \x20   assert(m.get(\"alpha\") == \"one\", \"value round-trips\");\n\
@@ -227,7 +227,7 @@ fn a_user_record_key_fails_at_compile_time_naming_the_union() {
         "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut pm: HashMap<Pt, i32> = HashMap.new();\n\
          \x20   assert(pm.put(Pt { x: 1, y: 2 }, 10), \"record map: first put\");\n\
          \x20   return pm.len();\n\
@@ -247,7 +247,7 @@ fn an_unhashable_key_type_is_refused_at_the_instantiation() {
     let ds = diags_of(
         "struct Boxy { v: i32 }\n\
          use nmapset::{ HashMap };\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut m: HashMap<Boxy, i32> = HashMap.new();\n\
          \x20   return 0;\n\
          }\n",
@@ -265,7 +265,7 @@ fn an_unhashable_key_type_is_refused_at_the_instantiation() {
 fn nmapset_instantiates_the_wrapper_classes() {
     let out = compile_pkg_app(
         "use nmapset::{ HashMap, HashSet };\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut m: HashMap<i32, i32> = HashMap.new();\n\
          \x20   let mut s: HashSet<i32> = HashSet.new();\n\
          \x20   m.put(1, 2);\n\
@@ -296,7 +296,7 @@ fn nmapset_instantiates_the_wrapper_classes() {
 /// wrapper's own semantics law. History: git.)
 const PARITY_BODY: &str = "\
          fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut fails = 0;\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
          \x20   assert(m.put(\"k\", \"old\"), \"first put adds\");\n\

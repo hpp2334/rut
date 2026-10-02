@@ -1,7 +1,7 @@
 /**
  * rut-book.js — the book's ▶ Run buttons.
  *
- * Every ```rut fenced block whose text contains `pub fn main` gets a
+ * Every ```rut fenced block whose text contains `entry fn main` gets a
  * "▶ Run" button; clicking it compiles + runs the block in-browser on
  * the rut wasm engine (crates/rut-wasm, the same artifact the demo
  * playground ships) and renders the program's output lines, compile
@@ -344,7 +344,7 @@
     var pre = code.parentElement;
     if (!pre || pre.tagName !== "PRE") return;
     var src = code.textContent;
-    if (src.indexOf("pub fn main") === -1) return; // not a whole program
+    if (src.indexOf("entry fn main") === -1) return; // not a whole program
 
     pre.classList.add("rut-run");
 

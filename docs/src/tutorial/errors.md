@@ -26,7 +26,7 @@ struct Node {
     right: ?Node;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("nodes");
     let n = Node { value: 1, left: nil, right: nil };
     log.info(f"left is nil: {n.left == nil}");
@@ -45,7 +45,7 @@ automatic at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic
 use nmapset::{ HashMap };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("optional");
     let mut scores: HashMap<str, i32> = HashMap.new();
     scores.put("rut", 41);
@@ -112,7 +112,7 @@ The caller destructures and checks the err half first:
 use json::{ decodeJson };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("json");
     let (n, e) = decodeJson<i64>("42");
     if (e == nil) {
@@ -156,7 +156,7 @@ The caller picks: branch on `kind`, or just render the fields:
 use json::{ decodeJson };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("json");
     let (bad, be) = decodeJson<i64>("[1,2,3]");
     if (be != nil) {
@@ -211,7 +211,7 @@ use ink::{ Logger };
 
 struct Point { x: i32; y: i32 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });
     let p = opaque.downcast<Point>(box1);   // ?Point
@@ -236,7 +236,7 @@ point 1 2
 use json::{ decodeJson, encodeJson };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("json");
 
     // a successful decode: (value, nil)

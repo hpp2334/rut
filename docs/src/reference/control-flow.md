@@ -54,7 +54,7 @@ fn describe(n: i32) -> str {
     };
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     log.info(f"{describe(0)} {describe(2)} {describe(10)}");
 }
@@ -102,7 +102,7 @@ fn go() { let log = Logger.new("t"); log.info("go"); }
 fn brake() { let log = Logger.new("t"); log.info("brake"); }
 fn stop() { let log = Logger.new("t"); log.info("stop"); }
 
-pub fn main() {
+entry fn main() {
     let l = Light.Yellow;
     when (l) {
         Light.Green  -> { go(); },
@@ -123,7 +123,7 @@ use ink::{ Logger };
 
 struct Point { x: i32; y: i32; }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let p: ?Point = Point { x: 7, y: 0 };
     when (p != nil) {

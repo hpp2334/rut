@@ -193,7 +193,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     return c;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let c = churn(100000, 200000);
     Logger.new("app").info(f"CHECKSUM {c}");
 }

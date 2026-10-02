@@ -572,7 +572,7 @@ mod tests {
     const FUEL_DEMO: &str = r#"
 use ink::{Logger};
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("case");
     let mut i = 0;
     while (true) {
@@ -587,7 +587,7 @@ pub fn main() {
     const HELLO: &str = r#"
 use ink::{Logger};
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("case");
     log.info("hello");
 }
@@ -747,7 +747,7 @@ use json::{ decodeJson };
 use strbuild::{ StringBuilder };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("book");
     let (n, e) = decodeJson<i64>("42");
     if (e == nil) {
@@ -792,7 +792,7 @@ async fn countdown(cx: RunContext, log: Logger, n: u32) {
     log.info("lift-off");
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("countdown");
     launch_future(countdown(log, 3));
 }

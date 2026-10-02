@@ -42,7 +42,7 @@ fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> nil {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let n = 150;
     let mut u = Vec<f64>.filled(0.0, n);
     let v = Vec<f64>.filled(0.0, n);

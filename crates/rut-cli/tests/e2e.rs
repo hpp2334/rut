@@ -98,7 +98,7 @@ fn describe(f: Flavor) -> str {
         Flavor.Sour  -> "sour",
     };
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let name = "rut";
     let n = 41 + 1;
     Logger.new("app").info(f"hi {name}! n={n} tab:\t");
@@ -117,7 +117,7 @@ fn case2_sharing() {
     // both, and `==` is CELL IDENTITY (two aliases of one cell are equal)
     let src = r#"
 struct Point { x: f32; y: f32 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
@@ -150,7 +150,7 @@ impl Hashable for Point {
     fn hash(self) -> i32 { return 0; }
 }
 type BoxTy = opaque;
-pub fn main() -> nil {
+entry fn main() -> nil {
     let box1 = opaque(Point { x: 1, y: 2 });
     let box2 = opaque("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
@@ -195,7 +195,7 @@ struct Point { x: i32; y: i32 }
 fn find(o: opaque) -> ?Point {
     return opaque.downcast<Point>(o);
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("app");
     let mut pt = Point { x: 1, y: 2 };
     let b = opaque(pt);
@@ -226,7 +226,7 @@ fn case3c_opaque_downcast_prim_value_and_nil_trap() {
     // zero (the old `.0` zero-on-false is gone).
     let src = r#"
 struct Point { x: i32; y: i32 }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut n = 5;
     let b = opaque(n);
     n = 9;
@@ -262,7 +262,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     }
     return primes;
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let primes = sieve(100);
     Logger.new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
@@ -287,7 +287,7 @@ fn mix(a: Color, b: Color) -> str {
         Color.Blue  -> "blueish",
     };
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(mix(Color.Red, Color.Green));
     Logger.new("app").info(mix(Color.Blue, Color.Blue));
 }
@@ -308,7 +308,7 @@ struct A { v: i32 }
 struct B { v: i32 }
 impl Get for A { fn get(self) -> i32 { return 10; } }
 impl Get for B { fn get(self) -> i32 { return 20; } }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut w: Get = A { v: 1 };
     Logger.new("app").info(f"first={w.get()}");
     w = B { v: 2 };
@@ -345,7 +345,7 @@ impl Shape for Square {
     fn area(self) -> f32 { return self.s * self.s; }
     fn name(self) -> str { return "square"; }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let shapes: Vec<Shape> = Vec.from([
         Circle { r: 1 },
         Square { s: 2 },
@@ -374,7 +374,7 @@ fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
     for (let x of v) { out.push(f(x)); }
     return out;
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let xs = Vec<i32>.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
@@ -389,7 +389,7 @@ pub fn main() -> nil {
 #[test]
 fn case8_fuel_traps_and_parks() {
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut i = 0;
     while (true) {
         i += 1;
@@ -411,7 +411,7 @@ pub fn main() -> nil {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut x = 2147483647;
     x = x.wrapping_add(1);   // wrapping: fine
     Logger.new("app").info(f"x={x}");
@@ -436,7 +436,7 @@ fn plain_shl_traps_when_bits_leave_the_width() {
     // `<<` traps; only `x.wrapping_shl(n)` wraps. This was
     // silently a RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info("before");
     let s = 1073741824 << 1;   // 1 << 31 does not fit i32
     Logger.new("app").info(f"after {s}");
@@ -452,7 +452,7 @@ fn shr_follows_signedness() {
     // `>>` is logical on unsigned (no sign-extension of the
     // top bit — u64's bit 63 is magnitude, not sign), arithmetic on signed.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let u: u64 = 0xFFFFFFFFFFFFFFFFu64;
     Logger.new("app").info(f"u={u >> 1}");
     let v: u32 = 0x80000000u32;
@@ -473,7 +473,7 @@ fn ne_on_primitives_is_not_eq() {
     // never entered its body.
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(f"a={1 != 56}");
     Logger.new("app").info(f"b={1 == 56}");
     Logger.new("app").info(f"c={2 != 2}");
@@ -499,7 +499,7 @@ fn bare_vec_filled_with_a_value_reads_back() {
     // out of bounds.)
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut k: Vec<u32> = Vec.filled(0, 4);
     Logger.new("app").info(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
@@ -527,7 +527,7 @@ fn generic_static_receiver_resolves() {
     // now reaches the static: it plays the annotation's role.
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a: Vec<u32> = Vec<u32>.from([1, 2, 3]);
     let b = Vec<u32>.from([4, 5]);
     let c = Vec<u8>.from([250, 251]);
@@ -540,13 +540,13 @@ pub fn main() -> nil {
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
     // (the prelude use is present, so the static route engages)
-    let bad = "use core::{ Option };\npub fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    let bad = "use core::{ Option };\nentry fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     // no backward compat: a removed head is an unknown name, full stop
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
     // and the plain (non-generic) spelling is the same ordinary miss —
     // every retired spelling falls to the normal resolution path
-    let unused = "pub fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
+    let unused = "entry fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
     let out = rut_driver::compile_module(unused, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
 }
@@ -558,7 +558,7 @@ fn heap_budget_traps_before_the_write() {
     // per element, so it takes 5M elements to exceed the 4 MB budget.
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let v = Vec<u8>.filled(0, 5000000);
     Logger.new("app").info("allocated");
 }
@@ -572,7 +572,7 @@ pub fn main() -> nil {
 fn mut_binding_law_is_enforced() {
     let src = r#"
 struct P { x: i32 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let p = P { x: 1 };
     p.x = 2;
 }
@@ -590,7 +590,7 @@ pub fn main() -> nil {
 fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
@@ -605,7 +605,7 @@ pub fn main() -> nil {
 #[test]
 fn option_eq_is_a_compile_error() {
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = Option.some(1);
     Logger.new("app").info(f"{a == a}");
 }
@@ -624,18 +624,18 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour = 5 }
-pub fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
+entry fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
 "#;
     let out = compile(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
-    assert!(text.contains("@0 Enum Flavor [0,35)"), "header: {text}");
+    assert!(text.contains("@0 Enum Flavor [0,37)"), "header: {text}");
     assert!(text.contains("vis: pub(self)"), "vis label: {text}");
     assert!(text.contains("- Sour = 5"), "member bullet: {text}");
     let json = &out.ast_json;
     let root = serde_hint_parse(json);
     assert_eq!(root.kind, "Module");
-    assert!(json.contains("\"span\":[0,35]"), "span on the wire: {json}");
+    assert!(json.contains("\"span\":[0,37]"), "span on the wire: {json}");
     for banned in ["\"text\"", "\"label\"", "\"fields\"", "\"summary\""] {
         assert!(!json.contains(banned), "banned key {banned} on the wire");
     }
@@ -666,7 +666,7 @@ fn classify(n: i32) -> str {
         return "positive";
     }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(classify(0));
     Logger.new("app").info(classify(-3));
     Logger.new("app").info(classify(7));
@@ -687,7 +687,7 @@ fn shortcircuit_truth_table() {
     // && and || both miscompiled: the rhs value never reached the result
     // register (&& was always false; f||t was false too)
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let t = true;
     let f = false;
     Logger.new("app").info(f"and: {t && t} {t && f} {f && t} {f && f}");
@@ -731,7 +731,7 @@ impl Wrapped {
     fn bump(mut self) -> nil { self.inner.bump(); }
     fn count(self) -> i32 { return self.inner.count(); }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut c = Counter.new();
     c.bump();
     c.bump();
@@ -752,7 +752,7 @@ fn when_statement_block_arms() {
     // expression in this build") — the statement form
     let src = r#"
 enum Light { Green, Yellow, Red }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut dropped = 0;
     let mut kept = 0;
     for (let i = 0; i < 6; i += 1) {
@@ -790,7 +790,7 @@ fn describe(f: Flavor) -> str {
         Flavor.Salty  -> "salty",
     };
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
     Logger.new("app").info(hits[0]);
     Logger.new("app").info(hits[1]);
@@ -929,7 +929,7 @@ fn bytes_are_an_immutable_primitive() {
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let z = bytes(3);
     Logger.new("app").info(f"z={z.len()}");
     let a = bytes.from([1, 2, 3]);
@@ -958,7 +958,7 @@ pub fn main() -> nil {
 #[test]
 fn bytes_index_out_of_bounds_traps() {
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = bytes.from([1]);
     Logger.new("app").info(f"{a[5]}");
 }
@@ -973,7 +973,7 @@ fn str_index_ascii_and_utf8_and_for_of_array() {
     // O(1), while a non-ASCII string still decodes the UTF-8 prefix. The
     // `for..of` over the fixed `[T]` also exercises the hoisted length.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = "ACGT";
     let u = "héllo";
     let mut k = 0;
@@ -993,7 +993,7 @@ pub fn main() -> nil {
 #[test]
 fn str_index_out_of_bounds_traps() {
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = "ACGT";
     Logger.new("app").info(f"{a[9]}");
 }
@@ -1018,7 +1018,7 @@ impl Stack {
     pub fn len(self) -> i32 { return self.items.len(); }
 }
 pub fn drain(s: Stack) -> i32 { return s.len(); }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut st = Stack.new();
     st.push(1);
     Logger.new("app").info(f"drained {drain(st)}");
@@ -1044,7 +1044,7 @@ impl Gauge {
     pub(self) fn raw(self) -> i32 { return self.n; }
     fn secret(self) -> i32 { return self.n * 100; }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut g = Gauge.new();
     g.bump();
     g.bump();
@@ -1089,7 +1089,7 @@ fn count(n: Node) -> i32 {
     if (n.right != nil) { c += count(n.right); }
     return c;
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(f"CHECKSUM {count(make(10, 1))}");
 }
 "#;
@@ -1114,7 +1114,7 @@ struct Later {
 fn make_early() -> Early {
     return Early { later: Later { back: nil, x: 7 }, tag: 1 };
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let e = make_early();
     Logger.new("app").info(f"tag={e.tag} x={e.later.x}");
 }
@@ -1137,7 +1137,7 @@ impl Node {
     fn new() -> Self { return Self {}; }
     fn val(self) -> i32 { return self.v; }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = Node.new();
     Logger.new("app").info(f"v={a.val()} has_next={a.next != nil}");
 }
@@ -1185,7 +1185,7 @@ impl<T> Vec<T> {
         return self.buf[self.len];
     }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(10);
     v.push(20);
@@ -1208,7 +1208,7 @@ fn vec_class_slice_syntax_runs() {
     // lower through its `impl Slice<T> for Vec<T>`
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2); v.push(3);
     v[0] = 10;
@@ -1241,7 +1241,7 @@ fn pouch_vec_via_module_loader_runs() {
                 text: r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(10);
     v.push(20);
@@ -1301,7 +1301,7 @@ fn std_collection_via_module_loader_runs() {
 use core::{ string_join };
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<str> = Vec.new();
     v.push("hello");
     v.push(" ");
@@ -1351,7 +1351,7 @@ fn fstring_single_part_needs_no_concat() {
     // one-argument `Concat` this used to emit; the
     // observable result is unchanged.
     let src = r#"
-pub fn main() {
+entry fn main() {
     let s = "abc";
     let t = f"{s}";
     let c = "x";
@@ -1371,7 +1371,7 @@ fn fstring_accumulator_appends_in_place() {
     // copy of the whole prefix each step. Correctness must hold for the
     // bail cases (alias in a later part, different target) too.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut s = "";
     let mut i = 0;
     while (i < 1000) { s = f"{s}ab"; i += 1; }
@@ -1401,7 +1401,7 @@ fn fstring_accumulator_is_linear_at_100k() {
     // own envelope (fuel O(n), live heap O(n)); the shape test below is
     // the deterministic linearity discriminator.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut out = "";
     let t = "xy";
     let mut i = 0;
@@ -1429,7 +1429,7 @@ fn fstring_accumulator_concat_lowers_with_dst_as_first_arg() {
     // register as the destination. A fresh-dst regression (copy the
     // prefix every step) fails THIS test, not just the wall clock.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut out = "";
     let t = "xy";
     let mut i = 0;
@@ -1473,7 +1473,7 @@ fn plus_shape_concat_is_linear_bytes_decode_at_100k() {
     // in-place path stays anywhere near it; a per-step copy of the prefix
     // is ≈ 5×10^9 octets of copying. Correctness: every octet survives.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut b: [u8] = [0; 100000];
     let mut i = 0;
     while (i < 100000) { b[i] = (65 + i % 26) as u8; i += 1; }
@@ -1493,7 +1493,7 @@ fn fstring_accumulator_with_alias_stays_correct_on_the_slow_path() {
     // excluding it from the in-place append. Correctness is the assertion —
     // the alias keeps the pre-loop text while `out` grows past it.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut out = "head";
     let alias = out;
     let t = "xy";
@@ -1516,7 +1516,7 @@ fn string_join_and_vec_as_array_run() {
     let src = r#"
 use core::{ string_join };
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<str> = Vec.new();
     v.push("x"); v.push("y"); v.push("z");
     let e: Vec<str> = Vec.new();
@@ -1536,7 +1536,7 @@ fn as_casts_truncate_like_c_and_rust() {
     // cast binds tighter than `*` (Rust placement) and chains left.
     let src = r#"
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = 300 as u8;
     let b = -1 as u8;
     let c = 4294967295u32 as i32;
@@ -1558,7 +1558,7 @@ pub fn main() -> nil {
     // the cast RHS is restricted to the numeric primitives at the parse
     // level — anything else leaves `as` for the select-arm bind
     // (`fut as name`), so `1 as str` is a syntax error
-    let bad = "pub fn main() -> nil { let x = 1 as str; }";
+    let bad = "entry fn main() -> nil { let x = 1 as str; }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("expected")));
 }
@@ -1569,7 +1569,7 @@ fn unsuffixed_int_literals_must_fit_i32() {
     // only while it fits the `i32` default — past it the literal must
     // declare its width, even in a `u64` position, so a dropped or
     // doubled digit can't masquerade as a constant
-    let ok = "pub fn main() -> nil { let x: u64 = 5; let y = 2147483647; }";
+    let ok = "entry fn main() -> nil { let x: u64 = 5; let y = 2147483647; }";
     let out = rut_driver::compile_module(ok, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
@@ -1577,18 +1577,18 @@ fn unsuffixed_int_literals_must_fit_i32() {
         out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
 
-    let in_u64_ctx = "pub fn main() -> nil { let x: u64 = 13503953896175478587; }";
+    let in_u64_ctx = "entry fn main() -> nil { let x: u64 = 13503953896175478587; }";
     let out = rut_driver::compile_module(in_u64_ctx, rut_parser::Mode::Impl, "main");
     assert!(out
         .diags
         .iter()
         .any(|d| d.msg.contains("exceeds the `i32` default") && d.msg.contains("u64")));
 
-    let no_ctx = "pub fn main() -> nil { let x = 99999999999; }";
+    let no_ctx = "entry fn main() -> nil { let x = 99999999999; }";
     let out = rut_driver::compile_module(no_ctx, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `i32` default")));
 
-    let fixed = "pub fn main() -> nil { let x: u64 = 13503953896175478587u64; }";
+    let fixed = "entry fn main() -> nil { let x: u64 = 13503953896175478587u64; }";
     let out = rut_driver::compile_module(fixed, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
@@ -1597,15 +1597,15 @@ fn unsuffixed_int_literals_must_fit_i32() {
     );
 
     // floats: magnitude is the trigger, precision is not
-    let float_ok = "pub fn main() -> nil { let x: f64 = 0.1; }";
+    let float_ok = "entry fn main() -> nil { let x: f64 = 0.1; }";
     let out = rut_driver::compile_module(float_ok, rut_parser::Mode::Impl, "main");
     assert!(out.diags.is_empty());
 
-    let float_bad = "pub fn main() -> nil { let x: f64 = 1.0e300; }";
+    let float_bad = "entry fn main() -> nil { let x: f64 = 1.0e300; }";
     let out = rut_driver::compile_module(float_bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `f32` default")));
 
-    let float_fixed = "pub fn main() -> nil { let x: f64 = 1.0e300f64; }";
+    let float_fixed = "entry fn main() -> nil { let x: f64 = 1.0e300f64; }";
     let out = rut_driver::compile_module(float_fixed, rut_parser::Mode::Impl, "main");
     assert!(out.diags.is_empty());
 }
@@ -1618,7 +1618,7 @@ fn builtin_impl_numeric_methods_run() {
     // the float helpers are host fns now.
     let src = r#"
 use calc::{ Math };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("app");
     // i32 wrapping
     log.info(f"{2147483647.wrapping_add(1)} {(-2147483647 - 1).wrapping_sub(1)} {65536.wrapping_mul(65536)}");
@@ -1677,7 +1677,7 @@ fn case_f32_math_surface() {
     // and the `_f` suffix carries the width (rut has no overloading)
     let src = r#"
 use calc::{ Math };
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("f32").info(f"{Math.sqrt_f(2.0)} {Math.abs_f(-2.5)} {Math.min_f(1.0, 2.0)} {Math.max_f(1.0, 2.0)}");
     Logger.new("f32").info(f"{Math.signum_f(-3.5)} {Math.signum_f(0.0)} {Math.signum_f(4.5)} {Math.copysign_f(3.0, -1.0)}");
     Logger.new("f32").info(f"{Math.fma_f(2.0, 3.0, 4.0)} {Math.pow_f(2.0, 10.0)} {Math.floor_f(2.7)} {Math.hypot_f(3.0, 4.0)}");
@@ -1708,7 +1708,7 @@ fn core_nan_const_is_name_explicit() {
     // semantics hold (compares false against itself)
     let with = r#"
 use core::{NAN};
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("app").info(f"{NAN} {NAN == NAN} {NAN < 1.0}");
 }
 "#;
@@ -1719,7 +1719,7 @@ pub fn main() -> nil {
     // without the use, the name does not resolve — the prelude is
     // never ambient
     let without = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let x = NAN;
 }
 "#;
@@ -1748,7 +1748,7 @@ impl B {
 impl Wrap<i32> for B {
     fn get(self) -> i32 { return self.v; }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let b = B.new(7);
     let w: Wrap<i32> = b;
     Logger.new("app").info(f"{w.get()}");
@@ -1794,7 +1794,7 @@ fn total(it: Iterable<i32>) -> i32 {
     return acc.total;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("it");
     let mut acc: ?Acc = Acc { };
     for (let v of CountUp.new(9)) {
@@ -1822,7 +1822,7 @@ fn for_of_vec_yields_element_references() {
 use pouch::{ Vec };
 use ink::{ Logger };
 struct Row { v: i32 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("ref");
     let xs: Vec<i32> = Vec.new();
     xs.push(1); xs.push(2); xs.push(3);
@@ -1852,7 +1852,7 @@ fn float_literal_defaults_to_f32() {
     // an uncontextualized float literal is `f32`; the slot
     // carries f32 precision, so a literal and a computed f32 agree.
     let src = r#"
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = 0.1;            // default: f32
     let b: f64 = 0.1;       // annotation: f64
     let c = 0.1 + 0.0;      // computed f32
@@ -1871,7 +1871,7 @@ fn float_literal_default_does_not_implicitly_widen() {
     // feeding it to `f64` is a width error
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = 0.1;                 // f32 by default
     let v: Vec<f64> = Vec.new();
     v.push(a);                   // must not widen to f64
@@ -1893,7 +1893,7 @@ fn literals_adapt_to_expected_float_in_unary_and_binary() {
     // `f64` annotation both take the expected type
     let src = r#"
 fn offset(x: f64) -> f64 { return x + 0.5; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let r = offset(-2.0);
     let v: f64 = 1.0 / 4.0;
     Logger.new("app").info(f"{r} {v}");
@@ -1915,7 +1915,7 @@ fn a9_repeat_fill_and_addr_of_roundtrip() {
     let src = r#"
 use pouch::{ Vec };
 struct P { x: i32 = 0 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut a: [i32] = [0; 8];
     a[3] = 33;
     Logger.new("t").info(f"a3={a[3]} len={a.len()}");
@@ -1952,7 +1952,7 @@ pub fn main() -> nil {
 fn a1_addr_of_deref_and_nil() {
     let src = r#"
 struct P { x: i32 = 0; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let p: ?P = P { x: 5 };
     Logger.new("t").info(f"x={p.x} nil={p == nil}");
     let n: ?P = nil;
@@ -1968,7 +1968,7 @@ pub fn main() -> nil {
 fn a1_nil_deref_traps() {
     let src = r#"
 struct P { x: i32 = 0; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let n: ?P = nil;
     let _ = n.x;
 }
@@ -1985,7 +1985,7 @@ fn disposal_runs_at_refcount_zero() {
 use core::{ Disposal, DisposalContext };
 struct P { x: i32 = 0; }
 impl Disposal for P { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"dropped {self.x}"); } }
-pub fn main() -> nil { let p = P { x: 9 }; Logger.new("t").info("body done"); }
+entry fn main() -> nil { let p = P { x: 9 }; Logger.new("t").info("body done"); }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
     assert_eq!(trap, None);
@@ -2003,7 +2003,7 @@ struct A { }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:a"); } }
 struct B { }
 impl Disposal for B { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:b"); } }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = A { };
     let b = B { };
     Logger.new("t").info("body done");
@@ -2022,7 +2022,7 @@ fn dispose_runs_when_a_binding_is_rebound_mid_frame() {
 use core::{ Disposal, DisposalContext };
 struct A { n: i32 = 0; }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut a = A { n: 1 };
     a = A { n: 2 };
     Logger.new("t").info("body done");
@@ -2044,7 +2044,7 @@ use core::{ Disposal, DisposalContext };
 struct Kid { }
 impl Disposal for Kid { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("kid gone"); } }
 struct Parent { kid: ?Kid = nil; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let p = Parent { kid: Kid { } };
     Logger.new("t").info("body done");
 }
@@ -2060,7 +2060,7 @@ fn a_trap_in_dispose_propagates() {
 use core::{ Disposal, DisposalContext };
 struct A { }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = A { };
     Logger.new("t").info("body done");
 }
@@ -2078,7 +2078,7 @@ fn the_vm_survives_a_trapping_dispose_for_the_next_call() {
 use core::{ Disposal, DisposalContext };
 struct A { }
 impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let a = A { };
     Logger.new("t").info("body done");
 }
@@ -2107,7 +2107,7 @@ fn disposal_pins_the_mut_self_receiver() {
 use core::{ Disposal, DisposalContext };
 struct P { x: i32 = 0; }
 impl Disposal for P { fn dispose(self, cx: DisposalContext) { } }
-pub fn main() -> nil { }
+entry fn main() -> nil { }
 "#;
     let out = compile(
         &format!("{src}\nuse ink::{{Logger}};\n"),
@@ -2128,7 +2128,7 @@ fn disposal_refuses_a_generic_target() {
 use core::{ Disposal, DisposalContext };
 class Box2<T> { v: T; }
 impl<T> Disposal for Box2<T> { fn dispose(mut self, cx: DisposalContext) { } }
-pub fn main() -> nil { }
+entry fn main() -> nil { }
 "#;
     let out = compile(
         &format!("{src}\nuse ink::{{Logger}};\n"),
@@ -2150,7 +2150,7 @@ fn a1_tuples_multi_return() {
 fn divmod(a: i32, b: i32) -> (i32, i32) {
     return (a / b, a % b);
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let (q, r) = divmod(7, 2);
     Logger.new("t").info(f"q={q} r={r}");
     Logger.new("t").info(f"t1={divmod(9, 4).1}");
@@ -2167,7 +2167,7 @@ fn a1_anonymous_fn_and_fn_typed_param() {
 fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
     return f(v);
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let r = apply(fn (x: i32) -> i32 { return x + 1; }, 5);
     Logger.new("t").info(f"r={r}");
 }
@@ -2187,7 +2187,7 @@ fn double(x: i32) -> i32 { return x * 2; }
 fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
     return f(v);
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     Logger.new("t").info(f"r={apply(double, 3)}");
 }
 "#;
@@ -2203,7 +2203,7 @@ fn a1_fn_value_captured_by_lambda() {
     let src = r#"
 fn inc(x: i32) -> i32 { return x + 1; }
 fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let g = inc;
     let h = fn (x: i32) -> i32 { return g(x) * 10; };
     Logger.new("t").info(f"r={apply(h, 4)}");
@@ -2225,7 +2225,7 @@ class Runner { op: fn(i32) -> i32; }
 impl Runner {
     fn run(self, v: i32) -> i32 { return (self.op)(v); }
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let f = square;
     let r = Runner { op: square };
     let a = f(5);
@@ -2242,7 +2242,7 @@ pub fn main() -> nil {
 fn a1_zero_value_field_defaults() {
     let src = r#"
 struct P3 { x: i32; s: str; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let p = P3 { };
     Logger.new("t").info(f"x={p.x} s=[{p.s}]");
 }
@@ -2320,7 +2320,7 @@ fn table() -> Vec<str> {
     t.push("b");
     return t;
 }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let t = table();
     Logger.new("t").info(f"len={t.len()} first={t[0]}");
 }
@@ -2340,7 +2340,7 @@ fn a2_sharing_semantics() {
 use pouch::{ Vec };
 struct Inner { v: i32 = 0; }
 struct Outer { inner: Inner; nums: Vec<i32>; tag: str; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut o = Outer { inner: Inner { v: 1 }, nums: Vec.new(), tag: "x" };
     o.nums.push(7);
     let snap = o;
@@ -2366,7 +2366,7 @@ fn a2_mutating_method_hits_the_original() {
     // receiver aliasing: push on the binding mutates the binding's cell
     let src = r#"
 use pouch::{ Vec };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let t: Vec<str> = Vec.new();
     t.push("a");
     t.push("b");
@@ -2415,7 +2415,7 @@ fn str_slice_views_read_through_and_flatten() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("view");
     let s = "hello world";
     let w = s.slice(6, 11);
@@ -2450,7 +2450,7 @@ fn str_slice_bounds_trap() {
     // out-of-bounds slices are traps, reversed ranges are traps
     let src = r#"
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let s = "hello";
     let t = s.slice(3, 1);
     Logger.new("view").info(t);
@@ -2469,7 +2469,7 @@ fn array_views_are_write_through_pointers() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("win");
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2); v.push(3); v.push(4);
@@ -2502,7 +2502,7 @@ fn array_views_are_fixed_length_and_bounds_checked() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
@@ -2516,7 +2516,7 @@ pub fn main() -> nil {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let v: Vec<i32> = Vec.new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
@@ -2535,7 +2535,7 @@ fn nil_is_the_empty_type_and_value() {
     let src = r#"
 struct Node { v: i32 }
 pub fn noop() -> nil { return; }
-pub fn main() -> nil {
+entry fn main() -> nil {
     let u: nil = nil;
     let p: ?Node = nil;
     Logger.new("app").info(f"nil={p == nil} u={u == nil}");
@@ -2553,7 +2553,7 @@ fn retired_unit_name_is_an_ordinary_unknown_type() {
     // position falls to the plain unknown-type diagnostic (the book's
     // migration table — stdlib.md — carries the `nil` mapping)
     let out = rut_driver::compile_module(
-        "pub fn main() -> unit { }",
+        "entry fn main() -> unit { }",
         rut_parser::Mode::Impl,
         "main",
     );
@@ -2589,7 +2589,7 @@ impl Iterable<i32> for Gen {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut cur = Box2 { v: -1 };
     for (let b of Gen.new(3)) {
@@ -2610,7 +2610,7 @@ fn capture_rebind_after_lambda_creation_is_seen() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut xs: Vec<i32> = Vec.new();
     xs.push(1);
@@ -2633,7 +2633,7 @@ fn capture_rebind_inside_lambda_propagates_out() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut zs: Vec<i32> = Vec.new();
     zs.push(5);
@@ -2654,7 +2654,7 @@ fn primitive_capture_stays_a_copy() {
     // moves (each call starts from the captured value)
     let src = r#"
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut count = 0;
     let bump = fn() -> i32 { count = count + 1; return count; };
@@ -2675,7 +2675,7 @@ fn read_only_ref_capture_and_push_through_capture_unchanged() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let ws: Vec<i32> = Vec.new();
     let add = fn(v: i32) -> bool { ws.push(v); return true; };
@@ -2716,7 +2716,7 @@ impl Iterable<i32> for Gen {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut picked = Box2 { v: -1 };
     for (let a of Gen.new(2)) {
@@ -2764,7 +2764,7 @@ impl Iterable<i32> for Count3 {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut grab: ?(fn() -> i32) = nil;
     let src: [i32] = [7, 8, 9];
@@ -2783,4 +2783,57 @@ pub fn main() -> nil {
     let (lines, trap, _) = run_case(src, 2_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["fused=9 desug=9"]);
+}
+
+#[test]
+fn the_main_convention_is_retired_pub_main_is_not_host_callable() {
+    // the S12b hole, closed by construction: `pub fn main` used to join
+    // the export table WITHOUT the crossing check and trapped at the
+    // boundary (a record return compiled, exported, then died at call).
+    // The convention is gone: a `pub fn main` is library surface only —
+    // it compiles, it is callable from rut, and the export table (the
+    // host-callable surface) carries only `entry fn`s.
+    let src = r#"
+struct Point { x: i32; y: i32 }
+
+pub fn main() -> Point {
+    return Point { x: 1, y: 2 };
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.diags.is_empty(),
+        "`pub fn main` is an ordinary pub fn — it still compiles: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+    let binary = out.binary.expect("binary");
+    let prog = rut_core::binary::decode(&binary).expect("decode");
+    assert!(
+        prog.export("main").is_none(),
+        "`pub fn main` is no export — the host cannot call it"
+    );
+    assert!(
+        prog.exports.is_empty(),
+        "no entry fns declared — the export table is empty: {:?}",
+        prog.exports.iter().map(|(n, _)| prog.name_of(*n)).collect::<Vec<_>>()
+    );
+
+    // the same shape spelled `entry fn main` IS host-callable — the
+    // door the convention used to fake, reached only through the
+    // crossing-checked entry table
+    let good = r#"
+struct Point { x: i32; y: i32 }
+
+entry fn main() -> Point {
+    return Point { x: 1, y: 2 };
+}
+"#;
+    let out = compile(good, "main");
+    assert!(
+        out.diags.is_empty(),
+        "the checked twin compiles: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+    let prog = rut_core::binary::decode(&out.binary.expect("binary")).expect("decode");
+    assert!(prog.export("main").is_some(), "`entry fn main` is the export");
 }

@@ -28,7 +28,7 @@ impl Rect {
     pub fn area(self) -> f32 { return self.w * self.h; }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let r = Rect.from_square(3);
     log.info(f"area={r.area()}");

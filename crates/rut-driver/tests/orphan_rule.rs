@@ -433,7 +433,7 @@ impl<T> Mark for ?T {
 impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 2; }
 }
-pub fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
+entry fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 ",
         Mode::Impl,
         "app",

@@ -62,7 +62,7 @@ acceptance):
   `rut-book` → `rut.hpp2334.com`); the demo target
   (`node scripts/deploy.cjs`) is unchanged.
 - Book run buttons: qualifying ```rut blocks (those containing
-  `pub fn main`) get a "▶ Run" button (docs/theme/rut-book.js) that
+  `entry fn main`) get a "▶ Run" button (docs/theme/rut-book.js) that
   runs the block in-browser on the rut wasm engine. The artifact is
   built from `crates/rut-wasm` (`cargo build -p rut-wasm --target
   wasm32-unknown-unknown --release`) and must land at

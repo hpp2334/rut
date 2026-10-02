@@ -27,7 +27,7 @@ fn length(pt: Point) -> f64 {
     return Math.sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("fns");
     let xs = Vec<i32>.from([1, 2, 3]);
     swap(xs, 0, 2);
@@ -57,7 +57,7 @@ types, which is what lets it inhabit a first-class `fn` type:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("closures");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };
 
@@ -85,7 +85,7 @@ fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
     return f(v);
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("fns");
     let double = fn (x: i32) -> i32 { return x * 2; };
     log.info(f"apply={apply(double, 21)}");
@@ -111,7 +111,7 @@ with the closure, so both sides always see the current value:
 use pouch::{ Vec };
 use ink::{ Logger };
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("cap");
     let mut xs: Vec<i32> = Vec.new();
     xs.push(1);
@@ -139,7 +139,7 @@ fn first<T>(xs: [T], fallback: T) -> T {
     return xs[0];
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("generics");
     let head = first([10, 20], -1);      // first<i32> — inferred
     let name = first(["a", "b"], "?");   // first<str> — a separate instance
@@ -184,7 +184,7 @@ fn name<T requires Labeled>(x: T) -> str {
     return w.label();
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("bounds");
     log.info(name(Tag { id: 7 }));
 }
@@ -223,7 +223,7 @@ fn nudged(pt: Point) -> Point {
     return Point { x: pt.x + 1, y: pt.y };
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("free-fns");
     let p = nudged(Point { x: 2, y: 5 });
     log.info(f"p.x={p.x} p.y={p.y}");
@@ -258,7 +258,7 @@ fn sum(xs: Vec<i32>) -> i32 {
     return total;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("closures");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };
     let area_of = fn (r: f32) -> f32 {

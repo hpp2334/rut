@@ -25,7 +25,7 @@ use ink::{ Logger };
 
 struct Node { next: ?Node }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("cells");
     let a: ?Node = Node { next: nil };
     let b = a;              // one retain
@@ -81,7 +81,7 @@ impl Disposal for Connection {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("rc");
     let conn = Connection.open("tcp://edge", log);
     log.info("main is done — the count hits zero at the boundary");
@@ -126,7 +126,7 @@ class View {
     observer: ?Weak<Model>;      // a back-pointer that closes no cycle
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("rc");
     let mut m = Model { name: "doc" };
     let v = View { model: nil, observer: Weak.new(m) };   // observe without owning

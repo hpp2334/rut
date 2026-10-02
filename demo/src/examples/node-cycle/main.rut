@@ -29,7 +29,7 @@ fn make_cycle() -> ?Node {                  // a -> b -> a : strong cycle
     return a;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next != nil}");

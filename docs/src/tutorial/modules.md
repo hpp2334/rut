@@ -13,7 +13,8 @@ Module scope contains **declarations only**: `use`, `let`, `fn`,
 `struct`, `class`, `enum`, `trait`, `impl`. Every statement lives
 inside a function — and **loading a module executes nothing**. There is
 no load-time side-effect ordering to reason about; the host loads your
-module and calls its entry point (conventionally `pub fn main`).
+module and calls one of its `entry fn`s (`entry fn main` for a plain
+program).
 
 Module-level `let` initializers must be load-time literals — `42`,
 `"app"`, `true`. Arithmetic, record literals, and calls to user
@@ -31,7 +32,7 @@ let app_name = "app";                  // any literal works
 
 fn main_body() { /* statements live here */ }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("app");
     let origin = Point { x: 0, y: 0 }; // record literals live in function bodies
     log.info(f"{app_name} v{version} origin.x={origin.x}");
@@ -165,7 +166,7 @@ surface `ink_host`; you never spell it):
 use greet::{ Greeting };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("app");
     let mut g = Greeting.new("rut");
     g.add("hello");
@@ -239,8 +240,9 @@ the boundary's crossing rules at compile time:
 entry fn hex_enc(data: bytes) -> str { .. }
 ```
 
-An embedded application drives these entries; `pub fn main` is the
-conventional entry the `rut run` CLI calls. See
+An embedded application drives these entries; `rut run` executes the
+program's entry designation — exactly one `entry fn` runs it, several
+take `--entry <name>`. See
 [the host boundary](../core-concepts/host-boundary.md).
 
 ## Tooling

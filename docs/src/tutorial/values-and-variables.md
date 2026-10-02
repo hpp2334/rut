@@ -30,7 +30,7 @@ iterates as one-codepoint `str`s, and codepoints read as `u32`
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("vars");
     let a = 10;          // an immutable binding
     let mut b = 10;      // a mutable binding
@@ -63,7 +63,7 @@ the expected type only while it fits the default.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("numbers");
     let a = 10;                        // i32
     let b = 10u8;                      // u8 via suffix
@@ -86,7 +86,7 @@ they never trap.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("casts");
     let cast = 300 as u8;   // 44 — keeps the low 8 bits
     log.info(f"cast={cast}");
@@ -115,7 +115,7 @@ ever happens implicitly.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("text");
     let name = "rut";
     let s = "hi\tname";              // plain: escapes processed
@@ -137,7 +137,7 @@ identifiers, calls, arithmetic — except nested string literals
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("text");
     log.info(f"open{{close}} braces");   // prints: open{close} braces
 }
@@ -161,7 +161,7 @@ The fixed array `[T]` is built from a literal or a repeat:
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("arrays");
     let arr = [1, 2, 3];         // [i32] — fixed length
     let zero: [u8] = [0u8; 34];  // 34 slots of 0
@@ -186,7 +186,7 @@ for the full surface.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("bytes");
     let b = "rut runs".encode();
     let ok = b.decode() == "rut runs";   // true — content comparison
@@ -210,7 +210,7 @@ use ink::{ Logger };
 
 struct Point { x: i32; y: i32 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("sharing");
     let mut p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
@@ -249,7 +249,7 @@ fn divmod(a: i32, b: i32) -> (i32, i32) {
     return (a / b, a % b);
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("tuples");
     let (q, r) = divmod(17, 5);   // destructuring
     let t = (1, true);
@@ -316,7 +316,7 @@ fn literals(name: str) {
     log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}");
 }
 
-pub fn main() {
+entry fn main() {
     literals("rut");
 }
 ```

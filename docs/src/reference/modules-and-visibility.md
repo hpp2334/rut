@@ -33,7 +33,7 @@ as executable bodies in `.rut`.
 use pouch::{ Vec };
 use ink::Logger;
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("uses");
     let v = Vec<i32>.new();
     log.info(f"{v.len()}");
@@ -82,7 +82,7 @@ user code runs at load.**
 ### Entry points
 
 The embedder loads a module and then explicitly calls an entry
-function — conventionally `pub fn main`, sync or async. `entry fn`
+function — `entry fn main` for a script, sync or async. `entry fn`
 publishes a function to the *embedder*; `entry` is orthogonal to
 visibility and does not combine with `pub`. Consequences of
 declarations-only loading: no use side-effect ordering, no load-order

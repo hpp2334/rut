@@ -134,7 +134,7 @@ fn run_std_trap(src: &str) -> rut_vm::Trap {
 #[test]
 fn in_bounds_get_set_all_elem_kinds_match_reference() {
     let src = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let n = 400;
     let mut a: [i32] = [0; n];
     let mut b: [u8] = [0; n];
@@ -177,7 +177,7 @@ pub fn main() -> i32 {
 #[test]
 fn pointer_array_get_set_matches_reference() {
     let src = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let n = 64;
     let mut p: [?i32] = [nil; n];
     for (let i = 0; i < n; i += 1) {
@@ -208,7 +208,7 @@ pub fn main() -> i32 {
 #[test]
 fn negative_get_traps_with_negative_i() {
     let src = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let a: [i32] = [7, 8, 9];
     let i = 0 - 3;
     return a[i];
@@ -223,7 +223,7 @@ pub fn main() -> i32 {
 #[test]
 fn negative_set_traps_with_negative_i() {
     let src = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut a: [i32] = [7, 8, 9];
     let i = 0 - 3;
     a[i] = 1;
@@ -240,7 +240,7 @@ pub fn main() -> i32 {
 #[test]
 fn overflow_get_set_trap() {
     let get = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let a: [i32] = [7, 8, 9];
     return a[3];
 }
@@ -250,7 +250,7 @@ pub fn main() -> i32 {
     assert_eq!(t.msg, "array index 3 out of bounds (len 3)", "{}", t.msg);
 
     let set = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut a: [i32] = [7, 8, 9];
     a[3] = 1;
     return 0;
@@ -261,7 +261,7 @@ pub fn main() -> i32 {
     assert_eq!(t.msg, "index 3 out of bounds (len 3)", "{}", t.msg);
 
     let huge = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let a: [i32] = [7, 8, 9];
     let i = 2147483647;
     return a[i];
@@ -280,7 +280,7 @@ pub fn main() -> i32 {
 fn window_get_set_write_through_unchanged() {
     let src = "\
 use pouch::{ Vec };
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2); v.push(3);
     let mut w = v.slice(1, 3);
@@ -297,7 +297,7 @@ pub fn main() -> i32 {
 fn window_bounds_traps_unchanged() {
     let src = "\
 use pouch::{ Vec };
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
@@ -323,7 +323,7 @@ pub fn main() -> i32 {
 fn sieve_shape_over_field_arrays_checksums() {
     let src = "\
 use pouch::{ Vec };
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let limit: i32 = 10_000;
     let mut marks = Vec<u8>.filled(0, limit + 1);
     let mut count = 0;
@@ -351,7 +351,7 @@ pub fn main() -> i32 {
 #[test]
 fn hot_index_loop_threaded_matches_parked() {
     let src = "\
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let n = 3000;
     let mut a: [i32] = [0; n];
     for (let i = 0; i < n; i += 1) { a[i] = i; }

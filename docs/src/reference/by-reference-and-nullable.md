@@ -20,7 +20,7 @@ use ink::{ Logger };
 
 struct Point { x: i32; y: i32; }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let mut p = Point { x: 1, y: 2 };
     let q = p;              // SHARE: one cell, two names — no copy
@@ -119,7 +119,7 @@ is unreachable — build a new one instead.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let header = bytes.from([1, 2, 3]);
     let alias = header;              // shares: one buffer, two names

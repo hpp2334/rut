@@ -61,6 +61,6 @@ fn structs() {
     log.info(f"same={same_cell} distinct={distinct} fresh.x={fresh.x}");
 }
 
-pub fn main() {
+entry fn main() {
     structs();
 }

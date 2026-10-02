@@ -150,7 +150,7 @@ entry fn render_line(topic: str, payload: str) -> str {
     return f"[{topic}] {payload}";
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("bus");
     log.info(render_line("broadcast", "<ada> hello world"));
 }

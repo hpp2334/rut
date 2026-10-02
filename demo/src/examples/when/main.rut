@@ -25,7 +25,7 @@ fn go() { /* ... */ }
 fn brake() { /* ... */ }
 fn stop() { /* ... */ }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("when");
     log.info(describe(2));               // "small"
     drive(Light.Yellow);

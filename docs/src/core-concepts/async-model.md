@@ -31,7 +31,7 @@ async fn countdown(cx: RunContext, log: Logger, n: u32) -> nil {
     }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = Logger.new("countdown");
     launch_future(countdown(log, 3));  // the other consume: launch
 }

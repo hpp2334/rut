@@ -207,7 +207,7 @@ async fn job(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, f"after:{u}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log, "a:10"));
 }
@@ -239,7 +239,7 @@ async fn job(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, f"done:{u}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log, "b:5"));
     launch_future(job(log, "a:20"));
@@ -265,7 +265,7 @@ use ink_host::create_logger;
 use async_host::launch_future;
 use fixture::probe;
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let _log = create_logger("t");
     launch_future(probe("ff:15"));
 }
@@ -292,7 +292,7 @@ async fn victim(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, "unreachable");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(victim(log, "x:7"));
 }
@@ -344,7 +344,7 @@ async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> ni
     if (ok) { logger_log(log, 2, "killer:aborted"); }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     let v = launch_future(victim(log));
     launch_future(killer(log, v));
@@ -406,7 +406,7 @@ async fn job(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, f"got:{v}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log, "k:10"));
 }
@@ -451,7 +451,7 @@ async fn job(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, f"job:{v}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log, "n:5"));
 }
@@ -479,7 +479,7 @@ async fn job(cx: RunContext, u: str) -> nil {
     await probe(u);
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     launch_future(job("direct:25"));
 }
 "#;
@@ -564,7 +564,7 @@ async fn job(cx: RunContext, log: opaque, u: str) -> nil {
     logger_log(log, 2, f"wall:after:{u}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log, "t"));
 }

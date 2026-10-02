@@ -93,7 +93,7 @@ fn nested() {
     log.info(f"vec {vec.len()}");
 }
 
-pub fn main() {
+entry fn main() {
     erase_and_recover();
     alias_law();
     share_vs_copy();

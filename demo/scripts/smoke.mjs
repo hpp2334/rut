@@ -94,7 +94,7 @@ console.log('\n[1] the runner law: missing/invalid artifact => mode "error"');
   check(!missing.isLive, 'the error runner is not live');
   let threw = false;
   try {
-    missing.compile('pub fn main() {}');
+    missing.compile('entry fn main() {}');
   } catch {
     threw = true;
   }
@@ -198,7 +198,7 @@ console.log('\n[2b] fuel off by default: >10M ops of bounded work, no cap');
   const src = [
     'use ink::{Logger};',
     '',
-    'pub fn main() {',
+    'entry fn main() {',
     '    let log = Logger.new("case");',
     '    let mut i = 0;',
     '    while (i < 2000000) {',

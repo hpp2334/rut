@@ -48,7 +48,7 @@ impl Shape for Circle {
     fn name(self) -> str { return "circle"; }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let c = Circle { r: 1.0 };
     log.info(f"{c.name()}={c.area()}");
@@ -92,7 +92,7 @@ impl Circle {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let c = Circle.new(1.0);
     log.info(f"r={c.r}");
@@ -123,7 +123,7 @@ impl Shape for Circle {
     fn name(self) -> str { return "circle"; }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let c: Shape = Circle { r: 1.0 };   // Circle widens to Shape
     log.info(f"{c.name()}={c.area()}");
@@ -162,7 +162,7 @@ fn describe(s: Shape) -> str {
     return f"{s.name()}={s.area()}";
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     log.info(describe(Circle { r: 1.0 }));
     log.info(describe(Square { side: 3.0 }));
@@ -201,7 +201,7 @@ impl Shape for Square {
     fn name(self) -> str { return "square"; }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let mut shapes: Vec<Shape> = Vec.new();
     shapes.push(Circle { r: 1.0 });
@@ -247,7 +247,7 @@ impl Shape for Square {
     fn name(self) -> str { return "square"; }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
     let sq = Square { side: 2.0 };
     log.info(f"shape: {sq is Shape} circle: {sq is Circle}");
@@ -295,7 +295,7 @@ impl Iterable<i32> for CountUp {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("iter");
     let ups = CountUp { n: 4 };
     let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures
@@ -350,7 +350,7 @@ fn describe(s: Shape) -> str {
     return f"{s.name()}={s.area()}";
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("traits");
 
     let c: Shape = Circle { r: 1.0 };

@@ -28,7 +28,7 @@ fn declared_binders_collect_and_the_impl_compiles() {
              pub fn new(v: T) -> Self { return Self { v: v }; }\n\
              pub fn get(self) -> T { return self.v; }\n\
          }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let b: Box2<i32> = Box2.new(7);\n\
              return b.get();\n\
          }\n",
@@ -46,7 +46,7 @@ fn undeclared_binder_names_the_declared_form() {
          impl<T> Box2<Tyypo> {\n\
              pub fn get(self) -> i32 { return 1; }\n\
          }\n\
-         pub fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains(
@@ -65,7 +65,7 @@ fn undeclared_binder_without_any_declared_list() {
          impl Vec2<T> {\n\
              pub fn len(self) -> i32 { return 0; }\n\
          }\n\
-         pub fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("undeclared type parameter `T`")),
@@ -80,7 +80,7 @@ fn multi_binder_head_declares_both() {
          impl<K, V> Pair2<K, V> {\n\
              pub fn new(k: K, v: V) -> Self { return Self { k: k, v: v }; }\n\
          }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let p: Pair2<i32, i32> = Pair2.new(1, 2);\n\
              return p.k;\n\
          }\n",
@@ -99,7 +99,7 @@ fn a_renamed_binder_is_the_head_spelling_law() {
              pub fn new(v: T) -> Self { return Self { v: v }; }\n\
              pub fn get(self) -> T { return self.v; }\n\
          }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let b: Box2<i32> = Box2.new(9);\n\
              return b.get();\n\
          }\n",
@@ -120,7 +120,7 @@ fn concrete_head_names_stay_concrete() {
          impl Coded for Holder<i32> {\n\
              fn coded(self) -> str { return \"holder\"; }\n\
          }\n\
-         pub fn main() -> str {\n\
+         entry fn main() -> str {\n\
              let h: Holder<i32> = Holder.new();\n\
              return h.coded();\n\
          }\n",

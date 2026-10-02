@@ -88,7 +88,7 @@ async fn work(cx: RunContext, log: opaque, n: u32) -> nil {
     logger_log(log, 2, "end");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(work(log, 7));
 }
@@ -116,7 +116,7 @@ async fn tick(cx: RunContext, log: opaque) -> nil {
     logger_log(log, 2, "done");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(tick(log));
 }
@@ -150,7 +150,7 @@ async fn outer(cx: RunContext, log: opaque) -> nil {
     logger_log(log, 2, "outer:done");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(outer(log));
 }
@@ -195,7 +195,7 @@ async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> ni
     if (ok2) { logger_log(log, 2, "killer:twice"); } else { logger_log(log, 2, "killer:second-false"); }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     let v = launch_future(victim(log));
     launch_future(killer(log, v));
@@ -274,7 +274,7 @@ async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> ni
     if (ok2) {{ logger_log(log, 2, "killer:twice"); }} else {{ logger_log(log, 2, "killer:second-false"); }}
 }}
 
-pub fn main() -> nil {{
+entry fn main() -> nil {{
     let log = create_logger("t");
     let v = launch_future(victim(log));
     launch_future(killer(log, v));
@@ -316,7 +316,7 @@ async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> ni
     if (ok) {{ logger_log(log, 2, "killer:aborted"); }} else {{ logger_log(log, 2, "killer:late"); }}
 }}
 
-pub fn main() -> nil {{
+entry fn main() -> nil {{
     let log = create_logger("t");
     let v = launch_future(victim(log));
     launch_future(killer(log, v));
@@ -350,7 +350,7 @@ async fn job(cx: RunContext, log: opaque) -> nil {
     logger_log(log, 2, "body-ran");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(job(log));
 }
@@ -383,7 +383,7 @@ async fn work(cx: RunContext, log: opaque) -> nil {
     if (cx.cancelled()) { logger_log(log, 2, "flagged"); } else { logger_log(log, 2, "live"); }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(work(log));
 }
@@ -422,7 +422,7 @@ async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> ni
     if (ok) { logger_log(log, 2, "aborted-the-parked"); }
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     let h = launch_future(parker(log));
     launch_future(killer(log, h));
@@ -456,7 +456,7 @@ async fn work(cx: RunContext, log: opaque) -> nil {
     logger_log(log, 2, "ran");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("t");
     launch_future(work(log));
 }
@@ -491,7 +491,7 @@ async fn work(cx: RunContext, log: opaque, seed: i32) -> nil {
     logger_log(log, 2, f"r={r.v}");
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let log = create_logger("cap");
     launch_future(work(log, 1));
 }

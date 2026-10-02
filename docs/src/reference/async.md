@@ -33,7 +33,7 @@ async fn countdown(cx: RunContext, n: u32) -> u32 {
     return i;
 }
 
-pub fn main() {
+entry fn main() {
     launch_future(countdown(3));      // trigger; receipt ignored
 }
 ```

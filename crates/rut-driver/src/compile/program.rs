@@ -521,13 +521,10 @@ pub fn compile_program_resolved(
     }
     // module lets (load-time expression check)
     ctx.compile_module_lets();
-    // compilation roots: the conventional `main` and every
-    // `entry fn` — the host-callable surface. A module may
-    // have either, both, or neither (pure library shape).
+    // compilation roots: every `entry fn` — the host-callable
+    // surface. A module may have none (pure library shape);
+    // `main` is an ordinary name, never a root by convention.
     let mut roots: Vec<Inst> = Vec::new();
-    if ctx.find_free_fn(sym::MAIN) {
-        roots.push(Inst { key: FnKey::Free(sym::MAIN), subst: vec![], trait_origins: vec![] });
-    }
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
             // an async fn is not host-callable (its woven body takes the
@@ -626,14 +623,12 @@ pub fn compile_program_resolved(
         diags.append(&mut ctx.diags);
         return fail(diags, ast_dump, ast_json);
     }
-    // finalize the entry table: `entry fn`s — plus the
-    // conventional `main` when it is exported.
+    // finalize the entry table: `entry fn`s — the whole
+    // host-callable surface (`main` is an ordinary name: a
+    // `pub fn main` crosses no entry row, only the crossing-checked
+    // `entry fn`s do).
     let mut exports: Vec<(IdentId, u32)> = Vec::new();
-    let mut names: Vec<IdentId> = ctx.entries.clone();
-    if ctx.exports.iter().any(|(n, _)| *n == sym::MAIN) && !names.contains(&sym::MAIN) {
-        names.push(sym::MAIN);
-    }
-    for n in names {
+    for n in ctx.entries.clone() {
         if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![], trait_origins: vec![] }) {
             exports.push((n, f));
         }

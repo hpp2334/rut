@@ -193,7 +193,7 @@ async fn countdown(cx: RunContext, log: Logger, n: u32) {
     log.info("lift-off");
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("countdown");
     launch_future(countdown(log, 3));
 }

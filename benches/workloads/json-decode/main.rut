@@ -458,7 +458,7 @@ fn rows_n() -> i32 { return 1200; }
 fn vals_n() -> i32 { return 6; }
 fn reps_n() -> i32 { return 3; }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let rows = rows_n();
     let vals = vals_n();
     let reps = reps_n();

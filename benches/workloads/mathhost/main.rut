@@ -7,7 +7,7 @@ use calc::{ Math };
 // after any change to call_host / HostRegistry / the join.
 // Scale: 1_000_000 iterations x 4 calls. Canonical reference: 3500000.
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut acc: f64 = 0.0;
     let mut x: f64 = 1.5;
     let mut y: f64 = 0.25;

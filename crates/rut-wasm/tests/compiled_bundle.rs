@@ -26,7 +26,7 @@ fn pack_world() -> Vec<u8> {
     .unwrap();
     std::fs::write(
         app.join("app.rut"),
-        "use lib::{ four };\npub fn main() -> i64 { return four(); }\n",
+        "use lib::{ four };\nentry fn main() -> i64 { return four(); }\n",
     )
     .unwrap();
     let bytes = rut_driver::pack_dir(&app).expect("pack");

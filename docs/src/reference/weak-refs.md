@@ -45,7 +45,7 @@ fn use_node(n: Node) {
     log.info(f"node {n.value}");
 }
 
-pub fn main() {
+entry fn main() {
     let n = Node.new(1);
     let w = Weak.new(n);        // Weak<Node>; T infers from n
     let b = w.upgrade();        // ?Node — a live handle
@@ -82,7 +82,7 @@ node 1
 
   fn make() -> Payload { return Payload { n: 1 }; }
 
-  pub fn main() {
+  entry fn main() {
       let log = Logger.new("t");
       let v = make();
       let w = Weak.new(v);  // watches the binding v — lives as long as v does

@@ -48,7 +48,7 @@ fn builtins_resolve_with_no_use_statement() {
     // every name here is a core builtin — none is imported
     let v = run_main(
         "struct Point { x: i32; y: i32 }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let b = opaque(Point { x: 3, y: 4 });\n\
              let p = opaque.downcast<Point>(b);\n\
              if (p == nil) { panic(\"point downcast failed\"); }\n\
@@ -75,7 +75,7 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
              for (let x of v) { t += x; }\n\
              return t;\n\
          }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let s = string_join([\"a\", \"b\"]);\n\
              if (s != \"ab\") { panic(\"join diverged\"); }\n\
              if (s.len() == 99) { panic(\"unreachable\"); }\n\
@@ -96,9 +96,9 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
 fn the_gated_traits_require_the_import() {
     // no use: each bare spelling names its fix
     for (src, name) in [
-        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\npub fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterable"),
-        ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\npub fn main() -> i32 { return f(nil); }\n", "RunContext"),
-        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\npub fn main() -> i32 { return 0; }\n", "Future"),
+        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterable"),
+        ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\nentry fn main() -> i32 { return f(nil); }\n", "RunContext"),
+        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "Future"),
     ] {
         let out = compile(src);
         assert!(
@@ -122,7 +122,7 @@ fn the_gated_traits_require_the_import() {
              }\n\
          }\n\
          class Acc { total: i32 = 0; }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let mut acc: ?Acc = Acc { };\n\
              for (let v of CountUp.new(4)) { acc.total = acc.total + v; }\n\
              return acc.total;\n\
@@ -136,7 +136,7 @@ fn opaque_downcast_member_carries_the_nullable_contract() {
     // the member form yields the nullable (refval-round2): a
     // mismatch is `nil` — never a zero-value `.0` with a flag
     let v = run_main(
-        "pub fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let b = opaque(\"hello\");\n\
              let miss = opaque.downcast<i64>(b);\n\
              if (miss != nil) { return 1; }\n\
@@ -158,7 +158,7 @@ fn the_old_spellings_are_gone() {
     // check's repo-wide grep for `\bOpaque\b` stays zero.
     let old_boot_name = format!("Opa{}ue", "q");
     let src = format!(
-        "pub fn main() -> i32 {{\n             let b = {old}.new(9);\n             return 0;\n         }}\n",
+        "entry fn main() -> i32 {{\n             let b = {old}.new(9);\n             return 0;\n         }}\n",
         old = old_boot_name
     );
     let out = compile(&src);
@@ -169,7 +169,7 @@ fn the_old_spellings_are_gone() {
     );
 
     let out = compile(
-        "pub fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let b = opaque(9);\n\
              let n = downcast<i32>(b);\n\
              return n;\n\
@@ -187,7 +187,7 @@ fn opaque_type_position_resolves_under_both_spellings() {
     let v = run_main(
         "fn keep(o: opaque) -> opaque { return o; }\n\
          fn keep2(o: opaque) -> opaque { return o; }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let b = keep(opaque(4));\n\
              let b2 = keep2(b);\n\
              let n = opaque.downcast<i32>(b2);\n\

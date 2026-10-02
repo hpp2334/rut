@@ -1,5 +1,5 @@
 //! Book code-block gate — every ```rut fenced block under docs/src whose
-//! content contains `pub fn main` compiles AND runs to completion, driven
+//! content contains `entry fn main` compiles AND runs to completion, driven
 //! the way the playground's wasm host drives them (mount_std plus the
 //! tree packages the block's `use` lines name, peers assembled,
 //! math/logger/nmap/async host fns bound — the same set the wasm host
@@ -26,6 +26,14 @@ const SKIP: &[(&str, u32, &str)] = &[
         "docs/src/tutorial/modules.md",
         4,
         "imports `greet`, the package the reader builds earlier in the chapter",
+    ),
+    // the code tour's boot-entry excerpt: `app.rut`'s one entry names
+    // the package's other modules (`World`/`world_boot`/`AppRoot`) —
+    // a fragment of the 05 page's project, never a whole program
+    (
+        "docs/src/examples/05-todolist-web.md",
+        1,
+        "the code-tour excerpt of `app.rut` — `World`/`world_boot`/`AppRoot` live in the package's other modules",
     ),
 ];
 
@@ -97,7 +105,7 @@ fn book_blocks_compile_and_run() {
         let src = std::fs::read_to_string(path).unwrap();
         for (n, body) in fenced_rut_blocks(&src).into_iter().enumerate() {
             let n = (n + 1) as u32;
-            if !body.contains("pub fn main") {
+            if !body.contains("entry fn main") {
                 continue; // fragments and surfaces are not the gate's business
             }
             seen_runnable += 1;

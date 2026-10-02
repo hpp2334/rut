@@ -50,7 +50,7 @@ fn cross_module_static_dispatch_runs_the_foreign_impl() {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Shape, Point, make_point};
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return a as i32;
@@ -68,7 +68,7 @@ fn cross_module_vtable_dispatch_runs_both_impls() {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Shape, pick};
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let s: Shape = pick(true);
     let a = s.area();
     return a as i32;
@@ -80,7 +80,7 @@ pub fn main() -> i32 {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Shape, pick};
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let s: Shape = pick(false);
     let a = s.area();
     return a as i32;
@@ -100,7 +100,7 @@ fn cross_module_fn_value_position() {
         ("app", "\
 use helpers::triple;
 fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     return apply(triple, 4);
 }
 "),
@@ -127,7 +127,7 @@ pub fn make_point() -> Point { return Point { x: 5.0 }; }
         ("app", "\
 use shapes::Shape;
 use extras::make_point;
-pub fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return a as i32;

@@ -30,7 +30,7 @@ fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
     quicksort(xs, p + 1, hi);
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let n = 10000;
     let xs: Vec<i32> = Vec.new();
     let mut x: i32 = 42;

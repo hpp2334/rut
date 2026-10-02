@@ -194,7 +194,7 @@ fn churn_sidecar(n: i32) -> i64 {
     return c;
 }
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let col = churn_col(2000);
     return col;
 }
@@ -239,7 +239,7 @@ fn law_col() -> i64 {
     return fails;
 }
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let a = law_col();
     if (a != 0) { return 1000 + a; }
     return 0;
@@ -261,7 +261,7 @@ fn prim_get_semantics_hold_through_the_family_spelling() {
 const GROW_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let mut m: HashMap<i32, i64> = HashMap.with_capacity(4);
     let mut fails: i64 = 0;
     let n = 500;
@@ -303,7 +303,7 @@ fn primmap_vals_survive_multi_grow_under_collisions() {
 const U64_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let mut m: HashMap<i32, u64> = HashMap.new();
     let mut fails: i64 = 0;
     let big: u64 = 9223372036854775808u64;      // 2^63
@@ -342,7 +342,7 @@ fn primmap_u64_lane_round_trips_raw_bits() {
 const F64_SRC: &str = r#"
 use nmapset::{ HashMap };
 
-pub fn main() -> i64 {
+entry fn main() -> i64 {
     let mut m: HashMap<i32, f64> = HashMap.new();
     let mut fails: i64 = 0;
     if (!m.put(1, 1.5f64)) { fails += 1; }
@@ -388,7 +388,7 @@ fn primmap_k_admission_names_the_union() {
     let ds = diags_of(
         "use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut pm: HashMap<Pt, i64> = HashMap.new();\n\
          \x20   return 0;\n\
          }\n",
@@ -406,7 +406,7 @@ fn primmap_k_admission_names_the_union() {
 fn primmap_coexists_with_hashmap_and_hashset() {
     let checksum = run_main(
         "use nmapset::{ HashMap, HashSet };\n\
-         pub fn main() -> i64 {\n\
+         entry fn main() -> i64 {\n\
          \x20   let mut pm: HashMap<str, i64> = HashMap.new();\n\
          \x20   let mut acc: i64 = 0;\n\
          \x20   for (let i = 0; i < 24; i += 1) {\n\

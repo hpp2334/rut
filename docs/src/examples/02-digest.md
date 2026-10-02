@@ -76,7 +76,7 @@ entry fn crc32(data: bytes) -> u32 {
     return crc ^ 0xFFFFFFFFu32;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("crc");
     let vector = "123456789".encode();   // the canonical CRC-32 test vector
     log.info(f"crc32(vector) = {crc32(vector)} — check value 0xCBF43926: {crc32(vector) == 0xCBF43926u32}");

@@ -20,7 +20,7 @@ type Row = [i32];
 
 let trip: Km = 1500;          // Km is Meters is i64 — all one type
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let plain: Meters = trip;     // no conversion: the alias IS the target
     log.info(f"{trip} {plain}");
@@ -96,7 +96,7 @@ fn name<T requires Labeled>(x: T) -> str {
 
 fn kind<T requires Ridge | Trench>(x: T) -> str { return "geo"; }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     log.info(f"{name(Ridge { depth: 3 })} {kind(Trench { depth: 1 })}");
 }

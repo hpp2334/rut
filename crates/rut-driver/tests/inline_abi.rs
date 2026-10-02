@@ -197,7 +197,7 @@ fn trait_heavy_checksum_parity() {
          \x20   if (k) { return 5; }\n\
          \x20   return 9u8;\n\
          }\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let mut acc: i32 = 0;\n\
          \x20   let a = 5;\n\
          \x20   if (a.hash_eq(5)) { acc += 1; }\n\
@@ -229,7 +229,7 @@ fn trait_heavy_checksum_parity() {
 fn slot_path_still_dispatches_the_slot_variant() {
     let src = format!(
         "{TINY}\
-         pub fn main() -> i32 {{\n\
+         entry fn main() -> i32 {{\n\
          \x20   let k = 5;\n\
          \x20   let hk: T = k;\n\
          \x20   return hk.m();\n\
@@ -283,7 +283,7 @@ fn cross_module_bare_prim_call_binds_the_concrete_variant() {
 
     let app = rut_driver::compile_program(
         "use dep::{T};\n\
-         pub fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let w = 5;\n\
          \x20   return w.m();\n\
          }\n",

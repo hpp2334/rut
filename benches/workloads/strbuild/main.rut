@@ -137,7 +137,7 @@ fn round(fr: Vec<str>) -> i64 {
     return s;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let fr = frags();
     let reps = rounds_n();
     let mut total: i64 = 0;

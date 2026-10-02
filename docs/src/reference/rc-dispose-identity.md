@@ -44,7 +44,7 @@ impl Disposal for Conn {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let c = Conn { log: log, url: "tcp://edge" };
     log.info("main is done");
@@ -94,7 +94,7 @@ use ink::{ Logger };
 
 struct Tile { v: i32; }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let tile = Tile { v: 7 };
     let w = Weak.new(tile);        // does NOT keep the cell alive

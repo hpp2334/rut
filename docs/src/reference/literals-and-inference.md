@@ -13,7 +13,7 @@ expected type only while it fits that default.
 ```rut
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let a = 10;                // i32 (default)
     let b = 10u8;              // u8 via suffix
@@ -49,7 +49,7 @@ Conversions are casts, truncating like C/Rust:
 use calc::{ Math };
 use ink::{ Logger };
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let cast = 300 as u8;      // 44
     let x = 3;
@@ -88,7 +88,7 @@ fn divmod(a: i32, b: i32) -> (i32, i32) {
     return (a / b, a % b);
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let pair = (1, "two");         // (i32, str)
     let (n, s) = pair;

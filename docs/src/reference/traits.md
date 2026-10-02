@@ -59,7 +59,7 @@ impl Shape for Point {
 }
 impl Serializable for User {}      // empty trait impl = the opt-in marker
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     let p = Point { x: 5 };
     log.info(f"{p.area()}");
@@ -193,7 +193,7 @@ impl Iterable<i32> for CountUp {
     }
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("t");
     for (let v of CountUp.new(3)) {
         log.info(f"tick {v}");

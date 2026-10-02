@@ -394,7 +394,7 @@ fn alias_target_resolves_at_declaration_used_or_not() {
     // diagnoses with nothing ever expanding it
     let ds = diags_of(
         "type Foo = NotAType;\n\
-         pub fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("unknown type `NotAType`")),
@@ -404,7 +404,7 @@ fn alias_target_resolves_at_declaration_used_or_not() {
     // too (a plain alias takes no arguments)
     let ds = diags_of(
         "type Bar = Missing<i64>;\n\
-         pub fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("unknown type `Missing`")),

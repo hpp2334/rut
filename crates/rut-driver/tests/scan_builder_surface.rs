@@ -48,7 +48,7 @@ fn assert_ok(src: &str) {
 #[test]
 fn code_at_reads_the_codepoint_at_an_index() {
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let s = \"a\\u{1F600}b\"; // ascii, astral, ascii
     if (s.code_at(0) != 0x61) { return 1; }
     if (s.code_at(1) != 0x1F600) { return 2; }
@@ -64,7 +64,7 @@ fn scan_stops_at_the_first_nonzero_class_and_packs_index_plus_class() {
     // a 257-entry table: `[` and `{` carry their own classes, everything
     // else 0 (keep scanning); the packed result is (stop << 8) | class
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let mut t: [u8] = [0; 257];
     t[0x5B] = 7;  // '[' -> 7
     t[0x7B] = 9;  // '{' -> 9
@@ -88,7 +88,7 @@ fn scan_table_last_entry_serves_every_high_codepoint() {
     // a 2-entry table: class 5 for EVERY codepoint (the min(cp, len-1)
     // rule); a 257-entry table isolates the high slot instead
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let mut t: [u8] = [0, 5];
     let r = \"abc\".scan(0, t);
     if ((r >> 8) as i32 != 0 || (r & 255) as i32 != 5) { return 1; }
@@ -114,7 +114,7 @@ fn scan_walks_codepoints_not_octets_on_non_ascii_text() {
     // index is the CODEPOINT index (3), not a byte offset — the loop
     // skips whole scalars rather than classifying octets
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let mut t: [u8] = [0; 257];
     t[0x62] = 2; // 'b' -> 2
     let s = \"a\\u{e9}\\u{1F600}b\"; // 4 codepoints, 8 octets
@@ -132,7 +132,7 @@ fn scan_matches_a_rut_side_reference_over_all_byte_values() {
     // 0..256, scan with a single-class table stops exactly where the
     // table says — at the codepoint with its class, or the end with 0
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let mut t: [u8] = [0; 257];
     let mut c: i32 = 0;
     while (c < 256) {
@@ -153,7 +153,7 @@ fn scan_matches_a_rut_side_reference_over_all_byte_values() {
 #[test]
 fn starts_with_tests_a_prefix_at_a_codepoint_offset() {
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let s = \"true false null\";
     if (!s.starts_with(0, \"true\")) { return 1; }
     if (!s.starts_with(5, \"false\")) { return 2; }
@@ -176,7 +176,7 @@ fn scan_cross_check_reassembles_through_the_fstring_accumulator() {
     // accumulator (`out = f"{out}{piece}"` — the in-place concat fast
     // path) reassembles the pieces
     assert_ok(
-        "pub fn main() -> i32 {
+        "entry fn main() -> i32 {
     let mut dig: [u8] = [1; 257];
     let mut i: i32 = 0x30;
     while (i <= 0x39) { dig[i] = 0; i += 1; }

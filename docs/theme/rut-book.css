@@ -77,7 +77,7 @@ html.light .hljs-meta, html.rust .hljs-meta {
 }
 
 /* .rut-run — the in-book run controls (theme/rut-book.js). Qualifying
-   blocks (```rut with `pub fn main`) carry this class on their <pre>
+   blocks (```rut with `entry fn main`) carry this class on their <pre>
    with a ▶ Run button and a collapsed output panel below. Colors
    follow the same theme families as the token palette above. */
 pre.rut-run {

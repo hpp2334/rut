@@ -28,8 +28,8 @@ runner) skips steps 2–3 and lands directly in verify + boot.
 
 ## What the host can call
 
-Callable names are the program's **`entry fn`s** plus the conventional
-`main`. Their signatures were checked against the host-crossing rule at
+Callable names are exactly the program's **`entry fn`s**. Their
+signatures were checked against the host-crossing rule at
 compile time — primitives, `str`, `bytes`, `opaque`, `?T` over a crossing
 type, and crossing tuples — so a bad surface can never surprise the
 embedder at call time. An `entry fn -> (?T, err)` decodes positionally at

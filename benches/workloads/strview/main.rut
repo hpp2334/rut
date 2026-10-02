@@ -92,7 +92,7 @@ fn churn(p: str, n: i32) -> i32 {
     return c;
 }
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let n = 50000;
     Logger.new("app").info(f"CHECKSUM {churn(build_parent(n), n)}");
 }

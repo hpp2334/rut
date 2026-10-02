@@ -3598,7 +3598,7 @@ this section is the only committed artifact.
 
 ## Adding a workload
 
-1. Add `benches/workloads/NAME.rut` (`pub fn main`, log `CHECKSUM
+1. Add `benches/workloads/NAME.rut` (`entry fn main`, log `CHECKSUM
    <value>` via the logger) and `NAME.js` (`console.log("CHECKSUM " + v)`),
    computing identical results with the same integer widths / float
    order. If the rut side needs a tree package beyond the CLI's

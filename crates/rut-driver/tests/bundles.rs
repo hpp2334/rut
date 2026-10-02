@@ -203,7 +203,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     .unwrap();
     std::fs::write(
         m.join("main.rut"),
-        "pub fn main() -> i32 { return 7; }\n",
+        "entry fn main() -> i32 { return 7; }\n",
     )
     .unwrap();
 
@@ -250,7 +250,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     .unwrap();
     std::fs::write(
         m2.join("main.rut"),
-        "pub fn main() -> i32 { return 7; }\n",
+        "entry fn main() -> i32 { return 7; }\n",
     )
     .unwrap();
     let dev_bytes = pack_dir(&m2).unwrap();
@@ -320,7 +320,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     .unwrap();
     std::fs::write(
         main.join("entry.rut"),
-        "use m::{ four };\npub fn main() -> i32 { return four(); }\n",
+        "use m::{ four };\nentry fn main() -> i32 { return four(); }\n",
     )
     .unwrap();
 

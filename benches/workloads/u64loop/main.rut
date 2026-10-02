@@ -7,7 +7,7 @@ use calc::{ Math };
 // sign/zero extension against regressions; intloop is the i32 sibling.
 // Scale: 1_000_000 iterations. Canonical reference: 7216000035.
 
-pub fn main() -> nil {
+entry fn main() -> nil {
     let mut h: u64 = 14695981039346656037u64;
     for (let i = 0; i < 1000000; i += 1) {
         h = h.wrapping_mul(1099511628211u64);

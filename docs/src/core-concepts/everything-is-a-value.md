@@ -33,7 +33,7 @@ use ink::{ Logger };
 
 struct Point { x: f32; y: f32 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("values");
     let mut p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
@@ -82,7 +82,7 @@ fn lookup(id: i64) -> ?User {
     return nil;             // a miss is nil, nothing else
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("values");
     let u = lookup(7);                // ?User
     log.info(f"u.name = {u.name}");   // auto-deref when non-nil
@@ -152,7 +152,7 @@ fn hex_digit(c: u32) -> i64 {
     return -1;
 }
 
-pub fn main() {
+entry fn main() {
     let log = Logger.new("values");
     let (raw, err) = parse_hex("4869");
     if (err != "") { log.info(f"err: {err}"); return; }   // propagate

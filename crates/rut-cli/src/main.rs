@@ -58,7 +58,20 @@ fn main() {
                     }
                 },
             };
-            run(path, fuel, symbols);
+            // the entry designation is opt-in against ambiguity: with
+            // several `entry fn`s the CLI refuses to guess — a missing
+            // value is a usage error, never a silent default
+            let entry = match args.iter().position(|a| a == "--entry") {
+                None => None,
+                Some(i) => match args.get(i + 1) {
+                    Some(v) => Some(v.clone()),
+                    None => {
+                        eprintln!("run: --entry needs the entry fn's name (got nothing)");
+                        std::process::exit(2);
+                    }
+                },
+            };
+            run(path, fuel, symbols, entry);
         }
         "fmt" => {
             let Some(path) = args.get(2) else {
@@ -105,7 +118,7 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
+        "rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
     );
 }
 
@@ -174,7 +187,7 @@ fn mode_of(path: &str) -> rut_parser::Mode {
     }
 }
 
-fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
+fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<String>) {
     if path.ends_with(".d.rut") {
         eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
         std::process::exit(2);
@@ -270,6 +283,42 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
         eprintln!("verify: {e}");
         std::process::exit(1);
     }
+    // the invocation designation: the entry-fn set of the entry lib.
+    // Exactly one `entry fn` runs the program; several require
+    // `--entry <name>`; none is nothing to run. `main` is an ordinary
+    // NAME — the compiler has no main convention to fall back to.
+    let entries: Vec<String> = prog
+        .exports
+        .iter()
+        .map(|(n, _)| prog.name_of(*n).to_string())
+        .collect();
+    let entry: String = match entry {
+        Some(name) => {
+            if !entries.iter().any(|e| *e == name) {
+                match entries.as_slice() {
+                    [] => eprintln!("run: no `entry fn {name}` — this program declares no entry fns at all"),
+                    _ => eprintln!("run: no `entry fn {name}` — this program's entry fns: {}", entries.join(", ")),
+                }
+                std::process::exit(1);
+            }
+            name
+        }
+        None => match entries.as_slice() {
+            [one] => one.clone(),
+            [] => {
+                eprintln!("no `entry fn` — nothing to run (declare one: `entry fn main() {{ .. }}`)");
+                std::process::exit(1);
+            }
+            many => {
+                eprintln!(
+                    "{} entry fns ({}) — name one with `--entry <fn>`",
+                    many.len(),
+                    many.join(", ")
+                );
+                std::process::exit(1);
+            }
+        },
+    };
     let hooks = rut_vm::interp::HostHooks::default();
     let limits = rut_vm::interp::Limits {
         fuel,
@@ -312,7 +361,7 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>) {
         }
     };
     // (bindings were installed into the registry before `Vm::new` above)
-    match vm.call::<_, ()>("main", ()) {
+    match vm.call::<_, ()>(&entry, ()) {
         Ok(_) => {}
         Err(t) => {
             eprintln!("trap: {} — {}", t.name(), t.msg);
