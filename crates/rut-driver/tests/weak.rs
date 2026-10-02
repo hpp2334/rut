@@ -22,6 +22,9 @@
 //! - admission + diagnostics: `Weak.new(prim)` and `Weak.new(fn)` diagnose
 //!   ("weak needs a reference type"), `weak on nil` traps, arity and
 //!   member errors name the one-member contract, `impl Weak` refuses;
+//! - import gating: `Weak` is `pub builtin` — every snippet spells
+//!   `use core::{ Weak };`, and a bare spelling (value or type
+//!   position) diagnoses naming the fix exactly;
 //! - the retired type-call spelling: a bare call of the type name does
 //!   not compile — the diagnostic names the class-method fix;
 //! - the consuming op: `Weak.new(make())` watches a referent that dies
@@ -157,6 +160,7 @@ impl Tile {
 fn upgrade_round_trips_while_alive() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let t = Tile.new(41);
     let w = Weak.new(t);
@@ -175,6 +179,7 @@ entry fn main() -> i32 {{
 fn death_answers_nil_forever() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let mut t = Tile.new(7);
     let w = Weak.new(t);
@@ -196,6 +201,7 @@ entry fn main() -> i32 {{
 fn the_cache_shape_probes_live_and_dead_entries() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 fn alive_n(w: Weak<Tile>) -> i32 {{
     let b = w.upgrade();
     if (b == nil) {{ return 0; }}
@@ -230,7 +236,7 @@ fn weak_back_pointer_breaks_the_cycle_and_dispose_sees_nil() {
     // user code ran, so the answer is nil — the deterministic-ordering
     // pin (no resurrection, the shape frees to the last cell).
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ Disposal, DisposalContext, Weak };
 class Node {
     name: str;
     other: ?Node = nil;            // the STRONG edge (parent -> child)
@@ -277,6 +283,7 @@ entry fn main() -> nil {
 #[test]
 fn weak_over_immortal_enum_member_upgrades_forever() {
     let src = r#"
+use core::{ Weak };
 enum E { A, B }
 entry fn main() -> i32 {
     let e = E.A;              // the immortal singleton cell
@@ -301,6 +308,7 @@ fn weak_over_nullable_answers_double_optional_and_dies_with_the_box() {
     // temporaries would lawfully pin the box past the kill.
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 fn probe_ot(w: Weak<?Tile>) -> ??Tile {{
     return w.upgrade();        // MakeOpt wraps the box — the sticky-? law
 }}
@@ -329,6 +337,7 @@ fn weak_over_user_opaque_box_dies_with_the_entry() {
     // a callee whose temps died at its own ret.
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 fn probe_o(w: Weak<opaque>) -> i32 {{
     let b = w.upgrade();
     if (b == nil) {{ return 42; }}
@@ -359,6 +368,7 @@ fn weak_over_host_box_dies_with_the_entry() {
     // here, the body bound below
     rut_driver::mount_dir(&mut s, &root.join("crates/rut-driver/tests/data/weak_host")).expect("mount weak_host");
     let src = r#"
+use core::{ Weak };
 use weak_host::{ make_box };
 fn probe_o(w: Weak<opaque>) -> i32 {
     let b = w.upgrade();
@@ -401,6 +411,7 @@ entry fn main() -> i32 {
 fn weak_inside_a_generic_fn_instantiates_per_concrete_t() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 fn watch<T>(v: T) -> Weak<T> {{
     return Weak.new(v);
 }}
@@ -422,6 +433,7 @@ entry fn main() -> i32 {{
 fn weak_boxes_compare_by_cell_identity() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w1 = Weak.new(t);
@@ -441,7 +453,8 @@ entry fn main() -> i32 {{
 #[test]
 fn weak_of_a_primitive_diagnoses_at_the_instantiation() {
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let w = Weak.new(5);
     return 0;
 }
@@ -459,7 +472,8 @@ fn weak_of_a_fn_value_diagnoses() {
     // cell" — fn values are the one non-prim non-cell, so the admission
     // refuses them with the same law.
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let f: fn(i32) -> i32 = fn (x: i32) -> i32 { return x + 1; };
     let w = Weak.new(f);
     return 0;
@@ -476,6 +490,7 @@ fn weak_of_a_fn_value_diagnoses() {
 fn weak_on_nil_traps() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let t: ?Tile = nil;
     let w = Weak.new(t);      // no cell to point at: the loud trap
@@ -498,7 +513,8 @@ fn upgrade_on_a_non_weak_traps() {
 #[test]
 fn construction_and_type_position_arity_diagnose() {
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let a = 1;
     let w = Weak.new(a, a);
     return 0;
@@ -510,7 +526,8 @@ fn construction_and_type_position_arity_diagnose() {
         "{diags:?}"
     );
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let w = Weak.new();
     return 0;
 }
@@ -521,7 +538,8 @@ fn construction_and_type_position_arity_diagnose() {
         "{diags:?}"
     );
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let w: Weak<i32, i32> = Weak.new(5);
     return 0;
 }
@@ -539,7 +557,8 @@ fn the_retired_type_call_spell_names_the_class_method_fix() {
     // became the class method: the diagnostic is loud and actionable,
     // naming the fix.
     let diags = compile_diags(
-        r#"entry fn main() -> i32 {
+        r#"use core::{ Weak };
+entry fn main() -> i32 {
     let s = "x";
     let w = Weak(s);
     return 0;
@@ -565,6 +584,7 @@ fn weak_new_consumes_the_argument_temporary() {
     // old referent — an unconsumed temporary would keep `upgrade()`
     // answering a handle past the rebind.
     let src = r#"
+use core::{ Weak };
 class Gad { n: i32; }
 impl Gad {
     fn make(n: i32) -> Self { return Self { n: n }; }
@@ -588,7 +608,8 @@ entry fn main() -> i32 {
 #[test]
 fn weak_takes_no_impl_blocks() {
     let diags = compile_diags(
-        r#"impl Weak {
+        r#"use core::{ Weak };
+impl Weak {
 }
 entry fn main() -> i32 {
     return 0;
@@ -605,6 +626,7 @@ entry fn main() -> i32 {
 fn weak_has_no_other_members() {
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w = Weak.new(t);
@@ -621,6 +643,48 @@ entry fn main() -> i32 {{
     );
 }
 
+// ---- import gating ------------------------------------------------------------
+
+/// Import gating (the `pub builtin` flip): `Weak` resolves ONLY
+/// through `use core::{ Weak }` — a bare spelling, in value position
+/// (`Weak.new(t)`) or type position (`Weak<Tile>`), fails compilation
+/// naming the fix exactly; with the use line the same shapes compile
+/// clean (the snippets above pin those runs).
+#[test]
+fn weak_requires_the_import() {
+    // no use: the value-position miss names the fix
+    let diags = compile_diags(
+        r#"struct Tile { n: i32; }
+entry fn main() -> i32 {
+    let t = Tile { n: 1 };
+    let w = Weak.new(t);
+    return 0;
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`Weak` is not in scope — `use core::{ Weak }`")),
+        "{diags:?}"
+    );
+
+    // the type-position twin: same gate, same fix (the call forces the
+    // signature's resolution, the ambient.rs shape)
+    let diags = compile_diags(
+        r#"struct Tile { n: i32; }
+fn f(w: Weak<Tile>) -> i32 { return 0; }
+entry fn main() -> i32 { return f(nil); }
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`Weak` is not in scope — `use core::{ Weak }`")),
+        "{diags:?}"
+    );
+}
+
 // ---- the heap comes back clean ---------------------------------------------------
 
 #[test]
@@ -629,6 +693,7 @@ fn heap_usage_returns_to_baseline_after_a_weak_churn() {
     rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let mut live = 0;
     for (let i = 0; i < 50; i += 1) {{
@@ -673,6 +738,7 @@ fn oom_at_the_weak_mint_traps_before_registration() {
     rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
+use core::{{ Weak }};
 entry fn main() -> i32 {{
     let t = Tile.new(1);
     let w = Weak.new(t);

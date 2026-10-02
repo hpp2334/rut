@@ -119,9 +119,12 @@ that crosses the host boundary (see
 ## `Weak<T>` — the weak reference
 
 `Weak<T>` is a builtin class whose box holds an *unretained* word to a
-referent — a weak never keeps anything alive.
+referent — a weak never keeps anything alive. The name is
+**import-gated**: spell `use core::{ Weak };` or the bare `Weak`
+diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``.
 
 ```rut
+use core::{ Weak };
 use ink::{ Logger };
 
 struct Tile { v: i32; }

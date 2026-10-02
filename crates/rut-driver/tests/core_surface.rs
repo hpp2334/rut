@@ -344,14 +344,14 @@ fn own_strbuf_named_type_still_resolves() {
 /// pin fixes the phase's intent — the disposal pair and the
 /// engine-woven trio (`Iterable`/`Future`/`RunContext`) are the
 /// import-gated spelling (`pub builtin`, ambient=false; the engine
-/// weaves on the symbols regardless), the native types gate only
-/// `DisposalContext`, and every fn row stays ambient (`prelude
+/// weaves on the symbols regardless), the native types gate `Weak`
+/// and `DisposalContext`, and every fn row stays ambient (`prelude
 /// builtin`). A future row flips only with a deliberate test update.
 #[test]
 fn engine_trait_rows_are_import_gated_everything_else_ambient() {
     let surface = rut_core::binary::Surface::core();
     for (name, _, ambient) in &surface.native_types {
-        let expected = surface.names.name(*name) == "DisposalContext";
+        let expected = matches!(surface.names.name(*name), "Weak" | "DisposalContext");
         assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
     }
     for (name, _, ambient) in &surface.native_traits {

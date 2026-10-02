@@ -21,11 +21,11 @@ compilation unit; no `use` is needed. A `use core::{ … };` statement
 stays legal but is redundant for them. The exceptions — the
 **import-gated** spellings, resolving only through
 `use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`,
-`DisposalContext`), and every engine-woven trait (`Iterable`,
-`Future`, `RunContext`) — the engine's weave itself never needs the
-import, only source that spells the names (an `impl` block, a
-trait-typed signature, a `downcast<Future<..>>`). The two builtin
-spellings (ambient vs import-gated) are documented in
+`DisposalContext`), the weak reference `Weak<T>`, and every
+engine-woven trait (`Iterable`, `Future`, `RunContext`) — the engine's
+weave itself never needs the import, only source that spells the names
+(an `impl` block, a trait-typed signature, a `downcast<Future<..>>`).
+The two builtin spellings (ambient vs import-gated) are documented in
 [Host fns and declaration files](host-fns.md).
 
 ### Functions
@@ -63,7 +63,8 @@ builtin primitive opaque {
 ```
 
 Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)`
-wraps (the class-method construction) ([opaque](opaque.md),
+wraps (the class-method construction; the `Weak` name itself is
+import-gated — `use core::{ Weak }`) ([opaque](opaque.md),
 [weak references](weak-refs.md)).
 
 ### Builtin classes
@@ -71,7 +72,7 @@ wraps (the class-method construction) ([opaque](opaque.md),
 | class | members |
 |---|---|
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
-| `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died |
+| `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }` |
 | `DisposalContext` | no members — the engine-minted parameter of a `dispose` body; it exists so the context can grow without touching the trait signature |
 
 ### Engine-woven traits

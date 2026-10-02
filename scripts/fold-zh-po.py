@@ -30,26 +30,78 @@ PO = 'docs/po/zh_CN.po'
 # markdown structure load-bearing). Everything not in FRESH either
 # keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
 # mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. This sweep (generic foreign traits cross modules — the v1
-# gates lift) changes FOUR strings: three are the traits pages'
-# placement/satisfaction bullets gaining the "the one cross-module
-# restriction" clause, one is the new crossing bullet.
+# DESIGN. This sweep (Weak is import-gated — `pub builtin`, not
+# `prelude builtin`) changes FIFTEEN strings: fourteen are prose
+# rewrites (the ambient/gated split moves `Weak`) or code blocks that
+# gained the `use core::{ Weak };` line (code never translates — the
+# msgstr IS the msgid), one is the new weak-refs gating paragraph.
 FRESH = {
-    # tutorial/traits.md — the placement bullet: the only-rule clause
-    # and the generic crossing sentence extend the old translation.
-    "**Placement:** an impl may live in a module of the trait's package or the type's package — at least one side must be yours. You cannot implement two foreign types to each other. This is the **only** cross-module rule: a foreign trait crosses freely for your own type, generic traits included — `impl<T> Wrap<T> for Box2<T>` against a used pkg's `trait Wrap<T>` is legal, and so is spelling `Wrap<i32>` as a parameter type.":
-        "**位置：**impl 可以放在 trait 所在包或类型所在包的模块里——至少有一侧必须属于你。你不能给两个外部类型互相实现。这是**唯一的**跨模块规则：外部 trait 可以自由地为你自己的类型实现，泛型 trait 也不例外——对着 `use` 进来的包写 `impl<T> Wrap<T> for Box2<T>`（其 `trait Wrap<T>`）是合法的，把 `Wrap<i32>` 拼写成参数类型同样合法。",
-    # core-concepts/traits-and-dispatch.md — the placement bullet: the
-    # closing clause names placement the only cross-module restriction.
-    "**Placement is pair-local.** A trait impl may live in the trait's package or the type's package — at least one side of every `(trait, type)` pair must be yours. Implementing two foreign types' pairing is rejected outright; there is no orphan rule beyond that — placement is the only cross-module restriction, and a foreign trait crosses freely for a local type (generic traits included).":
-        "**放置位置对组合局部。**trait impl 可以放在 trait 所在的包或类型所在的包——每个 `(trait, type)` 组合至少有一侧属于你自己。实现两个外部类型的组合会被直接拒绝；除此之外没有别的孤儿规则——放置是唯一的跨模块限制，外部 trait 可以为本地类型自由实现（泛型 trait 也不例外）。",
-    # reference/traits.md — the satisfaction bullet: the closing clause
-    # names the placement rule the only cross-module impl restriction.
-    "**Satisfaction is nominal.** A type that declares every member by shape is still not an `I` until some module writes `impl I for T`. There is no duck typing and no orphan rule beyond placement: for every `impl Trait for Type`, **at least one of `Type` or `Trait` must be defined in the current pkg** — both foreign is a compile error. Builtin types (`[T]`, the primitives, `?T`, `opaque`) are in no pkg: only a _local trait_ may be implemented for a builtin. This placement rule is the **only** cross-module impl restriction — a foreign trait crosses freely for a local type, generic or not.":
-        "**满足是名义性的。** 一个按形状声明了全部成员的类型，在某些模块写出 `impl I for T` 之前仍不是 `I`。没有鸭子类型，除了位置之外也没有孤儿规则：对每个 `impl Trait for Type`，**`Type` 或 `Trait` 至少一个必须定义在当前包** —— 两者都是外来的就是编译错误。内建类型（`[T]`、各原语、`?T`、`opaque`）不属于任何包：只有_本包的 trait_ 才能为内建类型实现。这条放置规则是**唯一的**跨模块 impl 限制——外部 trait 可以为本地类型自由实现，泛型与否皆可。",
-    # reference/traits.md — the new crossing bullet.
-    "**Generic traits cross modules.** A consumer implements a foreign generic trait for its own type — `impl<T> Wrap<T> for Box2<T>` against a `use`d pkg's `trait Wrap<T>` — and spells the trait in type position (`fn describe(w: Wrap<i32>) -> i32`). The trait's declaration crosses the used pkg's surface, each type-argument list instantiates it where it is used, and dispatch is the ordinary law: one concrete origin binds statically, merged origins consult the vtable. The orphan rule above is the only gate.":
-        "**泛型 trait 跨模块。**使用者为自己的类型实现一个外部的泛型 trait——对着 `use` 进来的包的 `trait Wrap<T>` 写 `impl<T> Wrap<T> for Box2<T>`——并把该 trait 拼写进类型位置（`fn describe(w: Wrap<i32>) -> i32`）。trait 的声明随被使用包的表面跨越而来，每个类型实参列表在使用的位置实例化它，而分派仍是常规法则：单一具体来源静态绑定，来源合并则查 vtable。上面的孤儿规则是唯一的门。",
+    # ---- the weak-import-gated sweep: `Weak` leaves the ambient prelude ----
+    # 14 msgids changed (prose rewrote or a code block gained the use
+    # line), 1 msgid is genuinely new (weak-refs.md's gating paragraph).
+    # Code blocks: code never translates — the msgstr IS the msgid.
+    # Terminology per docs/po/GLOSSARY.md: 导入把守 (import-gated),
+    # 环境自带 (ambient), 弱引用 (weak reference).
+
+    # tutorial/modules.md — the gated-names paragraph widens to `Weak`.
+    "Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions are core's import-gated names — the `Disposal`/`DisposalContext` pair and the weak reference `Weak` — they resolve only through `use core::{ .. }`, like any package name. Package names from your manifest are imported the same way; an unused name in a `use` is a lint, not an error.":
+        "内置名字——基本类型、`str`/`bytes` 的成员、`panic`、不依赖 `Vec` 的数组语法、`opaque`——都是**环境自带**的：无需 `use`。例外是 core 的导入把守名字——`Disposal`/`DisposalContext` 对与弱引用 `Weak`——它们只能像任何包名一样，经 `use core::{ .. }` 解析。清单里的包名也以同样的方式导入；`use` 里未被使用的名字只是一个 lint，不是错误。",
+
+    # core-concepts/memory.md — the Weak references section names the gate.
+    "`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once it died. Construction is the class-method form, admission is checked (reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps. The name is **import-gated** — spell `use core::{ Weak };`, or the bare `Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``.":
+        "`Weak.new(v)` 在 `v` 的单元上构造一个 `Weak<T>`，它**永远不让任何东西保活**；`w.upgrade()` 回答 `?T`——被保留的引用对象，或它死掉之后的 `nil`。构造是类方法形式，准入受检查（仅限引用类型——`Weak<i32>` 会被诊断），`Weak.new(nil)` 触发陷阱。名字是**导入把守**的——拼写 `use core::{ Weak };`，否则裸写的 `Weak` 会诊断 `` `Weak` is not in scope — `use core::{ Weak }` ``。",
+
+    # core-concepts/memory.md — the observer code block gained the use line.
+    "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nclass Model {\n    name: str;\n}\n\nclass View {\n    model: ?Model;\n    observer: ?Weak<Model>;      // a back-pointer that closes no cycle\n}\n\nentry fn main() {\n    let log = Logger.new(\"rc\");\n    let mut m = Model { name: \"doc\" };\n    let v = View { model: nil, observer: Weak.new(m) };   // observe without owning\n    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n    m = Model { name: \"next\" };   // the old cell's last strong reference dies here\n    log.info(f\"upgrade() answers nil: {v.observer.upgrade() == nil}\");\n}\n```":
+        "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nclass Model {\n    name: str;\n}\n\nclass View {\n    model: ?Model;\n    observer: ?Weak<Model>;      // a back-pointer that closes no cycle\n}\n\nentry fn main() {\n    let log = Logger.new(\"rc\");\n    let mut m = Model { name: \"doc\" };\n    let v = View { model: nil, observer: Weak.new(m) };   // observe without owning\n    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n    m = Model { name: \"next\" };   // the old cell's last strong reference dies here\n    log.info(f\"upgrade() answers nil: {v.observer.upgrade() == nil}\");\n}\n```",
+
+    # reference/builtin-generic-types.md — the Weak<T> section names the gate.
+    "`Weak<T>` is a builtin class whose box holds an _unretained_ word to a referent — a weak never keeps anything alive. The name is **import-gated**: spell `use core::{ Weak };` or the bare `Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``.":
+        "`Weak<T>` 是一个内置类，其盒持有一个指向被引用对象的 _未保留_（unretained）字 —— 弱引用绝不会让任何东西存活。名字是**导入把守**的：拼写 `use core::{ Weak };`，否则裸写的 `Weak` 会诊断 `` `Weak` is not in scope — `use core::{ Weak }` ``。",
+
+    # reference/builtin-generic-types.md — the construction block gained the use line.
+    "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Tile { v: i32; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let tile = Tile { v: 7 };\n    let w = Weak.new(tile);        // the class-method construction\n    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n    log.info(f\"{got.v}\");\n}\n```":
+        "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Tile { v: i32; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let tile = Tile { v: 7 };\n    let w = Weak.new(tile);        // the class-method construction\n    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n    log.info(f\"{got.v}\");\n}\n```",
+
+    # reference/rc-dispose-identity.md — the weak block gained the use line.
+    "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Tile { v: i32; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let tile = Tile { v: 7 };\n    let w = Weak.new(tile);        // does NOT keep the cell alive\n    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n    log.info(f\"{got.v}\");\n}\n```":
+        "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Tile { v: i32; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let tile = Tile { v: 7 };\n    let w = Weak.new(tile);        // does NOT keep the cell alive\n    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n    log.info(f\"{got.v}\");\n}\n```",
+
+    # reference/weak-refs.md — the NEW gating paragraph.
+    "`Weak` is one of core's **import-gated** builtin names: spell `use core::{ Weak };` to bring the class in ([core and the swappable packages](stdlib.md)). A bare `Weak` does not compile — the diagnostic is `` `Weak` is not in scope — `use core::{ Weak }` ``.":
+        "`Weak` 是 core **导入把守**的内置名字之一：拼写 `use core::{ Weak };` 把这个类引入（[core 与可换包](stdlib.md)）。裸写的 `Weak` 无法编译——诊断是 `` `Weak` is not in scope — `use core::{ Weak }` ``。",
+
+    # reference/weak-refs.md — the first block gained the use line.
+    "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nclass Node {\n    value: u32;\n    next: ?Node;          // strong — keeps the tail alive\n}\n\nimpl Node {\n    pub fn new(value: u32) -> Self { return Self { value: value, next: nil }; }\n}\n\nfn use_node(n: Node) {\n    let log = Logger.new(\"t\");\n    log.info(f\"node {n.value}\");\n}\n\nentry fn main() {\n    let n = Node.new(1);\n    let w = Weak.new(n);        // Weak<Node>; T infers from n\n    let b = w.upgrade();        // ?Node — a live handle\n    if (b != nil) {\n        use_node(b);\n    }\n}\n```":
+        "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nclass Node {\n    value: u32;\n    next: ?Node;          // strong — keeps the tail alive\n}\n\nimpl Node {\n    pub fn new(value: u32) -> Self { return Self { value: value, next: nil }; }\n}\n\nfn use_node(n: Node) {\n    let log = Logger.new(\"t\");\n    log.info(f\"node {n.value}\");\n}\n\nentry fn main() {\n    let n = Node.new(1);\n    let w = Weak.new(n);        // Weak<Node>; T infers from n\n    let b = w.upgrade();        // ?Node — a live handle\n    if (b != nil) {\n        use_node(b);\n    }\n}\n```",
+
+    # reference/weak-refs.md — the consuming-op block gained the use line.
+    "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Payload { n: i32; }\n\nfn make() -> Payload { return Payload { n: 1 }; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let v = make();\n    let w = Weak.new(v);  // watches the binding v — lives as long as v does\n    log.info(f\"{w.upgrade() != nil}\");\n}\n```":
+        "```rut\nuse core::{ Weak };\nuse ink::{ Logger };\n\nstruct Payload { n: i32; }\n\nfn make() -> Payload { return Payload { n: 1 }; }\n\nentry fn main() {\n    let log = Logger.new(\"t\");\n    let v = make();\n    let w = Weak.new(v);  // watches the binding v — lives as long as v does\n    log.info(f\"{w.upgrade() != nil}\");\n}\n```",
+
+    # reference/weak-refs.md — the disposal-ordering block merged Weak into its use line.
+    "```rut\nuse core::{ Disposal, DisposalContext, Weak };\n\nclass Node  { child: ?Node; }\nclass Child { back: ?Weak<Node>; }   // the observer's weak back-pointer\n\nimpl Disposal for Child {\n    fn dispose(mut self, cx: DisposalContext) {\n        // the parent's death released self through the field walk,\n        // and the parent's weak list was nulled before any of that\n        // user code ran — the back-pointer reads nil from in here:\n        if (self.back.upgrade() == nil) { /* always taken here */ }\n    }\n}\n```":
+        "```rut\nuse core::{ Disposal, DisposalContext, Weak };\n\nclass Node  { child: ?Node; }\nclass Child { back: ?Weak<Node>; }   // the observer's weak back-pointer\n\nimpl Disposal for Child {\n    fn dispose(mut self, cx: DisposalContext) {\n        // the parent's death released self through the field walk,\n        // and the parent's weak list was nulled before any of that\n        // user code ran — the back-pointer reads nil from in here:\n        if (self.back.upgrade() == nil) { /* always taken here */ }\n    }\n}\n```",
+
+    # reference/host-fns.md — the ambient bullet loses `Weak`.
+    "**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives and their `builtin impl` methods, `opaque`, `StackTrace`, and `panic`/`string_join`/`capture_stacktrace` are all ambient.":
+        "**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型及其 `builtin impl` 方法、`opaque`、`StackTrace`，以及 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。",
+
+    # reference/host-fns.md — the gated bullet gains `Weak<T>`.
+    "**`pub builtin`** — the **import-gated** engine surface: the name resolves only through `use core::{ .. }`, the way a package's names do. Today's rows are every builtin trait — `Iterable`, `Future`, `RunContext` — the disposal pair, `Disposal` and `DisposalContext`, and the weak reference, `Weak<T>` ([traits](traits.md), [async and await](async.md), [the Rc heap](rc-heap.md), [weak references](weak-refs.md)). The engine's weave never consults the gate — it keys on the native-trait symbols — so a module with no imports still iterates, awaits, and launches; only spelling a name in source gates.":
+        "**`pub builtin`**——**导入把守**的引擎表面：名字只能经 `use core::{ .. }` 解析，与包名的方式一样。如今的行是每个内置 trait——`Iterable`、`Future`、`RunContext`——单元死亡对 `Disposal` 与 `DisposalContext`，以及弱引用 `Weak<T>`（[trait](traits.md)、[异步与 await](async.md)、[Rc 堆](rc-heap.md)、[弱引用](weak-refs.md)）。引擎的织造从不查阅这道门——它以原生 trait 符号为键——因此一个没有任何导入的模块仍然可以迭代、await 与启动；把守只落在源码里拼写的名字上。",
+
+    # reference/stdlib.md — the gated-names list gains `Weak<T>`.
+    "The builtin fns, primitives, and containers are in scope in every compilation unit; no `use` is needed. A `use core::{ … };` statement stays legal but is redundant for them. The exceptions — the **import-gated** spellings, resolving only through `use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`, `DisposalContext`), the weak reference `Weak<T>`, and every engine-woven trait (`Iterable`, `Future`, `RunContext`) — the engine's weave itself never needs the import, only source that spells the names (an `impl` block, a trait-typed signature, a `downcast<Future<..>>`). The two builtin spellings (ambient vs import-gated) are documented in [Host fns and declaration files](host-fns.md).":
+        "内置函数、基本类型与容器在每个编译单元都在作用域内；无需 `use`。对它们而言 `use core::{ … };` 语句仍合法但多余。例外——**导入把守**的拼写，只能经 `use core::{ .. }` 解析：常量 `NAN`、`Disposal` 对（`Disposal`、`DisposalContext`）、弱引用 `Weak<T>`，以及每个引擎织入的 trait（`Iterable`、`Future`、`RunContext`）——引擎的织造本身从不需要导入，需要它的是拼写了名字的源码（一个 `impl` 块、一个 trait 类型的签名、一个 `downcast<Future<..>>`）。两种内置拼写（环境自带 vs 导入把守）记录在[宿主函数与声明文件](host-fns.md)。",
+
+    # reference/stdlib.md — the construction note names the gate.
+    "Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps (the class-method construction; the `Weak` name itself is import-gated — `use core::{ Weak }`) ([opaque](opaque.md), [weak references](weak-refs.md)).":
+        "构造保留其内置形式：`opaque(v)` 封存，`Weak.new(v)` 包装（类方法构造；`Weak` 这个名字本身是导入把守的——`use core::{ Weak }`）（[opaque](opaque.md)、[弱引用](weak-refs.md)）。",
+
+    # reference/stdlib.md — the builtin-classes table row gains the gate.
+    "`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }`":
+        "`Weak.new(v)`（对 nil 触发陷阱；仅引用类型）、`upgrade() -> ?T`——所指者死亡后为 `nil`。**导入把守**——`use core::{ Weak }`",
 }
 
 

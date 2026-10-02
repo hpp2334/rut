@@ -220,9 +220,10 @@ pub struct SurfaceMethod {
 }
 
 /// A builtin container published by `core`'s native surface:
-/// the type constructor is the compiler's own. Builtin names are
-/// AMBIENT: they resolve without a
-/// `use`.
+/// the type constructor is the compiler's own. Each row carries its
+/// own ambient bit: `true` binds in every unit (no `use` needed),
+/// `false` is the import-gated spelling — resolved only through
+/// `use core::{ .. }`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
     /// `Opaque` — the erasure box; a boot-table type whose
@@ -237,7 +238,9 @@ pub enum NativeTy {
     /// `Weak<T>` — the weak reference: a GENERIC builtin
     /// class (instantiated `Weak<T>` at use, the `Array { elem }` shape);
     /// its one member `upgrade()` is an engine builtin. Constructed by
-    /// the class method `Weak.new(v)`.
+    /// the class method `Weak.new(v)`. Import-gated (ambient=false,
+    /// the `pub builtin` spelling): the name resolves only through
+    /// `use core::{ Weak }`.
     Weak,
     /// `DisposalContext` — the disposal drain's minted context cell
     /// (the disposal surface): engine-implemented, one per `dispose`
@@ -402,10 +405,10 @@ impl Surface {
             native_types: vec![
                 (sym::OPAQUE, NativeTy::Opaque, true),
                 (sym::STACK_TRACE, NativeTy::StackTrace, true),
-                (sym::WEAK, NativeTy::Weak, true),
-                // the disposal surface: `pub builtin` — the import-gated
+                // the gated native types: `pub builtin` — the import-gated
                 // spellings (the binding loops gate on this bit: the
                 // name resolves only through `use core::{ .. }`)
+                (sym::WEAK, NativeTy::Weak, false),
                 (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
             ],
             native_traits: vec![

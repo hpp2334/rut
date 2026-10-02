@@ -90,6 +90,7 @@ wrapper class and no mint-site bookkeeping, just the impl.
 demotes any handle to a non-keeping reference:
 
 ```rut
+use core::{ Weak };
 use ink::{ Logger };
 
 struct Tile { v: i32; }

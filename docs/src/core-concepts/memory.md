@@ -112,9 +112,12 @@ Two edge rules worth knowing:
 anything alive**; `w.upgrade()` answers `?T` — the retained referent, or
 `nil` once it died. Construction is the class-method form, admission is
 checked (reference types only — `Weak<i32>` diagnoses), and
-`Weak.new(nil)` traps.
+`Weak.new(nil)` traps. The name is **import-gated** — spell
+`use core::{ Weak };`, or the bare `Weak` diagnoses
+`` `Weak` is not in scope — `use core::{ Weak }` ``.
 
 ```rut
+use core::{ Weak };
 use ink::{ Logger };
 
 class Model {

@@ -1394,7 +1394,7 @@ msgstr "文本"
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:141
-#: src/reference/rc-dispose-identity.md:123
+#: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
 #: src/reference/workers-and-channels.md:51 src/reference/value-boundary.md:35
 #: src/reference/value-boundary.md:36 src/reference/templates.md:19
@@ -1413,7 +1413,7 @@ msgstr "二进制"
 
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
-#: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:124
+#: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
 #: src/reference/value-boundary.md:37 src/reference/value-boundary.md:38
 msgid "`bytes`"
@@ -1795,7 +1795,7 @@ msgstr "操作数"
 
 
 #: src/tutorial/values-and-variables.md:228
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "`==` means"
 msgstr "`==` 的含义"
@@ -5060,9 +5060,9 @@ msgstr "`use` 以类 Rust 的路径导入名字："
 
 #: src/tutorial/modules.md:74
 msgid ""
-"Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions are core's import-gated pair, `Disposal`/`DisposalContext` — they resolve only through `use core::{ .. }`, like any package name. Package names from your manifest are imported the same way; an unused name in a `use` is a lint, not an error."
+"Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions are core's import-gated names — the `Disposal`/`DisposalContext` pair and the weak reference `Weak` — they resolve only through `use core::{ .. }`, like any package name. Package names from your manifest are imported the same way; an unused name in a `use` is a lint, not an error."
 msgstr ""
-"内置名字——基本类型、`str`/`bytes` 的成员、`panic`、不依赖 `Vec` 的数组语法、`opaque`——都是**环境自带**的：无需 `use`。例外是 core 的导入把守对：`Disposal`/`DisposalContext`——它们只能像任何包名一样，经 `use core::{ .. }` 解析。清单里的包名也以同样的方式导入；`use` 里未被使用的名字只是一个 lint，不是错误。"
+"内置名字——基本类型、`str`/`bytes` 的成员、`panic`、不依赖 `Vec` 的数组语法、`opaque`——都是**环境自带**的：无需 `use`。例外是 core 的导入把守名字——`Disposal`/`DisposalContext` 对与弱引用 `Weak`——它们只能像任何包名一样，经 `use core::{ .. }` 解析。清单里的包名也以同样的方式导入；`use` 里未被使用的名字只是一个 lint，不是错误。"
 
 
 #: src/tutorial/modules.md:82
@@ -6008,7 +6008,7 @@ msgstr ""
 "键来自一个固定集合——整数、`bool`、`str`、`bytes`（没有浮点数：它们没有稳定的相等契约）——由宿主做哈希；用户自定义的键以规范编码成 `bytes` 的方式破例。命中返回的是存储的单元，不是副本。没有迭代表面：map 和 set 回答问题，不做遍历。"
 
 
-#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:183
+#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:184
 msgid "`flow` — the push pipeline"
 msgstr "`flow` —— 推送管线"
 
@@ -6542,7 +6542,7 @@ msgstr ""
 
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
-#: src/core-concepts/traits-and-dispatch.md:244 src/core-concepts/memory.md:204
+#: src/core-concepts/traits-and-dispatch.md:244 src/core-concepts/memory.md:207
 msgid "What this buys you"
 msgstr "这给你带来什么"
 
@@ -8115,14 +8115,15 @@ msgstr "弱引用"
 
 #: src/core-concepts/memory.md:111
 msgid ""
-"`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once it died. Construction is the class-method form, admission is checked (reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps."
+"`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once it died. Construction is the class-method form, admission is checked (reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps. The name is **import-gated** — spell `use core::{ Weak };`, or the bare `Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``."
 msgstr ""
-"`Weak.new(v)` 在 `v` 的单元上构造一个 `Weak<T>`，它**永远不让任何东西保活**；`w.upgrade()` 回答 `?T`——被保留的引用对象，或它死掉之后的 `nil`。构造是类方法形式，准入受检查（仅限引用类型——`Weak<i32>` 会被诊断），`Weak.new(nil)` 触发陷阱。"
+"`Weak.new(v)` 在 `v` 的单元上构造一个 `Weak<T>`，它**永远不让任何东西保活**；`w.upgrade()` 回答 `?T`——被保留的引用对象，或它死掉之后的 `nil`。构造是类方法形式，准入受检查（仅限引用类型——`Weak<i32>` 会被诊断），`Weak.new(nil)` 触发陷阱。名字是**导入把守**的——拼写 `use core::{ Weak };`，否则裸写的 `Weak` 会诊断 `` `Weak` is not in scope — `use core::{ Weak }` ``。"
 
 
-#: src/core-concepts/memory.md:117
+#: src/core-concepts/memory.md:119
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Model {\n"
@@ -8145,6 +8146,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Model {\n"
@@ -8167,129 +8169,129 @@ msgstr ""
 "```"
 
 
-#: src/core-concepts/memory.md:144
+#: src/core-concepts/memory.md:147
 msgid ""
 "The two shapes that cause accidental cycles — **back-pointers** (child → parent) and **caches** (a table that should not extend lifetimes) — are exactly what `Weak` is for. A path through a `Weak` does not close a strong cycle."
 msgstr ""
 "造成意外循环引用的两种形状——**回指指针**（child → parent）与**缓存**（不该延长生命周期的表）——恰好就是 `Weak` 的用武之地。经过 `Weak` 的路径不会闭合强循环引用。"
 
 
-#: src/core-concepts/memory.md:149
+#: src/core-concepts/memory.md:152
 msgid "The cycle policy"
 msgstr "循环引用策略"
 
 
-#: src/core-concepts/memory.md:151
+#: src/core-concepts/memory.md:154
 msgid ""
 "**A strong cycle is a leak — deterministically.** Its members live until the VM is dropped; no collector ever runs, no pass interrupts execution, and destructor ordering never surprises you. Guidance is lint-level, not runtime:"
 msgstr ""
 "**强循环引用就是泄漏——确定性的泄漏。**它的成员活到 VM 被 drop 为止；收集器从不运行，没有任何阶段会打断执行，析构顺序也从不让你意外。指导是 lint 级的，不是运行时的："
 
 
-#: src/core-concepts/memory.md:156
+#: src/core-concepts/memory.md:159
 msgid ""
 "resource-holding types (types with `Disposal` impls or host handles) must not participate in strong cycles;"
 msgstr "持有资源的类型（带 `Disposal` impl 或宿主句柄的类型）不得参与强循环引用；"
 
 
-#: src/core-concepts/memory.md:158
+#: src/core-concepts/memory.md:161
 msgid "parent/child and observer shapes take `Weak` back-pointers;"
 msgstr "父/子与观察者形状采用 `Weak` 回指指针；"
 
 
-#: src/core-concepts/memory.md:159
+#: src/core-concepts/memory.md:162
 msgid "pure-data cycles are harmless — they cost only memory."
 msgstr "纯数据的循环引用无害——它们只花费内存。"
 
 
-#: src/core-concepts/memory.md:161
+#: src/core-concepts/memory.md:164
 msgid ""
 "You are not left alone with the rule: debug builds assert refcount discipline (retain/release pairing, no underflow, no double free), and at teardown the VM emits a **leak report** — surviving objects grouped by type with allocation sites — which is the primary tool for hunting accidental cycles. Behavior is fully deterministic, so a leak reproduces exactly."
 msgstr ""
 "这条规则并非让你独自面对：调试构建会断言引用计数纪律（保留/释放配对、无下溢、无双重释放），而 VM 在拆除时会输出一份**泄漏报告**——按类型分组、带分配位置的存活对象清单——它是猎捕意外循环引用的首要工具。行为完全确定，因此泄漏可以精确复现。"
 
 
-#: src/core-concepts/memory.md:168
+#: src/core-concepts/memory.md:171
 msgid "The self-managed heap"
 msgstr "自管堆"
 
 
-#: src/core-concepts/memory.md:170
+#: src/core-concepts/memory.md:173
 msgid ""
 "Host code may use `std` freely, but every byte backing a rut value is allocated through the VM's own heap manager. The discipline is the point, not the allocator:"
 msgstr "宿主代码可以随意使用 `std`，但支撑 rut 值的每一个字节都经由 VM 自己的堆管理器分配。要点在纪律，而不在分配器："
 
 
-#: src/core-concepts/memory.md:174
+#: src/core-concepts/memory.md:177
 msgid ""
 "**Cells** come from fixed-size arena chunks with freelists; a dead slot is reused by the next mint."
 msgstr "**单元**来自带空闲列表的定长 arena 块；死槽位会被下一次铸造复用。"
 
 
-#: src/core-concepts/memory.md:176
+#: src/core-concepts/memory.md:179
 msgid ""
 "**Variable-size payloads** (string octets, array element runs) live in size-classed blocks that never move; in-place geometric growth keeps append loops linear, and freelists recycle the common sizes."
 msgstr "**可变尺寸载荷**（字符串字节、数组元素段）住在按尺寸分级的块里，永不移动；就地几何增长让追加循环保持线性，空闲列表回收常见尺寸。"
 
 
-#: src/core-concepts/memory.md:179
+#: src/core-concepts/memory.md:182
 msgid ""
 "**Immortal singletons** — interned string literals, enum variants — live in a slab freed only at VM drop, carrying the \"no refcount\" sentinel."
 msgstr "**不朽单例**——驻留的字符串字面量、枚举成员——住在只在 VM drop 时释放的 slab 里，携带\"无引用计数\"哨兵。"
 
 
-#: src/core-concepts/memory.md:182
+#: src/core-concepts/memory.md:185
 msgid ""
 "**Nothing compacts.** The heap never moves cells, which is precisely what lets the boundary hand Rust zero-copy views into buffers (see [the host boundary](host-boundary.md))."
 msgstr ""
 "**永不压缩。**堆从不移动单元，这正是边界能把指向缓冲区的零拷贝视图交到 Rust 手里的原因（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/memory.md:186
+#: src/core-concepts/memory.md:189
 msgid "Why self-manage instead of using the host's allocator?"
 msgstr "为什么自管，而不用宿主的分配器？"
 
 
-#: src/core-concepts/memory.md:188
+#: src/core-concepts/memory.md:191
 msgid ""
 "**Budgets.** An embedder can say \"this script gets N bytes\" and get a clean, resumable out-of-memory trap instead of an OS abort. `vm.heap_usage()` is exact because every allocation is accounted."
 msgstr ""
 "**预算。**嵌入方可以说\"这个脚本只有 N 字节\"，然后得到一个干净、可恢复的内存耗尽陷阱，而不是操作系统级的中止。`vm.heap_usage()` 是精确的，因为每次分配都被记账。"
 
 
-#: src/core-concepts/memory.md:191
+#: src/core-concepts/memory.md:194
 msgid ""
 "**Teardown.** `Vm::drop` frees the whole heap in slab units after the leak report; nothing per-object leaks past the VM — important for wasm pages and plugin hosts that spawn and kill scripts."
 msgstr ""
 "**拆除。**`Vm::drop` 在泄漏报告之后按 slab 单位释放整个堆；没有任何按对象的东西泄漏出 VM 之外——这对会反复生成、杀掉脚本的 wasm 页面和插件宿主很重要。"
 
 
-#: src/core-concepts/memory.md:194
+#: src/core-concepts/memory.md:197
 msgid ""
 "**Leak reporting** walks the VM's own headers, which requires the VM's own headers everywhere."
 msgstr "**泄漏报告**遍历的是 VM 自己的头部，这要求处处都是 VM 自己的头部。"
 
 
-#: src/core-concepts/memory.md:197
+#: src/core-concepts/memory.md:200
 msgid ""
 "The budget check runs _before_ any write — a failed allocation leaves the heap byte-identical — and traps resumably: raise the limit and continue, or drop references and retry. See the reference on [resource limits](../reference/resource-limits.md) for the full knob set, and [the bytecode VM](the-vm.md) for how budgets interleave with execution."
 msgstr ""
 "预算检查在任何写入_之前_运行——失败的分配让堆保持逐字节相同——而且陷阱可恢复：调高限额继续，或者丢掉引用再试。完整的旋钮清单见关于[资源限制](../reference/resource-limits.md)的参考章节；预算如何与执行交织，见[字节码 VM](the-vm.md)。"
 
 
-#: src/core-concepts/memory.md:206
+#: src/core-concepts/memory.md:209
 msgid ""
 "**Deterministic resource release** — the property the whole design is organized around. If your script opened something, the closing statement is knowable."
 msgstr "**确定性的资源释放**——整个设计围绕它组织。如果你的脚本打开了什么，关闭它的语句是可知的。"
 
 
-#: src/core-concepts/memory.md:209
+#: src/core-concepts/memory.md:212
 msgid ""
 "**No pauses.** There is no collection pass; destruction happens inline at release-to-zero, so nothing ever interrupts a frame."
 msgstr "**没有停顿。**没有收集阶段；析构在计数释放到零时就地发生，所以没有任何东西会打断一帧。"
 
 
-#: src/core-concepts/memory.md:211
+#: src/core-concepts/memory.md:214
 msgid ""
 "**A small, honest mental model.** Sharing is by reference, copies are built explicitly (see [everything is a value](everything-is-a-value.md)), lifetimes are refcounts, and the one thing refcounts cannot do — cycles — is a documented rule with a first-class tool."
 msgstr ""
@@ -13327,7 +13329,7 @@ msgid "element access; out-of-bounds traps"
 msgstr "元素访问；越界陷阱"
 
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:363
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:364
 msgid "`len() -> i32`"
 msgstr "`len() -> i32`"
 
@@ -13347,7 +13349,7 @@ msgid "iteration; `x` is the shared element"
 msgstr "迭代；`x` 是共享的元素"
 
 
-#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:181
+#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:182
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr "`slice(from, to) -> ?Vec<T>`"
 
@@ -13367,7 +13369,7 @@ msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr "把活跃元素复制到一个全新的、大小恰好的数组"
 
 
-#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:180
+#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:181
 msgid "`freeze() -> bytes`"
 msgstr "`freeze() -> bytes`"
 
@@ -13390,13 +13392,15 @@ msgstr "`Weak<T>` —— 弱引用"
 
 #: src/reference/builtin-generic-types.md:121
 msgid ""
-"`Weak<T>` is a builtin class whose box holds an _unretained_ word to a referent — a weak never keeps anything alive."
-msgstr "`Weak<T>` 是一个内置类，其盒持有一个指向被引用对象的 _未保留_（unretained）字 —— 弱引用绝不会让任何东西存活。"
+"`Weak<T>` is a builtin class whose box holds an _unretained_ word to a referent — a weak never keeps anything alive. The name is **import-gated**: spell `use core::{ Weak };` or the bare `Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``."
+msgstr ""
+"`Weak<T>` 是一个内置类，其盒持有一个指向被引用对象的 _未保留_（unretained）字 —— 弱引用绝不会让任何东西存活。名字是**导入把守**的：拼写 `use core::{ Weak };`，否则裸写的 `Weak` 会诊断 `` `Weak` is not in scope — `use core::{ Weak }` ``。"
 
 
-#: src/reference/builtin-generic-types.md:124
+#: src/reference/builtin-generic-types.md:126
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -13411,6 +13415,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -13425,69 +13430,69 @@ msgstr ""
 "```"
 
 
-#: src/reference/builtin-generic-types.md:142
+#: src/reference/builtin-generic-types.md:145
 msgid ""
 "`Weak.new(v)` traps on a `nil` `v`; `T` must be a reference type (`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and `upgrade()` answers `??U`."
 msgstr ""
 "`Weak.new(v)` 在 `v` 为 `nil` 时陷阱；`T` 必须是引用类型（`Weak<i32>` 会被诊断报错 —— 基本类型按值移动）。`Weak<?U>` 合法，且 `upgrade()` 应答 `??U`。"
 
 
-#: src/reference/builtin-generic-types.md:145
+#: src/reference/builtin-generic-types.md:148
 msgid ""
 "The referent's death nulls every weak box before any user code runs; `upgrade()` answers `nil` deterministically from then on."
 msgstr "被引用对象的死亡会在任何用户代码运行之前把每个弱盒置为 nil；从那一刻起 `upgrade()` 确定性地应答 `nil`。"
 
 
-#: src/reference/builtin-generic-types.md:147
+#: src/reference/builtin-generic-types.md:150
 msgid ""
 "A weak edge closes no cycle: strong cycles still leak — see [Rc, dispose, and identity](rc-dispose-identity.md)."
 msgstr "弱边不闭合任何循环：强循环仍会泄漏 —— 参见[Rc、dispose 与同一性](rc-dispose-identity.md)。"
 
 
-#: src/reference/builtin-generic-types.md:150
+#: src/reference/builtin-generic-types.md:153
 msgid "Keyed collections"
 msgstr "键控集合"
 
 
-#: src/reference/builtin-generic-types.md:152
+#: src/reference/builtin-generic-types.md:155
 msgid ""
 "`HashMap<K, V>` and `HashSet<T>` (package `nmapset`) wrap a native key table. Admission is the compile-time **union bound** `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes` — a key type outside the set fails at the instantiation (escape hatch: encode it canonically to `bytes`). Float keys are absent by design: floats have no stable equality contract. The API is `new`/`with_capacity`/`put`/`get`/`has`/`remove`/`len`; `get` answers `?V` — `nil` is absent, and a hit returns the **stored cell**, not a copy (the aliasing law)."
 msgstr ""
 "`HashMap<K, V>` 与 `HashSet<T>`（包 `nmapset`）包装了一个原生键表。准入条件是编译期**联合约束** `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes` —— 集合之外的键类型在实例化时失败（逃生口：把它规范地编码成 `bytes`）。浮点键被有意排除：浮点数没有稳定的相等契约。API 是 `new`/`with_capacity`/`put`/`get`/`has`/`remove`/`len`；`get` 应答 `?V` —— `nil` 表示不存在，命中时返回**存储的单元**而非副本（别名法则）。"
 
 
-#: src/reference/builtin-generic-types.md:162
+#: src/reference/builtin-generic-types.md:165
 msgid "Absence and errors"
 msgstr "缺失与错误"
 
 
-#: src/reference/builtin-generic-types.md:164
+#: src/reference/builtin-generic-types.md:167
 msgid ""
 "There are no `Option`/`Result` builtins — the spellings are ordinary identifiers, and an unresolved use diagnoses as the unknown name it is. The [standard library](stdlib.md#what-core-does-not-have)'s removed-surface table maps each retired spelling to its replacement:"
 msgstr ""
 "没有 `Option`/`Result` 内置物 —— 这些写法现在是普通标识符，未解析的使用会如实诊断为未知名称。[标准库](stdlib.md#what-core-does-not-have)的已移除表面表给出了每个退役写法的替代方案："
 
 
-#: src/reference/builtin-generic-types.md:169
+#: src/reference/builtin-generic-types.md:172
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means \"not found\"."
 msgstr "**缺失**是可空类型上的 `nil`：查找返回 `?V`，`nil` 表示“未找到”。"
 
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:174
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive types](primitive-types.md)."
 msgstr "**错误**走应答通道：`(?T, err)` —— 参见[基本类型](primitive-types.md)。"
 
 
-#: src/reference/builtin-generic-types.md:173
+#: src/reference/builtin-generic-types.md:176
 msgid ""
 "**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see [opaque — erasure and downcast](opaque.md)."
 msgstr ""
 "**类型擦除后的恢复**是 `opaque.downcast<T>(o) -> ?T` —— 参见[opaque —— 擦除与向下转型](opaque.md)。"
 
 
-#: src/reference/builtin-generic-types.md:176
+#: src/reference/builtin-generic-types.md:179
 msgid ""
 "`==` on the removed sum spellings is a compile error. Compare structurally: `when`, a `nil`/`!= nil` guard, or the payload."
 msgstr "在已移除的 sum 写法上使用 `==` 是编译错误。请做结构化比较：`when`、`nil`/`!= nil` 守卫，或检查载荷。"
@@ -15119,6 +15124,7 @@ msgstr "`Weak<T>`（参见[内置泛型类型](builtin-generic-types.md)）把�
 #: src/reference/rc-dispose-identity.md:92
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -15133,6 +15139,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -15147,124 +15154,124 @@ msgstr ""
 "```"
 
 
-#: src/reference/rc-dispose-identity.md:110
+#: src/reference/rc-dispose-identity.md:111
 msgid ""
 "The referent's death nulls every weak box before any user code runs. A weak edge closes no cycle: strong cycles (two records holding each other, a container that holds its own observer) still leak to engine shutdown — the memory law is the program's; break cycles with `Weak`."
 msgstr ""
 "被引用对象的死亡会在任何用户代码运行之前把每个弱盒置为 nil。弱边不闭合任何循环：强循环（两个记录互相持有，一个容器持有自己的观察者）仍会一直泄漏到引擎关闭 —— 内存法则是程序自己的事；用 `Weak` 打破循环。"
 
 
-#: src/reference/rc-dispose-identity.md:115
+#: src/reference/rc-dispose-identity.md:116
 msgid "Identity — `==`"
 msgstr "同一性 —— `==`"
 
 
-#: src/reference/rc-dispose-identity.md:117
+#: src/reference/rc-dispose-identity.md:118
 msgid ""
 "`a == b` is a builtin operator: no dispatch, no opting in, no element-wise story. `a != b` is its negation."
 msgstr "`a == b` 是内置运算符：没有分派，不能选择加入，没有逐元素的说法。`a != b` 是它的否定。"
 
 
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "Operand type"
 msgstr "操作数类型"
 
 
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "Lowering"
 msgstr "降格方式"
 
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 #: src/reference/by-reference-and-nullable.md:99
 msgid "numeric / `bool` primitives"
 msgstr "数字 / `bool` 基本类型"
 
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 #: src/reference/by-reference-and-nullable.md:99
 msgid "value"
 msgstr "值"
 
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr "数值比较，浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
 
 
-#: src/reference/rc-dispose-identity.md:123
+#: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
 msgid "content (codepoints)"
 msgstr "内容（码点）"
 
 
-#: src/reference/rc-dispose-identity.md:123
 #: src/reference/rc-dispose-identity.md:124
+#: src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:100
 #: src/reference/by-reference-and-nullable.md:101
 msgid "content compare"
 msgstr "内容比较"
 
 
-#: src/reference/rc-dispose-identity.md:124
+#: src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
 msgid "content (octets)"
 msgstr "内容（字节）"
 
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 msgid ""
 "everything else — records, arrays, `Vec`, enums, closures, trait objects, `opaque`, `?T`"
 msgstr "其余一切 —— 记录、数组、`Vec`、枚举、闭包、trait 对象、`opaque`、`?T`"
 
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 #: src/reference/by-reference-and-nullable.md:102
 msgid "**cell identity**"
 msgstr "**单元同一性**"
 
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 #: src/reference/by-reference-and-nullable.md:102
 msgid "the raw slot compare"
 msgstr "原始槽位比较"
 
 
-#: src/reference/rc-dispose-identity.md:127
+#: src/reference/rc-dispose-identity.md:128
 msgid ""
 "Identity is the only `==` sharing can defend: with aliasing everywhere, structural equality of two independently built cells is ambiguous, and identity is O(1) with no deep walk. `[1, 2] == [1, 2]` is **false** — two cells."
 msgstr ""
 "同一性是共享唯一能捍卫的 `==`：别名无处不在时，两个独立构造的单元的结构相等是有歧义的，而同一性是 O(1) 的，无需深度遍历。`[1, 2] == [1, 2]` 是 **false** —— 两个单元。"
 
 
-#: src/reference/rc-dispose-identity.md:131
+#: src/reference/rc-dispose-identity.md:132
 msgid ""
 "Enum members are immortal singletons, so `Flavor.Sour == Flavor.Sour` is `true` — the one place identity quietly behaves as value."
 msgstr "枚举成员是不朽的单例，所以 `Flavor.Sour == Flavor.Sour` 是 `true` —— 这是同一性悄悄表现得像值的唯一场合。"
 
 
-#: src/reference/rc-dispose-identity.md:133
+#: src/reference/rc-dispose-identity.md:134
 msgid ""
 "`?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not; `p == nil` derefs the nullable side and compares against the null slot."
 msgstr "`?T == ?T` 是槽位同一性：两个 `nil` 相等，空槽与盒不相等；`p == nil` 会对可空一侧解引用并与空槽比较。"
 
 
-#: src/reference/rc-dispose-identity.md:136
+#: src/reference/rc-dispose-identity.md:137
 msgid ""
 "An **identity-compare lint** flags `==` between two obviously fresh composites (`Vec.from([..]) == Vec.from([..])`): \"always false — compare fields\". Asserting distinctness is legitimate and suppressible."
 msgstr ""
 "**同一性比较 lint** 会对两个明显崭新的复合值之间的 `==` 报警（`Vec.from([..]) == Vec.from([..])`）：“永远为 false —— 请比较字段”。断言两者不同是合法用例，可以抑制该 lint。"
 
 
-#: src/reference/rc-dispose-identity.md:140
+#: src/reference/rc-dispose-identity.md:141
 msgid ""
 "Field-wise comparison is a library trait contract (`hash` + `eq` implemented per type) — the mechanism value-keyed maps ride. It is not connected to `==`."
 msgstr "按字段比较是库 trait 契约（每个类型分别实现 `hash` + `eq`）—— 值键控的映射依赖的正是这一机制。它与 `==` 没有任何关联。"
 
 
-#: src/reference/rc-dispose-identity.md:143
+#: src/reference/rc-dispose-identity.md:144
 msgid ""
 "`when` literal patterns are unaffected: arms match compile-time values, never runtime `==`."
 msgstr "`when` 的字面量模式不受影响：分支匹配编译期值，绝非运行期 `==`。"
@@ -17282,7 +17289,7 @@ msgid "pass `x` directly — sharing needs no spelling"
 msgstr "直接传 `x` —— 共享无需写法"
 
 
-#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:113
+#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:114
 msgid "`Option<T>` / `Result<T, E>`"
 msgstr "`Option<T>` / `Result<T, E>`"
 
@@ -17777,7 +17784,7 @@ msgid ""
 msgstr "循环可能透过普通结构体字段（`next: ?Node` 反向指针）产生，也可能透过集合产生。"
 
 
-#: src/reference/weak-refs.md:24 src/reference/stdlib.md:74
+#: src/reference/weak-refs.md:24 src/reference/stdlib.md:75
 msgid "`Weak<T>`"
 msgstr "`Weak<T>`"
 
@@ -17791,7 +17798,15 @@ msgstr ""
 
 #: src/reference/weak-refs.md:31
 msgid ""
+"`Weak` is one of core's **import-gated** builtin names: spell `use core::{ Weak };` to bring the class in ([core and the swappable packages](stdlib.md)). A bare `Weak` does not compile — the diagnostic is `` `Weak` is not in scope — `use core::{ Weak }` ``."
+msgstr ""
+"`Weak` 是 core **导入把守**的内置名字之一：拼写 `use core::{ Weak };` 把这个类引入（[core 与可换包](stdlib.md)）。裸写的 `Weak` 无法编译——诊断是 `` `Weak` is not in scope — `use core::{ Weak }` ``。"
+
+
+#: src/reference/weak-refs.md:37
+msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Node {\n"
@@ -17819,6 +17834,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Node {\n"
@@ -17846,39 +17862,40 @@ msgstr ""
 "```"
 
 
-#: src/reference/weak-refs.md:62
+#: src/reference/weak-refs.md:69
 msgid "Construction — `Weak.new(v)`"
 msgstr "构造 —— `Weak.new(v)`"
 
 
-#: src/reference/weak-refs.md:64
+#: src/reference/weak-refs.md:71
 msgid ""
 "Construction is a **class method** with admission at the instantiation: `T` must be a **reference type**. `Weak<i32>` and `Weak.new(some_fn)` diagnose; primitives and `fn` values refuse. (The retired type-call spelling — a bare call of the type name — does not compile; the diagnostic names `Weak.new(v)`.)"
 msgstr ""
 "构造是**类方法**，在实例化时准入：`T` 必须是**引用类型**。`Weak<i32>` 与 `Weak.new(some_fn)` 会被诊断；基本类型与 `fn` 值拒绝。（已废弃的类型调用写法 —— 直接调用类型名 —— 无法编译；诊断会指明 `Weak.new(v)`。）"
 
 
-#: src/reference/weak-refs.md:69
+#: src/reference/weak-refs.md:76
 msgid ""
 "Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`, `bytes`, a user `opaque` box, or a host box."
 msgstr "适用于**任何单元**：类、结构体、`Vec`、`[T]`、枚举、`str`、`bytes`、用户 `opaque` 盒，或宿主盒。"
 
 
-#: src/reference/weak-refs.md:71
+#: src/reference/weak-refs.md:78
 msgid "`Weak.new(nil)` traps (\"weak on nil\")."
 msgstr "`Weak.new(nil)` 陷阱（\"weak on nil\"）。"
 
 
-#: src/reference/weak-refs.md:72
+#: src/reference/weak-refs.md:79
 msgid ""
 "**`Weak.new(v)` consumes the argument's temporary** and nulls its register (the engine's one consuming op): the weak observes the _binding's_ lifetime, never a temporary's. `Weak.new(make())` watches a referent that dies as soon as the temporary is released — `upgrade()` answers `nil`. Bind the value first:"
 msgstr ""
 "**`Weak.new(v)` 消费实参的临时值**并将其寄存器置空（引擎唯一的消费操作）：弱引用观察的是 _绑定_ 的生命周期，绝不是临时值的。`Weak.new(make())` 注视的被引用对象在临时值释放时立即死亡 —— `upgrade()` 应答 `nil`。先绑定值："
 
 
-#: src/reference/weak-refs.md:78
+#: src/reference/weak-refs.md:85
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Payload { n: i32; }\n"
@@ -17894,6 +17911,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Payload { n: i32; }\n"
@@ -17909,53 +17927,53 @@ msgstr ""
 "```"
 
 
-#: src/reference/weak-refs.md:97
+#: src/reference/weak-refs.md:105
 msgid ""
 "Two `Weak.new(v)` of one `v` are distinct boxes; `==` on weak boxes is identity, and two weaks of the same referent are not equal to each other."
 msgstr "对同一个 `v` 的两个 `Weak.new(v)` 是不同的盒；弱盒上的 `==` 是同一性，同一被引用对象的两个弱引用彼此不相等。"
 
 
-#: src/reference/weak-refs.md:101
+#: src/reference/weak-refs.md:109
 msgid "Upgrade — `w.upgrade() -> ?T`"
 msgstr "升级 —— `w.upgrade() -> ?T`"
 
 
-#: src/reference/weak-refs.md:103
+#: src/reference/weak-refs.md:111
 msgid ""
 "A dead-check plus retain: a live referent is retained into a fresh `?T` handle; a dead one answers the **null slot** — true `nil`, never a box containing nil."
 msgstr ""
 "一次死亡检查加 retain：存活的被引用对象被保留进一个新的 `?T` 句柄；已死的应答**空槽** —— 真正的 `nil`，绝不是装着 nil 的盒。"
 
 
-#: src/reference/weak-refs.md:106
+#: src/reference/weak-refs.md:114
 msgid ""
 "On `Weak<?U>` (legal) the answer is `??U` — the sticky-`?` law ([by-reference and nullable](by-reference-and-nullable.md))."
 msgstr ""
 "在 `Weak<?U>`（合法）上答案是 `??U` —— 粘性 `?` 法则（[按引用与可空](by-reference-and-nullable.md)）。"
 
 
-#: src/reference/weak-refs.md:108
+#: src/reference/weak-refs.md:116
 msgid ""
 "`upgrade()` on nil traps (\"upgrade on nil\"); on a non-weak value it traps (\"upgrade on non-weak\")."
 msgstr "对 nil 的 `upgrade()` 陷阱（\"upgrade on nil\"）；对非弱值则陷阱（\"upgrade on non-weak\"）。"
 
 
-#: src/reference/weak-refs.md:111
+#: src/reference/weak-refs.md:119
 msgid "Deterministic ordering"
 msgstr "确定性顺序"
 
 
-#: src/reference/weak-refs.md:113
+#: src/reference/weak-refs.md:121
 msgid ""
 "The referent's death **nulls every weak box before anything that runs user code** — before the dispose pin, before payload teardown. A dispose body that calls `upgrade()` sees `nil`, with no window:"
 msgstr ""
 "被引用对象的死亡**在任何运行用户代码的东西之前把每个弱盒置为 nil** —— 在 dispose 钉住之前，在载荷拆卸之前。调用 `upgrade()` 的 dispose 函数体看到 `nil`，没有窗口期："
 
 
-#: src/reference/weak-refs.md:117
+#: src/reference/weak-refs.md:125
 msgid ""
 "```rut\n"
-"use core::{ Disposal, DisposalContext };\n"
+"use core::{ Disposal, DisposalContext, Weak };\n"
 "\n"
 "class Node  { child: ?Node; }\n"
 "class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer\n"
@@ -17971,7 +17989,7 @@ msgid ""
 "```"
 msgstr ""
 "```rut\n"
-"use core::{ Disposal, DisposalContext };\n"
+"use core::{ Disposal, DisposalContext, Weak };\n"
 "\n"
 "class Node  { child: ?Node; }\n"
 "class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer\n"
@@ -17987,49 +18005,49 @@ msgstr ""
 "```"
 
 
-#: src/reference/weak-refs.md:133
+#: src/reference/weak-refs.md:141
 msgid ""
 "Weak references are **not** destructors — they observe; they never run code. They exist for caches, observers, and back-pointers."
 msgstr "弱引用**不是**析构器 —— 它们观察；它们从不运行代码。它们为缓存、观察者和反向指针而生。"
 
 
-#: src/reference/weak-refs.md:136
+#: src/reference/weak-refs.md:144
 msgid "Leak reporting"
 msgstr "泄漏报告"
 
 
-#: src/reference/weak-refs.md:138
+#: src/reference/weak-refs.md:146
 msgid ""
 "**rc discipline** is asserted in debug builds: retain/release pairing, no underflow, no double destruction."
 msgstr "**引用计数纪律**在 debug 构建中断言：retain/release 配对，无下溢，无双重销毁。"
 
 
-#: src/reference/weak-refs.md:140
+#: src/reference/weak-refs.md:148
 msgid ""
 "**Shutdown leak report**: at `Vm::drop`, surviving non-immortal objects are reported grouped by type, with allocation sites in debug builds — the primary tool for finding leaked cycles. Deterministic execution means a leak reproduces exactly."
 msgstr ""
 "**关闭时泄漏报告**：在 `Vm::drop` 时，按类型分组报告存活的非不朽对象，debug 构建中附带分配点 —— 这是找到泄漏循环的首要工具。确定性执行意味着泄漏可以精确复现。"
 
 
-#: src/reference/weak-refs.md:144
+#: src/reference/weak-refs.md:152
 msgid ""
 "The host can read live usage at any time (`vm.heap_usage()`, [resource limits](resource-limits.md))."
 msgstr "宿主可以随时读取活跃用量（`vm.heap_usage()`，[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/weak-refs.md:146
+#: src/reference/weak-refs.md:154
 msgid ""
 "Fuzz targets assert no crash and that destructor counts match allocations minus reported survivors."
 msgstr "fuzz 目标断言不崩溃，并且析构器计数等于分配数减去报告的存活者。"
 
 
-#: src/reference/weak-refs.md:149
+#: src/reference/weak-refs.md:157
 msgid ""
 "Status: the `Weak<T>` surface above is shipped; the shutdown report and per-type live counts are the specified diagnostics tier."
 msgstr "状态：上面的 `Weak<T>` 接口面已发布；关闭报告与按类型的活跃计数是规格中的诊断层（tier）。"
 
 
-#: src/reference/weak-refs.md:152
+#: src/reference/weak-refs.md:160
 msgid ""
 "If real code ever demands more, a collector could return only as a separate, opt-in module — the heap assumes nothing of it today."
 msgstr "如果真实代码有一天需要更多，收集器只能作为一个单独的、可选加入的模块回归 —— 今天的堆对它不做任何假设。"
@@ -20961,7 +20979,7 @@ msgid "`bench_cross::pkg()`"
 msgstr "`bench_cross::pkg()`"
 
 
-#: src/reference/embedding.md:321 src/reference/stdlib.md:139
+#: src/reference/embedding.md:321 src/reference/stdlib.md:140
 msgid "the crossing-tax benchmark rows"
 msgstr "跨越税基准测试行"
 
@@ -22088,16 +22106,16 @@ msgstr ""
 
 #: src/reference/host-fns.md:95
 msgid ""
-"**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives and their `builtin impl` methods, `opaque`, `Weak`, `StackTrace`, and `panic`/`string_join`/ `capture_stacktrace` are all ambient."
+"**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives and their `builtin impl` methods, `opaque`, `StackTrace`, and `panic`/`string_join`/`capture_stacktrace` are all ambient."
 msgstr ""
-"**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型及其 `builtin impl` 方法、`opaque`、`Weak`、`StackTrace`，以及 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。"
+"**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型及其 `builtin impl` 方法、`opaque`、`StackTrace`，以及 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。"
 
 
-#: src/reference/host-fns.md:100
+#: src/reference/host-fns.md:99
 msgid ""
-"**`pub builtin`** — the **import-gated** engine surface: the name resolves only through `use core::{ .. }`, the way a package's names do. Today's rows are every builtin trait — `Iterable`, `Future`, `RunContext` — and the disposal pair, `Disposal` and `DisposalContext` ([traits](traits.md), [async and await](async.md), [the Rc heap](rc-heap.md)). The engine's weave never consults the gate — it keys on the native-trait symbols — so a module with no imports still iterates, awaits, and launches; only spelling a name in source gates."
+"**`pub builtin`** — the **import-gated** engine surface: the name resolves only through `use core::{ .. }`, the way a package's names do. Today's rows are every builtin trait — `Iterable`, `Future`, `RunContext` — the disposal pair, `Disposal` and `DisposalContext`, and the weak reference, `Weak<T>` ([traits](traits.md), [async and await](async.md), [the Rc heap](rc-heap.md), [weak references](weak-refs.md)). The engine's weave never consults the gate — it keys on the native-trait symbols — so a module with no imports still iterates, awaits, and launches; only spelling a name in source gates."
 msgstr ""
-"**`pub builtin`**——**导入把守**的引擎表面：名字只能经 `use core::{ .. }` 解析，与包名的方式一样。如今的行是每个内置 trait——`Iterable`、`Future`、`RunContext`——以及单元死亡对 `Disposal` 与 `DisposalContext`（[trait](traits.md)、[异步与 await](async.md)、[Rc 堆](rc-heap.md)）。引擎的织造从不查阅这道门——它以原生 trait 符号为键——因此一个没有任何导入的模块仍然可以迭代、await 与启动；把守只落在源码里拼写的名字上。"
+"**`pub builtin`**——**导入把守**的引擎表面：名字只能经 `use core::{ .. }` 解析，与包名的方式一样。如今的行是每个内置 trait——`Iterable`、`Future`、`RunContext`——单元死亡对 `Disposal` 与 `DisposalContext`，以及弱引用 `Weak<T>`（[trait](traits.md)、[异步与 await](async.md)、[Rc 堆](rc-heap.md)、[弱引用](weak-refs.md)）。引擎的织造从不查阅这道门——它以原生 trait 符号为键——因此一个没有任何导入的模块仍然可以迭代、await 与启动；把守只落在源码里拼写的名字上。"
 
 
 #: src/reference/host-fns.md:110
@@ -22144,7 +22162,7 @@ msgid "allowed"
 msgstr "允许"
 
 
-#: src/reference/host-fns.md:135 src/reference/stdlib.md:79
+#: src/reference/host-fns.md:135 src/reference/stdlib.md:80
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr "说明"
@@ -22405,8 +22423,8 @@ msgstr "生成行"
 
 
 #: src/reference/host-fns.md:280 src/reference/reflection.md:75
-#: src/reference/stdlib.md:33 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:211 src/reference/stdlib.md:357
+#: src/reference/stdlib.md:33 src/reference/stdlib.md:175
+#: src/reference/stdlib.md:212 src/reference/stdlib.md:358
 #: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
 #: src/reference/cli.md:171
 msgid "meaning"
@@ -23646,9 +23664,9 @@ msgstr "core——前奏表面"
 
 #: src/reference/stdlib.md:19
 msgid ""
-"The builtin fns, primitives, and containers are in scope in every compilation unit; no `use` is needed. A `use core::{ … };` statement stays legal but is redundant for them. The exceptions — the **import-gated** spellings, resolving only through `use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`, `DisposalContext`), and every engine-woven trait (`Iterable`, `Future`, `RunContext`) — the engine's weave itself never needs the import, only source that spells the names (an `impl` block, a trait-typed signature, a `downcast<Future<..>>`). The two builtin spellings (ambient vs import-gated) are documented in [Host fns and declaration files](host-fns.md)."
+"The builtin fns, primitives, and containers are in scope in every compilation unit; no `use` is needed. A `use core::{ … };` statement stays legal but is redundant for them. The exceptions — the **import-gated** spellings, resolving only through `use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`, `DisposalContext`), the weak reference `Weak<T>`, and every engine-woven trait (`Iterable`, `Future`, `RunContext`) — the engine's weave itself never needs the import, only source that spells the names (an `impl` block, a trait-typed signature, a `downcast<Future<..>>`). The two builtin spellings (ambient vs import-gated) are documented in [Host fns and declaration files](host-fns.md)."
 msgstr ""
-"内置函数、基本类型与容器在每个编译单元都在作用域内；无需 `use`。对它们而言 `use core::{ … };` 语句仍合法但多余。例外——**导入把守**的拼写，只能经 `use core::{ .. }` 解析：常量 `NAN`、`Disposal` 对（`Disposal`、`DisposalContext`），以及每个引擎织入的 trait（`Iterable`、`Future`、`RunContext`）——引擎的织造本身从不需要导入，需要它的是拼写了名字的源码（一个 `impl` 块、一个 trait 类型的签名、一个 `downcast<Future<..>>`）。两种内置拼写（环境自带 vs 导入把守）记录在[宿主函数与声明文件](host-fns.md)。"
+"内置函数、基本类型与容器在每个编译单元都在作用域内；无需 `use`。对它们而言 `use core::{ … };` 语句仍合法但多余。例外——**导入把守**的拼写，只能经 `use core::{ .. }` 解析：常量 `NAN`、`Disposal` 对（`Disposal`、`DisposalContext`）、弱引用 `Weak<T>`，以及每个引擎织入的 trait（`Iterable`、`Future`、`RunContext`）——引擎的织造本身从不需要导入，需要它的是拼写了名字的源码（一个 `impl` 块、一个 trait 类型的签名、一个 `downcast<Future<..>>`）。两种内置拼写（环境自带 vs 导入把守）记录在[宿主函数与声明文件](host-fns.md)。"
 
 
 #: src/reference/stdlib.md:33
@@ -23747,440 +23765,441 @@ msgstr ""
 
 #: src/reference/stdlib.md:65
 msgid ""
-"Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps (the class-method construction) ([opaque](opaque.md), [weak references](weak-refs.md))."
+"Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps (the class-method construction; the `Weak` name itself is import-gated — `use core::{ Weak }`) ([opaque](opaque.md), [weak references](weak-refs.md))."
 msgstr ""
-"构造保留其内置形式：`opaque(v)` 封存，`Weak.new(v)` 包装（类方法构造）（[opaque](opaque.md)、[弱引用](weak-refs.md)）。"
+"构造保留其内置形式：`opaque(v)` 封存，`Weak.new(v)` 包装（类方法构造；`Weak` 这个名字本身是导入把守的——`use core::{ Weak }`）（[opaque](opaque.md)、[弱引用](weak-refs.md)）。"
 
 
-#: src/reference/stdlib.md:69
+#: src/reference/stdlib.md:70
 msgid "Builtin classes"
 msgstr "内建类"
 
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:72
 msgid "class"
 msgstr "类"
 
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:72
 msgid "members"
 msgstr "成员"
 
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:74
 msgid "`StackTrace`"
 msgstr "`StackTrace`"
 
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:74
 msgid ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str`"
 msgstr ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str`"
 
 
-#: src/reference/stdlib.md:74
-msgid ""
-"`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died"
-msgstr "`Weak.new(v)`（对 nil 触发陷阱；仅引用类型）、`upgrade() -> ?T`——所指者死亡后为 `nil`"
-
-
 #: src/reference/stdlib.md:75
+msgid ""
+"`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }`"
+msgstr ""
+"`Weak.new(v)`（对 nil 触发陷阱；仅引用类型）、`upgrade() -> ?T`——所指者死亡后为 `nil`。**导入把守**——`use core::{ Weak }`"
+
+
+#: src/reference/stdlib.md:76
 msgid "`DisposalContext`"
 msgstr "`DisposalContext`"
 
 
-#: src/reference/stdlib.md:75
+#: src/reference/stdlib.md:76
 msgid ""
 "no members — the engine-minted parameter of a `dispose` body; it exists so the context can grow without touching the trait signature"
 msgstr "无成员——`dispose` 函数体的引擎铸造参数；它存在是为了让上下文可以成长而不触碰 trait 签名"
 
 
-#: src/reference/stdlib.md:77
+#: src/reference/stdlib.md:78
 msgid "Engine-woven traits"
 msgstr "引擎织入的 trait"
 
 
-#: src/reference/stdlib.md:79
+#: src/reference/stdlib.md:80
 msgid "trait"
 msgstr "trait"
 
 
-#: src/reference/stdlib.md:79 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:80 src/reference/stdlib.md:175
+#: src/reference/stdlib.md:358
 msgid "member"
 msgstr "成员"
 
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid "`Iterable<E>`"
 msgstr "`Iterable<E>`"
 
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid "`fn iterate(self, emit: fn(E) -> bool)`"
 msgstr "`fn iterate(self, emit: fn(E) -> bool)`"
 
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid ""
 "`for (x of it)` desugars to it; `emit` returning `false` stops. **import-gated** — `use core::{ Iterable }` (an `impl Iterable<E> for T` names it); the builtin sequences' fused loops never do"
 msgstr ""
 "`for (x of it)` 脱糖到它；`emit` 返回 `false` 即停止。**导入把守**——`use core::{ Iterable }`（`impl Iterable<E> for T` 点名它）；内置序列的融合循环从不需要"
 
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid "`Future<T>`"
 msgstr "`Future<T>`"
 
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid "`fn yield(cx: RunContext)`"
 msgstr "`fn yield(cx: RunContext)`"
 
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid ""
 "every `async fn`'s hidden frame implements it; `await` consumes it. **import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: Future<T>`, `downcast<Future<..>>`)"
 msgstr ""
 "每个 `async fn` 的隐藏帧都实现它；`await` 消费它。**导入把守**——`use core::{ Future }`（用户 impl、启动器的 `f: Future<T>`、`downcast<Future<..>>`）"
 
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid "`RunContext`"
 msgstr "`RunContext`"
 
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid ""
 "`checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool`"
 msgstr ""
 "`checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool`"
 
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid ""
 "the async protocol's cx record ([async and await](async.md)); **import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield signature spells it)"
 msgstr ""
 "异步协议的 cx 记录（[异步与 await](async.md)）；**导入把守**——`use core::{ RunContext }`（`async fn` 头或 yield 签名会拼写它）"
 
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid "`Disposal`"
 msgstr "`Disposal`"
 
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid "`fn dispose(mut self, cx: DisposalContext)`"
 msgstr "`fn dispose(mut self, cx: DisposalContext)`"
 
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid ""
 "the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, DisposalContext }`"
 msgstr ""
 "单元死亡契约：引擎在引用计数归零时调用它（[Rc 堆](rc-heap.md)）；**导入把守**——`use core::{ Disposal, DisposalContext }`"
 
 
-#: src/reference/stdlib.md:86
+#: src/reference/stdlib.md:87
 msgid ""
 "Users implement these with ordinary `impl` blocks; the engine has compiler-backed impls for its own types. All four are `pub builtin` (the import-gated spelling): the weave is keyed on the native-trait symbols and never consults user scope — a module that imports nothing still iterates builtins, awaits, and launches."
 msgstr ""
 "用户用普通的 `impl` 块实现它们；引擎为自己的类型准备了编译器背书的 impl。全部四个都是 `pub builtin`（导入把守的拼写）：织造以原生 trait 符号为键，从不查阅用户作用域——一个什么都不导入的模块仍然可以迭代内置序列、await 与启动。"
 
 
-#: src/reference/stdlib.md:92
+#: src/reference/stdlib.md:93
 msgid "Numeric methods (per integer width `i8`–`u64`)"
 msgstr "数值方法（每个整数宽度 `i8`–`u64` 各有一套）"
 
 
-#: src/reference/stdlib.md:101
+#: src/reference/stdlib.md:102
 msgid ""
 "Ambient like the primitives themselves: `x.wrapping_add(y)` needs no `use`. The trap-on-overflow `+`/`-`/`*`/`<<` stay the default operators."
 msgstr ""
 "像基本类型本身一样环境自带：`x.wrapping_add(y)` 不需要 `use`。溢出即陷阱的 `+`/`-`/`*`/`<<` 仍是默认运算符。"
 
 
-#: src/reference/stdlib.md:104
+#: src/reference/stdlib.md:105
 msgid "Constants"
 msgstr "常量"
 
 
-#: src/reference/stdlib.md:106
+#: src/reference/stdlib.md:107
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float constants are `calc`'s."
 msgstr "`NAN`（f64）——core 唯一的常量，由 `use core::{NAN}` 点名。其余浮点常量都是 `calc` 的。"
 
 
-#: src/reference/stdlib.md:109
+#: src/reference/stdlib.md:110
 msgid "What core does _not_ have"
 msgstr "core _没有_的东西"
 
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:112
 msgid "removed"
 msgstr "已移除"
 
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:112
 msgid "replacement"
 msgstr "替代"
 
 
-#: src/reference/stdlib.md:113
+#: src/reference/stdlib.md:114
 msgid ""
 "`?T` with `nil` as absence; `(T, err)` tuples ([by-reference and nullable](by-reference-and-nullable.md))"
 msgstr "以 `nil` 表示缺席的 `?T`；`(T, err)` 元组（[按引用与可空](by-reference-and-nullable.md)）"
 
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:115
 msgid "`own` / `make_ptr`"
 msgstr "`own` / `make_ptr`"
 
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:115
 msgid "`?T` bindings are the cell reference"
 msgstr "`?T` 绑定就是单元引用"
 
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:116
 msgid "`char`"
 msgstr "`char`"
 
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:116
 msgid "`str` of one codepoint; `s.code()`/`str.from_code(n)`"
 msgstr "单码点的 `str`；`s.code()`/`str.from_code(n)`"
 
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:117
 msgid "free `downcast<T>(o)`"
 msgstr "自由函数 `downcast<T>(o)`"
 
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:117
 msgid "`opaque.downcast<T>(o)`"
 msgstr "`opaque.downcast<T>(o)`"
 
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:118
 msgid "`Array` as a name"
 msgstr "作为名字的 `Array`"
 
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:118
 msgid "the `[T]` grammar; `[v; n]` repeat construction"
 msgstr "`[T]` 文法；`[v; n]` 重复构造"
 
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:119
 msgid "`on_drop(p, cleanup)`"
 msgstr "`on_drop(p, cleanup)`"
 
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:119
 msgid ""
 "implement `Disposal` for the type — the engine calls `dispose` at refcount zero ([the Rc heap](rc-heap.md))"
 msgstr "为该类型实现 `Disposal`——引擎在引用计数归零时调用 `dispose`（[Rc 堆](rc-heap.md)）"
 
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:120
 msgid "output builtins (`print`, `console`)"
 msgstr "输出类内建（`print`、`console`）"
 
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:120
 msgid "a logger package (`ink`)"
 msgstr "一个 logger 包（`ink`）"
 
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:121
 msgid "`assert(cond, msg?)`"
 msgstr "`assert(cond, msg?)`"
 
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:121
 msgid ""
 "plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }` — write the helper where you need it"
 msgstr ""
 "基于 `panic` 的普通 rut 代码：`fn assert(c: bool, m: str) { if (!c) { panic(m); } }`——在需要的地方写下这个辅助函数"
 
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:122
 msgid "`StrBuf`"
 msgstr "`StrBuf`"
 
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:122
 msgid ""
 "`use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` is engine-optimized ([the builder package](#strbuild--the-builder), [f-strings](literals-and-inference.md))"
 msgstr ""
 "`use strbuild::{ StringBuilder }`，或直接累加：`out = f\"{out}{t}\"` 已被引擎优化（[构建器包](#strbuild--the-builder)、[f 字符串](literals-and-inference.md)）"
 
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:124
 msgid ""
 "No removed surface keeps compatibility routing: a removed head in an unresolvable position is an ordinary unknown-name error."
 msgstr "没有哪个被移除的表面保留兼容路由：在无法解析的位置出现的被移除头部，就是一个普通的未知名字错误。"
 
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:127
 msgid "The swappable set"
 msgstr "可换集合"
 
 
-#: src/reference/stdlib.md:128 src/reference/project-structure.md:152
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:152
 msgid "package"
 msgstr "包"
 
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:129
 msgid "kind"
 msgstr "种类"
 
 
-#: src/reference/stdlib.md:128 src/reference/stdlib.md:211
+#: src/reference/stdlib.md:129 src/reference/stdlib.md:212
 msgid "surface"
 msgstr "表面"
 
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:131
 msgid "`ink_host`"
 msgstr "`ink_host`"
 
 
-#: src/reference/stdlib.md:130 src/reference/stdlib.md:136
-#: src/reference/stdlib.md:139
+#: src/reference/stdlib.md:131 src/reference/stdlib.md:137
+#: src/reference/stdlib.md:140
 msgid "host pkg"
 msgstr "宿主包"
 
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:131
 msgid ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)`"
 msgstr ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)`"
 
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:132
 msgid "`ink`"
 msgstr "`ink`"
 
 
-#: src/reference/stdlib.md:131 src/reference/stdlib.md:132
+#: src/reference/stdlib.md:132 src/reference/stdlib.md:133
 msgid "inline rut pkg"
 msgstr "内联 rut 包"
 
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:132
 msgid "the `Logger` class over `ink_host`"
 msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:158
+#: src/reference/stdlib.md:133 src/reference/project-structure.md:158
 msgid "`pouch`"
 msgstr "`pouch`"
 
 
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:133
 msgid "the growable sequence `Vec<T>`"
 msgstr "可增长序列 `Vec<T>`"
 
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "`nmap_host` / `nmapset`"
 msgstr "`nmap_host` / `nmapset`"
 
 
-#: src/reference/stdlib.md:133 src/reference/stdlib.md:135
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:134 src/reference/stdlib.md:136
+#: src/reference/stdlib.md:138
 msgid "host pkg + inline rut pkg"
 msgstr "宿主包 + 内联 rut 包"
 
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:134 src/reference/project-structure.md:159
+#: src/reference/stdlib.md:135 src/reference/project-structure.md:159
 msgid "`json`"
 msgstr "`json`"
 
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:135
 msgid "inline rut pkg (pulls `strbuild_host`)"
 msgstr "内联 rut 包（随行拉取 `strbuild_host`）"
 
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:135
 msgid "`encodeJson` / `decodeJson` / `decodeJsonBytes` + traits"
 msgstr "`encodeJson` / `decodeJson` / `decodeJsonBytes` + traits"
 
 
-#: src/reference/stdlib.md:135
+#: src/reference/stdlib.md:136
 msgid "`strbuild_host` / `strbuild`"
 msgstr "`strbuild_host` / `strbuild`"
 
 
-#: src/reference/stdlib.md:135
+#: src/reference/stdlib.md:136
 msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:136 src/reference/project-structure.md:155
+#: src/reference/stdlib.md:137 src/reference/project-structure.md:155
 msgid "`calc`"
 msgstr "`calc`"
 
 
-#: src/reference/stdlib.md:136
+#: src/reference/stdlib.md:137
 msgid "the `Math` namespace"
 msgstr "`Math` 命名空间"
 
 
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:138
 msgid "`async_engine` / `async_host`"
 msgstr "`async_engine` / `async_host`"
 
 
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:138
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr "启动器各行；`launch_future` / `sleep`"
 
 
-#: src/reference/stdlib.md:138
+#: src/reference/stdlib.md:139
 msgid "`http_host` / `http`"
 msgstr "`http_host` / `http`"
 
 
-#: src/reference/stdlib.md:138
+#: src/reference/stdlib.md:139
 msgid "host pkg + rut pkg"
 msgstr "宿主包 + rut 包"
 
 
-#: src/reference/stdlib.md:138 src/reference/cli.md:61
+#: src/reference/stdlib.md:139 src/reference/cli.md:61
 msgid "the std HTTP lanes"
 msgstr "标准 HTTP 链路"
 
 
-#: src/reference/stdlib.md:139
+#: src/reference/stdlib.md:140
 msgid "`bench-cross`"
 msgstr "`bench-cross`"
 
 
-#: src/reference/stdlib.md:141
+#: src/reference/stdlib.md:142
 msgid "`ink_host` and `ink` — logging"
 msgstr "`ink_host` 与 `ink`——日志"
 
 
-#: src/reference/stdlib.md:143
+#: src/reference/stdlib.md:144
 msgid ""
 "There is no `print`, no global output builtin. All logging goes through a used logger; the host owns the sink, and an uninstalled sink is a silent no-op — a script cannot accidentally spam an embedded host's stdout."
 msgstr ""
 "没有 `print`，没有全局输出内建。所有日志都经过一个被使用的 logger；汇点由宿主拥有，未安装的汇点是无声的空操作——脚本不可能意外刷屏嵌入式宿主的 stdout。"
 
 
-#: src/reference/stdlib.md:147
+#: src/reference/stdlib.md:148
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -24201,135 +24220,135 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "method"
 msgstr "方法"
 
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "level passed to `ink_host`"
 msgstr "传给 `ink_host` 的级别"
 
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:163
 msgid "`debug(msg)`"
 msgstr "`debug(msg)`"
 
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:163
 msgid "0"
 msgstr "0"
 
 
-#: src/reference/stdlib.md:163
+#: src/reference/stdlib.md:164
 msgid "`info(msg)` / `log(msg)`"
 msgstr "`info(msg)` / `log(msg)`"
 
 
-#: src/reference/stdlib.md:163 src/reference/frontend.md:98
+#: src/reference/stdlib.md:164 src/reference/frontend.md:98
 #: src/reference/bundles.md:200
 msgid "1"
 msgstr "1"
 
 
-#: src/reference/stdlib.md:164
+#: src/reference/stdlib.md:165
 msgid "`warn(msg)`"
 msgstr "`warn(msg)`"
 
 
-#: src/reference/stdlib.md:164 src/reference/frontend.md:99
+#: src/reference/stdlib.md:165 src/reference/frontend.md:99
 #: src/reference/bundles.md:201
 msgid "2"
 msgstr "2"
 
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:166
 msgid "`error(msg)`"
 msgstr "`error(msg)`"
 
 
-#: src/reference/stdlib.md:165 src/reference/frontend.md:100
+#: src/reference/stdlib.md:166 src/reference/frontend.md:100
 #: src/reference/bundles.md:202
 msgid "3"
 msgstr "3"
 
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:168
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!(\"{s}\")))` (the ctx is `session.host_pkg_context()` — [embedding](embedding.md)). Mounting `ink` pulls `ink_host` along (`deps`)."
 msgstr ""
 "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!(\"{s}\")))`（ctx 即 `session.host_pkg_context()`——[嵌入](embedding.md)）。挂载 `ink` 会顺带拉来 `ink_host`（`deps`）。"
 
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:171
 msgid "`pouch` — `Vec<T>`"
 msgstr "`pouch`——`Vec<T>`"
 
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:173
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr "可增长序列，用 rut 写在定长 `[T]` 数组之上："
 
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid "construction (`[v; n]` under the hood)"
 msgstr "构造（底层是 `[v; n]`）"
 
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid "`push(v)` / `pop() -> T`"
 msgstr "`push(v)` / `pop() -> T`"
 
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > 0`"
 msgstr "`pop` 返回被移除的元素；**对空触发陷阱**——用 `len() > 0` 设守卫"
 
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr "`get`/`set` via `v[i]`, `for (x of v)`"
 
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr "编译器下降；元素访问别名所存储的单元"
 
 
-#: src/reference/stdlib.md:179
+#: src/reference/stdlib.md:180
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr "`from([T])` / `as_array() -> [T]`"
 
 
-#: src/reference/stdlib.md:179
+#: src/reference/stdlib.md:180
 msgid "bridges to the fixed array"
 msgstr "通往定长数组的桥"
 
 
-#: src/reference/stdlib.md:180
+#: src/reference/stdlib.md:181
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr "`Vec<u8>` → 不可变 `bytes` 的复制（恰好是存活长度）"
 
 
-#: src/reference/stdlib.md:181
+#: src/reference/stdlib.md:182
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr "编译器下降的 O(1) 定长窗口；增长时脱离"
 
 
-#: src/reference/stdlib.md:185
+#: src/reference/stdlib.md:186
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it registers `impl Iterable<E> for T`, and a Flow wraps one drive in adapter stages — a closure per STAGE, never per element. Pipelines are the clarity tier; the fused builtin loops stay the perf tier."
 msgstr ""
 "`Flow<E>` 把推送契约串成链：一个类型在注册了 `impl Iterable<E> for T` 时即可迭代，而 Flow 把同一次 drive 包进适配器阶段——每个阶段一个闭包，绝非每个元素一个。管线是清晰度档位；融合的内建循环仍是性能档位。"
 
 
-#: src/reference/stdlib.md:190
+#: src/reference/stdlib.md:191
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -24350,109 +24369,109 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:214
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr "`x.into_flow() -> Flow<E>`"
 
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:214
 msgid ""
 "the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and `Flow<E>` itself (the identity row: a chain re-enters as a source)"
 msgstr ""
 "入口——`IntoFlow<E>` 行：`[T]`、`str`、`bytes`、`Vec<T>`，以及 `Flow<E>` 自身（同一性行：一条链重新作为源进入）"
 
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:215
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:215
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers"
 msgstr "变换——引入新的类型变量，因此请标注 lambda 或写明类型实参；具名 fn 可自动推断"
 
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:216
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr "`filter(p: fn(E) -> bool) -> Self`"
 
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:216
 msgid "keep the elements the predicate admits"
 msgstr "保留谓词放行的元素"
 
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:217
 msgid "`take(n)` / `skip(n)`"
 msgstr "`take(n)` / `skip(n)`"
 
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:217
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained"
 msgstr "前 `n` 个 / 跳过前 `n` 个之后的全部——计数器是一个由 drive 改动的记录，耗尽的阶段保持耗尽"
 
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:218
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
 msgstr ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
 
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:218
 msgid "the one-drive consumers"
 msgstr "单次 drive 的消费者"
 
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid "`T::from_flow(it: Iterable<E>) -> T`"
 msgstr "`T::from_flow(it: Iterable<E>) -> T`"
 
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`"
 msgstr "汇——`FromFlow<E>` 行：`Vec<T>`、`HashSet<T>`"
 
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid "`for (x of chain)`"
 msgstr "`for (x of chain)`"
 
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid ""
 "chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar"
 msgstr "链即可迭代对象——`impl Iterable<E> for Flow<E>` 行进入普通的脱糖"
 
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:222
 msgid ""
 "**Import the traits you spell and the pipeline type**: `use flow::{ Flow, IntoFlow, FromFlow }` — the use-both law names each one; the sink's `Iterable<E>` parameter re-mints through `use core::{ Iterable }` (the `from_flow` sinks take the CONTRACT, not Flow, so a user iterable — a `CountUp`\\-shape — widens straight into them)."
 msgstr ""
 "**拼写了什么就导入什么，连同管线类型**：`use flow::{ Flow, IntoFlow, FromFlow }`——使用即导入法则逐一点名；汇的 `Iterable<E>` 参数经 `use core::{ Iterable }` 重铸（`from_flow` 汇取的是契约而非 Flow，因此用户可迭代对象——`CountUp`\\ 形状——直接加宽进入）。"
 
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:228
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no host-table walk — json's map encode grows with it) and `HashMap::from_flow` (its `(K, V)` tuple trait argument cannot cross the compiled-bundle impl-row carrier yet; it compiles and dispatches inside flow's own unit)."
 msgstr ""
 "**延后但有记载**：mapset 的 `IntoFlow`（nmapset 尚无宿主表遍历——json 的 map 编码将与它一同成长）和 `HashMap::from_flow`（其 `(K, V)` 元组 trait 实参尚无法跨越编译包的 impl 行载体；它在 flow 自己的单元内编译并分派）。"
 
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:234
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr "`nmapset`——`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:235
+#: src/reference/stdlib.md:236
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state is one `opaque` handle, every method one host call."
 msgstr "架在原生键表（`nmap_host` 行）之上的薄包装：全部状态就是一个 `opaque` 句柄，每个方法一次宿主调用。"
 
 
-#: src/reference/stdlib.md:238
+#: src/reference/stdlib.md:239
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {\n"
@@ -24481,19 +24500,19 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:251
+#: src/reference/stdlib.md:252
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom key canonically to `bytes`); `get` answers the stored cell, so two gets of one key name one value until a replace; values release host-side. `str` keys hash by content; `str` keys also carry `*_range(parent, off, len)` members keyed by a byte range of the parent string — a range key is the same key as its content, with no key cell minted on a probe ([string views](string-views.md))."
 msgstr ""
 "法则：键集合是封闭的（没有浮点数——没有稳定的相等契约；自定义键以规范编码成 `bytes` 的方式破例）；`get` 应答的是存储的单元，因此对同一个键的两次 get 在替换之前指名同一个值；值在宿主侧释放。`str` 键按内容哈希；`str` 键还携带以父串字节范围为键的 `*_range(parent, off, len)` 成员——范围键与其内容是同一个键，探查时不铸造任何键单元（[字符串视图](string-views.md)）。"
 
 
-#: src/reference/stdlib.md:259
+#: src/reference/stdlib.md:260
 msgid "`calc` — the `Math` namespace"
 msgstr "`calc`——`Math` 命名空间"
 
 
-#: src/reference/stdlib.md:261
+#: src/reference/stdlib.md:262
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -24526,91 +24545,91 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:280
+#: src/reference/stdlib.md:281
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`, `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`. Constants: `Math.PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE`. Integer numeric methods are core's, not `calc`'s."
 msgstr ""
 "函数（各带一个 `_f` 的 f32 孪生）：`sqrt`、`floor`、`ceil`、`round`、`trunc`、`exp`、`ln`、`log2`、`log10`、`sin`、`cos`、`tan`、`asin`、`acos`、`atan`、`sinh`、`cosh`、`tanh`、`pow`、`atan2`、`hypot`、`copysign`、`fma`，外加浮点辅助 `abs`、`min`、`max`、`signum`。常量：`Math.PI`、`TAU`、`E`、`SQRT_2`、`LN_2`、`LN_10`、`LOG2_E`、`LOG10_E`、`INFINITY`、`NEG_INFINITY`、`EPSILON`、`MAX`、`MIN`、`MIN_POSITIVE`。整数的数值方法是 core 的，不是 `calc` 的。"
 
 
-#: src/reference/stdlib.md:288
+#: src/reference/stdlib.md:289
 msgid "`json` — the serde package"
 msgstr "`json`——serde 包"
 
 
-#: src/reference/stdlib.md:290
+#: src/reference/stdlib.md:291
 msgid ""
 "Pure rut, `inline = true`, zero host fns — a json mount adds no host bindings."
 msgstr "纯 rut，`inline = true`，零宿主函数——挂载 json 不添加任何宿主绑定。"
 
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:303
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 "**对偶法则**：`(?T, ?E)` 恰好一个 nil——成功 = `(value, nil)`，失败 = `(nil, err)`。Encode 返回 `?EncodeJsonError`，因为循环结构被预期为可恢复的数据，而不是陷阱。"
 
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:306
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its expectations straight off the cursor. A `Vec<Row>` decode mints exactly the program's values, once."
 msgstr ""
 "**直接解码**：没有中间文档；类型的 `decode` 直接从游标上读取它期望的东西。一次 `Vec<Row>` 解码恰好铸造程序需要的值，且只铸一次。"
 
 
-#: src/reference/stdlib.md:308
+#: src/reference/stdlib.md:309
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = `WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common range, ±1 ulp beyond (disclosed); encode renders the shortest round-trip decimal."
 msgstr ""
 "**数字**：`i64` 只接受整型词素（溢出/带小数点的词素 = `WrongType`，绝不无声回绕）；`f64` 在常见范围内按 IEEE 精确解析，范围之外误差 ±1 ulp（明示）；encode 渲染最短往返十进制。"
 
 
-#: src/reference/stdlib.md:312
+#: src/reference/stdlib.md:313
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable (`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 "**深度**：两个方向都以 128 封顶，可恢复（`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`）。"
 
 
-#: src/reference/stdlib.md:314
+#: src/reference/stdlib.md:315
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, `EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`; decode details carry `at`/`got`/`expected`, encode details carry `at` and the lazily built `$.rows[3].name` path."
 msgstr ""
 "**错误**：无载荷的种类枚举 + 固定字段结构体——`DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`、`EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`；decode 细节携带 `at`/`got`/`expected`，encode 细节携带 `at` 和惰性构建的 `$.rows[3].name` 路径。"
 
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:320
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr "`decodeJsonBytes` 是严格 UTF-8（`InvalidUtf8`），绝不有损。"
 
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:321
 msgid ""
 "**Ownership**: json owns the traits; all container impls live in json, gated by peer groups — `Vec` rows activate when `pouch` is anywhere in the consumer's closure, the map/set rows when `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 "**所有权**：trait 归 json 所有；所有容器 impl 都住在 json 里，由 peer 组把门——当 `pouch` 出现在消费方闭包的任何角落时 `Vec` 行激活，`nmapset` 在场时 map/set 行激活（[依赖种类](dependency-kinds.md)）。没有这些 peer 的消费方挂载的是轻量版 json。"
 
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:326
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 "写入器经由 `strbuild` 的 `StringBuilder` 累积；读取器搭载 core 的 `str.scan`/`starts_with` 原语和 O(1) 字符串视图。"
 
 
-#: src/reference/stdlib.md:329
+#: src/reference/stdlib.md:330
 msgid "`strbuild` — the builder"
 msgstr "`strbuild`——构建器"
 
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:332
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`, registered under the pkg-name scope), and the `strbuild` package wraps them in the `StringBuilder` class. Core ships no string-building machinery; a strbuild mount pairs with the bodies:"
 msgstr ""
 "构建器现在是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` 声明包声明五个行（`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，以包名作用域注册），`strbuild` 包把它们包进 `StringBuilder` 类。核心不内置任何字符串构建机制；挂载 strbuild 即与函数体配对："
 
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -24643,103 +24662,103 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:359
+#: src/reference/stdlib.md:360
 msgid "`new()`"
 msgstr "`new()`"
 
 
-#: src/reference/stdlib.md:359
+#: src/reference/stdlib.md:360
 msgid "grow from small"
 msgstr "从小处开始增长"
 
 
-#: src/reference/stdlib.md:360
+#: src/reference/stdlib.md:361
 msgid "`with_cap(cap: i32)`"
 msgstr "`with_cap(cap: i32)`"
 
 
-#: src/reference/stdlib.md:360
+#: src/reference/stdlib.md:361
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap)"
 msgstr "按八位组提示预定尺寸（负数触发陷阱；提示仅供参考 —— 每个容量值的行为完全相同）"
 
 
-#: src/reference/stdlib.md:361
+#: src/reference/stdlib.md:362
 msgid "`append(mut self, value: str)`"
 msgstr "`append(mut self, value: str)`"
 
 
-#: src/reference/stdlib.md:361
+#: src/reference/stdlib.md:362
 msgid "amortized O(\\|s\\|), in place"
 msgstr "均摊 O(\\|s\\|)，就地追加"
 
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:363
 msgid "`append_code(mut self, cp: u32)`"
 msgstr "`append_code(mut self, cp: u32)`"
 
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:363
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr "一个码点；无效标量铸造 U+FFFD"
 
 
-#: src/reference/stdlib.md:363
+#: src/reference/stdlib.md:364
 msgid "codepoints so far, O(1)"
 msgstr "迄今为止的码点数，O(1)"
 
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:365
 msgid "`build() -> str`"
 msgstr "`build() -> str`"
 
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:365
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr "全新的不可变 str；构建器保留自己的缓冲区"
 
 
-#: src/reference/stdlib.md:366
+#: src/reference/stdlib.md:367
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land in the caller's document; copies happen at exactly two engineered points — `build`'s materialization and growth's prefix move. Growth consults the embedder's heap budget BEFORE growing (the geometric next-capacity is charged), so the wasm 4 MiB cap governs builder growth exactly as it governs engine allocations."
 msgstr ""
 "共享是默认：经由别名（或 `mut` 参数）做出的追加落进调用方的文档；复制恰好发生在两个刻意设计的位置——`build` 的实体化和增长时的前缀搬移。增长在发生之前先询问嵌入方的堆预算（几何下一容量按记账收取），因此 wasm 的 4 MiB 上限对构建器增长的约束与对引擎分配完全一致。"
 
 
-#: src/reference/stdlib.md:373
+#: src/reference/stdlib.md:374
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting `strbuild` pulls `strbuild_host` along (`deps`); mounting `json` pulls both (its writer rides the builder)."
 msgstr ""
 "嵌入方一侧：`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`。挂载 `strbuild` 顺带拉来 `strbuild_host`（`deps`）；挂载 `json` 则两个都来（它的 writer 骑在构建器上）。"
 
 
-#: src/reference/stdlib.md:378
+#: src/reference/stdlib.md:379
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = f\"{out}{t}\"` appends in place, linear in the total output ([f-strings](literals-and-inference.md))."
 msgstr ""
 "对常见的累加器形状，完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性（[f 字符串](literals-and-inference.md)）。"
 
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:383
 msgid "`calc`'s company: `async` and `http`"
 msgstr "`calc` 的同伴：`async` 与 `http`"
 
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:385
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
 msgstr ""
 "`async_engine` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`async_host` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[任务](tasks.md)、[宿主 future](host-futures.md)）。"
 
 
-#: src/reference/stdlib.md:391
+#: src/reference/stdlib.md:392
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 "`http_host` 声明传输各行（三个异步，五个同步读回）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的："
 
 
-#: src/reference/stdlib.md:396
+#: src/reference/stdlib.md:397
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -24766,33 +24785,33 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:408
+#: src/reference/stdlib.md:409
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; `byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for transport failure. The reqwest lane is native-only."
 msgstr ""
 "`send` 在响应头处解析；`body(cx)` 排干线上的响应体；`byte_stream()`/`next(cx)` 逐块行走。状态 `0` 保留给传输失败。reqwest 链路仅限原生构建。"
 
 
-#: src/reference/stdlib.md:412
+#: src/reference/stdlib.md:413
 msgid "Mounting"
 msgstr "挂载"
 
 
-#: src/reference/stdlib.md:414
+#: src/reference/stdlib.md:415
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. Swappable packages mount by directory or bundle ([module bundles](bundles.md)); the `rut` CLI mounts the tree packages a loose file names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 "`mount_std` 挂载 `core` + `calc`；`mount_std_async` 加上异步那一对。可换包按目录或捆绑包挂载（[模块捆绑包](bundles.md)）；`rut` CLI 会为散文件挂载它按 `use` 点名的树内包（[rut CLI](cli.md)）。"
 
 
-#: src/reference/stdlib.md:418
+#: src/reference/stdlib.md:419
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
 msgstr ""
 "`inline = true` 的包（ink、pouch、nmapset、json、strbuild、async_host）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
 
 
-#: src/reference/stdlib.md:422
+#: src/reference/stdlib.md:423
 msgid ""
 "Generic exports link on their own: instantiation happens where the body lives, consumers request it, and `Vec<i64>` is one type program-wide ([the compiler pipeline](compiler.md))."
 msgstr ""

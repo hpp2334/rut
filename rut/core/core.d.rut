@@ -15,8 +15,9 @@
 // Builtin decls spell `prelude builtin` or `pub builtin` — the two
 // strict spellings. `prelude builtin` binds AMBIENT: in scope in every
 // compilation unit, no `use` needed. `pub builtin` is the import-gated
-// form: it will resolve only through `use core::{ .. }` (core's surface
-// is entirely ambient `prelude builtin` today). (Pkg mounting by `use`
+// form: it resolves only through `use core::{ .. }` (today the gated
+// rows are the weak reference `Weak<T>` and the disposal pair — every
+// other name here is ambient). (Pkg mounting by `use`
 // — ink/pouch/calc — is a different mechanism and unaffected.) The
 // compiler's copy of this surface is `rut_core::binary::Surface::core`;
 // a driver test asserts the two stay in lockstep. Type-calls spelled
@@ -69,7 +70,10 @@ prelude builtin class StackTrace {
 // from inside the dying cell's own cleanup. A weak edge closes no
 // cycle: strong cycles still leak to `Vm::drop` (the stated
 // rule — this class is the first-class answer, not a collector).
-prelude builtin class Weak<T> {
+// `pub builtin` (the import-gated spelling): the class resolves
+// through `use core::{ Weak }`; a bare `Weak` diagnoses
+// "`Weak` is not in scope — `use core::{ Weak }`".
+pub builtin class Weak<T> {
     fn upgrade(self) -> ?T;       // the live referent retained into a
                                   // fresh ?T, or nil once the referent
                                   // died (repeat upgrades are stable)

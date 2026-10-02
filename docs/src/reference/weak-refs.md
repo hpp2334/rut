@@ -28,7 +28,14 @@ cell holding the referent's slot word, **unretained** — a weak never
 keeps anything alive, and a path through a `Weak` does not close a
 strong cycle.
 
+`Weak` is one of core's **import-gated** builtin names: spell
+`use core::{ Weak };` to bring the class in
+([core and the swappable packages](stdlib.md)). A bare `Weak` does not
+compile — the diagnostic is
+`` `Weak` is not in scope — `use core::{ Weak }` ``.
+
 ```rut
+use core::{ Weak };
 use ink::{ Logger };
 
 class Node {
@@ -76,6 +83,7 @@ node 1
   `upgrade()` answers `nil`. Bind the value first:
 
   ```rut
+  use core::{ Weak };
   use ink::{ Logger };
 
   struct Payload { n: i32; }
@@ -115,7 +123,7 @@ user code** — before the dispose pin, before payload teardown. A
 dispose body that calls `upgrade()` sees `nil`, with no window:
 
 ```rut
-use core::{ Disposal, DisposalContext };
+use core::{ Disposal, DisposalContext, Weak };
 
 class Node  { child: ?Node; }
 class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer

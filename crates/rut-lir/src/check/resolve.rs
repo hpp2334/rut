@@ -441,8 +441,11 @@ impl<'a> Ctx<'a> {
                 }
                 // `Weak<T>` resolves like every builtin now —
                 // the pre-weak M5 stub ("not supported in this build") that
-                // pre-reserved the name is gone; the `Weak` row reaches the
-                // `core_ty` match below through the same ambient surface.
+                // pre-reserved the name is gone; the gated native types
+                // (`Weak`, `DisposalContext`) reach the `core_ty` match
+                // below the same way every row here does: only once the
+                // unit's `use` bound the name (the ambient rows —
+                // `Opaque`, `StackTrace` — bind in every unit without it).
                 // a used core builtin container: the
                 // prelude is used, never ambient — `Opaque`
                 // resolves only when the name was bound from the core

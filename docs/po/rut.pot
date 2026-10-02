@@ -1202,7 +1202,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:141
-#: src/reference/rc-dispose-identity.md:123
+#: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
 #: src/reference/workers-and-channels.md:51 src/reference/value-boundary.md:35
 #: src/reference/value-boundary.md:36 src/reference/templates.md:19
@@ -1218,7 +1218,7 @@ msgid "binary"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
-#: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:124
+#: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
 #: src/reference/value-boundary.md:37 src/reference/value-boundary.md:38
 msgid "`bytes`"
@@ -1499,7 +1499,7 @@ msgid "Operands"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:228
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "`==` means"
 msgstr ""
@@ -3751,10 +3751,10 @@ msgstr ""
 msgid ""
 "Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free "
 "array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions "
-"are core's import-gated pair, `Disposal`/`DisposalContext` — they resolve "
-"only through `use core::{ .. }`, like any package name. Package names from "
-"your manifest are imported the same way; an unused name in a `use` is a "
-"lint, not an error."
+"are core's import-gated names — the `Disposal`/`DisposalContext` pair and "
+"the weak reference `Weak` — they resolve only through `use core::{ .. }`, "
+"like any package name. Package names from your manifest are imported the "
+"same way; an unused name in a `use` is a lint, not an error."
 msgstr ""
 
 #: src/tutorial/modules.md:82
@@ -4516,7 +4516,7 @@ msgid ""
 "questions, they don't walk."
 msgstr ""
 
-#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:183
+#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:184
 msgid "`flow` — the push pipeline"
 msgstr ""
 
@@ -4978,7 +4978,7 @@ msgid ""
 msgstr ""
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
-#: src/core-concepts/traits-and-dispatch.md:244 src/core-concepts/memory.md:204
+#: src/core-concepts/traits-and-dispatch.md:244 src/core-concepts/memory.md:207
 msgid "What this buys you"
 msgstr ""
 
@@ -6395,12 +6395,15 @@ msgid ""
 "`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps anything "
 "alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once "
 "it died. Construction is the class-method form, admission is checked "
-"(reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps."
+"(reference types only — `Weak<i32>` diagnoses), and `Weak.new(nil)` traps. "
+"The name is **import-gated** — spell `use core::{ Weak };`, or the bare "
+"`Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``."
 msgstr ""
 
-#: src/core-concepts/memory.md:117
+#: src/core-concepts/memory.md:119
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Model {\n"
@@ -6425,7 +6428,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/memory.md:144
+#: src/core-concepts/memory.md:147
 msgid ""
 "The two shapes that cause accidental cycles — **back-pointers** (child → "
 "parent) and **caches** (a table that should not extend lifetimes) — are "
@@ -6433,32 +6436,32 @@ msgid ""
 "cycle."
 msgstr ""
 
-#: src/core-concepts/memory.md:149
+#: src/core-concepts/memory.md:152
 msgid "The cycle policy"
 msgstr ""
 
-#: src/core-concepts/memory.md:151
+#: src/core-concepts/memory.md:154
 msgid ""
 "**A strong cycle is a leak — deterministically.** Its members live until the "
 "VM is dropped; no collector ever runs, no pass interrupts execution, and "
 "destructor ordering never surprises you. Guidance is lint-level, not runtime:"
 msgstr ""
 
-#: src/core-concepts/memory.md:156
+#: src/core-concepts/memory.md:159
 msgid ""
 "resource-holding types (types with `Disposal` impls or host handles) must "
 "not participate in strong cycles;"
 msgstr ""
 
-#: src/core-concepts/memory.md:158
+#: src/core-concepts/memory.md:161
 msgid "parent/child and observer shapes take `Weak` back-pointers;"
 msgstr ""
 
-#: src/core-concepts/memory.md:159
+#: src/core-concepts/memory.md:162
 msgid "pure-data cycles are harmless — they cost only memory."
 msgstr ""
 
-#: src/core-concepts/memory.md:161
+#: src/core-concepts/memory.md:164
 msgid ""
 "You are not left alone with the rule: debug builds assert refcount "
 "discipline (retain/release pairing, no underflow, no double free), and at "
@@ -6467,68 +6470,68 @@ msgid ""
 "cycles. Behavior is fully deterministic, so a leak reproduces exactly."
 msgstr ""
 
-#: src/core-concepts/memory.md:168
+#: src/core-concepts/memory.md:171
 msgid "The self-managed heap"
 msgstr ""
 
-#: src/core-concepts/memory.md:170
+#: src/core-concepts/memory.md:173
 msgid ""
 "Host code may use `std` freely, but every byte backing a rut value is "
 "allocated through the VM's own heap manager. The discipline is the point, "
 "not the allocator:"
 msgstr ""
 
-#: src/core-concepts/memory.md:174
+#: src/core-concepts/memory.md:177
 msgid ""
 "**Cells** come from fixed-size arena chunks with freelists; a dead slot is "
 "reused by the next mint."
 msgstr ""
 
-#: src/core-concepts/memory.md:176
+#: src/core-concepts/memory.md:179
 msgid ""
 "**Variable-size payloads** (string octets, array element runs) live in "
 "size-classed blocks that never move; in-place geometric growth keeps append "
 "loops linear, and freelists recycle the common sizes."
 msgstr ""
 
-#: src/core-concepts/memory.md:179
+#: src/core-concepts/memory.md:182
 msgid ""
 "**Immortal singletons** — interned string literals, enum variants — live in "
 "a slab freed only at VM drop, carrying the \"no refcount\" sentinel."
 msgstr ""
 
-#: src/core-concepts/memory.md:182
+#: src/core-concepts/memory.md:185
 msgid ""
 "**Nothing compacts.** The heap never moves cells, which is precisely what "
 "lets the boundary hand Rust zero-copy views into buffers (see [the host "
 "boundary](host-boundary.md))."
 msgstr ""
 
-#: src/core-concepts/memory.md:186
+#: src/core-concepts/memory.md:189
 msgid "Why self-manage instead of using the host's allocator?"
 msgstr ""
 
-#: src/core-concepts/memory.md:188
+#: src/core-concepts/memory.md:191
 msgid ""
 "**Budgets.** An embedder can say \"this script gets N bytes\" and get a "
 "clean, resumable out-of-memory trap instead of an OS abort. "
 "`vm.heap_usage()` is exact because every allocation is accounted."
 msgstr ""
 
-#: src/core-concepts/memory.md:191
+#: src/core-concepts/memory.md:194
 msgid ""
 "**Teardown.** `Vm::drop` frees the whole heap in slab units after the leak "
 "report; nothing per-object leaks past the VM — important for wasm pages and "
 "plugin hosts that spawn and kill scripts."
 msgstr ""
 
-#: src/core-concepts/memory.md:194
+#: src/core-concepts/memory.md:197
 msgid ""
 "**Leak reporting** walks the VM's own headers, which requires the VM's own "
 "headers everywhere."
 msgstr ""
 
-#: src/core-concepts/memory.md:197
+#: src/core-concepts/memory.md:200
 msgid ""
 "The budget check runs _before_ any write — a failed allocation leaves the "
 "heap byte-identical — and traps resumably: raise the limit and continue, or "
@@ -6537,20 +6540,20 @@ msgid ""
 "bytecode VM](the-vm.md) for how budgets interleave with execution."
 msgstr ""
 
-#: src/core-concepts/memory.md:206
+#: src/core-concepts/memory.md:209
 msgid ""
 "**Deterministic resource release** — the property the whole design is "
 "organized around. If your script opened something, the closing statement is "
 "knowable."
 msgstr ""
 
-#: src/core-concepts/memory.md:209
+#: src/core-concepts/memory.md:212
 msgid ""
 "**No pauses.** There is no collection pass; destruction happens inline at "
 "release-to-zero, so nothing ever interrupts a frame."
 msgstr ""
 
-#: src/core-concepts/memory.md:211
+#: src/core-concepts/memory.md:214
 msgid ""
 "**A small, honest mental model.** Sharing is by reference, copies are built "
 "explicitly (see [everything is a value](everything-is-a-value.md)), "
@@ -10880,7 +10883,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:363
+#: src/reference/builtin-generic-types.md:109 src/reference/stdlib.md:364
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -10896,7 +10899,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:181
+#: src/reference/builtin-generic-types.md:111 src/reference/stdlib.md:182
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -10912,7 +10915,7 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:180
+#: src/reference/builtin-generic-types.md:113 src/reference/stdlib.md:181
 msgid "`freeze() -> bytes`"
 msgstr ""
 
@@ -10933,12 +10936,15 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:121
 msgid ""
 "`Weak<T>` is a builtin class whose box holds an _unretained_ word to a "
-"referent — a weak never keeps anything alive."
+"referent — a weak never keeps anything alive. The name is **import-gated**: "
+"spell `use core::{ Weak };` or the bare `Weak` diagnoses `` `Weak` is not in "
+"scope — `use core::{ Weak }` ``."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:124
+#: src/reference/builtin-generic-types.md:126
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -10953,30 +10959,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:142
+#: src/reference/builtin-generic-types.md:145
 msgid ""
 "`Weak.new(v)` traps on a `nil` `v`; `T` must be a reference type "
 "(`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and "
 "`upgrade()` answers `??U`."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:145
+#: src/reference/builtin-generic-types.md:148
 msgid ""
 "The referent's death nulls every weak box before any user code runs; "
 "`upgrade()` answers `nil` deterministically from then on."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:147
+#: src/reference/builtin-generic-types.md:150
 msgid ""
 "A weak edge closes no cycle: strong cycles still leak — see [Rc, dispose, "
 "and identity](rc-dispose-identity.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:150
+#: src/reference/builtin-generic-types.md:153
 msgid "Keyed collections"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:152
+#: src/reference/builtin-generic-types.md:155
 msgid ""
 "`HashMap<K, V>` and `HashSet<T>` (package `nmapset`) wrap a native key "
 "table. Admission is the compile-time **union bound** `K requires i8 | i16 | "
@@ -10988,11 +10994,11 @@ msgid ""
 "not a copy (the aliasing law)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:162
+#: src/reference/builtin-generic-types.md:165
 msgid "Absence and errors"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:164
+#: src/reference/builtin-generic-types.md:167
 msgid ""
 "There are no `Option`/`Result` builtins — the spellings are ordinary "
 "identifiers, and an unresolved use diagnoses as the unknown name it is. The "
@@ -11000,25 +11006,25 @@ msgid ""
 "table maps each retired spelling to its replacement:"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:169
+#: src/reference/builtin-generic-types.md:172
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means "
 "\"not found\"."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:174
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive "
 "types](primitive-types.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:173
+#: src/reference/builtin-generic-types.md:176
 msgid ""
 "**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see [opaque — "
 "erasure and downcast](opaque.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:176
+#: src/reference/builtin-generic-types.md:179
 msgid ""
 "`==` on the removed sum spellings is a compile error. Compare structurally: "
 "`when`, a `nil`/`!= nil` guard, or the payload."
@@ -12359,6 +12365,7 @@ msgstr ""
 #: src/reference/rc-dispose-identity.md:92
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Tile { v: i32; }\n"
@@ -12373,7 +12380,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:110
+#: src/reference/rc-dispose-identity.md:111
 msgid ""
 "The referent's death nulls every weak box before any user code runs. A weak "
 "edge closes no cycle: strong cycles (two records holding each other, a "
@@ -12381,74 +12388,74 @@ msgid ""
 "memory law is the program's; break cycles with `Weak`."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:115
+#: src/reference/rc-dispose-identity.md:116
 msgid "Identity — `==`"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:117
+#: src/reference/rc-dispose-identity.md:118
 msgid ""
 "`a == b` is a builtin operator: no dispatch, no opting in, no element-wise "
 "story. `a != b` is its negation."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "Operand type"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:120
+#: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "Lowering"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 #: src/reference/by-reference-and-nullable.md:99
 msgid "numeric / `bool` primitives"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 #: src/reference/by-reference-and-nullable.md:99
 msgid "value"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:122
+#: src/reference/rc-dispose-identity.md:123
 msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:123
+#: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
 msgid "content (codepoints)"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:123
 #: src/reference/rc-dispose-identity.md:124
+#: src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:100
 #: src/reference/by-reference-and-nullable.md:101
 msgid "content compare"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:124
+#: src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
 msgid "content (octets)"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 msgid ""
 "everything else — records, arrays, `Vec`, enums, closures, trait objects, "
 "`opaque`, `?T`"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 #: src/reference/by-reference-and-nullable.md:102
 msgid "**cell identity**"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:125
+#: src/reference/rc-dispose-identity.md:126
 #: src/reference/by-reference-and-nullable.md:102
 msgid "the raw slot compare"
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:127
+#: src/reference/rc-dispose-identity.md:128
 msgid ""
 "Identity is the only `==` sharing can defend: with aliasing everywhere, "
 "structural equality of two independently built cells is ambiguous, and "
@@ -12456,32 +12463,32 @@ msgid ""
 "cells."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:131
+#: src/reference/rc-dispose-identity.md:132
 msgid ""
 "Enum members are immortal singletons, so `Flavor.Sour == Flavor.Sour` is "
 "`true` — the one place identity quietly behaves as value."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:133
+#: src/reference/rc-dispose-identity.md:134
 msgid ""
 "`?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not; "
 "`p == nil` derefs the nullable side and compares against the null slot."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:136
+#: src/reference/rc-dispose-identity.md:137
 msgid ""
 "An **identity-compare lint** flags `==` between two obviously fresh "
 "composites (`Vec.from([..]) == Vec.from([..])`): \"always false — compare "
 "fields\". Asserting distinctness is legitimate and suppressible."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:140
+#: src/reference/rc-dispose-identity.md:141
 msgid ""
 "Field-wise comparison is a library trait contract (`hash` + `eq` implemented "
 "per type) — the mechanism value-keyed maps ride. It is not connected to `==`."
 msgstr ""
 
-#: src/reference/rc-dispose-identity.md:143
+#: src/reference/rc-dispose-identity.md:144
 msgid ""
 "`when` literal patterns are unaffected: arms match compile-time values, "
 "never runtime `==`."
@@ -14281,7 +14288,7 @@ msgstr ""
 msgid "pass `x` directly — sharing needs no spelling"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:113
+#: src/reference/by-reference-and-nullable.md:142 src/reference/stdlib.md:114
 msgid "`Option<T>` / `Result<T, E>`"
 msgstr ""
 
@@ -14738,7 +14745,7 @@ msgid ""
 "back-pointers) as well as through collections."
 msgstr ""
 
-#: src/reference/weak-refs.md:24 src/reference/stdlib.md:74
+#: src/reference/weak-refs.md:24 src/reference/stdlib.md:75
 msgid "`Weak<T>`"
 msgstr ""
 
@@ -14751,7 +14758,16 @@ msgstr ""
 
 #: src/reference/weak-refs.md:31
 msgid ""
+"`Weak` is one of core's **import-gated** builtin names: spell `use core::{ "
+"Weak };` to bring the class in ([core and the swappable "
+"packages](stdlib.md)). A bare `Weak` does not compile — the diagnostic is `` "
+"`Weak` is not in scope — `use core::{ Weak }` ``."
+msgstr ""
+
+#: src/reference/weak-refs.md:37
+msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "class Node {\n"
@@ -14780,11 +14796,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/weak-refs.md:62
+#: src/reference/weak-refs.md:69
 msgid "Construction — `Weak.new(v)`"
 msgstr ""
 
-#: src/reference/weak-refs.md:64
+#: src/reference/weak-refs.md:71
 msgid ""
 "Construction is a **class method** with admission at the instantiation: `T` "
 "must be a **reference type**. `Weak<i32>` and `Weak.new(some_fn)` diagnose; "
@@ -14793,17 +14809,17 @@ msgid ""
 "`Weak.new(v)`.)"
 msgstr ""
 
-#: src/reference/weak-refs.md:69
+#: src/reference/weak-refs.md:76
 msgid ""
 "Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`, "
 "`bytes`, a user `opaque` box, or a host box."
 msgstr ""
 
-#: src/reference/weak-refs.md:71
+#: src/reference/weak-refs.md:78
 msgid "`Weak.new(nil)` traps (\"weak on nil\")."
 msgstr ""
 
-#: src/reference/weak-refs.md:72
+#: src/reference/weak-refs.md:79
 msgid ""
 "**`Weak.new(v)` consumes the argument's temporary** and nulls its register "
 "(the engine's one consuming op): the weak observes the _binding's_ lifetime, "
@@ -14812,9 +14828,10 @@ msgid ""
 "first:"
 msgstr ""
 
-#: src/reference/weak-refs.md:78
+#: src/reference/weak-refs.md:85
 msgid ""
 "```rut\n"
+"use core::{ Weak };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Payload { n: i32; }\n"
@@ -14831,50 +14848,50 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/weak-refs.md:97
+#: src/reference/weak-refs.md:105
 msgid ""
 "Two `Weak.new(v)` of one `v` are distinct boxes; `==` on weak boxes is "
 "identity, and two weaks of the same referent are not equal to each other."
 msgstr ""
 
-#: src/reference/weak-refs.md:101
+#: src/reference/weak-refs.md:109
 msgid "Upgrade — `w.upgrade() -> ?T`"
 msgstr ""
 
-#: src/reference/weak-refs.md:103
+#: src/reference/weak-refs.md:111
 msgid ""
 "A dead-check plus retain: a live referent is retained into a fresh `?T` "
 "handle; a dead one answers the **null slot** — true `nil`, never a box "
 "containing nil."
 msgstr ""
 
-#: src/reference/weak-refs.md:106
+#: src/reference/weak-refs.md:114
 msgid ""
 "On `Weak<?U>` (legal) the answer is `??U` — the sticky-`?` law "
 "([by-reference and nullable](by-reference-and-nullable.md))."
 msgstr ""
 
-#: src/reference/weak-refs.md:108
+#: src/reference/weak-refs.md:116
 msgid ""
 "`upgrade()` on nil traps (\"upgrade on nil\"); on a non-weak value it traps "
 "(\"upgrade on non-weak\")."
 msgstr ""
 
-#: src/reference/weak-refs.md:111
+#: src/reference/weak-refs.md:119
 msgid "Deterministic ordering"
 msgstr ""
 
-#: src/reference/weak-refs.md:113
+#: src/reference/weak-refs.md:121
 msgid ""
 "The referent's death **nulls every weak box before anything that runs user "
 "code** — before the dispose pin, before payload teardown. A dispose body "
 "that calls `upgrade()` sees `nil`, with no window:"
 msgstr ""
 
-#: src/reference/weak-refs.md:117
+#: src/reference/weak-refs.md:125
 msgid ""
 "```rut\n"
-"use core::{ Disposal, DisposalContext };\n"
+"use core::{ Disposal, DisposalContext, Weak };\n"
 "\n"
 "class Node  { child: ?Node; }\n"
 "class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer\n"
@@ -14890,23 +14907,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/weak-refs.md:133
+#: src/reference/weak-refs.md:141
 msgid ""
 "Weak references are **not** destructors — they observe; they never run code. "
 "They exist for caches, observers, and back-pointers."
 msgstr ""
 
-#: src/reference/weak-refs.md:136
+#: src/reference/weak-refs.md:144
 msgid "Leak reporting"
 msgstr ""
 
-#: src/reference/weak-refs.md:138
+#: src/reference/weak-refs.md:146
 msgid ""
 "**rc discipline** is asserted in debug builds: retain/release pairing, no "
 "underflow, no double destruction."
 msgstr ""
 
-#: src/reference/weak-refs.md:140
+#: src/reference/weak-refs.md:148
 msgid ""
 "**Shutdown leak report**: at `Vm::drop`, surviving non-immortal objects are "
 "reported grouped by type, with allocation sites in debug builds — the "
@@ -14914,25 +14931,25 @@ msgid ""
 "reproduces exactly."
 msgstr ""
 
-#: src/reference/weak-refs.md:144
+#: src/reference/weak-refs.md:152
 msgid ""
 "The host can read live usage at any time (`vm.heap_usage()`, [resource "
 "limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/weak-refs.md:146
+#: src/reference/weak-refs.md:154
 msgid ""
 "Fuzz targets assert no crash and that destructor counts match allocations "
 "minus reported survivors."
 msgstr ""
 
-#: src/reference/weak-refs.md:149
+#: src/reference/weak-refs.md:157
 msgid ""
 "Status: the `Weak<T>` surface above is shipped; the shutdown report and "
 "per-type live counts are the specified diagnostics tier."
 msgstr ""
 
-#: src/reference/weak-refs.md:152
+#: src/reference/weak-refs.md:160
 msgid ""
 "If real code ever demands more, a collector could return only as a separate, "
 "opt-in module — the heap assumes nothing of it today."
@@ -17520,7 +17537,7 @@ msgstr ""
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:321 src/reference/stdlib.md:139
+#: src/reference/embedding.md:321 src/reference/stdlib.md:140
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
@@ -18496,20 +18513,21 @@ msgstr ""
 msgid ""
 "**`prelude builtin`** — the **ambient** engine surface: the name binds in "
 "every compilation unit, no `use` needed. The primitives and their `builtin "
-"impl` methods, `opaque`, `Weak`, `StackTrace`, and `panic`/`string_join`/ "
-"`capture_stacktrace` are all ambient."
+"impl` methods, `opaque`, `StackTrace`, and "
+"`panic`/`string_join`/`capture_stacktrace` are all ambient."
 msgstr ""
 
-#: src/reference/host-fns.md:100
+#: src/reference/host-fns.md:99
 msgid ""
 "**`pub builtin`** — the **import-gated** engine surface: the name resolves "
 "only through `use core::{ .. }`, the way a package's names do. Today's rows "
-"are every builtin trait — `Iterable`, `Future`, `RunContext` — and the "
-"disposal pair, `Disposal` and `DisposalContext` ([traits](traits.md), [async "
-"and await](async.md), [the Rc heap](rc-heap.md)). The engine's weave never "
-"consults the gate — it keys on the native-trait symbols — so a module with "
-"no imports still iterates, awaits, and launches; only spelling a name in "
-"source gates."
+"are every builtin trait — `Iterable`, `Future`, `RunContext` — the disposal "
+"pair, `Disposal` and `DisposalContext`, and the weak reference, `Weak<T>` "
+"([traits](traits.md), [async and await](async.md), [the Rc "
+"heap](rc-heap.md), [weak references](weak-refs.md)). The engine's weave "
+"never consults the gate — it keys on the native-trait symbols — so a module "
+"with no imports still iterates, awaits, and launches; only spelling a name "
+"in source gates."
 msgstr ""
 
 #: src/reference/host-fns.md:110
@@ -18556,7 +18574,7 @@ msgstr ""
 msgid "allowed"
 msgstr ""
 
-#: src/reference/host-fns.md:135 src/reference/stdlib.md:79
+#: src/reference/host-fns.md:135 src/reference/stdlib.md:80
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr ""
@@ -18799,8 +18817,8 @@ msgid "emitted row"
 msgstr ""
 
 #: src/reference/host-fns.md:280 src/reference/reflection.md:75
-#: src/reference/stdlib.md:33 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:211 src/reference/stdlib.md:357
+#: src/reference/stdlib.md:33 src/reference/stdlib.md:175
+#: src/reference/stdlib.md:212 src/reference/stdlib.md:358
 #: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
 #: src/reference/cli.md:171
 msgid "meaning"
@@ -19883,12 +19901,12 @@ msgid ""
 "compilation unit; no `use` is needed. A `use core::{ … };` statement stays "
 "legal but is redundant for them. The exceptions — the **import-gated** "
 "spellings, resolving only through `use core::{ .. }`: the const `NAN`, the "
-"`Disposal` pair (`Disposal`, `DisposalContext`), and every engine-woven "
-"trait (`Iterable`, `Future`, `RunContext`) — the engine's weave itself never "
-"needs the import, only source that spells the names (an `impl` block, a "
-"trait-typed signature, a `downcast<Future<..>>`). The two builtin spellings "
-"(ambient vs import-gated) are documented in [Host fns and declaration "
-"files](host-fns.md)."
+"`Disposal` pair (`Disposal`, `DisposalContext`), the weak reference "
+"`Weak<T>`, and every engine-woven trait (`Iterable`, `Future`, `RunContext`) "
+"— the engine's weave itself never needs the import, only source that spells "
+"the names (an `impl` block, a trait-typed signature, a "
+"`downcast<Future<..>>`). The two builtin spellings (ambient vs import-gated) "
+"are documented in [Host fns and declaration files](host-fns.md)."
 msgstr ""
 
 #: src/reference/stdlib.md:33
@@ -19961,124 +19979,124 @@ msgstr ""
 #: src/reference/stdlib.md:65
 msgid ""
 "Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps "
-"(the class-method construction) ([opaque](opaque.md), [weak "
-"references](weak-refs.md))."
+"(the class-method construction; the `Weak` name itself is import-gated — "
+"`use core::{ Weak }`) ([opaque](opaque.md), [weak references](weak-refs.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:69
+#: src/reference/stdlib.md:70
 msgid "Builtin classes"
 msgstr ""
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:72
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:71
+#: src/reference/stdlib.md:72
 msgid "members"
 msgstr ""
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:74
 msgid "`StackTrace`"
 msgstr ""
 
-#: src/reference/stdlib.md:73
+#: src/reference/stdlib.md:74
 msgid ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, "
 "`render() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:74
+#: src/reference/stdlib.md:75
 msgid ""
 "`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — "
-"`nil` once the referent died"
+"`nil` once the referent died. **import-gated** — `use core::{ Weak }`"
 msgstr ""
 
-#: src/reference/stdlib.md:75
+#: src/reference/stdlib.md:76
 msgid "`DisposalContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:75
+#: src/reference/stdlib.md:76
 msgid ""
 "no members — the engine-minted parameter of a `dispose` body; it exists so "
 "the context can grow without touching the trait signature"
 msgstr ""
 
-#: src/reference/stdlib.md:77
+#: src/reference/stdlib.md:78
 msgid "Engine-woven traits"
 msgstr ""
 
-#: src/reference/stdlib.md:79
+#: src/reference/stdlib.md:80
 msgid "trait"
 msgstr ""
 
-#: src/reference/stdlib.md:79 src/reference/stdlib.md:174
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:80 src/reference/stdlib.md:175
+#: src/reference/stdlib.md:358
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid "`Iterable<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid "`fn iterate(self, emit: fn(E) -> bool)`"
 msgstr ""
 
-#: src/reference/stdlib.md:81
+#: src/reference/stdlib.md:82
 msgid ""
 "`for (x of it)` desugars to it; `emit` returning `false` stops. "
 "**import-gated** — `use core::{ Iterable }` (an `impl Iterable<E> for T` "
 "names it); the builtin sequences' fused loops never do"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid "`Future<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid "`fn yield(cx: RunContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid ""
 "every `async fn`'s hidden frame implements it; `await` consumes it. "
 "**import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: "
 "Future<T>`, `downcast<Future<..>>`)"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid "`RunContext`"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid ""
 "`checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, "
 "`cancelled() -> bool`"
 msgstr ""
 
-#: src/reference/stdlib.md:83
+#: src/reference/stdlib.md:84
 msgid ""
 "the async protocol's cx record ([async and await](async.md)); "
 "**import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield "
 "signature spells it)"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid "`Disposal`"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid "`fn dispose(mut self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/stdlib.md:84
+#: src/reference/stdlib.md:85
 msgid ""
 "the cell-death contract: the engine calls it at refcount zero ([the Rc "
 "heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, "
 "DisposalContext }`"
 msgstr ""
 
-#: src/reference/stdlib.md:86
+#: src/reference/stdlib.md:87
 msgid ""
 "Users implement these with ordinary `impl` blocks; the engine has "
 "compiler-backed impls for its own types. All four are `pub builtin` (the "
@@ -20087,249 +20105,249 @@ msgid ""
 "builtins, awaits, and launches."
 msgstr ""
 
-#: src/reference/stdlib.md:92
+#: src/reference/stdlib.md:93
 msgid "Numeric methods (per integer width `i8`–`u64`)"
 msgstr ""
 
-#: src/reference/stdlib.md:101
+#: src/reference/stdlib.md:102
 msgid ""
 "Ambient like the primitives themselves: `x.wrapping_add(y)` needs no `use`. "
 "The trap-on-overflow `+`/`-`/`*`/`<<` stay the default operators."
 msgstr ""
 
-#: src/reference/stdlib.md:104
+#: src/reference/stdlib.md:105
 msgid "Constants"
 msgstr ""
 
-#: src/reference/stdlib.md:106
+#: src/reference/stdlib.md:107
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float "
 "constants are `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:109
+#: src/reference/stdlib.md:110
 msgid "What core does _not_ have"
 msgstr ""
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:112
 msgid "removed"
 msgstr ""
 
-#: src/reference/stdlib.md:111
+#: src/reference/stdlib.md:112
 msgid "replacement"
 msgstr ""
 
-#: src/reference/stdlib.md:113
+#: src/reference/stdlib.md:114
 msgid ""
 "`?T` with `nil` as absence; `(T, err)` tuples ([by-reference and "
 "nullable](by-reference-and-nullable.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:115
 msgid "`own` / `make_ptr`"
 msgstr ""
 
-#: src/reference/stdlib.md:114
+#: src/reference/stdlib.md:115
 msgid "`?T` bindings are the cell reference"
 msgstr ""
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:116
 msgid "`char`"
 msgstr ""
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:116
 msgid "`str` of one codepoint; `s.code()`/`str.from_code(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:117
 msgid "free `downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:116
+#: src/reference/stdlib.md:117
 msgid "`opaque.downcast<T>(o)`"
 msgstr ""
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:118
 msgid "`Array` as a name"
 msgstr ""
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:118
 msgid "the `[T]` grammar; `[v; n]` repeat construction"
 msgstr ""
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:119
 msgid "`on_drop(p, cleanup)`"
 msgstr ""
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:119
 msgid ""
 "implement `Disposal` for the type — the engine calls `dispose` at refcount "
 "zero ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:120
 msgid "output builtins (`print`, `console`)"
 msgstr ""
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:120
 msgid "a logger package (`ink`)"
 msgstr ""
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:121
 msgid "`assert(cond, msg?)`"
 msgstr ""
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:121
 msgid ""
 "plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { "
 "panic(m); } }` — write the helper where you need it"
 msgstr ""
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:122
 msgid "`StrBuf`"
 msgstr ""
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:122
 msgid ""
 "`use strbuild::{ StringBuilder }`, or just accumulate: `out = f\"{out}{t}\"` "
 "is engine-optimized ([the builder package](#strbuild--the-builder), "
 "[f-strings](literals-and-inference.md))"
 msgstr ""
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:124
 msgid ""
 "No removed surface keeps compatibility routing: a removed head in an "
 "unresolvable position is an ordinary unknown-name error."
 msgstr ""
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:127
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/project-structure.md:152
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:152
 msgid "package"
 msgstr ""
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:129
 msgid "kind"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/stdlib.md:211
+#: src/reference/stdlib.md:129 src/reference/stdlib.md:212
 msgid "surface"
 msgstr ""
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:131
 msgid "`ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:130 src/reference/stdlib.md:136
-#: src/reference/stdlib.md:139
+#: src/reference/stdlib.md:131 src/reference/stdlib.md:137
+#: src/reference/stdlib.md:140
 msgid "host pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:131
 msgid ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, "
 "msg: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:132
 msgid "`ink`"
 msgstr ""
 
-#: src/reference/stdlib.md:131 src/reference/stdlib.md:132
+#: src/reference/stdlib.md:132 src/reference/stdlib.md:133
 msgid "inline rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:131
+#: src/reference/stdlib.md:132
 msgid "the `Logger` class over `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:158
+#: src/reference/stdlib.md:133 src/reference/project-structure.md:158
 msgid "`pouch`"
 msgstr ""
 
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:133
 msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "`nmap_host` / `nmapset`"
 msgstr ""
 
-#: src/reference/stdlib.md:133 src/reference/stdlib.md:135
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:134 src/reference/stdlib.md:136
+#: src/reference/stdlib.md:138
 msgid "host pkg + inline rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:134 src/reference/project-structure.md:159
+#: src/reference/stdlib.md:135 src/reference/project-structure.md:159
 msgid "`json`"
 msgstr ""
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:135
 msgid "inline rut pkg (pulls `strbuild_host`)"
 msgstr ""
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:135
 msgid "`encodeJson` / `decodeJson` / `decodeJsonBytes` + traits"
 msgstr ""
 
-#: src/reference/stdlib.md:135
+#: src/reference/stdlib.md:136
 msgid "`strbuild_host` / `strbuild`"
 msgstr ""
 
-#: src/reference/stdlib.md:135
+#: src/reference/stdlib.md:136
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:136 src/reference/project-structure.md:155
+#: src/reference/stdlib.md:137 src/reference/project-structure.md:155
 msgid "`calc`"
 msgstr ""
 
-#: src/reference/stdlib.md:136
+#: src/reference/stdlib.md:137
 msgid "the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:138
 msgid "`async_engine` / `async_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:137
+#: src/reference/stdlib.md:138
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr ""
 
-#: src/reference/stdlib.md:138
+#: src/reference/stdlib.md:139
 msgid "`http_host` / `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:138
+#: src/reference/stdlib.md:139
 msgid "host pkg + rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:138 src/reference/cli.md:61
+#: src/reference/stdlib.md:139 src/reference/cli.md:61
 msgid "the std HTTP lanes"
 msgstr ""
 
-#: src/reference/stdlib.md:139
+#: src/reference/stdlib.md:140
 msgid "`bench-cross`"
 msgstr ""
 
-#: src/reference/stdlib.md:141
+#: src/reference/stdlib.md:142
 msgid "`ink_host` and `ink` — logging"
 msgstr ""
 
-#: src/reference/stdlib.md:143
+#: src/reference/stdlib.md:144
 msgid ""
 "There is no `print`, no global output builtin. All logging goes through a "
 "used logger; the host owns the sink, and an uninstalled sink is a silent "
 "no-op — a script cannot accidentally spam an embedded host's stdout."
 msgstr ""
 
-#: src/reference/stdlib.md:147
+#: src/reference/stdlib.md:148
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -20341,107 +20359,107 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "method"
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "level passed to `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:163
 msgid "`debug(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:163
 msgid "0"
 msgstr ""
 
-#: src/reference/stdlib.md:163
+#: src/reference/stdlib.md:164
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:163 src/reference/frontend.md:98
+#: src/reference/stdlib.md:164 src/reference/frontend.md:98
 #: src/reference/bundles.md:200
 msgid "1"
 msgstr ""
 
-#: src/reference/stdlib.md:164
+#: src/reference/stdlib.md:165
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:164 src/reference/frontend.md:99
+#: src/reference/stdlib.md:165 src/reference/frontend.md:99
 #: src/reference/bundles.md:201
 msgid "2"
 msgstr ""
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:166
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:165 src/reference/frontend.md:100
+#: src/reference/stdlib.md:166 src/reference/frontend.md:100
 #: src/reference/bundles.md:202
 msgid "3"
 msgstr ""
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:168
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| "
 "println!(\"{s}\")))` (the ctx is `session.host_pkg_context()` — "
 "[embedding](embedding.md)). Mounting `ink` pulls `ink_host` along (`deps`)."
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:171
 msgid "`pouch` — `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:173
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid "construction (`[v; n]` under the hood)"
 msgstr ""
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid "`push(v)` / `pop() -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > "
 "0`"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr ""
 
-#: src/reference/stdlib.md:179
+#: src/reference/stdlib.md:180
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/stdlib.md:179
+#: src/reference/stdlib.md:180
 msgid "bridges to the fixed array"
 msgstr ""
 
-#: src/reference/stdlib.md:180
+#: src/reference/stdlib.md:181
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr ""
 
-#: src/reference/stdlib.md:181
+#: src/reference/stdlib.md:182
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:185
+#: src/reference/stdlib.md:186
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it registers "
 "`impl Iterable<E> for T`, and a Flow wraps one drive in adapter stages — a "
@@ -20449,7 +20467,7 @@ msgid ""
 "fused builtin loops stay the perf tier."
 msgstr ""
 
-#: src/reference/stdlib.md:190
+#: src/reference/stdlib.md:191
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -20470,73 +20488,73 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:214
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:214
 msgid ""
 "the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and "
 "`Flow<E>` itself (the identity row: a chain re-enters as a source)"
 msgstr ""
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:215
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:215
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:216
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:216
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:217
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:217
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:218
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:218
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid "`T::from_flow(it: Iterable<E>) -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid "the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid ""
 "chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:222
 msgid ""
 "**Import the traits you spell and the pipeline type**: `use flow::{ Flow, "
 "IntoFlow, FromFlow }` — the use-both law names each one; the sink's "
@@ -20545,7 +20563,7 @@ msgid ""
 "`CountUp`\\-shape — widens straight into them)."
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:228
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
 "host-table walk — json's map encode grows with it) and `HashMap::from_flow` "
@@ -20553,17 +20571,17 @@ msgid ""
 "carrier yet; it compiles and dispatches inside flow's own unit)."
 msgstr ""
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:234
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:235
+#: src/reference/stdlib.md:236
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:238
+#: src/reference/stdlib.md:239
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -20582,7 +20600,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:251
+#: src/reference/stdlib.md:252
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -20593,11 +20611,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:259
+#: src/reference/stdlib.md:260
 msgid "`calc` — the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:261
+#: src/reference/stdlib.md:262
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -20616,7 +20634,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:280
+#: src/reference/stdlib.md:281
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, "
 "`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, "
@@ -20627,31 +20645,31 @@ msgid ""
 "methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:288
+#: src/reference/stdlib.md:289
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:290
+#: src/reference/stdlib.md:291
 msgid ""
 "Pure rut, `inline = true`, zero host fns — a json mount adds no host "
 "bindings."
 msgstr ""
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:303
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:306
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:308
+#: src/reference/stdlib.md:309
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -20659,13 +20677,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:312
+#: src/reference/stdlib.md:313
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:314
+#: src/reference/stdlib.md:315
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -20674,11 +20692,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:320
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:321
 msgid ""
 "**Ownership**: json owns the traits; all container impls live in json, gated "
 "by peer groups — `Vec` rows activate when `pouch` is anywhere in the "
@@ -20686,17 +20704,17 @@ msgid ""
 "kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:326
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:329
+#: src/reference/stdlib.md:330
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:332
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -20706,7 +20724,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -20724,53 +20742,53 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:359
+#: src/reference/stdlib.md:360
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:359
+#: src/reference/stdlib.md:360
 msgid "grow from small"
 msgstr ""
 
-#: src/reference/stdlib.md:360
+#: src/reference/stdlib.md:361
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:360
+#: src/reference/stdlib.md:361
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:361
+#: src/reference/stdlib.md:362
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:361
+#: src/reference/stdlib.md:362
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:363
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:363
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:363
+#: src/reference/stdlib.md:364
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:365
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:365
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:366
+#: src/reference/stdlib.md:367
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -20780,25 +20798,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:373
+#: src/reference/stdlib.md:374
 msgid ""
 "Embedder side: `hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. "
 "Mounting `strbuild` pulls `strbuild_host` along (`deps`); mounting `json` "
 "pulls both (its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:378
+#: src/reference/stdlib.md:379
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:383
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:385
 msgid ""
 "`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
@@ -20808,14 +20826,14 @@ msgid ""
 "has no launcher ([tasks](tasks.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:391
+#: src/reference/stdlib.md:392
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); "
 "`http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / "
 "`Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 
-#: src/reference/stdlib.md:396
+#: src/reference/stdlib.md:397
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -20830,18 +20848,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:408
+#: src/reference/stdlib.md:409
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:412
+#: src/reference/stdlib.md:413
 msgid "Mounting"
 msgstr ""
 
-#: src/reference/stdlib.md:414
+#: src/reference/stdlib.md:415
 msgid ""
 "`mount_std` mounts `core` + `calc`; `mount_std_async` adds the async pair. "
 "Swappable packages mount by directory or bundle ([module "
@@ -20849,7 +20867,7 @@ msgid ""
 "names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:418
+#: src/reference/stdlib.md:419
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
 "are source-inlined into each consumer — required for class-method surfaces, "
@@ -20857,7 +20875,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:422
+#: src/reference/stdlib.md:423
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
