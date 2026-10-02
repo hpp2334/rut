@@ -94,7 +94,7 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             | TyKind::DisposalContext
             | TyKind::Enum { .. }
             | TyKind::TraitObj { .. } => {}
-            TyKind::Array { elem } | TyKind::Weak { elem } | TyKind::Opt { elem } => f(*elem),
+            TyKind::Array { elem } | TyKind::Weak { elem } | TyKind::Opt { elem } | TyKind::Future { elem } => f(*elem),
             TyKind::Data { fields } => for fl in fields {
                 f(fl.ty);
             },
@@ -1254,6 +1254,9 @@ fn remap_kind(
         }
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
         TyKind::Weak { elem } => TyKind::Weak { elem: map(*elem) },
+        // the async handle: the element rides the rebase like every
+        // per-instantiation generic (`Weak<T>`)
+        TyKind::Future { elem } => TyKind::Future { elem: map(*elem) },
         TyKind::Enum { members } => TyKind::Enum {
             members: members
                 .iter()

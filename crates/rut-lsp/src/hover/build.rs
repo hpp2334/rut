@@ -432,23 +432,6 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::BuiltinTrait { name, ambient, generics, methods, .. } => {
-                if !ambient {
-                    idx.pub_gated.push(ast.name(*name).to_string());
-                }
-                let ms = members_of(src, ast, toks, methods);
-                idx.types.push(ty_def(
-                    src,
-                    toks,
-                    ast.name(*name),
-                    TyForm::BuiltinTrait,
-                    Vis::Pub,
-                    generics_of(ast, generics),
-                    Vec::new(),
-                    ms,
-                    span,
-                ));
-            }
             ItemKind::BuiltinImpl { .. } => {
                 // core's `builtin impl i32 { .. }` — no new type; the
                 // methods surface through core's own hover data

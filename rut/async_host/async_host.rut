@@ -1,14 +1,15 @@
 // async_host/async_host.rut — the standard launcher surface in rut
 // (ruling 8: launch_future / LaunchedFutureHandle / sleep are HOST
-// surface — ordinary code over the open Future surface, mounted by
+// surface — ordinary code over the closed `Future` class, mounted by
 // each embedder by choice; users may write their own launchers the
 // same way). The engine rows cross the erasure box (`opaque`);
 // this package restores the typed arrow: `opaque(f)` seals the frame
 // on the way out, `opaque.downcast<Future<nil>>` recovers the sleep
 // mint on the way in.
 //
-// `Future<T>` is core's engine-woven trait: every async
-// fn's hidden frame implements it, and `await` is the in-body consume.
+// `Future<T>` is core's CLOSED engine class (v20): every async
+// producer — an `async fn` call, an `async { }` block, the engine
+// mints below — answers it, and `await` is the in-body consume.
 // `launch_future` is the other consume — the driving loop's trigger —
 // and `sleep` is the one in-tree pender. `select2` / `select_all` are
 // the structured-competition surface (first-ready wins; the losers are
@@ -61,7 +62,7 @@ pub fn launch_future<T>(f: Future<T>) -> LaunchedFutureHandle<T> {
 // The one in-tree pender: a Future<nil> that parks its awaiter until
 // `ms` elapses on the VM's clock (engine-assisted mint; the driving
 // loop's timer queue does the waiting). The mint crosses SEALED under
-// the `Future<nil>` object spelling — the downcast is the recovery.
+// the `Future<nil>` class spelling — the downcast is the recovery.
 pub fn sleep(ms: u32) -> Future<nil> {
     return opaque.downcast<Future<nil>>(__sleep(ms));
 }

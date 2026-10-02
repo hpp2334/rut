@@ -194,7 +194,7 @@ fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<Completio
                     detail: format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
                     doc: t.doc.clone(),
                     kind: match t.form {
-                        TyForm::Trait | TyForm::BuiltinTrait => CompletionKind::Trait,
+                        TyForm::Trait => CompletionKind::Trait,
                         _ => CompletionKind::Type,
                     },
                 },

@@ -70,7 +70,7 @@ type term that follows:
   shared cell (gated by `mut`, see
   [Modules and visibility](modules-and-visibility.md)).
 - When the cell's refcount reaches zero, the engine runs the type's
-  `Disposal` impl (`dispose(self, cx)`) — the cell-death hook, not a
+  `[disposal]` member (`<free>(mut self, cx)`) — the cell-death hook, not a
   per-value attach ([the Rc heap](rc-heap.md)).
 - Across the host boundary `?T` crosses nil-flattened when its element
   crosses.

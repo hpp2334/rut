@@ -43,6 +43,6 @@
     "async_host": {
       "path": "../../rut/async_host"
     },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/http.rutbundle", "sha256": "20f86c6b1488d05c0c135f81a638186bc0c016acdbbdfefdf92096e371b619ea" }
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/http.rutbundle", "sha256": "f9ef8eae03ee922d8f44415d412afbeaa6f9ac296d8bcc52a7fd5e0509da5f43" }
   }
 }

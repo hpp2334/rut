@@ -36,13 +36,12 @@ use rut_vm::{OpaqueRef, Slot, Trap, TrapKind};
 
 use rut_core::async_frame as af;
 
-/// The sleep mint's seal type: the rut-side `Future<nil>` OBJECT
-/// spelling — `mk_trait_inst` spells the instantiation `Future<nil>`
-/// and `mk_trait_obj` interns the object type under `[trait] <that>`,
-/// so this exact name is what `sleep`'s `opaque.downcast<Future<nil>>`
-/// compares the box against (the TidOf law: a Rut entry answers its
-/// recorded `val_ty`).
-const FUTURE_NIL_OBJ: &str = "[trait] Future<nil>";
+/// The sleep mint's seal type: the rut-side `Future<nil>` CLASS
+/// spelling (v20's closed builtin class — `mk_future` interns the
+/// handle type as `Future<nil>`), so this exact name is what `sleep`'s
+/// `opaque.downcast<Future<nil>>` compares the box against (the TidOf
+/// law: a Rut entry answers its recorded `val_ty`).
+const FUTURE_NIL_OBJ: &str = "Future<nil>";
 
 /// The sleep frame type / checkpoint enum / seal type, found by their
 /// reserved names (the compiler mints the frame pair the first time
@@ -211,7 +210,7 @@ fn mint_select2(vm: &Vm, a: Slot, b: Slot) -> Result<OpaqueRef, Trap> {
     let b_ans = vm.prog.type_name(answer_ty_of(vm, cell_of(b).ty)?);
     let composite = format!("Either2<{a_ans}, {b_ans}>");
     let frame_ty = find_ty(vm, &format!("{}{}>", af::SELECT2_FRAME_PREFIX, composite))?;
-    let fut_obj = find_ty(vm, &format!("[trait] Future<{composite}>"))?;
+    let fut_obj = find_ty(vm, &format!("Future<{composite}>"))?;
     let ckpt = find_ty(vm, af::SELECT_CKPT)?;
     let nfields = match vm.prog.types.kind(frame_ty) {
         rut_core::types::TyKind::Data { fields } => fields.len(),
@@ -314,7 +313,7 @@ pub fn pkg() -> HostPkg {
     // ---- the structured-competition rows ----
     //
     // `__select2`: unbox both children, mint the race frame sealed under
-    // the composite `Future<Either2<A, B>>` spelling. Nothing runs here —
+    // the composite `Future<Either2<A, B>>` class spelling. Nothing runs here —
     // the yield's fresh arm arms the cohort and launches it.
     rut_vm::pkg_fn!(pkg, "__select2", (OpaqueRef, OpaqueRef) -> OpaqueRef,
         |vm: &mut Vm, a: OpaqueRef, b: OpaqueRef| {
@@ -415,7 +414,7 @@ pub fn pkg() -> HostPkg {
             })?;
             let t_ans = vm.prog.type_name(answer_ty_of(vm, cell_of(first).ty)?);
             let frame_ty = find_ty(vm, &format!("{}{}>", af::SELECT_ALL_FRAME_PREFIX, t_ans))?;
-            let fut_obj = find_ty(vm, &format!("[trait] Future<(u32, {t_ans})>"))?;
+            let fut_obj = find_ty(vm, &format!("Future<(u32, {t_ans})>"))?;
             let ckpt = find_ty(vm, af::SELECT_ALL_CKPT)?;
             let nfields = match vm.prog.types.kind(frame_ty) {
                 rut_core::types::TyKind::Data { fields } => fields.len(),
@@ -503,7 +502,7 @@ pub fn pkg() -> HostPkg {
         |vm: &mut Vm, ty: u32| {
             let t_ans = vm.prog.type_name(ty).to_string();
             let frame_ty = find_ty(vm, &format!("{}{}>", af::COMPLETER_FRAME_PREFIX, t_ans))?;
-            let fut_obj = find_ty(vm, &format!("[trait] Future<{t_ans}>"))?;
+            let fut_obj = find_ty(vm, &format!("Future<{t_ans}>"))?;
             let ckpt = find_ty(vm, af::COMPLETER_CKPT)?;
             let nfields = match vm.prog.types.kind(frame_ty) {
                 rut_core::types::TyKind::Data { fields } => fields.len(),

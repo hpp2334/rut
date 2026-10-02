@@ -6,7 +6,7 @@
 //! `bytes`), the adapters (`map`/`filter`/`take`/`skip`/`count`/
 //! `fold`/`enumerate`/`for_each`), the `Vec.from_flow` sink, the
 //! `HashSet::from_flow` sink, chains feeding
-//! `for..of` (the `impl Iterable` path), the identity row, and
+//! `for..of` (the `[iterable]` marker path), the identity row, and
 //! stop-propagation through `take`.
 
 use rut_driver::{Module, ModuleBody, Session, compile_graph, mount_bundle_bytes, mount_std};
@@ -67,7 +67,6 @@ fn vec_pipeline_map_filter_take_into_vec_sink() {
     // consumers, not Vec's — the drain reads the sink's fields)
     let lines = run(
         r#"
-use core::{ Iterable };
 use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -93,7 +92,7 @@ entry fn main() -> nil {
 #[test]
 fn adapters_take_skip_count_and_chain_for_of() {
     // take/skip/count over a Vec source; a chain feeding plain for..of
-    // (the `impl Iterable` desugar). The drain accumulates through a
+    // (the `[iterable]` marker desugar). The drain accumulates through a
     // ref-headed binding — the capture law's pinned primitive copy
     // means a captured `i32` in the emit closure copies its slot (the
     // fused Vec loop owns the in-place `+=` shape).
@@ -179,14 +178,14 @@ entry fn main() -> nil {
 
 #[test]
 fn identity_row_and_user_iterable_sink() {
-    // the identity row: a chain re-enters as a source; a user Iterable
-    // (no Flow involved) feeds the Vec sink directly — the CONTRACT
-    // parameter takes any iterable
+    // the identity row: a chain re-enters as a source; a user iterable
+    // (no Flow machinery in the type itself) feeds the Vec sink through
+    // its own IntoFlow row — the sink parameter takes the EXPLICIT
+    // wrapper now, so the widening is spelled at the call site
     let lines = run(
         r#"
 use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
-use core::{ Iterable };
 use ink::{ Logger };
 
 class CountUp {
@@ -195,13 +194,28 @@ class CountUp {
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iterable<i32> for CountUp {
-    fn iterate(self, emit: fn(i32) -> bool) {
+impl CountUp {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 1;
         while (i <= self.n) {
             if (!emit(i)) { return; }
             i += 1;
         }
+    }
+}
+// the local type rides flow's entry trait into the sink: a local
+// trait/foreign-type impl (IntoFlow is flow's), the same law the
+// generic crossing probe pins below
+impl IntoFlow<i32> for CountUp {
+    fn into_flow(self) -> Flow<i32> {
+        let n: i32 = self.n;
+        return Flow.new(fn (emit: fn(i32) -> bool) -> nil {
+            let mut i = 1;
+            while (i <= n) {
+                if (!emit(i)) { return; }
+                i += 1;
+            }
+        });
     }
 }
 
@@ -212,8 +226,8 @@ entry fn main() -> nil {
     // identity: the chain re-enters as a source
     let reentered: Vec<i32> = Vec.from_flow(nums.into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow());
     log.info(f"reentered n={reentered.len} last={reentered[reentered.len-1]}");
-    // the user iterable widens straight into the sink
-    let out: Vec<i32> = Vec.from_flow(CountUp.new(4));
+    // the user iterable widens through its row, spelled at the sink
+    let out: Vec<i32> = Vec.from_flow(CountUp.new(4).into_flow());
     log.info(f"countup n={out.len} last={out[out.len-1]}");
 }
 "#,
@@ -281,7 +295,6 @@ fn array_entry_empty_and_nonempty() {
     let lines = run(
         r#"
 use pouch::{ Vec };
-use core::{ Iterable };
 use flow::{ Flow, IntoFlow };
 use ink::{ Logger };
 
@@ -332,15 +345,14 @@ fn take_stops_the_source() {
     // stop-propagation (adapted at landing: a consumer cannot implement
     // the generic `IntoFlow` across the package boundary — the v1 gate
     // reserves generic foreign traits for their declaring module — so
-    // the source-stop rides the LOCAL Iterable: a for-of `break` answers
-    // `false` at the emit exactly like flow's take stage, and the
-    // counting source stops at the third drive; flow's own `take(2)`
-    // feeds the sink the same two elements).
+    // the source-stop rides the LOCAL `[iterable]` member: a for-of
+    // `break` answers `false` at the emit exactly like flow's take
+    // stage, and the counting source stops at the third drive; flow's
+    // own `take(2)` feeds the sink the same two elements).
     let lines = run(
         r#"
 use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
-use core::{ Iterable };
 use ink::{ Logger };
 
 class Counting {
@@ -348,9 +360,7 @@ class Counting {
 }
 impl Counting {
     fn new() -> Self { return Self { n: 0 }; }
-}
-impl Iterable<i32> for Counting {
-    fn iterate(mut self, emit: fn(i32) -> bool) {
+    [iterable] fn iterate(mut self, emit: fn(i32) -> bool) {
         let mut i = 1;
         while (i <= 100) {
             self.n += 1;

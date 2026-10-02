@@ -59,6 +59,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
+| `disposal` / `iterable` | the bracket markers — `[disposal] fn` / `[iterable] fn` designate an inherent impl member as an engine contract slot (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([traits](traits.md)) |
 
 `panic(msg)` is a prelude function, not a keyword.
 
@@ -78,6 +79,14 @@ The list is short and closed. Words that are keywords in JavaScript or
 Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … —
 are ordinary identifiers here: `let null = 5;` and `fn match()` are
 legal rut.
+
+## The async block
+
+`async { .. }` — keyword before a block — is the async primitive: one
+expression form whose evaluation mints the frame (pure; legal in sync
+code) and whose type is `Future<T>`
+([async and await](async.md)). `async` before `fn` is the declaration
+sugar over it.
 
 ## Naming conventions (enforced)
 

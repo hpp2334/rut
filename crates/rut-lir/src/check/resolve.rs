@@ -2,7 +2,6 @@
 //! (including `pouch`'s `Vec` class), trait objects, fn types;
 //! naming-position resolution.
 
-use rut_core::types::*;
 use super::*;
 
 impl<'a> Ctx<'a> {
@@ -26,53 +25,21 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                // a used core trait — the prelude's
-                // only builtin trait is the `Iterable<E>` protocol
-                let core_trait = self.extern_traits.get(&tname).copied();
-                if core_trait == Some(rut_core::binary::NativeTrait::Iterable) {
-                    let args: Vec<TypeId> = segs[0]
-                        .generics
-                        .iter()
-                        .map(|g| self.resolve_type(*g, env))
-                        .collect();
-                    if args.len() != 1 {
-                        self.err(self.ast.span(node.id()), format!(
-                            "`Iterable` takes 1 type parameter, {} given — `Iterable<E>`",
-                            args.len()
-                        ));
+                // the engine contracts are GONE from the impl-head lane
+                // (v20): `Iterable`/`Disposal` are the bracket markers,
+                // `Future`/`RunContext` are closed builtin classes. The
+                // diagnostics name the replacement — the marker word is
+                // free-standing in an inherent impl; an unbound gated
+                // name still gets the scope fix.
+                if let Some(msg) = self.engine_contract_head_error(tname) {
+                    let bound = self.extern_native_types.contains_key(&tname);
+                    let goes = tname == sym::ITERABLE
+                        || tname == sym::DISPOSAL
+                        || bound;
+                    if goes {
+                        self.err(self.ast.span(node.id()), msg);
                         return None;
                     }
-                    return Some(self.mk_iterator_inst(tname, args[0]));
-                }
-                // `impl Future<T> for ..` — the same engine-
-                // woven lane: the trait is built per type-argument list,
-                // the user's impl registers launcher-drivable
-                if core_trait == Some(rut_core::binary::NativeTrait::Future) {
-                    let args: Vec<TypeId> = segs[0]
-                        .generics
-                        .iter()
-                        .map(|g| self.resolve_type(*g, env))
-                        .collect();
-                    if args.len() != 1 {
-                        self.err(self.ast.span(node.id()), format!(
-                            "`Future` takes 1 type parameter, {} given — `Future<T>`",
-                            args.len()
-                        ));
-                        return None;
-                    }
-                    return Some(self.mk_future_inst(tname, args[0]));
-                }
-                // `impl Disposal for ..` — the cell-death contract: one
-                // trait per module, its single member `dispose(mut self,
-                // cx: DisposalContext)`; the engine's release path
-                // dispatches through the module's per-type disposal row,
-                // never a vtable slot
-                if core_trait == Some(rut_core::binary::NativeTrait::Disposal) {
-                    if !segs[0].generics.is_empty() {
-                        self.err(self.ast.span(node.id()), "`Disposal` takes no type parameters");
-                        return None;
-                    }
-                    return Some(self.mk_disposal_trait(tname));
                 }
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
@@ -153,47 +120,24 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The `Iterable<E>` protocol contract: one trait per
-    /// type-argument list, its single method `iterate(emit: fn(E) -> bool)`.
-    /// Duck-typed satisfaction fills its vtable slot from the iterable's own
-    /// member — the contract is engine-woven, not user-declarable.
-    pub fn mk_iterator_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {
-        if let Some(&id) = self.trait_inst.get(&(name, vec![arg])) {
-            return id;
-        }
-        let id = self.traits.len() as u32;
-        let tname = self.intern(&format!("Iterable<{}>", self.elem_spelling(arg)));
-        let emit = self.mk_fn_ty(vec![arg], TY_BOOL);
-        self.traits.push(TraitDesc {
-            name: tname,
-            methods: vec![rut_core::binary::TraitMethod {
-                name: sym::ITERATE,
-                params: vec![emit],
-                ret: TY_NIL,
-            }],
-        });
-        self.trait_inst.insert((name, vec![arg]), id);
-        id
-    }
+    /// The `Iterable`/`Disposal` trait mints are GONE (v20): the
+    /// bracket markers (`[iterable]` / `[disposal]`) replaced the
+    /// traits. The element type falls out of the marked member's own
+    /// signature, for-of reads the designated member slot, the engine's
+    /// release path reads the per-type disposal row built off the
+    /// marked member — never a trait lookup.
+    /// The engine-minted `RunContext` cx record: one field —
 
     /// Mint (or fetch) the CONCRETE instantiation of an impl's trait
     /// under a target substitution — the template re-resolution law's
     /// mint half (the dispatch half that per-instantiation consumers
-    /// run: the for-of weave, the vtable fills). A NATIVE generic trait
-    /// (core's `Iterable`) has no local decl to instantiate from — its
-    /// descriptor mint is the iterator lane's; a local trait
+    /// run: the for-of weave, the vtable fills). A local trait
     /// instantiates from its AST. The `trait_inst` cache is shared, so
     /// an instantiation the ordinary trait-ref resolution minted
-    /// earlier is fetched, never duplicated.
+    /// earlier is fetched, never duplicated. (The native contracts are
+    /// gone — the markers are designated member slots, not traits — so
+    /// there is no `Iterable` arm anymore.)
     pub fn mint_impl_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
-        if self.extern_traits.get(&name).copied()
-            == Some(rut_core::binary::NativeTrait::Iterable)
-        {
-            if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
-                return id;
-            }
-            return self.mk_iterator_inst(name, args[0]);
-        }
         // a used module's exported GENERIC trait: the carried descriptor
         // mints the instantiation (no local AST exists)
         if self.extern_trait(name).is_some() {
@@ -302,6 +246,13 @@ impl<'a> Ctx<'a> {
     /// through the same trait (launcher-drivable). Mirrors
     /// `mk_iterator_inst` — the descriptor's params exclude the
     /// receiver, which the vtable ABI always supplies as argv[0].
+    ///
+    /// v20: NOT a user-visible trait anymore — the row is the internal
+    /// designated-slot allocation for the closed `Future<T>` class (the
+    /// "class layout binding"): every `Future<elem>` instantiation owns
+    /// ONE global yield slot, and every engine-minted frame over that
+    /// elem fills it (`extra_vtable_fills`). No surface row exists;
+    /// nothing in source can name or implement it.
     pub fn mk_future_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {
         if let Some(&id) = self.trait_inst.get(&(name, vec![arg])) {
             return id;
@@ -321,35 +272,55 @@ impl<'a> Ctx<'a> {
         id
     }
 
-    /// The `Disposal` contract (the cell-death trait): one trait per
-    /// module, its single member `dispose(mut self, cx: DisposalContext)`.
-    /// Mirrors `mk_future_inst` — the descriptor's params exclude the
-    /// receiver, which the call ABI always supplies as argv[0]. The
-    /// registration exists so the ordinary impl machinery checks
-    /// coverage/signatures and compiles the body; the engine's release
-    /// path reads the module's per-type disposal row, never a vtable.
-    pub fn mk_disposal_trait(&mut self, name: IdentId) -> u32 {
-        if let Some(&id) = self.trait_inst.get(&(name, vec![])) {
-            return id;
-        }
-        let id = self.traits.len() as u32;
-        let dispose = self.intern("dispose");
-        self.traits.push(TraitDesc {
+    /// The `Future<T>` CLOSED builtin class: the ONE surface spelling of
+    /// every async producer's answer (`async fn` calls, `async { }`
+    /// blocks, `sleep`, the select/completer mints). Interned per
+    /// instantiation like `mk_weak`; the slot row above is its layout
+    /// binding.
+    pub fn mk_future(&mut self, elem: TypeId) -> TypeId {
+        // the designated slot row exists FIRST — awaiting this type
+        // aims its `CallI` through it, and `mk_future_inst` dedups
+        self.mk_future_inst(sym::FUTURE, elem);
+        let name = self.intern(&format!("Future<{}>", self.elem_spelling(elem)));
+        self.types.intern(RutType {
             name,
-            methods: vec![rut_core::binary::TraitMethod {
-                name: dispose,
-                params: vec![TY_DISPOSAL_CONTEXT],
-                ret: TY_NIL,
-            }],
-        });
-        self.trait_inst.insert((name, vec![]), id);
-        id
+            kind: TyKind::Future { elem },
+        })
     }
+
+    /// The impl-head / naming-position diagnostic for a spelled engine
+    /// contract: the `builtin trait` row kind is gone, and each of the
+    /// four names has exactly one replacement.
+    pub fn engine_contract_head_error(&self, name: IdentId) -> Option<String> {
+        if name == sym::ITERABLE {
+            return Some(
+                "`Iterable` is gone — mark the member: `impl T { [iterable] fn iterate(self, emit: fn(E) -> bool) { .. } }` (the element type falls out of the marked member's signature)".to_string(),
+            );
+        }
+        if name == sym::DISPOSAL {
+            return Some(
+                "`Disposal` is gone — mark the member: `impl T { [disposal] fn dispose_db(mut self, cx: DisposalContext) { .. } }` (the engine calls it at refcount zero; the name is free, the bracket designates)".to_string(),
+            );
+        }
+        if name == sym::FUTURE {
+            return Some(
+                "`Future` is a closed builtin class — futures are engine-minted (an `async fn` call, an `async { }` block, `sleep`, the select/completer mints); a user type cannot be one".to_string(),
+            );
+        }
+        if name == sym::RUN_CONTEXT {
+            return Some(
+                "`RunContext` is a closed builtin class — the weave injects it as `cx` into every async body; a user type cannot be one".to_string(),
+            );
+        }
+        None
+    }
+
 
     /// The engine-minted `RunContext` cx record: one field —
     /// the frame edge — laid out per `rut_core::async_frame`. The NAME
-    /// is the surface spelling, so `cx: RunContext` parameters and the
-    /// trait's method signatures all land on this one type; its members
+    /// is the surface spelling (v20: the closed `builtin class` row),
+    /// so the weave's injected `cx` binding and the class's members all
+    /// land on this one type; its members
     /// inline as field ops in the weave and in user bodies alike.
     pub fn run_context_ty(&mut self) -> TypeId {
         if let Some(t) = self.run_context_ty {
@@ -471,22 +442,39 @@ impl<'a> Ctx<'a> {
                         }
                         // the disposal drain's context cell: the engine mints
                         // it — the name resolves in type position (a
-                        // `dispose` body's `cx` parameter), nothing
+                        // `[disposal]` body's `cx` parameter), nothing
                         // constructs it
                         (rut_core::binary::NativeTy::DisposalContext, []) => TY_DISPOSAL_CONTEXT,
                         (rut_core::binary::NativeTy::DisposalContext, _) => {
                             self.err(sp, "`DisposalContext` takes no generic arguments");
                             TY_I32
                         }
-                        // the ONE generic builtin — `Weak<T>`
-                        // interns per instantiation (`mk_weak`, the
-                        // `mk_array` law). Exactly one parameter.
+                        // the TWO generic builtins — `Weak<T>` and (v20)
+                        // the closed `Future<T>` — intern per
+                        // instantiation (`mk_weak` / `mk_future`, the
+                        // `mk_array` law). Exactly one parameter each.
                         (rut_core::binary::NativeTy::Weak, [g]) => {
                             let elem = self.resolve_type(*g, env);
                             self.mk_weak(elem)
                         }
                         (rut_core::binary::NativeTy::Weak, _) => {
                             self.err(sp, "`Weak<T>` takes exactly one type parameter — the weak-referenced type");
+                            TY_I32
+                        }
+                        (rut_core::binary::NativeTy::Future, [g]) => {
+                            let elem = self.resolve_type(*g, env);
+                            self.mk_future(elem)
+                        }
+                        (rut_core::binary::NativeTy::Future, _) => {
+                            self.err(sp, "`Future<T>` takes exactly one type parameter — the answer type");
+                            TY_I32
+                        }
+                        // the cx class: the surface name IS the
+                        // engine-minted record — the weave injects it as
+                        // `cx`; nothing constructs it
+                        (rut_core::binary::NativeTy::RunContext, []) => self.run_context_ty(),
+                        (rut_core::binary::NativeTy::RunContext, _) => {
+                            self.err(sp, "`RunContext` takes no generic arguments");
                             TY_I32
                         }
                     };
@@ -522,63 +510,17 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
-                        // the `Iterable<E>` protocol:
-                        // engine-woven — its trait is built directly per
-                        // type-argument list, before the AST-decl lookup
-                        if self.extern_traits.get(&name).copied()
-                            == Some(rut_core::binary::NativeTrait::Iterable)
-                        {
-                            let args: Vec<TypeId> = seg
-                                .generics
-                                .iter()
-                                .map(|g| self.resolve_type(*g, env))
-                                .collect();
-                            if args.len() != 1 {
-                                self.err(sp, format!(
-                                    "`Iterable` takes 1 type parameter, {} given — `Iterable<E>`",
-                                    args.len()
-                                ));
-                                return TY_I32;
-                            }
-                            let id = self.mk_iterator_inst(name, args[0]);
-                            return self.mk_trait_obj(id);
-                        }
-                        // the `Future<T>` protocol:
-                        // engine-woven the same way — the trait is built per
-                        // type-argument list; the object type is what async
-                        // call results widen to and what `launch_future`
-                        // consumes
-                        if self.extern_traits.get(&name).copied()
-                            == Some(rut_core::binary::NativeTrait::Future)
-                        {
-                            let args: Vec<TypeId> = seg
-                                .generics
-                                .iter()
-                                .map(|g| self.resolve_type(*g, env))
-                                .collect();
-                            if args.len() != 1 {
-                                self.err(sp, format!(
-                                    "`Future` takes 1 type parameter, {} given — `Future<T>`",
-                                    args.len()
-                                ));
-                                return TY_I32;
-                            }
-                            let id = self.mk_future_inst(name, args[0]);
-                            return self.mk_trait_obj(id);
-                        }
-                        // the `RunContext` cx: the surface
-                        // name IS the engine-minted record's name — the
-                        // trait row is the frozen signature set, the
-                        // record is the lowering (field ops, no calls)
-                        if self.extern_traits.get(&name).copied()
-                            == Some(rut_core::binary::NativeTrait::RunContext)
-                        {
-                            if !seg.generics.is_empty() {
-                                self.err(sp, "`RunContext` takes no generic arguments");
-                                return TY_I32;
-                            }
-                            return self.run_context_ty();
-                        }
+                // the removed engine-contract names (v20): a spelled
+                // `Iterable`/`Disposal` in type position names its
+                // marker. (`Future`/`RunContext` resolve through the
+                // native-type match above when bound; unbound they fall
+                // to the use-gate's scope fix like any gated name.)
+                if name == sym::ITERABLE || name == sym::DISPOSAL {
+                    if let Some(msg) = self.engine_contract_head_error(name) {
+                        self.err(sp, msg);
+                        return TY_I32;
+                    }
+                }
                         if let Some(t) = self.find_trait(name).cloned() {
                             // a trait name in type position IS the
                             // object type — the bare name spells it

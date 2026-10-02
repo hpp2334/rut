@@ -408,22 +408,12 @@ pub enum ItemKind {
         generics: Vec<IdentId>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
-    /// `builtin trait Name<..>` — .d.rut only, core only: a
-    /// trait the ENGINE is woven into (compiler-backed impls /
-    /// lowering hooks — `x[i]` through `Index`, `for (x of it)` through
-    /// `Iterable`, rc-0 `Disposal`). Users still implement it with
-    /// ordinary `impl` blocks; the `builtin` marker is the engine's
-    /// reservation, not an access rule. Library contracts without
-    /// engine knowledge (`Hashable`) stay plain `trait`.
-    BuiltinTrait {
-        vis: Vis,
-        /// the strict spelling the decl used: `true` — `prelude builtin`
-        /// (ambient), `false` — `pub builtin` (import-gated)
-        ambient: bool,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless
-    },
+    /// `builtin trait Name<..>` — REMOVED (v20, the select + type-surface
+    /// plan's lanes 3+4): the engine-contract row kind is gone.
+    /// `Future`/`RunContext` are closed `builtin class` rows now;
+    /// `Iterable`/`Disposal` are the bracket markers
+    /// (`[iterable] fn` / `[disposal] fn` on inherent impl members).
+    /// The parser diagnoses the spelling and recovers.
     /// `builtin primitive <name> { .. }` — .d.rut only, core only: the
     /// surface statement for a boot primitive (`str`/`bytes`/`opaque`).
     /// NOT a class — no construction literal, no fields; the members are
@@ -465,12 +455,19 @@ pub struct FieldDeclData {
     pub init: Option<NodeHandle<AnyExpr>>,
 }
 
-/// `pub(..)`? `async`? fn name<..>(self, ..) -> T { .. }
+/// `pub(..)`? `[marker]`? `async`? fn name<..>(self, ..) -> T { .. }
 /// `vis: None` = unannotated — module-private, the default
 #[derive(Clone, Debug)]
 pub struct MethodDeclData {
     pub vis: Option<Vis>,
     pub is_async: bool,
+    /// the engine-designated slot the member fills, if any (v20): a
+    /// bracket marker `[disposal]` / `[iterable]` — a CONTEXTUAL word in
+    /// a closed engine-owned set, checked against the engine's contract
+    /// (one per class, inherent members only, signature must match).
+    /// The name of the marked fn itself is FREE: designation is by
+    /// bracket, never by spelling.
+    pub marker: Option<IdentId>,
     pub name: IdentId,
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>, // Param / SelfParam
@@ -609,6 +606,14 @@ pub enum ExprKind {
     ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Await { expr: NodeHandle<AnyExpr> },
+    /// `async { .. }` — the async block, the async primitive (v20): ONE
+    /// expression form, keyword before a block. Evaluating it MINTS the
+    /// frame (the body woven by the same machinery an `async fn` body
+    /// uses); the frame runs when driven (awaited or launched). Its TYPE
+    /// is `Future<T>` with `T` inferred from the block's `return`
+    /// statements (fn-body rules); the `return` is the FUTURE's answer,
+    /// not any enclosing fn's.
+    AsyncBlock { body: NodeHandle<BlockNode> },
     /// `expr is Type` — relational precedence, non-associative
     Is { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
     /// `expr as T` — the numeric cast, truncating like C/Rust; binds

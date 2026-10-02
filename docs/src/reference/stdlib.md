@@ -20,12 +20,14 @@ The builtin fns, primitives, and containers are in scope in every
 compilation unit; no `use` is needed. A `use core::{ … };` statement
 stays legal but is redundant for them. The exceptions — the
 **import-gated** spellings, resolving only through
-`use core::{ .. }`: the const `NAN`, the `Disposal` pair (`Disposal`,
-`DisposalContext`), the weak reference `Weak<T>`, and every
-engine-woven trait (`Iterable`, `Future`, `RunContext`) — the engine's
-weave itself never needs the import, only source that spells the names
-(an `impl` block, a trait-typed signature, a `downcast<Future<..>>`).
-The two builtin spellings (ambient vs import-gated) are documented in
+`use core::{ .. }`: the const `NAN`, the disposal context
+`DisposalContext`, the weak reference `Weak<T>`, and the closed async
+pair (`Future<T>`, `RunContext`) — the engine's weave itself never
+needs the import, only source that spells the names (a `cx: T`
+parameter, a launcher's `f: Future<T>`, a `downcast<Future<..>>`).
+The bracket markers (`[disposal]`/`[iterable]`) need NO import — the
+marker word is the designation, not a name. The two builtin spellings
+(ambient vs import-gated) are documented in
 [Host fns and declaration files](host-fns.md).
 
 ### Functions
@@ -73,22 +75,23 @@ import-gated — `use core::{ Weak }`) ([opaque](opaque.md),
 |---|---|
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
 | `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }` |
-| `DisposalContext` | no members — the engine-minted parameter of a `dispose` body; it exists so the context can grow without touching the trait signature |
+| `DisposalContext` | no members — the engine-minted parameter of a `[disposal]` member; it exists so the context can grow without touching the marker's signature |
 
-### Engine-woven traits
+### Engine contracts — markers and the closed async pair
 
-| trait | member | notes |
+The engine's contracts are spellings on types (the `builtin trait`
+row kind is gone):
+
+| contract | spelling | notes |
 |---|---|---|
-| `Iterable<E>` | `fn iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops. **import-gated** — `use core::{ Iterable }` (an `impl Iterable<E> for T` names it); the builtin sequences' fused loops never do |
-| `Future<T>` | `fn yield(cx: RunContext)` | every `async fn`'s hidden frame implements it; `await` consumes it. **import-gated** — `use core::{ Future }` (a user impl, a launcher's `f: Future<T>`, `downcast<Future<..>>`) |
-| `RunContext` | `checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool` | the async protocol's cx record ([async and await](async.md)); **import-gated** — `use core::{ RunContext }` (an `async fn` head or a yield signature spells it) |
-| `Disposal` | `fn dispose(mut self, cx: DisposalContext)` | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, DisposalContext }` |
+| `[iterable]` | `fn <free>(self, emit: fn(E) -> bool)` on an inherent impl | `for (x of it)` calls that ONE designated member; `emit` returning `false` stops; the element type falls out of the marked member's signature. No import — the marker IS the designation; the builtin sequences' fused loops never mark one |
+| `[disposal]` | `fn <free>(mut self, cx: DisposalContext)` on an inherent impl | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); `DisposalContext` is **import-gated** — `use core::{ DisposalContext }` |
+| `Future<T>` | `pub builtin class` — closed | every async producer's answer ([async and await](async.md)); **import-gated** — `use core::{ Future }` (a launcher's `f: Future<T>`, `downcast<Future<..>>`). No constructor, no impl lane — engine-minted only |
+| `RunContext` | `pub builtin class` — closed; `checkpoint() -> u32`, `cancelled() -> bool` | the cx the weave INJECTS into every async body; **import-gated** — `use core::{ RunContext }` (a `cx` probe's type). No constructor — engine-minted per async call |
 
-Users implement these with ordinary `impl` blocks; the engine has
-compiler-backed impls for its own types. All four are `pub builtin`
-(the import-gated spelling): the weave is keyed on the native-trait
-symbols and never consults user scope — a module that imports nothing
-still iterates builtins, awaits, and launches.
+The ENGINE weaves without any of them — async frames, the minted cx,
+and the fused `for..of` loops never consult user scope: a module that
+imports nothing still iterates builtins, awaits, and launches.
 
 ### Numeric methods (per integer width `i8`–`u64`)
 
@@ -166,8 +169,8 @@ The growable sequence, written in rut over the fixed `[T]` array:
 
 ### `flow` — the push pipeline
 
-`Flow<E>` chains the push contract: a type is iterable when it
-registers `impl Iterable<E> for T`, and a Flow wraps one drive in
+`Flow<E>` chains the push contract: a type is iterable when it marks
+an `[iterable]` member, and a Flow wraps one drive in
 adapter stages — a closure per STAGE, never per element. Pipelines are
 the clarity tier; the fused builtin loops stay the perf tier.
 
@@ -199,14 +202,11 @@ picked=3 first=20 last=30
 | `filter(p: fn(E) -> bool) -> Self` | keep the elements the predicate admits |
 | `take(n)` / `skip(n)` | the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained |
 | `count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>` | the one-drive consumers |
-| `T::from_flow(it: Iterable<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>` |
-| `for (x of chain)` | chains are iterables — the `impl Iterable<E> for Flow<E>` row feeds the ordinary desugar |
+| `T::from_flow(it: Flow<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`; the call site manufactures the wrapper explicitly (`xs.into_flow()`) |
+| `for (x of chain)` | chains are iterable — the `[iterable]` member on `Flow<E>` feeds the ordinary desugar |
 
 **Import the traits you spell and the pipeline type**: `use flow::{
-Flow, IntoFlow, FromFlow }` — the use-both law names each one; the
-sink's `Iterable<E>` parameter re-mints through `use core::{
-Iterable }` (the `from_flow` sinks take the CONTRACT, not Flow, so a
-user iterable — a `CountUp`-shape — widens straight into them).
+Flow, IntoFlow, FromFlow }` — the use-both law names each one.
 
 **Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no
 host-table walk — json's map encode grows with it) and

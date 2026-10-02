@@ -78,11 +78,10 @@ fn diags_of(src: &str) -> Vec<String> {
 #[test]
 fn launch_runs_to_completion() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
-async fn work(cx: RunContext, log: opaque, n: u32) -> nil {
+async fn work(log: opaque, n: u32) -> nil {
     logger_log(log, 2, "begin");
     logger_log(log, 2, f"n={n}");
     logger_log(log, 2, "end");
@@ -104,11 +103,10 @@ entry fn main() -> nil {
 #[test]
 fn park_and_resume_through_sleep() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
-async fn tick(cx: RunContext, log: opaque) -> nil {
+async fn tick(log: opaque) -> nil {
     for (let i = 0; i < 3; i += 1) {
         logger_log(log, 2, f"tick{i}");
         await sleep(10);
@@ -134,17 +132,16 @@ entry fn main() -> nil {
 #[test]
 fn nested_awaits() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
-async fn inner(cx: RunContext, log: opaque, tag: str) -> nil {
+async fn inner(log: opaque, tag: str) -> nil {
     logger_log(log, 2, f"{tag}:enter");
     await sleep(5);
     logger_log(log, 2, f"{tag}:exit");
 }
 
-async fn outer(cx: RunContext, log: opaque) -> nil {
+async fn outer(log: opaque) -> nil {
     await inner(log, "a");
     await inner(log, "b");
     logger_log(log, 2, "outer:done");
@@ -174,18 +171,17 @@ entry fn main() -> nil {
 #[test]
 fn abort_after_park_runs_the_drop_path_then_reports_false() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
-async fn victim(cx: RunContext, log: opaque) -> nil {
+async fn victim(log: opaque) -> nil {
     let buf: ?str = "held";
     logger_log(log, 2, "victim:park");
     await sleep(60);
     logger_log(log, 2, "victim:unreachable");
 }
 
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+async fn killer(log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
     await sleep(10);
     let ok = h.abort();
     if (ok) { logger_log(log, 2, "killer:aborted"); }
@@ -221,18 +217,18 @@ entry fn main() -> nil {
     assert_eq!(vm.now_ms(), 65);
 }
 
-// ---- Disposal at the cancellation checkpoint ----
+// ---- disposal at the cancellation checkpoint ----
 
-/// A dispose-implementing local that logs through the ink_host logger when
-/// the engine releases it — the Disposal analog of the old on_drop
+/// A `[disposal]`-marked local that logs through the ink_host logger when
+/// the engine releases it — the disposal analog of the old on_drop
 /// observation closures.
 const DROPLOG: &str = r#"
 class DropLog { log: opaque; }
 impl DropLog {
     fn new(log: opaque) -> Self { return Self { log: log }; }
 }
-impl Disposal for DropLog {
-    fn dispose(mut self, cx: DisposalContext) {
+impl DropLog {
+    [disposal] fn dispose_log(mut self, cx: DisposalContext) {
         logger_log(self.log, 2, "dropped:buf");
     }
 }
@@ -241,8 +237,8 @@ class DropTag { log: opaque; tag: str; }
 impl DropTag {
     fn new(log: opaque, tag: str) -> Self { return Self { log: log, tag: tag }; }
 }
-impl Disposal for DropTag {
-    fn dispose(mut self, cx: DisposalContext) {
+impl DropTag {
+    [disposal] fn dispose_tag(mut self, cx: DisposalContext) {
         logger_log(self.log, 2, self.tag);
     }
 }
@@ -252,18 +248,18 @@ impl Disposal for DropTag {
 fn abort_after_park_disposes_locals_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
-use core::{{ Disposal, DisposalContext, RunContext }};
+use core::{{ DisposalContext }};
 use ink_host::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
-async fn victim(cx: RunContext, log: opaque) -> nil {{
+async fn victim(log: opaque) -> nil {{
     let buf = DropLog.new(log);
     logger_log(log, 2, "victim:park");
     await sleep(60);
     logger_log(log, 2, "victim:unreachable");
 }}
 
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
+async fn killer(log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
     await sleep(10);
     let ok = h.abort();
     if (ok) {{ logger_log(log, 2, "killer:aborted"); }}
@@ -299,18 +295,18 @@ entry fn main() -> nil {{
 fn dispose_locals_fire_in_reverse_order_at_the_checkpoint() {
     let src = format!(
         r#"{DROPLOG}
-use core::{{ Disposal, DisposalContext, RunContext }};
+use core::{{ DisposalContext }};
 use ink_host::{{ create_logger, logger_log }};
 use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
 
-async fn victim(cx: RunContext, log: opaque) -> nil {{
+async fn victim(log: opaque) -> nil {{
     let a = DropTag.new(log, "drop:a");
     let b = DropTag.new(log, "drop:b");
     await sleep(60);
     logger_log(log, 2, "unreachable");
 }}
 
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
+async fn killer(log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
     await sleep(30);
     let ok = h.abort();
     if (ok) {{ logger_log(log, 2, "killer:aborted"); }} else {{ logger_log(log, 2, "killer:late"); }}
@@ -342,11 +338,10 @@ entry fn main() -> nil {{
 #[test]
 fn abort_before_first_drive_never_runs_the_body() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
-async fn job(cx: RunContext, log: opaque) -> nil {
+async fn job(log: opaque) -> nil {
     logger_log(log, 2, "body-ran");
 }
 
@@ -375,11 +370,10 @@ fn vm_first_ready(vm: &mut Vm) -> rut_vm::Slot {
 #[test]
 fn the_cx_cancelled_probe_answers_in_a_live_body() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
-async fn work(cx: RunContext, log: opaque) -> nil {
+async fn work(log: opaque) -> nil {
     if (cx.cancelled()) { logger_log(log, 2, "flagged"); } else { logger_log(log, 2, "live"); }
 }
 
@@ -403,11 +397,11 @@ entry fn main() -> nil {
 #[test]
 fn a_bound_sleep_future_drives_and_aborts_through_the_box() {
     let src = r#"
-use core::{ Future, RunContext };
+use core::{ Future };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
-async fn parker(cx: RunContext, log: opaque) -> nil {
+async fn parker(log: opaque) -> nil {
     // the annotated binding: the downcast's `?Future<nil>` answer
     // derefs into a `Future<nil>` binding — the one-consume surface
     let s: Future<nil> = sleep(40);
@@ -416,7 +410,7 @@ async fn parker(cx: RunContext, log: opaque) -> nil {
     logger_log(log, 2, "unreachable");
 }
 
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+async fn killer(log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
     await sleep(10);
     let ok = h.abort();
     if (ok) { logger_log(log, 2, "aborted-the-parked"); }
@@ -448,11 +442,10 @@ entry fn main() -> nil {
 #[test]
 fn fuel_is_charged_per_drive_step() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 
-async fn work(cx: RunContext, log: opaque) -> nil {
+async fn work(log: opaque) -> nil {
     logger_log(log, 2, "ran");
 }
 
@@ -477,13 +470,12 @@ fn async_local_captured_by_closure_shares_its_slot() {
     // rebind inside the closure is visible in the async body after the
     // call (and across the park, since the cell rides the frame)
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep };
 
 struct Box2 { v: i32 }
 
-async fn work(cx: RunContext, log: opaque, seed: i32) -> nil {
+async fn work(log: opaque, seed: i32) -> nil {
     let mut r = Box2 { v: seed };
     let touch = fn() -> bool { r = Box2 { v: 5 }; return true; };
     await sleep(2);

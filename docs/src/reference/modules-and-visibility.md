@@ -54,10 +54,12 @@ error.
 The engine's builtin names — the primitives, `opaque`, `panic`,
 `type_id<T>()`, `str(x)` — are **ambient**: no `use` is
 needed for them. The gated names resolve only through
-`use core::{ .. }`: the const `NAN`, the `Disposal`/
-`DisposalContext` pair, and every builtin trait (`Iterable`,
-`Future`, `RunContext`) — the engine's weave never needs the import,
-only source that spells a trait name does
+`use core::{ .. }`: the const `NAN`, the disposal context
+`DisposalContext`, the weak reference `Weak<T>`, and the closed async
+pair (`Future<T>`, `RunContext`) — the engine's weave never needs the
+import, only source that spells one of the names does. The bracket
+markers (`[disposal]`/`[iterable]`) need no import — the marker word
+is the designation, not a name
 ([Host fns and declaration files](host-fns.md)).
 Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through
 `use`.

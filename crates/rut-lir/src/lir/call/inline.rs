@@ -65,9 +65,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_self = self.self_ty;
         let saved_subst = std::mem::replace(&mut self.subst, subst.clone());
         self.self_ty = Some(self_ty);
-        // compile args under best-effort expected types; a parameter node
-        // still spelling an unbound generic (`a: Readable<T>`) gets no
-        // hint — unification binds the generic from the argument
         let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
             .iter()
             .skip(1)
@@ -117,22 +114,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
+        // the ARGUMENTS' expected types (best-effort): a parameter node
+        // still spelling an unbound generic (`a: Readable<T>`) gets no
+        // hint — unification binds the generic from the argument;
+        // otherwise the hint resolves under the CALLEE's instantiation
+        // (the swap above) — and the shape hint (the phase-2 placeholder
+        // env) rides fresh placeholder types for the unbound rest
+        let hints: Vec<Option<TypeId>> = param_nodes
+            .iter()
+            .map(|tn| match tn {
+                Some(t) if self.free_generics(*t, &decl_generics, &subst).is_empty() => {
+                    Some(self.resolve_type_now(*t))
+                }
+                Some(t) => Some(self.hint_with_placeholders(*t, &decl_generics, &subst)),
+                None => None,
+            })
+            .collect();
+        // the arguments compile under the CALLER's substitution — a
+        // lambda argument may spell the CALLER's generics
+        // (`Vec.from_flow`'s `fn (x: T) ..` inside the sink's own
+        // generic `T`), and the swap above must not leak into their
+        // annotation resolution. The hints are type ids (callee-space);
+        // no env rides them.
+        self.subst = saved_subst.clone();
         let mut arg_tys: Vec<TypeId> = Vec::new();
         let mut aregs: Vec<u16> = Vec::new();
         for (i, a) in args.iter().enumerate() {
-            let expected = match param_nodes[i] {
-                Some(tn) if self.free_generics(tn, &decl_generics, &subst).is_empty() => {
-                    Some(self.resolve_type_now(tn))
-                }
-                // the shape hint (the phase-2 placeholder env): a
-                // best-effort expected type whose unbound generics ride
-                // fresh placeholder types — a spelled lambda argument
-                // (`fn (ctx) -> str { .. }`) takes its parameter
-                // annotations from the BOUND part (`ctx: DeriveCtx`);
-                // unification below binds the real values
-                Some(tn) => Some(self.hint_with_placeholders(tn, &decl_generics, &subst)),
-                _ => None,
-            };
+            let expected = hints[i];
             let t = self.compile_expr(*a, expected)?;
             if let Some(e) = expected {
                 self.widen_to_slot(t, e, sp.lo);
@@ -140,6 +148,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             arg_tys.push(t);
             aregs.push(self.last_reg);
         }
+        // re-arm the callee's instantiation for the unification and the
+        // signature resolution below
+        self.subst = subst.clone();
         // structural unification binds the method's remaining generics
         for (i, tn) in param_nodes.iter().enumerate() {
             if let Some(tn) = tn {

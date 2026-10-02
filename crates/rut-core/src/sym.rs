@@ -209,6 +209,12 @@ pub const WELL_KNOWN: &[&str] = &[
     // every interner agrees on the surface names.
     "Disposal",        // DISPOSAL
     "DisposalContext", // DISPOSAL_CONTEXT
+    // v20 — the marker vocabulary + the injected cx binding: the bracket
+    // markers' contextual words (the closed set the checker validates)
+    // and the resume-context name the weave binds in every async body.
+    "disposal", // DISPOSAL_MARKER
+    "iterable", // ITERABLE_MARKER
+    "cx",       // CX
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -342,6 +348,11 @@ pub const SLEEP_YIELD: IdentId = IdentId(84);
 // agrees on the surface names
 pub const DISPOSAL: IdentId = IdentId(85);
 pub const DISPOSAL_CONTEXT: IdentId = IdentId(86);
+// v20 — the marker vocabulary + the injected cx binding (append-only
+// tail: fixed ids never move)
+pub const DISPOSAL_MARKER: IdentId = IdentId(87);
+pub const ITERABLE_MARKER: IdentId = IdentId(88);
+pub const CX: IdentId = IdentId(89);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -466,6 +477,10 @@ mod tests {
             // the disposal surface
             ("Disposal", DISPOSAL),
             ("DisposalContext", DISPOSAL_CONTEXT),
+            // the marker vocabulary + the injected cx binding
+            ("disposal", DISPOSAL_MARKER),
+            ("iterable", ITERABLE_MARKER),
+            ("cx", CX),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

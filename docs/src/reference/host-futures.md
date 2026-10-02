@@ -92,13 +92,12 @@ anywhere); without it, cancellation is the documented best-effort law —
 the thread finishes, the late result is discarded.
 
 Rut side, the closure's own surface is invisible — callers see a
-normal async fn:
+normal async fn (the cx is injected, never spelled):
 
 ```rut
-use core::{ RunContext };
 use async_host::launch_future;
 
-async fn grab(cx: RunContext, path: str) -> bytes {
+async fn grab(path: str) -> bytes {
     let body = await fetch(path);
     return body;
 }

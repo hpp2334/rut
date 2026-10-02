@@ -85,6 +85,12 @@ source text by design; a partially translated book is a valid book.
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
 | pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定 |
 | fetch | 拉取 | the `DepRemote` contract → `DepRemote` 契约（代码不译）；`rut fetch` stays code |
+| bracket marker | 括号标记 | `[disposal]` / `[iterable]` stay code；标记词不译——方括号即指定 |
+| marker | 标记 | the closed marker set → 封闭标记集；designation by bracket, not name → 以方括号指定，而非以名字指定 |
+| designated slot | 指定槽位 | for-of reads this slot → for-of 读取该指定槽位 |
+| mint (verb) | 铸造 | the engine mints the frame → 引擎铸造帧；engine-minted → 引擎铸造 |
+| async block | async 块 | `async { .. }` stays code；the async primitive → async 原语 |
+| inject | 注入 | the weave injects the resume context → 编织注入恢复上下文；injected, never spelled → 注入，绝不拼写 |
 | remote (policy) | 远程（策略） | the remote policy → 远程策略；`DepRemote`/`HttpRemote`/`Loader`/`Loaded` stay code |
 | cache-first | 缓存优先 | a hit never touches the network → 命中则绝不触碰网络 |
 | offline remote | 离线远程 | `HttpRemote::offline` — cache-only → 只用缓存；prime the cache → 预热缓存 |

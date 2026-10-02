@@ -54,7 +54,7 @@ area = 3
   crosses freely for a local type (generic traits included).
 - **Any nominal type can be a target** — classes, structs, and even
   primitives (`impl MyTrait for i32` registers like any other impl).
-  Traits may be generic (`Wrap<T>`, `Iterable<E>`); each instantiation
+  Traits may be generic (`Wrap<T>`, `Readable<T>`); each instantiation
   has its own identity and its own method slots, and an impl may be
   parameterized by the target's own type parameters — `impl
   Encode<T> for Store<T>` registers a template that serves every
@@ -176,20 +176,20 @@ call site means.
 
 ## The iteration protocol
 
-A type is iterable when it implements the builtin `Iterable<E>` trait
-(a `pub builtin` core name — an `impl` block names it, so the module
-imports it, `use core::{ Iterable }`):
+A type is iterable when an inherent impl marks a member `[iterable]`
+(the bracket marker — the contract's shape is `fn <free>(self,
+emit: fn(E) -> bool)`, the element falling out of the marked member's
+own signature):
 
 ```rut
-use core::{ Iterable };
 use ink::{ Logger };
 
 class CountUp {
     n: i32;
 }
 
-impl Iterable<i32> for CountUp {
-    fn iterate(self, emit: fn(i32) -> bool) {
+impl CountUp {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
@@ -222,17 +222,20 @@ The builtin sequences (`[T]`, `str`, `bytes`, and the standard
 growable `Vec`) keep fused index loops instead; they never pay a
 per-element call.
 
-## Engine contracts are traits too
+## Engine contracts are not traits
 
-The async machinery is spelled as builtin traits — `Future<T>` and
-`RunContext` — which the engine *names* but does not close: a
-hand-written type can `impl Future<nil> for MyFuture` through the same
-registry as any other impl and be driven by the same loop. Like
-`Iterable`, both are `pub builtin` core names: the engine's weave never
-needs the import, but source that spells the names does
-(`use core::{ Future, RunContext }`). See
-[the async model](async-model.md) and the worked example in
-[04 — Custom async](../examples/04-custom-async.md).
+The engine's own contracts are spellings on types (the `builtin
+trait` row kind is gone): the bracket markers `[disposal]` and
+`[iterable]` designate inherent impl members (one per contract per
+class, the signature checked against the contract, dispatched through
+a designated slot — never a trait lookup), and the async protocol
+lives on two CLOSED `builtin class` rows, `Future<T>` and
+`RunContext`. The closure IS the wall: futures and cx records are
+engine-minted only, so a user type cannot BE one — structural
+satisfaction cannot see engine identity, and nominal closure is the
+only spelling of "engine-minted only". See
+[the async model](async-model.md), [traits](../reference/traits.md),
+and [the Rc heap](../reference/rc-heap.md).
 
 ## Equality is not a trait
 

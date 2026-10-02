@@ -13,7 +13,7 @@ first-class answer.
 | Rule | Content |
 |---|---|
 | No collector | No mark bits, no colors, no pauses beyond destructor chains. What leaks leaks wholly and predictably. |
-| Resource holders | Classes holding resources (`Disposal` impls, host boxes) must **not** participate in strong cycles. |
+| Resource holders | Classes holding resources (`[disposal]` members, host boxes) must **not** participate in strong cycles. |
 | Back-pointers | Parent/child and observer shapes take a `Weak` back-pointer. |
 | Pure-data cycles | Harmless — memory only, freed wholesale at teardown. |
 | Lints | The compiler may warn on obvious self-reference (a value stored into its own field through a handle path); general cycle detection stays out of scope. |
@@ -121,13 +121,13 @@ user code** — before the dispose pin, before payload teardown. A
 dispose body that calls `upgrade()` sees `nil`, with no window:
 
 ```rut
-use core::{ Disposal, DisposalContext, Weak };
+use core::{ DisposalContext, Weak };
 
 class Node  { child: ?Node; }
 class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer
 
-impl Disposal for Child {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Child {
+    [disposal] fn release(mut self, cx: DisposalContext) {
         // the parent's death released self through the field walk,
         // and the parent's weak list was nulled before any of that
         // user code ran — the back-pointer reads nil from in here:

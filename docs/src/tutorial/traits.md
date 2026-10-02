@@ -278,21 +278,20 @@ makes widening legal inside the body: `let w: Labeled = x;`.
 
 ## Making your type iterable
 
-A type becomes a `for..of` target by implementing the builtin
-`Iterable<E>` contract with its single resumption member (`Iterable`
-is core's import-gated `pub builtin` trait — an `impl` names it, so
-bring it in with `use core::{ Iterable }`; the builtin sequences
-themselves never need it):
+A type becomes a `for..of` target by marking an inherent member
+`[iterable]` — the bracket marker designates the member (the NAME is
+free; the element type falls out of the member's own emit parameter).
+No import is needed — the marker word IS the designation; the builtin
+sequences never mark one:
 
 ```rut
-use core::{ Iterable };
 use pouch::{ Vec };
 use ink::{ Logger };
 
 struct CountUp { n: i32 }
 
-impl Iterable<i32> for CountUp {
-    fn iterate(self, emit: fn(i32) -> bool) {
+impl CountUp {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }   // false = stop
         }

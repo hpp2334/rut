@@ -877,6 +877,25 @@ impl TypeBodyFrame {
         self.members_top(p)
     }
 
+    /// The bracket marker's PARSE half: `[word]` before a member's
+    /// modifiers. The parser accepts ANY contextual ident here (the
+    /// grammar audit: `[`/`]` exist, and no member decl could start
+    /// with `[` before this) — the CHECKER validates the engine's
+    /// closed marker set. `None` when the next tokens are not a bracket
+    /// group.
+    fn parse_member_marker(p: &mut Parser) -> Option<IdentId> {
+        if !matches!(p.tok(), Tok::LBracket) {
+            return None;
+        }
+        let lo = p.span();
+        p.bump(); // [
+        let word = p.expect_ident("a marker name after `[`").unwrap_or(IdentId(0));
+        if p.expect(Tok::RBracket).is_none() {
+            p.err(lo, "unterminated marker — `[disposal]` / `[iterable]`");
+        }
+        Some(word)
+    }
+
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
@@ -995,11 +1014,14 @@ impl TypeBodyFrame {
                     }
                 }
                 BodyMode::Trait | BodyMode::Impl => {
-                    // modifier loop: `pub` rejected here (a trait impl
-                    // rides the trait's visibility); `async` accepted on
-                    // the method
+                    // modifier loop: the bracket marker parsed here and
+                    // diagnosed (markers are inherent-members-only — the
+                    // checker never sees one on a trait impl); `pub`
+                    // rejected (a trait impl rides the trait's
+                    // visibility); `async` accepted on the method
                     let lo = p.span();
                     let mut is_async = false;
+                    let marker = Self::parse_member_marker(p);
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
                             "pub" => {
@@ -1018,6 +1040,12 @@ impl TypeBodyFrame {
                             _ => break,
                         }
                     }
+                    if let Some(word) = marker {
+                        p.err(lo, format!(
+                            "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never a trait or a trait impl",
+                            p.interner.name(word)
+                        ));
+                    }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
                         let with_body = matches!(self.mode, BodyMode::Impl);
@@ -1031,10 +1059,11 @@ impl TypeBodyFrame {
                     p.sync_stmt();
                 }
                 BodyMode::Inherent => {
-                    // `impl T { .. }` — inherent methods: `pub`/`async`
-                    // legal (the checker restricts `pub` to classes);
-                    // no fields
+                    // `impl T { .. }` — inherent methods: the bracket
+                    // marker FIRST (marker-before-visibility —
+                    // `[disposal] pub fn ..`), then `pub`/`async`
                     let lo = p.span();
+                    let marker = Self::parse_member_marker(p);
                     let mut vis: Option<Vis> = None;
                     let mut is_async = false;
                     while let Tok::Ident(m) = p.tok().clone() {
@@ -1050,9 +1079,14 @@ impl TypeBodyFrame {
                             _ => break,
                         }
                     }
+                    if matches!(p.tok(), Tok::LBracket) {
+                        p.err(lo, "the bracket marker comes first — `[disposal] pub fn ..` (marker-before-visibility)");
+                    }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true, true)));
+                        let mut mf = MethodFrame::new(vis, is_async, true, true);
+                        mf.marker = marker;
+                        return Step::Push(Frame::Method(mf));
                     }
                     if is_async {
                         p.err(lo, "expected `fn` after `async`");
@@ -1137,6 +1171,10 @@ pub(crate) struct MethodFrame {
     lo: u32,
     vis: Option<Vis>,
     is_async: bool,
+    /// the bracket marker (`[disposal]` / `[iterable]`) — parsed as a
+    /// contextual word, validated against the engine's closed set by
+    /// the checker
+    marker: Option<IdentId>,
     with_body: bool,
     /// rut methods take inline bounds; surface (.d.rut) members
     /// do not
@@ -1165,6 +1203,7 @@ impl MethodFrame {
             lo: 0,
             vis,
             is_async,
+            marker: None,
             with_body,
             allow_bounds,
             stage: MeStage::Params,
@@ -1232,6 +1271,7 @@ impl MethodFrame {
         let d = MethodDeclData {
             vis: self.vis,
             is_async: self.is_async,
+            marker: self.marker.take(),
             name: self.name,
             generics: std::mem::take(&mut self.generics),
             bounds: std::mem::take(&mut self.bounds),
@@ -1444,11 +1484,13 @@ impl FnFrame {
 //                                       `bytes`/`opaque`) — never a
 //                                       class
 //     prelude builtin class Name<T> { methods } engine type's member
-//                                       contract
-//     prelude builtin trait Name<T> { .. }      engine-woven contract
-//                                       (Index, Iterable, Disposal)
+//                                       contract (`Future<T>` and
+//                                       `RunContext` among them — the
+//                                       closed async pair)
 //
-// `host class` and `extern` are gone: native state crosses as `opaque`
+// `host class`, `extern`, and `builtin trait` are gone (v20: engine
+// contracts are `builtin class` rows and the `[..]` markers);
+// native state crosses as `opaque`
 // and rut wraps it in a class (the `Logger` pattern).
 
 pub(crate) struct SurfaceFrame {
@@ -1461,7 +1503,6 @@ pub(crate) struct SurfaceFrame {
     is_async: bool,
     /// `builtin trait Name { .. }` — collects members like BuiltinTy
     /// but emits the trait node
-    is_trait: bool,
     /// `builtin impl i32 { .. }` — collects bodiless methods like
     /// BuiltinTy but emits the builtin-impl node
     is_impl: bool,
@@ -1490,7 +1531,6 @@ impl SurfaceFrame {
             lo: 0,
             stage: SuStage::Params,
             is_async: false,
-            is_trait: false,
             is_impl: false,
             is_primitive: false,
             name: IdentId(0),
@@ -1608,18 +1648,22 @@ impl SurfaceFrame {
             }
             Tok::Ident(k) if k == "class" || k == "trait" => {
                 // `builtin class Name<T> { .. }` — an engine builtin type's
-                // member contract; `builtin trait Name<T> { .. }` — an
-                // engine-woven contract. Builtin decls spell
-                // their kind: a bare `builtin Name { .. }` is an error.
-                let is_trait = k == "trait";
+                // member contract. The `builtin trait` spelling is GONE
+                // (v20): the engine-contract row kind died with the
+                // select + type-surface plan's lanes 3+4 — `Future`/
+                // `RunContext` are closed classes, `Iterable`/`Disposal`
+                // are the bracket markers. Diagnosed, then recovered as a
+                // class so the members still parse.
+                if k == "trait" {
+                    p.err(p.span(), "`builtin trait` is removed — engine contracts are spelled on types now: `Future`/`RunContext` are `builtin class` rows, and `Iterable`/`Disposal` are bracket markers (`[iterable] fn` / `[disposal] fn` in an inherent `impl`)");
+                }
                 p.bump();
                 let Some(name) = p.expect_ident("a builtin type name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                self.is_trait = is_trait;
                 if matches!(p.tok(), Tok::Lt) {
-                    let owner = if is_trait { "builtin trait" } else { "builtin class" };
+                    let owner = "builtin class";
                     let (gens, pending) = generic_params(p, false, owner);
                     self.generics = gens;
                     debug_assert!(pending.is_none(), "rejected bounds never suspend");
@@ -1666,13 +1710,13 @@ impl SurfaceFrame {
             }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }`",
+                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, or `builtin impl <prim> { .. }` (`builtin trait` is removed — engine contracts are `builtin class` rows and bracket markers now)",
                 );
                 Step::Pop(Done::Failed)
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn`, `primitive`, `class`, `trait`, or `impl` after `builtin`, found {found}"));
+                p.err_here(format!("expected `fn`, `primitive`, `class`, or `impl` after `builtin`, found {found}"));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1687,18 +1731,7 @@ impl SurfaceFrame {
                 // `builtin` diagnoses and recovers as ambient
                 let ambient =
                     matches!(self.linkage, Linkage::Builtin { ambient: true });
-                let node = if self.is_trait {
-                    p.item(
-                        ItemKind::BuiltinTrait {
-                            vis: Vis::Self_,
-                            ambient,
-                            name: self.name,
-                            generics: std::mem::take(&mut self.generics),
-                            methods: std::mem::take(&mut self.methods),
-                        },
-                        span,
-                    )
-                } else if self.is_impl {
+                let node = if self.is_impl {
                     p.item(
                         ItemKind::BuiltinImpl {
                             vis: Vis::Self_,

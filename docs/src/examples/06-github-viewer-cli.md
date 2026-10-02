@@ -83,24 +83,24 @@ The std `http` package is **async-only and unsuffixed**: only the
 operations that really wait are async points, everything else is sync
 construction sugar. The five verbs are build sugars (`get`/`post`/
 `put`/`patch`/`del` — the DELETE verb spells `del`; the wire still
-sees canonical `DELETE`), and `send(cx)` is THE async point, resolving **at
+sees canonical `DELETE`), and `send()` is THE async point, resolving **at
 headers** — the wire body stays unread
 ([the async model](../core-concepts/async-model.md)):
 
 ```rut
-async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
+async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
     if (err != nil) {
         let why: str = err;
         eprint(why);
         return 1;
     }
-    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));
+    let (tree, e) = decodeJsonBytes<Root>(await resp.body());
 ```
 
-`list` is the **drain** lane: one `body(cx)` await pulls the whole
+`list` is the **drain** lane: one `body()` await pulls the whole
 tree, and the JSON decode goes through the std `json` package's
 reader with `impl JsonDeserialize for Entry` in this file. Status
 mapping is one function: `status() == 0` is the reserved transport
@@ -109,7 +109,7 @@ note, anything else non-2xx is the bare status.
 
 ### The download: true streaming, chunk by chunk
 
-`download` walks a `ByteStream` — `next(cx)` answers one chunk per
+`download` walks a `ByteStream` — `next()` answers one chunk per
 await (nil = EOF-or-failed; the sticky `error()` names which), and
 each chunk lands through the **sync** `append_file` host row. The
 destination is truncated once first, so a stale file never leaks its
@@ -119,7 +119,7 @@ tail into a fresh download:
     let stream = resp.byte_stream();
     let mut total: i32 = 0;
     while (true) {
-        let c = await stream.next(cx);
+        let c = await stream.next();
         if (c == nil) {
             // EOF — or a mid-read failure? the sticky error names it
             let rerr = stream.error();

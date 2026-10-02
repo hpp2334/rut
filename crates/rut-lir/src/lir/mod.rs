@@ -200,6 +200,12 @@ pub struct FnCompiler<'a, 'b> {
     /// while an async fn's body compiles: the frame edge,
     /// the cx edge, and the checkpoint/field allocation counters
     pub(crate) async_frame: Option<AsyncFrame>,
+    /// the async block's infer pass (v20): `return` records the found
+    /// type instead of checking it, so the block's `T` unifies after the
+    /// first weave; the final weave re-runs with `false`
+    pub(crate) async_infer: bool,
+    /// the infer pass's harvest: each `return`'s found type, in order
+    pub(crate) async_founds: Vec<TypeId>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {

@@ -821,12 +821,6 @@ impl<'a> P<'a> {
                 self.gen_only(&generics);
                 self.trait_body(members, span);
             }
-            ItemKind::BuiltinTrait { vis: _, ambient, name, generics, methods } => {
-                self.text(if ambient { "prelude builtin trait " } else { "pub builtin trait " });
-                self.text(self.a.name(name));
-                self.gen_only(&generics);
-                self.trait_body(methods, span);
-            }
             ItemKind::BuiltinPrimitive { ambient, name, members } => {
                 self.text(if ambient { "prelude builtin primitive " } else { "pub builtin primitive " });
                 self.text(self.a.name(name));
@@ -1149,6 +1143,13 @@ impl<'a> P<'a> {
 
     fn method_decl(&mut self, h: NodeHandle<MethodDeclNode>) {
         let d = self.a.method_decl(h).clone();
+        // the bracket marker comes FIRST (marker-before-visibility)
+        if let Some(mk) = d.marker {
+            self.text("[");
+            self.text(self.a.name(mk));
+            self.text("]");
+            self.sp();
+        }
         if let Some(v) = d.vis.and_then(vis_opt) {
             self.text(v);
             self.sp();
@@ -1631,6 +1632,22 @@ impl<'a> P<'a> {
             }
             ExprKind::Lit(l) => {
                 self.lit(&l);
+            }
+            ExprKind::AsyncBlock { body } => {
+                // `async { .. }` — the async primitive; the block always
+                // breaks (a mint is a statement-sized thing)
+                let stmts: Vec<_> = self.a.block(body).to_vec();
+                self.text("async ");
+                self.text("{");
+                self.level += 1;
+                self.nl();
+                for s in stmts {
+                    self.stmt(s);
+                }
+                self.drain_close(self.a.span(body.id()).hi);
+                self.level -= 1;
+                self.nl();
+                self.text("}");
             }
             ExprKind::Path { segs } => {
                 self.path(&segs);

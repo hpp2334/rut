@@ -132,17 +132,16 @@ high
   `fn` is module-private (see
   [Modules and visibility](modules-and-visibility.md)).
 
-Trait impls make enum values iterable — `for (let v of c)` rides the
-same desugar as a class's (see [The iteration protocol](traits.md)):
+A marked member makes enum values iterable — `for (let v of c)` rides
+the same desugar as a class's (see [The iteration protocol](traits.md)):
 
 ```rut
-use core::{ Iterable };
 use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-impl Iterable<Light> for Light {
-    fn iterate(self, emit: fn(Light) -> bool) {
+impl Light {
+    [iterable] fn iterate(self, emit: fn(Light) -> bool) {
         let mut cur = self;
         for (let i = 0; i < 3; i += 1) {
             if (!emit(cur)) { return; }
@@ -169,7 +168,7 @@ Green
 Yellow
 ```
 
-One limit stays: `Disposal` is for structs and classes only — the
+One limit stays: `[disposal]` is for structs and classes only — the
 engine disposes a record's cell, and an enum member is immortal.
 
 ## Boundaries

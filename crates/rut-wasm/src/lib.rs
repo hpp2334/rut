@@ -778,11 +778,10 @@ entry fn main() {
     // so the countdown completes (a clock that never moves parks after
     // the first sleep and the lines after it never fire)
     const BOOK_ASYNC: &str = r#"
-use core::{ RunContext };
 use async_host::{ launch_future, sleep };
 use ink::{ Logger };
 
-async fn countdown(cx: RunContext, log: Logger, n: u32) {
+async fn countdown(log: Logger, n: u32) {
     let mut i = n;
     while (i > 0) {
         log.info(f"t-{i}");

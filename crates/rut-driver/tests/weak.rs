@@ -236,7 +236,7 @@ fn weak_back_pointer_breaks_the_cycle_and_dispose_sees_nil() {
     // user code ran, so the answer is nil — the deterministic-ordering
     // pin (no resurrection, the shape frees to the last cell).
     let src = r#"
-use core::{ Disposal, DisposalContext, Weak };
+use core::{ DisposalContext, Weak };
 class Node {
     name: str;
     other: ?Node = nil;            // the STRONG edge (parent -> child)
@@ -244,9 +244,7 @@ class Node {
 }
 impl Node {
     fn new(name: str) -> Self { return Self { name: name, other: nil, back: nil }; }
-}
-impl Disposal for Node {
-    fn dispose(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_node(mut self, cx: DisposalContext) {
         if (self.back != nil) {
             let b = self.back.upgrade();   // INSIDE dispose: the parent's box died first —
             if (b != nil) { panic("cycle resurrected"); }   // the nulling preceded user code

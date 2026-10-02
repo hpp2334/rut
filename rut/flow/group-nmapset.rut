@@ -19,11 +19,10 @@
 // exercise it there); it re-joins the shipped surface when the impl
 // row's trait-argument carrier grows the tuple shape.
 
-use core::{ Iterable };
 use nmapset::{ HashSet };
 
 impl<T> FromFlow<T> for HashSet<T> {
-    fn from_flow(it: Iterable<T>) -> Self {
+    fn from_flow(it: Flow<T>) -> Self {
         let out: HashSet<T> = HashSet.new();
         it.iterate(fn (x: T) -> bool { out.put(x); return true; });
         return out;

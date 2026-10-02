@@ -981,6 +981,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     kids(s.id(), out, self);
                 }
             }
+            // the async block's body IS in scope at its site: the mint
+            // reads the captured values there, so the enclosing scan
+            // descends (an `async { }` inside a for-of body makes the
+            // block's reads the emit closure's captures)
+            Kind::Expr(ExprKind::AsyncBlock { body }) => kids(body.id(), out, self),
             Kind::Expr(ExprKind::Path { segs }) => {
                 // the HEAD of any path chain is a name candidate — a
                 // multi-seg chain (`acc.total`) names its head local just
@@ -1152,6 +1157,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     walk(s.id(), inside, self, assigned, captured);
                 }
             }
+            // the async block descends with the SAME `inside` law: its
+            // reads are the enclosing fn's captures (the mint reads the
+            // values at the site); the lambda's own law is the stricter
+            // `true` arm and does not apply — the block frame is minted,
+            // never deferred
+            Kind::Expr(ExprKind::AsyncBlock { body }) => walk(body.id(), inside, self, assigned, captured),
             Kind::Expr(ExprKind::Path { segs }) => {
                 if inside && !segs.is_empty() {
                     captured.insert(segs[0].name);

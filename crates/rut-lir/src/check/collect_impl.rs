@@ -266,7 +266,18 @@ impl<'a> Ctx<'a> {
                 // the disposal context likewise: engine-minted, no
                 // member surface — there is nothing to impl onto it
                 (rut_core::binary::NativeTy::DisposalContext, _) => {
-                    self.err(sp, "`DisposalContext` takes no impl blocks — the engine mints it per `dispose` call");
+                    self.err(sp, "`DisposalContext` takes no impl blocks — the engine mints it per `[disposal]` call");
+                    None
+                }
+                // the closed async pair: engine-minted only — a user
+                // type cannot BE a future, and the cx record is the
+                // weave's (the walls are the point of the closure)
+                (rut_core::binary::NativeTy::Future, _) => {
+                    self.err(sp, "`Future` takes no impl blocks — futures are engine-minted (an `async fn` call, an `async { }` block, `sleep`, the select/completer mints)");
+                    None
+                }
+                (rut_core::binary::NativeTy::RunContext, _) => {
+                    self.err(sp, "`RunContext` takes no impl blocks — the weave injects it as `cx` into every async body");
                     None
                 }
             }
@@ -428,7 +439,19 @@ impl<'a> Ctx<'a> {
         let tname = spell;
         if !is_local {
             // a `builtin class` inherent impl — registered for static
-            // dispatch through the native shape
+            // dispatch through the native shape. The markers never reach
+            // here: engine contracts live on USER records
+            for (_, mnode) in &mths {
+                if self.ast.method_decl(*mnode).marker.is_some() {
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!(
+                            "`{}` is a builtin class — engine contract markers (`[disposal]`/`[iterable]`) live on user struct and class impls",
+                            self.name(tname)
+                        ),
+                    );
+                }
+            }
             let prev_names: Vec<IdentId> = self
                 .impls
                 .iter()
@@ -472,6 +495,12 @@ impl<'a> Ctx<'a> {
         // local struct/class: methods attach to the decl, where the
         // ordinary inherent-call machinery finds them
         if let Some(idx) = self.datas.iter().position(|(n, _)| *n == tname) {
+            // the MARKER validation (v20): the closed set, one per
+            // contract per class, signature per contract, concrete
+            // record targets only — the engine's contracts live here
+            // since the `builtin trait` rows died
+            let vsp = mths.first().map(|(_, m)| self.ast.span(m.id())).unwrap_or(self.ast.span(self.ast.root.id()));
+            self.validate_markers(tname, &mths, target_data, target_ty, vsp);
             for (n, mnode) in &mths {
                 if self.datas[idx].1.methods.iter().any(|(pn, _)| pn == n) {
                     self.err(
@@ -480,12 +509,49 @@ impl<'a> Ctx<'a> {
                     );
                 }
             }
+            // the engine calls a `[disposal]` member with NO call site:
+            // its body queues eagerly, so the per-type disposal row
+            // finds a compiled fn (a `[iterable]` member binds at its
+            // for-of sites like any method)
+            let disposal = sym::DISPOSAL_MARKER;
+            let marked: Vec<IdentId> = mths
+                .iter()
+                .filter(|(_, m)| self.ast.method_decl(*m).marker == Some(disposal))
+                .map(|(n, _)| *n)
+                .collect();
             self.datas[idx].1.methods.extend(mths);
+            for n in marked {
+                self.ensure_inst(Inst {
+                    key: FnKey::Method { data: tname, name: n },
+                    subst: vec![],
+                    trait_origins: vec![],
+                });
+            }
             return;
         }
         // a local enum: the same attach on the enum's own decl slot —
         // statics and self methods alike, the struct rule
         if let Some(idx) = self.enums.iter().position(|(n, _)| *n == tname) {
+            // the marker walk for enums: `[iterable]` is legal (an
+            // enum VALUE iterates like a class's — for-of drives the
+            // designated member), but `[disposal]` is not — an enum's
+            // members are immortal singletons, never released, and an
+            // unknown word dies here too (the closed set's other gate)
+            for (_n, mnode) in &mths {
+                let md = self.ast.method_decl(*mnode);
+                let Some(word) = md.marker else { continue };
+                if word == sym::DISPOSAL_MARKER {
+                    self.err(self.ast.span(mnode.id()), format!(
+                        "`{}` cannot carry `[disposal]` — only a struct or class can (the engine disposes a record's cell; an enum's members are immortal singletons)",
+                        self.name(tname)
+                    ));
+                } else if word != sym::ITERABLE_MARKER {
+                    self.err(self.ast.span(mnode.id()), format!(
+                        "`[{}]` is not an engine contract — the closed marker set is `[disposal]` and `[iterable]`",
+                        self.name(word)
+                    ));
+                }
+            }
             for (n, mnode) in &mths {
                 if self.enums[idx].1.methods.iter().any(|(pn, _)| pn == n) {
                     self.err(
@@ -495,6 +561,200 @@ impl<'a> Ctx<'a> {
                 }
             }
             self.enums[idx].1.methods.extend(mths);
+        }
+    }
+
+    /// The bracket markers' CHECKER half (v20): the parser accepts any
+    /// `[word]`, this validates the engine's CLOSED set and each
+    /// contract's law.
+    ///
+    /// - the set: `[disposal]`, `[iterable]` — engine-owned, nothing
+    ///   else marks;
+    /// - at most one per contract per class (a second `[disposal]`
+    ///   member has no slot to fill);
+    /// - inherent-members-only (the parser already rejects the trait /
+    ///   trait-impl spellings; the builtin-class targets never reach
+    ///   here — they diagnosed above);
+    /// - the signature per contract: `[disposal] fn <free>(mut self,
+    ///   cx: DisposalContext)` — the name is FREE, the bracket
+    ///   designates; the engine calls it at refcount zero, so the
+    ///   target must be a CONCRETE struct/class (the row keys the
+    ///   cell's type id; a generic target has no static row);
+    ///   `[iterable] fn <free>(self, emit: fn(E) -> bool)` — the
+    ///   element type falls out of the marked member's own signature.
+    fn validate_markers(
+        &mut self,
+        tname: IdentId,
+        mths: &[(IdentId, NodeHandle<MethodDeclNode>)],
+        target_data: Option<(IdentId, Vec<IdentId>)>,
+        target_ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) {
+        let disposal = sym::DISPOSAL_MARKER;
+        let iterable = sym::ITERABLE_MARKER;
+        // the target's own type parameters bind as template placeholders
+        // for the signature checks — a `[iterable]` member on a generic
+        // class (`impl<E> Flow<E>`) spells the element type with the
+        // class's binder (`emit: fn(E) -> bool`), and the concrete type
+        // falls out at instantiation, exactly like any template method's
+        let param_env: Vec<(IdentId, TypeId)> = match target_data.as_ref() {
+            Some((_, params)) => {
+                params.iter().map(|p| (*p, self.param_placeholder(*p))).collect()
+            }
+            None => vec![],
+        };
+        for (n, mnode) in mths {
+            let md = self.ast.method_decl(*mnode);
+            let Some(word) = md.marker else { continue };
+            if word != disposal && word != iterable {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!(
+                        "`[{}]` is not an engine contract — the closed marker set is `[disposal]` and `[iterable]`",
+                        self.name(word)
+                    ),
+                );
+                continue;
+            }
+            if md.is_async {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!("`[{}]` marks a synchronous contract — `async` is not allowed here", self.name(word)),
+                );
+            }
+            // at most one per contract per class — the decl's existing
+            // methods count too (an earlier impl block may have marked)
+            let already = self
+                .find_data(tname)
+                .map(|d| {
+                    d.methods
+                        .iter()
+                        .any(|(pn, pm)| *pn != *n && self.ast.method_decl(*pm).marker == Some(word))
+                })
+                .unwrap_or(false)
+                || mths.iter().any(|(pn, pm)| {
+                    pn != n && self.ast.method_decl(*pm).marker == Some(word)
+                });
+            if already {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!(
+                        "`{}` already carries a `[{}]` member — at most one per contract per class (the engine's slot is singular)",
+                        self.name(tname),
+                        self.name(word)
+                    ),
+                );
+            }
+            match word {
+                w if w == disposal => {
+                    if target_data.is_some() {
+                        self.err(
+                            sp,
+                            format!(
+                                "`{}` cannot carry `[disposal]` through a generic target — implement it for the concrete struct or class (the engine's row keys the cell's type id)",
+                                self.name(tname)
+                            ),
+                        );
+                        continue;
+                    }
+                    if !matches!(self.types.kind(target_ty), TyKind::Data { .. }) {
+                        self.err(
+                            sp,
+                            format!(
+                                "`{}` cannot carry `[disposal]` — only a struct or class can (the engine calls the member on the record's cell at refcount zero)",
+                                self.name(tname)
+                            ),
+                        );
+                        continue;
+                    }
+                    // signature: `(mut self, cx: DisposalContext)` -> nil
+                    let mut params = md.params.iter();
+                    let self_form = match params.next().map(|p| self.ast.param(*p)) {
+                        Some(MemberKind::SelfParam(sd)) => Some(sd.is_mut),
+                        _ => None,
+                    };
+                    if self_form != Some(true) {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[disposal]` member takes `mut self` first — the engine calls it on the pinned cell",
+                        );
+                    }
+                    let cx_ok = match params.next().map(|p| self.ast.param(*p)) {
+                        Some(MemberKind::Param(ParamData { ty: Some(t), .. })) => {
+                            self.resolve_sig_ty(*t, &param_env, None) == TY_DISPOSAL_CONTEXT
+                        }
+                        _ => false,
+                    };
+                    if !cx_ok {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[disposal]` member's second parameter is `cx: DisposalContext` — the engine mints it per call",
+                        );
+                    }
+                    if params.next().is_some() {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[disposal]` member takes exactly `(mut self, cx: DisposalContext)`",
+                        );
+                    }
+                    if md.ret.map(|r| self.resolve_sig_ty(r, &param_env, None)).unwrap_or(TY_NIL) != TY_NIL {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[disposal]` member returns nil — the engine ignores any answer",
+                        );
+                    }
+                    // the engine calls the member with NO call site: the
+                    // body queues eagerly, so the per-type disposal row
+                    // finds a compiled fn
+                    let idx = self.impls.len();
+                    let _ = idx;
+                }
+                w if w == iterable => {
+                    // signature: `(self, emit: fn(E) -> bool)` -> nil —
+                    // the element type falls out of the emit parameter
+                    let mut params = md.params.iter();
+                    let has_self = matches!(params.next().map(|p| self.ast.param(*p)), Some(MemberKind::SelfParam(_)));
+                    if !has_self {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "an `[iterable]` member takes a receiver — `fn <name>(self, emit: fn(E) -> bool)`",
+                        );
+                    }
+                    let emit_ok = match params.next().map(|p| self.ast.param(*p)) {
+                        Some(MemberKind::Param(ParamData { ty: Some(t), .. })) => {
+                            {
+                                let et = self.resolve_sig_ty(*t, &param_env, None);
+                                // a fn type names the element directly; a
+                                // target parameter (`emit: fn(E) -> bool`
+                                // under `impl<E>`) falls out at
+                                // instantiation
+                                matches!(self.types.kind(et), TyKind::Fn { .. })
+                                    || param_env.iter().any(|(_, ph)| *ph == et)
+                            }
+                        }
+                        _ => false,
+                    };
+                    if !emit_ok {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "an `[iterable]` member's second parameter is the emit callback — `emit: fn(E) -> bool` (`false` stops the iteration; the element type falls out of the marked member's signature)",
+                        );
+                    }
+                    if params.next().is_some() {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "an `[iterable]` member takes exactly `(self, emit: fn(E) -> bool)`",
+                        );
+                    }
+                    if md.ret.map(|r| self.resolve_sig_ty(r, &param_env, None)).unwrap_or(TY_NIL) != TY_NIL {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "an `[iterable]` member returns nil — the drive consumes through `emit`",
+                        );
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
@@ -725,30 +985,10 @@ impl<'a> Ctx<'a> {
             self.err(sp, "duplicate impl for the same (trait, type) pair");
             return;
         }
-        // the disposal contract's target gate: a CONCRETE user record
-        // type — the engine's release path keys the row by the cell's
-        // type id at refcount zero, so primitives and engine shapes
-        // refuse, and a generic target has no static row to fill
-        if trait_name == sym::DISPOSAL {
-            if target_data.is_some() {
-                self.err(
-                    sp,
-                    format!(
-                        "`{ty_display}` cannot implement Disposal — implement it for the concrete struct or class"
-                    ),
-                );
-                return;
-            }
-            if !matches!(self.types.kind(target_ty), TyKind::Data { .. }) {
-                self.err(
-                    sp,
-                    format!(
-                        "`{ty_display}` cannot implement Disposal — only a struct or class can (the engine calls `dispose` on the record's cell)"
-                    ),
-                );
-                return;
-            }
-        }
+        // (the disposal contract's target gate is GONE with the trait:
+        // the `[disposal]` marker's own gates — concrete record target,
+        // one per class, signature — run in `collect_impl_inherent`'s
+        // marker walk)
         // the trait's required signatures: from the trait's own AST when
         // it is declared here (async + receiver form live only there),
         // resolved under the impl's trait-argument substitution; from the
@@ -809,7 +1049,6 @@ impl<'a> Ctx<'a> {
         // and receiver form matching — and nothing extra. Generic targets
         // (`impl .. for Vec<T>`) stay structural: their parameters only
         // become types at instantiation.
-        let dispose_name = self.intern("dispose");
         for req in &reqs {
             let Some((_, mnode)) = mths.iter().find(|(n, _)| *n == req.name) else {
                 let tname = self.name(self.trait_by_id(trait_id).name);
@@ -860,15 +1099,10 @@ impl<'a> Ctx<'a> {
                     ),
                 );
             }
-            // the disposal contract pins its receiver: the engine calls
-            // `dispose` on the pinned cell with `mut self` — a `self`
-            // (by-value) or receiver-less spelling refuses
-            if trait_name == sym::DISPOSAL && req.name == dispose_name && self_form != Some(true) {
-                self.err(
-                    self.ast.span(mnode.id()),
-                    "`dispose` must take `mut self` — the engine calls it on the cell at refcount zero",
-                );
-            }
+            // (the disposal contract's receiver pin is GONE with the
+            // trait: the `[disposal]` marker's own signature contract
+            // checks `mut self` at the inherent impl, in
+            // `collect_impl_inherent`'s marker walk)
             if target_data.is_none() && (ptys != req.ptys || ret != req.ret) {
                 // `Self`-spelled trait parameters reach the descriptor as
                 // this trait's object type — the impl spells the concrete

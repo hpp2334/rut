@@ -38,25 +38,24 @@ fn host_fn_parses() {
     assert_eq!(generics.len(), 1, "builtin fn keeps its generics");
 }
 
-const BUILTIN_TRAIT: &str = "\
-prelude builtin trait Index<T> {
-    fn len(self) -> i32;
-    fn get(self, i: i32) -> T;
-}
-";
 
 #[test]
-fn builtin_trait_parses() {
-    let (ast, diags) = parse(BUILTIN_TRAIT, Mode::Decl);
-    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+fn builtin_trait_spelling_is_removed() {
+    let src = "prelude builtin trait Index<T> {\n    fn len(self) -> i32;\n}\n";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        "the removed spelling must be diagnosed: {diags:?}"
+    );
+    // recovery: the members still parse (as a class)
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTrait { name, generics, methods, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinTrait item, got {:?}", ast.item(items[0]));
+    let ItemKind::BuiltinTy { name, generics, members, .. } = ast.item(items[0]) else {
+        panic!("expected the recovered BuiltinTy item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(ast.name(*name), "Index");
     assert_eq!(generics.len(), 1);
-    assert_eq!(methods.len(), 2);
+    assert_eq!(members.len(), 1);
 }
 
 const BUILTIN_SURFACE: &str = "\
@@ -106,13 +105,16 @@ fn zero_member_builtin_bodies_parse() {
     assert!(members.is_empty());
 
     let (ast, diags) = parse("prelude builtin trait Mark { }", Mode::Decl);
-    assert!(diags.is_empty(), "zero-member builtin trait must parse clean: {diags:?}");
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        "the removed spelling must be diagnosed: {diags:?}"
+    );
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTrait { methods, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinTrait item, got {:?}", ast.item(items[0]));
+    let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
+        panic!("expected the recovered BuiltinTy item, got {:?}", ast.item(items[0]));
     };
-    assert!(methods.is_empty());
+    assert!(members.is_empty());
 }
 
 const HOST_STRUCT: &str = "\
@@ -314,16 +316,21 @@ fn the_two_builtin_spellings_parse_clean() {
         "`pub builtin` is the import-gated spelling: {linkage:?}"
     );
 
-    // the kind words compose with both spellings
+    // the kind words compose with both spellings (the `builtin trait`
+    // row kind is GONE — v20)
     for src in [
         "pub builtin class opaque { fn new<T>(v: T) -> Self; }",
-        "pub builtin trait Mark { }",
         "pub builtin impl i32 { fn abs(self) -> i32; }",
         "prelude builtin primitive opaque { fn downcast<T>(o: Self) -> ?T; }",
     ] {
         let (_, diags) = parse(src, Mode::Decl);
         assert!(diags.is_empty(), "`{src}` must parse clean: {diags:?}");
     }
+    let (_, diags) = parse("pub builtin trait Mark { }", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        "the removed spelling must diagnose: {diags:?}"
+    );
 }
 
 #[test]

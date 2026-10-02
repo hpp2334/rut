@@ -22,7 +22,6 @@ const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 fn declared_names() -> (
     Vec<(String, bool)>,
     Vec<(String, bool)>,
-    Vec<(String, bool)>,
     Vec<String>,
     Vec<(String, Vec<String>)>,
 ) {
@@ -30,7 +29,6 @@ fn declared_names() -> (
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
-    let mut builtin_traits = Vec::new();
     let mut plain_traits = Vec::new();
     let mut builtin_impls = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
@@ -64,9 +62,6 @@ fn declared_names() -> (
                 }
                 builtin_types.push((n, *ambient));
             }
-            ItemKind::BuiltinTrait { name, ambient, .. } => {
-                builtin_traits.push((ast.name(*name).to_string(), *ambient))
-            }
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
             ItemKind::BuiltinImpl { prim, methods, .. } => {
                 let names = methods
@@ -80,13 +75,13 @@ fn declared_names() -> (
             other => panic!("core declares an embedder surface item: {other:?}"),
         }
     }
-    (builtin_fns, builtin_types, builtin_traits, plain_traits, builtin_impls)
+    (builtin_fns, builtin_types, plain_traits, builtin_impls)
 }
 
 #[test]
 fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
-    let (builtin_fns, builtin_types, builtin_traits, plain_traits, builtin_impls) = declared_names();
+    let (builtin_fns, builtin_types, plain_traits, builtin_impls) = declared_names();
 
     // builtin types: the decl's `builtin` decls are exactly the native
     // types — name AND ambient bit (the decl spelling vs the row)
@@ -97,18 +92,19 @@ fn core_decl_matches_the_compilers_surface() {
     surf_types.sort();
     assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
 
-    // traits: the decl's builtin traits are exactly the native
-    // traits (name AND ambient bit) — and nothing in the prelude is a
-    // plain library trait
-    let mut decl_traits = builtin_traits;
-    decl_traits.sort();
+    // the engine-contract `builtin trait` rows are GONE (v20): the decl
+    // carries no trait rows, the surface registers no native traits —
+    // and nothing in the prelude is a plain library trait
     let mut surf_traits: Vec<(String, bool)> =
         surface.native_traits.iter().map(|(n, _, a)| (surface.names.name(*n).to_string(), *a)).collect();
     surf_traits.sort();
-    assert_eq!(decl_traits, surf_traits, "core.d.rut builtin traits == Surface::core native_traits");
+    assert!(
+        surf_traits.is_empty(),
+        "the builtin trait row kind is gone — Surface::core registers no native traits"
+    );
     assert!(
         plain_traits.is_empty(),
-        "every engine-woven trait is `builtin trait` (plain `trait` is the library form — Hashable lives in pouch)"
+        "no plain `trait` in the prelude (the library form lives in packages — Hashable in pouch)"
     );
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
@@ -341,20 +337,21 @@ fn own_strbuf_named_type_still_resolves() {
 /// VISIBILITY AGREEMENT, spelled out per row: each decl's
 /// `Linkage::Builtin { ambient }` matches the ambient bit on its
 /// `Surface::core()` row (checked set-wise by the lockstep above); this
-/// pin fixes the phase's intent — the disposal pair and the
-/// engine-woven trio (`Iterable`/`Future`/`RunContext`) are the
-/// import-gated spelling (`pub builtin`, ambient=false; the engine
-/// weaves on the symbols regardless), the native types gate `Weak`
-/// and `DisposalContext`, and every fn row stays ambient (`prelude
-/// builtin`). A future row flips only with a deliberate test update.
+/// pin fixes the phase's intent — the gated native types are `Weak`,
+/// `DisposalContext`, and the closed async pair (`Future`/`RunContext`,
+/// v20's `builtin trait` successors), every fn row stays ambient
+/// (`prelude builtin`), and the native-trait table is EMPTY (the row
+/// kind is gone — the markers need no import). A future row flips only
+/// with a deliberate test update.
 #[test]
 fn engine_trait_rows_are_import_gated_everything_else_ambient() {
     let surface = rut_core::binary::Surface::core();
     for (name, _, ambient) in &surface.native_types {
-        let expected = matches!(surface.names.name(*name), "Weak" | "DisposalContext");
+        let expected = matches!(surface.names.name(*name), "Weak" | "DisposalContext" | "Future" | "RunContext");
         assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
     }
     for (name, _, ambient) in &surface.native_traits {
+        let _ = name;
         assert!(!*ambient, "native trait `{}` is import-gated (`pub builtin`)", surface.names.name(*name));
     }
     for (name, ambient) in &surface.native_fns {

@@ -84,7 +84,7 @@ machine):
 | control | `Jmp`, `Br`, `BrTable` | `BrTable` arms in the `labels` pool |
 | calls | `Call`, `CallM`, `CallI`, `CallFn`, `CallNat`, `Ret` | see below |
 | records | `NewCell`, `MakeRecord`, `GetF`, `SetF` | `MakeRecord` allocates + initializes every field in one op; field operands bake the field's `Repr` |
-| ownership | `Own` (payload copy; `bytes.clone()`'s lowering) | opcode 90 (`OnDrop`) is retired — cell-death code is the `Disposal` trait, dispatched by the release path, not an op ([the Rc heap](rc-heap.md)) |
+| ownership | `Own` (payload copy; `bytes.clone()`'s lowering) | opcode 90 (`OnDrop`) is retired — cell-death code is the `[disposal]` marker, dispatched by the release path, not an op ([the Rc heap](rc-heap.md)) |
 | nullables | `MakeOpt` | `T -> ?T`: box into a one-slot cell (shares, never copies) |
 | weak refs | `WeakNew`, `WeakUpgrade` | [Weak references](weak-refs.md) |
 | arrays | `ArrNew` (zeroed), `ArrLit` (fixed), `ArrGet`/`ArrSet`, `ArrGetF`/`ArrSetF` (fused field+index) | bounds trap; element repr baked in |
@@ -176,11 +176,14 @@ them ([The compiler pipeline](compiler.md)).
 - Resume dispatch is the existing `BrTable` over that state.
 - Locals live across suspension as cell-backed frame fields
   (`GetF`/`SetF`).
-- The driven half is an ordinary `CallI` through the future's `yield`
-  vtable row; suspension is a plain `Ret`.
+- The driven half is an ordinary `CallI` through the `Future<T>`
+  class's designated yield slot (the engine ABI — the vtable row is
+  keyed by the hidden frame type, never spelled in source);
+  suspension is a plain `Ret`.
 
-The wire format is untouched by the async plan — bundles and binaries from
-the same compiler version stay compatible. The driving loop that wakes
+The async plan rides the version gate like every surface change
+(v20 carried the closed `Future` class) — bundles and binaries from
+different compiler versions are refused at the version byte. The driving loop that wakes
 these frames is [VM core](vm-core.md)'s scheduler; the surface semantics
 are [Async and await](async.md).
 

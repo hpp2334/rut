@@ -374,6 +374,8 @@ enum AtomStage {
     PostDotCall { recv: NodeHandle<AnyExpr>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
     PostCall { callee: NodeHandle<AnyExpr>, args: Vec<NodeHandle<AnyExpr>> },
     PostIndex { recv: NodeHandle<AnyExpr> },
+    /// `async { .. }` — the block body is being fetched
+    AsyncBody { lo: u32 },
 }
 
 impl AtomFrame {
@@ -462,6 +464,16 @@ impl AtomFrame {
                 if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
                     let ty_name = p.interner.intern(&name);
                     return self.struct_enter(p, ty_name, false);
+                }
+                // `async { .. }` — the async block, the async PRIMITIVE
+                // (v20): one expression form, keyword before a block.
+                // Evaluating it mints the frame; its type is `Future<T>`.
+                // (`async fn` stays a declaration — the sugar over this.)
+                if name == "async" && matches!(p.peek(1).tok, Tok::LBrace) {
+                    let lo = sp.lo;
+                    p.bump();
+                    self.stage = AtomStage::AsyncBody { lo };
+                    return Step::Push(Frame::Block(BlockFrame::strict(p)));
                 }
                 p.bump();
                 let first = PathSeg { name: p.interner.intern(&name), generics: Vec::new() };
@@ -865,8 +877,19 @@ impl AtomFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
+            // the async block's body landed: the block IS the expression
+            Done::Block(b) => match self.stage {
+                AtomStage::AsyncBody { lo } => {
+                    let e = p.expr(ExprKind::AsyncBlock { body: b }, Span::new(lo, p.span().hi));
+                    self.finish(p, e)
+                }
+                _ => unreachable!("atom frame received a block outside the async body"),
+            },
             Done::Expr(e) => match &mut self.stage {
                 AtomStage::Primary => self.finish(p, e), // an f-string child
+                AtomStage::AsyncBody { .. } => {
+                    unreachable!("atom frame received an expr inside the async body")
+                }
                 AtomStage::Paren { first, e: slot, elems } => {
                     if *first {
                         *slot = Some(e);

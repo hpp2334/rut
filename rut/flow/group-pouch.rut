@@ -5,7 +5,6 @@
 // INHERENT impls; a local-trait/foreign-type impl group is the
 // json/group-pouch precedent.
 
-use core::{ Iterable };
 use pouch::{ Vec };
 
 // The entry: a growable Vec walks its backing through the fused loop
@@ -25,12 +24,11 @@ impl<T> IntoFlow<T> for Vec<T> {
     }
 }
 
-// The sink: the CONTRACT parameter (not Flow) — every iterable (a
-// chain, a user Iterable, a builtin sequence widened by its row)
-// feeds it in one drive. No new type variables (T is Vec's own), so
+// The sink: the EXPLICIT pipeline (the call site manufactures it —
+// `xs.into_flow()`). No new type variables (T is Vec's own), so
 // no generic-method support is needed here.
 impl<T> FromFlow<T> for Vec<T> {
-    fn from_flow(it: Iterable<T>) -> Self {
+    fn from_flow(it: Flow<T>) -> Self {
         let out: Vec<T> = Vec.new();
         it.iterate(fn (x: T) -> bool { out.push(x); return true; });
         return out;

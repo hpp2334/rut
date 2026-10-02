@@ -186,7 +186,7 @@ Limits, exhaustively:
 Everything else class-shaped is allowed — `impl` blocks, `Self`,
 `Disposal`. And the old "no destructor" limit is gone: a shared value
 dies exactly when its cell's refcount reaches zero, so cleanup is one
-`impl` away — implement `Disposal` for the type and the engine calls
+`impl` away — mark a `[disposal]` member on the type and the engine calls
 `dispose` at that moment (see
 [Rc, dispose, and identity](rc-dispose-identity.md)).
 

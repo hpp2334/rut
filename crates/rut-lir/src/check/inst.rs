@@ -4,7 +4,6 @@
 
 use crate::lir::FnCompiler;
 use rut_core::binary::FuncCode;
-use rut_core::types::*;
 use super::*;
 
 impl<'a> Ctx<'a> {
@@ -41,7 +40,7 @@ impl<'a> Ctx<'a> {
         let subst: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
         let origins = inst.trait_origins.clone();
         match inst.key {
-            FnKey::Lambda(_) | FnKey::ForOfEmit { .. } => {}
+            FnKey::Lambda(_) | FnKey::ForOfEmit { .. } | FnKey::AsyncBlock(_) => {}
             FnKey::Free(n) => {
                 // a mirrored FOREIGN generic fn names its owner (the
                 // linkable-classes phase): the stub's row must spell the
@@ -209,6 +208,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
+            FnKey::AsyncBlock(node) => format!("async@{}", node.0),
             FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
             FnKey::HostThunk(name) => format!("host@{}", self.name(name)),
         }
@@ -391,46 +391,50 @@ impl<'a> Ctx<'a> {
     // ---- module lets (load-time expressions only) ----
 
     /// The per-type disposal rows (the cell-death dispatch): entry per
-    /// (dense) type — `Some(dispose func id)` when the type has an
-    /// `impl ..: Disposal`, None otherwise. The engine's release path
-    /// reads this table at refcount zero; the vtable row is never
-    /// consulted for it. Generic-target impls monomorphize at their call
-    /// sites and stay module-local — no static row.
+    /// (dense) type — `Some(dispose func id)` when the type carries a
+    /// `[disposal]`-marked member, None otherwise. The engine's release
+    /// path reads this table at refcount zero; no vtable and no trait
+    /// lookup — the marker IS the designated slot (v20). The member
+    /// queues eagerly at its impl (no call site exists); a generic
+    /// target was refused at collect — no static row.
     pub fn disposal_impls(&mut self) -> Vec<Option<u32>> {
         let mut out = vec![None; self.types.types.len()];
-        let dispose_name = self.intern("dispose");
-        let impls = self.impls.clone();
-        for (idx, im) in impls.iter().enumerate() {
-            if im.inherent || im.target_data.is_some() || im.trait_name != sym::DISPOSAL {
-                continue;
-            }
-            let key = Inst {
-                key: self.impl_method_key(idx, dispose_name, true),
-                subst: vec![],
-                trait_origins: vec![],
-            };
-            if let Some(&fid) = self.inst_map.get(&key) {
-                out[self.types.dense(im.target) as usize] = Some(fid);
+        let disposal = sym::DISPOSAL_MARKER;
+        let datas = self.datas.clone();
+        for (dname, d) in datas {
+            for (n, mnode) in &d.methods {
+                if self.ast.method_decl(*mnode).marker != Some(disposal) {
+                    continue;
+                }
+                let key = Inst {
+                    key: FnKey::Method { data: dname, name: *n },
+                    subst: vec![],
+                    trait_origins: vec![],
+                };
+                if let Some(&fid) = self.inst_map.get(&key) {
+                    out[self.types.dense(d.ty) as usize] = Some(fid);
+                }
+                break;
             }
         }
         out
     }
 
-    /// The dense-type set carrying a static `Disposal` impl (the SROA
-    /// guard): a record of one of these types observes its own lifetime —
-    /// `dispose` runs at refcount zero — so the optimizer must not delete
-    /// its mint. Derived from the impl DECLARATIONS (not the inst map), so
-    /// it is stable at every point of the monomorphization queue; a
-    /// generic target keeps its row under the template's own id, exactly
-    /// where the static dispatch table looks (instantiations dispatch no
-    /// static row, so their mints stay elidable — the mirror of runtime).
+    /// The dense-type set carrying a `[disposal]` member (the SROA
+    /// guard): a record of one of these types observes its own lifetime
+    /// — the marked member runs at refcount zero — so the optimizer must
+    /// not delete its mint. Derived from the DECLARATIONS, so it is
+    /// stable at every point of the monomorphization queue.
     pub fn disposal_dense_set(&self) -> std::collections::HashSet<TypeId> {
         let mut set = std::collections::HashSet::new();
-        for im in &self.impls {
-            if im.inherent || im.target_data.is_some() || im.trait_name != sym::DISPOSAL {
-                continue;
+        let disposal = sym::DISPOSAL_MARKER;
+        for (_, d) in &self.datas {
+            if d.methods
+                .iter()
+                .any(|(_, m)| self.ast.method_decl(*m).marker == Some(disposal))
+            {
+                set.insert(d.ty);
             }
-            set.insert(im.target);
         }
         set
     }
@@ -456,3 +460,4 @@ impl<'a> Ctx<'a> {
         }
     }
 }
+

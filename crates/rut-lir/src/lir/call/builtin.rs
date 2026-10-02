@@ -418,7 +418,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_extern_impl_template_static(eidx, midx, concrete, subst, args, expected, sp);
             }
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == g.template) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self, _)| !*has_self && *n == member) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
                     let class_args = if !base_generics.is_empty() {
                         base_generics.iter().map(|gn| self.resolve_type_now(*gn)).collect()
                     } else {
@@ -441,7 +441,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if let Some(&t) = self.ctx.extern_types.get(&base) {
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == t) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|(n, .., has_self, _)| !*has_self && *n == member) {
+                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
                     return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
                 }
             }

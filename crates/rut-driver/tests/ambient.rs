@@ -85,39 +85,40 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
     assert_eq!(v, 6);
 }
 
-/// The import-gated builtin traits (the `pub builtin` spellings):
-/// naming `Iterable`/`Future`/`RunContext` in source resolves ONLY
-/// through `use core::{ .. }` — the bare spelling names the fix
-/// exactly — while the engine's weave never consults user scope: the
-/// fused `for..of` over `[i32]` above and every launched host frame
-/// run with no import at all. With the import, an `impl Iterable<i32>
-/// for CountUp` compiles and the duck-typed `for..of` drives it.
+/// The import-gated core names (the `pub builtin` spellings):
+/// spelling `Future`/`RunContext` in source resolves ONLY through
+/// `use core::{ .. }` — the bare spelling names the fix exactly —
+/// while the engine's weave never consults user scope: the fused
+/// `for..of` over `[i32]` above and every launched host frame
+/// run with no import at all. The `builtin trait` names are GONE
+/// (v20): a bare `Iterable`/`Disposal` names its marker, and with the
+/// gate satisfied a marked member compiles and for..of drives it.
 #[test]
 fn the_gated_traits_require_the_import() {
-    // no use: each bare spelling names its fix
+    // no use: each bare spelling names its fix (or its replacement)
     for (src, name) in [
-        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "Iterable"),
-        ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\nentry fn main() -> i32 { return f(nil); }\n", "RunContext"),
-        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "Future"),
+        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "`Iterable` is gone"),
+        ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\nentry fn main() -> i32 { return f(nil); }\n", "`RunContext` is not in scope"),
+        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "`Future` is not in scope"),
+        ("use core::{ Future };\nclass F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "`Future` is a closed builtin class"),
     ] {
         let out = compile(src);
         assert!(
-            out.diags
-                .iter()
-                .any(|d| d.msg == format!("`{name}` is not in scope — `use core::{{ {name} }}`")),
+            out.diags.iter().any(|d| d.msg.contains(name)),
             "the {name} miss names the fix: {:?}",
             out.diags
         );
-        assert!(out.program.is_none(), "the bare {name} source must not compile");
+        assert!(out.program.is_none(), "the bare spelling must not compile");
     }
 
-    // with the import: the impl registers and for..of drives it
+    // with the import: the marked member registers and for..of drives
+    // it (the element type falls out of the marked member's signature)
     let v = run_main(
-        "use core::{ Iterable };\n\
+        "use core::{ Future };\n\
          class CountUp { n: i32 = 0; }\n\
          impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
-         impl Iterable<i32> for CountUp {\n\
-             fn iterate(self, emit: fn(i32) -> bool) {\n\
+         impl CountUp {\n\
+             [iterable] fn iterate(self, emit: fn(i32) -> bool) {\n\
                  for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
              }\n\
          }\n\

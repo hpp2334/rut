@@ -1,7 +1,8 @@
 // flow/flow.rut — the push pipeline: `Flow<E>` is a chainable wrapper
 // over THE push contract. Rut's iteration is push-style, one schema: a
-// type is iterable when it registers `impl Iterable<E> for T` and a
-// `for..of` desugars to `it.iterate(emit)`; a Flow is the same drive
+// type is iterable when an inherent impl marks a member `[iterable]`
+// and a `for..of` calls that ONE designated member (`emit` answering
+// `false` stops); a Flow is the same drive
 // wrapped in adapters — every stage wraps `drive` in one new closure
 // (a closure per STAGE, never per element). Pipelines are the clarity
 // tier: the fused builtin loops stay the perf tier.
@@ -13,8 +14,6 @@
 // group-pouch.rut and the map/set sinks in group-nmapset.rut, the
 // peer-gated integration groups.
 
-use core::{ Iterable };
-
 // The entry trait: a source becomes a pipeline. Builtin sequences
 // (`[T]`, `str`, `bytes`), growable `Vec<T>`, and `Flow` itself (the
 // identity row) all register it — generic `X requires IntoFlow<E>`
@@ -23,10 +22,12 @@ pub trait IntoFlow<E> {
     fn into_flow(self) -> Flow<E>;
 }
 
-// The sink trait: a pipeline (or any iterable — the parameter takes
-// the CONTRACT, not Flow) materializes into the implementing type.
+// The sink trait: a pipeline materializes into the implementing type.
+// The parameter takes the EXPLICIT wrapper — `xs.into_flow()`
+// manufactures it at the call site (wrappers are explicit manufacture;
+// nothing is auto-inserted), so one drive feeds every sink.
 pub trait FromFlow<E> {
-    fn from_flow(it: Iterable<E>) -> Self;
+    fn from_flow(it: Flow<E>) -> Self;
 }
 
 // The pipeline class: one field, the drive. A `Flow` is as reusable as
@@ -163,11 +164,13 @@ struct FoldState<A> {
     acc: A;
 }
 
-// A Flow IS an iterable — the for..of weave and every
-// `Iterable<E>`-typed parameter widen to it. The template impl on the
-// generic class: the exact shape `iterate_impl` dispatches.
-impl<E> Iterable<E> for Flow<E> {
-    fn iterate(self, emit: fn(E) -> bool) {
+// A Flow IS an iterable — the for..of weave reads the designated
+// member. The marked member on the class's own inherent impl: the
+// exact shape the for-of dispatch keys, `pub` so every consumer's
+// loops (and the flow sinks) drive it. The element type E falls out
+// of the marked member's own emit parameter.
+impl<E> Flow<E> {
+    [iterable] pub fn iterate(self, emit: fn(E) -> bool) {
         (self.drive)(emit);
     }
 }

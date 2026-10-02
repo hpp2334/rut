@@ -710,7 +710,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !hit {
                 continue;
             }
-            let Some(midx) = ih.methods.iter().position(|(n, ..)| *n == name) else {
+            let Some(midx) = ih.methods.iter().position(|m| m.name == name) else {
                 continue;
             };
             let subst = generic

@@ -159,7 +159,7 @@ A fixed pipeline with no flags:
 4. **Peephole + SROA** — the rewriters re-intern operand pools on register
    remap, so pool sharing stays consistent (see
    [Typed bytecode](typed-bytecode.md)). SROA declines a record whose
-   class implements `Disposal`: the cell's death is observable (dispose
+   class carries a `[disposal]` member: the cell's death is observable (it runs
    runs at refcount zero), so its mint is never deleted.
 5. **Pattern lowering** — downcast chains become one type-id load plus a
    jump table; `when` on enums lowers to `brtable` over the member value.

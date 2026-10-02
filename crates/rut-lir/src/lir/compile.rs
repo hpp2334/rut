@@ -20,6 +20,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::HostThunk(thunk_name) = inst.key {
             return super::asyncfn::compile_host_thunk(ctx, fid, thunk_name);
         }
+        // an `async { }` block: the weave reads its mint plan (captures +
+        // answer type) from ctx.async_block_sigs
+        if let FnKey::AsyncBlock(node) = inst.key {
+            return super::asyncfn::compile_async_block_fn(ctx, fid, node);
+        }
         let (node, self_ty, is_method, class_name, slot_self) = match &inst.key {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
@@ -151,7 +156,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 (m.id(), Some(self_ty), true, cname, slot_self)
             }
-            FnKey::Lambda(_) => unreachable!(),
+            FnKey::Lambda(_) | FnKey::AsyncBlock(_) => unreachable!(),
             FnKey::HostThunk(_) => unreachable!(),
         };
         let is_async = match ctx.ast.kind(node) {
@@ -255,6 +260,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         assigned: std::collections::HashSet::new(),
         captured: std::collections::HashSet::new(),
         cell_counter: 0,
+        async_infer: false,
+        async_founds: Vec::new(),
         };
         // the capture law's pre-pass: names first (a fn-level walk over
         // the body), promotion at each `bind_local` once types resolve
@@ -455,6 +462,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         assigned: std::collections::HashSet::new(),
         captured: std::collections::HashSet::new(),
         cell_counter: 0,
+        async_infer: false,
+        async_founds: Vec::new(),
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -592,6 +601,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         assigned: std::collections::HashSet::new(),
         captured: std::collections::HashSet::new(),
         cell_counter: 0,
+        async_infer: false,
+        async_founds: Vec::new(),
         };
         // the emit closure's own pre-pass: its frame promotes its own
         // bindings (nested lambdas / for-of bodies under the loop body)

@@ -10,7 +10,6 @@
 
 use crate::check::{collect::split_top_commas, TcResult};
 use crate::lir::*;
-use rut_core::sym;
 use std::collections::HashMap;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -36,8 +35,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(s) = self_ty {
             env.insert("#Self".to_string(), s);
         }
-        let (_n, params, ret, _f, _has_self, _mgen) =
-            self.ctx.extern_inherents[ih].methods[midx].clone();
+        let m = self.ctx.extern_inherents[ih].methods[midx].clone();
+        let (params, ret) = (m.params, m.ret);
         let ptys = params
             .iter()
             .map(|&p| self.ctx.subst_template_ty(p, &env))
@@ -111,42 +110,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(&arg) = env.get(&text) {
             return arg;
         }
-        // a core `Iterable<#leaf>` parameter re-mints through the
-        // iterator lane: `from_flow(it: Iterable<#E>)` over the
-        // `Vec<i32>` target answers `Iterable<i32>` — the sink's
-        // contract parameter at the concrete element. The NAME is the
-        // gate, not a `use`: a carried `[trait] Iterable<#leaf>` row
-        // exists only because a mounted pkg's signature named it (the
-        // tbase-bridge acknowledgment), and the mint binds no name —
-        // the descriptor joins the trait table shape-only.
-        if let Some(rest) = text.strip_prefix("[trait] ") {
-            if let Some((tname, args)) = rest.split_once('<') {
-                let tname_id = self.ctx.intern(tname);
-                let is_iterable = tname_id == rut_core::sym::ITERABLE
-                    || self
-                        .ctx
-                        .extern_traits
-                        .get(&tname_id)
-                        .copied()
-                        == Some(rut_core::binary::NativeTrait::Iterable);
-                if is_iterable {
-                    let a = args.strip_suffix('>').unwrap_or(args).trim();
-                    let concrete_arg = match env.get(a) {
-                        Some(&t) => t,
-                        None => {
-                            let aid = self.ctx.intern(a);
-                            match self.ctx.types.dense_id_of_name(aid) {
-                                Some(t) => t,
-                                None => return id,
-                            }
-                        }
-                    };
-                    let tname_id = self.ctx.intern(tname);
-                    let tid = self.ctx.mk_iterator_inst(tname_id, concrete_arg);
-                    return self.ctx.mk_trait_obj(tid);
-                }
-            }
-        }
+        // (the `[trait] Iterable<#leaf>` respell lane is GONE with the
+        // trait — v20's `[iterable]` marker crosses on the inherent
+        // method row, and no parameter names the contract anymore)
         let Some((base_text, rest)) = text.split_once('<') else {
             return id;
         };
@@ -189,8 +155,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let (name, _params, _ret, func, has_self, mgen) =
-            self.ctx.extern_inherents[ih].methods[midx].clone();
+        let m = self.ctx.extern_inherents[ih].methods[midx].clone();
+        let (name, func, has_self, mgen) = (m.name, m.local, m.has_self, m.generics);
         debug_assert!(has_self, "instance call routed a class method");
         // a generic METHOD's own parameters join the class's
         // substitution: explicit site arguments first (`source<i64>`),
@@ -216,7 +182,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // (its shape hint's `#leaf` placeholders would leak into the
             // checks) — diagnose with the fix, mirroring the local inline
             // path's gate
-            let mparams = self.ctx.extern_inherents[ih].methods[midx].1.clone();
+            let mparams = self.ctx.extern_inherents[ih].methods[midx].params.clone();
             for (i, a) in args.iter().enumerate() {
                 let mentions_leaf = mparams.get(i).map_or(false, |&p| {
                     self.ctx.type_name(p).to_string().contains('#')
@@ -254,7 +220,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .iter()
                 .map(|(g, t)| (format!("#{}", self.ctx.name(*g)), *t))
                 .collect();
-            let mparams = self.ctx.extern_inherents[ih].methods[midx].1.clone();
+            let mparams = self.ctx.extern_inherents[ih].methods[midx].params.clone();
             let ptys0: Vec<TypeId> = mparams
                 .iter()
                 .map(|&p| self.ctx.subst_template_ty(p, &env0))
@@ -498,6 +464,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             (TyKind::Weak { elem: pe }, TyKind::Weak { elem: ae }) => {
                 self.infer_named_placeholders(pe, ae, names, env, _sp)
             }
+            // the closed `Future<T>` handle (v20): the element binds
+            // element-wise — `launch_future<T>(f: Future<T>)` over a
+            // `Future<nil>` argument binds `T := nil`
+            (TyKind::Future { elem: pe }, TyKind::Future { elem: ae }) => {
+                self.infer_named_placeholders(pe, ae, names, env, _sp)
+            }
             (
                 TyKind::Fn { params: pp, ret: pr },
                 TyKind::Fn { params: ap, ret: ar },
@@ -617,8 +589,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         args: Vec<NodeHandle<AnyExpr>>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let (name, _params, _ret, func, has_self, _mgen) =
-            self.ctx.extern_inherents[ih].methods[midx].clone();
+        let m = self.ctx.extern_inherents[ih].methods[midx].clone();
+        let (name, func, has_self) = (m.name, m.local, m.has_self);
         debug_assert!(!has_self, "class call routed an instance method");
         let subst: Vec<(IdentId, TypeId)> = match dname {
             Some(d) => match self.ctx.extern_generics.get(&d) {

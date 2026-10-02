@@ -581,18 +581,17 @@ fn rate_limit_and_other_statuses_map() {
 /// then stream (the mint degrades to a dead reader), stream then body
 /// (the drain degrades to empty) — through the SAME fixture lane.
 const ONESHOT_SRC: &str = r#"
-use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use rgh_host::{ out };
 
-async fn body_first(cx: RunContext, url: str) -> nil {
+async fn body_first(url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
-    let b = await resp.body(cx);
+    let resp = await client.get(url).build().send();
+    let b = await resp.body();
     out(f"body={b.len()}");
     let s = resp.byte_stream();
-    let c = await s.next(cx);
+    let c = await s.next();
     if (c == nil) {
         out("late-next=eof");
     } else {
@@ -600,18 +599,18 @@ async fn body_first(cx: RunContext, url: str) -> nil {
     }
 }
 
-async fn stream_first(cx: RunContext, url: str) -> nil {
+async fn stream_first(url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
-    let c = await s.next(cx);
+    let c = await s.next();
     if (c == nil) {
         out("first-next=eof");
     } else {
         let v: bytes = c;
         out(f"first-next={v.len()}");
     }
-    let b = await resp.body(cx);
+    let b = await resp.body();
     out(f"late-body={b.len()}");
 }
 

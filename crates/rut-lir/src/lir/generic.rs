@@ -145,21 +145,45 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TypeKind::TyPath { segs, .. }
                 if segs.len() == 1
                     && !segs[0].generics.is_empty()
-                    && (self
+                    && segs[0].name == rut_core::sym::FUTURE
+                    && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
+            {
+                // the closed `Future<T>` handle (v20): a generic handle
+                // parameter against a future argument unifies through
+                // the element — `fn launch<T>(f: Future<T>)` over
+                // `Future<nil>` binds `T := nil` structurally, no trait
+                // machinery anywhere
+                let arg_nodes = segs[0].generics.clone();
+                let TyKind::Future { elem } = self.ctx.types.kind(arg_ty) else {
+                    self.ctx.err(sp, format!(
+                        "argument is `{}`, a `Future<..>` expected",
+                        self.ctx.type_name(arg_ty)
+                    ));
+                    return Err(());
+                };
+                let concrete = [*elem];
+                if concrete.len() != arg_nodes.len() {
+                    self.ctx.err(sp, format!(
+                        "`{}` takes {} type argument(s), {} given",
+                        self.ctx.name(segs[0].name),
+                        concrete.len(),
+                        arg_nodes.len()
+                    ));
+                    return Err(());
+                }
+                for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
+                    self.unify_generic(*node, c, decl_generics, subst, sp)?;
+                }
+                Ok(())
+            }
+            TypeKind::TyPath { segs, .. }
+                if segs.len() == 1
+                    && !segs[0].generics.is_empty()
+                    && self
                         .ctx
                         .find_trait(segs[0].name)
                         .map(|t| !t.generics.is_empty())
                         .unwrap_or(false)
-                        // the engine-woven `Future<T>`: ambient,
-                        // not locally declared — its object arguments unify
-                        // through their own instantiation's args exactly
-                        // like a declared generic trait's
-                        || self
-                            .ctx
-                            .extern_traits
-                            .get(&segs[0].name)
-                            .copied()
-                            == Some(rut_core::binary::NativeTrait::Future))
                     && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
             {
                 // a generic trait's instantiation against a concrete

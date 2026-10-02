@@ -110,9 +110,9 @@ entry fn main() {
   instantiates it where it is used, and dispatch is the ordinary law:
   one concrete origin binds statically, merged origins consult the
   vtable. The orphan rule above is the only gate.
-- **The element is a type argument, not an associated type**:
-  `impl Iterable<char> for Counter` — there are no associated `type`
-  members.
+- **The element is a type argument, not an associated type** — a
+  trait method's element shapes (`fn emit(x: E) -> bool`) spell it
+  inline; there are no associated `type` members.
 - **`Self` in impl signatures** names the impl's target under the impl's
   substitution: `-> Self` returns, `Self { .. }` constructs.
 
@@ -178,12 +178,11 @@ trait name/instantiation.
 - `is` is total: never traps, yields only `bool`. The same descriptor
   answers the vtable and the probe — one runtime truth per value.
 
-## The iteration protocol
+## The iteration protocol — the `[iterable]` marker
 
-A type is iterable when it registers `impl Iterable<E> for T`:
+A type is iterable when an inherent impl marks a member `[iterable]`:
 
 ```rut
-use core::{ Iterable };
 use ink::{ Logger };
 
 class CountUp {
@@ -192,10 +191,8 @@ class CountUp {
 
 impl CountUp {
     pub fn new(n: i32) -> Self { return Self { n: n }; }
-}
 
-impl Iterable<i32> for CountUp {
-    fn iterate(self, emit: fn(i32) -> bool) {
+    [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
@@ -216,54 +213,66 @@ tick 2
 tick 3
 ```
 
-An enum value iterates the same way: `impl Iterable<E> for Color`
-makes `for (let v of c)` walk whatever the impl's `iterate` emits —
-the desugar is the trait, the target's kind is irrelevant (see
-[Enums](enums.md)).
+The contract's shape: `fn <free>(self, emit: fn(E) -> bool)` — the
+member's NAME IS FREE (the bracket designates, never the spelling),
+and the element type `E` falls out of the marked member's own emit
+parameter. `for (v of it) { body }` calls that ONE designated member —
+`it.<member>(emit)` — with a synthetic closure: the body runs, then
+`emit` returns `true`; `break` returns `false` (stopping the
+iteration); `continue` returns `true` immediately; a `return` inside
+the body stops the iteration (not the enclosing function). The loop
+variable is the closure's parameter — a fresh binding per iteration;
+captured enclosing locals are copied by value at the desugar, so
+accumulate through a shared cell or a method. The builtin sequences
+(`[T]`, `Vec<T>`, `str`, `bytes`) keep their fused index loops and
+never reach the marker. An enum value iterates the same way — a
+marked member on the enum's impl makes `for (let v of c)` walk
+whatever it emits (see [Enums](enums.md)).
 
-`for (v of it) { body }` desugars to `it.iterate(emit)` with a
-synthetic closure: the body runs, then `emit` returns `true`; `break`
-returns `false` (stopping the iteration); `continue` returns `true`
-immediately; a `return` inside the body stops the iteration (not the
-enclosing function). The loop variable is the closure's parameter — a
-fresh binding per iteration; captured enclosing locals are copied by
-value at the desugar, so accumulate through a shared cell or a method.
-The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their
-fused index loops and never reach the protocol.
+## Engine contracts — markers and closed classes
 
-## Engine contracts
+The engine's own contracts are **spellings on types**, not traits
+(the `builtin trait` row kind is gone). Two mechanisms, one job each:
 
-`builtin trait` names are compiler-backed but **engine-named, not
-engine-closed** — users implement them through the ordinary nominal
-path:
+**The bracket markers** — `[disposal]` and `[iterable]` designate an
+inherent impl member. The parser accepts any contextual word in the
+brackets; the checker validates the engine's CLOSED set, at most one
+member per contract per class, inherent-members-only, and each
+contract's signature. The descriptor ABI is a designated slot per
+class — the engine's release path and the for-of weave read their
+slot directly, never a per-(type × trait) lookup:
 
 ```rut
-pub builtin trait Iterable<E> {
-    fn iterate(self, emit: fn(E) -> bool);
+impl Db {
+    [disposal] fn dispose_db(mut self, cx: DisposalContext) {  // name FREE —
+        self.file.close();                                      // the bracket
+    }                                                           // designates
 }
-pub builtin trait Future<T> { fn yield(cx: RunContext); }
-pub builtin trait RunContext {
-    fn checkpoint(self) -> u32;
-    fn next_checkpoint(mut self, v: u32) -> nil;
-    fn cancelled(self) -> bool;
-}
-pub builtin trait Disposal {
-    fn dispose(mut self, cx: DisposalContext);
-}
+
+impl Rows {
+    [iterable] fn iterate(self, emit: fn(Row) -> bool) { .. }   // for-of reads
+}                                                               // this slot
 ```
 
-`impl Future<nil> for CustomFuture` registers in the same registry as
-any other impl. Every builtin trait is the import-gated `pub builtin`
-spelling: the ENGINE weaves on the native-trait symbols — async frames,
-the minted cx, and the fused `for..of` loops never consult user scope —
-but source that SPELLS a trait name resolves it only through
-`use core::{ .. }` (`Iterable` for an `impl Iterable<E> for T` or a
-trait-typed parameter; `Future` for a user impl, a launcher's
-`f: Future<T>`, or `downcast<Future<..>>`; `RunContext` for a yield
-signature or an `async fn` head; the `Disposal` pair through
-`use core::{ Disposal, DisposalContext }` — see
-[Host fns and declaration files](host-fns.md)). See
-[Async and await](async.md) and [the Rc heap](rc-heap.md).
+`[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` —
+the engine calls it when a value of the type reaches refcount zero
+([the Rc heap](rc-heap.md)); the target must be a CONCRETE struct or
+class (the row keys the cell's type id). `[iterable]`'s contract is
+the iteration protocol above.
+
+**The closed builtin classes** — `Future<T>` and `RunContext` carry
+the async protocol. Both are `pub builtin` (the import-gated spelling)
+and **closed**: no constructor, no impl lane, no user-callable
+members beyond `RunContext`'s two reads — a user type cannot BE a
+future or a cx. The walls hold by nominal closure: structural
+satisfaction cannot see engine identity, so closure is the only
+spelling of "engine-minted only". The ENGINE weaves without them —
+async frames, the minted cx, and the fused `for..of` loops never
+consult user scope; source that SPELLS a name resolves it only
+through `use core::{ .. }` (a launcher's `f: Future<T>`,
+`downcast<Future<..>>`, a `cx` probe in an async body — see
+[Async and await](async.md), [host fns and declaration
+files](host-fns.md), and [the Rc heap](rc-heap.md)).
 
 ## Equality
 

@@ -46,32 +46,32 @@ At the probe, the frame runs its **drop path**:
 
 1. the pending edge is cleared — a pending `sleep` dies with the frame;
 2. every local releases **deterministically, in reverse declaration
-   order** (`Disposal` impls run, [the Rc heap](rc-heap.md));
+   order** (`[disposal]` members run, [the Rc heap](rc-heap.md));
 3. the state retires (null) — later `abort()` calls answer `false`.
 
-Inside a future impl, `cx.cancelled()` reads the same flag as data, so
-a hand-written frame can honor cancellation at its own pace
-([the host futures bridge](host-futures.md)). Cancellation is
-synchronous at the engine level (flag + re-enqueue); a frame parked on
-a host future only observes the flag when the loop drives it again.
+Inside an async body, the injected `cx.cancelled()` reads the same
+flag as data, so a frame can honor cancellation at its own pace.
+Cancellation is synchronous at the engine level (flag + re-enqueue); a
+frame parked on a host future only observes the flag when the loop
+drives it again.
 
 ```rut
-use core::{ Disposal, DisposalContext, RunContext };
+use core::{ DisposalContext };
 
 class Drops {
     n: u32;
 }
 
-impl Disposal for Drops {
-    fn dispose(mut self, cx: DisposalContext) { self.n += 1; }
+impl Drops {
+    [disposal] fn release(mut self, cx: DisposalContext) { self.n += 1; }
 }
 
-async fn job(cx: RunContext, seen: ?Drops) -> nil {
+async fn job() -> nil {
     let buf = Drops { n: 0 };
     await sleep(5000);
     // if `job` is aborted while parked here, the probe at the sleep
-    // checkpoint runs the drop path: buf's dispose fires, then the
-    // locals release in reverse declaration order
+    // checkpoint runs the drop path: buf's `[disposal]` member fires,
+    // then the locals release in reverse declaration order
 }
 ```
 
@@ -92,8 +92,8 @@ through a callback.
 ```rut
 use async_host::{ sleep, select2, Either2 };
 
-async fn fetch_or_timeout(cx: RunContext) -> str {
-    let winner = await select2(slow_fetch(cx), sleep(50));
+async fn fetch_or_timeout() -> str {
+    let winner = await select2(slow_fetch(), sleep(50));
     if (winner.is_a()) {
         return winner.a_value();
     }
@@ -108,7 +108,7 @@ async fn fetch_or_timeout(cx: RunContext) -> str {
   is the fn signature's `Either2<T, U>` — computed at the call site,
   never a cast.
 - The **losers are cancelled** the moment a winner is settled: their
-  drop paths run (pending sleeps die with them, `Disposal` hooks
+  drop paths run (pending sleeps die with them, `[disposal]` members
   fire). A cancelled race (`h.abort()` on the race future) cascades
   through its children.
 - `select_all<T>(futs)` races a whole `[Future<T>]` cohort and
@@ -136,7 +136,7 @@ fn fetch_like(tag: str) -> Future<str> {
     return f;
 }
 
-async fn settle_later(cx: RunContext, done: Completer<str>, tag: str) -> nil {
+async fn settle_later(done: Completer<str>, tag: str) -> nil {
     await sleep(10);
     done.resolve(tag);
 }

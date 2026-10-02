@@ -59,9 +59,10 @@ host struct Name { fields }           // flat record; every field a crossing
                                       // whole surface
 prelude builtin fn name<T>(params) -> T;   // engine fn, compiler-lowered
 prelude builtin class Name<T> { .. }       // engine type member contract
-prelude builtin trait Name<T> { .. }       // engine-woven contract
+                                           // (the closed async pair among
+                                           // them — `Future<T>`, `RunContext`)
 prelude builtin impl i32 { .. }            // engine methods on a primitive
-pub builtin trait Name<T> { .. }           // the import-gated twin (below)
+pub builtin class Name<T> { .. }           // the import-gated twin (below)
 ```
 
 Rules:
@@ -80,9 +81,11 @@ Rules:
   ([opaque](opaque.md)).
 - **`builtin` is the engine's reservation** — spelled only in the
   toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder
-  decl is a compile error. Users implement builtin traits with ordinary
-  `impl` blocks; library contracts stay plain `trait`
-  ([traits and dispatch](traits.md)).
+  decl is a compile error. The engine's contracts are spellings on
+  types now: the bracket markers on inherent impl members and the
+  closed `builtin class` pair; library contracts stay plain `trait`
+  ([traits](traits.md)). The `builtin trait` row kind is REMOVED — the
+  spelling diagnoses with the replacement.
 - **`builtin` is a contextual keyword**: `.d.rut`-only; elsewhere it is a
   legal identifier.
 
@@ -98,12 +101,12 @@ diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
   `panic`/`string_join`/`capture_stacktrace` are all ambient.
 - **`pub builtin`** — the **import-gated** engine surface: the name
   resolves only through `use core::{ .. }`, the way a package's names
-  do. Today's rows are every builtin trait — `Iterable`, `Future`,
-  `RunContext` — the disposal pair, `Disposal` and `DisposalContext`,
-  and the weak reference, `Weak<T>`
+  do. Today's rows are the closed async pair — `Future<T>`,
+  `RunContext` — the disposal context, `DisposalContext`, and the weak
+  reference, `Weak<T>`
   ([traits](traits.md), [async and await](async.md), [the Rc
   heap](rc-heap.md), [weak references](weak-refs.md)). The engine's
-  weave never consults the gate — it keys on the native-trait symbols —
+  weave never consults the gate — it keys on the engine symbols —
   so a module with no imports still iterates, awaits, and launches;
   only spelling a name in source gates.
 
@@ -111,7 +114,7 @@ Using a `pub builtin` name without the use line is a resolution miss
 that names the fix, never a bare "unknown name":
 
 ```text
-`Disposal` is not in scope — `use core::{ Disposal }`
+`Future` is not in scope — `use core::{ Future }`
 ```
 
 The split is per name: a unit that imports one gated name still sees

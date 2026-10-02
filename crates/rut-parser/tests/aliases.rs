@@ -138,18 +138,17 @@ fn stray_where_diagnoses_with_inline_replacement() {
 #[test]
 fn misplaced_bounds_are_rejected() {
     // struct / trait / builtin generics reject `requires` — class
-    // generics TAKE them
+    // generics TAKE them (the admission bounds)
     let cases = [
-        ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds"),
-        ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds"),
-        (
-            "trait D { fn d(self) -> u64; }\nprelude builtin trait Bt<T requires D> { }",
-            "`builtin trait` generic parameters take no `requires` bounds",
-        ),
+        ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds", Mode::Impl),
+        ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds", Mode::Impl),
+        // the engine surface's own gate (v20: the `builtin trait` row
+        // kind is gone — the builtin CLASS carries the check)
+        ("trait D { fn d(self) -> u64; }\nprelude builtin class Bt<T requires D> { }", "`builtin class` generic parameters take no `requires` bounds", Mode::Decl),
     ];
-    for (src, want) in cases {
+    for (src, want, mode) in cases {
         let full = format!("trait D {{ fn d(self) -> u64; }}\n{src}\n");
-        let (_, diags) = parse(&full, Mode::Impl);
+        let (_, diags) = parse(&full, mode);
         assert!(
             diags.iter().any(|d| d.msg.contains(want)),
             "expected `{want}` for `{src}`: {diags:?}"

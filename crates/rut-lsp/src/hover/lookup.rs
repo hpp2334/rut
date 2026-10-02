@@ -350,7 +350,7 @@ pub(crate) fn render_target(t: MemberTarget) -> String {
 /// the index declaring trait `name` — its home module; the declaration
 /// and the impl block may live in different indexes
 pub(crate) fn trait_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
-    find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Trait | TyForm::BuiltinTrait))
+    find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Trait))
 }
 
 /// the inherent impl-block fn `impl ty_name { fn member(..) }` — the

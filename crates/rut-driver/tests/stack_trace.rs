@@ -378,16 +378,17 @@ fn version_nine_rejects_stale_artifacts() {
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v19 (surfaces on the wire
+    // and a fresh compile round-trips under v20 (surfaces on the wire
     // since v16; v17 added the owner-anchored instantiation ledger,
     // v18 the exported generic fns' placeholder signatures, v19 the
-    // builder's engine-surface withdrawal)
+    // builder's engine-surface withdrawal, v20 the bracket markers +
+    // the closed async classes)
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module("app_main", Module { body: ModuleBody::Source { text: "entry fn main() -> i32 { return 4; }".into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &19u32.to_le_bytes(), "the header carries v19");
+    assert_eq!(&bytes[4..8], &20u32.to_le_bytes(), "the header carries v20");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

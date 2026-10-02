@@ -9,16 +9,15 @@ a driving loop pumps it. The model is described in
 surface in [async and await](../reference/async.md) and
 [launched futures](../reference/launched-futures.md).
 
-## `async fn` and `await`
+## `async fn`, `async { }`, and `await`
 
-An `async fn` declares its context — `cx: RunContext` — as the *first
-parameter*. Calling it runs nothing: it returns a cold future. `await`
-is the one in-body suspension point, and it consumes the future:
+Calling an `async fn` runs nothing: it returns a cold future — a
+`Future<T>`, the ONE async type every producer answers (an `async fn`
+call, an `async { }` block, `sleep`, the race/completer mints). `await`
+is the in-body suspension point, and it consumes the future:
 
 ```rut
-use core::{ RunContext };
-
-async fn countdown(cx: RunContext, log: Logger, n: u32) {
+async fn countdown(log: Logger, n: u32) {
     let mut i = n;
     while (i > 0) {
         log.info(f"t-{i}");
@@ -29,18 +28,24 @@ async fn countdown(cx: RunContext, log: Logger, n: u32) {
 }
 ```
 
-The cx is engine-minted at call sites the way `self` is — you never
-pass it when *calling* an async fn:
+The resume context is **injected, never spelled**: the weave binds `cx`
+inside every async body (probe it with `cx.cancelled()` — see
+[async and await](../reference/async.md)). And `async fn` is sugar over
+the `async { }` block — the block is the primitive, an expression that
+mints the frame where it stands and answers `Future<T>`:
 
 ```rut
-launch_future(countdown(log, 3));   // no cx — the engine supplies it
+let f: Future<nil> = async {          // mints cold; runs when driven
+    log.info("later");
+};
+launch_future(f);
 ```
 
 Two consume paths, and exactly one per future:
 
-- **`await fut`** — drive it from this async fn's body. Legal only
-  inside an `async fn`, and only for engine-woven futures (async-fn
-  results and `sleep`).
+- **`await fut`** — drive it from this async body. Legal only inside
+  an async fn or async block, and only for `Future<..>` values (which
+  is every producer).
 - **`launch_future(fut)`** — hand it to the driving loop and keep a
   receipt. Returns a `LaunchedFutureHandle<T>`, which is *not* a future:
   it cannot be awaited or re-launched. Its `abort()` flags cancellation;
@@ -88,7 +93,7 @@ construction sugar:
 use http::{ HttpClient };
 
 let client = HttpClient.new();
-let resp = await client.get(url).build().send(cx);
+let resp = await client.get(url).build().send();
 ```
 
 The shape, step by step:
@@ -97,11 +102,11 @@ The shape, step by step:
   hands back a `RequestBuilder`; `.method(..)`, `.url(..)`,
   `.header(k, v)` (repeatable), `.body(bytes)` chain on it.
 - `.build()` freezes a re-sendable `Request`.
-- **`.send(cx)` is the async point.** It resolves at *headers* — the
+- **`.send()` is the async point.** It resolves at *headers* — the
   wire body is still unread.
 - From the `Response`, take one of two readbacks:
-  - `await resp.body(cx)` — drain the remaining body in one future;
-  - `resp.byte_stream()` then `await stream.next(cx)` — one chunk per
+  - `await resp.body()` — drain the remaining body in one future;
+  - `resp.byte_stream()` then `await stream.next()` — one chunk per
     future, `nil` at end-of-stream, for bounded-memory downloads.
 
 Errors come back as data, not traps: status `0` is reserved for
@@ -114,9 +119,9 @@ A complete worker from the repository's GitHub-viewer example — send,
 then drain:
 
 ```rut
-async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
+async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     if (resp.status() == 0) {
         let why: str = resp.transport_error();
         eprint(f"rgh: network error: {why}");
@@ -126,7 +131,7 @@ async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: 
         eprint(f"rgh: CDN {resp.status()}");
         return 1;
     }
-    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));
+    let (tree, e) = decodeJsonBytes<Root>(await resp.body());
     if (e != nil) {
         let why: DecodeJsonError = e;
         eprint(f"rgh: bad tree JSON at {why.at}");
@@ -140,10 +145,10 @@ async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: 
 The stream lane walks chunks — send, then loop:
 
 ```rut
-let resp = await client.get(url).build().send(cx);
+let resp = await client.get(url).build().send();
 let stream = resp.byte_stream();
 while (true) {
-    let c = await stream.next(cx);
+    let c = await stream.next();
     if (c == nil) {
         let rerr = stream.error();
         if (rerr != nil) { return 1; }   // failed mid-read
@@ -180,11 +185,10 @@ see [workers and channels](../reference/workers-and-channels.md).
 ## Put it together
 
 ```rut
-use core::{ RunContext };
 use async_host::{ launch_future, sleep };
 use ink::{ Logger };
 
-async fn countdown(cx: RunContext, log: Logger, n: u32) {
+async fn countdown(log: Logger, n: u32) {
     let mut i = n;
     while (i > 0) {
         log.info(f"t-{i}");

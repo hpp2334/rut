@@ -1835,16 +1835,16 @@ entry fn main() -> nil {
 
 #[test]
 fn for_of_user_iterate_protocol() {
-    // a type is iterable when it registers
-    // `impl Iterable<E> for T`; `for (v of it)` desugars to
-    // `it.iterate(emit)` — the loop var is the emit closure's parameter
-    // (fresh per iteration); `break` returns `false`, `continue` returns
-    // `true`; captures are by value, so the accumulator is a shared cell
-    // (`*Acc`). `total` takes the trait-typed parameter: it specializes
-    // per concrete argument, so its call binds statically.
+    // a type is iterable when an inherent impl marks a member
+    // `[iterable]`; `for (v of it)` desugars to a call of that ONE
+    // designated member — `it.<name>(emit)` — and the loop var is the
+    // emit closure's parameter (fresh per iteration); `break` returns
+    // `false`, `continue` returns `true`; captures are by value, so the
+    // accumulator is a shared cell (`*Acc`). `total` takes the concrete
+    // type: the marked member is ordinary inherent surface, so the call
+    // binds statically.
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterable };
 
 struct Acc { total: i32 = 0; }
 
@@ -1853,16 +1853,14 @@ class CountUp {
 }
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl Iterable<i32> for CountUp {
-    fn iterate(self, emit: fn(i32) -> bool) {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }
 }
 
-fn total(it: Iterable<i32>) -> i32 {
+fn total(it: CountUp) -> i32 {
     let mut acc: ?Acc = Acc { };
     it.iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
@@ -2051,14 +2049,14 @@ entry fn main() -> nil {
     assert_eq!(trap.as_deref(), Some("NilDeref"));
 }
 
-// ---- Disposal: the engine calls `dispose` at refcount zero ----
+// ---- Disposal: the engine calls the `[disposal]` member at refcount zero ----
 
 #[test]
 fn disposal_runs_at_refcount_zero() {
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct P { x: i32 = 0; }
-impl Disposal for P { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"dropped {self.x}"); } }
+impl P { [disposal] fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"dropped {self.x}"); } }
 entry fn main() -> nil { let p = P { x: 9 }; Logger.new("t").info("body done"); }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2072,11 +2070,11 @@ fn disposal_fires_in_reverse_binding_order_at_frame_end() {
     // walks the registers in binding order, the drain pops LIFO — the
     // later local's dispose runs first
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:a"); } }
+impl A { [disposal] fn dispose_a(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:a"); } }
 struct B { }
-impl Disposal for B { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:b"); } }
+impl B { [disposal] fn dispose_b(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:b"); } }
 entry fn main() -> nil {
     let a = A { };
     let b = B { };
@@ -2093,9 +2091,9 @@ fn dispose_runs_when_a_binding_is_rebound_mid_frame() {
     // the rebind drops the old cell's last strong handle INSIDE the
     // frame; the drain at the root call's end runs its dispose
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
 entry fn main() -> nil {
     let mut a = A { n: 1 };
     a = A { n: 2 };
@@ -2114,9 +2112,9 @@ fn dispose_cascades_through_a_record_field() {
     // the parent outlives the call; the child dies at the callee's ret —
     // its dispose queues mid-run and drains at the root call's end
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct Kid { }
-impl Disposal for Kid { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("kid gone"); } }
+impl Kid { [disposal] fn release_kid(mut self, cx: DisposalContext) { Logger.new("t").info("kid gone"); } }
 struct Parent { kid: ?Kid = nil; }
 entry fn main() -> nil {
     let p = Parent { kid: Kid { } };
@@ -2131,9 +2129,9 @@ entry fn main() -> nil {
 #[test]
 fn a_trap_in_dispose_propagates() {
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
     Logger.new("t").info("body done");
@@ -2149,9 +2147,9 @@ fn the_vm_survives_a_trapping_dispose_for_the_next_call() {
     // the trapping dispose surfaces as a trap AND leaves the Vm usable:
     // the next call on the same interpreter runs to completion
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
     Logger.new("t").info("body done");
@@ -2174,13 +2172,13 @@ entry fn next_call() -> i64 {
 
 #[test]
 fn disposal_pins_the_mut_self_receiver() {
-    // the engine calls `dispose` on the pinned cell — a by-value `self`
-    // spelling refuses (the cx param + nil ret are the ordinary
-    // descriptor signature check)
+    // the engine calls the `[disposal]` member on the pinned cell — a
+    // by-value `self` spelling refuses (the cx param + nil ret are the
+    // ordinary descriptor signature check; the NAME stays free)
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct P { x: i32 = 0; }
-impl Disposal for P { fn dispose(self, cx: DisposalContext) { } }
+impl P { [disposal] fn dispose(self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(
@@ -2190,7 +2188,7 @@ entry fn main() -> nil { }
     assert!(
         out.diags
             .iter()
-            .any(|d| format!("{d:?}").contains("`dispose` must take `mut self`")),
+            .any(|d| d.msg.contains("`[disposal]` member takes `mut self` first")),
         "{:?}",
         out.diags
     );
@@ -2199,9 +2197,9 @@ entry fn main() -> nil { }
 #[test]
 fn disposal_refuses_a_generic_target() {
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 class Box2<T> { v: T; }
-impl<T> Disposal for Box2<T> { fn dispose(mut self, cx: DisposalContext) { } }
+impl<T> Box2<T> { [disposal] fn dispose(mut self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(
@@ -2211,7 +2209,7 @@ entry fn main() -> nil { }
     assert!(
         out.diags
             .iter()
-            .any(|d| format!("{d:?}").contains("cannot implement Disposal")),
+            .any(|d| d.msg.contains("cannot carry `[disposal]` through a generic target")),
         "{:?}",
         out.diags
     );
@@ -2643,7 +2641,6 @@ fn capture_rebind_inside_for_of_body_propagates() {
     // is visible after the loop (it stayed invisible under the copy law)
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterable };
 
 struct Box2 { v: i32 }
 
@@ -2652,9 +2649,7 @@ class Gen {
 }
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl Iterable<i32> for Gen {
-    fn iterate(self, emit: fn(i32) -> bool) {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 0;
         while (i < self.n) {
             if (!emit(i)) { return; }
@@ -2770,7 +2765,6 @@ fn nested_desugared_for_of_shares_slots() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
-use core::{ Iterable };
 
 struct Box2 { v: i32 }
 
@@ -2779,9 +2773,7 @@ class Gen {
 }
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl Iterable<i32> for Gen {
-    fn iterate(self, emit: fn(i32) -> bool) {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 0;
         while (i < self.n) {
             if (!emit(i)) { return; }
@@ -2820,19 +2812,16 @@ fn sugar_law_fused_and_desugared_loop_var_agree() {
     // case 7 — the loop var is ONE variable reassigned per iteration in
     // BOTH loop forms: a stashed lambda capturing it sees the value
     // current at call time — the last element after the loop. The fused
-    // (builtin sequence) and desugared (user `Iterable`) forms answer
-    // identically.
+    // (builtin sequence) and desugared (user `[iterable]` member) forms
+    // answer identically.
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterable };
 
 class Count3 {
 }
 impl Count3 {
     fn new() -> Self { return Self { }; }
-}
-impl Iterable<i32> for Count3 {
-    fn iterate(self, emit: fn(i32) -> bool) {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         emit(7); emit(8); emit(9);
         return;
     }

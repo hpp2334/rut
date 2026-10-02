@@ -646,15 +646,14 @@ mod tests {
     /// The awaits deliver (the answer lane): send at headers, body as
     /// the drain, stream reads per chunk.
     const SRC: &str = r#"
-use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use http_host::{ http_status, http_err, http_read_err };
 use async_host::launch_future;
 use ink_host::{ create_logger, logger_log };
 
-async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
+async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.post(url, "hi".encode()).build().send(cx);
+    let resp = await client.post(url, "hi".encode()).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     // the readbacks are ?str — nil-check, then deref, then log (the
     // rgh deref pattern; a ?str never interpolates)
@@ -672,18 +671,18 @@ async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
         let t: str = rerr;
         logger_log(log, 2, f"read-err={t}");
     }
-    let b = await resp.body(cx);
+    let b = await resp.body();
     logger_log(log, 2, f"body={b.len()}");
 }
 
-async fn streamed(cx: RunContext, log: opaque, url: str) -> nil {
+async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
     let mut total: i32 = 0;
     let mut failed = false;
     while (true) {
-        let c = await s.next(cx);
+        let c = await s.next();
         if (c == nil) {
             let e = s.error();
             if (e != nil) { failed = true; }
@@ -882,15 +881,14 @@ entry fn boot_stream(url: str) -> nil {
     #[test]
     fn the_body_lane_answers_the_short_drain_after_a_mid_read_death() {
         let src = r#"
-use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use ink_host::{ create_logger, logger_log };
 
-async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
+async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
-    let b = await resp.body(cx);
+    let resp = await client.get(url).build().send();
+    let b = await resp.body();
     logger_log(log, 2, f"drain={b.len()}");
     logger_log(log, 2, f"read-err={resp.read_error()}");
 }
@@ -954,20 +952,19 @@ entry fn boot(url: str) -> nil {
     #[test]
     fn the_one_shot_law_degrades_second_takers() {
         let src = r#"
-use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use ink_host::{ create_logger, logger_log };
 
-async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
+async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     // body first, THEN a stream mint: the mint degrades to a dead
     // reader — immediate EOF, empty error
-    let b = await resp.body(cx);
+    let b = await resp.body();
     logger_log(log, 2, f"body={b.len()}");
     let s = resp.byte_stream();
-    let c = await s.next(cx);
+    let c = await s.next();
     if (c == nil) {
         logger_log(log, 2, "late-next-nil=true");
     } else {
@@ -984,18 +981,18 @@ async fn probe(cx: RunContext, log: opaque, url: str) -> nil {
 
 // the other order: stream first, then body — the drain degrades to
 // empty
-async fn probe2(cx: RunContext, log: opaque, url: str) -> nil {
+async fn probe2(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
-    let c = await s.next(cx);
+    let c = await s.next();
     let mut n: i32 = -1;
     if (c != nil) {
         let v: bytes = c;
         n = v.len();
     }
     logger_log(log, 2, f"first-next={n}");
-    let b = await resp.body(cx);
+    let b = await resp.body();
     logger_log(log, 2, f"late-body={b.len()}");
 }
 
@@ -1068,18 +1065,17 @@ entry fn boot(url: str) -> nil {
     #[test]
     fn the_builder_walks_every_verb_and_header() {
         let src = r#"
-use core::{ RunContext };
 use http::{ HttpClient, ClientQueryMethod };
 use async_host::launch_future;
 use ink_host::{ create_logger, logger_log };
 
-async fn probe(cx: RunContext, log: opaque) -> nil {
+async fn probe(log: opaque) -> nil {
     let client = HttpClient.new();
-    let _ = await client.get("fixture://get").build().send(cx);
-    let _ = await client.post("fixture://post", "p".encode()).build().send(cx);
-    let _ = await client.put("fixture://put", "p".encode()).build().send(cx);
-    let _ = await client.patch("fixture://patch", "p".encode()).build().send(cx);
-    let _ = await client.del("fixture://delete").build().send(cx);
+    let _ = await client.get("fixture://get").build().send();
+    let _ = await client.post("fixture://post", "p".encode()).build().send();
+    let _ = await client.put("fixture://put", "p".encode()).build().send();
+    let _ = await client.patch("fixture://patch", "p".encode()).build().send();
+    let _ = await client.del("fixture://delete").build().send();
     let _ = await client.request()
         .method(ClientQueryMethod.Put)
         .url("fixture://manual")
@@ -1087,7 +1083,7 @@ async fn probe(cx: RunContext, log: opaque) -> nil {
         .header("X-Trace", "t-1")
         .body("m".encode())
         .build()
-        .send(cx);
+        .send();
     logger_log(log, 2, "all-sent");
 }
 
@@ -1204,20 +1200,19 @@ entry fn boot() -> nil {
             rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
         }
         let stream_src = r#"
-use core::{ RunContext };
 use http::HttpClient;
 use async_host::launch_future;
 use ink_host::{ create_logger, logger_log };
 
-async fn streamed(cx: RunContext, log: opaque, url: str) -> nil {
+async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient.new();
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     let s = resp.byte_stream();
     let mut total: i32 = 0;
     let mut failed = false;
     while (true) {
-        let c = await s.next(cx);
+        let c = await s.next();
         if (c == nil) {
             let e = s.error();
             if (e != nil) { failed = true; }

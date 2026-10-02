@@ -87,7 +87,7 @@ expected-type position, transitive through `??T`:
   Absence reads plainly: a lookup returns `?V`, and `nil` means "not
   found".
 - When the cell's refcount reaches zero, the engine runs the type's
-  `Disposal` impl — the cell-death hook
+  `[disposal]` member — the cell-death hook
   (see [Rc, dispose, and identity](rc-dispose-identity.md)).
 - Across the host boundary `?T` crosses nil-flattened when its element
   crosses — an `entry fn -> (?T, err)` is a first-class host answer.

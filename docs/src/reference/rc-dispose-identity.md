@@ -26,19 +26,20 @@ fields and elements are pointer-sized handle slots, and the refcount
 walk sees every handle field via the compile-time field table (see
 [Reified types and layout](reified-types.md)).
 
-## Disposal — the cell-death contract
+## Disposal — the cell-death contract (the `[disposal]` marker)
 
 Destructors are implemented, not attached. A type opts in with one
-`impl` block over the core trait `Disposal`:
+`[disposal]`-marked member on its inherent impl (the name is free —
+the bracket designates):
 
 ```rut
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 use ink::{ Logger };
 
 struct Conn { log: Logger; url: str; }
 
-impl Disposal for Conn {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Conn {
+    [disposal] fn close(mut self, cx: DisposalContext) {
         self.log.info(f"closed {self.url}");
     }
 }
@@ -55,19 +56,23 @@ main is done
 closed tcp://edge
 ```
 
-- `dispose` runs when the cell's refcount reaches **zero** —
-  deterministic destruction, not a collector callback. The dying value
-  arrives as `mut self`; the fields release after the body returns.
-- `cx: DisposalContext` is **engine-minted**, one per dispose call. It
-  is empty today — the parameter exists so the context can grow
-  additively without ever touching the trait signature.
-- `Disposal` and `DisposalContext` are the **import-gated** builtin
-  surface: `use core::{ Disposal, DisposalContext };` brings the pair
-  in ([core and the swappable packages](stdlib.md)). Using either
-  without the use line diagnoses
-  `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
-- One impl per type, by trait coherence — there is no per-value
-  attach and nothing to attach twice.
+- A `[disposal]` member runs when the cell's refcount reaches
+  **zero** — deterministic destruction, not a collector callback. The
+  dying value arrives as `mut self`; the fields release after the body
+  returns. The member's NAME IS FREE — the bracket designates, the
+  spelling never does (one `[disposal]` member per class).
+- `cx: DisposalContext` is **engine-minted**, one per call. It is
+  empty today — the parameter exists so the context can grow
+  additively without ever touching the marker's signature.
+- `DisposalContext` is the **import-gated** builtin class:
+  `use core::{ DisposalContext };` brings it in
+  ([core and the swappable packages](stdlib.md)). Using it without the
+  use line diagnoses
+  `` `DisposalContext` is not in scope — `use core::{ DisposalContext }` ``.
+  The `Disposal` trait is GONE — the `[disposal]` marker needs no
+  import, and the removed spelling diagnoses with the marker's shape.
+- One marked member per class, by the marker's own law — there is no
+  per-value attach and nothing to attach twice.
 - The body runs at a call boundary, not re-entrantly inside the
   release; the full sequence — weak boxes nulled first, then
   `dispose`, then the recursive field walk — is

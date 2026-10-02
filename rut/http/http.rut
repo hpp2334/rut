@@ -7,7 +7,7 @@
 // `.decode()`); NO query/params struct; NO `_async` suffixes anywhere.
 //
 // THE SHAPE: the verbs hand back a `RequestBuilder`; `build()` freezes
-// a re-sendable `Request`; `send(cx)` is THE async point — the plan's
+// a re-sendable `Request`; `send()` is THE async point — the plan's
 // usage chain compiles verbatim:
 //
 //     let resp = await client.request()
@@ -16,18 +16,14 @@
 //         .header("Accept", "application/json")
 //         .body(payload)
 //         .build()
-//         .send(cx);
+//         .send();
 //
-// and the terse case is `await client.get(u).build().send(cx)`.
+// and the terse case is `await client.get(u).build().send()`.
 //
-// One disclosed engine adaptation: async METHODS are not woven in this
-// build (the v1 diagnostic — the loop's tasks are async free fns), so
-// each async point is a sync method whose body calls the private async
-// free fn BELOW: the call mints the engine frame inside the method and
-// the method returns it typed `Future<T>`; the caller's `await`
-// consumes it (the `sleep` surface's exact crossing). The face the
-// caller sees is the async-only one above; the engine's async-method
-// refusal never shows.
+// The async points are `async { }` blocks (the async primitive): each
+// sync method MINTS the frame inside itself and answers it typed
+// `Future<T>`; the caller's `await` consumes it. The cx is the
+// weave's — injected, never spelled, never passed.
 //
 // THE LAWS (the host side owns them; this face is the thin wrapper):
 // send resolves at HEADERS (the wire body stays unread — true
@@ -40,7 +36,7 @@
 // death is DATA — the sticky `read_error()` goes non-nil and stays.
 // Cancellation is best-effort (a worker thread finishes its blocking
 // read; the late result is discarded — disclosed).
-use core::{ Future, RunContext };
+use core::{ Future };
 use http_host::{
     http_send, http_body, http_stream_next,
     http_status, http_err, http_read_err, http_resp_stream,
@@ -154,29 +150,21 @@ pub class Request {
 }
 
 impl Request {
-    /// THE async point — resolves at HEADERS. The engine frame mints
-    /// in the call below (the cx is engine-minted — never passed);
-    /// `await` consumes the returned future (the disclosed
-    /// sync-method-over-free-fn adaptation).
-    pub fn send(self, cx: RunContext) -> Future<Response> {
-        let _ = cx;
-        return send_impl(self.c, self.m, self.url, self.headers, self.body);
+    /// THE async point — resolves at HEADERS. The `async { }` block
+    /// mints the frame inside the call; `await` consumes the returned
+    /// future. The block's reads (self's fields) capture by value at
+    /// the mint — the capture law.
+    pub fn send(self) -> Future<Response> {
+        let c = self.c;
+        let m = self.m;
+        let url = self.url;
+        let headers = self.headers;
+        let body = self.body;
+        return async {
+            let r: opaque = await http_send(c, m, url, headers, body);
+            return Response { r: r };
+        };
     }
-}
-
-// ---- the async points (private; one mint each) ----
-
-async fn send_impl(cx: RunContext, c: opaque, m: str, url: str, headers: str, body: bytes) -> Response {
-    let r: opaque = await http_send(c, m, url, headers, body);
-    return Response { r: r };
-}
-
-async fn body_impl(cx: RunContext, r: opaque) -> bytes {
-    return await http_body(r);
-}
-
-async fn next_impl(cx: RunContext, s: opaque) -> ?bytes {
-    return await http_stream_next(s);
 }
 
 /// the response handle: the host owns the layout, rut holds the opaque
@@ -205,9 +193,11 @@ impl Response {
     /// the drain: the remaining wire in ONE future — empty on a
     /// transport failure or after the stream lane took over (the
     /// one-shot law's degrade)
-    pub fn body(self, cx: RunContext) -> Future<bytes> {
-        let _ = cx;
-        return body_impl(self.r);
+    pub fn body(self) -> Future<bytes> {
+        let r = self.r;
+        return async {
+            return await http_body(r);
+        };
     }
 
     /// mint the reader: instant, sync. One-shot vs `body()` — a late
@@ -230,9 +220,11 @@ pub class ByteStream {
 impl ByteStream {
     /// one chunk per future; nil = EOF-or-failed (`error()` names
     /// which). The chunk source is bounded end to end.
-    pub fn next(self, cx: RunContext) -> Future<?bytes> {
-        let _ = cx;
-        return next_impl(self.s);
+    pub fn next(self) -> Future<?bytes> {
+        let s = self.s;
+        return async {
+            return await http_stream_next(s);
+        };
     }
 
     /// the same sticky read failure, read through the response row

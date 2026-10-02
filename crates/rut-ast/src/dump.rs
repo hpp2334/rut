@@ -238,16 +238,6 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "BuiltinPrimitive"
             }
-            ItemKind::BuiltinTrait { vis, ambient, name, generics, methods } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("linkage", DumpVal::Str(if *ambient { "prelude builtin" } else { "pub builtin" }.to_string())));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if !generics.is_empty() {
-                    fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
-                }
-                fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
-                "BuiltinTrait"
-            }
             ItemKind::BuiltinImpl { vis, prim, methods } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("prim", DumpVal::Str(a.name(*prim).to_string())));
@@ -446,6 +436,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             ExprKind::Block { stmts } => {
                 fields.push(field("stmts", DumpVal::Nodes(stmts.iter().map(|&s| node_dump(a, s.id())).collect())));
                 "Block"
+            }
+            ExprKind::AsyncBlock { body } => {
+                fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, body.id())))));
+                "AsyncBlock"
             }
             ExprKind::Lit(_) => "Lit", // value derived: src[lo..hi]
             ExprKind::Path { segs } => {

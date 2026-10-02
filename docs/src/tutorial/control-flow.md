@@ -65,7 +65,10 @@ marks[4]=1 marks[5]=0 stopped at m=14
 ```
 
 **`for..of`** iterates anything with elements: fixed arrays, `Vec`s,
-`str` (yielding one-codepoint `str`s), and `bytes` (yielding `u8`s):
+`str` (yielding one-codepoint `str`s), `bytes` (yielding `u8`s), and
+any type that marks an `[iterable]` member (a user class or an enum —
+the loop calls that ONE designated member; see
+[traits](../reference/traits.md)):
 
 ```rut
 use ink::{ Logger };

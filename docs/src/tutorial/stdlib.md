@@ -113,7 +113,7 @@ same=true zeroed=4 from=3
 
 `opaque(v)` seals any value for recovery with
 `opaque.downcast<T>(o) -> ?T` — see [errors and
-optionality](errors.md). Implementing `Disposal` for a type gives it
+optionality](errors.md). Marking a `[disposal]` member on a type gives it
 cleanup code that runs when its cell's refcount reaches zero, and
 `Weak.new(v)` holds a non-keeping reference (`upgrade() -> ?T`, `nil`
 once the referent died) — the memory stories live in
@@ -205,9 +205,9 @@ maps and sets answer questions, they don't walk.
 
 ## `flow` — the push pipeline
 
-`Flow<E>` chains the push contract. A type is iterable when it
-registers `impl Iterable<E> for T` — `for (x of it)` desugars to
-`it.iterate(emit)` — and a Flow wraps one drive in adapter stages: a
+`Flow<E>` chains the push contract. A type is iterable when it marks
+an `[iterable]` member — `for (x of it)` calls that ONE designated
+member — and a Flow wraps one drive in adapter stages: a
 closure per stage, never per element. Entry is `into_flow()`, the exit
 is a sink (`Vec.from_flow`), and everything between is
 chaining:
@@ -232,7 +232,7 @@ entry fn main() -> nil {
         joined.push(f"{x}");
     }
 
-    // chains feed plain for..of (Flow is an Iterable)
+    // chains feed plain for..of (Flow carries the [iterable] member)
     let mut sum = 0;
     for (let x of nums.into_flow().skip(1)) {
         sum += x;
@@ -251,9 +251,10 @@ Three laws to know:
   the builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for
   `Flow<E>` itself (the identity row: a chain re-enters as a source),
   so generic code bounded on `IntoFlow<E>` takes chains and sources
-  alike. The sinks (`FromFlow<E>`) take the CONTRACT —
-  `it: Iterable<E>` — so a user iterable (a `CountUp`-shape, no Flow
-  involved) widens straight into them.
+  alike. The sinks (`FromFlow<E>`) take the explicit wrapper —
+  `it: Flow<E>` — so the call site manufactures it
+  (`xs.into_flow()`); wrappers are explicit manufacture, never
+  auto-inserted.
 - **`map` introduces a new type variable.** Annotate the lambda, spell
   the type argument (`.map<i32>(..)`), or pass a fn path — a lambda
   that spells nothing diagnoses with the fix.

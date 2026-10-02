@@ -1,7 +1,7 @@
 //! Disposal dispatch (the cell-death contract): the engine pins a cell
-//! whose type implements `Disposal` at strong-count zero, queues it, and
-//! runs `dispose(self, cx)` at the next call boundary on the same frame
-//! machine. The pins here:
+//! whose type carries a `[disposal]`-marked member at strong-count
+//! zero, queues it, and runs it (with the engine-minted cx) at the next
+//! call boundary on the same frame machine. The pins here:
 //!
 //! - the release path: a dispose-implementing cell frees ONLY through the
 //!   drain (the pin, the queued call, the post-`dispose` release) — the
@@ -56,9 +56,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 const DISP: &str = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
 "#;
 
 #[test]
@@ -124,9 +124,9 @@ entry fn main() -> i32 {{
 #[test]
 fn the_disposal_row_rides_the_binary() {
     let src = r#"
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "app_main");
@@ -143,42 +143,29 @@ entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
         .collect();
     assert_eq!(rows.len(), 1, "one row: {:?}", rows);
     let (ty, fid) = rows[0];
-    // the dispose fn: the impl method's inst name ends in `$dispose`
+    // the marked member: the inst name ends in the (free) member name
     let fname = prog.interner.name(prog.funcs[fid as usize].name);
-    assert!(fname.ends_with("dispose"), "the dispose inst: {fname}");
+    assert!(fname.ends_with("release"), "the marked member's inst: {fname}");
     assert!(ty >= rut_core::types::TypeTable::boot().types.len(), "a user type, not a boot id");
     // the linked program keeps the row and the VM releases cleanly
     let flat = rut_core::link::flatten(prog);
     assert!(flat.disposal_impls.iter().filter(|f| f.is_some()).count() >= 1);
 }
 
-/// Import gating (the `pub builtin` spellings): `Disposal` and
-/// `DisposalContext` resolve ONLY through `use core::{ .. }` — the bare
-/// source fails compilation naming the fix exactly, a use that names
-/// only one of the pair leaves the other missing with its own fix, and
-/// the fully-imported source compiles and runs.
+/// Import gating (the `pub builtin` spelling): `DisposalContext`
+/// resolves ONLY through `use core::{ .. }` — the bare source fails
+/// compilation naming the fix exactly, and the imported source compiles
+/// and runs. (`Disposal` itself is GONE — the `[disposal]` marker needs
+/// no import; the removed spelling names its marker.)
 #[test]
 fn disposal_requires_the_import() {
     let body = r#"
 struct A { n: i32 = 0; }
-impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
 "#;
-    // no use at all: the trait miss names the fix
+    // no use at all: the cx-type miss names the fix
     let out = rut_driver::compile_module(body, rut_parser::Mode::Impl, "app_main");
-    assert!(
-        out.diags
-            .iter()
-            .any(|d| d.msg == "`Disposal` is not in scope — `use core::{ Disposal }`"),
-        "the trait miss names the fix: {:?}",
-        out.diags
-    );
-    assert!(out.binary.is_none(), "the bare source must not compile");
-
-    // the trait imported but not the cx type: the type miss names its
-    // own fix (the impl still fails — dispose's signature is wrong)
-    let trait_only = format!("use core::{{ Disposal }};\n{body}");
-    let out = rut_driver::compile_module(&trait_only, rut_parser::Mode::Impl, "app_main");
     assert!(
         out.diags
             .iter()
@@ -186,8 +173,20 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
         "the cx-type miss names the fix: {:?}",
         out.diags
     );
+    assert!(out.binary.is_none(), "the bare source must not compile");
 
-    let with = format!("use core::{{ Disposal, DisposalContext }};\n{body}");
+    // the removed trait spelling names its marker
+    let gone = format!("use core::{{ DisposalContext }};\nclass Q {{ }}\nimpl Disposal for Q {{ fn dispose(mut self, cx: DisposalContext) {{ }} }}\nentry fn main() -> i32 {{ return 0; }}\n");
+    let out = rut_driver::compile_module(&gone, rut_parser::Mode::Impl, "app_main");
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`Disposal` is gone")),
+        "the removed spelling names the marker: {:?}",
+        out.diags
+    );
+
+    let with = format!("use core::{{ DisposalContext }};\n{body}");
     let out = rut_driver::compile_module(&with, rut_parser::Mode::Impl, "app_main");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
     let bytes = out.binary.expect("encoded module");

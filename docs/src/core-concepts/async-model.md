@@ -1,9 +1,10 @@
 # The async model
 
-rut's concurrency is **pull-based**, built on one noun: `Future<T>`.
-Calling an `async fn` runs nothing — it produces a cold future. The
-future runs when something *drives* it: an `await` inside another async
-fn, or a launch into the VM's queue. There are no promises, no
+rut's concurrency is **pull-based**, built on one noun: `Future<T>` —
+a closed builtin class, engine-minted only. Calling an `async fn` (or
+evaluating an `async { }` block) runs nothing — it produces a cold
+future. The future runs when something *drives* it: an `await` inside
+another async body, or a launch into the VM's queue. There are no promises, no
 microtask queue, and no implicit scheduling: **the host owns time**, and
 nothing runs unless the driving loop runs it.
 
@@ -20,11 +21,10 @@ nothing runs unless the driving loop runs it.
 ## The surface
 
 ```rut
-use core::{ RunContext };
 use async_host::{ launch_future, sleep };
 use ink::{ Logger };
 
-async fn countdown(cx: RunContext, log: Logger, n: u32) -> nil {
+async fn countdown(log: Logger, n: u32) -> nil {
     for (let i = n; i > 0; i -= 1) {
         log.info(f"{i}");
         await sleep(1000);             // the only suspension spelling
@@ -45,28 +45,36 @@ entry fn main() -> nil {
 
 The rules:
 
-- **The first parameter is the context.** `async fn f(cx: RunContext,
-  ..)` — the engine mints it at call sites and per drive, the way it
-  mints `self`. It carries the frame edge: `checkpoint()` reads the
-  resume state, `cancelled()` reads the frame's abort flag. The spelled
-  `RunContext` name is core's, imported like any package name:
-  `use core::{ RunContext }` — the engine's weave itself never needs
-  the import, only source that names the trait does.
-- **Calling does not run.** `async fn f(..) -> T` describes a value
-  that widens to `Future<T>`; it runs when awaited or launched.
+- **The context is injected, never spelled.** The weave binds `cx` (a
+  `RunContext`) in every async body; an async fn's parameters are
+  ordinary values. It carries the frame edge: `checkpoint()` reads the
+  resume state, `cancelled()` reads the frame's abort flag. The
+  `RunContext` class is core's, import-gated (`use core::{
+  RunContext }`) — the weave itself never needs the import, only
+  source that names the class does.
+- **Calling does not run.** `async fn f(..) -> T` answers a
+  `Future<T>`; it runs when awaited or launched. `async fn` is sugar —
+  `fn f(..) -> Future<T> { return async { .. }; }` is the same program,
+  because the `async { }` block is the primitive: one expression form
+  that mints the frame where it stands (legal in sync code — the mint
+  is pure), its `return` answering the future, its reads capturing the
+  enclosing locals by value.
 - **One consume law.** A future is consumed by `await` *or* by
   `launch_future` — exactly one. The launch returns its own receipt
   type, which is not a future and cannot be launched or awaited again.
-- **`await` targets engine-woven futures** (async-fn results and
-  `sleep`). Hand-written futures are *launcher-drivable* — the driving
-  loop finds their `Future::yield` in the vtable — which is how the
-  standard `sleep` itself is built over the open trait surface.
+- **Every producer has one type.** An async fn call, an async block,
+  `sleep`, the race/completer mints — all `Future<..>`, so `await`
+  never asks "which kind". The walls hold by nominal closure: no
+  constructor, no impl lane — a user type cannot BE a future (which is
+  how the standard `sleep` itself is minted: engine-side, sealed under
+  the class spelling).
 
 ## What the compiler emits
 
-An `async fn` compiles to one hidden frame — an ordinary heap cell —
-with a woven `Future::yield` that the driving loop calls once per
-resumption:
+An async producer compiles to one hidden frame — an ordinary heap
+cell — with a woven yield that the driving loop calls once per
+resumption (the `Future<T>` class's designated slot — the engine ABI,
+unspelled):
 
 ```text
 frame:  [0]=state      the checkpoint enum's member — the pc
@@ -92,8 +100,8 @@ rides existing bytecode — no new opcodes, no new runtime machinery.
 
 `handle.abort()` flags the frame's cancellation and re-enqueues it. The
 probe at its next checkpoint branches to the drop path: locals release
-in reverse binding order, `Disposal` impls run at refcount zero, and
-any pending `sleep` dies with the frame. Cancellation **never interrupts
+in reverse binding order, `[disposal]` members run at refcount zero,
+and any pending `sleep` dies with the frame. Cancellation **never interrupts
 mid-expression** — the checkpoint probe is the only place a
 cancellation becomes observable, so a cancelled function dies at a
 known-clean boundary. This is the same machinery that frees any heap

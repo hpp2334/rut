@@ -222,7 +222,17 @@ pub struct SurfaceMethod {
     /// the call site substitutes and the bodies ride the request
     /// machinery; empty for plain methods
     pub generics: Vec<IdentId>,
+    /// the engine-designated slot the member fills, if any (v20): the
+    /// closed marker set, engine-owned — 0 none, 1 `[disposal]`, 2
+    /// `[iterable]`. The consumer's for-of/disposal paths read THIS,
+    /// never a per-(type × trait) lookup.
+    pub marker: u8,
 }
+
+/// The marker wire codes of [`SurfaceMethod::marker`].
+pub const MARKER_NONE: u8 = 0;
+pub const MARKER_DISPOSAL: u8 = 1;
+pub const MARKER_ITERABLE: u8 = 2;
 
 /// A builtin container published by `core`'s native surface:
 /// the type constructor is the compiler's own. Each row carries its
@@ -250,10 +260,26 @@ pub enum NativeTy {
     /// `DisposalContext` — the disposal drain's minted context cell
     /// (the disposal surface): engine-implemented, one per `dispose`
     /// call. Empty member surface for now — the type exists so the
-    /// `Disposal` contract's `cx` parameter resolves and the context
-    /// can grow without touching the trait signature. Never constructed
-    /// by user code.
+    /// `[disposal]` contract's `cx` parameter resolves and the context
+    /// can grow without touching the marker's signature. Never
+    /// constructed by user code.
     DisposalContext,
+    /// `Future<T>` — the async handle, a CLOSED builtin class
+    /// (v20, the trait's successor): engine-minted only — an `async fn`
+    /// call, an `async { }` block, `sleep`, the select/completer mints.
+    /// No constructor, no impls, no user-callable members; the walls
+    /// hold by nominal closure (a zero-member interface would be
+    /// satisfied by everything; engine identity is not a member).
+    /// Generic like `Weak<T>`: interned per instantiation at use.
+    /// Import-gated (the `pub builtin` spelling).
+    Future,
+    /// `RunContext` — the cx protocol, a CLOSED builtin class
+    /// (v20): the weave injects one per async call (`cx`); its members
+    /// `checkpoint()`/`cancelled()` lower as inline field ops on the
+    /// engine-minted record. The record itself is engine-minted — one
+    /// frame-edge field, never constructed by user code.
+    /// Import-gated (the `pub builtin` spelling).
+    RunContext,
 }
 
 /// A builtin trait published by `core`'s native surface:
@@ -415,19 +441,21 @@ impl Surface {
                 // name resolves only through `use core::{ .. }`)
                 (sym::WEAK, NativeTy::Weak, false),
                 (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
+                // the async pair, v20: CLOSED builtin classes now — the
+                // `builtin trait` rows are gone. The weave never consults
+                // these bits (frames, cx minting and the future slots key
+                // on the engine symbols); only source that SPELLS a name
+                // resolves it through `use core::{ .. }`.
+                (sym::FUTURE, NativeTy::Future, false),
+                (sym::RUN_CONTEXT, NativeTy::RunContext, false),
             ],
-            native_traits: vec![
-                // the engine-woven trio: `pub builtin` — the import-gated
-                // spellings, exactly the disposal pair's law. The WEAVE
-                // never consults these bits (async frames, cx minting and
-                // the fused `for..of` loops key on the native-trait
-                // symbols); only source that SPELLS a name resolves it
-                // through `use core::{ .. }`.
-                (sym::ITERABLE, NativeTrait::Iterable, false),
-                (sym::FUTURE, NativeTrait::Future, false),
-                (sym::RUN_CONTEXT, NativeTrait::RunContext, false),
-                (sym::DISPOSAL, NativeTrait::Disposal, false),
-            ],
+            // the `builtin trait` rows are GONE (v20): `Iterable` and
+            // `Disposal` became the bracket markers (`[iterable]` /
+            // `[disposal]` — designated member slots, not traits), and
+            // `Future`/`RunContext` became the closed native types above.
+            // The wire keeps the table (length-prefixed, empty for every
+            // v20 module) and the `NativeTrait` tags stay decode-stable.
+            native_traits: vec![],
             native_fns: CORE_FNS.iter().map(|&n| (n, true)).collect(),
             // core's one const: `use core::{NAN}` — the unwritable float
             // (f64 bits materialized with `ConstRaw`)
@@ -445,17 +473,21 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
         sym::STACK_TRACE => Some(NativeTy::StackTrace),
         sym::WEAK => Some(NativeTy::Weak),
         sym::DISPOSAL_CONTEXT => Some(NativeTy::DisposalContext),
+        // v20: the async pair — CLOSED builtin classes
+        sym::FUTURE => Some(NativeTy::Future),
+        sym::RUN_CONTEXT => Some(NativeTy::RunContext),
         _ => None,
     }
 }
 
-/// A core builtin trait by name, if it is one.
+/// A core builtin trait by name, if it is one. EMPTY since v20: the
+/// `builtin trait` row kind is gone — `Iterable`/`Disposal` became the
+/// bracket markers, `Future`/`RunContext` the closed native types. The
+/// shell remains so the marker spelling's diagnostics and the removed-
+/// name hints have one place to consult.
 pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
-    match name {
-        sym::ITERABLE => Some(NativeTrait::Iterable),
-        sym::DISPOSAL => Some(NativeTrait::Disposal),
-        _ => None,
-    }
+    let _ = name;
+    None
 }
 
 /// Is `name` one of the core prelude functions?
@@ -721,6 +753,15 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// namespace/host rows are not derivable without guesswork), so stale
 /// v15 artifacts — which carry no surface section — are refused with
 /// the standard version error.
+/// v20: the `builtin trait` row kind is GONE — the select + type-surface
+/// plan's lanes 3+4. `Future<T>` and `RunContext` became CLOSED builtin
+/// classes (native type tags 5/6; `TyKind::Future { elem }` kind tag 18 —
+/// the async handle, engine-minted only), `Iterable`/`Disposal` became
+/// the bracket markers, and the engine-trait surface rows left
+/// `Surface::core`. The inherent-method surface rows gained the
+/// designated-slot marker byte (`SurfaceMethod::marker`), so a stale
+/// v19 artifact misparses the first marked method row — refused with
+/// the standard version error, the v15 precedent.
 /// v17: owner-anchored instantiation — a declared-surface change.
 /// Type exports gain their generic parameter lists, and the program
 /// carries its instantiation ledger (type rows + fn identities, each
@@ -747,7 +788,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// carries the withdrawn kind, the withdrawn native row, or the
 /// shifted nat tags, so stale artifacts are refused at the version
 /// byte, the v12 precedent.
-pub const VERSION: u32 = 19;
+pub const VERSION: u32 = 20;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -1072,6 +1113,8 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             e.u32(m.ret);
             e.u32(m.local);
             e.u8(m.has_self as u8);
+            // v20: the designated-slot marker rides the row
+            e.u8(m.marker);
             e.u32(m.generics.len() as u32);
             for g in &m.generics {
                 e.u32(g.0);
@@ -1091,6 +1134,9 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             // first anyway
             NativeTy::Weak => 3,
             NativeTy::DisposalContext => 4,
+            // v20: the async pair became CLOSED builtin classes
+            NativeTy::Future => 5,
+            NativeTy::RunContext => 6,
         });
         e.u8(*ambient as u8);
     }
@@ -1187,6 +1233,11 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u32(*elem);
         }
         TyKind::DisposalContext => e.u8(17),
+        // v20: the `Future<T>` closed builtin class (the async handle)
+        TyKind::Future { elem } => {
+            e.u8(18);
+            e.u32(*elem);
+        }
     }
 }
 
@@ -1545,11 +1596,13 @@ fn decode_surface(
             let ret = d.u32()?;
             let local = d.u32()?;
             let has_self = d.u8()? != 0;
+            // v20: the designated-slot marker
+            let marker = d.u8()?;
             let mut generics = Vec::new();
             for _ in 0..(d.u32()? as usize) {
                 generics.push(name(d)?);
             }
-            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self, generics });
+            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self, generics, marker });
         }
         s.inherents.push(SurfaceInherent { target, methods });
     }
@@ -1564,6 +1617,11 @@ fn decode_surface(
             // tag 2 withdrawn with `NativeTy::StrBuf` — never re-meaninged
             3 => NativeTy::Weak,
             4 => NativeTy::DisposalContext,
+            // v20: the async pair became CLOSED builtin classes
+            // (`Future<T>` — the one generic besides `Weak<T>` — and the
+            // cx record `RunContext`)
+            5 => NativeTy::Future,
+            6 => NativeTy::RunContext,
             t => return Err(format!("bad native type tag {t}")),
         };
         let ambient = d.u8()? != 0;
@@ -1736,6 +1794,8 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         // 15 withdrawn with `TyKind::StrBuf` — never re-meaninged
         16 => TyKind::Weak { elem: d.u32()? },
         17 => TyKind::DisposalContext,
+        // v20: the `Future<T>` closed builtin class (the async handle)
+        18 => TyKind::Future { elem: d.u32()? },
         t => return Err(format!("bad type kind tag {t}")),
     })
 }

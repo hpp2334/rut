@@ -211,6 +211,10 @@ pub enum FnKey {
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
     Lambda(NodeId),
+    /// one `async { }` block AST node (v20): the mint plan (captures +
+    /// answer type) rides `ctx.async_block_sigs`; unit-local like a
+    /// lambda — no ledger row
+    AsyncBlock(NodeId),
     /// the emit closure of a desugared `for (v of xs)` over the
     /// `iterate` protocol: `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
@@ -232,6 +236,19 @@ pub struct AsyncLayout {
     pub fut_inst: u32,
     /// the yield's vtable slot under that instantiation
     pub yield_slot: u32,
+}
+
+/// An `async { }` block's mint plan (v20): the captures (the block
+/// frame's value fields, in first-reference order — read by value at
+/// the mint, per the capture law), the answer type `T` (the future's
+/// `Future<T>`), and the body handle the weave reads. `infer` marks the
+/// first weave's inference pass.
+#[derive(Clone, Debug)]
+pub struct AsyncBlockSig {
+    pub body: NodeHandle<BlockNode>,
+    pub caps: Vec<(IdentId, TypeId)>,
+    pub ret: TypeId,
+    pub infer: bool,
 }
 
 /// A monomorphization instantiation: fn key + generic substitution.
@@ -390,6 +407,16 @@ pub struct Ctx<'a> {
     /// Future instantiation and its yield's vtable slot — minted by the
     /// weave before the body compiles, read by every call site
     pub async_layout: std::collections::HashMap<u32, AsyncLayout>,
+    /// the `async { }` blocks' mint plans (v20): block node → captures
+    /// (the frame's value fields, first-reference order) + the answer
+    /// type + the infer-pass flag. Recorded by the block's call site
+    /// BEFORE the weave queues; the weave reads it when the block
+    /// instantiation compiles.
+    pub async_block_sigs: std::collections::HashMap<NodeId, AsyncBlockSig>,
+    /// the infer passes' harvest: block fid → each `return`'s found
+    /// type, in order. The call site unifies it into the answer type and
+    /// re-weaves when the first guess missed.
+    pub async_block_founds: std::collections::HashMap<u32, Vec<TypeId>>,
     /// frame type → (yield's vtable slot) — the await expansion reads
     /// this to aim its `CallI` at the awaited frame's woven yield
     pub frame_yield_slot: std::collections::HashMap<TypeId, u32>,
@@ -527,7 +554,7 @@ pub struct ExternInherent {
     pub target: TypeId,
     /// (name, argument types with the receiver excluded, return, fn
     /// local, instance-vs-class, the method's own generic parameters)
-    pub methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool, Vec<IdentId>)>,
+    pub methods: Vec<rut_core::binary::SurfaceMethod>,
 }
 
 /// A used module's exported GENERIC fn: the owner pkg, the parameter
@@ -649,6 +676,8 @@ impl<'a> Ctx<'a> {
             completer_minted: std::collections::HashMap::new(),
             select_all_minted: std::collections::HashMap::new(),
             async_layout: std::collections::HashMap::new(),
+            async_block_sigs: std::collections::HashMap::new(),
+            async_block_founds: std::collections::HashMap::new(),
             frame_yield_slot: std::collections::HashMap::new(),
             async_fns: std::collections::HashSet::new(),
             allow_uses: false,

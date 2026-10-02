@@ -38,9 +38,7 @@ entry fn main() -> nil {
 #[test]
 fn await_on_a_non_future_diagnoses() {
     let msg = one_diag(r#"
-use core::{ RunContext };
-
-async fn work(cx: RunContext) -> nil {
+async fn work() -> nil {
     await 7;
 }
 
@@ -53,15 +51,17 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn await_on_a_user_impl_future_diagnoses_in_v1() {
+fn await_on_a_user_type_diagnoses() {
+    // futures are engine-minted only: awaiting a user class value
+    // diagnoses with the frame law — the record is a raw frame type
+    // that cannot surface, and the awaitable is the async CALL's
+    // `Future<T>`, never the argument
     let msg = one_diag(r#"
-use core::{ RunContext };
-
 class NotWoven {
     n: i32 = 0;
 }
 
-async fn work(cx: RunContext, f: NotWoven) -> nil {
+async fn work(f: NotWoven) -> nil {
     await f;
 }
 
@@ -70,7 +70,9 @@ entry fn main() -> nil {
 }
 "#);
     assert!(
-        msg.contains("engine-woven futures") && msg.contains("launchers"),
+        msg.contains("`await` needs a `Future<..>`")
+            && msg.contains("`NotWoven` is a raw frame type and cannot surface anymore")
+            && msg.contains("the call's `Future<T>` is the awaitable"),
         "got: {msg}"
     );
 }
@@ -78,12 +80,11 @@ entry fn main() -> nil {
 #[test]
 fn await_on_the_receipt_diagnoses_with_the_join_law() {
     let msg = one_diag(r#"
-use core::{ RunContext };
 use async_host::{ launch_future, LaunchedFutureHandle };
 
-async fn work(cx: RunContext) -> nil { }
+async fn work() -> nil { }
 
-async fn awaiter(cx: RunContext, h: LaunchedFutureHandle<nil>) -> nil {
+async fn awaiter(h: LaunchedFutureHandle<nil>) -> nil {
     await h;
 }
 
@@ -102,10 +103,9 @@ fn relaunching_the_receipt_is_a_type_error() {
     // ruling 6: `launch_future(launch_future(f))` — the receipt is not
     // a Future; the arrow fails to type, never a runtime check
     let msg = one_diag(r#"
-use core::{ RunContext };
 use async_host::launch_future;
 
-async fn work(cx: RunContext) -> nil { }
+async fn work() -> nil { }
 
 entry fn main() -> nil {
     launch_future(launch_future(work()));
@@ -118,15 +118,21 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn an_async_fn_demands_the_cx_first_parameter() {
+fn an_async_fn_never_spells_the_cx_parameter() {
+    // the resume context is INJECTED as `cx` — a spelled parameter of
+    // that name diagnoses (the parameter list carries ordinary values)
     let msg = one_diag(r#"
-async fn work(n: u32) -> nil { }
+async fn work(cx: i32) -> nil { }
 
 entry fn main() -> nil {
     work(7);
 }
 "#);
-    assert!(msg.contains("`cx: RunContext`"), "got: {msg}");
+    assert!(
+        msg.contains("an async fn's parameters are ordinary values")
+            && msg.contains("the resume context is injected as `cx`, never spelled"),
+        "got: {msg}"
+    );
 }
 
 #[test]
@@ -134,7 +140,7 @@ fn runcontext_has_no_other_members() {
     let msg = one_diag(r#"
 use core::{ RunContext };
 
-async fn work(cx: RunContext) -> nil {
+async fn work() -> nil {
     let x = cx.bogus();
 }
 
@@ -164,7 +170,7 @@ fn a_user_launcher_over_the_same_future_surface() {
     .expect("engine surface");
     s.register_module("my_engine", engine).expect("mount");
     let src = r#"
-use core::{ Future, RunContext };
+use core::{ Future };
 use my_engine::{ __launch };
 
 class MyHandle {
@@ -176,7 +182,7 @@ fn launch(f: Future<nil>) -> MyHandle {
     return MyHandle { f: f };
 }
 
-async fn tick(cx: RunContext) -> nil { }
+async fn tick() -> nil { }
 
 entry fn main() -> nil {
     launch(tick());

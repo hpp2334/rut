@@ -1,29 +1,25 @@
-// custom_async.rut — a user-implemented future and a user-written
-// launcher (04-custom-async), in the Future-only vocabulary.
+// custom_async.rut — a user-written launcher over the closed `Future`
+// class (04-custom-async), in the Future-only vocabulary.
 //
-// The async plan LANDED: `async fn(cx: RunContext, ..)` compiles into
-// the engine-woven `impl Future<T>` for its hidden frame, the driving
-// loop owns every launched future, and the standard launcher set
-// (`launch_future` / `LaunchedFutureHandle` / `sleep`) is the embedder's
-// host surface (the `async_engine` + `async_host` packages). This file
-// remains the user-impl-of-builtin-trait test: `Future<T>` is an
-// engine-named builtin trait, and `impl Future<nil> for CustomFuture`
-// registers through the ordinary nominal path — builtin traits are
-// engine-NAMED, not engine-CLOSED. A user future is
-// LAUNCHER-DRIVABLE (the driving loop finds its `Future::yield` row in
-// the vtable); v1 `await` targets engine-woven futures only (async-fn
-// results and `sleep`), and join lands later.
+// The surface, v20: `Future<T>` is a CLOSED builtin class — engine-
+// minted only (an `async fn` call, an `async { }` block, `sleep`, the
+// race/completer mints); a user type cannot BE a future, and the cx is
+// INJECTED into every async body (never a spelled parameter). What a
+// user module CAN re-spell is the launcher tier: the engine's standard
+// set (`launch_future` / `LaunchedFutureHandle` / `sleep`) is ordinary
+// code over the same `Future` surface, and this file is the proof —
+// `launch_custom` plus the stats this example exists to show: one
+// audit counter per launch and cancellation, the cancellation probe
+// read as data INSIDE the async body (`cx.cancelled()`), and the
+// resume state read at each checkpoint (`cx.checkpoint()`).
 //
-// The shape, in one paragraph: `CustomFuture` is a hand-written stage
-// machine — the same shape the `async fn` weave emits for a hidden
-// frame, spelled out in source. `impl Future<nil> for CustomFuture`
-// is the resumption surface the driving loop drives, one `yield` per
-// checkpoint, the cx carrying the frame edge. `launch_custom` is a USER
-// launcher over that same Future surface — the ruling-8 law: the
-// engine's standard set is ordinary code any module may re-spell — plus
-// the stats this example exists to show: one audit counter per
-// resumption, the cancellation probe read as data, and a completion
-// audit over the shared `AuditLog` cell.
+// The shape, in one paragraph: the producers are `async { }` blocks and
+// `async fn`s — the engine mints their frames, the driving loop owns
+// every launched future, and `launch_custom` only supplies the DRIVING
+// and the audit, exactly the division the standard `launch_future`
+// keeps. The receipt is the user-space twin of
+// `LaunchedFutureHandle`: not a Future, not re-launchable, one member
+// (the cancel edge).
 
 // ---------------------------------------------------------------- audit --
 
@@ -73,83 +69,69 @@ impl AuditLog {
     }
 }
 
-// -------------------------------------------------------------- machine --
+// ------------------------------------------------------------ producers --
 
-// The hand-written machine — what the `async fn` weave emits for a
-// hidden frame, spelled out: a stage counter, an audit label, the
-// payload the stages carry, and the done flag. FIELDS ONLY —
-// the stage logic lives in the inherent impl block below.
-
-struct CustomFuture {
-    steps: u32;      // checkpoints booked before the run finishes
-    stage: str;      // what the current stage does (the audit's label)
-    done: bool;      // the last stage ran
-}
-
-impl CustomFuture {
-    fn new(steps: u32, stage: str) -> Self {
-        return Self { steps: steps, stage: stage, done: false };
-    }
-
-    /// One stage of work — what one resumption advances. `false` when
-    /// no stages are left: the runner's completion signal.
-    fn advance(mut self) -> bool {
-        if (self.done) {
-            return false;
-        }
-        if (self.steps == 0) {
-            self.done = true;
-            return false;
-        }
-        self.steps -= 1;
-        return true;
-    }
-
-    /// The audit label of the current stage.
-    fn label(self) -> str {
-        return self.stage;
-    }
-}
-
-// ----------------------------------------------------- the trait surface --
-
-// The nominal registration: one impl block, one `(trait,
-// type)` pair, duplicates are a link error. The trait is `builtin` —
-// the engine weaves it for every `async fn`'s hidden frame, invisibly;
-// a hand-written machine registers through the same registry and rides
-// the same drive law.
+// The async BLOCK is the primitive: one expression form that mints the
+// frame where it stands (the mint is pure — legal in sync code), its
+// `return` answering the FUTURE, its reads capturing the enclosing
+// locals by value. Every producer answers the ONE closed class:
+// `Future<nil>` here.
 //
-// The resumption entry the driving loop drives — once per checkpoint,
-// with the cx whose one field is the frame edge. The receiver IS the
-// frame (the machine's fields are its state); the context is
-// the only handle a resumption needs. Inside, the frozen cx protocol
-// reads as data: `checkpoint` answers this frame's resume state,
-// `cancelled` answers the task's abort flag — cancellation is DATA the
-// frame reads, not an exception it catches.
-impl Future<nil> for CustomFuture {
-    fn yield(self, cx: RunContext) {
-        // the ledger view: the frame's resume state, read as data
-        let at = cx.checkpoint();
-        // the cancellation probe: a cancelled frame stops advancing —
-        // the audit sees it as "died here, did not advance" — and runs
-        // its drop path instead of the next stage
-        if (cx.cancelled()) {
-            self.done = true;
-            self.stage = f"{self.stage}@{at}:cancelled";
+// Inside an async body the weave INJECTS the resume context as `cx`
+// (an async fn's parameters are ordinary values — a spelled `cx` is
+// gone). The frozen cx protocol reads as data: `checkpoint()` answers
+// this frame's resume state, `cancelled()` the task's abort flag —
+// cancellation is DATA the frame reads, not an exception it catches.
+
+use core::{ Future };
+use async_host::{ sleep };
+
+/// A staged producer as an async block: `steps` checkpoints, each
+/// parking one tick, the audit counting every resumption off the
+/// frame's own ledger (`cx.checkpoint()`).
+fn staged(steps: u32, log: ?AuditLog) -> Future<nil> {
+    return async {
+        let mut i = 0;
+        while (i < steps) {
+            await sleep(10);
+            i += 1;
+            // the ledger view: this frame's resume state, read as data
+            let at = cx.checkpoint();
+            if (log != nil) {
+                log.note_yield(at);
+            }
         }
-    }
+        if (log != nil) {
+            log.note_finish();
+        }
+    };
+}
+
+/// A cancellable producer: the cancellation probe is the frame's OWN
+/// checkpoint read — a cancelled frame stops advancing and runs its
+/// drop path (the audit sees "died here, did not advance").
+fn cancellable(log: ?AuditLog) -> Future<nil> {
+    return async {
+        while (true) {
+            if (cx.cancelled()) {
+                if (log != nil) {
+                    log.note_cancel();
+                }
+                return;
+            }
+            await sleep(20);
+        }
+    };
 }
 
 // ---------------------------------------------------------------- launch --
 
 // The launched receipt — the user-space twin of the engine standard
-// set's `LaunchedFutureHandle` (the async_host package): the
-// future-typed stage machine and the shared audit cell it was launched
-// with. The receipt is NOT a Future (it cannot be awaited), not
-// re-launchable (ruling 6: a type error, never a runtime check), one
-// member: the cancel edge.
+// set's `LaunchedFutureHandle` (the async_host package): the future and
+// the shared audit cell it was launched with. The receipt is NOT a
+// Future (it cannot be awaited), not re-launchable (a type error, never
+// a runtime check), one member: the cancel edge.
 
-use core::{ Future, RunContext };
 use async_engine::{ __abort, __launch };
 
 struct CustomLaunched {
@@ -183,29 +165,12 @@ impl CustomLaunched {
     }
 }
 
-/// The user launcher. The future registers nothing new here — its impl
-/// block already did; a launcher only supplies the DRIVING and the
-/// audit. This is the same division the engine standard set's
-/// `launch_future` keeps (ruling 8), over the same `Future` surface, so
-/// the machine never knows which one started it.
+/// The user launcher. A launcher supplies only the DRIVING and the
+/// audit — the same division the standard `launch_future` keeps, over
+/// the same `Future` surface, so the producer never knows which one
+/// started it.
 fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
     __launch(opaque(f));
     log.note_launch();
     return CustomLaunched { task: f, log: log, alive: true };
-}
-
-/// The audit drive — the runnable twin of the engine loop's columns
-/// The engine drives the TRAIT surface (the vtable's
-/// `Future::yield`, the cx minted per drive); this walks the machine's
-/// own stages, one `advance` per booked checkpoint, and counts every
-/// resumption the audit would see. The shape is the drive law either
-/// way: run a stage, count it, stop on completion.
-fn audit_drive(m: CustomFuture, l: CustomLaunched) -> bool {
-    let mut driven: u32 = 0;
-    while (m.advance()) {
-        driven += 1;
-        l.log.note_yield(driven);
-    }
-    l.log.note_finish();
-    return m.done;      // true: every booked stage ran — a clean finish
 }

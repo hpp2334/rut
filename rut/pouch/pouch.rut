@@ -14,7 +14,7 @@
 // writes alias the stored cells — binding an element copies nothing.
 //
 // Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
-// builtin `Iterable` contract, which resolves the `buf`/`len`
+// `[iterable]` contract, which resolves the `buf`/`len`
 // backing fields directly — never a per-element method call.
 // The builtin `Vec` natives are gone; this class is the sequence type.
 

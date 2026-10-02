@@ -46,11 +46,12 @@ element traffic is plain slot moves.
 
 When a count reaches zero, destruction runs in a fixed order:
 
-1. **Weak boxes null first, then `dispose`.** A type implementing the
-   `Disposal` trait gets its `dispose(mut self, cx: DisposalContext)`
-   called — the engine pins the dying cell, queues the call, and the
-   interpreter drains the queue at call boundaries. One impl per type;
-   `use core::{ Disposal, DisposalContext }` brings the pair in. Fields
+1. **Weak boxes null first, then the `[disposal]` member.** A type
+   carrying a `[disposal]`-marked member gets it called —
+   `(mut self, cx: DisposalContext)`, the engine minting the cx — the
+   engine pins the dying cell, queues the call, and the interpreter
+   drains the queue at call boundaries. One marked member per class;
+   `use core::{ DisposalContext }` brings the cx type in. Fields
    release after the body returns.
 2. **Fields release in declaration order**, recursively — a dying
    record's strings, arrays, and boxes release their own references, so
@@ -61,7 +62,7 @@ When a count reaches zero, destruction runs in a fixed order:
    GC" (see [the host boundary](host-boundary.md)).
 
 ```rut
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 use ink::{ Logger };
 
 class Connection {
@@ -75,8 +76,8 @@ impl Connection {
     }
 }
 
-impl Disposal for Connection {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Connection {
+    [disposal] fn close(mut self, cx: DisposalContext) {
         self.log.info(f"closed {self.url}");
     }
 }
@@ -156,7 +157,7 @@ until the VM is dropped; no collector ever runs, no pass interrupts
 execution, and destructor ordering never surprises you. Guidance is
 lint-level, not runtime:
 
-- resource-holding types (types with `Disposal` impls or host
+- resource-holding types (types with `[disposal]` members or host
   handles) must not participate in strong cycles;
 - parent/child and observer shapes take `Weak` back-pointers;
 - pure-data cycles are harmless — they cost only memory.

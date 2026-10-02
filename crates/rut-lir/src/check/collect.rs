@@ -3,7 +3,6 @@
 //!; impl methods enter the instantiation queue eagerly.
 
 use rut_core::binary::TraitDesc;
-use rut_core::types::*;
 use super::*;
 
 
@@ -713,16 +712,22 @@ impl<'a> Ctx<'a> {
                 let e = self.subst_template_ty(elem, env);
                 Some(self.mk_weak(e))
             }
+            // the `Future<E>` handle shape: the element substitutes
+            // structurally (the kind carries it directly — v20's closed
+            // class spelling, no name decoding)
+            TyKind::Future { elem } => {
+                let e = self.subst_template_ty(elem, env);
+                Some(self.mk_future(e))
+            }
             TyKind::Fn { params, ret } => {
                 let r = self.subst_template_ty(ret, env);
                 let ps = params.iter().map(|&p| self.subst_template_ty(p, env)).collect();
                 Some(self.mk_fn_ty(ps, r))
             }
-            // the `Future<E>` protocol shape: the element rides the
-            // trait-inst name (its only carrier — the kind holds a
-            // unit-local trait-table index), so decode, substitute, and
-            // re-mint this unit's inst
-            TyKind::TraitObj { .. } => self.subst_future_obj(id, env),
+            // a user trait object: the kind holds a unit-local
+            // trait-table index with no structural element to
+            // substitute — passes through
+            TyKind::TraitObj { .. } => None,
             // a TUPLE (record with numeric fields) mentioning a
             // placeholder (`(?#T, ?DecodeJsonError)` — the generic fns'
             // return shapes): rebuild with the substituted fields. A
@@ -815,50 +820,6 @@ impl<'a> Ctx<'a> {
         rebuilt.unwrap_or(id)
     }
 
-    /// The `Future<E>` trait-object shape under a substitution: decode
-    /// the element from the instantiation's name (its only carrier —
-    /// the kind stores a unit-local trait-table index), substitute or
-    /// resolve it, re-mint this unit's inst. A non-`Future` trait
-    /// object, or an element that resolves nowhere, passes through.
-    fn subst_future_obj(
-        &mut self,
-        id: TypeId,
-        env: &std::collections::HashMap<String, TypeId>,
-    ) -> Option<TypeId> {
-        let tname = self.types.type_at(id).name;
-        let tname = self.interner.name(tname).to_string();
-        let inner = tname
-            .strip_prefix("[trait] Future<")
-            .and_then(|s| s.strip_suffix('>'))?;
-        let elem = match env.get(inner) {
-            Some(&a) => a,
-            None if inner.starts_with('?') => {
-                let bid = self.intern(&inner[1..]);
-                let e = self.types.dense_id_of_name(bid)?;
-                self.mk_opt(e)
-            }
-            None => {
-                let iid = self.intern(inner);
-                let Some(eid) = self.types.dense_id_of_name(iid) else {
-                    return None;
-                };
-                // a COMPOSITE element row carried under its placeholder
-                // spelling (`Future<Either2<#T, #U>>`, `Future<(u32, #T)>`
-                // — the select2 surface): run the full substitution over
-                // the row — a nominal `Base<#T>` re-mints at the env's
-                // arguments, a tuple rebuilds its fields — never the
-                // dense hit alone, which would pin the placeholders into
-                // the call's answer type. Rows that substitute to
-                // themselves come back unchanged (a frame answer, `str`,
-                // a concrete inst), so the re-mint below dedups to the
-                // same inst.
-                self.subst_template_ty(eid, env)
-            }
-        };
-        let fut_name = self.intern("Future");
-        let fut = self.mk_future_inst(fut_name, elem);
-        Some(self.mk_trait_obj(fut))
-    }
 }
 
 /// Split a type-argument list at top-level commas (`Vec<Vec<i64>>, str`

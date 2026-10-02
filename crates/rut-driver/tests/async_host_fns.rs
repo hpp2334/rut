@@ -196,12 +196,11 @@ fn run_loop(vm: &mut Vm, fx: &Fixture, cap: usize) {
 #[test]
 fn await_orders_after_completion() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
-async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+async fn job(log: opaque, u: str) -> nil {
     logger_log(log, 2, f"before:{u}");
     await probe(u);
     logger_log(log, 2, f"after:{u}");
@@ -228,12 +227,11 @@ entry fn main() -> nil {
 #[test]
 fn two_awaits_run_concurrently_and_settle_by_deadline() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
-async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+async fn job(log: opaque, u: str) -> nil {
     logger_log(log, 2, f"before:{u}");
     await probe(u);
     logger_log(log, 2, f"done:{u}");
@@ -282,12 +280,11 @@ entry fn main() -> nil {
 #[test]
 fn a_failed_completer_traps_with_its_message() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::boom;
 
-async fn victim(cx: RunContext, log: opaque, u: str) -> nil {
+async fn victim(log: opaque, u: str) -> nil {
     await boom(u);
     logger_log(log, 2, "unreachable");
 }
@@ -327,18 +324,17 @@ entry fn main() -> nil {
 #[test]
 fn cancel_maps_the_data_path_to_the_arm_and_discards_late_results() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
 
-async fn victim(cx: RunContext, log: opaque) -> nil {
+async fn victim(log: opaque) -> nil {
     let buf: ?str = "held";
     await hang("x");
     logger_log(log, 2, "unreachable");
 }
 
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+async fn killer(log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
     await sleep(10);
     let ok = h.abort();
     if (ok) { logger_log(log, 2, "killer:aborted"); }
@@ -396,12 +392,11 @@ entry fn main() -> nil {
 #[test]
 fn await_delivers_the_host_answer() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
-async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+async fn job(log: opaque, u: str) -> nil {
     let v = await probe(u);
     logger_log(log, 2, f"got:{v}");
 }
@@ -426,26 +421,25 @@ fn await_delivers_through_user_frames_and_type_checks() {
     // the rgh shape: a user async fn awaits another user async fn whose
     // body awaits the HOST row — the value crosses two answer lanes
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::probe;
 
-async fn inner(cx: RunContext, log: opaque, u: str) -> str {
+async fn inner(log: opaque, u: str) -> str {
     logger_log(log, 2, "inner:start");
     let v = await probe(u);
     logger_log(log, 2, "inner:got");
     return v;
 }
 
-async fn outer(cx: RunContext, log: opaque, u: str) -> str {
+async fn outer(log: opaque, u: str) -> str {
     logger_log(log, 2, "outer:start");
     let v = await inner(log, u);
     logger_log(log, 2, f"outer:{v}");
     return v;
 }
 
-async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+async fn job(log: opaque, u: str) -> nil {
     logger_log(log, 2, "job:start");
     let v = await outer(log, u);
     logger_log(log, 2, f"job:{v}");
@@ -471,11 +465,10 @@ entry fn main() -> nil {
 #[test]
 fn the_rows_drive_directly_through_call_host_row() {
     let src = r#"
-use core::{ RunContext };
 use async_host::launch_future;
 use fixture::probe;
 
-async fn job(cx: RunContext, u: str) -> nil {
+async fn job(u: str) -> nil {
     await probe(u);
 }
 
@@ -553,12 +546,11 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     .expect("fixture");
     s.register_module("fixture", fixture).expect("mount fixture");
     let app = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::launch_future;
 use fixture::wall;
 
-async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+async fn job(log: opaque, u: str) -> nil {
     logger_log(log, 2, f"wall:before:{u}");
     await wall(u);
     logger_log(log, 2, f"wall:after:{u}");

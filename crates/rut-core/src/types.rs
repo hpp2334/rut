@@ -219,6 +219,14 @@ pub enum TyKind {
     /// row. A ref type by the `is_ref` law (the box is a cell — the
     /// referent it holds is not).
     Weak { elem: TypeId },
+    /// `Future<T>` — the async handle, the `Weak<T>` shape:
+    /// the CLOSED builtin class's runtime spelling, interned per
+    /// instantiation (`mk_future`), no boot row. A HANDLE type, never a
+    /// value's own cell: a slot of this type holds an engine-minted
+    /// frame record (`#frame@..`), the way a trait-object slot held one —
+    /// the hidden frame is representation, `Future<T>` is the one
+    /// surface spelling. A ref type (the frame cell it names).
+    Future { elem: TypeId },
     /// fn(P..) -> R — a closure value { func, captures } in one slot
     Fn { params: Vec<TypeId>, ret: TypeId },
 }

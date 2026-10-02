@@ -1,6 +1,8 @@
-//! The async weave: an `async fn(cx: RunContext, ..)` compiles
-//! into the engine-woven `impl Future<T>` for a hidden frame type — the
-//! frame IS the coroutine, the body becomes its `yield`.
+//! The async weave: an `async fn(..)` (or an `async { }` block)
+//! compiles into the hidden frame's driven half — the
+//! frame IS the coroutine, the body becomes its `yield`, and the
+//! surface answers the closed `Future<T>` class (v20: no trait, no
+//! impl row — the class's designated slot row is the layout binding).
 //!
 //! The woven FuncCode (one per async fn, existing ops only):
 //!
@@ -34,16 +36,17 @@
 //! drop path in reverse binding order).
 
 use super::*;
-use crate::check::ImplDecl;
 use rut_core::async_frame as af;
 use rut_core::ops::Op;
 
 type Layout = crate::check::AsyncLayout;
 
-/// Mint the async machinery of one async fn (idempotent per fid): the
-/// hidden frame type, the checkpoint enum, the `Future<ret>`
-/// instantiation, the compiler-written impl row (empty — the vtable
-/// fill carries the row), and the yield slot.
+/// Mint the async machinery of one async producer (idempotent per
+/// fid): the hidden frame type, the checkpoint enum, the `Future<ret>`
+/// designated slot row, and the yield slot. v20: the `Future<ret>` row
+/// is the CLOSED class's layout binding — an internal descriptor (one
+/// designated yield slot per `Future<elem>`), not a trait: no impl
+/// registers, nothing in source can name it.
 pub(crate) fn ensure_layout(ctx: &mut Ctx, fid: u32, fname: IdentId, ret_ty: TypeId, param_fields: Vec<(IdentId, TypeId)>) -> Layout {
     if let Some(l) = ctx.async_layout.get(&fid) {
         return *l;
@@ -72,21 +75,10 @@ pub(crate) fn ensure_layout(ctx: &mut Ctx, fid: u32, fname: IdentId, ret_ty: Typ
         name: frame_name,
         kind: TyKind::Data { fields },
     });
-    // the compiler-written impl: `impl Future<ret> for #frame@<fn>` —
-    // an ordinary ImplDecl row (dispatch, widening, `is` all see it);
-    // the vtable row itself rides the extra fill (no AST method nodes)
+    // the closed class's designated slot: one global yield slot per
+    // `Future<ret>` instantiation, filled per frame type below (the
+    // await's `CallI` and the driving loop's `drive` both aim at it)
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, ret_ty);
-    ctx.impls.push(ImplDecl {
-        trait_id: fut_inst,
-        trait_name: sym::FUTURE,
-        target: frame_ty,
-        target_data: None,
-        trait_arg_nodes: vec![],
-        is_template: false,
-        inherent: false,
-        methods: vec![],
-        origin: ctx.own_spec.clone(),
-    });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, fid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
@@ -120,6 +112,12 @@ pub(crate) fn append_frame_field(ctx: &mut Ctx, frame_ty: TypeId, name: IdentId,
 /// Compile one async fn instantiation into `ctx.funcs[fid]`: the weave
 /// sketched in the module docs. Dispatched from `FnCompiler::compile`
 /// when the fn node is `is_async`.
+///
+/// v20 — the sugar law: `async fn work(params) -> T { BODY }` is sugar
+/// over `fn work(params) -> Future<T> { return async { BODY }; }`. The
+/// cx is NOT a parameter anymore — the weave injects the binding `cx`
+/// (the resume context) into every async body; an async fn's parameters
+/// are ordinary values.
 pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult<()> {
     let FnKey::Free(name) = inst.key else {
         unreachable!("async dispatch only queues free fns")
@@ -136,33 +134,28 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         ctx.err(sp, "generic async fns are not woven in this build (v1: monomorphic async fns)");
         return Err(());
     }
-    // the frozen cx law: the first parameter IS the cx
-    let Some(first) = f.params.first() else {
-        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter — the engine mints it at call sites");
-        return Err(());
-    };
-    let cx_param = match ctx.ast.param(*first) {
-        MemberKind::Param(ParamData { ty: Some(t), name, .. }) => Some((*t, *name)),
-        _ => None,
-    };
-    let Some((cx_ty_node, cx_name)) = cx_param else {
-        ctx.err(sp, "an async fn takes `cx: RunContext` as its first parameter — the engine mints it at call sites");
-        return Err(());
-    };
-    let cx_ty = ctx.resolve_type(cx_ty_node, &[]);
-    if cx_ty != ctx.run_context_ty() {
-        ctx.err(sp, format!(
-            "an async fn's first parameter is `{}` — `cx: RunContext` expected",
-            ctx.type_name(cx_ty)
-        ));
-        return Err(());
+    // the cx is INJECTED, never spelled: an async fn's parameters are
+    // ordinary values (a spelled `cx` would collide with the injection)
+    for p in &f.params {
+        if let MemberKind::Param(ParamData { ty: Some(t), name, .. }) = ctx.ast.param(*p) {
+            let spells_cx = *name == sym::CX
+                || matches!(ctx.ast.ty(*t), TypeKind::TyPath { ref segs, .. }
+                    if segs.len() == 1 && segs[0].name == sym::RUN_CONTEXT);
+            if spells_cx {
+                ctx.err(ctx.ast.span(p.id()), format!(
+                    "`{}`: an async fn's parameters are ordinary values — the resume context is injected as `cx`, never spelled",
+                    ctx.name(*name)
+                ));
+                return Err(());
+            }
+        }
     }
     let ret_ty = f.ret.map(|r| ctx.resolve_type(r, &[])).unwrap_or(TY_NIL);
-    // user params (after the cx) become the frame's first cell fields;
-    // the yield's argv carries only (frame, cx) — the call site writes
-    // the params into the frame before it is ever driven
+    // the fn's parameters become the frame's first cell fields; the
+    // yield's argv carries only (frame, cx) — the call site writes the
+    // params into the frame before it is ever driven
     let mut param_fields: Vec<(IdentId, TypeId)> = Vec::new();
-    for p in &f.params[1..] {
+    for p in &f.params {
         if let MemberKind::Param(ParamData { ty: Some(t), name, .. }) = ctx.ast.param(*p) {
             param_fields.push((*name, ctx.resolve_type(*t, &[])));
         } else {
@@ -171,8 +164,32 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         }
     }
     let layout = ensure_layout(ctx, fid, name, ret_ty, param_fields.clone());
+    weave_async_body_infer(ctx, fid, name, layout, f.body, param_fields, false)
+}
+
+/// The shared weave: dispatch + arms + the body, one FuncCode per
+/// async producer (an `async fn`'s body or an `async { }` block's).
+/// `name` is the weaved fn's spelling (the fn's name, or the block's
+/// reserved `#async@<node>`); the frame/cx pair is the yield ABI.
+fn weave_async_body_infer(
+    ctx: &mut Ctx,
+    fid: u32,
+    name: IdentId,
+    layout: Layout,
+    body: NodeHandle<BlockNode>,
+    param_fields: Vec<(IdentId, TypeId)>,
+    infer: bool,
+) -> TcResult<()> {
     let cx_ty = ctx.run_context_ty();
     let frame_local = ctx.intern("#frame");
+    let body_lo = ctx.ast.span(body.id()).lo;
+    let ret_ty = match ctx.types.kind(layout.frame_ty) {
+        TyKind::Data { fields } => fields
+            .get(af::ANSWER_FIELD as usize)
+            .map(|f| f.ty)
+            .unwrap_or(TY_NIL),
+        _ => TY_NIL,
+    };
 
     let mut c = FnCompiler {
         ctx,
@@ -205,6 +222,8 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         assigned: std::collections::HashSet::new(),
         captured: std::collections::HashSet::new(),
         cell_counter: 0,
+        async_infer: infer,
+        async_founds: Vec::new(),
     };
     // argv pair: reg 0 the frame, reg 1 the cx (the FuncCode params are
     // exactly these two — the driving loop supplies both per drive)
@@ -221,10 +240,11 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         field: NO_FIELD,
         cell: None,
     });
-    // the cx binding: user-visible by its declared name, register-live
-    // only — each drive mints a fresh cx, so it is never cell-backed
+    // the INJECTED cx binding: the weave supplies the resume context per
+    // drive, so it is never cell-backed — user probes (`cx.cancelled()`)
+    // read the injected register
     c.locals.push(Local {
-        name: cx_name,
+        name: sym::CX,
         reg: cx_reg,
         ty: cx_ty,
         is_mut: false,
@@ -233,7 +253,8 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         field: NO_FIELD,
         cell: None,
     });
-    // the user params: fields LOCALS_BASE.. — restore at every arm
+    // the producer's values (an async fn's params; an async block's
+    // captures): fields LOCALS_BASE.. — restore at every arm
     for (i, (pname, pty)) in param_fields.iter().enumerate() {
         let reg = c.new_reg(*pty);
         let field = af::LOCALS_BASE + i as u32;
@@ -270,23 +291,23 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     c.bind(l_s0);
     let l_drop0 = c.new_label();
     let l_live0 = c.new_label();
-    emit_cancelled_probe(&mut c, sp.lo, l_drop0, l_live0);
+    emit_cancelled_probe(&mut c, body_lo, l_drop0, l_live0);
     c.bind(l_live0);
-    emit_restore(&mut c, sp.lo);
+    emit_restore(&mut c, body_lo);
     // the capture law's pre-pass: an async body's locals promote like
     // any frame's (the hidden cell rides the frame field)
-    c.capture_pre_pass(f.body.id());
-    if c.compile_block(f.body).is_err() {
+    c.capture_pre_pass(body.id());
+    if c.compile_block(body).is_err() {
         return Err(());
     }
     // completion — the value is discarded (no handle can receive it in v1)
-    emit_completion(&mut c, sp.lo);
+    emit_completion(&mut c, body_lo);
     // the s0 drop path — an abort that lands before the first drive (or
     // while parked at state s0) never runs the body
     c.bind(l_drop0);
-    emit_drop_path(&mut c, sp.lo);
+    emit_drop_path(&mut c, body_lo);
     c.bind(l_retire);
-    c.emit(Op::Ret { val: None }, sp.lo);
+    c.emit(Op::Ret { val: None }, 0);
 
     // dispatch — the resume law: the state field names the arm
     c.bind(l_dispatch);
@@ -297,7 +318,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
             field: af::STATE_FIELD,
             repr: c.ctx.types.repr_of(layout.ckpt_ty),
         },
-        sp.lo,
+        0,
     );
     let mut table_labels = vec![l_s0];
     let arm_labels = c.async_frame.as_ref().map(|f| f.arm_labels.clone()).unwrap_or_default();
@@ -306,11 +327,11 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     {
         let brt = c.code.len();
         c.fixups.push((brt, l_retire, true));
-        c.emit(Op::BrTable { idx: state_reg, table_off, count, default: 0 }, sp.lo);
+        c.emit(Op::BrTable { idx: state_reg, table_off, count, default: 0 }, 0);
     }
     // well-formedness: the fn ends in Ret — the dispatch
     // always jumps, this is the unreachable tail
-    c.emit(Op::Ret { val: None }, sp.lo);
+    c.emit(Op::Ret { val: None }, 0);
 
     c.resolve_labels();
     // the brtable's arms: fill the table pool directly (the fixup
@@ -321,6 +342,10 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     }
     patch_members(c.ctx, layout.ckpt_ty, table_labels.len() as u32);
 
+    let founds = std::mem::take(&mut c.async_founds);
+    if c.async_infer {
+        c.ctx.async_block_founds.insert(fid, founds);
+    }
     let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
     let (code, spans, pools) = peephole::run(code, spans, c.pools);
     let Pools { argv, labels, .. } = pools;
@@ -343,6 +368,17 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     let f2 = &mut c.ctx.funcs[fid as usize];
     *f2 = fc;
     Ok(())
+}
+
+/// The frame's answer-lane type (the producer's `T`).
+fn answer_ty_of_layout(ctx: &Ctx, layout: &Layout) -> TypeId {
+    match ctx.types.kind(layout.frame_ty) {
+        TyKind::Data { fields } => fields
+            .get(af::ANSWER_FIELD as usize)
+            .map(|f| f.ty)
+            .unwrap_or(TY_NIL),
+        _ => TY_NIL,
+    }
 }
 
 /// The cancelled probe at an arm: the frame's flag (read directly —
@@ -561,64 +597,40 @@ pub(crate) fn compile_await(
         return Err(());
     };
     let t = c.compile_expr(expr, None)?;
-    // v1 await-legality (the survey's pinned refinement): the operand
-    // must reach an engine-woven frame — either its hidden frame type
-    // (a bare async-call result) or a `Future<..>` object spelling (an
-    // annotated binding, the sleep surface). A concrete non-engine type
-    // diagnoses: the probe reads the engine-reserved state field, and a
-    // user `impl Future` has nothing to read — launcher territory, and
-    // join lands later.
-    let ok = match c.ctx.types.kind(t) {
-        TyKind::Data { .. } => {
-            if c.ctx.engine_frames.contains(&t) {
-                true
+    // v20 await-legality: the operand's type is `Future<T>` — the ONE
+    // surface spelling (an async fn call, an `async { }` block, `sleep`,
+    // a select/completer mint). Plain type identity: every producer
+    // mints the closed class, so `await` never asks "which kind" — and
+    // nothing else is awaitable (the walls: a user type cannot BE a
+    // Future).
+    let elem = match c.ctx.types.kind(t) {
+        TyKind::Future { elem } => *elem,
+        other => {
+            let tn = c.ctx.type_name(t).to_string();
+            if tn.starts_with("LaunchedFutureHandle") {
+                c.ctx.err(sp, "cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched");
+            } else if matches!(other, TyKind::Data { .. }) {
+                c.ctx.err(sp, format!(
+                    "`await` needs a `Future<..>` — `{tn}` is a raw frame type and cannot surface anymore; the call's `Future<T>` is the awaitable"
+                ));
             } else {
-                let tn = c.ctx.type_name(t).to_string();
-                if tn.starts_with("LaunchedFutureHandle") {
-                    c.ctx.err(sp, "cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched");
-                } else {
-                    c.ctx.err(sp, format!(
-                        "`await` targets engine-woven futures (async-fn results, `sleep`) — `{tn}` is not one; user `impl Future` types drive through launchers"
-                    ));
-                }
-                false
+                c.ctx.err(sp, format!(
+                    "`await` needs a Future — `{}` is not one",
+                    c.ctx.type_name(t)
+                ));
             }
-        }
-        TyKind::TraitObj { trait_id } => {
-            c.ctx
-                .trait_inst
-                .iter()
-                .find(|(_, &id)| id == *trait_id)
-                .map(|((n, _), _)| *n == sym::FUTURE)
-                .unwrap_or(false)
-        }
-        _ => {
-            c.ctx.err(sp, format!(
-                "`await` needs a Future — `{}` is not one",
-                c.ctx.type_name(t)
-            ));
-            false
+            return Err(());
         }
     };
-    if !ok {
-        return Err(());
-    }
     let fut = c.last_reg;
-    // the CallI aims at the operand's own `Future::yield` slot: the
-    // engine frame's registered row (a bare async-call result) or the
-    // trait object's instantiation (an annotated binding, `sleep`)
-    let yield_slot = match c.ctx.types.kind(t) {
-        TyKind::Data { .. } => *c
-            .ctx
-            .frame_yield_slot
-            .get(&t)
-            .expect("engine frame has a registered yield slot"),
-        TyKind::TraitObj { trait_id } => c
-            .ctx
-            .trait_slot(*trait_id, 0)
-            .expect("a Future instantiation has exactly one member"),
-        _ => unreachable!("legality checked above"),
-    };
+    // the CallI aims at the `Future<elem>` class's designated yield slot
+    // (the class layout binding — every engine frame over this elem
+    // fills it; the vtable dispatches by the cell's own frame type)
+    let fut_inst = c.ctx.mk_future_inst(sym::FUTURE, elem);
+    let yield_slot = c
+        .ctx
+        .trait_slot(fut_inst, 0)
+        .expect("a Future instantiation has exactly one member");
     let k = c.async_frame.as_ref().expect("checked above").next_state;
     let ckpt_ty = c.async_frame.as_ref().expect("checked above").ckpt_ty;
     let l_sresume = c.new_label();
@@ -628,30 +640,10 @@ pub(crate) fn compile_await(
         f.arm_labels.push(l_sresume);
     }
     let sp_lo = sp.lo;
-    // THE ANSWER: the awaited frame's element — the hidden frame's
-    // answer field (fields[ANSWER_FIELD]) or the `Future<T>`
-    // instantiation's T (the await expression's value, the rut-http
+    // THE ANSWER: the awaited frame's element — the `Future<T>` class's
+    // T (the await expression's value, the rut-http
     // face's whole point: `let r = await http_send(..)`).
-    let ans_ty = match c.ctx.types.kind(t) {
-        TyKind::Data { fields } => fields
-            .get(af::ANSWER_FIELD as usize)
-            .map(|f| f.ty)
-            .unwrap_or(TY_NIL),
-        TyKind::TraitObj { trait_id } => c
-            .ctx
-            .trait_inst
-            .iter()
-            .find(|(_, &id)| id == *trait_id)
-            .and_then(|((n, targs), _)| {
-                if *n == sym::FUTURE && !targs.is_empty() {
-                    Some(targs[0])
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(TY_NIL),
-        _ => TY_NIL,
-    };
+    let ans_ty = elem;
     let ans = c.new_reg(ans_ty);
     // spill the future into MY pending edge FIRST — the probe may fall
     // straight through (already-done future) or park, and the resume
@@ -777,15 +769,16 @@ struct AsyncFrameView {
 }
 
 /// The async call site (`compile_free_fn_call`'s is_async arm): mint
-/// the frame cell, store the user params, arm the entry state — the
-/// call's value IS the frame, typed as its hidden type (which widens
-/// to `Future<T>` through the registered impl).
+/// the frame cell, store the argument values, arm the entry state —
+/// the call's value IS the frame, typed as the closed `Future<ret>`
+/// class (the call's answer is the frame's answer lane; the register
+/// keeps the frame's own type for the field ops the await emits).
 pub(crate) fn compile_async_call(
     c: &mut FnCompiler,
     name: IdentId,
     fd: &rut_ast::ast::FnData,
     args: &[NodeHandle<AnyExpr>],
-    expected: Option<TypeId>,
+    _expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
     let sp_lo = sp.lo;
@@ -802,27 +795,26 @@ pub(crate) fn compile_async_call(
     if !c.ctx.async_layout.contains_key(&fid) {
         c.ctx.compile_queue(inst)?;
     }
-    // the weave's own legality ran above (the cx law, generics) — its
-    // diagnostics precede the call-shape checks
+    // the weave's own legality ran above (the cx-injection law,
+    // generics) — its diagnostics precede the call-shape checks
     let layout = *c
         .ctx
         .async_layout
         .get(&fid)
         .ok_or_else(|| ())?; // the weave failed (diagnostics recorded)
-    let want = fd.params.len().saturating_sub(1);
-    if args.len() != want {
+    if args.len() != fd.params.len() {
         c.ctx.err(sp, format!(
-            "call arity: {} arg(s) for {} parameter(s) — the cx is engine-minted, not passed",
-            args.len(), want
+            "call arity: {} arg(s) for {} parameter(s)",
+            args.len(), fd.params.len()
         ));
         return Err(());
     }
-    let ret_ty = fd.ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_NIL);
-    // compile the args against the declared (post-cx) parameter types
+    let ret_ty = answer_ty_of_layout(c.ctx, &layout);
+    // compile the args against the declared parameter types
     let mut aregs = Vec::new();
     let mut atys = Vec::new();
     for (i, a) in args.iter().enumerate() {
-        let pt = match c.ctx.ast.param(fd.params[i + 1]) {
+        let pt = match c.ctx.ast.param(fd.params[i]) {
             MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
             _ => TY_I32,
         };
@@ -837,12 +829,139 @@ pub(crate) fn compile_async_call(
         aregs.push(c.last_reg);
         atys.push(pt);
     }
-    // the frame cell: fields are zeroed, the engine state arms s0
+    mint_frame(c, layout, &aregs, &atys, sp_lo);
+    // the call's type IS the closed `Future<ret>` class — generic
+    // inference (`launch_future(work())` binding `T := nil`) unifies
+    // through the element, structurally
+    Ok(c.ctx.mk_future(ret_ty))
+}
+
+/// The `async { }` block call site (the async primitive, v20):
+/// captures by value per the capture law, weaves the block body into
+/// its own frame fn (the same machinery an `async fn` body uses), and
+/// mints the frame — the expression's value, typed `Future<T>`.
+///
+/// The answer type: the expected type's element in an annotated
+/// position (`let f: Future<str> = async { .. }`, a `select2` arm),
+/// else the unified `return` types of an inference weave. `return` in
+/// the block is the FUTURE's answer, not any enclosing fn's.
+pub(crate) fn compile_async_block(
+    c: &mut FnCompiler,
+    body: NodeHandle<BlockNode>,
+    expected: Option<TypeId>,
+    sp: rut_lexer::span::Span,
+) -> TcResult<TypeId> {
+    let node = body.id();
+    // expected flow-in: a `Future<elem>` context names the answer
+    let expected_elem = match expected.map(|e| c.ctx.types.kind(e).clone()) {
+        Some(TyKind::Future { elem }) => Some(elem),
+        _ => None,
+    };
+    // capture analysis: names in the block that resolve to ENCLOSING
+    // locals (the block's own bindings never reach this table) — the
+    // for-of emit closure's law. Cell-backed captures pool the SHARED
+    // cell; the rest copy their current value (the capture law).
+    let mut referenced = Vec::new();
+    c.scan_names(node, &mut referenced);
+    let mut caps: Vec<(IdentId, TypeId)> = Vec::new();
+    let mut cap_regs: Vec<u16> = Vec::new();
+    for n in referenced {
+        if caps.iter().any(|(cn, _)| *cn == n) {
+            continue;
+        }
+        if let Some(l) = c.lookup(n).cloned() {
+            caps.push((n, l.ty));
+            cap_regs.push(c.read_local(&l, sp.lo));
+        }
+    }
+    // the two-pass weave: pass 1 records the returns' found types
+    // (infer), the call site unifies them into the answer type, pass 2
+    // re-weaves against it — unless the expected type already named it.
+    let inst = crate::check::Inst {
+        key: crate::check::FnKey::AsyncBlock(node),
+        subst: vec![],
+        trait_origins: vec![],
+    };
+    let fid = c.ctx.ensure_inst(inst.clone());
+    let diags_before = c.ctx.diags.len();
+    let guess = expected_elem.unwrap_or(TY_NIL);
+    let plan = |ret: TypeId, infer: bool| crate::check::AsyncBlockSig {
+        body,
+        caps: caps.clone(),
+        ret,
+        infer,
+    };
+    c.ctx.async_block_sigs.insert(node, plan(guess, expected_elem.is_none()));
+    if !c.ctx.async_layout.contains_key(&fid) {
+        c.ctx.compile_queue(inst.clone())?;
+    }
+    if c.ctx.diags.len() > diags_before {
+        return Err(()); // the weave's diagnostics surfaced once
+    }
+    let elem = match expected_elem {
+        Some(e) => e,
+        None => {
+            let founds = c.ctx.async_block_founds.remove(&fid).unwrap_or_default();
+            let mut first: Option<TypeId> = None;
+            let mut bad: Option<(TypeId, TypeId)> = None;
+            for f in founds {
+                match first {
+                    None => first = Some(f),
+                    Some(t) if t != f => {
+                        bad = Some((t, f));
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            if let Some((a, b)) = bad {
+                c.ctx.err(sp, format!(
+                    "an async block's returns disagree — `{}` and `{}` (the answer is ONE type; annotate the binding to pin it)",
+                    c.ctx.type_name(a),
+                    c.ctx.type_name(b)
+                ));
+                return Err(());
+            }
+            first.unwrap_or(TY_NIL)
+        }
+    };
+    // pass 2: the found answer re-weaves (checks now armed). The
+    // expected-typed path weaves once, checked from the start.
+    if expected_elem.is_none() {
+        c.ctx.async_block_sigs.insert(node, plan(elem, false));
+        c.ctx.compile_queue(inst.clone())?;
+        if c.ctx.diags.len() > diags_before {
+            return Err(());
+        }
+    }
+    let Some(layout) = c.ctx.async_layout.get(&fid).copied() else {
+        return Err(()); // unreachable — the weave minted it
+    };
+    mint_frame(c, layout, &cap_regs, &caps.iter().map(|(_, t)| *t).collect::<Vec<_>>(), sp.lo);
+    Ok(c.ctx.mk_future(elem))
+}
+
+/// The weaved body of one `async { }` block instantiation: the mint
+/// plan supplies captures + answer; the shared weave does the rest.
+pub(crate) fn compile_async_block_fn(ctx: &mut Ctx, fid: u32, node: NodeId) -> TcResult<()> {
+    let Some(sig) = ctx.async_block_sigs.get(&node).cloned() else {
+        return Ok(()); // no plan — the block was never a call site
+    };
+    let name = ctx.intern(&format!("#async@{}", node.0));
+    let layout = ensure_layout(ctx, fid, name, sig.ret, sig.caps.clone());
+    weave_async_body_infer(ctx, fid, name, layout, sig.body, sig.caps, sig.infer)
+}
+
+/// The shared mint: a zeroed frame cell, the producer's values into the
+/// LOCALS_BASE fields, the s0 state armed — the call's value IS the
+/// frame (the register keeps the frame's own type; the expression's
+/// type is the `Future<T>` the caller sees).
+fn mint_frame(c: &mut FnCompiler, layout: Layout, vals: &[u16], tys: &[TypeId], sp_lo: u32) {
     let frame = c.new_reg(layout.frame_ty);
     c.emit(Op::NewCell { dst: frame, ty: layout.frame_ty }, sp_lo);
-    for (i, &r) in aregs.iter().enumerate() {
+    for (i, &r) in vals.iter().enumerate() {
         let field = af::LOCALS_BASE + i as u32;
-        let repr = c.ctx.types.repr_of(atys[i]);
+        let repr = c.ctx.types.repr_of(tys[i]);
         c.emit(Op::SetF { obj: frame, field, val: r, repr }, sp_lo);
     }
     let e = c.new_reg(layout.ckpt_ty);
@@ -859,36 +978,6 @@ pub(crate) fn compile_async_call(
     // the call's value IS the frame cell (last_reg is the convention)
     c.last_reg = frame;
     c.ctx.engine_frames.insert(layout.frame_ty);
-    // the consume's spelling: a `Future<..>`-typed context (the
-    // launcher's generic parameter, an annotated let) takes the trait
-    // object — the value stays the frame cell, and the generic unify
-    // reads the instantiation's args (`T := ret`). A placeholder-typed
-    // context (the generic launcher's hint) takes the CONCRETE
-    // instantiation so the unification has real args to read. A bare
-    // context keeps the hidden frame type — `await`'s engine-woven
-    // provenance.
-    if let Some(e) = expected {
-        if let TyKind::TraitObj { trait_id } = c.ctx.types.kind(e) {
-            let hit = c
-                .ctx
-                .trait_inst
-                .iter()
-                .find(|(_, &id)| id == *trait_id)
-                .map(|(k, _)| k.clone());
-            if let Some((tname, targs)) = hit {
-                if tname == sym::FUTURE && !targs.is_empty() {
-                    if targs[0] == ret_ty {
-                        return Ok(e);
-                    }
-                    if c.ctx.type_name(targs[0]).starts_with('#') {
-                        let obj = c.ctx.mk_trait_obj(layout.fut_inst);
-                        return Ok(obj);
-                    }
-                }
-            }
-        }
-    }
-    Ok(layout.frame_ty)
 }
 
 /// Mint the engine-backed sleep future once: the sleep
@@ -930,18 +1019,10 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
             ],
         },
     });
+    // the Future<ret> designated slot (the closed class's layout
+    // binding): one global yield slot per `Future<nil>`, filled per
+    // frame type below
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, TY_NIL);
-    ctx.impls.push(ImplDecl {
-        trait_id: fut_inst,
-        trait_name: sym::FUTURE,
-        target: frame_ty,
-        target_data: None,
-        trait_arg_nodes: vec![],
-        is_template: false,
-        inherent: false,
-        methods: vec![],
-        origin: ctx.own_spec.clone(),
-    });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     let thunk_name = ctx.intern("async_engine::__sleep_yield");
     // the host thunk must EXIST (the wrapper calls it; the join resolves
@@ -1041,7 +1122,7 @@ pub(crate) fn ensure_select_future(ctx: &mut Ctx, a_ans: TypeId, b_ans: TypeId, 
 /// `[Future<T>]` slot — and the `(u32, T)` tuple as the answer lane's
 /// composite. The yield (`__select_all_yield`) launches every cohort
 /// member on the fresh arm and arbitrates the first retirement.
-pub(crate) fn ensure_select_all_future(ctx: &mut Ctx, t_ans: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
+pub(crate) fn ensure_select_all_future(ctx: &mut Ctx, t_ans: TypeId, _sp: rut_lexer::span::Span) -> TcResult<()> {
     if ctx.select_all_minted.contains_key(&t_ans) {
         return Ok(());
     }
@@ -1128,22 +1209,11 @@ fn mint_engine_future(
     }))
 }
 
-/// The shared fill: the `Future<answer>` impl row over the minted frame
-/// (an ordinary ImplDecl — dispatch, widening, `is` all see it) and the
-/// engine-thunk yield's vtable fill.
+/// The shared fill: the `Future<answer>` designated slot's vtable fill
+/// over the minted frame (the closed class's layout binding — no impl
+/// row exists or is needed; dispatch reads the frame type's fill).
 fn finish_engine_future(ctx: &mut Ctx, frame_ty: TypeId, answer_ty: TypeId, _thunk_fid: u32, wfid: u32) {
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, answer_ty);
-    ctx.impls.push(ImplDecl {
-        trait_id: fut_inst,
-        trait_name: sym::FUTURE,
-        target: frame_ty,
-        target_data: None,
-        trait_arg_nodes: vec![],
-        is_template: false,
-        inherent: false,
-        methods: vec![],
-        origin: ctx.own_spec.clone(),
-    });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
@@ -1385,20 +1455,9 @@ pub(crate) fn ensure_host_async(
             ],
         },
     });
-    // the Future<ret> impl row (dispatch/widening/`is` see it; the
-    // vtable fill carries the yield slot)
+    // the Future<ret> designated slot (the closed class's layout
+    // binding) — the wrapper's vtable fill carries the yield
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, ret_ty);
-    ctx.impls.push(ImplDecl {
-        trait_id: fut_inst,
-        trait_name: sym::FUTURE,
-        target: frame_ty,
-        target_data: None,
-        trait_arg_nodes: vec![],
-        is_template: false,
-        inherent: false,
-        methods: vec![],
-        origin: ctx.own_spec.clone(),
-    });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     let cx_ty = ctx.run_context_ty();
     // the four bodyless host thunks; the minted FuncCode's NAME is the
@@ -1508,7 +1567,7 @@ pub(crate) fn compile_host_async_call(
     name: IdentId,
     ef: &crate::check::ExternFn,
     args: &[NodeHandle<AnyExpr>],
-    expected: Option<TypeId>,
+    _expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
     let sp_lo = sp.lo;
@@ -1547,32 +1606,10 @@ pub(crate) fn compile_host_async_call(
         Op::SetF { obj: frame, field: af::STATE_FIELD, val: cell, repr: Repr::Ref },
         sp_lo,
     );
-    // the consume's spelling (the `compile_async_call` tail): a
-    // `Future<..>`-typed context takes the trait object so the generic
-    // unify reads the instantiation's args
-    if let Some(e) = expected {
-        if let TyKind::TraitObj { trait_id } = c.ctx.types.kind(e) {
-            let hit = c
-                .ctx
-                .trait_inst
-                .iter()
-                .find(|(_, &id)| id == *trait_id)
-                .map(|(k, _)| k.clone());
-            if let Some((tname, targs)) = hit {
-                if tname == sym::FUTURE && !targs.is_empty() {
-                    if targs[0] == ef.ret {
-                        c.last_reg = frame;
-                        return Ok(e);
-                    }
-                    if c.ctx.type_name(targs[0]).starts_with('#') {
-                        let obj = c.ctx.mk_trait_obj(layout.fut_inst);
-                        c.last_reg = frame;
-                        return Ok(obj);
-                    }
-                }
-            }
-        }
-    }
+    // the consume's spelling: the call's type IS the closed
+    // `Future<ret>` class — generic inference unifies through the
+    // element, structurally
     c.last_reg = frame;
-    Ok(layout.frame_ty)
+    c.ctx.engine_frames.insert(layout.frame_ty);
+    Ok(c.ctx.mk_future(ef.ret))
 }

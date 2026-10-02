@@ -45,7 +45,7 @@ at the op.
   + an indirect jump.
 - Refcount retain/release are inline in the loop; a release to zero
   nulls the weak list, queues the type's `dispose` body (the
-  `Disposal` contract), and frees
+  `[disposal]` contract), and frees
   ([The Rc heap and destructors](rc-heap.md)).
 - Fuel is accounted per op, with the fuller budget check amortized every
   `interrupt_every` ops.
@@ -138,7 +138,8 @@ queues and a virtual clock:
 - `timers: BTreeMap<u64, Vec<Slot>>` — sleep deadlines against the VM's
   **virtual clock** (`now_ms` / `set_now` — deterministic; the host
   advances it explicitly, or maps it to wall time).
-- `drive(fut)` — one re-entrant call of a future's `yield` row: a fresh
+- `drive(fut)` — one drive step through the future's designated yield
+  slot (the `Future<T>` class's engine ABI): a fresh
   engine context over the frame edge, answering `Done` or `Parked` off
   the frame's state field. Fuel accounting rides the per-op budget
   unchanged: an exhausted drive parks the frame at its pc, and a re-drive

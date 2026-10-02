@@ -15,6 +15,17 @@ use rut_core::{IdentId, sym};
 use super::dump::ir_dump_of;
 use super::seeds::Seeds;
 
+/// The marker's wire code (v20): the closed set is validated at
+/// collect, so an unknown word never reaches the surface build.
+fn marker_code(m: Option<rut_core::IdentId>) -> u8 {
+    match m {
+        None => rut_core::binary::MARKER_NONE,
+        Some(w) if w == rut_core::sym::DISPOSAL_MARKER => rut_core::binary::MARKER_DISPOSAL,
+        Some(w) if w == rut_core::sym::ITERABLE_MARKER => rut_core::binary::MARKER_ITERABLE,
+        Some(_) => rut_core::binary::MARKER_NONE,
+    }
+}
+
 fn respell_surface_ty(
     types: &rut_core::types::TypeTable,
     t: TypeId,
@@ -434,37 +445,31 @@ pub fn compile_program_resolved(
             let cx_name = ctx.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
             let cx_ty = ctx.run_context_ty();
             for ih in &surface.inherents {
-                let methods: Vec<(
-                    rut_core::IdentId,
-                    Vec<TypeId>,
-                    TypeId,
-                    u32,
-                    bool,
-                    Vec<rut_core::IdentId>,
-                )> = ih
+                let methods: Vec<rut_core::binary::SurfaceMethod> = ih
                     .methods
                     .iter()
-                    .map(|m| {
-                        (
-                            ctx.intern(surface.names.name(m.name)),
-                            m.params
-                                .iter()
-                                .map(|p| {
-                                    respell_surface_ty(
-                                        &ctx.types, *p, own_scope, dep_scope, cx_name, cx_ty,
-                                    )
-                                })
-                                .collect(),
-                            respell_surface_ty(
-                                &ctx.types, m.ret, own_scope, dep_scope, cx_name, cx_ty,
-                            ),
-                            rut_core::pack(dep_scope, m.local),
-                            m.has_self,
-                            m.generics
-                                .iter()
-                                .map(|&g| ctx.intern(surface.names.name(g)))
-                                .collect(),
-                        )
+                    .map(|m| rut_core::binary::SurfaceMethod {
+                        name: ctx.intern(surface.names.name(m.name)),
+                        params: m
+                            .params
+                            .iter()
+                            .map(|p| {
+                                respell_surface_ty(
+                                    &ctx.types, *p, own_scope, dep_scope, cx_name, cx_ty,
+                                )
+                            })
+                            .collect(),
+                        ret: respell_surface_ty(
+                            &ctx.types, m.ret, own_scope, dep_scope, cx_name, cx_ty,
+                        ),
+                        local: rut_core::pack(dep_scope, m.local),
+                        has_self: m.has_self,
+                        marker: m.marker,
+                        generics: m
+                            .generics
+                            .iter()
+                            .map(|&g| ctx.intern(surface.names.name(g)))
+                            .collect(),
                     })
                     .collect();
                 let target2 = respell_surface_ty(
@@ -760,6 +765,10 @@ pub fn compile_program_resolved(
                 ret,
                 local,
                 has_self,
+                // the designated-slot marker crosses the surface (the
+                // consumer's for-of reads it): the checker validated the
+                // closed set at collect
+                marker: marker_code(md.marker),
                 generics: if method_generic { md.generics.clone() } else { vec![] },
             });
         }
@@ -818,6 +827,7 @@ pub fn compile_program_resolved(
                 ret,
                 local,
                 has_self,
+                marker: marker_code(md.marker),
                 generics: vec![],
             });
         }

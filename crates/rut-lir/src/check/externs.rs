@@ -289,20 +289,13 @@ impl<'a> Ctx<'a> {
             .any(|p| format!("#{}", self.name(*p)) == text)
     }
 
-    /// The element of a `Future<E>` trait-object type: the kind stores
-    /// the trait-table index (unit-local — a carried row's index is the
-    /// exporter's), so the instantiation's name ("[trait] Future<E>")
-    /// is the only carrier; the element text resolves through the
-    /// carried/boot rows by name.
+    /// The element of a `Future<E>` handle: the kind carries it
+    /// structurally (v20's closed class).
     pub fn future_elem(&mut self, ty: TypeId) -> Option<TypeId> {
-        if !matches!(self.types.kind(ty), TyKind::TraitObj { .. }) {
-            return None;
+        match self.types.kind(ty) {
+            TyKind::Future { elem } => Some(*elem),
+            _ => None,
         }
-        let tname = self.name(self.types.type_at(ty).name).to_string();
-        let inner = tname
-            .strip_prefix("[trait] Future<")
-            .and_then(|s| s.strip_suffix('>'))?;
-        self.resolve_elem_text(inner)
     }
 
     /// Re-spell a foreign impl method's signature type for THIS call's
@@ -377,60 +370,38 @@ impl<'a> Ctx<'a> {
         self.types.dense_id_of_name(id)
     }
 
-    /// The async Future trait objects re-spell at the binding: a linked
-    /// pkg's `Future<Response>` ret is ITS unit's instantiation
-    /// (per-unit minted); the importing unit's await keys the Future
-    /// trait_inst per-unit, so the ret re-spells to THIS unit's
-    /// `Future<Response>`. The element decodes from the
-    /// instantiation's name (its only carrier) and resolves through
-    /// `resolve_elem` (the binding's own type exports, then the
-    /// carried/boot rows).
+    /// The async futures re-spell at the binding: a linked
+    /// pkg's `Future<Response>` ret is ITS unit's instantiation row
+    /// (exporter-packed ids); the importing unit re-mints the row over
+    /// THIS unit's element. The element rides the kind structurally
+    /// (v20's closed class — no name decoding): it resolves through the
+    /// binding's own type exports first (the pkg carries the row), then
+    /// the carried/boot rows (`?T` peels — see `resolve_elem_text`).
     pub fn respell_future_ret(
         &mut self,
         ret: TypeId,
         surface_exports: &[(IdentId, TypeId)],
     ) -> TypeId {
-        if !matches!(self.types.kind(ret), TyKind::TraitObj { .. }) {
-            return ret;
-        }
-        // the trait id inside a carried TraitObj row is the EXPORTER's
-        // trait-table index — meaningless here, and the local table may
-        // not even have that slot. The type row's own name
-        // ("[trait] Future<nil>") is the only carrier: decode the
-        // element from it and re-mint this unit's Future inst.
-        let tname = self.name(self.types.type_at(ret).name).to_string();
-        let Some(inner) = tname
-            .strip_prefix("[trait] Future<")
-            .and_then(|s| s.strip_suffix('>'))
-        else {
+        let TyKind::Future { elem } = self.types.kind(ret) else {
             return ret;
         };
-        // the element resolves through the binding's own type exports
-        // first (the pkg carries the row), then through the carried /
-        // boot rows by name (a leading `?` peels — see
-        // `resolve_elem_text`)
-        let inner_id = self.intern(inner);
-        let elem = surface_exports
+        let text = self.type_name(*elem).to_string();
+        let inner_id = self.intern(&text);
+        let elem2 = surface_exports
             .iter()
             .find(|(n, _)| *n == inner_id)
             .map(|(_, ty)| *ty)
-            .or_else(|| self.resolve_elem_text(inner));
-        let Some(elem) = elem else {
-            return ret;
-        };
-        let fut_name = self.intern("Future");
-        let fut = self.mk_future_inst(fut_name, elem);
-        self.mk_trait_obj(fut)
+            .or_else(|| self.resolve_elem_text(&text));
+        match elem2 {
+            Some(e) => self.mk_future(e),
+            None => ret,
+        }
     }
 
     /// Bind a used class's inherent method surface (the
     /// linkable-classes phase): `methods` ride the surface verbatim,
     /// each fn id scope-qualified with the exporter's scope.
-    pub fn add_extern_inherent(
-        &mut self,
-        target: TypeId,
-        methods: Vec<(IdentId, Vec<TypeId>, TypeId, u32, bool, Vec<IdentId>)>,
-    ) {
+    pub fn add_extern_inherent(&mut self, target: TypeId, methods: Vec<rut_core::binary::SurfaceMethod>) {
         if methods.is_empty() {
             return;
         }
@@ -482,7 +453,7 @@ impl<'a> Ctx<'a> {
             if !hit {
                 continue;
             }
-            if let Some(midx) = ih.methods.iter().position(|(n, ..)| *n == name) {
+            if let Some(midx) = ih.methods.iter().position(|m| m.name == name) {
                 let subst = match dname.and_then(|d| self.extern_generics.get(&d)) {
                     Some(g) => g.params.iter().cloned().zip(cargs.iter().cloned()).collect(),
                     None => vec![],

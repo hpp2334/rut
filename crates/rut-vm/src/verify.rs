@@ -108,12 +108,13 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         TyKind::Data { fields } => Some(fields),
                         TyKind::Opt { .. } => None,
                         // the async weave's driven-half field ops on a
-                        // trait-object-spelled future: the
-                        // register holds an engine frame record the
-                        // static type erases; the repr law below is what
+                        // future-spelled register: the register holds an
+                        // engine frame record the static type erases
+                        // (`Future<T>` is the handle, the frame is the
+                        // representation); the repr law below is what
                         // protects RC, and the field index is checked at
                         // runtime against the concrete record
-                        TyKind::TraitObj { .. } => None,
+                        TyKind::TraitObj { .. } | TyKind::Future { .. } => None,
                         _ => None,
                     };
                     match fields {
@@ -136,7 +137,11 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             // read the boxed copy
                             let elem_repr = match prog.types.kind(ty) {
                                 TyKind::Opt { elem } => prog.types.repr_of(*elem),
-                                TyKind::TraitObj { .. } => {
+                                // the async weave's driven-half field ops
+                                // on a future-spelled register: the frame
+                                // record is the representation, the index
+                                // is checked at runtime against it
+                                TyKind::TraitObj { .. } | TyKind::Future { .. } => {
                                     if *repr != Repr::Ref {
                                         return Err(bad(
                                             "field access on a future must be a ref slot".into(),

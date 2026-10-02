@@ -43,20 +43,20 @@ are emitted only where a reference can flow:
 - Debug builds assert the full counter discipline: retain/release
   pairing, no underflow, no double destruction.
 
-## Destruction — `Disposal`
+## Destruction — the `[disposal]` marker
 
-A type opts into destructor code by implementing the core trait
-`Disposal` (see [Rc, dispose, and identity](rc-dispose-identity.md)
-for the trait surface):
+A type opts into destructor code by marking an inherent member
+`[disposal]` (see [Rc, dispose, and identity](rc-dispose-identity.md)
+for the marker's surface — the name is free, the bracket designates):
 
 ```rut
-use core::{ Disposal, DisposalContext };
+use core::{ DisposalContext };
 use ink::{ Logger };
 
 struct Audit { log: Logger; n: i32; }
 
-impl Disposal for Audit {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Audit {
+    [disposal] fn release(mut self, cx: DisposalContext) {
         self.log.info(f"released {self.n} octets");
     }
 }
@@ -81,7 +81,7 @@ Laws:
 
 - The engine calls `dispose(mut self, cx: DisposalContext)` exactly
   once per cell death — when the strong count reaches zero. Types
-  without a `Disposal` impl release straight to the field walk.
+  without a `[disposal]` member release straight to the field walk.
 - The call runs **at a call boundary**, not re-entrantly inside the
   release: death pins the cell and queues it, and the interpreter
   drains the queue at its call boundaries — the root call's end for
@@ -106,7 +106,7 @@ When a cell's strong count reaches zero:
    runs** — a dispose body that calls `upgrade()` sees `nil`,
    deterministically ([weak references](weak-refs.md)).
 2. The type's queued `dispose` body runs for cells whose type
-   implements `Disposal` (pinned cell, then released).
+   carries a `[disposal]` member (pinned cell, then released).
 3. Ref-typed children are released **recursively**: record fields in
    declaration order, sum payloads, array elements, `opaque` box inners,
    closure captures. The walk is driven by a per-type release plan built

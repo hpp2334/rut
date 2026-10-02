@@ -191,6 +191,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // an async body — elsewhere it diagnoses
                 crate::lir::asyncfn::compile_await(self, expr, sp)
             }
+            ExprKind::AsyncBlock { body } => {
+                // the async primitive (v20): mint the frame, answer
+                // `Future<T>`. Legal everywhere — minting is pure; only
+                // `await` needs an async body.
+                crate::lir::asyncfn::compile_async_block(self, body, expected, sp)
+            }
             ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
             ExprKind::Struct { ty, fields } => self.compile_struct(ty, fields, expected, sp),
             ExprKind::ArrayLit { elems } => {

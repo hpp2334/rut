@@ -46,7 +46,7 @@ the rest continue from there.
 arm (see [control flow and when](control-flow.md)). Enums render as
 their member name in format strings. Enums take `impl` blocks —
 non-self methods on the name, `self` methods on a value, and trait
-impls (`impl Iterable<E> for Light` makes `for (let v of l)` walk) —
+impls (a marked `[iterable] fn` makes `for (let v of l)` walk) —
 see [enums](../reference/enums.md).
 
 ## Structs — open records
@@ -159,7 +159,7 @@ A class adds two things to a struct: module-private fields and
 construction gated through class methods. There is no outside literal —
 the only way to build a class value from outside is to call a class
 method that chooses to. (Cleanup hooks are not a class privilege:
-implement `Disposal` for either shape, and the engine calls `dispose`
+mark a `[disposal]` member on either shape, and the engine calls it
 when the value's cell refcount reaches zero — see
 [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)
 

@@ -199,8 +199,10 @@ fn for_of_without_an_impl_names_the_missing_contract() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl Iterable<E> for Count")),
-        "missing iterable impl must diagnose: {ds:?}"
+        ds.iter().any(|d| d.contains("`for (let .. of ..)` needs a sequence")
+            && d.contains("`Count` is not one")
+            && d.contains("marks no `[iterable]` member")),
+        "missing iterable member must diagnose: {ds:?}"
     );
 }
 
@@ -667,15 +669,19 @@ fn enum_inherent_statics_and_self_calls_compile() {
 }
 
 #[test]
-fn enum_iterator_impl_drives_for_break_continue() {
-    // the for-of desugar is the trait: `for (let v of c)` calls the
-    // impl's `iterate` with a synthetic emit closure — `break` returns
-    // false, `continue` returns true — exactly the class semantics
-    let src = "use core::{ Iterable };\n\
-               enum Light { Green, Yellow, Red }\n\
+fn iterable_member_drives_for_break_continue() {
+    // the for-of desugar is the marked member: `for (let v of c)` calls
+    // the impl's `[iterable] fn iterate` with a synthetic emit closure —
+    // `break` returns false, `continue` returns true. (The marker lives
+    // on struct and class impls — an enum's members are immortal
+    // singletons and carry no engine contract, pinned beside the
+    // disposal twin below.)
+    let src = "enum Light { Green, Yellow, Red }\n\
+               class Lights { }\n\
                struct Acc { hits: i32 = 0; }\n\
-               impl Iterable<Light> for Light {\n\
-               \x20   fn iterate(self, emit: fn(Light) -> bool) {\n\
+               impl Lights {\n\
+               \x20   fn new() -> Self { return Self { }; }\n\
+               \x20   [iterable] fn iterate(self, emit: fn(Light) -> bool) {\n\
                \x20       if (!emit(Light.Green)) { return; }\n\
                \x20       if (!emit(Light.Yellow)) { return; }\n\
                \x20       emit(Light.Red);\n\
@@ -685,13 +691,13 @@ fn enum_iterator_impl_drives_for_break_continue() {
                \x20   // the capture law: scalars copy into the emit closure,\n\
                \x20   // so the accumulator is a shared cell\n\
                \x20   let mut acc: ?Acc = Acc { };\n\
-               \x20   for (let v of Light.Green) {\n\
+               \x20   for (let v of Lights.new()) {\n\
                \x20       acc.hits += 1;\n\
                \x20       if (acc.hits == 2) { break; }\n\
                \x20   }\n\
                \x20   if (acc.hits != 2) { return -1; }\n\
                \x20   let mut all: ?Acc = Acc { };\n\
-               \x20   for (let v of Light.Red) {\n\
+               \x20   for (let v of Lights.new()) {\n\
                \x20       all.hits += 1;\n\
                \x20       continue;\n\
                \x20   }\n\
@@ -706,9 +712,8 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
     // enums are concrete: `Light<E>` is a spelled-arity error, and a
     // foreign name keeps the fallthrough diagnosis (now naming enums)
     let ds = diags_of(
-        "use core::{ Iterable };\n\
-         enum Light { Green, Red }\n\
-         impl Iterable<i32> for Light<i32> { fn iterate(self, emit: fn(i32) -> bool) { } }\n\
+        "enum Light { Green, Red }\n\
+         impl Light<i32> { [iterable] fn iterate(self, emit: fn(i32) -> bool) { } }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
@@ -719,16 +724,39 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
 
 #[test]
 fn disposal_stays_data_only_for_enums() {
+    // `[disposal]` refuses an enum target: the engine disposes record
+    // cells only, and an enum's members are immortal singletons.
+    // `[iterable]` is LEGAL on an enum (a value iterates like a
+    // class's — the docs pin it), so the second half drives one.
     let ds = diags_of(
-        "use core::{ Disposal };\n\
+        "use core::{ DisposalContext };\n\
          enum Light { Green, Red }\n\
-         impl Disposal for Light { fn dispose(self) { } }\n\
+         impl Light { [disposal] fn dispose_light(mut self, cx: DisposalContext) { } }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("cannot implement Disposal") && d.contains("only a struct or class")),
+        ds.iter().any(|d| d.contains("cannot carry `[disposal]`")
+            && d.contains("immortal singletons")),
         "the engine disposes record cells only: {ds:?}"
     );
+    // the capture law: the emit closure copies scalars, so the loop
+    // accumulates through a ref-headed cell (the docs' own law)
+    let v = run_main(
+        "class Acc { n: i32 = 0; }\n\
+         enum Light { Green, Red }\n\
+         impl Light {\n\
+             [iterable] fn iterate(self, emit: fn(Light) -> bool) { emit(Light.Green); emit(Light.Red); }\n\
+         }\n\
+         entry fn main() -> i32 {\n\
+             let mut acc: ?Acc = Acc { };\n\
+             for (let l of Light.Red) {\n\
+                 let x = when (l) { Light.Green -> 1, Light.Red -> 2 };\n\
+                 acc.n = acc.n + x;\n\
+             }\n\
+             return acc.n;\n\
+         }\n",
+    );
+    assert_eq!(v, 3, "the enum's marked member drives the for-of");
 }
 
 #[test]

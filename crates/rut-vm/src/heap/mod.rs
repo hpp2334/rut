@@ -517,7 +517,10 @@ impl Heap {
     /// primitive fields copied, handle fields shared.
     pub fn own(&self, s: Slot, ty: TypeId, table: &TypeTable) -> Result<Slot, Trap> {
         match table.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Nil | TyKind::Fn { .. } | TyKind::Opt { .. } => Ok(s),
+            // handles: the slot IS the value (the async future's frame
+            // record is shared, never copied — one future, one state)
+            TyKind::Prim(_) | TyKind::Nil | TyKind::Fn { .. } | TyKind::Opt { .. }
+            | TyKind::Future { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str_bytes(cell.as_bytes().to_vec())

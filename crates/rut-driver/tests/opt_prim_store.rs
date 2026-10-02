@@ -555,8 +555,13 @@ fn version_gate_rejects_stale_artifacts() {
     // against a packaged binary's ledger; v18 adds the exported
     // generic fns' placeholder signatures; v19 withdraws the builder's
     // engine surface (kind tag 15, native-type tag 2, the five
-    // `Nat::StrBuf*` rows — every later nat's tag shifts down)
-    assert_eq!(VERSION, 19, "the builder's engine-surface withdrawal owns this VERSION bump");
+    // `Nat::StrBuf*` rows — every later nat's tag shifts down); v20
+    // kills the `builtin trait` row kind — `Future`/`RunContext` became
+    // CLOSED builtin classes and `Iterable`/`Disposal` the bracket
+    // markers, and the inherent-method surface rows gained the
+    // designated-slot marker byte (a stale v19 artifact misparses the
+    // first marked method row)
+    assert_eq!(VERSION, 20, "the bracket-marker/closed-async-class landing owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

@@ -63,21 +63,20 @@ fn run_loop(vm: &mut Vm, cap: usize) {
 #[test]
 fn select2_answers_the_first_ready() {
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, select2, Either2 };
 
-async fn slow(cx: RunContext, log: opaque) -> str {
+async fn slow(log: opaque) -> str {
     await sleep(500);
     return "slow";
 }
 
-async fn quick(cx: RunContext, log: opaque) -> str {
+async fn quick(log: opaque) -> str {
     await sleep(5);
     return "quick";
 }
 
-async fn raced(cx: RunContext, log: opaque) -> nil {
+async fn raced(log: opaque) -> nil {
     let winner = await select2(slow(log), quick(log));
     if (winner.is_a()) {
         logger_log(log, 2, f"slow: {winner.a_value()}");
@@ -105,16 +104,15 @@ fn select2_types_the_two_sides_distinctly() {
     // `select2<str, nil>`: the timeout side answers nil — the winner's
     // type is the fn signature's Either2<T, U>, no casts anywhere.
     let src = r#"
-use core::{ RunContext };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, select2, Either2 };
 
-async fn fetch(cx: RunContext, log: opaque) -> str {
+async fn fetch(log: opaque) -> str {
     await sleep(500);
     return "payload";
 }
 
-async fn fetch_or_timeout(cx: RunContext, log: opaque) -> nil {
+async fn fetch_or_timeout(log: opaque) -> nil {
     let winner = await select2(fetch(log), sleep(50));
     if (winner.is_a()) {
         logger_log(log, 2, f"got {winner.a_value()}");
@@ -140,7 +138,7 @@ fn select2_cancels_the_loser_through_its_drop_path() {
     // release in reverse binding order, the Disposal hook fires, and
     // the loser's continuation NEVER runs.
     let src = r#"
-use core::{ RunContext, Disposal, DisposalContext };
+use core::{ DisposalContext };
 use ink::{ Logger };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, select2, Either2 };
@@ -148,24 +146,24 @@ use async_host::{ launch_future, sleep, select2, Either2 };
 class Tracked {
     n: i32 = 0;
 }
-impl Disposal for Tracked {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Tracked {
+    [disposal] fn dispose_tracked(mut self, cx: DisposalContext) {
         Logger.new("t").info(f"gone {self.n}");
     }
 }
 
-async fn loser(cx: RunContext, log: opaque, n: i32) -> nil {
+async fn loser(log: opaque, n: i32) -> nil {
     let t = Tracked { n: n };
     await sleep(60_000);
     logger_log(log, 2, "loser finished");   // must never run
 }
 
-async fn winner(cx: RunContext, log: opaque) -> nil {
+async fn winner(log: opaque) -> nil {
     await sleep(5);
     logger_log(log, 2, "won");
 }
 
-async fn raced(cx: RunContext, log: opaque) -> nil {
+async fn raced(log: opaque) -> nil {
     let w = await select2(loser(log, 7), winner(log));
     logger_log(log, 2, "raced done");
 }
@@ -194,7 +192,7 @@ entry fn main() -> nil {
 #[test]
 fn select_all_answers_the_winner_index_and_value() {
     let src = r#"
-use core::{ RunContext, Future, Disposal, DisposalContext };
+use core::{ Future, DisposalContext };
 use ink::{ Logger };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, select_all };
@@ -202,19 +200,19 @@ use async_host::{ launch_future, sleep, select_all };
 class Tracked {
     tag: str;
 }
-impl Disposal for Tracked {
-    fn dispose(mut self, cx: DisposalContext) {
+impl Tracked {
+    [disposal] fn dispose_tracked(mut self, cx: DisposalContext) {
         Logger.new("t").info(f"cancelled {self.tag}");
     }
 }
 
-async fn worker(cx: RunContext, log: opaque, ms: u32, tag: str) -> str {
+async fn worker(log: opaque, ms: u32, tag: str) -> str {
     let t = Tracked { tag: tag };
     await sleep(ms);
     return tag;
 }
 
-async fn raced(cx: RunContext, log: opaque) -> nil {
+async fn raced(log: opaque) -> nil {
     let workers: [Future<str>] = [worker(log, 300, "a"), worker(log, 10, "b"), worker(log, 200, "c")];
     let (i, v) = await select_all(workers);
     logger_log(log, 2, f"winner {i}:{v}");
@@ -245,16 +243,16 @@ fn completer_resolves_a_parked_awaiter() {
     // resolution right settles it from "callback" side; stability on a
     // second resolve (false — already retired).
     let src = r#"
-use core::{ RunContext, Future };
+use core::{ Future };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, completer, Completer };
 
-async fn waiter(cx: RunContext, log: opaque, f: Future<str>) -> nil {
+async fn waiter(log: opaque, f: Future<str>) -> nil {
     let v = await f;
     logger_log(log, 2, f"got {v}");
 }
 
-async fn settle_later(cx: RunContext, log: opaque, done: Completer<str>) -> nil {
+async fn settle_later(log: opaque, done: Completer<str>) -> nil {
     await sleep(10);
     let first = done.resolve("settled");
     let second = done.resolve("again");
@@ -278,11 +276,11 @@ entry fn main() -> nil {
 fn completer_answers_before_the_await() {
     // already-done at the probe: the await falls straight through
     let src = r#"
-use core::{ RunContext, Future };
+use core::{ Future };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, completer };
 
-async fn waiter(cx: RunContext, log: opaque, f: Future<u32>, done: Completer<u32>) -> nil {
+async fn waiter(log: opaque, f: Future<u32>, done: Completer<u32>) -> nil {
     done.resolve(41);
     let v = await f;
     logger_log(log, 2, f"answer {v}");
@@ -305,7 +303,7 @@ fn completer_feeds_a_select_race() {
     // the callback→async composition: a PLAIN fn returning a Future
     // (no async block), raced against a sleep through select2.
     let src = r#"
-use core::{ RunContext, Future };
+use core::{ Future };
 use ink_host::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, select2, completer, Completer, Either2 };
 
@@ -316,12 +314,12 @@ fn fake_fetch(tag: str) -> Future<str> {
     return f;
 }
 
-async fn settle_later(cx: RunContext, done: Completer<str>, tag: str) -> nil {
+async fn settle_later(done: Completer<str>, tag: str) -> nil {
     await sleep(10);
     done.resolve(tag);
 }
 
-async fn fetch_or_timeout(cx: RunContext, log: opaque) -> nil {
+async fn fetch_or_timeout(log: opaque) -> nil {
     let winner = await select2(fake_fetch("payload"), sleep(5_000));
     if (winner.is_a()) {
         logger_log(log, 2, f"got {winner.a_value()}");

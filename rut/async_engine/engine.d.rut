@@ -12,7 +12,7 @@
 //     loop (the queue takes its own reference).
 //   `__abort` — same seal; the body unboxes and flags + re-enqueues.
 //   `__sleep` — the one engine-assisted mint: the body builds the sleep
-//     frame and answers it SEALED under the `Future<nil>` object
+//     frame and answers it SEALED under the `Future<nil>` class
 //     spelling, which is what `sleep`'s `downcast<Future<nil>>`
 //     recovers.
 //   `__sleep_yield` — the sleep future's `Future::yield`: a bodyless
@@ -29,7 +29,7 @@
 //     cancel path `__abort` drives — the LIBRARY's law (a loser must
 //     not keep running), expressed over the engine's existing rows, not
 //     new machinery. The mint crosses back under the
-//     `Future<Either2<A, B>>` object spelling for the wrapper's
+//     `Future<Either2<A, B>>` class spelling for the wrapper's
 //     downcast. Fixed arity is the boundary's law, not a choice: `host
 //     fn` signatures are concrete over the crossing set. When the two
 //     answers already allow it, wider reach composes in rut (see
@@ -41,7 +41,7 @@
 //     through the members' own cancelled paths).
 //   `__completer` — the manually-resolvable future primitive: the body
 //     mints a cold `#frame@completer<T>` and seals it under the
-//     `Future<T>` object spelling; `ty` (a `type_id<T>()` constant) is
+//     `Future<T>` class spelling; `ty` (a `type_id<T>()` constant) is
 //     the linked answer id the seal and frame names derive from.
 //   `__resolve` — the resolution RIGHT's engine half: store the answer,
 //     retire the frame, wake its awaiter — `__abort`-style stability

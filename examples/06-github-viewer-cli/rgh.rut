@@ -10,7 +10,7 @@
 //   rgh --repo=owner/name --ref=<tag|branch|sha> list
 //   rgh --repo=owner/name --ref=<tag|branch|sha> download <repo-path> [<dest>]
 //
-// THE ASYNC SHAPE: the brain is an async free fn (`rgh_main(cx, args)
+// THE ASYNC SHAPE: the brain is an async free fn (`rgh_main(args)
 // -> i32`); the host's `boot` entry launches it (`launch_future`) and
 // pumps the driving loop to idle, then exits with the code the
 // `exit` row carried out. The fetch sites await — `send` resolves at
@@ -25,7 +25,6 @@
 // crosses a `rgh_host` row, and every byte that enters (the HTTP
 // bodies) crosses the std `rut/http` lane.
 
-use core::{ RunContext };
 use pouch::{ Vec };
 use json::{
     DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonDeserialize,
@@ -354,16 +353,16 @@ fn map_response(resp: Response, notfound: str, host: str) -> ?str {
 
 // the list: send resolves at HEADERS; the tree JSON drains in ONE body
 // await (the one-shot lane)
-async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
+async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
     if (err != nil) {
         let why: str = err;
         eprint(why);
         return 1;
     }
-    let (tree, e) = decode_root_bytes<Root>(await resp.body(cx));
+    let (tree, e) = decode_root_bytes<Root>(await resp.body());
     if (e != nil) {
         let why: DecodeJsonError = e;
         eprint(f"rgh: the CDN's tree JSON did not parse at {why.at}: expected {why.expected}");
@@ -383,9 +382,9 @@ async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: 
 // stream CHUNK BY CHUNK — bounded memory end to end — and every chunk
 // lands through the sync `append_file` row. A mid-read wire death is
 // DATA (the stream's nil + the sticky error), never a trap.
-async fn do_download(cx: RunContext, client: HttpClient, owner: str, repo: str, rf: str, path: str, dest: str) -> i32 {
+async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: str, dest: str) -> i32 {
     let url = f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{rf}/{path}";
-    let resp = await client.get(url).build().send(cx);
+    let resp = await client.get(url).build().send();
     let err = map_response(resp, "no such file (or repo/ref)", "cdn.jsdelivr.net");
     if (err != nil) {
         let why: str = err;
@@ -403,7 +402,7 @@ async fn do_download(cx: RunContext, client: HttpClient, owner: str, repo: str, 
     let stream = resp.byte_stream();
     let mut total: i32 = 0;
     while (true) {
-        let c = await stream.next(cx);
+        let c = await stream.next();
         if (c == nil) {
             // EOF — or a mid-read failure? the sticky error names it
             let rerr = stream.error();
@@ -432,7 +431,7 @@ async fn do_download(cx: RunContext, client: HttpClient, owner: str, repo: str, 
 // the argv carve + the dispatch — every return value an i32, exactly
 // the pre-async discipline (usage surface, URL building, JSON decode,
 // formatting unchanged)
-async fn rgh_run(cx: RunContext, args: str) -> i32 {
+async fn rgh_run(args: str) -> i32 {
     let argv = split_argv(args);
     let argc = argv.len();
 
@@ -498,7 +497,7 @@ async fn rgh_run(cx: RunContext, args: str) -> i32 {
 // the `-> i32` discipline (in the embedder the row NEVER RETURNS — the
 // process exits with the code; in the test lane it records and the
 // brain retires so the driving loop reaches idle)
-async fn rgh_main(cx: RunContext, args: str) -> i32 {
+async fn rgh_main(args: str) -> i32 {
     let code = await rgh_run(args);
     exit(code);
     return code;

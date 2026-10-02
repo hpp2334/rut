@@ -1,7 +1,10 @@
 // core/core.d.rut — the prelude surface: what the language
 // itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
-// lowered fns, and the engine-woven traits `Iterable` and `Disposal`
-// (the `Index` contract is gone, v1.1). The array `[T]` is pure
+// lowered fns, and the closed async classes `Future` and `RunContext`
+// (the engine-contract `builtin trait` rows are gone: `Iterable` and
+// `Disposal` are the bracket markers now — `[iterable] fn` /
+// `[disposal] fn` on inherent impl members; the `Index` contract is
+// gone, v1.1). The array `[T]` is pure
 // grammar — no decl carries it.
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
@@ -265,89 +268,97 @@ prelude builtin impl u64 {
 // `use core::{NAN}`. The float constants (`PI`, `E`, `INFINITY`, …)
 // stay `calc`'s.
 
-// ---- engine-woven traits ----
-// `builtin trait` = the engine has built-in knowledge: compiler-
-// backed impls and lowering hooks. Users implement them with ordinary
-// `impl` blocks. Library contracts without engine knowledge (a
-// package's own trait — e.g. an encoding contract for map keys) stay
-// plain `trait`. Every trait here is `pub builtin` (the import-gated
-// spelling): the engine weaves on the native-trait symbols — only
-// source that SPELLS a trait name resolves it, through
-// `use core::{ .. }`.
+// ---- engine contracts ----
+// The engine's contracts are SPELLINGS ON TYPES now (no `builtin
+// trait` rows): the bracket markers `[disposal]` and `[iterable]`
+// designate an inherent impl member (one per contract per class, the
+// signature checked against the contract), and the closed `builtin
+// class` pair below carries the async protocol. Library contracts
+// without engine knowledge (a package's own trait — e.g. an encoding
+// contract for map keys) stay plain `trait`.
 
-// v1.1 removed `Index` from the prelude: indexing is builtin over
-// `[T]`/`Vec`/`str`/`bytes`. `Disposal` is BACK — registered again as
-// the cell-death contract: the engine pins a cell whose type
-// implements `Disposal` when its strong count reaches zero (weak boxes
-// null first) and runs `dispose(self, cx)` at the next call boundary;
-// the fields release after it returns. Library contracts without
-// engine knowledge (`Hashable`) stay plain `trait` in their module.
-
-// The iteration protocol. A type is iterable when it declares this
-// member (duck-typed satisfaction); `for (x of it)` desugars to
-// `it.iterate(emit)` — the loop variable is ONE variable reassigned per
-// iteration, and captures follow the language's capture law (scalars
-// copy; ref-headed bindings share their slot): `emit`
-// returning `false` stops the iteration (a `break`). `pub builtin`
-// (the import-gated spelling): the builtin sequences (`[T]`, `Vec`,
-// `str`, `bytes`) keep their fused loops and never name the trait —
-// only source that SPELLS `Iterable` (an `impl Iterable<E> for T`, a
-// trait-typed parameter) resolves it, through `use core::{ Iterable }`.
-pub builtin trait Iterable<E> {
-    fn iterate(self, emit: fn(E) -> bool);
-}
-
-// The async protocol, the Future-only vocabulary. Two engine-named
-// traits, user-open (ordinary `impl` blocks register through the same
-// path as `Iterable` impls). Both are `pub builtin` (the import-gated
-// spelling): the ENGINE weaves without them — every `async fn`'s
-// hidden frame gets its `impl Future<T>` and every drive mints the cx
-// record internally, keyed on the native-trait symbols, never on
-// user-scope resolution. Source that SPELLS the names resolves them
-// only through `use core::{ Future }` / `use core::{ RunContext }`:
-// a user `impl Future<T> for ..`, a launcher's `f: Future<T>`
-// parameter, `downcast<Future<..>>`, `cx: RunContext` in a yield
-// signature or an `async fn` head.
+// The iteration protocol. A type is iterable when an inherent impl
+// marks a member `[iterable]`; `for (x of it)` calls that ONE
+// designated member — `it.<member>(emit)` — the loop variable is ONE
+// variable reassigned per iteration, and captures follow the
+// language's capture law (scalars copy; ref-headed bindings share
+// their slot): `emit` returning `false` stops the iteration (a
+// `break`). The contract's shape: `fn <free>(self, emit: fn(E) ->
+// bool)` — the element type E falls out of the marked member's own
+// signature, and the member's name is free (the bracket designates).
+// The builtin sequences (`[T]`, `Vec`, `str`, `bytes`) keep their
+// fused loops and never mark a member.
 //
-// `Future<T>` — a cold, once-drivable computation. The engine weaves
-// `impl Future<T>` for every `async fn`'s hidden frame type; user
-// impls are launcher-drivable the same way. The driven half is ONE
-// member: `yield(cx)` — poll the frame once at its checkpoint. The
-// cx is receiver-like at async call sites: the engine mints it, the
-// way it mints `self`.
+//   impl Rows {
+//       [iterable] pub fn iterate(self, emit: fn(Row) -> bool) { .. }
+//   }
+//   for (let r of rows) { .. }
+
+// The cell-death contract. An inherent impl marks a member
+// `[disposal]`; the engine calls it when a value of the type reaches
+// refcount zero (weak boxes null first, fields release after it
+// returns) at the next call boundary. The contract's shape: `fn
+// <free>(mut self, cx: DisposalContext)` — the NAME IS FREE
+// (designation by bracket, never by spelling), `mut self` first, the
+// engine-minted context second, nil answered.
 //
-// `RunContext` — the cx protocol: `checkpoint` reads this frame's
-// resume state, `next_checkpoint` records the next one (the `mut`
-// receiver writes), `cancelled` reads the task's abort flag. The
-// members lower as inline field ops on the engine-minted cx record —
+//   impl Db {
+//       [disposal] fn dispose_db(mut self, cx: DisposalContext) { .. }
+//   }
+
+// The async protocol, the Future-only vocabulary — TWO CLOSED builtin
+// classes (v20: the `builtin trait` pair is gone). Both are `pub
+// builtin` (the import-gated spelling): the ENGINE weaves without
+// them — every async producer's frame mints keyed on the engine
+// symbols, never on user-scope resolution. Source that SPELLS the
+// names resolves them only through `use core::{ Future }` / `use
+// core::{ RunContext }`: a launcher's `f: Future<T>` parameter,
+// `downcast<Future<..>>`, a `cx` probe in an async body.
+//
+// `Future<T>` — a cold, once-drivable computation, and the ONE type
+// every async producer answers: an `async fn` call, an `async { }`
+// block, `sleep`, `select2`, `completer` — all `Future<..>`, so
+// `await`/`select2`/`launch_future` never ask "which kind". CLOSED:
+// no constructor, no impl lane, no user-callable members — a user
+// type cannot BE a Future (the walls are the point: structural
+// satisfaction cannot see engine identity, so nominal closure is the
+// only spelling of "engine-minted only"). The hidden frame is
+// representation; the handle is the surface.
+//
+// `async fn` is genuine sugar over the async BLOCK — both sides are
+// writable programs:
+//
+//     async fn work() -> nil { BODY }
+//     // ≡
+//     fn work() -> Future<nil> {
+//         return async { BODY };
+//     }
+//
+// `async { .. }` is the primitive: one expression form, evaluated
+// where it stands (the mint is pure — the frame runs when driven).
+// Its captures read by value at the mint (the capture law); its
+// `return` answers the FUTURE, not any enclosing fn.
+//
+// `RunContext` — the cx protocol: the weave INJECTS the binding `cx`
+// into every async body (an `async fn`'s parameters are ordinary
+// values — a spelled cx is gone). `checkpoint()` reads this frame's
+// resume state, `cancelled()` reads the task's abort flag. The
+// members lower as inline field ops on the engine-minted record —
 // the frozen surface is this signature set, nothing more.
 //
-// v1 awaiting targets engine-woven futures (async-fn results and
-// `sleep`); user impls drive through launchers — join lands later.
 // `launch_future` / `LaunchedFutureHandle` / `sleep` are HOST surface
 // (the embedder's standard set), never core: users may write their own
-// launchers over this same Future surface.
-pub builtin trait Future<T> {
-    fn yield(cx: RunContext);
+// launchers over this same `Future` surface.
+pub builtin class Future<T> {
 }
 
-pub builtin trait RunContext {
+pub builtin class RunContext {
     fn checkpoint(self) -> u32;
-    fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;
 }
 
-// The cell-death contract: the engine calls `dispose` when a value of
-// an implementing type reaches refcount zero — weak boxes null first,
-// fields release after it returns. `pub builtin` (the import-gated
-// spelling): the trait resolves through `use core::{Disposal}`; users
-// implement it with an ordinary `impl` block.
-pub builtin trait Disposal {
-    fn dispose(mut self, cx: DisposalContext);
-}
-
-// engine-minted, one per dispose call; no members yet — the
+// engine-minted, one per `[disposal]` call; no members — the
 // parameter exists so the context grows without touching the
-// trait signature
+// marker's signature
 pub builtin class DisposalContext {
 }
