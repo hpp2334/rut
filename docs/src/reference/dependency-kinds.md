@@ -117,7 +117,7 @@ this CDN — that is the recommended import for everything the toolchain
 ships. A `path` row is for **your own local packages**: a sibling
 directory in the same project (the modules tutorial's `greet` app
 mounting `../pkg` is the shape). The tag advances with format changes
-(`std-v3` today) and is never re-pointed, so a pin at a tag stays
+(`std-v5` today) and is never re-pointed, so a pin at a tag stays
 honest forever.
 
 The std tree ships as committed per-package bundles —

@@ -102,6 +102,8 @@ MECH = [
     (re.compile(r'format_version 7\b'), 'format_version 9'),
     (re.compile(r'format_version 8\b'), 'format_version 10'),
     (re.compile(r'\bIterator\b'), 'Iterable'),
+    # the std-v5 publish: the book's pin rows ride the new tag spelling
+    (re.compile(r'\bstd-v3\b'), 'std-v5'),
 ]
 
 

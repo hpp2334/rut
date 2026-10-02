@@ -104,7 +104,7 @@ greet/
 
   "deps": {
     // the toolchain's pouch package, from jsDelivr — pinned by sha256
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "21631babbe379a01ac9d2f334ae6713300d0d979feee8823dbebedc21e7ec8f0" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/pouch.rutbundle", "sha256": "3ceedd188659972ff6c797289e57e9fc9a686da9ea55f49ceb28ce4127c6ac80" }
   }
 }
 ```
@@ -155,7 +155,7 @@ surface `ink_host`; you never spell it):
     // your own package: a sibling directory
     "greet": { "path": "../pkg" },
     // the toolchain's ink package, from jsDelivr — pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
   }
 }
 ```
