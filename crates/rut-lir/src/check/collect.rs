@@ -162,6 +162,12 @@ impl<'a> Ctx<'a> {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
+        // the positional spelling rides the decl — the call
+        // construction's arming flag (structs and braced classes: false)
+        let newtype = matches!(
+            self.ast.item(rut_ast::ast::NodeHandle::new(node)),
+            ItemKind::Class { newtype: true, .. }
+        );
         // the instantiation ledger's owner anchor: this decl's bodies
         // live in this unit — every decl's origin IS its module (no
         // source crosses a boundary)
@@ -187,6 +193,7 @@ impl<'a> Ctx<'a> {
                 methods: mths,
                 generics: generics.to_vec(),
                 requires: requires.to_vec(),
+                newtype,
             },
         ));
     }

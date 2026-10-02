@@ -56,6 +56,9 @@ source text by design; a partially translated book is a valid book.
 | struct | 结构体 | `struct` keyword in code stays |
 | enum | 枚举 | `enum` keyword in code stays |
 | class | 类 | `class` keyword in code stays |
+| newtype | 新类型 | the positional one-field wrapper decl（`class Name(Wrapped);` stays code）；首次出现标注英文 newtype |
+| wrapper | 包装器 | the wrapper family → 包装器家族；wrapped type → 被包装的类型 |
+| satisfaction | 满足 | structural satisfaction → 结构化满足（interfaces 语境；能力"够得着/够不着"以满足为准） |
 | destructor | 析构器 | drop → 保留 drop（drop path → drop 路径） |
 | weak reference | 弱引用 | |
 | cycle | 循环引用 | the cycle collector → 循环收集器 |

@@ -117,6 +117,11 @@ pub struct SurfaceType {
     /// the generic parameters in declaration order — the positional key
     /// a consumer's `Vec<i64>` spells its arguments against
     pub params: Vec<IdentId>,
+    /// the positional one-field decl (`class Name(Wrapped);`): the
+    /// newtype spelling. The flag IS the constructor's crossing paper —
+    /// a consumer's `Name(x)` call construction checks it (a fact about
+    /// the nominal class, never a field-count guess).
+    pub newtype: bool,
     /// the id's scope: `None` — the exporter's own scope (ordinary rows);
     /// `Some(s)` — an explicit one. A transparent alias to a BOOT type
     /// (`pub type Meters = i64;`) points at the shared boot
@@ -996,6 +1001,7 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u32(t.local);
         e.u8(t.is_class as u8);
         e.u8(t.is_generic as u8);
+        e.u8(t.newtype as u8);
         e.u32(t.params.len() as u32);
         for p in &t.params {
             e.u32(p.0);
@@ -1456,13 +1462,14 @@ fn decode_surface(
         let local = d.u32()?;
         let is_class = d.u8()? != 0;
         let is_generic = d.u8()? != 0;
+        let newtype = d.u8()? != 0;
         let nparams = d.u32()? as usize;
         let mut params = Vec::with_capacity(nparams);
         for _ in 0..nparams {
             params.push(name(d)?);
         }
         let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
-        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, params, scope });
+        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, newtype, params, scope });
     }
     // exported generic fns
     let n = d.u32()? as usize;
@@ -2189,6 +2196,7 @@ mod tests {
             local: 0,
             is_class: false,
             is_generic: false,
+            newtype: false,
             params: Vec::new(),
             scope: None,
         });

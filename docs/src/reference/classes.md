@@ -76,6 +76,60 @@ area=9
   `await`: the `Self { .. }` literal is an ordinary expression, and
   locals live in the coroutine frame.
 
+## Newtypes: the one-field wrapper
+
+`class Name(Wrapped);` — the positional one-field decl. It IS an
+ordinary class: exactly one field, `inner`, of the wrapped type. The
+positional spelling additionally provides the constructor — the call
+form `Name(value)`:
+
+```rut
+class JsonI64(i64);              // the wrapper family — one per wrapped
+class JsonI32(i32);              // type, each with its own body
+class JsonF64(f64);
+impl JsonI64 {
+    pub fn encode(mut self, w: JsonWriter) -> nil { w.int(self.inner); }
+}
+
+dump(JsonI64(64));               // manufacture at the boundary
+```
+
+- **The wrapped type is unrestricted** — primitives, composites,
+  tuples, fn types, another module's class: `class Opt(?i64);`,
+  `class Pair((i32, str));`, `class Cb(fn(i32) -> str);` are all legal.
+  The wrapped position is a FIELD type, never an impl target — that is
+  the point. A wrapper is how a primitive or a third-party type gains a
+  capability satisfaction can't reach: declare the wrapper, implement
+  on it, hand the wrapper across the boundary.
+- **No auto-insertion, ever.** `dump(64)` is an error forever; the
+  capability exists exactly where the constructor is spelled. And no
+  implicit forwarding: the wrapper exposes exactly its own members —
+  `inner` (the ordinary field, ordinary visibility) and its `impl`
+  methods.
+- **The naming law**: wrappers are named for what they wrap (`JsonI64`,
+  never `JsonExt`). Per-type wrappers with type-specific bodies when
+  the bodies differ; a generic wrapper covers the uniform cases:
+  `class DebugWrap<T>(T);`.
+- **The generic instantiation law**: a binder is determined by the
+  wrapped argument when it appears there (`class Tail<T>([T]);` →
+  `Tail([1, 2])` is a `Tail<i32>`), or by explicit type arguments at
+  the constructor (`Converter<i32>("64")` — `class Converter<T>(str);`
+  cannot infer, the binder is not in `str`). If any binder is
+  undetermined, the call spells ALL binders — all-or-nothing:
+  `class Pair<A, B>(i32);` accepts `Pair<i32, str>(7)`, never
+  `Pair<i32>(7)`.
+- **The third-party adapter** (the orphan case, dissolved):
+  `class TheirJson(TheirType);` plus an inherent `encode` hands THEIR
+  type the capability — consumers manufacture `TheirJson(x)` from their
+  own modules; the newtype flag rides the class's surface row like the
+  class itself does.
+- A braced class — even one with a single `inner` field — has no call
+  construction. The positional spelling is what provides the
+  constructor; everything else stays sealed.
+
+At runtime the construction mints a real cell: the wrapper is a value
+like every class.
+
 ## Methods: explicit `self`
 
 - **The receiver is explicit.** An instance method spells its receiver

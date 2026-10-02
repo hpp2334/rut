@@ -131,8 +131,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
                 "Struct"
             }
-            ItemKind::Class { vis, name, generics, requires, fields: fs, methods } => {
+            ItemKind::Class { vis, name, generics, requires, newtype, fields: fs, methods } => {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
+                if *newtype {
+                    fields.push(field("newtype", DumpVal::Flag(true)));
+                }
                 if !requires.is_empty() {
                     fields.push(field(
                         "bounds",

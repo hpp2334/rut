@@ -716,13 +716,24 @@ impl<'a> P<'a> {
                 self.ty_decl(name, &generics, &Vec::new());
                 self.body_of_fields_methods(fields, methods, Some(span));
             }
-            ItemKind::Class { vis, name, generics, requires, fields, methods } => {
+            ItemKind::Class { vis, name, generics, requires, newtype, fields, methods } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("class ");
                 self.ty_decl(name, &generics, &requires);
+                // the positional one-field decl prints back in its
+                // spelling — never as the desugared braced body
+                if newtype {
+                    if let Some(f) = fields.first() {
+                        let d = self.a.field_decl(*f);
+                        self.text("(");
+                        self.ty(d.ty);
+                        self.text(");");
+                        return;
+                    }
+                }
                 self.body_of_fields_methods(fields, methods, Some(span));
             }
             ItemKind::Trait { vis, name, generics, requires, methods } => {

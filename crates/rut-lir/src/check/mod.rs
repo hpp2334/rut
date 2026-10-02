@@ -54,6 +54,10 @@ pub struct DataDecl {
     /// union); checked at every
     /// `mk_data_inst`. Empty for structs and for classes without bounds.
     pub requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    /// the positional one-field decl (`class JsonI64(i64);`): the flag
+    /// that arms the call construction `JsonI64(64)` — the spelled
+    /// constructor. A braced class never gets one (the seal holds).
+    pub newtype: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -105,6 +109,9 @@ pub struct ExternGeneric {
     pub template: TypeId,
     /// `class` — no outside record literal
     pub is_class: bool,
+    /// the positional one-field decl — the call construction's flag,
+    /// crossed on the surface row (a fact about the nominal class)
+    pub newtype: bool,
 }
 
 /// One consumer request routed to a declaring package's compile: an
@@ -306,6 +313,11 @@ pub struct Ctx<'a> {
     pub extern_types: std::collections::HashMap<IdentId, TypeId>,
     /// used types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
+    /// used types spelled `class Name(Wrapped);` — the call
+    /// construction's arming set, keyed by the bound NAME (the
+    /// construction site has the name, and the flag is the nominal
+    /// class's, not the row's)
+    pub extern_newtypes: std::collections::HashSet<IdentId>,
     /// used core builtin containers: name -> constructor.
     /// The prelude is used, never ambient — `Array`/`Opaque` resolve
     /// only through this map
@@ -615,6 +627,7 @@ impl<'a> Ctx<'a> {
             extern_consts: std::collections::HashMap::new(),
             extern_types: std::collections::HashMap::new(),
             extern_classes: std::collections::HashSet::new(),
+            extern_newtypes: std::collections::HashSet::new(),
             extern_native_types: std::collections::HashMap::new(),
             extern_traits: std::collections::HashMap::new(),
             extern_trait_decls: std::collections::HashMap::new(),

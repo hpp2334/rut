@@ -339,6 +339,13 @@ pub enum ItemKind {
         /// none). Gates which instantiations compile — no method calls
         /// on the bare parameter.
         requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
+        /// the positional one-field decl (`class JsonI64(i64);`): the
+        /// newtype spelling. The field list is the DESUGARED shape —
+        /// exactly one `inner` field of the wrapped type — and the flag
+        /// is what arms the call construction `JsonI64(64)` (the
+        /// compiler-provided constructor; a braced class never gets one,
+        /// so the seal holds).
+        newtype: bool,
         fields: Vec<NodeHandle<FieldDeclNode>>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },

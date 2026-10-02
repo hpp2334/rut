@@ -72,10 +72,13 @@ impl<'a> Ctx<'a> {
     }
 
     /// Bind a used type name to the exporter's scope-qualified id.
-    pub fn add_extern_type(&mut self, name: IdentId, ty: TypeId, is_class: bool) {
+    pub fn add_extern_type(&mut self, name: IdentId, ty: TypeId, is_class: bool, newtype: bool) {
         self.extern_types.insert(name, ty);
         if is_class {
             self.extern_classes.insert(ty);
+        }
+        if newtype {
+            self.extern_newtypes.insert(name);
         }
     }
 
@@ -91,12 +94,15 @@ impl<'a> Ctx<'a> {
         params: Vec<IdentId>,
         template: TypeId,
         is_class: bool,
+        newtype: bool,
     ) {
         self.decl_owner.insert(name, owner.clone());
-        
+        if newtype {
+            self.extern_newtypes.insert(name);
+        }
         self.extern_generics.insert(
             name,
-            ExternGeneric { owner, params, template, is_class },
+            ExternGeneric { owner, params, template, is_class, newtype },
         );
     }
 

@@ -355,12 +355,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
             return Err(());
         }
-        if self.ctx.find_data(name).is_some() {
+        if let Some(d) = self.ctx.find_data(name).cloned() {
+            // the newtype decl's call construction — `JsonI64(64)`: the
+            // spelled constructor, the manufacture mechanism. An
+            // ordinary (braced) class still diagnoses: the seal holds.
+            if d.newtype {
+                return self.compile_newtype_ctor(name, &d, generics, args, expected, sp);
+            }
             self.ctx.err(sp, format!(
                 "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}`",
                 self.ctx.name(name), self.ctx.name(name)
             ));
             return Err(());
+        }
+        // a USED newtype class — the surface row's flag arms the same
+        // construction at a distance (the third-party adapter: the
+        // consumer manufactures the wrapper over the foreign value)
+        if self.ctx.extern_newtypes.contains(&name) {
+            return self.compile_extern_newtype_ctor(name, generics, args, expected, sp);
         }
         let msg = self
             .ctx

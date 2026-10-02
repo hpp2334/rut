@@ -10052,13 +10052,16 @@ msgstr ""
 msgid ""
 "**Construction is a method call, never a type-call.** User classes construct "
 "through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, "
-"`Version.parse(s)` — see [Classes and constructors](classes.md). Only "
-"builtin surfaces keep call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat "
+"`Version.parse(s)` — see [Classes and constructors](classes.md). The one "
+"exception is the newtype decl's own constructor: `class JsonI64(i64);` "
+"constructs as the call `JsonI64(64)` (see "
+"[Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin "
+"surfaces keep other call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat "
 "`[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic "
 "types](builtin-generic-types.md))."
 msgstr ""
 
-#: src/reference/lexical-structure.md:98
+#: src/reference/lexical-structure.md:101
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the "
 "compiler attaches no semantics to it."
@@ -12090,10 +12093,92 @@ msgid ""
 msgstr ""
 
 #: src/reference/classes.md:79
-msgid "Methods: explicit `self`"
+msgid "Newtypes: the one-field wrapper"
 msgstr ""
 
 #: src/reference/classes.md:81
+msgid ""
+"`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary "
+"class: exactly one field, `inner`, of the wrapped type. The positional "
+"spelling additionally provides the constructor — the call form `Name(value)`:"
+msgstr ""
+
+#: src/reference/classes.md:86
+msgid ""
+"```rut\n"
+"class JsonI64(i64);              // the wrapper family — one per wrapped\n"
+"class JsonI32(i32);              // type, each with its own body\n"
+"class JsonF64(f64);\n"
+"impl JsonI64 {\n"
+"    pub fn encode(mut self, w: JsonWriter) -> nil { w.int(self.inner); }\n"
+"}\n"
+"\n"
+"dump(JsonI64(64));               // manufacture at the boundary\n"
+"```"
+msgstr ""
+
+#: src/reference/classes.md:97
+msgid ""
+"**The wrapped type is unrestricted** — primitives, composites, tuples, fn "
+"types, another module's class: `class Opt(?i64);`, `class Pair((i32, "
+"str));`, `class Cb(fn(i32) -> str);` are all legal. The wrapped position is "
+"a FIELD type, never an impl target — that is the point. A wrapper is how a "
+"primitive or a third-party type gains a capability satisfaction can't reach: "
+"declare the wrapper, implement on it, hand the wrapper across the boundary."
+msgstr ""
+
+#: src/reference/classes.md:104
+msgid ""
+"**No auto-insertion, ever.** `dump(64)` is an error forever; the capability "
+"exists exactly where the constructor is spelled. And no implicit forwarding: "
+"the wrapper exposes exactly its own members — `inner` (the ordinary field, "
+"ordinary visibility) and its `impl` methods."
+msgstr ""
+
+#: src/reference/classes.md:109
+msgid ""
+"**The naming law**: wrappers are named for what they wrap (`JsonI64`, never "
+"`JsonExt`). Per-type wrappers with type-specific bodies when the bodies "
+"differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
+msgstr ""
+
+#: src/reference/classes.md:113
+msgid ""
+"**The generic instantiation law**: a binder is determined by the wrapped "
+"argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a "
+"`Tail<i32>`), or by explicit type arguments at the constructor "
+"(`Converter<i32>(\"64\")` — `class Converter<T>(str);` cannot infer, the "
+"binder is not in `str`). If any binder is undetermined, the call spells ALL "
+"binders — all-or-nothing: `class Pair<A, B>(i32);` accepts `Pair<i32, "
+"str>(7)`, never `Pair<i32>(7)`."
+msgstr ""
+
+#: src/reference/classes.md:121
+msgid ""
+"**The third-party adapter** (the orphan case, dissolved): `class "
+"TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the "
+"capability — consumers manufacture `TheirJson(x)` from their own modules; "
+"the newtype flag rides the class's surface row like the class itself does."
+msgstr ""
+
+#: src/reference/classes.md:126
+msgid ""
+"A braced class — even one with a single `inner` field — has no call "
+"construction. The positional spelling is what provides the constructor; "
+"everything else stays sealed."
+msgstr ""
+
+#: src/reference/classes.md:130
+msgid ""
+"At runtime the construction mints a real cell: the wrapper is a value like "
+"every class."
+msgstr ""
+
+#: src/reference/classes.md:133
+msgid "Methods: explicit `self`"
+msgstr ""
+
+#: src/reference/classes.md:135
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the "
 "first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields "
@@ -12101,7 +12186,7 @@ msgid ""
 "`let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/classes.md:86
+#: src/reference/classes.md:140
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on "
 "the class itself (`Rect.new(..)`, `Self.new(..)` inside the body). Presence "
@@ -12109,23 +12194,23 @@ msgid ""
 "functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:145
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes "
 "an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr ""
 
-#: src/reference/classes.md:94
+#: src/reference/classes.md:148
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, "
 "with the same visibility forms as fields."
 msgstr ""
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:151
 msgid "Member visibility"
 msgstr ""
 
-#: src/reference/classes.md:99
+#: src/reference/classes.md:153
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and "
 "visibility](modules-and-visibility.md)): an unannotated field or method is "
@@ -12135,11 +12220,11 @@ msgid ""
 "its module."
 msgstr ""
 
-#: src/reference/classes.md:106
+#: src/reference/classes.md:160
 msgid "Reference semantics and equality"
 msgstr ""
 
-#: src/reference/classes.md:108
+#: src/reference/classes.md:162
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see "
 "[By-reference and nullable](by-reference-and-nullable.md)): assignment "
@@ -12147,31 +12232,31 @@ msgid ""
 "field-wise comparison is an opted-in trait contract."
 msgstr ""
 
-#: src/reference/classes.md:113
+#: src/reference/classes.md:167
 msgid ""
 "Reflection is opt-in: a class is walkable only where a serialization "
 "contract has been implemented for it by hand; structs are the open, "
 "auto-walkable records."
 msgstr ""
 
-#: src/reference/classes.md:117
+#: src/reference/classes.md:171
 msgid "No inheritance"
 msgstr ""
 
-#: src/reference/classes.md:119
+#: src/reference/classes.md:173
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no "
 "method overriding, no `super.m()`, no `protected`."
 msgstr ""
 
-#: src/reference/classes.md:121
+#: src/reference/classes.md:175
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or "
 "free functions; subtyping is only class→trait widening (see [Traits and "
 "dispatch](traits.md))."
 msgstr ""
 
-#: src/reference/classes.md:124
+#: src/reference/classes.md:178
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell "
 "payload (see [Reified types and layout](reified-types.md)) — no prefix "

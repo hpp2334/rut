@@ -441,6 +441,9 @@ pub(crate) struct TyDeclFrame {
 #[derive(Clone, Copy)]
 enum TdStage {
     GenBound,
+    /// the wrapped type of the positional decl (`class Name(Ty);`) —
+    /// a child Type frame
+    NewtypeTy,
     Body,
 }
 
@@ -475,10 +478,25 @@ impl TyDeclFrame {
                 return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
             }
         }
-        self.push_body()
+        self.push_body(p)
     }
 
-    fn push_body(&mut self) -> Step {
+    fn push_body(&mut self, p: &mut Parser) -> Step {
+        // the positional one-field form — `class Name(Wrapped);` — the
+        // newtype decl: the manufacture mechanism for everything
+        // satisfaction can't reach. Classes only (a struct head has no
+        // positional form); the wrapped type is a child Type frame and
+        // absorb builds the desugared one-field class.
+        if self.is_class && matches!(p.tok(), Tok::LParen) {
+            p.bump(); // (
+            if p.eat_punct(Tok::RParen) {
+                p.err_here("a newtype class wraps exactly one type — `class Name(Wrapped);`");
+                p.sync_item();
+                return Step::Pop(Done::Failed);
+            }
+            self.stage = TdStage::NewtypeTy;
+            return Step::Push(Frame::Type(TypeFrame::new(p)));
+        }
         self.stage = TdStage::Body;
         Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Class {
             allow_pub: self.is_class,
@@ -497,9 +515,52 @@ impl TyDeclFrame {
                     self.pending = Some(g);
                     return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
                 }
-                self.push_body()
+                self.push_body(p)
             }
             (TdStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
+            (TdStage::NewtypeTy, Done::Ty(t)) => {
+                // `class Foo(Bar);` ≡ `class Foo { inner: Bar }` plus the
+                // compiler-provided constructor `Foo(x)` — the desugar
+                // happens HERE, as one synthesized field, so every
+                // downstream machine (template fields, layout, the
+                // instance literal, the LSP) treats the wrapper as the
+                // ordinary class it is. The positional spelling is the
+                // only new surface; `newtype: true` arms the call
+                // construction at the checker.
+                p.expect(Tok::RParen);
+                if p.eat_punct(Tok::LBrace) {
+                    p.err_here("a newtype class has no body — the wrapped type is the one field; methods live in `impl` blocks");
+                    p.sync_item();
+                    return Step::Pop(Done::Failed);
+                }
+                p.expect(Tok::Semi);
+                let inner = p.interner.intern("inner");
+                let ty_span = p.nodes[t.id().0 as usize].span;
+                let field = p.field_decl(
+                    FieldDeclData {
+                        vis: None,
+                        is_static: false,
+                        name: inner,
+                        ty: t,
+                        init: None,
+                    },
+                    ty_span,
+                );
+                let node = p.item(
+                    ItemKind::Class {
+                        vis: self.vis,
+                        name: self.name,
+                        generics: std::mem::take(&mut self.generics),
+                        requires: std::mem::take(&mut self.requires),
+                        newtype: true,
+                        fields: vec![field],
+                        methods: Vec::new(),
+                    },
+                    Span::new(self.lo, p.span().hi),
+                );
+                Step::Pop(Done::Item(node))
+            }
+            (TdStage::NewtypeTy, Done::Failed) => Step::Pop(Done::Failed),
             (TdStage::Body, Done::Body(fields, methods)) => {
                 let (vis, name, generics) = (self.vis, self.name, std::mem::take(&mut self.generics));
                 let kind = if self.is_class {
@@ -508,6 +569,7 @@ impl TyDeclFrame {
                         name,
                         generics,
                         requires: std::mem::take(&mut self.requires),
+                        newtype: false,
                         fields,
                         methods,
                     }

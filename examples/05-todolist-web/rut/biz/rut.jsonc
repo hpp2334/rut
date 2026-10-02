@@ -36,7 +36,7 @@
     // shapes compile from the bundles at the link. The tests prime an
     // offline remote from the committed artifacts (dist/std plays the
     // wire), so the gates never network.
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "e6da59110d3b83753965bf3c8bf15c274fb89cf12939e0ad96d21b739a67384a" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "abb0f62dbb308045b0d79ad230a41a857dfde03d6fddc283f0e3723820773569" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "2d8183205bbf582fece18d5bc0b3341f9e9667378c1b92f3a70a051f9a441ccd" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "9e1ddb40597b33315f0542f741d522482a81250ce82c12d728df1297e0d1762b" }
   }
 }

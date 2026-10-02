@@ -91,9 +91,12 @@ legal rut.
 - **Construction is a method call, never a type-call.** User classes
   construct through their own class methods: `Rect.new(3, 4)`,
   `Rect.from(other)`, `Version.parse(s)` — see
-  [Classes and constructors](classes.md). Only builtin surfaces keep
-  call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat
-  `[v; n]`, and `Vec<T>.from(..)` (see
+  [Classes and constructors](classes.md). The one exception is the
+  newtype decl's own constructor: `class JsonI64(i64);` constructs as
+  the call `JsonI64(64)` (see
+  [Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin
+  surfaces keep other call forms: `bytes.zeroed(n)`, `opaque(v)`, the
+  repeat `[v; n]`, and `Vec<T>.from(..)` (see
   [Builtin generic types](builtin-generic-types.md)).
 - The trailing-`$` marker is kept meaningful by this style rule alone;
   the compiler attaches no semantics to it.

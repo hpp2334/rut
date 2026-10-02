@@ -263,7 +263,7 @@ pub fn compile_program_resolved(
                 if let TyKind::Enum { members } = ctx.types.kind(ty_id).clone() {
                     ctx.add_extern_enum(id, ty_id, members);
                 }
-                ctx.add_extern_type(id, ty_id, t.is_class);
+                ctx.add_extern_type(id, ty_id, t.is_class, t.newtype);
                 // the type's origin pkg rides the binding
                 ctx.extern_origins.insert(id, origin.clone());
                 // a linked generic: the template row (its placeholder
@@ -283,6 +283,7 @@ pub fn compile_program_resolved(
                         params,
                         template_row,
                         t.is_class,
+                        t.newtype,
                     );
                 }
             }
@@ -961,6 +962,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(d.ty),
                 is_class: d.kind == rut_lir::check::DataKind::Class,
                 is_generic: !d.generics.is_empty(),
+                newtype: d.newtype,
                 params: if d.generics.is_empty() {
                     Vec::new()
                 } else {
@@ -975,6 +977,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(e.ty),
                 is_class: false,
                 is_generic: false,
+                newtype: false,
                 params: Vec::new(),
                 scope: None,
             });
@@ -992,6 +995,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(ty),
                 is_class: false,
                 is_generic: false,
+                newtype: false,
                 params: Vec::new(),
                 scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
             });

@@ -24,6 +24,6 @@
     "lib": "./sort.rut"
   },
   "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "e6da59110d3b83753965bf3c8bf15c274fb89cf12939e0ad96d21b739a67384a" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "2d8183205bbf582fece18d5bc0b3341f9e9667378c1b92f3a70a051f9a441ccd" }
   }
 }

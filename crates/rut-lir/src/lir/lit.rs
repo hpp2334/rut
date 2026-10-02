@@ -144,6 +144,355 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     // ---- literals: struct / array ----
 
+    // ---- the newtype call construction ----
+    //
+    // `JsonI64(64)`, `Tail([1, 2])`, `Converter<i32>("64")` — the
+    // positional one-field class's compiler-provided constructor. THE
+    // manufacture mechanism for everything satisfaction can't reach: a
+    // wrapper comes into being only where a constructor is spelled —
+    // never auto-inserted, never forwarded (the wrapper exposes exactly
+    // its own members). The construction mints a real cell (MakeRecord).
+
+    /// The LOCAL newtype's construction (the decl is this module's).
+    pub(crate) fn compile_newtype_ctor(
+        &mut self,
+        name: IdentId,
+        d: &crate::check::DataDecl,
+        generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        if args.len() != 1 {
+            self.ctx.err(sp, format!(
+                "`{}`(..) takes exactly one wrapped value",
+                self.ctx.name(name)
+            ));
+            return Err(());
+        }
+        // the wrapped type, as the decl spells it — the synthesized
+        // `inner` field's node (the desugared decl's single field)
+        let field_node = match self.ctx.ast.item(d.node) {
+            ItemKind::Class { fields, .. } if fields.len() == 1 => fields[0],
+            _ => {
+                self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+                return Err(());
+            }
+        };
+        let fd = self.ctx.ast.field_decl(field_node);
+        if d.generics.is_empty() {
+            // the concrete wrapper: the wrapped value checks against the
+            // field type as written, one cell mints
+            let fty = self.ctx.resolve_type(fd.ty, &[]);
+            let t = self.compile_expr(args[0], Some(fty))?;
+            if !self.widens(t, fty) {
+                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                    "the wrapped value is `{}`, `{}` expected",
+                    self.ctx.type_name(t), self.ctx.type_name(fty)
+                ));
+            }
+            self.widen_to_slot(t, fty, sp.lo);
+            let val = self.last_reg;
+            return Ok(self.mint_newtype(d.ty, val, sp));
+        }
+        // the generic wrapper: explicit type args first (all-or-nothing —
+        // the call spells ALL binders or none), else the binders the
+        // wrapped argument determines (the free-fn unification rule)
+        let (inst, fty, arg_ty) = if !generics.is_empty() {
+            if generics.len() != d.generics.len() {
+                self.ctx.err(sp, format!(
+                    "`{}`<..> takes {} type argument(s), {} given — spell ALL binders or none",
+                    self.ctx.name(name), d.generics.len(), generics.len()
+                ));
+                return Err(());
+            }
+            let inst_args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+            let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
+            let env: Vec<(IdentId, TypeId)> = d
+                .generics
+                .iter()
+                .cloned()
+                .zip(inst_args.iter().cloned())
+                .collect();
+            let fty = self.ctx.resolve_type(fd.ty, &env);
+            let t = self.compile_expr(args[0], Some(fty))?;
+            (inst, fty, t)
+        } else {
+            let hint = self.hint_with_placeholders(fd.ty, &d.generics, &[]);
+            let t = self.compile_expr(args[0], Some(hint))?;
+            let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
+            self.unify_generic(fd.ty, t, &d.generics, &mut subst, sp)?;
+            let undetermined = d
+                .generics
+                .iter()
+                .find(|g| !subst.iter().any(|(n, _)| n == *g))
+                .cloned();
+            if let Some(g) = undetermined {
+                // the binder the wrapped argument could not name — the
+                // constructor demands its spelling (the annotated
+                // binding's own arguments show the shape, when they
+                // answer)
+                let wrapped = crate::check::bound_ty_str(self.ctx, fd.ty);
+                let spelled = match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                    Some((ed, eargs)) if ed == name => eargs
+                        .iter()
+                        .map(|a| self.ctx.type_name(*a).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    _ => d
+                        .generics
+                        .iter()
+                        .map(|g| self.ctx.name(*g).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                self.ctx.err(sp, format!(
+                    "`{}`'s parameter `{}` is not determined by `{wrapped}` — spell it: `{}<{spelled}>(..)`",
+                    self.ctx.name(name),
+                    self.ctx.name(g),
+                    self.ctx.name(name)
+                ));
+                return Err(());
+            }
+            let inst_args: Vec<TypeId> = d
+                .generics
+                .iter()
+                .map(|g| {
+                    subst
+                        .iter()
+                        .find(|(n, _)| n == g)
+                        .map(|(_, t)| *t)
+                        .unwrap_or(TY_I32)
+                })
+                .collect();
+            let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
+            let env: Vec<(IdentId, TypeId)> = d
+                .generics
+                .iter()
+                .cloned()
+                .zip(inst_args.iter().cloned())
+                .collect();
+            let fty = self.ctx.resolve_type(fd.ty, &env);
+            (inst, fty, t)
+        };
+        if !self.widens(arg_ty, fty) {
+            self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                "the wrapped value is `{}`, `{}` expected",
+                self.ctx.type_name(arg_ty),
+                self.ctx.type_name(fty)
+            ));
+        }
+        // the slot widen runs AFTER the substitution completed — a
+        // placeholder-hinted lambda argument crosses at its real ABI here
+        self.widen_to_slot(arg_ty, fty, sp.lo);
+        let val = self.last_reg;
+        Ok(self.mint_newtype(inst, val, sp))
+    }
+
+    /// The USED newtype's construction — `theirjson::TheirJson(x)`,
+    /// `Wrap<i32>(5)`: the surface row's flag arms the same spelled
+    /// constructor at a distance. A concrete wrapper's layout is the
+    /// carried row (the `inner` field descriptor); a generic one lays
+    /// the mirror instantiation out of the template's placeholder field
+    /// and routes the bodies request to the owner (the linkable-classes
+    /// machinery — nothing new).
+    pub(crate) fn compile_extern_newtype_ctor(
+        &mut self,
+        name: IdentId,
+        generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        if args.len() != 1 {
+            self.ctx.err(sp, format!(
+                "`{}`(..) takes exactly one wrapped value",
+                self.ctx.name(name)
+            ));
+            return Err(());
+        }
+        // the generic form first: the template answers (a generic class
+        // rides `extern_generics` too — the generic arm answers before
+        // the concrete row)
+        if let Some(g) = self.ctx.extern_generics.get(&name).cloned() {
+            let template_field = match self.ctx.types.kind(g.template) {
+                TyKind::Data { fields } if fields.len() == 1 => fields[0].ty,
+                _ => {
+                    self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+                    return Err(());
+                }
+            };
+            // explicit type args: all-or-nothing (the call spells ALL
+            // binders or none), the wrapped value against the
+            // substituted field row
+            if !generics.is_empty() {
+                if generics.len() != g.params.len() {
+                    self.ctx.err(sp, format!(
+                        "`{}`<..> takes {} type argument(s), {} given — spell ALL binders or none",
+                        self.ctx.name(name),
+                        g.params.len(),
+                        generics.len()
+                    ));
+                    return Err(());
+                }
+                let inst_args: Vec<TypeId> =
+                    generics.iter().map(|gn| self.resolve_type_now(*gn)).collect();
+                let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
+                let mut env: std::collections::HashMap<String, TypeId> =
+                    std::collections::HashMap::new();
+                for (p, &a) in g.params.iter().zip(inst_args.iter()) {
+                    env.insert(format!("#{}", self.ctx.name(*p)), a);
+                }
+                let fty = self.ctx.subst_template_ty(template_field, &env);
+                let t = self.compile_expr(args[0], Some(fty))?;
+                if !self.widens(t, fty) {
+                    self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                        "the wrapped value is `{}`, `{}` expected",
+                        self.ctx.type_name(t), self.ctx.type_name(fty)
+                    ));
+                }
+                self.widen_to_slot(t, fty, sp.lo);
+                let val = self.last_reg;
+                return Ok(self.mint_newtype(inst, val, sp));
+            }
+            // inference: the wrapped argument against the template's
+            // placeholder field (structural — the consumer's side of the
+            // free-fn rule). The argument compiles once; the substituted
+            // slot check runs after the unification completed.
+            let t = self.compile_expr(args[0], None)?;
+            let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
+            if !self.unify_template_field(template_field, t, &g.params, &mut subst) {
+                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                    "the wrapped value is `{}`, the wrapped type of `{}` expected",
+                    self.ctx.type_name(t),
+                    self.ctx.name(name)
+                ));
+                return Err(());
+            }
+            let undetermined = g
+                .params
+                .iter()
+                .find(|p| !subst.iter().any(|(n, _)| n == *p))
+                .cloned();
+            if let Some(p) = undetermined {
+                let spelled = match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                    Some((ed, eargs)) if ed == name => eargs
+                        .iter()
+                        .map(|a| self.ctx.type_name(*a).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    _ => g
+                        .params
+                        .iter()
+                        .map(|p| self.ctx.name(*p).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                self.ctx.err(sp, format!(
+                    "`{}`'s parameter `{}` is not determined by the wrapped argument — spell it: `{}<{spelled}>(..)`",
+                    self.ctx.name(name),
+                    self.ctx.name(p),
+                    self.ctx.name(name)
+                ));
+                return Err(());
+            }
+            let inst_args: Vec<TypeId> = g
+                .params
+                .iter()
+                .map(|p| {
+                    subst
+                        .iter()
+                        .find(|(n, _)| n == p)
+                        .map(|(_, t)| *t)
+                        .unwrap_or(TY_I32)
+                })
+                .collect();
+            let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
+            let mut env: std::collections::HashMap<String, TypeId> = std::collections::HashMap::new();
+            for (p, &a) in g.params.iter().zip(inst_args.iter()) {
+                env.insert(format!("#{}", self.ctx.name(*p)), a);
+            }
+            let fty = self.ctx.subst_template_ty(template_field, &env);
+            if !self.widens(t, fty) {
+                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                    "the wrapped value is `{}`, `{}` expected",
+                    self.ctx.type_name(t), self.ctx.type_name(fty)
+                ));
+            }
+            self.widen_to_slot(t, fty, sp.lo);
+            let val = self.last_reg;
+            return Ok(self.mint_newtype(inst, val, sp));
+        }
+        // the concrete form: the carried row IS the layout
+        let ty = self.ctx.extern_types.get(&name).cloned();
+        let fty = ty.and_then(|ty| match self.ctx.types.kind(ty) {
+            TyKind::Data { fields } if fields.len() == 1 => Some(fields[0].ty),
+            _ => None,
+        });
+        let Some((ty, fty)) = ty.zip(fty) else {
+            self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+            return Err(());
+        };
+        let t = self.compile_expr(args[0], Some(fty))?;
+        if !self.widens(t, fty) {
+            self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                "the wrapped value is `{}`, `{}` expected",
+                self.ctx.type_name(t), self.ctx.type_name(fty)
+            ));
+        }
+        self.widen_to_slot(t, fty, sp.lo);
+        let val = self.last_reg;
+        Ok(self.mint_newtype(ty, val, sp))
+    }
+
+    /// The construction's emission: one cell, the wrapped value its
+    /// single field. A real record — eliding the wrapper cell in static
+    /// chains is a later optimization lane, never a surface law.
+    fn mint_newtype(&mut self, ty: TypeId, val: u16, sp: rut_lexer::span::Span) -> TypeId {
+        let dst = self.new_reg(ty);
+        { let (argv_off, argc) = self.pool_args(&[val]); self.emit(Op::MakeRecord { dst, ty, argv_off, argc }, sp.lo); }
+        ty
+    }
+
+    /// Structural unification of a carried template field row (its
+    /// `#<param>` placeholder leaves) against a concrete argument: a
+    /// placeholder leaf binds its parameter; the structural wrappers
+    /// (`[T]`, `?T`) recurse; everything else is exact identity (the
+    /// owner-anchored mirrors count as one).
+    fn unify_template_field(
+        &mut self,
+        field: TypeId,
+        arg: TypeId,
+        params: &[IdentId],
+        subst: &mut Vec<(IdentId, TypeId)>,
+    ) -> bool {
+        let text = self
+            .ctx
+            .interner
+            .name(self.ctx.types.type_at(field).name)
+            .to_string();
+        if let Some(stripped) = text.strip_prefix('#') {
+            if let Some(id) = self.ctx.lookup_name(stripped) {
+                if params.contains(&id) {
+                    if let Some(e) = subst.iter_mut().find(|(n, _)| *n == id) {
+                        return self.same_ty(e.1, arg);
+                    }
+                    subst.push((id, arg));
+                    return true;
+                }
+            }
+        }
+        match (self.ctx.types.kind(field).clone(), self.ctx.types.kind(arg).clone()) {
+            (TyKind::Array { elem: a }, TyKind::Array { elem: b }) => {
+                self.unify_template_field(a, b, params, subst)
+            }
+            (TyKind::Opt { elem: a }, TyKind::Opt { elem: b }) => {
+                self.unify_template_field(a, b, params, subst)
+            }
+            _ => self.same_ty(field, arg),
+        }
+    }
+
     pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         // `Self` binds inside class bodies. A generic head
         // spelled WITHOUT its arguments (`M { .. }` where `M` is generic)
