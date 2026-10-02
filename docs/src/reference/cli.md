@@ -13,7 +13,7 @@ crates from your own project through a Cargo git dependency
 binary itself.
 
 ```sh
-rut run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>]
+rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
 rut fetch <dir>
@@ -30,7 +30,7 @@ loose-file shape:
 
 | input | pipeline |
 |---|---|
-| `dir` (a module directory with `rut.jsonc`) | load the whole graph, compile it, run the root's `main` ([project structure](project-structure.md)) |
+| `dir` (a module directory with `rut.jsonc`) | load the whole graph, compile it, run the entry designation (below) ([project structure](project-structure.md)) |
 | `mod.rutbundle` | the packed form of the same contract ([module bundles](bundles.md)) |
 
 Anything else is refused at the door (exit 2): a loose `.rut` file is
@@ -43,6 +43,7 @@ Flags and defaults:
 
 | item | behavior |
 |---|---|
+| `--entry <fn>` | name the `entry fn` to run. Without the flag: exactly one `entry fn` runs the program; several refuse to guess (exit 1, naming the set); none reports `no `entry fn` — nothing to run` — a library shape compiles clean, the designation is where the run stops. A named fn that is not an entry is a loud error |
 | `--fuel N` | cap the op budget per turn. Fuel is opt-in: without the flag the run is uncapped; a missing or unparsable value is a loud error (exit 2) — no silent default |
 | `--symbols <file.rutsym>` | restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the directory lane compiles fresh and needs no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn |
 | heap limit | fixed at 64 MiB |

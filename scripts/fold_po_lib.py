@@ -91,7 +91,9 @@ def esc(s):
 # the mechanical cutover — the ONLY auto-carried diffs (the JSONC
 # cutover's textual shapes, applied identically to msgid and msgstr;
 # the vocabulary purge's shape: the legacy word IS `struct` now;
-# the push-contract rename: the trait's name IS `Iterable` now)
+# the push-contract rename: the trait's name IS `Iterable` now;
+# the main-convention retirement: the code-span shape IS `entry fn`
+# now — `pub fn main` was the retired spelling of the same decl)
 MECH = [
     (re.compile(r'\bdataclasses\b'), 'structs'),
     (re.compile(r'\bdataclass\b'), 'struct'),
@@ -104,6 +106,9 @@ MECH = [
     (re.compile(r'\bIterator\b'), 'Iterable'),
     # the std-v5 publish: the book's pin rows ride the new tag spelling
     (re.compile(r'\bstd-v3\b'), 'std-v5'),
+    # the main convention retires: `entry fn main` is the same decl's
+    # spelling now (drop `pub`, add `entry`)
+    (re.compile(r'\bpub fn main\b'), 'entry fn main'),
 ]
 
 

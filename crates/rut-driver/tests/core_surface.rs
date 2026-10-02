@@ -179,7 +179,7 @@ fn retired_names_are_ordinary_unknown_names() {
         "app_main",
         rut_driver::Module {
             body: rut_driver::ModuleBody::Source {
-                text: "fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
+                text: "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
                 is_decl: false,
             },
             ..Default::default()
@@ -200,7 +200,7 @@ fn retired_names_are_ordinary_unknown_names() {
         rut_driver::Module {
             body: rut_driver::ModuleBody::Source {
                 text: "use core::{ Option };\n\
-                 fn main() -> i32 { let x = Option.some(1); return 0; }\n"
+                 entry fn main() -> i32 { let x = Option.some(1); return 0; }\n"
                     .into(),
                 is_decl: false,
             },

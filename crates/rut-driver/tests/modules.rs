@@ -22,7 +22,7 @@ fn uses_and_links_a_function() {
 
     // root "app" under scope 2 uses `add`
     let root = rut_driver::compile_program(
-        "use math::{add};\nfn main() -> i32 { return add(2, 3); }\n",
+        "use math::{add};\nentry fn main() -> i32 { return add(2, 3); }\n",
         Mode::Impl,
         "app",
         2,
@@ -56,7 +56,7 @@ fn uses_of_an_unmounted_module_error() {
     // resolution is exact: a name nothing answers to is a load error,
     // never a silent binding
     let out = rut_driver::compile_module(
-        "use math::{add};\nfn main() -> i32 { return add(1, 2); }\n",
+        "use math::{add};\nentry fn main() -> i32 { return add(1, 2); }\n",
         Mode::Impl,
         "app",
     );
@@ -73,7 +73,7 @@ fn uses_and_links_a_type() {
     let dep = rut_driver::compile_program(
         "struct Point { x: i32; y: i32; }\n\
          pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
         Mode::Impl,
         "geo",
         1,
@@ -100,7 +100,7 @@ fn uses_and_links_a_type() {
              if (n <= 0) { return p.y; }\n\
              return sink(p, n - 1);\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let p: Point = mk();\n\
              let q: Point = origin();\n\
              return sink(p, 1) + q.y;\n\
@@ -144,7 +144,7 @@ fn binary_round_trips_the_whole_surface() {
          pub struct Point { x: i32; y: i32; }\n\
          impl Shape for Point { fn area(self) -> i32 { return self.x * self.y; } }\n\
          pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
         Mode::Impl,
         "geo",
         1,
@@ -167,7 +167,7 @@ fn graph_compiles_and_links_uses_in_order() {
         Module {
             body: ModuleBody::Source {
                 text: "pub fn seven() -> i32 { return 7; }\n\
-                 fn main() -> i32 { return seven(); }\n"
+                 entry fn main() -> i32 { return seven(); }\n"
                     .into(),
                     is_decl: false,
             },
@@ -180,7 +180,7 @@ fn graph_compiles_and_links_uses_in_order() {
         Module {
             body: ModuleBody::Source {
                 text: "use math::{ seven };\n\
-                 fn main() -> i32 { return seven(); }\n"
+                 entry fn main() -> i32 { return seven(); }\n"
                     .into(),
                     is_decl: false,
             },
@@ -216,7 +216,7 @@ fn graph_threads_a_type_through_a_chain() {
             body: ModuleBody::Source {
                 text: "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
-                 fn main() -> i32 { return 0; }\n"
+                 entry fn main() -> i32 { return 0; }\n"
                     .into(),
                     is_decl: false,
             },
@@ -230,7 +230,7 @@ fn graph_threads_a_type_through_a_chain() {
             body: ModuleBody::Source {
                 text: "use geo_base::{Point, origin};\n\
                  pub fn shifted() -> Point { return origin(); }\n\
-                 fn main() -> i32 { return 0; }\n"
+                 entry fn main() -> i32 { return 0; }\n"
                     .into(),
                     is_decl: false,
             },
@@ -244,7 +244,7 @@ fn graph_threads_a_type_through_a_chain() {
             body: ModuleBody::Source {
                 text: "use geo_base::{Point};\n\
                  use geo_mid::{shifted};\n\
-                 fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
+                 entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
                     .into(),
                     is_decl: false,
             },
@@ -270,7 +270,7 @@ fn pouch_module_source_compiles() {
     let merged = rut_driver::load_module_source(&pouch).expect("read");
     assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
-        "{merged}\nfn main() -> i32 {{\n\
+        "{merged}\nentry fn main() -> i32 {{\n\
              let mut v: Vec<i32> = Vec.new();\n\
              v.push(1);\n\
              v.push(2);\n\
@@ -306,7 +306,7 @@ fn loads_a_directory_graph() {
     .unwrap();
     std::fs::write(
         app.join("entry.rut"),
-        "use math::{seven};\nfn main() -> i32 { return seven(); }\n",
+        "use math::{seven};\nentry fn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
     std::fs::write(
@@ -354,7 +354,7 @@ fn consumer_uses_pouch_vec() {
         Module {
             body: ModuleBody::Source {
                 text: "use pouch::{ Vec };\n\
-                 fn main() -> i32 {\n\
+                 entry fn main() -> i32 {\n\
                      let mut v: Vec<i32> = Vec.new();\n\
                      v.push(1);\n\
                      v.push(2);\n\
@@ -394,7 +394,7 @@ fn graph_reports_a_missing_dependency() {
         Module {
             body: ModuleBody::Source {
                 text: "use missing::{nope};\n\
-                 fn main() -> i32 { return 0; }\n"
+                 entry fn main() -> i32 { return 0; }\n"
                     .into(),
                     is_decl: false,
             },

@@ -30,7 +30,7 @@ fn alias_is_transparent_in_params_fields_and_lets() {
         "type Meters = i64;\n\
          struct Trip { dist: Meters }\n\
          fn walk(m: Meters) -> Meters { return m; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let d: Meters = 42;\n\
              let t: Trip = Trip { dist: d };\n\
              let n = walk(t.dist);\n\
@@ -47,7 +47,7 @@ fn alias_chains_expand() {
          type B = C;\n\
          type C = i64;\n\
          fn f(x: A) -> C { return x; }\n\
-         fn main() -> i32 { let v: A = 7; return f(v) as i32; }\n",
+         entry fn main() -> i32 { let v: A = 7; return f(v) as i32; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
@@ -58,7 +58,7 @@ fn forward_referenced_alias_is_legal() {
     let out = compile(
         "fn f(x: Later) -> Later { return x; }\n\
          type Later = i64;\n\
-         fn main() -> i32 { let v: Later = 3; return f(v) as i32; }\n",
+         entry fn main() -> i32 { let v: Later = 3; return f(v) as i32; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
@@ -68,7 +68,7 @@ fn recursive_alias_diagnoses() {
     let ds = diags_of(
         "type A = B;\n\
          type B = A;\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("recursive type alias")),
@@ -80,7 +80,7 @@ fn recursive_alias_diagnoses() {
 fn self_alias_diagnoses() {
     let ds = diags_of(
         "type A = A;\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("recursive type alias")),
@@ -95,7 +95,7 @@ fn unions_are_bound_only() {
     let ds = diags_of(
         "type Num = i32 | str;\n\
          pub fn f(x: Num) -> i32 { return 0; }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("bound-only")),
@@ -105,7 +105,7 @@ fn unions_are_bound_only() {
     // so `|` is not even valid type syntax there
     let ds = diags_of(
         "pub fn g(x: i32 | str) -> i32 { return 0; }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         !ds.is_empty(),
@@ -117,7 +117,7 @@ fn unions_are_bound_only() {
 fn bound_admits_each_union_member_and_fails_outside() {
     let src = "\
 fn tag<T requires i32 | str>(x: T) -> i32 { return 0; }\n\
-fn main() -> i32 {\n\
+entry fn main() -> i32 {\n\
     let a = tag(5);\n\
     let b = tag(\"s\");\n\
     return a + b;\n\
@@ -128,7 +128,7 @@ fn main() -> i32 {\n\
 
     let ds = diags_of(
         "fn tag<T requires i32 | str>(x: T) -> i32 { return 0; }\n\
-         fn main() -> i32 { return tag(true); }\n",
+         entry fn main() -> i32 { return tag(true); }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("does not satisfy") && d.contains("i32 | str")),
@@ -146,7 +146,7 @@ fn seal<T requires Enc>(x: T) -> i32 {\n\
     let e: Enc = x;\n\
     return e.enc().len();\n\
 }\n\
-fn main() -> i32 { let t: Token = Token { v: 1 }; return seal(t); }\n\
+entry fn main() -> i32 { let t: Token = Token { v: 1 }; return seal(t); }\n\
 ";
     let out = compile(src);
     assert!(out.diags.is_empty(), "Token satisfies Enc: {:?}", out.diags);
@@ -157,7 +157,7 @@ fn main() -> i32 { let t: Token = Token { v: 1 }; return seal(t); }\n\
          struct Token { v: i32 }\n\
          impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
          fn seal<T requires Enc>(x: T) -> i32 { return 0; }\n\
-         fn main() -> i32 { return seal(\"nope\"); }\n",
+         entry fn main() -> i32 { return seal(\"nope\"); }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("`str` does not satisfy") && d.contains("Enc")),
@@ -174,7 +174,7 @@ fn trait_object_satisfies_nothing() {
          struct Token { v: i32 }\n\
          impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
          fn seal<T requires Enc>(x: T) -> i32 { return 0; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let w: Enc = Token { v: 1 };\n\
              return seal(w);\n\
          }\n",
@@ -190,7 +190,7 @@ fn bound_may_reference_another_generic() {
     // `U requires [T]` — resolved under the call-site substitution
     let out = compile(
         "         fn hold<T, U requires [T]>(x: U) -> i32 { return 0; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let a = [0; 2];\n\
              return hold<i32, [i32]>(a);\n\
          }\n",
@@ -200,7 +200,7 @@ fn bound_may_reference_another_generic() {
     // U = [str] does not satisfy `U requires [i32]`
     let ds = diags_of(
         "         fn hold<T, U requires [T]>(x: U) -> i32 { return 0; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let s = [\"\", \"\"];\n\
              return hold<i32, [str]>(s);\n\
          }\n",
@@ -224,7 +224,7 @@ fn method_bounds_parse_and_collect() {
              fn new() -> Self { return Self { v: 0 }; }\n\
              fn wrap<T requires Enc>(self, x: T) -> i32 { return 0; }\n\
          }\n\
-         fn main() -> i32 { let w: W = W.new(); return w.v; }\n",
+         entry fn main() -> i32 { let w: W = W.new(); return w.v; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
@@ -263,7 +263,7 @@ fn alias_exports_transparently_across_modules() {
 
     let root = rut_driver::compile_program(
         "use units::{ Meters, m };\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let d: Meters = 9;\n\
              return m(d) as i32;\n\
          }\n",
@@ -276,13 +276,13 @@ fn alias_exports_transparently_across_modules() {
 
     // ... but the union alias's name never crossed — using it diagnoses
     let ds = rut_driver::compile_program(
-        "use units::{ Mix };\nfn main() -> i32 { let x: Mix = 0; return 0; }\n",
+        "use units::{ Mix };\nentry fn main() -> i32 { let x: Mix = 0; return 0; }\n",
         Mode::Impl,
         "app",
         2,
         &[(1, {
             let dep = rut_driver::compile_program(
-                "type Mix = i32 | str;\nfn main() -> i32 { return 0; }\n",
+                "type Mix = i32 | str;\nentry fn main() -> i32 { return 0; }\n",
                 Mode::Impl,
                 "units",
                 1,
@@ -307,7 +307,7 @@ fn alias_shadows_nothing_and_duplicate_names_diagnose() {
     let ds = diags_of(
         "struct S { v: i32 }\n\
          type S = i64;\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("duplicate type name `S`")),
@@ -329,7 +329,7 @@ fn alias_head_params_are_a_parse_error_again() {
     // reaches the checker — the parser expects `=` after the name
     let ds = diags_of(
         "type HashMap<K, i64> = i64;\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("expected =") && d.contains("found `<`")),
@@ -338,7 +338,7 @@ fn alias_head_params_are_a_parse_error_again() {
     // the empty head died with the same seam
     let ds = diags_of(
         "type Foo<> = i64;\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("expected =")),
@@ -352,8 +352,8 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
     // the class-first order under the removed lift) cannot even parse
     // now; a PLAIN alias colliding with a class diagnoses both ways
     for src in [
-        "class C { }\n type C = i64;\n fn main() -> i32 { return 0; }\n",
-        "type C = i64;\n class C { }\n fn main() -> i32 { return 0; }\n",
+        "class C { }\n type C = i64;\n entry fn main() -> i32 { return 0; }\n",
+        "type C = i64;\n class C { }\n entry fn main() -> i32 { return 0; }\n",
     ] {
         let ds = diags_of(src);
         assert!(
@@ -363,8 +363,8 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
     }
     // alias-vs-generic-struct, both orders (the lifted leg-2 shape)
     for src in [
-        "struct W<T> { v: T }\n type W = i64;\n fn main() -> i32 { return 0; }\n",
-        "type W = i64;\n struct W<T> { v: T }\n fn main() -> i32 { return 0; }\n",
+        "struct W<T> { v: T }\n type W = i64;\n entry fn main() -> i32 { return 0; }\n",
+        "type W = i64;\n struct W<T> { v: T }\n entry fn main() -> i32 { return 0; }\n",
     ] {
         let ds = diags_of(src);
         assert!(
@@ -374,16 +374,16 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
     }
     // alias-vs-alias (the row-vs-row family shape — two decls, one name)
     let ds = diags_of(
-        "type A = i64;\n type A = str;\n fn main() -> i32 { return 0; }\n",
+        "type A = i64;\n type A = str;\n entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("duplicate type name `A`")),
         "two aliases, one name: {ds:?}"
     );
     // alias-vs-enum and alias-vs-trait (the legs that never had a lift)
-    let ds = diags_of("enum E { M }\n type E = i64;\n fn main() -> i32 { return 0; }\n");
+    let ds = diags_of("enum E { M }\n type E = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(ds.iter().any(|d| d.contains("duplicate type name `E`")), "{ds:?}");
-    let ds = diags_of("trait T { }\n type T = i64;\n fn main() -> i32 { return 0; }\n");
+    let ds = diags_of("trait T { }\n type T = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(ds.iter().any(|d| d.contains("duplicate type name `T`")), "{ds:?}");
 }
 

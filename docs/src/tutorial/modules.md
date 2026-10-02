@@ -248,7 +248,7 @@ take `--entry <name>`. See
 ## Tooling
 
 ```sh
-rut run <dir | mod.rutbundle> [--fuel N]              # compile + run
+rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N]      # compile + run
 rut fmt <file.rut | dir> [--check]                    # format in place
 rut pack <dir> [-o out.rutbundle]                     # a self-contained bundle
 rut dump <file.rut>                                   # dump module info

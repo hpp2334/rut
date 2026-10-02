@@ -580,7 +580,7 @@ fn go() -> i32 {
 fn f(a: i32, b: i32) -> i32 {
     return a;
 }
-fn main() -> i32 {
+entry fn main() -> i32 {
     return f(1, 2, 3);
 }
 ";

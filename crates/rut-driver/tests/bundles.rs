@@ -83,7 +83,7 @@ fn in_memory_bytes_load_without_a_file() {
 fn refusals() {
     let base = std::env::temp_dir().join(format!("rut-bundle-ref-{}", std::process::id()));
     std::fs::create_dir_all(&base).unwrap();
-    let src = "fn main() -> i32 { return 7; }\n".as_bytes();
+    let src = "entry fn main() -> i32 { return 7; }\n".as_bytes();
 
     // no rut.jsonc entry at all
     let not_a_bundle = rut_driver::bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();

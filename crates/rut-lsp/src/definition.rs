@@ -623,7 +623,7 @@ mod tests {
             "fn make() -> Circle {",
             "    return Circle.new(1.0);",
             "}",
-            "fn main() -> nil {",
+            "entry fn main() -> nil {",
             "    let c = make();",
             "    let d = make();",
             "}",
@@ -690,7 +690,7 @@ mod tests {
 
     #[test]
     fn unimported_names_keep_the_flat_chain() {
-        let src = "fn main() -> nil {\n    let w = Widget.new();\n}\n";
+        let src = "entry fn main() -> nil {\n    let w = Widget.new();\n}\n";
         let d = doc(&src);
         let extra = [widget_index()];
         let hits = def(&d, at(&d.src, "= Widget.new();", 1) + 2, &extra);
@@ -782,14 +782,14 @@ mod tests {
 
     #[test]
     fn misses_stay_misses() {
-        let src = "fn main() -> nil {\n}\n";
+        let src = "entry fn main() -> nil {\n}\n";
         let d = doc(src);
         // keywords, unknown names, and decl-less primitives are empty
         assert!(def(&d, 0, &[]).is_empty()); // `fn` keyword
-        let src2 = "fn main() -> nil {\n    let x = i32.max(1);\n}\n";
+        let src2 = "entry fn main() -> nil {\n    let x = i32.max(1);\n}\n";
         let d2 = doc(src2);
         assert!(def(&d2, at(&d2.src, "i32.max", 1), &[]).is_empty(), "i32 has no decl to jump to");
-        let src3 = "fn main() -> nil {\n    let x = mystery();\n}\n";
+        let src3 = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
         let d3 = doc(src3);
         assert!(def(&d3, at(&d3.src, "mystery", 1), &[]).is_empty());
     }

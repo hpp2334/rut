@@ -34,7 +34,7 @@ fn trait_impl_coverage_is_checked() {
         "trait Shape { fn area(self) -> f32; }\n\
          struct Circle { r: f32 }\n\
          impl Shape for Circle { }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("impl is missing `area`")),
@@ -48,7 +48,7 @@ fn trait_impl_coverage_is_checked() {
              fn area(self) -> f32 { return self.r; }\n\
              fn extra(self) -> i32 { return 1; }\n\
          }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("`extra` is not a member of Shape")),
@@ -61,7 +61,7 @@ fn trait_impl_coverage_is_checked() {
          impl Shape for Circle {\n\
              fn area(self) -> i32 { return 4; }\n\
          }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("does not match the trait's signature")),
@@ -75,7 +75,7 @@ fn receiver_form_must_match_the_trait() {
         "trait T { fn m(mut self) -> nil; }\n\
          struct S { x: i32 }\n\
          impl T for S { fn m(self) -> nil { } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("must match the trait's receiver")),
@@ -90,7 +90,7 @@ fn duplicate_trait_type_pair_is_an_error() {
          struct S { x: i32 }\n\
          impl I for S { fn m(self) -> i32 { return 1; } }\n\
          impl I for S { fn m(self) -> i32 { return 2; } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("duplicate impl for the same (trait, type) pair")),
@@ -106,7 +106,7 @@ fn satisfaction_is_nominal_not_structural() {
         "trait I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
          impl S { fn m(self) -> i32 { return self.x; } }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let s = S { x: 1 };\n\
              let i: I = s;\n\
              return i.m();\n\
@@ -120,7 +120,7 @@ fn satisfaction_is_nominal_not_structural() {
         "trait I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
          impl S { fn m(self) -> i32 { return self.x; } }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let s = S { x: 1 };\n\
              if (s is I) { return 1; }\n\
              return 0;\n\
@@ -136,7 +136,7 @@ fn marker_impls_are_legal() {
         "trait Mark { }\n\
          struct S { x: i32 }\n\
          impl Mark for S { }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
@@ -150,7 +150,7 @@ fn static_dispatch_when_the_origin_is_single() {
          struct B { v: i32 }\n\
          impl B { fn new(v: i32) -> Self { return Self { v: v }; } }\n\
          impl Get for B { fn get(self) -> i32 { return self.v; } }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let b = B.new(7);\n\
              let w: Get = b;\n\
              return w.get();\n\
@@ -176,7 +176,7 @@ fn vtable_dispatch_when_origins_merge() {
              if (k) { return A { v: 1 }; }\n\
              return B { v: 2 };\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let g: Get = pick(true);\n\
              return g.get();\n\
          }\n",
@@ -192,7 +192,7 @@ fn for_of_without_an_impl_names_the_missing_contract() {
     let ds = diags_of(
         "class Count { n: i32 }\n\
          impl Count { fn new() -> Self { return Self { n: 0 }; } }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let c = Count.new();\n\
              for (let v of c) { }\n\
              return 0;\n\
@@ -209,7 +209,7 @@ fn impl_target_must_be_a_local_type_or_owned_builtin() {
     let ds = diags_of(
         "trait I { fn m(self) -> i32; }\n\
          impl I for Missing { fn m(self) -> i32 { return 1; } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum of this module")),
@@ -226,7 +226,7 @@ fn self_spells_the_impl_target() {
              fn new(x: i32) -> Self { return Self { x: x }; }\n\
              fn bump(self) -> Self { return P { x: self.x + 1 }; }\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let p = P.new(1);\n\
              let q = p.bump();\n\
              return q.x;\n\
@@ -250,7 +250,7 @@ fn reassignment_invalidates_a_stale_origin() {
          struct B { v: i32 }\n\
          impl Get for A { fn get(self) -> i32 { return 10; } }\n\
          impl Get for B { fn get(self) -> i32 { return 20; } }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let mut w: Get = A { v: 1 };\n\
              w = B { v: 2 };\n\
              return w.get();\n\
@@ -277,7 +277,7 @@ fn builtin_class_inherent_impls_compile() {
         "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let a = [0; 2];\n\
              return a.first();\n\
          }\n",
@@ -289,7 +289,7 @@ fn builtin_class_inherent_impls_compile() {
          impl opaque {\n\
              fn peek(self) -> i32 { return 1; }\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let o = opaque(5);\n\
              return o.peek();\n\
          }\n",
@@ -369,7 +369,7 @@ fn merged_origins_prim_and_struct_emit_calli() {
              if (k) { return 5; }\n\
              return S { v: 1 };\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let w: T = pick(true);\n\
              let v = w.m();\n\
              return 0;\n\
@@ -385,7 +385,7 @@ fn merged_origins_prim_and_struct_emit_calli() {
 fn inherent_impl_on_a_primitive_diagnoses() {
     let ds = diags_of(
         "impl i32 { fn f(self) -> i32 { return self; } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("a primitive takes trait impls only")
@@ -453,7 +453,7 @@ fn duplicate_prim_pair_reports_the_orphan_before_the_link() {
     let app = rut_driver::compile_program(
         "use dep::{T};\n\
          impl T for i32 { fn m(self) -> i32 { return 2; } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
         Mode::Impl,
         "app",
         2,
@@ -609,7 +609,7 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
 
     let private = rut_driver::compile_program(
         "use counter::{fresh};\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
          \x20   let c = fresh();\n\
          \x20   return c.secret();\n\
          }\n",
@@ -709,7 +709,7 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
         "use core::{ Iterable };\n\
          enum Light { Green, Red }\n\
          impl Iterable<i32> for Light<i32> { fn iterate(self, emit: fn(i32) -> bool) { } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("`Light` takes no generic arguments")),
@@ -723,7 +723,7 @@ fn disposal_stays_data_only_for_enums() {
         "use core::{ Disposal };\n\
          enum Light { Green, Red }\n\
          impl Disposal for Light { fn dispose(self) { } }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("cannot implement Disposal") && d.contains("only a struct or class")),

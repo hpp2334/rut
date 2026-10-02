@@ -32,7 +32,7 @@ fn repeat_compiles_scalar_nil_and_ref_fills() {
     // (the cell handle shared by every slot)
     let out = compile(
         "struct P { x: i32 = 0 }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let a: [i32] = [0; 8];\n\
              let b: [?i32] = [nil; 4];\n\
              let p = P { x: 1 };\n\
@@ -49,7 +49,7 @@ fn repeat_compiles_scalar_nil_and_ref_fills() {
 fn nil_fill_lowers_to_arrnew_alone() {
     // the nil fill IS the zero-fill: the memset-class op needs no loop
     let out = compile(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let b: [?i32] = [nil; 4];\n\
              return b.len();\n\
          }\n",
@@ -69,7 +69,7 @@ fn address_of_boxes_the_operand() {
     let out = compile(
         "struct P { x: i32 = 0 }\n\
          fn poke(p: ?P) -> i32 { return p.x; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let v = P { x: 9 };\n\
              let p: ?P = v;\n\
              let q: ?i32 = 7;\n\
@@ -88,7 +88,7 @@ fn bracket_types_need_no_use_statement() {
     // `string_join` resolves without a `use` too.
     let out = compile(
         "pub fn join_all(parts: [str]) -> str { return string_join(parts); }\n\
-         fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         out.diags.is_empty(),
@@ -97,7 +97,7 @@ fn bracket_types_need_no_use_statement() {
     );
     let out = compile(
         "fn len3(xs: [?i32]) -> i32 { return xs.len(); }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let a: [i32] = [0; 3];\n\
              return a.len() + len3([nil; 1]);\n\
          }\n",
@@ -120,7 +120,7 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
              fn push(mut self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
              fn get(self, i: i32) -> T { return self.buf[i]; }\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let mut b: Box2<i32> = Box2.new();\n\
              b.push(5);\n\
              b.push(7);\n\
@@ -140,7 +140,7 @@ fn nullable_widen_narrow_and_nil_typing() {
     let out = compile(
         "struct P { x: i32 = 0 }\n\
          fn poke(p: ?P) -> i32 { return p.x; }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let v = P { x: 8 };\n\
              let p: ?P = v;\n\
              let q: ?i32 = nil;\n\
@@ -153,7 +153,7 @@ fn nullable_widen_narrow_and_nil_typing() {
     assert!(ir.contains("makeopt"), "the T → ?T widen must box: {ir}");
     // a nil literal against a primitive annotation is a type mismatch
     let ds = diags_of(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let x: i32 = nil;\n\
              return x;\n\
          }\n",
@@ -174,7 +174,7 @@ fn prefix_question_binds_the_following_type_term() {
     // shapes are not interchangeable.
     let out = compile(
         "fn count(xs: [?i32]) -> i32 { return xs.len(); }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let mut a: [?i32] = [7; 3];\n\
              a[1] = nil;\n\
              let e: ?i32 = a[0];\n\
@@ -190,7 +190,7 @@ fn prefix_question_binds_the_following_type_term() {
 
     // `[?i32]` is NOT itself nullable — nil against it is a mismatch
     let ds = diags_of(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let bad: [?i32] = nil;\n\
              return 0;\n\
          }\n",
@@ -201,7 +201,7 @@ fn prefix_question_binds_the_following_type_term() {
     );
     // an element of `[?i32]` is `?i32`, never `?[i32]`
     let ds = diags_of(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let a: [?i32] = [7; 3];\n\
              let wrong: ?[i32] = a[0];\n\
              return wrong.len();\n\
@@ -220,7 +220,7 @@ fn impl_over_the_array_type_still_compiles() {
         "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let a = [0; 2];\n\
              return a.first();\n\
          }\n",

@@ -446,7 +446,7 @@ mod tests {
 
     #[test]
     fn inference_miss_stays_silent() {
-        let src = "fn main() -> nil {\n    let x = mystery();\n}\n";
+        let src = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
         let d = doc(src);
         assert!(w(&d, &[]).all().is_empty());
     }
@@ -546,7 +546,7 @@ mod tests {
             "fn parse(s: str) -> (opaque, str) {",
             "    return (opaque(s), \"\");",
             "}",
-            "fn main() -> str {",
+            "entry fn main() -> str {",
             "    let v = parse(\"x\");",
             "    return \"\";",
             "}",
@@ -576,7 +576,7 @@ mod tests {
             "fn hex_val(c: str, k: i32) -> i32 {",
             "    return k;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return hex_val(\"a\", 2);",
             "}",
             "",
@@ -624,7 +624,7 @@ mod tests {
             "fn f(a: i32, b: i32) -> i32 {",
             "    return a;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    let x: i32 = f(1);",
             "    let y: i32 = f(1, 2, 3);",
             "    let z: i32 = f();",
@@ -683,7 +683,7 @@ mod tests {
             "fn outer(b: i32, c: i32) -> i32 {",
             "    return b + c;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return outer(inner(1), 2);",
             "}",
             "",

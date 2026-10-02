@@ -51,7 +51,7 @@ fn run_main(app_src: &str) -> i32 {
 #[test]
 fn clone_lowers_to_the_fresh_buffer_native() {
     let out = compile_program(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let a = bytes.from([1u8, 2, 3]);\n\
              let b = a.clone();\n\
              if (a != b) { return 1; }\n\
@@ -88,7 +88,7 @@ fn clone_content_compares_equal_and_runs() {
 #[test]
 fn clone_takes_no_arguments_and_other_members_still_diagnose() {
     let ds: Vec<String> = compile_program(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let a = bytes.from([1u8]);\n\
              let b = a.clone(a);\n\
              return b.len();\n\
@@ -103,7 +103,7 @@ fn clone_takes_no_arguments_and_other_members_still_diagnose() {
         "clone() takes no arguments — an argument must diagnose: {ds:?}"
     );
     let ds: Vec<String> = compile_program(
-        "fn main() -> i32 {\n\
+        "entry fn main() -> i32 {\n\
              let a = bytes.from([1u8]);\n\
              return a.nope();\n\
          }\n",

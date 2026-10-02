@@ -97,7 +97,7 @@ context; after that, use the zh-CN rendering alone.
 1. **Code never translates.** Inline code spans, fenced code blocks,
    identifiers, type names, field/method names, keywords, numeric
    literals, and URLs stay byte-identical: `rut`, `opaque`,
-   `opaque.downcast<T>`, `pub fn main`, `rut.jsonc`, `.d.rut`,
+   `opaque.downcast<T>`, `entry fn main`, `rut.jsonc`, `.d.rut`,
    `mod.rutbundle`, `rc`, `spawn`, CLI verbs (`rut run`, `rut build`,
    `rut check`, `rut fmt`, `rut doc`, …), package names (`core`,
    `ink`, `pouch`, …).

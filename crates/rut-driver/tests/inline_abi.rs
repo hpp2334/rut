@@ -61,7 +61,7 @@ impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n";
 fn bare_prim_trait_call_is_boxless_and_inlines() {
     let out = compile(&format!(
         "{TINY}\
-         fn main() -> i32 {{\n\
+         entry fn main() -> i32 {{\n\
          \x20   let x = 5;\n\
          \x20   return x.m();\n\
          }}\n"
@@ -103,7 +103,7 @@ fn fat_body_falls_back_to_the_concrete_variant_without_a_box() {
          \x20       return a30;\n\
          \x20   }}\n\
          }}\n\
-         fn main() -> i32 {{\n\
+         entry fn main() -> i32 {{\n\
          \x20   let x = 5;\n\
          \x20   return x.m();\n\
          }}\n"
@@ -148,7 +148,7 @@ fn fat_body_falls_back_to_the_concrete_variant_without_a_box() {
 fn mix64_shaped_free_fn_flattens() {
     let out = compile(
         "fn mix64(bits: u64) -> u64 { return (14695981039346656037u64 ^ bits).wrapping_mul(1099511628211u64); }\n\
-         fn main() -> u64 {\n\
+         entry fn main() -> u64 {\n\
          \x20   let mut h = 0u64;\n\
          \x20   for (let i = 0; i < 4; i += 1) {\n\
          \x20       h = mix64(h ^ i as u64);\n\

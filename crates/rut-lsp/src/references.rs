@@ -525,7 +525,7 @@ mod tests {
             "fn make() -> i32 {",
             "    return 1;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    let a = make();",
             "    let b = make();",
             "    return a + b;",
@@ -748,9 +748,9 @@ mod tests {
 
     #[test]
     fn misses_stay_empty() {
-        let d = doc("fn main() -> nil {\n}\n");
+        let d = doc("entry fn main() -> nil {\n}\n");
         assert!(refs(&d, 0, &[], true).is_empty(), "keywords have no references");
-        let d2 = doc("fn main() -> nil {\n    let x = mystery();\n}\n");
+        let d2 = doc("entry fn main() -> nil {\n    let x = mystery();\n}\n");
         assert!(refs(&d2, at(&d2.src, "mystery", 1), &[], true).is_empty(), "unknown names too");
     }
 }

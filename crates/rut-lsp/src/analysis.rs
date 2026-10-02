@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn analyze_end_to_end() {
-        let a = analyze("fn main() -> nil {\n    let x = ;\n}\n", Mode::Impl);
+        let a = analyze("entry fn main() -> nil {\n    let x = ;\n}\n", Mode::Impl);
         assert!(!a.diags.is_empty(), "parse error must surface");
         assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
         assert_eq!(a.diags[0].source.as_deref(), Some("rut"));

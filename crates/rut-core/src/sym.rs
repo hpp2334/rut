@@ -474,10 +474,11 @@ mod tests {
             assert_eq!(i.lookup(text), Some(*id));
             assert_eq!(i.intern(text), *id, "intern must not re-assign");
         }
-        // the retired rows (`print`/`size_of`/`align_of`, ids 51–53)
-        // carry no consts — the ids stay fixed (append-only law), the
-        // consts died with the removal diagnostics they served
-        assert_eq!(WELL_KNOWN.len(), cases.len() + 3, "table and cases disagree");
+        // the retired rows (`main`, `print`/`size_of`/`align_of` —
+        // ids 3 and 51–53) carry no consts — the ids stay fixed
+        // (append-only law), the consts died with the conventions and
+        // removal diagnostics they served
+        assert_eq!(WELL_KNOWN.len(), cases.len() + 4, "table and cases disagree");
     }
 
     #[test]

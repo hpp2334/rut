@@ -114,7 +114,7 @@ fn cross_module_trait_call_binds_statically() {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Shape, Point, make_point};
-fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return 0;
@@ -134,7 +134,7 @@ fn cross_module_trait_call_uses_the_vtable_when_origins_merge() {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Shape, pick};
-fn main() -> i32 {
+entry fn main() -> i32 {
     let s: Shape = pick(true);
     let v = s.area();
     return 0;
@@ -174,7 +174,7 @@ fn trait_local_impl_for_a_used_type_dispatches() {
         ("app", "\
 use shapes::make_point;
 use extras::{Shape, describe};
-fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     let d = describe();
@@ -219,7 +219,7 @@ pub fn make_point() -> Point { return Point { x: 3.0 }; }
         ("app", "\
 use shapes::{Shape, Point};
 use extras::make_point;
-fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return 0;
@@ -249,7 +249,7 @@ fn duplicate_impl_pair_reports_the_orphan_before_the_link() {
         ("extras", EXTRAS_DUP),
         ("app", "\
 use extras::make_point;
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(
@@ -278,7 +278,7 @@ fn unused_but_implemented_trait_gives_the_use_gate_diagnostic() {
         ("shapes", SHAPES),
         ("app", "\
 use shapes::{Point, make_point};
-fn main() -> i32 {
+entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return 0;
@@ -354,7 +354,7 @@ fn two_phase_surfaces_carry_traits_and_impls() {
     assert_eq!(surface.impls.len(), 2, "surface carries both impl registrations");
     let app = rut_driver::compile_program(
         "use shapes::{Shape, Point, make_point};\n\
-         fn main() -> i32 {\n\
+         entry fn main() -> i32 {\n\
              let p = make_point();\n\
              let a = p.area();\n\
              return 0;\n\

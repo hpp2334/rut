@@ -334,8 +334,8 @@ return c.;
 
     #[test]
     fn bare_completion_has_the_keyword_table_and_decls() {
-        let src = "trait Shape {\nfn area(self) -> f64;\n}\nfn main() -> nil { }\n";
-        let items = complete_after(src, "fn main() -> nil { }");
+        let src = "trait Shape {\nfn area(self) -> f64;\n}\nentry fn main() -> nil { }\n";
+        let items = complete_after(src, "entry fn main() -> nil { }");
         let ls = labels(&items);
         // the final keyword table — the current spellings, no retired ones
         for kw in ["trait", "async", "use", "impl", "let", "fn"] {
@@ -375,7 +375,7 @@ return c.;
             complete(&idxs, &toks, &ast, pos)
         };
 
-        let bare = "fn main() -> nil { }\n";
+        let bare = "entry fn main() -> nil { }\n";
         let items = mk(bare);
         let ls = labels(&items);
         assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");

@@ -334,7 +334,7 @@ mod tests {
             "fn hex_val(c: str, k: i32) -> i32 {",
             "    return k;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return hex_val(\"a\", 2);",
             "}",
             "",
@@ -376,7 +376,7 @@ mod tests {
             "fn outer(b: i32, c: i32) -> i32 {",
             "    return b + c;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return outer(inner(1), 2);",
             "}",
             "",
@@ -482,7 +482,7 @@ mod tests {
             "fn f(a: i32, b: i32) -> i32 {",
             "    return a;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    let x: i32 = f(1, 2, 3);",
             "    return x;",
             "}",
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn unknown_callee_stays_silent() {
-        let src = "fn main() -> nil {\n    mystery(1, 2);\n}\n";
+        let src = "entry fn main() -> nil {\n    mystery(1, 2);\n}\n";
         let d = doc(&src);
         assert!(help(&d, at(&d.src, "1, 2", 1), &[]).is_none());
     }
@@ -525,7 +525,7 @@ mod tests {
             "fn show(c: str, a: i32, b: i32) -> i32 {",
             "    return a;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return show(f\"{inner(1, 2)}-{inner(3, 4)}\", 5, 6);",
             "}",
             "",
@@ -554,7 +554,7 @@ mod tests {
             "fn place(p: Point, k: i32) -> f64 {",
             "    return p.x;",
             "}",
-            "fn main() -> f64 {",
+            "entry fn main() -> f64 {",
             "    return place(Point { x: 1.0, y: 2.0 }, 3);",
             "}",
             "",
@@ -577,7 +577,7 @@ mod tests {
             "fn f(a: i32, b: i32) -> i32 {",
             "    return a;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    let x = f(1, if (true) { 2 } else { 3 });",
             "    return x;",
             "}",
@@ -602,7 +602,7 @@ mod tests {
             "fn hex_val(c: str) -> i32 {",
             "    return 1;",
             "}",
-            "fn main() -> i32 {",
+            "entry fn main() -> i32 {",
             "    return hex_val(\"a\");",
             "}",
             "",

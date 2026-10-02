@@ -87,7 +87,7 @@ struct Thing { n: i32 }
 impl Show for Thing {
     fn show(self) -> str { return \"thing\"; }
 }
-fn main() -> i32 {
+entry fn main() -> i32 {
     let t = Thing { n: 1 };
     let s = t.show();
     return s.len() as i32;
@@ -111,7 +111,7 @@ trait Named { fn tag(self) -> str; }
 impl<T> Named for Set<T> {
     fn tag(self) -> str { return \"set\"; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
@@ -129,7 +129,7 @@ struct Thing { n: i32 }
 impl Mark for Thing {
     fn mark(self) -> i32 { return self.n; }
 }
-fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
+entry fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 ",
     )]);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
@@ -150,7 +150,7 @@ use coll::{Set};
 impl<T> Set<T> {
     pub fn probe_hi(self) -> i64 { return 7; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(g.program.is_none(), "the inherent orphan must refuse");
@@ -177,7 +177,7 @@ use tr::{Mark};
 impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(g.program.is_none(), "the orphan must refuse to compile");
@@ -205,7 +205,7 @@ use tr::{Mark};
 impl Mark for str {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(g.program.is_none(), "the orphan must refuse to compile");
@@ -235,7 +235,7 @@ use tr::{Mark};
 impl<T> Mark for ?T {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 ",
         ),
     ]);
@@ -256,7 +256,7 @@ use tr::{Mark};
 impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 ",
         ),
     ]);
@@ -278,7 +278,7 @@ impl<T> Mark for ?T {
 impl<T> Mark for [T] {
     fn mark(self) -> i32 { return 2; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 ",
     )]);
     assert!(legal.diags.is_empty(), "{}", diags_of(&legal));
@@ -301,7 +301,7 @@ use tr::{Mark};
 impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 ",
         ),
     ]);
@@ -322,7 +322,7 @@ trait Mark { fn mark(self) -> i32; }
 impl<T> Mark for Box<T> {
     fn mark(self) -> i32 { return 1; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 ",
         ),
     ]);
@@ -347,7 +347,7 @@ use tr::{Mark};
 impl<T> Mark for Set<T> {
     fn mark(self) -> i32 { return 2; }
 }
-fn main() -> i32 { return 0; }
+entry fn main() -> i32 { return 0; }
 "),
     ]);
     assert!(g.program.is_none(), "{}", diags_of(&g));
