@@ -342,23 +342,24 @@ pub fn main() -> nil {
 
 #[test]
 fn map_inference_fn_path_and_explicit_type_arg() {
-    // the generic-method inference ladder (adapted at landing: the
-    // bare fn-path argument has no lowering yet — a fn name in value
-    // position diagnoses `unknown name` even on a plain local call —
-    // so both rungs spell lambdas; the explicit `<i32>` argument is
-    // the ladder's checked half). The fn-path lane is flagged.
+    // the generic-method inference ladder: rung 1 — the bare fn-path
+    // argument unifies against the declared param's fn type (R := i32
+    // from the helper's return); the explicit `<i32>` spelling is the
+    // checked half
     let lines = run(
         r#"
 use pouch::{ Vec };
 use flow::{ Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
+fn double(x: i32) -> i32 { return x * 2; }
+
 pub fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2);
-    // the annotated lambda: the declared fn type unifies, R := i32
-    let a: Vec<i32> = Vec.from_flow(nums.into_flow().map(fn(x: i32) -> i32 { return x * 2; }));
+    // the bare fn path: `map(double)` infers R from double's return
+    let a: Vec<i32> = Vec.from_flow(nums.into_flow().map(double));
     // the explicit spelling
     let b: Vec<i32> = Vec.from_flow(nums.into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; }));
     log.info(f"a={a.len} b={b.len}");

@@ -524,6 +524,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                 return Ok(ty);
             }
+            // a fn name in VALUE position: the bare fn-path lane —
+            // the fn's own value (call-position resolution keeps its
+            // fast path; only this fallthrough gains the arm)
+            if let Some(r) = self.compile_fn_path_value(name, sp) {
+                return r;
+            }
             let msg = self
                 .ctx
                 .not_in_core_scope(name)
@@ -622,6 +628,97 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ),
         );
         Err(())
+    }
+
+    // ---- the bare fn-path lane ----
+
+    /// A fn NAME in value position resolves to the fn's value — the
+    /// closure shape the fn-typed indirect-call lane already consumes.
+    /// Resolution mirrors the call path: the enclosing unit's fns, then
+    /// imported fns; `None` falls through to the ladder's unknown-name
+    /// diagnostic (the name is not a fn).
+    pub(crate) fn compile_fn_path_value(
+        &mut self,
+        name: IdentId,
+        sp: rut_lexer::span::Span,
+    ) -> Option<TcResult<TypeId>> {
+        // the enclosing unit's fn (compile_free_fn_call's own lookup)
+        if let Some(fnode) = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n) {
+            let fd = self.ctx.ast.fn_decl(fnode).clone();
+            if fd.is_async {
+                self.ctx.err(sp, format!(
+                    "`{}` is async —call it; async fns have no value in this build",
+                    self.ctx.name(name)
+                ));
+                return Some(Err(()));
+            }
+            if !fd.generics.is_empty() {
+                self.ctx.err(sp, format!(
+                    "`{}` is generic —call it (spelling the type arguments there); a bare fn path has none to give",
+                    self.ctx.name(name)
+                ));
+                return Some(Err(()));
+            }
+            // the fn's own signature — a non-generic fn spells no free
+            // generics, so this env resolves it exactly
+            let ptys: Vec<TypeId> = fd
+                .params
+                .iter()
+                .map(|p| match self.ctx.ast.param(*p) {
+                    MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
+                    _ => TY_I32,
+                })
+                .collect();
+            let ret_ty = fd.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
+            // the SAME instantiation key the direct-call lane mints —
+            // the value and every direct call share one compiled body
+            let inst = crate::check::Inst {
+                key: crate::check::FnKey::Free(name),
+                subst: vec![],
+                trait_origins: vec![],
+            };
+            let fid = self.ctx.ensure_inst(inst);
+            return Some(self.make_fn_value(fid, ptys, ret_ty, sp));
+        }
+        // an imported fn (`use pkg::name`): the value binds the
+        // exporter's scope-qualified fn — the same id the direct-call
+        // lane emits; the link relocates closure targets like call ones
+        if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            if ef.is_async {
+                self.ctx.err(sp, format!(
+                    "`{}` is async —call it; async fns have no value in this build",
+                    self.ctx.name(name)
+                ));
+                return Some(Err(()));
+            }
+            return Some(self.make_fn_value(ef.func, ef.params, ef.ret, sp));
+        }
+        // a used GENERIC fn has no monomorphic value — diagnose at the
+        // use site instead of the fallthrough's unknown-name
+        if self.ctx.extern_generic_fn(name).is_some() {
+            self.ctx.err(sp, format!(
+                "`{}` is generic —call it; generic fns have no value without type arguments",
+                self.ctx.name(name)
+            ));
+            return Some(Err(()));
+        }
+        None
+    }
+
+    /// The fn value itself: an empty-capture closure over `fid`, typed
+    /// `fn(params) -> ret` — minted once per USE (never per call), the
+    /// exact register shape a fn-typed param, local or field carries.
+    fn make_fn_value(
+        &mut self,
+        fid: u32,
+        ptys: Vec<TypeId>,
+        ret: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let fty = self.ctx.mk_fn_ty(ptys, ret);
+        let dst = self.new_reg(fty);
+        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
+        Ok(fty)
     }
 
     pub(crate) fn load_const_let(&mut self, init: NodeHandle<AnyExpr>, ty: TypeId, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<u16> {

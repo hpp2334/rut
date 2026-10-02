@@ -91,6 +91,24 @@ pub fn main() -> i32 {
 }
 
 #[test]
+fn cross_module_fn_value_position() {
+    // the bare fn-path lane crosses `use`: an imported fn's value binds
+    // the exporter's scope-qualified fn (the link relocates closure
+    // targets exactly like call targets)
+    let out = run_graph(&[
+        ("helpers", "pub fn triple(x: i32) -> i32 { return x * 3; }"),
+        ("app", "\
+use helpers::triple;
+fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
+pub fn main() -> i32 {
+    return apply(triple, 4);
+}
+"),
+    ]);
+    assert_eq!(out, 12, "the imported fn's value answered the indirect call");
+}
+
+#[test]
 fn type_local_impl_for_a_foreign_trait_runs() {
     // the impl lives in a second module: `Shape` is foreign to it, the
     // type is its own; the consumer uses both names and

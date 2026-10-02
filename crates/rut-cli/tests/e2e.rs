@@ -2178,6 +2178,67 @@ pub fn main() -> nil {
 }
 
 #[test]
+fn a1_fn_name_as_value_argument() {
+    // the bare fn-path lane: a fn name in value position resolves to
+    // the fn's value — `apply(double, 3)` rides the fn-typed
+    // indirect-call lane like any fn-typed argument
+    let src = r#"
+fn double(x: i32) -> i32 { return x * 2; }
+fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
+    return f(v);
+}
+pub fn main() -> nil {
+    Logger.new("t").info(f"r={apply(double, 3)}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["r=6"]);
+}
+
+#[test]
+fn a1_fn_value_captured_by_lambda() {
+    // the capture law pins fn values: `!is_ref` — the immediate-slot
+    // copy, no cell promotion
+    let src = r#"
+fn inc(x: i32) -> i32 { return x + 1; }
+fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
+pub fn main() -> nil {
+    let g = inc;
+    let h = fn (x: i32) -> i32 { return g(x) * 10; };
+    Logger.new("t").info(f"r={apply(h, 4)}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["r=50"]);
+}
+
+#[test]
+fn a1_fn_value_stored_and_called_later() {
+    // the `drive` shape, hand-written: a fn value in a local and in a
+    // field, each called later through the indirect-call lane (the
+    // field call through `self`, as the drive field spells it)
+    let src = r#"
+fn square(x: i32) -> i32 { return x * x; }
+class Runner { op: fn(i32) -> i32; }
+impl Runner {
+    fn run(self, v: i32) -> i32 { return (self.op)(v); }
+}
+pub fn main() -> nil {
+    let f = square;
+    let r = Runner { op: square };
+    let a = f(5);
+    let b = r.run(6);
+    Logger.new("t").info(f"local={a} field={b}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["local=25 field=36"]);
+}
+
+#[test]
 fn a1_zero_value_field_defaults() {
     let src = r#"
 struct P3 { x: i32; s: str; }
