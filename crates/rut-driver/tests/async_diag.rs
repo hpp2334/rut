@@ -118,25 +118,6 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn await_select_stays_parse_only() {
-    let msg = one_diag(r#"
-use core::{ RunContext };
-use async_host::sleep;
-
-async fn work(cx: RunContext) -> nil {
-    let n = await select {
-        sleep(5) -> 1,
-    };
-}
-
-entry fn main() -> nil {
-    work();
-}
-"#);
-    assert!(msg.contains("`await select`") && msg.contains("not in this build"), "got: {msg}");
-}
-
-#[test]
 fn an_async_fn_demands_the_cx_first_parameter() {
     let msg = one_diag(r#"
 async fn work(n: u32) -> nil { }

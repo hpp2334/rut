@@ -113,7 +113,6 @@ fn malformed_input_terminates() {
         "fn f() -> nil { ] }",
         "pub(super) fn",
         "fn f<K where K",
-        "fn f() -> nil { let x = await select { a -> 1, ; }",
     ];
     for src in cases {
         let (ast, diags) = parse(src, Mode::Impl);

@@ -135,7 +135,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
 /// scan backwards counting unclosed parens. Returns the open paren's
 /// token index and the commas at-or-before `pos` that sit at the call's
 /// own depth — paren depth 0 AND outside any `{}` / `[]` block, so a
-/// when-select's arm commas or a struct literal's field commas can never
+/// when-arm commas or a struct literal's field commas can never
 /// pose as argument separators. An f-string is ONE token (its holes live
 /// inside it), so it can never miscount either. A non-call paren (`if
 /// (`/`while (`/`when (` — the head is a keyword) is skipped so an

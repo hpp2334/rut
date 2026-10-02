@@ -969,6 +969,187 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     Ok(())
 }
 
+/// The engine-backed yield pair for one row (the sleep pair's cousins):
+/// ensure the bodyless host thunk (its `host_id` names the embedder's
+/// registered body) and the sealing wrapper the vtable fill binds. The
+/// select/completer wrappers are SHARED — every instantiation's fill
+/// points at the same fn, so their frame register is spelled `opaque`
+/// (the seal is the erasure; the bodies unbox through the crossing,
+/// never through a recorded type). Answers `(thunk fid, wrap fid)`.
+pub(crate) fn ensure_engine_yield_pair(ctx: &mut Ctx, row: &str) -> TcResult<(u32, u32)> {
+    let thunk_name = ctx.intern(&format!("async_engine::{row}"));
+    let wrap_name = ctx.intern(&format!("async_engine::{row}.wrap"));
+    let thunk_fid = ctx.ensure_inst(crate::check::Inst {
+        key: crate::check::FnKey::HostThunk(thunk_name),
+        subst: vec![],
+        trait_origins: vec![],
+    });
+    let wfid = ctx.ensure_inst(crate::check::Inst {
+        key: crate::check::FnKey::HostThunk(wrap_name),
+        subst: vec![],
+        trait_origins: vec![],
+    });
+    Ok((thunk_fid, wfid))
+}
+
+/// Mint the engine-backed select2 future for one composite answer
+/// (idempotent per pair): the select frame `#frame@select2<Either2<A, B>>`
+/// — the standard engine layout plus the two child slots — the shared
+/// two-state checkpoint enum, the `Future<Either2<A, B>>` impl row, and
+/// the engine-thunk yield (`__select2_yield`: launch the cohort on the
+/// fresh arm, arbitrate and cancel the loser on the resumed one). The
+/// host set's `select2` wrapper is the only intended caller; the names
+/// are what the engine bodies re-derive from the children at runtime.
+pub(crate) fn ensure_select_future(ctx: &mut Ctx, a_ans: TypeId, b_ans: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
+    if ctx.select_minted.contains_key(&(a_ans, b_ans)) {
+        return Ok(());
+    }
+    let either2_name = ctx.intern("Either2");
+    if ctx.find_data(either2_name).is_none() {
+        ctx.err(
+            sp,
+            "`__select2` is engine-internal — the typed surface is async_host's `select2`",
+        );
+        return Err(());
+    }
+    let composite = ctx.mk_data_inst(either2_name, vec![a_ans, b_ans], sp);
+    let composite_name = ctx.type_name(composite).to_string();
+    let s0 = ctx.intern("#s0");
+    let s1 = ctx.intern("#s1");
+    let fa = ctx.intern("a");
+    let fb = ctx.intern("b");
+    let frame_ty = mint_engine_future(
+        ctx,
+        &format!("{}{}>", af::SELECT2_FRAME_PREFIX, composite_name),
+        af::SELECT_CKPT,
+        &[(s0, 0), (s1, 1)],
+        composite,
+        vec![
+            FieldInfo { name: fa, ty: TY_OPAQUE },
+            FieldInfo { name: fb, ty: TY_OPAQUE },
+        ],
+    )?;
+    let (thunk_fid, wfid) = ensure_engine_yield_pair(ctx, "__select2_yield")?;
+    finish_engine_future(ctx, frame_ty, composite, thunk_fid, wfid);
+    ctx.select_minted.insert((a_ans, b_ans), frame_ty);
+    Ok(())
+}
+
+/// Mint the engine-backed select-all future for one element answer
+/// (idempotent per element): the cohort frame
+/// `#frame@select_all<T>` — the standard engine layout plus the sealed
+/// `[Future<T>]` slot — and the `(u32, T)` tuple as the answer lane's
+/// composite. The yield (`__select_all_yield`) launches every cohort
+/// member on the fresh arm and arbitrates the first retirement.
+pub(crate) fn ensure_select_all_future(ctx: &mut Ctx, t_ans: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
+    if ctx.select_all_minted.contains_key(&t_ans) {
+        return Ok(());
+    }
+    let composite = ctx.mk_tuple(vec![TY_U32, t_ans]);
+    let t_name = ctx.type_name(t_ans).to_string();
+    let s0 = ctx.intern("#s0");
+    let s1 = ctx.intern("#s1");
+    let fcohort = ctx.intern("cohort");
+    let frame_ty = mint_engine_future(
+        ctx,
+        &format!("{}{}>", af::SELECT_ALL_FRAME_PREFIX, t_name),
+        af::SELECT_ALL_CKPT,
+        &[(s0, 0), (s1, 1)],
+        composite,
+        vec![FieldInfo { name: fcohort, ty: TY_OPAQUE }],
+    )?;
+    let (thunk_fid, wfid) = ensure_engine_yield_pair(ctx, "__select_all_yield")?;
+    finish_engine_future(ctx, frame_ty, composite, thunk_fid, wfid);
+    ctx.select_all_minted.insert(t_ans, frame_ty);
+    Ok(())
+}
+
+/// Mint the engine-backed completer future for one answer type
+/// (idempotent per answer): the manual frame `#frame@completer<T>` —
+/// the standard engine layout, no body. `completer()` mints it cold;
+/// `resolve` stores the answer and retires the frame engine-side, and
+/// the yield (`__completer_yield`) is a no-op except for the cancelled
+/// retire — the future progresses when the resolution RIGHT fires.
+pub(crate) fn ensure_completer_future(ctx: &mut Ctx, t_ans: TypeId) -> TcResult<()> {
+    if ctx.completer_minted.contains_key(&t_ans) {
+        return Ok(());
+    }
+    let frame_name = format!("{}{}>", af::COMPLETER_FRAME_PREFIX, ctx.type_name(t_ans));
+    let s0 = ctx.intern("#s0");
+    let frame_ty = mint_engine_future(
+        ctx,
+        &frame_name,
+        af::COMPLETER_CKPT,
+        &[(s0, 0)],
+        t_ans,
+        vec![],
+    )?;
+    let (thunk_fid, wfid) = ensure_engine_yield_pair(ctx, "__completer_yield")?;
+    finish_engine_future(ctx, frame_ty, t_ans, thunk_fid, wfid);
+    ctx.completer_minted.insert(t_ans, frame_ty);
+    Ok(())
+}
+
+/// The shared frame mint: a `TyKind::Data` frame over the standard
+/// engine layout (state, cancelled, awaiter, pending, answer) plus
+/// `extra` trailing slots, and its checkpoint enum. The answer lane is
+/// `answer_ty` — for the competition rows that is the COMPOSITE
+/// (`Either2<A, B>` / `(u32, T)`), so a chained composition reads the
+/// child's answer spelling straight off the field.
+fn mint_engine_future(
+    ctx: &mut Ctx,
+    frame_name: &str,
+    ckpt_name: &str,
+    ckpt_members: &[(IdentId, i64)],
+    answer_ty: TypeId,
+    extra: Vec<FieldInfo>,
+) -> TcResult<TypeId> {
+    let mut members: Vec<(IdentId, i64)> = Vec::new();
+    for (n, v) in ckpt_members {
+        members.push((*n, *v));
+    }
+    let ckpt_name_id = ctx.intern(ckpt_name);
+    let ckpt_ty = ctx.types.intern(RutType {
+        name: ckpt_name_id,
+        kind: TyKind::Enum { members },
+    });
+    let mut fields = vec![
+        FieldInfo { name: ctx.intern("state"), ty: ckpt_ty },
+        FieldInfo { name: ctx.intern("cancelled"), ty: TY_BOOL },
+        FieldInfo { name: ctx.intern("awaiter"), ty: TY_OPAQUE },
+        FieldInfo { name: ctx.intern("pending"), ty: TY_OPAQUE },
+        FieldInfo { name: ctx.intern("answer"), ty: answer_ty },
+    ];
+    fields.extend(extra);
+    let frame_name_id = ctx.intern(frame_name);
+    Ok(ctx.types.intern(RutType {
+        name: frame_name_id,
+        kind: TyKind::Data { fields },
+    }))
+}
+
+/// The shared fill: the `Future<answer>` impl row over the minted frame
+/// (an ordinary ImplDecl — dispatch, widening, `is` all see it) and the
+/// engine-thunk yield's vtable fill.
+fn finish_engine_future(ctx: &mut Ctx, frame_ty: TypeId, answer_ty: TypeId, _thunk_fid: u32, wfid: u32) {
+    let fut_inst = ctx.mk_future_inst(sym::FUTURE, answer_ty);
+    ctx.impls.push(ImplDecl {
+        trait_id: fut_inst,
+        trait_name: sym::FUTURE,
+        target: frame_ty,
+        target_data: None,
+        trait_arg_nodes: vec![],
+        is_template: false,
+        inherent: false,
+        methods: vec![],
+        origin: ctx.own_spec.clone(),
+    });
+    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
+    ctx.frame_yield_slot.insert(frame_ty, slot);
+    ctx.engine_frames.insert(frame_ty);
+}
+
 /// The engine-backed sleep pair: the host THUNK — bodyless,
 /// `host_id` names the embedder's registered body, params spell the row's
 /// `(opaque, opaque)` crossings — and the sealing WRAPPER the vtable fill
@@ -1063,6 +1244,70 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
         };
         ctx.funcs[fid as usize] = fc;
         return Ok(());
+    }
+    // the select/completer pairs: the same two shapes under their own
+    // names. The wrappers are SHARED across instantiations — the frame
+    // register is spelled `opaque` (the seal is the erasure, not a
+    // re-type), so one wrapper serves every composite's fill.
+    for row in ["__select2_yield", "__select_all_yield", "__completer_yield"] {
+        let wrap = ctx.intern(&format!("async_engine::{row}.wrap"));
+        if thunk_name == wrap {
+            let cx_ty = ctx.run_context_ty();
+            // the thunk was ensured beside the mint (`ensure_engine_yield_pair`)
+            let thunk_key = crate::check::Inst {
+                key: crate::check::FnKey::HostThunk(ctx.intern(&format!("async_engine::{row}"))),
+                subst: vec![],
+                trait_origins: vec![],
+            };
+            let thunk_fid = ctx
+                .inst_map
+                .get(&thunk_key)
+                .copied()
+                .expect("the yield thunk is ensured before its wrapper compiles");
+            let fc = rut_core::binary::FuncCode {
+                name: thunk_name,
+                regs: vec![TY_OPAQUE, cx_ty, TY_OPAQUE, TY_OPAQUE],
+                params: vec![TY_OPAQUE, cx_ty],
+                ret: TY_NIL,
+                is_method: false,
+                n_captures: 0,
+                argv: vec![2, 3],
+                labels: vec![],
+                code: vec![
+                    Op::Box { dst: 2, val: 0, ty: TY_OPAQUE },
+                    Op::Box { dst: 3, val: 1, ty: cx_ty },
+                    Op::Call { func: thunk_fid, argv_off: 0, argc: 2, dst: NOREG },
+                    // well-formedness: the fn ends in Ret — the
+                    // threaded `Call` answers Next(pc+1), so without this the
+                    // dispatch walks past the code
+                    Op::Ret { val: None },
+                ],
+                spans: vec![],
+                pos: vec![],
+                host_id: None,
+            };
+            ctx.funcs[fid as usize] = fc;
+            return Ok(());
+        }
+        let thunk = ctx.intern(&format!("async_engine::{row}"));
+        if thunk_name == thunk {
+            let fc = rut_core::binary::FuncCode {
+                name: thunk_name,
+                regs: vec![TY_OPAQUE, TY_OPAQUE],
+                params: vec![TY_OPAQUE, TY_OPAQUE],
+                ret: TY_NIL,
+                is_method: false,
+                n_captures: 0,
+                argv: vec![],
+                labels: vec![],
+                code: vec![],
+                spans: vec![],
+                pos: vec![],
+                host_id: Some(thunk_name),
+            };
+            ctx.funcs[fid as usize] = fc;
+            return Ok(());
+        }
     }
     Ok(())
 }

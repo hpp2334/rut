@@ -163,10 +163,12 @@ and completion is one enqueue back into the ready queue.
 
 ## Structured concurrency, honestly
 
-The language today keeps the vocabulary deliberately small: launch,
-abort, and await. Racing (`await select { .. }`) and joining a launched
-future (`await handle`) parse but are compile-gated — the diagnostics
-name them as future work, and structured scopes (a block that cancels
+The language today keeps the core vocabulary deliberately small: launch,
+abort, and await. Racing (`select2` / `select_all`) and the manually
+resolvable future (`completer<T>()`) are stdlib surface over the same
+engine rows — the losers of a race are cancelled through the ordinary
+abort path. Joining a launched future (`await handle`) parses but is
+compile-gated, and structured scopes (a block that cancels
 its children on exit) are the same story. What exists now is already
 enough to structure real programs — the launch/abort receipt gives you
 explicit ownership of background work, and drop-based cancellation gives

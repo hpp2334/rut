@@ -12,8 +12,9 @@ vocabulary ([async and await](async.md)).
 | launch | `launch_future(f)` | live |
 | cancel | `h.abort()` | live |
 | join | `await h` on a receipt | compile-gated — "not in this build" |
-| race | `await select { .. }` | parses; semantics compile-gated |
-| first-of | `select_all(futs)` (stdlib) | lands with `select` |
+| race | `select2(a, b)` (stdlib) | live |
+| first-of | `select_all(futs)` (stdlib) | live |
+| manual futures | `completer<T>()` (stdlib) | live |
 | structured scopes | `scope { .. }` | specified, not built |
 
 ## The receipt — `LaunchedFutureHandle<T>`
@@ -86,25 +87,68 @@ case, never a trap; join re-enqueues the awaiter the same way an
 in-body `await` parks, so the value surfaces on the driving loop, not
 through a callback.
 
-## `select` (specified)
+## Racing — `select2` / `select_all` (stdlib)
 
 ```rut
-await select {
-    http.fetch(url)  resp  -> handle(resp),
-    timeout(ms)             -> handle_timeout(),
+use async_host::{ sleep, select2, Either2 };
+
+async fn fetch_or_timeout(cx: RunContext) -> str {
+    let winner = await select2(slow_fetch(cx), sleep(50));
+    if (winner.is_a()) {
+        return winner.a_value();
+    }
+    return "timeout";
 }
 ```
 
-- `await select { .. }` races futures; the **winner's value drives its
-  arm**; the losers are dropped — which means **cancelled** (their drop
-  paths run, pending sleeps die with them).
-- Arms use `->` like `when`: `fut -> expr` discards the resolved value;
-  `fut x -> expr` binds it to `x` (arm-local binding).
-- `select_all(futs)` (stdlib, built on `select`) resolves with the
-  first ready value.
+- `select2(a, b)` races two futures; the call **mints the race** —
+  nothing runs until `await` (or `launch_future`) drives it. The
+  answer is `Either2<T, U>`: `is_a()`/`a_value()` read the first
+  future's side, `is_b()`/`b_value()` the second's. The winner's type
+  is the fn signature's `Either2<T, U>` — computed at the call site,
+  never a cast.
+- The **losers are cancelled** the moment a winner is settled: their
+  drop paths run (pending sleeps die with them, `Disposal` hooks
+  fire). A cancelled race (`h.abort()` on the race future) cascades
+  through its children.
+- `select_all<T>(futs)` races a whole `[Future<T>]` cohort and
+  resolves with `(i, v)` — the winner's index and value — cancelling
+  every other still-live member. Ties (two members already retired)
+  break by index order.
 
-The grammar parses today; the semantics are gated with
-"`await select` is not in this build".
+`Either2` is an ordinary generic class (`left: ?A; right: ?B`) —
+rut's enums are the C-style member set, so the two-sided answer is
+private fields plus accessors, not pattern arms.
+
+## Manual futures — `completer<T>()`
+
+`completer<T>()` mints a cold `Future<T>` **and** the resolution right
+beside it — the primitive that turns a plain callback into a future the
+whole `await`/`select2` vocabulary drives:
+
+```rut
+use async_host::{ completer, Completer, launch_future, sleep };
+
+// a PLAIN fn returning a Future; no async block needed:
+fn fetch_like(tag: str) -> Future<str> {
+    let (f, done) = completer<str>();
+    launch_future(settle_later(done, tag));   // the "callback" side
+    return f;
+}
+
+async fn settle_later(cx: RunContext, done: Completer<str>, tag: str) -> nil {
+    await sleep(10);
+    done.resolve(tag);
+}
+```
+
+- `done.resolve(v)` settles the future and wakes its awaiter; it
+  answers `false` when the future already retired — resolved,
+  cancelled, or abandoned (the same stability `abort()` has). The
+  right consumes itself: one resolve.
+- `Completer<T>` is only the **right**, not the future — a
+  `LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine
+  minted future it settles is the awaitable.
 
 ## Structure and fairness
 

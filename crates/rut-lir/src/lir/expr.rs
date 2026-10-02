@@ -191,12 +191,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // an async body — elsewhere it diagnoses
                 crate::lir::asyncfn::compile_await(self, expr, sp)
             }
-            ExprKind::Select { .. } => {
-                // `await select` keeps parsing; its
-                // semantics are the structured-competition batch
-                self.ctx.err(sp, "`await select` is not in this build");
-                Err(())
-            }
             ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
             ExprKind::Struct { ty, fields } => self.compile_struct(ty, fields, expected, sp),
             ExprKind::ArrayLit { elems } => {

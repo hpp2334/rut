@@ -202,10 +202,6 @@ impl CallCx<'_> {
                 for a in arms {
                     match self.ctx.ast.arm(*a) {
                         ArmKind::WhenArm { body, .. } => self.walk_expr(*body),
-                        ArmKind::SelectArm { fut, bind: _, body } => {
-                            self.walk_expr(*fut);
-                            self.walk_expr(*body);
-                        }
                     }
                 }
             }

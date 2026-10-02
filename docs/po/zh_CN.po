@@ -306,7 +306,7 @@ msgid "The host futures bridge"
 msgstr "宿主 future 桥"
 
 
-#: src/SUMMARY.md:84 src/tutorial/async.md:167
+#: src/SUMMARY.md:84 src/tutorial/async.md:168
 #: src/reference/workers-and-channels.md:1
 msgid "Workers and channels"
 msgstr "worker 与通道"
@@ -1896,7 +1896,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:240 src/tutorial/types.md:278
 #: src/tutorial/traits.md:329 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:257 src/tutorial/async.md:179
+#: src/tutorial/modules.md:257 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:387
 msgid "Put it together"
 msgstr "综合运用"
@@ -5615,25 +5615,25 @@ msgstr ""
 
 
 #: src/tutorial/async.md:157
-msgid "`await select`, join, and structured scopes"
-msgstr "`await select`、join 与结构化作用域"
+msgid "Racing futures and the join tier"
+msgstr "竞速 future 与 join 层级"
 
 
 #: src/tutorial/async.md:159
 msgid ""
-"Racing futures (`await select { fut1 -> .., fut2 x -> .. }`) and joining a launched future's value (`await handle`) are spelled in the grammar but not in this build — the compiler gates them. Cancellation _is_ here: `handle.abort()` flags the frame, and the probe at its next checkpoint unwinds it deterministically, running cleanup in reverse declaration order. See [launched futures](../reference/launched-futures.md) for the roadmap."
+"`select2(a, b)` races two futures and answers the first-ready side as an `Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are cancelled, their drop paths running at their next checkpoint. `select_all(futs)` extends the race to a cohort, answering `(i, v)`. Joining a launched future's value (`await handle`) is still spelled in the grammar but not in this build — the compiler gates it. See [launched futures](../reference/launched-futures.md) for the race and completer surfaces."
 msgstr ""
-"竞速 future（`await select { fut1 -> .., fut2 x -> .. }`）与接取已 launch 的 future 的值（`await handle`）在语法里写得出来，但在当前构建中不可用——编译器把它们拦下。取消_已经落地_：`handle.abort()` 给帧打上标记，下一个检查点处的探针确定性地将它展开，按声明的逆序运行清理。路线图见[已启动的 future](../reference/launched-futures.md)。"
+"`select2(a, b)` 对两个 future 竞速，以 `Either2` 应答先就绪的一侧（`is_a()`/`a_value()` 或 `is_b()`/`b_value()`）；落败者会被取消，各自的 drop 路径在下一个检查点运行。`select_all(futs)` 把竞速扩展到一整组，应答 `(i, v)`。连接已启动 future 的值（`await handle`）仍在语法里拼写，但本构建尚未实现——编译器会设门。竞速与 completer 表面见[已启动的 future](../reference/launched-futures.md)。"
 
 
-#: src/tutorial/async.md:169
+#: src/tutorial/async.md:170
 msgid ""
 "For true parallelism, a host can spawn **workers** — separate VMs on separate threads with separate heaps. There is no shared memory: all data crosses typed channels, and what may cross is a checked rule — primitives and `str` copy; a cell (vec, record, class instance) transfers when exclusively held, else deep-copies; endpoints (`Sender`/`Receiver`) transfer; **closures do not cross**. A trap in a worker kills only that worker. The API is a host facility (`spawn_worker`, `Channel<T>`), so its shape depends on your embedder — see [workers and channels](../reference/workers-and-channels.md)."
 msgstr ""
 "要真正的并行，宿主可以生成 **worker**——独立线程上、拥有独立堆的独立 VM。没有共享内存：所有数据都经由类型化通道穿越，而什么可以穿越是一条受检规则——基本类型和 `str` 复制；单元（vec、记录、类实例）在独占持有时转移，否则深复制；端点（`Sender`/`Receiver`）转移；**闭包不穿越**。worker 里的陷阱只杀死那个 worker。这个 API 是宿主设施（`spawn_worker`、`Channel<T>`），它的形状取决于你的嵌入方——参见 [worker 与通道](../reference/workers-and-channels.md)。"
 
 
-#: src/tutorial/async.md:181
+#: src/tutorial/async.md:182
 msgid ""
 "```rut\n"
 "use core::{ RunContext };\n"
@@ -5659,7 +5659,7 @@ msgstr ""
 "```rutuse core::{ RunContext };use async_host::{ launch_future, sleep };use ink::{ Logger };async fn countdown(cx: RunContext, log: Logger, n: u32) {    let mut i = n;    while (i > 0) {        log.info(f\"t-{i}\");        await sleep(500);        i -= 1;    }    log.info(\"lift-off\");}entry fn main() {    let log = Logger.new(\"countdown\");    launch_future(countdown(log, 3));}```"
 
 
-#: src/tutorial/async.md:209
+#: src/tutorial/async.md:210
 msgid "Next: [the standard library](stdlib.md)."
 msgstr "下一章：[标准库](stdlib.md)。"
 
@@ -7913,9 +7913,9 @@ msgstr "结构化并发，如实相告"
 
 #: src/core-concepts/async-model.md:166
 msgid ""
-"The language today keeps the vocabulary deliberately small: launch, abort, and await. Racing (`await select { .. }`) and joining a launched future (`await handle`) parse but are compile-gated — the diagnostics name them as future work, and structured scopes (a block that cancels its children on exit) are the same story. What exists now is already enough to structure real programs — the launch/abort receipt gives you explicit ownership of background work, and drop-based cancellation gives it a clean off switch — but nothing in the model silently cancels siblings on your behalf. See the reference on [async and await](../reference/async.md), [launched futures](../reference/launched-futures.md), and the [host futures bridge](../reference/host-futures.md); the [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a full program living inside this loop."
+"The language today keeps the core vocabulary deliberately small: launch, abort, and await. Racing (`select2` / `select_all`) and the manually resolvable future (`completer<T>()`) are stdlib surface over the same engine rows — the losers of a race are cancelled through the ordinary abort path. Joining a launched future (`await handle`) parses but is compile-gated, and structured scopes (a block that cancels its children on exit) are the same story. What exists now is already enough to structure real programs — the launch/abort receipt gives you explicit ownership of background work, and drop-based cancellation gives it a clean off switch — but nothing in the model silently cancels siblings on your behalf. See the reference on [async and await](../reference/async.md), [launched futures](../reference/launched-futures.md), and the [host futures bridge](../reference/host-futures.md); the [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a full program living inside this loop."
 msgstr ""
-"这门语言今天刻意保持很小的词汇表：launch、abort 和 await。竞速（`await select { .. }`）与 join 已启动的 future（`await handle`）能解析但被编译期闸住——诊断把它们标为未来工作，结构化作用域（一个在退出时取消其子帧的块）也是同样的情况。现有机制已足以组织真实的程序——launch/abort 回执让你对后台工作拥有显式所有权，基于 drop 的取消给了它一个干净的开关——但模型中没有任何东西会替你悄悄取消兄弟 future。参见关于[异步与 await](../reference/async.md)、[已启动的 future](../reference/launched-futures.md)与[宿主 future 桥](../reference/host-futures.md)的参考章节；[GitHub 查看器 CLI](../examples/06-github-viewer-cli.md) 示例展示了一个完整程序如何活在这个循环里。"
+"语言今天刻意保持核心词汇很小：启动、取消与等待。竞速（`select2` / `select_all`）与可手工完成的 future（`completer<T>()`）是架在同一批引擎行上的标准库表面——竞速的落败者经由普通的取消路径被取消。连接已启动 future 的值（`await handle`）可以解析但被编译设门，结构化作用域（一个在退出时取消其子任务的块）也是同样的故事。现有的一切已足以构建真实的程序——启动/取消回执让你显式拥有后台工作，基于 drop 的取消给它一个干净的开关——但模型中没有任何东西会替你静默取消兄弟任务。参见参考书目的[异步与等待](../reference/async.md)、[已启动的 future](../reference/launched-futures.md)与[宿主 future 桥](../reference/host-futures.md)；[GitHub 查看器 CLI](../examples/06-github-viewer-cli.md)示例展示了一个活在这个循环里的完整程序。"
 
 
 #: src/core-concepts/memory.md:3
@@ -12199,11 +12199,6 @@ msgid "`host`"
 msgstr "`host`"
 
 
-#: src/reference/lexical-structure.md:47
-msgid "`select`"
-msgstr "`select`"
-
-
 #: src/reference/lexical-structure.md:48
 msgid "`true`"
 msgstr "`true`"
@@ -12292,8 +12287,8 @@ msgstr "`as`"
 
 
 #: src/reference/lexical-structure.md:59
-msgid "the numeric cast (`x as u32`) and the `select` arm bind"
-msgstr "数值类型转换（`x as u32`）与 `select` 分支绑定"
+msgid "the numeric cast (`x as u32`)"
+msgstr "数值转换（`x as u32`）"
 
 
 #: src/reference/lexical-structure.md:60
@@ -17396,7 +17391,7 @@ msgstr ""
 "```"
 
 
-#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:27
+#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:28
 #: src/reference/reflection.md:97
 msgid "Laws:"
 msgstr "法则："
@@ -18958,9 +18953,9 @@ msgstr ""
 
 #: src/reference/async.md:179
 msgid ""
-"See [launched futures](launched-futures.md) for receipts, cancellation, and the join/select tier; [the host futures bridge](host-futures.md) for backing a host async fn with Rust; [workers and channels](workers-and-channels.md) for isolate parallelism. A worked user-defined future lives in [the custom-async example](../examples/04-custom-async.md)."
+"See [launched futures](launched-futures.md) for receipts, cancellation, and the race/completer tier (`select2` / `select_all` / `completer`); [the host futures bridge](host-futures.md) for backing a host async fn with Rust; [workers and channels](workers-and-channels.md) for isolate parallelism. A worked user-defined future lives in [the custom-async example](../examples/04-custom-async.md)."
 msgstr ""
-"回执、取消与 join/select 层见[已启动的 future](launched-futures.md)；用 Rust 支撑宿主 async fn 见[宿主 future 桥](host-futures.md)；隔离体并行见 [worker 与通道](workers-and-channels.md)。一个完整可运行的用户自定义 future 在[自定义异步示例](../examples/04-custom-async.md)里。"
+"回执、取消与竞速/completer 层级（`select2` / `select_all` / `completer`）见[已启动的 future](launched-futures.md)；用 Rust 支撑宿主异步函数见[宿主 future 桥](host-futures.md)；隔离并行见 [worker 与通道](workers-and-channels.md)。一个完整的用户自定义 future 见[自定义异步示例](../examples/04-custom-async.md)。"
 
 
 #: src/reference/launched-futures.md:3
@@ -18996,6 +18991,8 @@ msgstr "`launch_future(f)`"
 
 
 #: src/reference/launched-futures.md:12 src/reference/launched-futures.md:13
+#: src/reference/launched-futures.md:15 src/reference/launched-futures.md:16
+#: src/reference/launched-futures.md:17
 msgid "live"
 msgstr "可用"
 
@@ -19031,13 +19028,8 @@ msgstr "race"
 
 
 #: src/reference/launched-futures.md:15
-msgid "`await select { .. }`"
-msgstr "`await select { .. }`"
-
-
-#: src/reference/launched-futures.md:15
-msgid "parses; semantics compile-gated"
-msgstr "可解析；语义被编译期门控"
+msgid "`select2(a, b)` (stdlib)"
+msgstr "`select2(a, b)`（标准库）"
 
 
 #: src/reference/launched-futures.md:16
@@ -19050,91 +19042,96 @@ msgid "`select_all(futs)` (stdlib)"
 msgstr "`select_all(futs)`（标准库）"
 
 
-#: src/reference/launched-futures.md:16
-msgid "lands with `select`"
-msgstr "随 `select` 一起落地"
+#: src/reference/launched-futures.md:17
+msgid "manual futures"
+msgstr "手工 future"
 
 
 #: src/reference/launched-futures.md:17
+msgid "`completer<T>()` (stdlib)"
+msgstr "`completer<T>()`（标准库）"
+
+
+#: src/reference/launched-futures.md:18
 msgid "structured scopes"
 msgstr "结构化作用域"
 
 
-#: src/reference/launched-futures.md:17
+#: src/reference/launched-futures.md:18
 msgid "`scope { .. }`"
 msgstr "`scope { .. }`"
 
 
-#: src/reference/launched-futures.md:17
+#: src/reference/launched-futures.md:18
 msgid "specified, not built"
 msgstr "已规定，未实现"
 
 
-#: src/reference/launched-futures.md:19
+#: src/reference/launched-futures.md:20
 msgid "The receipt — `LaunchedFutureHandle<T>`"
 msgstr "回执——`LaunchedFutureHandle<T>`"
 
 
-#: src/reference/launched-futures.md:29
+#: src/reference/launched-futures.md:30
 msgid ""
 "The receipt is **not a `Future`**: `await h` diagnoses — the type system rejects it, never a runtime check."
 msgstr "回执**不是 `Future`**：`await h` 会被诊断——类型系统拒绝它，绝不是运行时检查。"
 
 
-#: src/reference/launched-futures.md:31
+#: src/reference/launched-futures.md:32
 msgid ""
 "It is **not re-launchable**: `launch_future(h)` is a type error for the same reason. A future is consumed exactly once — by `await` or by `launch_future`, never both, never twice."
 msgstr ""
 "它**不可再次启动**：出于同样的原因，`launch_future(h)` 是类型错误。一个 future 恰好被消费一次——被 `await` 或被 `launch_future`，绝不同时，绝不两次。"
 
 
-#: src/reference/launched-futures.md:34
+#: src/reference/launched-futures.md:35
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, `false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 "只有一个成员：`abort()`——如果帧被打了标志并重新入队则返回 `true`，已经结束则返回 `false`（重复 abort 是稳定且无害的）。"
 
 
-#: src/reference/launched-futures.md:38
+#: src/reference/launched-futures.md:39
 msgid "Cancellation"
 msgstr "取消"
 
 
-#: src/reference/launched-futures.md:40
+#: src/reference/launched-futures.md:41
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at its next checkpoint is the only place cancellation becomes observable** — it never interrupts mid-expression."
 msgstr "`abort()` 给帧打上取消标志并把它重新入队。**它的下一个检查点处的探针是取消变得可观察的唯一地点**——它绝不会在表达式中途打断。"
 
 
-#: src/reference/launched-futures.md:44
+#: src/reference/launched-futures.md:45
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr "在探针处，帧运行自己的 **drop 路径**："
 
 
-#: src/reference/launched-futures.md:46
+#: src/reference/launched-futures.md:47
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr "pending 边被清除——一个 pending 中的 `sleep` 随帧一同消亡；"
 
 
-#: src/reference/launched-futures.md:47
+#: src/reference/launched-futures.md:48
 msgid ""
 "every local releases **deterministically, in reverse declaration order** (`Disposal` impls run, [the Rc heap](rc-heap.md));"
 msgstr "每个局部变量都以**确定性的、声明相反的顺序**释放（`Disposal` impl 会运行，[Rc 堆](rc-heap.md)）；"
 
 
-#: src/reference/launched-futures.md:49
+#: src/reference/launched-futures.md:50
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr "状态退役（null）——之后的 `abort()` 调用应答 `false`。"
 
 
-#: src/reference/launched-futures.md:51
+#: src/reference/launched-futures.md:52
 msgid ""
 "Inside a future impl, `cx.cancelled()` reads the same flag as data, so a hand-written frame can honor cancellation at its own pace ([the host futures bridge](host-futures.md)). Cancellation is synchronous at the engine level (flag + re-enqueue); a frame parked on a host future only observes the flag when the loop drives it again."
 msgstr ""
 "在 future impl 内部，`cx.cancelled()` 把同一个标志作为数据读取，因此手写的帧可以按自己的节奏响应取消（[宿主 future 桥](host-futures.md)）。取消在引擎层面是同步的（打标志 + 重新入队）；停放在宿主 future 上的帧只有在循环再次驱动它时才会观察到该标志。"
 
 
-#: src/reference/launched-futures.md:57
+#: src/reference/launched-futures.md:58
 msgid ""
 "```rut\n"
 "use core::{ Disposal, DisposalContext, RunContext };\n"
@@ -19159,83 +19156,147 @@ msgstr ""
 "```rutuse core::{ Disposal, DisposalContext, RunContext };class Drops {    n: u32;}impl Disposal for Drops {    fn dispose(mut self, cx: DisposalContext) { self.n += 1; }}async fn job(cx: RunContext, seen: ?Drops) -> nil {    let buf = Drops { n: 0 };    await sleep(5000);    // if `job` is aborted while parked here, the probe at the sleep    // checkpoint runs the drop path: buf's dispose fires, then the    // locals release in reverse declaration order}```"
 
 
-#: src/reference/launched-futures.md:77
+#: src/reference/launched-futures.md:78
 msgid "Join (specified)"
 msgstr "join（已规定）"
 
 
-#: src/reference/launched-futures.md:79
+#: src/reference/launched-futures.md:80
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and produces its completion value. Until the join tier lands, `await h` diagnoses with the join law and the receipt stays non-awaitable."
 msgstr ""
 "回执就是 join 表面：`await h` join 已启动的 future 并产出其完成值。在 join 层落地之前，`await h` 会以 join 法则被诊断，回执保持不可 await。"
 
 
-#: src/reference/launched-futures.md:84
+#: src/reference/launched-futures.md:85
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled case, never a trap; join re-enqueues the awaiter the same way an in-body `await` parks, so the value surfaces on the driving loop, not through a callback."
 msgstr ""
 "计划中的法则：join 一个已取消的回执得到的是已取消情形，绝不是陷阱；join 以体内 `await` 停放的同样方式重新入队 awaiter，因此值是在驱动循环上浮现的，而不是经由回调。"
 
 
-#: src/reference/launched-futures.md:89
-msgid "`select` (specified)"
-msgstr "`select`（已规定）"
+#: src/reference/launched-futures.md:90
+msgid "Racing — `select2` / `select_all` (stdlib)"
+msgstr "竞速——`select2` / `select_all`（标准库）"
 
 
-#: src/reference/launched-futures.md:98
+#: src/reference/launched-futures.md:92
 msgid ""
-"`await select { .. }` races futures; the **winner's value drives its arm**; the losers are dropped — which means **cancelled** (their drop paths run, pending sleeps die with them)."
+"```rut\n"
+"use async_host::{ sleep, select2, Either2 };\n"
+"\n"
+"async fn fetch_or_timeout(cx: RunContext) -> str {\n"
+"    let winner = await select2(slow_fetch(cx), sleep(50));\n"
+"    if (winner.is_a()) {\n"
+"        return winner.a_value();\n"
+"    }\n"
+"    return \"timeout\";\n"
+"}\n"
+"```"
 msgstr ""
-"`await select { .. }` 让 future 竞速；**胜者的值驱动它所在的分支**；败者被 drop——这意味着**被取消**（它们的 drop 路径运行，pending 中的 sleep 随之消亡）。"
 
 
-#: src/reference/launched-futures.md:101
+#: src/reference/launched-futures.md:104
 msgid ""
-"Arms use `->` like `when`: `fut -> expr` discards the resolved value; `fut x -> expr` binds it to `x` (arm-local binding)."
+"`select2(a, b)` races two futures; the call **mints the race** — nothing runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, U>`: `is_a()`/`a_value()` read the first future's side, `is_b()`/`b_value()` the second's. The winner's type is the fn signature's `Either2<T, U>` — computed at the call site, never a cast."
 msgstr ""
-"分支像 `when` 一样使用 `->`：`fut -> expr` 丢弃已解析的值；`fut x -> expr` 把它绑定到 `x`（分支局部绑定）。"
+"`select2(a, b)` 对两个 future 竞速；这次调用**铸造竞速本身**——在被 `await`（或 `launch_future`）驱动之前什么都不会运行。应答是 `Either2<T, U>`：`is_a()`/`a_value()` 读第一个 future 一侧，`is_b()`/`b_value()` 读第二个。胜者的类型就是函数签名里的 `Either2<T, U>`——在调用点计算，绝不需要转换。"
 
 
-#: src/reference/launched-futures.md:103
+#: src/reference/launched-futures.md:110
 msgid ""
-"`select_all(futs)` (stdlib, built on `select`) resolves with the first ready value."
-msgstr "`select_all(futs)`（标准库，构建于 `select` 之上）以第一个就绪的值解析。"
+"The **losers are cancelled** the moment a winner is settled: their drop paths run (pending sleeps die with them, `Disposal` hooks fire). A cancelled race (`h.abort()` on the race future) cascades through its children."
+msgstr ""
+"胜者一经裁定，**落败者随即被取消**：它们的 drop 路径照常运行（未决的 sleep 随之消亡，`Disposal` 钩子触发）。竞速本身被取消（对竞速 future 调 `h.abort()`）会级联到它的子 future。"
 
 
-#: src/reference/launched-futures.md:106
+#: src/reference/launched-futures.md:114
 msgid ""
-"The grammar parses today; the semantics are gated with \"`await select` is not in this build\"."
-msgstr "语法今天就能解析；语义被门控，诊断为 \"`await select` is not in this build\"。"
+"`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with `(i, v)` — the winner's index and value — cancelling every other still-live member. Ties (two members already retired) break by index order."
+msgstr ""
+"`select_all<T>(futs)` 对整组 `[Future<T>]` 竞速，应答 `(i, v)`——胜者的下标与值——并取消其余所有仍在运行的成员。平局（两个成员都已结束）按下标顺序裁决。"
 
 
-#: src/reference/launched-futures.md:109
+#: src/reference/launched-futures.md:119
+msgid ""
+"`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums are the C-style member set, so the two-sided answer is private fields plus accessors, not pattern arms."
+msgstr ""
+"`Either2` 是一个普通的泛型类（`left: ?A; right: ?B`）——rut 的枚举是 C 风格的成员集，所以这种两侧应答用的是私有字段加访问器，而不是模式分支。"
+
+
+#: src/reference/launched-futures.md:123
+msgid "Manual futures — `completer<T>()`"
+msgstr "手工 future——`completer<T>()`"
+
+
+#: src/reference/launched-futures.md:125
+msgid ""
+"`completer<T>()` mints a cold `Future<T>` **and** the resolution right beside it — the primitive that turns a plain callback into a future the whole `await`/`select2` vocabulary drives:"
+msgstr ""
+"`completer<T>()` 铸造一个冷的 `Future<T>`，并在旁边交出完成权——这个原语把普通回调变成整个 `await`/`select2` 词汇都能驱动的 future："
+
+
+#: src/reference/launched-futures.md:129
+msgid ""
+"```rut\n"
+"use async_host::{ completer, Completer, launch_future, sleep };\n"
+"\n"
+"// a PLAIN fn returning a Future; no async block needed:\n"
+"fn fetch_like(tag: str) -> Future<str> {\n"
+"    let (f, done) = completer<str>();\n"
+"    launch_future(settle_later(done, tag));   // the \"callback\" side\n"
+"    return f;\n"
+"}\n"
+"\n"
+"async fn settle_later(cx: RunContext, done: Completer<str>, tag: str) -> nil {\n"
+"    await sleep(10);\n"
+"    done.resolve(tag);\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/launched-futures.md:145
+msgid ""
+"`done.resolve(v)` settles the future and wakes its awaiter; it answers `false` when the future already retired — resolved, cancelled, or abandoned (the same stability `abort()` has). The right consumes itself: one resolve."
+msgstr ""
+"`done.resolve(v)` 落定 future 并唤醒其等待者；当该 future 已经结束——已完成、已取消或已被遗弃——它应答 `false`（与 `abort()` 同样的稳定性）。完成权自我消费：仅可 resolve 一次。"
+
+
+#: src/reference/launched-futures.md:149
+msgid ""
+"`Completer<T>` is only the **right**, not the future — a `LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted future it settles is the awaitable."
+msgstr ""
+"`Completer<T>` 只是**完成权**，不是 future——它是 `LaunchedFutureHandle` 的同类。对它 `await` 会被诊断；它所落定的、由引擎铸造的 future 才是可等待的那个。"
+
+
+#: src/reference/launched-futures.md:153
 msgid "Structure and fairness"
 msgstr "结构与公平性"
 
 
-#: src/reference/launched-futures.md:111
+#: src/reference/launched-futures.md:155
 msgid ""
 "v1 launched futures are **unstructured**: aborting a frame does not abort frames it awaits. Structured scopes — `scope { .. }` cancelling children on exit — are the specified remedy."
 msgstr ""
 "v1 已启动的 future 是**非结构化的**：abort 一个帧不会 abort 它所 await 的帧。结构化作用域——`scope { .. }` 在退出时取消子帧——是已规定的补救。"
 
 
-#: src/reference/launched-futures.md:114
+#: src/reference/launched-futures.md:158
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park or completion, so one greedy future cannot starve the queue. Priorities are not in the model."
 msgstr ""
 "就绪环是**轮转（round-robin）**的：每次驱动把一个帧运行到它的下一次停放或完成，因此一个贪婪的 future 无法饿死队列。优先级不在模型之中。"
 
 
-#: src/reference/launched-futures.md:117
+#: src/reference/launched-futures.md:161
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the embedder's idle test ([async and await](async.md))."
 msgstr ""
 "`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——这是嵌入方的空闲判据（[异步与 await](async.md)）。"
 
 
-#: src/reference/launched-futures.md:120
+#: src/reference/launched-futures.md:164
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; the frame is retired either way, and its locals ran their drop path."
 msgstr ""

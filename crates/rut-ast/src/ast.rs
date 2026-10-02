@@ -524,8 +524,6 @@ pub enum StmtKind {
 #[derive(Clone, Debug)]
 pub enum ArmKind {
     WhenArm { pats: Vec<NodeHandle<AnyPat>>, body: NodeHandle<AnyExpr> },
-    /// `fut -> body` / `fut as name -> body`
-    SelectArm { fut: NodeHandle<AnyExpr>, bind: Option<IdentId>, body: NodeHandle<AnyExpr> },
 }
 
 // ---- patterns (constructor/binding forms per corpus) ----
@@ -604,8 +602,6 @@ pub enum ExprKind {
     ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Await { expr: NodeHandle<AnyExpr> },
-    /// `select { ... }` — only reachable as `await select { .. }`
-    Select { arms: Vec<NodeHandle<AnyArm>> },
     /// `expr is Type` — relational precedence, non-associative
     Is { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
     /// `expr as T` — the numeric cast, truncating like C/Rust; binds

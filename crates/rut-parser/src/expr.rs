@@ -21,9 +21,7 @@ use crate::ty::TypeFrame;
 use crate::{is_reserved_kw, Parser, EXPR_MAX};
 
 /// The ten numeric primitive names — the only spellings an `as` cast
-/// accepts as its right-hand side. When the word after
-/// `as` is anything else, the keyword belongs to the select-arm bind
-/// (`fut as name`), which shares it.
+/// accepts as its right-hand side.
 fn is_numeric_prim(s: &str) -> bool {
     matches!(s, "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64")
 }
@@ -68,7 +66,7 @@ pub(crate) struct ExprFrame {
 
 enum ExprStage {
     Start,
-    /// waiting for an atom (or the select form) — the operand
+    /// waiting for an atom — the operand
     Operand,
     /// waiting for the `is` right-hand type
     IsTy,
@@ -128,8 +126,7 @@ impl ExprFrame {
     }
 
     /// sweep prefix operators (`-` `!` `~` `*` `&` `await`), then fetch an
-    /// atom. `await select {..}` is the one prefix form that replaces its
-    /// operand outright.
+    /// atom.
     fn fetch_operand(&mut self, p: &mut Parser) -> Step {
         self.stage = ExprStage::Operand;
         if let Some(f) = self.sweep(p) {
@@ -156,14 +153,7 @@ impl ExprFrame {
                 Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
                 Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
-                _ if p.at_kw("await") => {
-                    let is_select = matches!(&p.peek(1).tok, Tok::Ident(s) if s == "select")
-                        && matches!(p.peek(2).tok, Tok::LBrace);
-                    if is_select {
-                        return Some(Frame::Select(SelectFrame::new(p.span())));
-                    }
-                    Some(Pfx::Await)
-                }
+                _ if p.at_kw("await") => Some(Pfx::Await),
                 _ => None,
             };
             let Some(pfx) = pfx else { break };
@@ -290,10 +280,9 @@ impl ExprFrame {
                     // truncating like C/Rust. Left-associative at level 12,
                     // tighter than `*` (Rust placement), so `a * b as u32`
                     // casts `b` and `x as u32 as u64` chains. The RHS is a
-                    // naming position type; when the next word is not one
-                    // of the numeric primitives the keyword is left for the
-                    // select-arm bind (`fut as name`), which
-                    // shares it.
+                    // naming position type restricted to the numeric
+                    // primitives — anything else leaves `as` unmatched
+                    // (the caller's expect diagnoses it).
                     p.bump(); // the `as` keyword
                     self.reduce_while(p, 12);
                     self.stage = ExprStage::AsTy;
@@ -1120,69 +1109,5 @@ impl FStrFrame {
             p.restore_from_hole(toks, pos, ed, ne);
         }
         self.step(p)
-    }
-}
-
-// ---- `await select { .. }` ----
-
-pub(crate) struct SelectFrame {
-    sp: Span,
-    arms: Vec<NodeHandle<AnyArm>>,
-    cur: Option<(NodeHandle<AnyExpr>, Option<IdentId>)>,
-    cur_sp: Span,
-}
-
-impl SelectFrame {
-    pub(crate) fn new(sp: Span) -> Self {
-        SelectFrame { sp, arms: Vec::new(), cur: None, cur_sp: sp }
-    }
-
-    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        p.bump(); // await
-        p.bump(); // select
-        p.expect(Tok::LBrace);
-        self.arms_top(p)
-    }
-
-    fn arms_top(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::RBrace) {
-            let arms = std::mem::take(&mut self.arms);
-            return Step::Pop(Done::Expr(p.expr(ExprKind::Select { arms }, self.sp.to(p.span()))));
-        }
-        self.cur_sp = p.span();
-        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
-    }
-
-    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
-        match d {
-            Done::Expr(e) => match self.cur.take() {
-                None => {
-                    // the future — `as name` binds it
-                    let bind = if p.at_kw("as") {
-                        p.bump();
-                        let Some(id) = p.expect_ident("a binding name") else {
-                            return Step::Pop(Done::Failed);
-                        };
-                        Some(id)
-                    } else {
-                        None
-                    };
-                    p.expect(Tok::Arrow);
-                    self.cur = Some((e, bind));
-                    Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
-                }
-                Some((fut, bind)) => {
-                    let node = p.arm(
-                        ArmKind::SelectArm { fut, bind, body: e },
-                        self.cur_sp.to(p.span()),
-                    );
-                    self.arms.push(node);
-                    p.eat_punct(Tok::Comma);
-                    self.arms_top(p)
-                }
-            },
-            Done::Failed => Step::Pop(Done::Failed),
-            _ => unreachable!("select frame receives expressions"),
-        }
     }
 }

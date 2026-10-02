@@ -44,7 +44,7 @@ The keyword set is exactly:
 | `while` | `for` | `of` | `return` | `when` |
 | `enum` | `struct` | `class` | `trait` | `impl` |
 | `requires` | `use` | `pub` | `static` | `async` |
-| `await` | `extern` | `is` | `host` | `select` |
+| `await` | `extern` | `is` | `host` | |
 | `true` | `false` | `nil` | | |
 
 Contextual words — ordinary identifiers elsewhere:
@@ -56,7 +56,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `self` | the explicit receiver, first parameter of an instance method |
 | `Self` | names the enclosing class inside its body; the class-private literal `Self { .. }` |
 | `new` | not special — the conventional construction-method name (`Rect.new(..)`) |
-| `as` | the numeric cast (`x as u32`) and the `select` arm bind |
+| `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
 

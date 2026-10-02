@@ -956,6 +956,14 @@ impl Vm {
         self.heap.alloc_record_zeroed(ty, n)
     }
 
+    /// Box `raw` as the `?opt_ty` one-slot cell; the slot owns one
+    /// reference (the payload's own is the caller's to mind — the
+    /// select composite's `?T` answer fields are the intended caller,
+    /// and they retain through `set_record_field`).
+    pub fn alloc_opt_value(&self, opt_ty: TypeId, raw: Slot) -> Result<Slot, Trap> {
+        self.heap.alloc_opt_value(opt_ty, raw)
+    }
+
     /// The checkpoint enum's immortal member singleton (the engine
     /// half's state writes answer with the minted cell, per the survey).
     pub fn enum_member_slot(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {

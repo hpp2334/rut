@@ -21,10 +21,42 @@
 //     raw frame and cx), so the compiler mints a sealing wrapper that
 //     boxes both registers before the row is reached — the wire at this
 //     row is two boxes, and the body unboxes back to the raw pair.
+//   `__select2` — first-ready over two sealed frames: the body unboxes
+//     both, arms the select frame as their one shared waker, and parks
+//     on the driving loop until one retires; the resumed yield answers
+//     the winner's composite (`Either2<A, B>`, minted from the winner's
+//     answer lane) and cancels the still-live loser through the same
+//     cancel path `__abort` drives — the LIBRARY's law (a loser must
+//     not keep running), expressed over the engine's existing rows, not
+//     new machinery. The mint crosses back under the
+//     `Future<Either2<A, B>>` object spelling for the wrapper's
+//     downcast. Fixed arity is the boundary's law, not a choice: `host
+//     fn` signatures are concrete over the crossing set. When the two
+//     answers already allow it, wider reach composes in rut (see
+//     async_host's `select_all`).
+//   `__select_all` — the same race over a sealed cohort (`opaque` box
+//     over the `[Future<T>]` array): every member is armed and launched,
+//     the first retirement answers `(i, v)` sealed in the tuple, and
+//     every other still-live member is cancelled (the cascade runs
+//     through the members' own cancelled paths).
+//   `__completer` — the manually-resolvable future primitive: the body
+//     mints a cold `#frame@completer<T>` and seals it under the
+//     `Future<T>` object spelling; `ty` (a `type_id<T>()` constant) is
+//     the linked answer id the seal and frame names derive from.
+//   `__resolve` — the resolution RIGHT's engine half: store the answer,
+//     retire the frame, wake its awaiter — `__abort`-style stability
+//     (false when the frame already retired). The right itself is
+//     rut-side (`Completer`, a `LaunchedFutureHandle` sibling); the row
+//     never sees it.
+//   `__select2_yield` / `__select_all_yield` / `__completer_yield` — the
+//     three competition frames' `Future::yield` thunks, bound exactly
+//     like `__sleep_yield` (a sealing wrapper boxes the raw pair; the
+//     row's wire is two boxes).
 //
-// The engine-minted types themselves (`#frame@sleep`, the cx record)
-// are unspellable in rut source — `opaque` is the honest crossing
-// spelling: a sealed cell the body recovers through the erasure box.
+// The engine-minted types themselves (`#frame@sleep`, the cx record,
+// the per-answer select/completer frames) are unspellable in rut
+// source — `opaque` is the honest crossing spelling: a sealed cell the
+// body recovers through the erasure box.
 
 pub host fn __launch(f: opaque);
 
@@ -33,3 +65,17 @@ pub host fn __abort(f: opaque) -> bool;
 pub host fn __sleep(ms: u32) -> opaque;
 
 pub host fn __sleep_yield(f: opaque, cx: opaque);
+
+pub host fn __select2(a: opaque, b: opaque) -> opaque;
+
+pub host fn __select2_yield(f: opaque, cx: opaque);
+
+pub host fn __select_all(cohort: opaque) -> opaque;
+
+pub host fn __select_all_yield(f: opaque, cx: opaque);
+
+pub host fn __completer(ty: u32) -> opaque;
+
+pub host fn __resolve(f: opaque, v: opaque) -> bool;
+
+pub host fn __completer_yield(f: opaque, cx: opaque);

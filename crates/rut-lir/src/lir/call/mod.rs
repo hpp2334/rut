@@ -271,7 +271,46 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if name == sym::SLEEP_RAW {
                 crate::lir::asyncfn::ensure_sleep_future(self.ctx)?;
             }
-            if !generics.is_empty() {
+            // the structured-competition rows: minting rides the wrapper's
+            // call, keyed on the type arguments the wrapper spells (the
+            // concrete answers under its own substitution). Type args ride
+            // the CALL spelling — the decl rows stay concrete (`opaque`
+            // wires), the types are compile-time only.
+            // the structured-competition rows: minting rides the wrapper's
+            // call, keyed on the type arguments the wrapper spells (the
+            // concrete answers under its own substitution). Type args ride
+            // the CALL spelling — the decl rows stay concrete (`opaque`
+            // wires), the types are compile-time only — so the rows
+            // CONSUME their type arguments where every other used fn
+            // rejects them.
+            // the rows are matched by NAME TEXT (not well-known symbols —
+            // the well-known table is binary-format surface, pinned by the
+            // committed bundles): the caller's interner binds the extern
+            // row and the call from the same table, so the text compare is
+            // exact where it runs.
+            let row_name = self.ctx.name(name).to_string();
+            let row_takes_type_args =
+                row_name == "__select2" || row_name == "__select_all" || row_name == "__completer";
+            if row_takes_type_args {
+                let (want, what) = if row_name == "__select2" {
+                    (2, "`__select2<T, U>` takes the two futures' answer types — the typed surface is async_host's `select2`")
+                } else {
+                    (1, "the row takes the answer type as its type argument — the typed surface is async_host's")
+                };
+                if generics.len() != want {
+                    self.ctx.err(sp, what);
+                    return Err(());
+                }
+                let resolved: Vec<TypeId> = generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+                if row_name == "__select2" {
+                    crate::lir::asyncfn::ensure_select_future(self.ctx, resolved[0], resolved[1], sp)?;
+                } else if row_name == "__select_all" {
+                    crate::lir::asyncfn::ensure_select_all_future(self.ctx, resolved[0], sp)?;
+                } else {
+                    crate::lir::asyncfn::ensure_completer_future(self.ctx, resolved[0])?;
+                }
+            }
+            if !generics.is_empty() && !row_takes_type_args {
                 self.ctx.err(sp, format!("`{}` is a used fn and takes no type arguments", self.ctx.name(name)));
                 return Err(());
             }

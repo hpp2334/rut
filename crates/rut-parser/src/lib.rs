@@ -445,7 +445,7 @@ pub const RESERVED_KW: &[&str] = &[
     "let", "mut", "if", "else", "while", "for", "of", "return", "when",
     "enum", "class", "struct", "trait", "impl", "requires", "use", "pub",
     "static", "async", "await", "extern", "is", "host", "fn",
-    "true", "false", "nil", "select",
+    "true", "false", "nil",
 ];
 
 pub fn is_reserved_kw(s: &str) -> bool {

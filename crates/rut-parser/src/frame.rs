@@ -10,7 +10,7 @@ use rut_ast::ast::*;
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
-use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame, SelectFrame};
+use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame};
 use crate::item::{
     classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, TypeAliasFrame, UseFrame,
     MethodFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TraitFrame, TyDeclFrame, TypeBodyFrame,
@@ -71,7 +71,6 @@ pub(crate) enum Frame {
     Atom(AtomFrame),
     Lambda(LambdaFrame),
     FStr(FStrFrame),
-    Select(SelectFrame),
 }
 
 impl Frame {
@@ -103,7 +102,6 @@ impl Frame {
                 Frame::Atom(f) => f.step(p),
                 Frame::Lambda(f) => f.step(p),
                 Frame::FStr(f) => f.step(p),
-                Frame::Select(f) => f.step(p),
             },
             Some(d) => match self {
                 Frame::Module(f) => f.absorb(p, d),
@@ -131,7 +129,6 @@ impl Frame {
                 Frame::Atom(f) => f.absorb(p, d),
                 Frame::Lambda(f) => f.absorb(p, d),
                 Frame::FStr(f) => f.absorb(p, d),
-                Frame::Select(f) => f.absorb(p, d),
             },
         }
     }

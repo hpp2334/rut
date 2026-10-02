@@ -176,8 +176,9 @@ Fuel rides the existing per-op budget
 the frame and propagates `OutOfFuel`; a re-drive re-enters at the
 frame's checkpoint.
 
-See [launched futures](launched-futures.md) for receipts, cancellation, and the join/select
-tier; [the host futures bridge](host-futures.md) for backing a host
+See [launched futures](launched-futures.md) for receipts, cancellation, and the
+race/completer tier (`select2` / `select_all` / `completer`);
+[the host futures bridge](host-futures.md) for backing a host
 async fn with Rust; [workers and channels](workers-and-channels.md) for
 isolate parallelism. A worked user-defined future lives in
 [the custom-async example](../examples/04-custom-async.md).

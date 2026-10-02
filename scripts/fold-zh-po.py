@@ -34,8 +34,9 @@ PO = 'docs/po/zh_CN.po'
 # not in FRESH either keeps its msgstr byte-for-byte (unchanged
 # msgid), rides MECH (the mechanical cutover shapes), or folds to ""
 # — the English fallback BY DESIGN.
-FRESH = {}  # empty — every fold below landed in the catalog (66c159c and the
-# launched-futures.md rename); future sweeps add their strings here.
+FRESH = {}  # empty — the select/completer sweep's strings landed in the
+# catalog (zh_CN.po carries them; the swept msgids are byte-stable since).
+# old select-grammar prose (dropped as obsolete by the fold).
 
 
 

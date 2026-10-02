@@ -642,8 +642,8 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
 /// the rut replacement. Everything else, including words that are
 /// keywords in other languages (`switch`, `match`, `null`, `var`, …),
 /// lexes as an ordinary identifier.
-/// NOTE: `super` and `as` are NOT here — they are contextual (`pub(super)`;
-/// `as` binds select arms); the parser rejects
+/// NOTE: `super` and `as` are NOT here — they are contextual
+/// (`pub(super)`; `as` is the numeric-cast word); the parser rejects
 /// them in every other position.
 fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {

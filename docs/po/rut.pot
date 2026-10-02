@@ -2,7 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00
+"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -257,7 +258,7 @@ msgstr ""
 msgid "The host futures bridge"
 msgstr ""
 
-#: src/SUMMARY.md:84 src/tutorial/async.md:167
+#: src/SUMMARY.md:84 src/tutorial/async.md:168
 #: src/reference/workers-and-channels.md:1
 msgid "Workers and channels"
 msgstr ""
@@ -1575,7 +1576,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:240 src/tutorial/types.md:278
 #: src/tutorial/traits.md:329 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:257 src/tutorial/async.md:179
+#: src/tutorial/modules.md:257 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:387
 msgid "Put it together"
 msgstr ""
@@ -4204,20 +4205,22 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/async.md:157
-msgid "`await select`, join, and structured scopes"
+msgid "Racing futures and the join tier"
 msgstr ""
 
 #: src/tutorial/async.md:159
 msgid ""
-"Racing futures (`await select { fut1 -> .., fut2 x -> .. }`) and joining a "
-"launched future's value (`await handle`) are spelled in the grammar but not "
-"in this build — the compiler gates them. Cancellation _is_ here: "
-"`handle.abort()` flags the frame, and the probe at its next checkpoint "
-"unwinds it deterministically, running cleanup in reverse declaration order. "
-"See [launched futures](../reference/launched-futures.md) for the roadmap."
+"`select2(a, b)` races two futures and answers the first-ready side as an "
+"`Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are "
+"cancelled, their drop paths running at their next checkpoint. "
+"`select_all(futs)` extends the race to a cohort, answering `(i, v)`. Joining "
+"a launched future's value (`await handle`) is still spelled in the grammar "
+"but not in this build — the compiler gates it. See [launched "
+"futures](../reference/launched-futures.md) for the race and completer "
+"surfaces."
 msgstr ""
 
-#: src/tutorial/async.md:169
+#: src/tutorial/async.md:170
 msgid ""
 "For true parallelism, a host can spawn **workers** — separate VMs on "
 "separate threads with separate heaps. There is no shared memory: all data "
@@ -4230,7 +4233,7 @@ msgid ""
 "channels](../reference/workers-and-channels.md)."
 msgstr ""
 
-#: src/tutorial/async.md:181
+#: src/tutorial/async.md:182
 msgid ""
 "```rut\n"
 "use core::{ RunContext };\n"
@@ -4254,7 +4257,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:209
+#: src/tutorial/async.md:210
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -6213,15 +6216,17 @@ msgstr ""
 
 #: src/core-concepts/async-model.md:166
 msgid ""
-"The language today keeps the vocabulary deliberately small: launch, abort, "
-"and await. Racing (`await select { .. }`) and joining a launched future "
-"(`await handle`) parse but are compile-gated — the diagnostics name them as "
-"future work, and structured scopes (a block that cancels its children on "
-"exit) are the same story. What exists now is already enough to structure "
-"real programs — the launch/abort receipt gives you explicit ownership of "
-"background work, and drop-based cancellation gives it a clean off switch — "
-"but nothing in the model silently cancels siblings on your behalf. See the "
-"reference on [async and await](../reference/async.md), [launched "
+"The language today keeps the core vocabulary deliberately small: launch, "
+"abort, and await. Racing (`select2` / `select_all`) and the manually "
+"resolvable future (`completer<T>()`) are stdlib surface over the same engine "
+"rows — the losers of a race are cancelled through the ordinary abort path. "
+"Joining a launched future (`await handle`) parses but is compile-gated, and "
+"structured scopes (a block that cancels its children on exit) are the same "
+"story. What exists now is already enough to structure real programs — the "
+"launch/abort receipt gives you explicit ownership of background work, and "
+"drop-based cancellation gives it a clean off switch — but nothing in the "
+"model silently cancels siblings on your behalf. See the reference on [async "
+"and await](../reference/async.md), [launched "
 "futures](../reference/launched-futures.md), and the [host futures "
 "bridge](../reference/host-futures.md); the [GitHub viewer "
 "CLI](../examples/06-github-viewer-cli.md) example shows a full program "
@@ -9870,10 +9875,6 @@ msgstr ""
 msgid "`host`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:47
-msgid "`select`"
-msgstr ""
-
 #: src/reference/lexical-structure.md:48
 msgid "`true`"
 msgstr ""
@@ -9947,7 +9948,7 @@ msgid "`as`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:59
-msgid "the numeric cast (`x as u32`) and the `select` arm bind"
+msgid "the numeric cast (`x as u32`)"
 msgstr ""
 
 #: src/reference/lexical-structure.md:60
@@ -14368,7 +14369,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:27
+#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:28
 #: src/reference/reflection.md:97
 msgid "Laws:"
 msgstr ""
@@ -15733,10 +15734,11 @@ msgstr ""
 #: src/reference/async.md:179
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and "
-"the join/select tier; [the host futures bridge](host-futures.md) for backing "
-"a host async fn with Rust; [workers and channels](workers-and-channels.md) "
-"for isolate parallelism. A worked user-defined future lives in [the "
-"custom-async example](../examples/04-custom-async.md)."
+"the race/completer tier (`select2` / `select_all` / `completer`); [the host "
+"futures bridge](host-futures.md) for backing a host async fn with Rust; "
+"[workers and channels](workers-and-channels.md) for isolate parallelism. A "
+"worked user-defined future lives in [the custom-async "
+"example](../examples/04-custom-async.md)."
 msgstr ""
 
 #: src/reference/launched-futures.md:3
@@ -15767,6 +15769,8 @@ msgid "`launch_future(f)`"
 msgstr ""
 
 #: src/reference/launched-futures.md:12 src/reference/launched-futures.md:13
+#: src/reference/launched-futures.md:15 src/reference/launched-futures.md:16
+#: src/reference/launched-futures.md:17
 msgid "live"
 msgstr ""
 
@@ -15795,11 +15799,7 @@ msgid "race"
 msgstr ""
 
 #: src/reference/launched-futures.md:15
-msgid "`await select { .. }`"
-msgstr ""
-
-#: src/reference/launched-futures.md:15
-msgid "parses; semantics compile-gated"
+msgid "`select2(a, b)` (stdlib)"
 msgstr ""
 
 #: src/reference/launched-futures.md:16
@@ -15810,75 +15810,79 @@ msgstr ""
 msgid "`select_all(futs)` (stdlib)"
 msgstr ""
 
-#: src/reference/launched-futures.md:16
-msgid "lands with `select`"
+#: src/reference/launched-futures.md:17
+msgid "manual futures"
 msgstr ""
 
 #: src/reference/launched-futures.md:17
+msgid "`completer<T>()` (stdlib)"
+msgstr ""
+
+#: src/reference/launched-futures.md:18
 msgid "structured scopes"
 msgstr ""
 
-#: src/reference/launched-futures.md:17
+#: src/reference/launched-futures.md:18
 msgid "`scope { .. }`"
 msgstr ""
 
-#: src/reference/launched-futures.md:17
+#: src/reference/launched-futures.md:18
 msgid "specified, not built"
 msgstr ""
 
-#: src/reference/launched-futures.md:19
+#: src/reference/launched-futures.md:20
 msgid "The receipt — `LaunchedFutureHandle<T>`"
 msgstr ""
 
-#: src/reference/launched-futures.md:29
+#: src/reference/launched-futures.md:30
 msgid ""
 "The receipt is **not a `Future`**: `await h` diagnoses — the type system "
 "rejects it, never a runtime check."
 msgstr ""
 
-#: src/reference/launched-futures.md:31
+#: src/reference/launched-futures.md:32
 msgid ""
 "It is **not re-launchable**: `launch_future(h)` is a type error for the same "
 "reason. A future is consumed exactly once — by `await` or by "
 "`launch_future`, never both, never twice."
 msgstr ""
 
-#: src/reference/launched-futures.md:34
+#: src/reference/launched-futures.md:35
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, "
 "`false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 
-#: src/reference/launched-futures.md:38
+#: src/reference/launched-futures.md:39
 msgid "Cancellation"
 msgstr ""
 
-#: src/reference/launched-futures.md:40
+#: src/reference/launched-futures.md:41
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at "
 "its next checkpoint is the only place cancellation becomes observable** — it "
 "never interrupts mid-expression."
 msgstr ""
 
-#: src/reference/launched-futures.md:44
+#: src/reference/launched-futures.md:45
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr ""
 
-#: src/reference/launched-futures.md:46
+#: src/reference/launched-futures.md:47
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr ""
 
-#: src/reference/launched-futures.md:47
+#: src/reference/launched-futures.md:48
 msgid ""
 "every local releases **deterministically, in reverse declaration order** "
 "(`Disposal` impls run, [the Rc heap](rc-heap.md));"
 msgstr ""
 
-#: src/reference/launched-futures.md:49
+#: src/reference/launched-futures.md:50
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr ""
 
-#: src/reference/launched-futures.md:51
+#: src/reference/launched-futures.md:52
 msgid ""
 "Inside a future impl, `cx.cancelled()` reads the same flag as data, so a "
 "hand-written frame can honor cancellation at its own pace ([the host futures "
@@ -15887,7 +15891,7 @@ msgid ""
 "when the loop drives it again."
 msgstr ""
 
-#: src/reference/launched-futures.md:57
+#: src/reference/launched-futures.md:58
 msgid ""
 "```rut\n"
 "use core::{ Disposal, DisposalContext, RunContext };\n"
@@ -15910,18 +15914,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:77
+#: src/reference/launched-futures.md:78
 msgid "Join (specified)"
 msgstr ""
 
-#: src/reference/launched-futures.md:79
+#: src/reference/launched-futures.md:80
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and "
 "produces its completion value. Until the join tier lands, `await h` "
 "diagnoses with the join law and the receipt stays non-awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:84
+#: src/reference/launched-futures.md:85
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled "
 "case, never a trap; join re-enqueues the awaiter the same way an in-body "
@@ -15929,61 +15933,126 @@ msgid ""
 "callback."
 msgstr ""
 
-#: src/reference/launched-futures.md:89
-msgid "`select` (specified)"
+#: src/reference/launched-futures.md:90
+msgid "Racing — `select2` / `select_all` (stdlib)"
 msgstr ""
 
-#: src/reference/launched-futures.md:98
+#: src/reference/launched-futures.md:92
 msgid ""
-"`await select { .. }` races futures; the **winner's value drives its arm**; "
-"the losers are dropped — which means **cancelled** (their drop paths run, "
-"pending sleeps die with them)."
+"```rut\n"
+"use async_host::{ sleep, select2, Either2 };\n"
+"\n"
+"async fn fetch_or_timeout(cx: RunContext) -> str {\n"
+"    let winner = await select2(slow_fetch(cx), sleep(50));\n"
+"    if (winner.is_a()) {\n"
+"        return winner.a_value();\n"
+"    }\n"
+"    return \"timeout\";\n"
+"}\n"
+"```"
 msgstr ""
 
-#: src/reference/launched-futures.md:101
+#: src/reference/launched-futures.md:104
 msgid ""
-"Arms use `->` like `when`: `fut -> expr` discards the resolved value; `fut x "
-"-> expr` binds it to `x` (arm-local binding)."
+"`select2(a, b)` races two futures; the call **mints the race** — nothing "
+"runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, "
+"U>`: `is_a()`/`a_value()` read the first future's side, `is_b()`/`b_value()` "
+"the second's. The winner's type is the fn signature's `Either2<T, U>` — "
+"computed at the call site, never a cast."
 msgstr ""
 
-#: src/reference/launched-futures.md:103
+#: src/reference/launched-futures.md:110
 msgid ""
-"`select_all(futs)` (stdlib, built on `select`) resolves with the first ready "
-"value."
+"The **losers are cancelled** the moment a winner is settled: their drop "
+"paths run (pending sleeps die with them, `Disposal` hooks fire). A cancelled "
+"race (`h.abort()` on the race future) cascades through its children."
 msgstr ""
 
-#: src/reference/launched-futures.md:106
+#: src/reference/launched-futures.md:114
 msgid ""
-"The grammar parses today; the semantics are gated with \"`await select` is "
-"not in this build\"."
+"`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with "
+"`(i, v)` — the winner's index and value — cancelling every other still-live "
+"member. Ties (two members already retired) break by index order."
 msgstr ""
 
-#: src/reference/launched-futures.md:109
+#: src/reference/launched-futures.md:119
+msgid ""
+"`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums "
+"are the C-style member set, so the two-sided answer is private fields plus "
+"accessors, not pattern arms."
+msgstr ""
+
+#: src/reference/launched-futures.md:123
+msgid "Manual futures — `completer<T>()`"
+msgstr ""
+
+#: src/reference/launched-futures.md:125
+msgid ""
+"`completer<T>()` mints a cold `Future<T>` **and** the resolution right "
+"beside it — the primitive that turns a plain callback into a future the "
+"whole `await`/`select2` vocabulary drives:"
+msgstr ""
+
+#: src/reference/launched-futures.md:129
+msgid ""
+"```rut\n"
+"use async_host::{ completer, Completer, launch_future, sleep };\n"
+"\n"
+"// a PLAIN fn returning a Future; no async block needed:\n"
+"fn fetch_like(tag: str) -> Future<str> {\n"
+"    let (f, done) = completer<str>();\n"
+"    launch_future(settle_later(done, tag));   // the \"callback\" side\n"
+"    return f;\n"
+"}\n"
+"\n"
+"async fn settle_later(cx: RunContext, done: Completer<str>, tag: str) -> nil "
+"{\n"
+"    await sleep(10);\n"
+"    done.resolve(tag);\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/launched-futures.md:145
+msgid ""
+"`done.resolve(v)` settles the future and wakes its awaiter; it answers "
+"`false` when the future already retired — resolved, cancelled, or abandoned "
+"(the same stability `abort()` has). The right consumes itself: one resolve."
+msgstr ""
+
+#: src/reference/launched-futures.md:149
+msgid ""
+"`Completer<T>` is only the **right**, not the future — a "
+"`LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted "
+"future it settles is the awaitable."
+msgstr ""
+
+#: src/reference/launched-futures.md:153
 msgid "Structure and fairness"
 msgstr ""
 
-#: src/reference/launched-futures.md:111
+#: src/reference/launched-futures.md:155
 msgid ""
 "v1 launched futures are **unstructured**: aborting a frame does not abort "
 "frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
 "exit — are the specified remedy."
 msgstr ""
 
-#: src/reference/launched-futures.md:114
+#: src/reference/launched-futures.md:158
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
 "or completion, so one greedy future cannot starve the queue. Priorities are "
 "not in the model."
 msgstr ""
 
-#: src/reference/launched-futures.md:117
+#: src/reference/launched-futures.md:161
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
 "parked on Completers — the embedder's idle test ([async and "
 "await](async.md))."
 msgstr ""
 
-#: src/reference/launched-futures.md:120
+#: src/reference/launched-futures.md:164
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
 "the frame is retired either way, and its locals ran their drop path."

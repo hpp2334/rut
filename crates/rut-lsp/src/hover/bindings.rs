@@ -245,18 +245,6 @@ impl Cx<'_> {
                 for a in arms {
                     match self.ast.arm(*a) {
                         ArmKind::WhenArm { body, .. } => self.walk_expr(*body),
-                        ArmKind::SelectArm { fut, bind, body } => {
-                            // `fut as name -> body` binds `name` over the arm
-                            if let Some(b) = bind {
-                                let body_span = self.ast.span(body.id());
-                                let text = self.ast.name(*b);
-                                if let Some(decl) = ident_span(self.toks, self.ast.span(a.id()), text) {
-                                    self.push(text, decl, Span::new(decl.lo, body_span.hi), BindKind::Let, None, false);
-                                }
-                            }
-                            self.walk_expr(*fut);
-                            self.walk_expr(*body);
-                        }
                     }
                 }
             }
@@ -304,10 +292,6 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
         for a in arms {
             match ast.arm(*a) {
                 ArmKind::WhenArm { body, .. } => out.push(*body),
-                ArmKind::SelectArm { fut, bind: _, body } => {
-                    out.push(*fut);
-                    out.push(*body);
-                }
             }
         }
     }
@@ -349,7 +333,6 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
             out.push(*scrut);
             arm_bodies(ast, arms, &mut out);
         }
-        ExprKind::Select { arms } => arm_bodies(ast, arms, &mut out),
         ExprKind::Is { expr, .. } | ExprKind::Cast { expr, .. } => out.push(*expr),
         // `Block`/`Lambda` never reach here (the walker handles them);
         // literals and paths have no children. FStr holes are raw token

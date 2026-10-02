@@ -26,7 +26,7 @@
 //! (the child-level table mirrors the parser's reduce levels). The
 //! VM-verified suite (`tests/semantic_equiv.rs`) referees the table.
 //!
-//! **Flat mode** (`in_flat`): when-arm/select-arm INLINE bodies print
+//! **Flat mode** (`in_flat`): when-arm INLINE bodies print
 //! their statements without newline hooks — drains are suppressed (the
 //! enclosing arm's end drain catches the runs; the block's own lines
 //! flush the comments the scanner places on the arm's line; the comment
@@ -530,7 +530,7 @@ impl<'a> P<'a> {
     /// flat/broken element lists: ", " separators flat, or one element
     /// per line at the continuation band with trailing commas. Each
     /// element's own break points re-run fresh in broken mode (the
-    /// band's fresh indent gives them room). NOT for when/select arms —
+    /// band's fresh indent gives them room). NOT for when arms —
     /// those are always one-per-line.
     ///
     /// `spans` is the ELEMENT spans parallel to `items` (the drain and
@@ -1430,18 +1430,6 @@ impl<'a> P<'a> {
                     self.sp();
                     self.arm_body(body, span);
                 }
-                ArmKind::SelectArm { fut, bind, body } => {
-                    self.expr(fut);
-                    if let Some(b) = bind {
-                        self.sp();
-                        self.text("as ");
-                        self.text(self.a.name(b));
-                    }
-                    self.sp();
-                    self.text("->");
-                    self.sp();
-                    self.arm_body(body, span);
-                }
             }
             self.text(",");
             // the drain anchors on the cursor — the body's expr() just
@@ -1486,7 +1474,7 @@ impl<'a> P<'a> {
     }
 
     /// inline-flat eligibility: only terminal statements whose
-    /// expressions contain no block-holding constructs (when/select
+    /// expressions contain no block-holding constructs (when
     /// trees, nested blocks, block-bodied lambdas)
     fn flat_safe(&self, stmts: &[NodeHandle<AnyStmt>]) -> bool {
         stmts.iter().all(|s| match self.a.stmt(*s).clone() {
@@ -1500,7 +1488,7 @@ impl<'a> P<'a> {
 
     fn expr_flat(&self, h: NodeHandle<AnyExpr>) -> bool {
         match self.a.expr(h) {
-            ExprKind::Block { .. } | ExprKind::WhenExpr { .. } | ExprKind::Select { .. } => false,
+            ExprKind::Block { .. } | ExprKind::WhenExpr { .. } => false,
             ExprKind::Lambda { body, .. } => self.a.narrow_block(*body).is_none(),
             _ => true,
         }
@@ -1806,10 +1794,6 @@ impl<'a> P<'a> {
             ExprKind::Await { expr } => {
                 self.text("await ");
                 self.operand(expr, L_UNARY, false);
-            }
-            ExprKind::Select { arms } => {
-                self.text("select ");
-                self.arms(&arms, self.a.span(h.id()));
             }
             ExprKind::Is { expr, ty } => {
                 self.operand(expr, L_CMP, false);

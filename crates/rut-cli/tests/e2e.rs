@@ -1630,8 +1630,8 @@ entry fn main() -> nil {
     assert_eq!(lines, vec!["44 255 -1 2 2147483647 0 212 88 44 -2 255"]);
 
     // the cast RHS is restricted to the numeric primitives at the parse
-    // level — anything else leaves `as` for the select-arm bind
-    // (`fut as name`), so `1 as str` is a syntax error
+    // level — anything else leaves `as` unmatched, so `1 as str` is a
+    // syntax error
     let bad = "entry fn main() -> nil { let x = 1 as str; }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("expected")));

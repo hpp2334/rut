@@ -832,7 +832,20 @@ impl<'a> Ctx<'a> {
             }
             None => {
                 let iid = self.intern(inner);
-                self.types.dense_id_of_name(iid)?
+                let Some(eid) = self.types.dense_id_of_name(iid) else {
+                    return None;
+                };
+                // a COMPOSITE element row carried under its placeholder
+                // spelling (`Future<Either2<#T, #U>>`, `Future<(u32, #T)>`
+                // — the select2 surface): run the full substitution over
+                // the row — a nominal `Base<#T>` re-mints at the env's
+                // arguments, a tuple rebuilds its fields — never the
+                // dense hit alone, which would pin the placeholders into
+                // the call's answer type. Rows that substitute to
+                // themselves come back unchanged (a frame answer, `str`,
+                // a concrete inst), so the re-mint below dedups to the
+                // same inst.
+                self.subst_template_ty(eid, env)
             }
         };
         let fut_name = self.intern("Future");

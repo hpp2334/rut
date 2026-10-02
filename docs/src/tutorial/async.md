@@ -154,15 +154,16 @@ while (true) {
 }
 ```
 
-## `await select`, join, and structured scopes
+## Racing futures and the join tier
 
-Racing futures (`await select { fut1 -> .., fut2 x -> .. }`) and
-joining a launched future's value (`await handle`) are spelled in the
-grammar but not in this build — the compiler gates them. Cancellation
-*is* here: `handle.abort()` flags the frame, and the probe at its next
-checkpoint unwinds it deterministically, running cleanup in reverse
-declaration order. See [launched futures](../reference/launched-futures.md) for the
-roadmap.
+`select2(a, b)` races two futures and answers the first-ready side as
+an `Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers
+are cancelled, their drop paths running at their next checkpoint.
+`select_all(futs)` extends the race to a cohort, answering `(i, v)`.
+Joining a launched future's value (`await handle`) is still spelled in
+the grammar but not in this build — the compiler gates it. See
+[launched futures](../reference/launched-futures.md) for the race and
+completer surfaces.
 
 ## Workers and channels
 

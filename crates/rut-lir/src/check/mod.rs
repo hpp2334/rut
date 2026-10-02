@@ -369,6 +369,11 @@ pub struct Ctx<'a> {
     pub extra_vtable_fills: Vec<(TypeId, u32, u32)>,
     /// whether the engine-backed sleep future machinery is already minted
     pub sleep_minted: bool,
+    /// the engine-backed select/completer futures: composite answer (or
+    /// element answer) → the minted frame type — idempotent per answer
+    pub select_minted: std::collections::HashMap<(TypeId, TypeId), TypeId>,
+    pub completer_minted: std::collections::HashMap<TypeId, TypeId>,
+    pub select_all_minted: std::collections::HashMap<TypeId, TypeId>,
     /// per compiled async fn: the minted frame type, checkpoint enum,
     /// Future instantiation and its yield's vtable slot — minted by the
     /// weave before the body compiles, read by every call site
@@ -627,6 +632,9 @@ impl<'a> Ctx<'a> {
             engine_frames: std::collections::HashSet::new(),
             extra_vtable_fills: Vec::new(),
             sleep_minted: false,
+            select_minted: std::collections::HashMap::new(),
+            completer_minted: std::collections::HashMap::new(),
+            select_all_minted: std::collections::HashMap::new(),
             async_layout: std::collections::HashMap::new(),
             frame_yield_slot: std::collections::HashMap::new(),
             async_fns: std::collections::HashSet::new(),

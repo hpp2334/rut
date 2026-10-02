@@ -627,10 +627,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 kids(body.id(), out, self);
             }
-            Kind::Arm(ArmKind::SelectArm { fut, body, .. }) => {
-                kids(fut.id(), out, self);
-                kids(body.id(), out, self);
-            }
             Kind::Expr(ExprKind::Block { stmts }) => {
                 for s in stmts {
                     kids(s.id(), out, self);
@@ -673,11 +669,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             Kind::Expr(ExprKind::Lambda { body: b, .. }) => kids(b.id(), out, self),
             Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => kids(expr.id(), out, self),
-            Kind::Expr(ExprKind::Select { arms }) => {
-                for a in arms {
-                    kids(a.id(), out, self);
-                }
-            }
             Kind::Expr(ExprKind::Is { expr, .. }) => kids(expr.id(), out, self),
             Kind::Expr(ExprKind::Cast { expr, .. }) => kids(expr.id(), out, self),
             Kind::Expr(ExprKind::FStr { parts }) => {
@@ -807,10 +798,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 walk(body.id(), inside, self, assigned, captured);
             }
-            Kind::Arm(ArmKind::SelectArm { fut, body, .. }) => {
-                walk(fut.id(), inside, self, assigned, captured);
-                walk(body.id(), inside, self, assigned, captured);
-            }
             Kind::Expr(ExprKind::Block { stmts }) => {
                 for s in stmts {
                     walk(s.id(), inside, self, assigned, captured);
@@ -861,11 +848,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Kind::Expr(ExprKind::Lambda { body: b, .. }) => walk(b.id(), true, self, assigned, captured),
             Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
                 walk(expr.id(), inside, self, assigned, captured)
-            }
-            Kind::Expr(ExprKind::Select { arms }) => {
-                for a in arms {
-                    walk(a.id(), inside, self, assigned, captured);
-                }
             }
             Kind::Expr(ExprKind::Is { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
             Kind::Expr(ExprKind::Cast { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),

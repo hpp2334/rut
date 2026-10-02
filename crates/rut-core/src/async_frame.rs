@@ -78,3 +78,35 @@ pub const HOST_FRAME_PREFIX: &str = "#hframe@";
 /// slot every engine frame answers through ([`ANSWER_FIELD`]); the
 /// separate name is the host lane's reading of it.
 pub const HOST_ANSWER_FIELD: u32 = ANSWER_FIELD;
+
+// ---- the structured-competition frames (the select/completer landing)
+// The frame types are minted PER COMPOSITE ANSWER (their answer lane is
+// the composite: `Either2<A, B>`, the `(u32, T)` tuple, or the plain
+// answer type), so the names carry the answer spelling — the compiler
+// mints them from the wrapper's type arguments, and the engine bodies
+// re-derive the same text from the children's answer fields. One text,
+// one linked type row (names unify at link).
+
+/// The select future's checkpoint enum — shared by every select
+/// instantiation (identical two-state shape: fresh, parked).
+pub const SELECT_CKPT: &str = "#ckpt@select";
+/// The select2 frame's name prefix; the full name is this prefix, the
+/// composite answer spelling (`Either2<A, B>`), and `>`.
+pub const SELECT2_FRAME_PREFIX: &str = "#frame@select2<";
+/// The select-all cohort's checkpoint enum — shared, same shape as
+/// [`SELECT_CKPT`].
+pub const SELECT_ALL_CKPT: &str = "#ckpt@select_all";
+/// The select-all frame's name prefix; the full name is this prefix,
+/// the element answer spelling (`T`), and `>`.
+pub const SELECT_ALL_FRAME_PREFIX: &str = "#frame@select_all<";
+/// The completer future's checkpoint enum — one state (live); a
+/// resolved or cancelled completer retires to null.
+pub const COMPLETER_CKPT: &str = "#ckpt@completer";
+/// The completer frame's name prefix; the full name is this prefix,
+/// the answer spelling (`T`), and `>`.
+pub const COMPLETER_FRAME_PREFIX: &str = "#frame@completer<";
+/// Field 5 — select2's first child frame (the `a` future's cell);
+/// select-all's cohort (the sealed `[Future<T>]` array cell).
+pub const CHILD_A_FIELD: u32 = LOCALS_BASE;
+/// Field 6 — select2's second child frame (the `b` future's cell).
+pub const CHILD_B_FIELD: u32 = LOCALS_BASE + 1;

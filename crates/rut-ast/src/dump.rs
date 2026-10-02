@@ -390,14 +390,6 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, body.id())))));
                 "WhenArm"
             }
-            ArmKind::SelectArm { fut, bind, body } => {
-                fields.push(field("fut", DumpVal::Node(Box::new(node_dump(a, fut.id())))));
-                if let Some(b) = bind {
-                    fields.push(field("bind", DumpVal::Str(a.name(*b).to_string())));
-                }
-                fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, body.id())))));
-                "SelectArm"
-            }
         },
         Kind::Pat(k) => match k {
             PatKind::PatLit(e) => {
@@ -560,10 +552,6 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             ExprKind::Await { expr } => {
                 fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, expr.id())))));
                 "Await"
-            }
-            ExprKind::Select { arms } => {
-                fields.push(field("arms", DumpVal::Nodes(arms.iter().map(|&x| node_dump(a, x.id())).collect())));
-                "Select"
             }
             ExprKind::Is { expr, ty } => {
                 fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, expr.id())))));
