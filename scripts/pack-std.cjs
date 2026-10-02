@@ -168,6 +168,22 @@ const EXAMPLES = [
     deps: ["pouch"],
   },
   {
+    manifest: "examples/05-todolist-web/rut/biz/rut.jsonc",
+    deps: ["pouch", "nmapset"],
+  },
+  {
+    manifest: "examples/05-todolist-web/rut/ui/rut.jsonc",
+    deps: ["pouch", "nmapset"],
+  },
+  {
+    manifest: "examples/05-todolist-web/tests/store_probe/rut.jsonc",
+    deps: ["pouch"],
+  },
+  {
+    manifest: "examples/05-todolist-web/tests/t1_harness/rut.jsonc",
+    deps: ["pouch", "nmapset"],
+  },
+  {
     manifest: "examples/06-github-viewer-cli/rut.jsonc",
     deps: ["http"],
   },

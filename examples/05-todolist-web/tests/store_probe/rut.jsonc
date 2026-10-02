@@ -17,6 +17,6 @@
     // the toolchain's pouch, from the CDN — the same pinned jsDelivr row
     // the app's own manifests spell (the tests prime an offline remote
     // from the committed dist/std artifacts, so the gate never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "3ceedd188659972ff6c797289e57e9fc9a686da9ea55f49ceb28ce4127c6ac80" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "e6da59110d3b83753965bf3c8bf15c274fb89cf12939e0ad96d21b739a67384a" }
   }
 }
