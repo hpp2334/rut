@@ -152,7 +152,8 @@ fn opaque_downcast_member_carries_the_nullable_contract() {
 fn the_old_spellings_are_gone() {
     // builtin-surface phase 2: the free `downcast<T>` fn is deleted (the
     // engine alias too) and the boot name IS `opaque` — the old call
-    // spellings diagnose, they do not fall through to some alias.
+    // spellings are ordinary unknown names now, they do not fall
+    // through to some alias.
     // The old boot name is assembled from pieces so the completion
     // check's repo-wide grep for `\bOpaque\b` stays zero.
     let old_boot_name = format!("Opa{}ue", "q");
@@ -175,8 +176,8 @@ fn the_old_spellings_are_gone() {
          }\n",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("removed")),
-        "the free `downcast` spelling must diagnose with the removal: {:?}",
+        out.diags.iter().any(|d| d.msg.contains("unknown function `downcast`")),
+        "the free `downcast` spelling must be an ordinary unknown name: {:?}",
         out.diags
     );
 }

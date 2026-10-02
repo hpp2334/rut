@@ -1,7 +1,7 @@
 //! A6 surface migrations: the `[v; n]` repeat construction,
 //! the `&x` address-of (the `make_ptr` spelling is gone), and the purge of
-//! the `Array` name — the type is `[T]`, and use sites diagnose with the
-//! removal and its replacement.
+//! the `Array` name — the type is `[T]`, and a retired name is an
+//! ordinary unknown name now.
 
 use rut_parser::Mode;
 
