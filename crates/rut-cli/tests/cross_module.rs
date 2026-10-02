@@ -208,6 +208,41 @@ entry fn main() -> i32 {
 }
 
 #[test]
+fn two_instantiations_of_one_foreign_generic_trait() {
+    // the mint cache: `Wrap<i32>` and `Wrap<str>` are two descriptors
+    // off one carried decl — each dispatches to its own instantiation,
+    // and a widened local of either dispatches statically (the
+    // single-origin mint the registry produced)
+    let extras = "\
+use traits::Wrap;
+pub struct Box2<T> { v: T }
+impl<T> Wrap<T> for Box2<T> {
+    fn unwrap_or(self, d: T) -> T { return self.v; }
+}
+pub fn make_i() -> Box2<i32> { return Box2 { v: 7 }; }
+pub fn make_s() -> Box2<str> { return Box2 { v: \"hi\" }; }
+";
+    let out = run_graph(&[
+        ("traits", WRAP),
+        ("extras", extras),
+        ("app", "\
+use traits::Wrap;
+use extras::{Box2, make_i, make_s};
+entry fn main() -> i32 {
+    let a: Box2<i32> = make_i();
+    let b: Box2<str> = make_s();
+    let x: i32 = a.unwrap_or(0);
+    let y: str = b.unwrap_or(\"d\");
+    let w: Wrap<i32> = a;
+    let z: i32 = w.unwrap_or(1);
+    return x + z + y.len() as i32;
+}
+"),
+    ]);
+    assert_eq!(out, 16, "both instantiations answered (7 + 7 + 2)");
+}
+
+#[test]
 fn orphan_generic_impl_still_rejected() {
     // foreign trait + foreign type: the ONE cross-module impl
     // restriction — the orphan rule — stands unchanged under the lifted
