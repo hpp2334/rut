@@ -40,9 +40,6 @@ entry fn main() {
 - Fixed-length windows: `v.slice(from, to)` — see
   [String slicing and views](string-views.md).
 
-The old `Array<T>` name is removed: the array type is spelled `[T]`,
-construction is the repeat `[v; n]`.
-
 ## `?T` — the nullable
 
 `?T` is a nil-able cell: a one-slot box whose payload is a `T` or the
@@ -77,10 +74,6 @@ type term that follows:
   per-value attach ([the Rc heap](rc-heap.md)).
 - Across the host boundary `?T` crosses nil-flattened when its element
   crosses.
-
-The removed pointer spellings diagnose: `*T` and postfix `T?` point at
-`?T`; expression `*x`/`&x` point at the sharing law ("pass `x`
-directly"). See [By-reference and nullable](by-reference-and-nullable.md).
 
 ## `Vec<T>` — the growable sequence
 
@@ -165,9 +158,7 @@ copy (the aliasing law).
 ## Absence and errors
 
 There are no `Option`/`Result` builtins — the spellings are ordinary
-identifiers, and an unresolved use diagnoses as the unknown name it
-is. The [standard library](stdlib.md#what-core-does-not-have)'s
-removed-surface table maps each retired spelling to its replacement:
+identifiers, and an unresolved use diagnoses as the unknown name it is:
 
 - **Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil`
   means "not found".
@@ -176,5 +167,5 @@ removed-surface table maps each retired spelling to its replacement:
 - **Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see
   [opaque — erasure and downcast](opaque.md).
 
-`==` on the removed sum spellings is a compile error. Compare
-structurally: `when`, a `nil`/`!= nil` guard, or the payload.
+A nullable/enum value is not compared structurally with `==` — test it
+with `when`, a `nil`/`!= nil` guard, or the payload.

@@ -56,7 +56,7 @@ trait-typed values, `?T` boxes alike. Writing is gated by the
 `mut`-binding law (see [Modules and visibility](modules-and-visibility.md)),
 never by the sharing.
 
-There is no eager copy and no `own(x)`: **`bytes.clone()` is the one
+There is no eager copy: **`bytes.clone()` is the one
 copy escape hatch**. There is no `&`/`*` syntax anywhere.
 `==` on cells is **identity** (the raw slot compare); `str`/`bytes`
 compare by content — the full table is in

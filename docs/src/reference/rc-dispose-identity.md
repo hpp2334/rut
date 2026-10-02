@@ -16,11 +16,10 @@ closures' captured cells — is a **heap cell handle**:
   [Modules and visibility](modules-and-visibility.md)), never by the
   sharing.
 
-There is no eager copy of any composite. `own(x)` and `make_ptr(v)` are
-removed spellings — bindings share by reference. **`bytes.clone()` is
-the one copy escape hatch**: a one-shot deep copy of a buffer's octets.
-Every other type shares on binding; a divergent value of any other type
-is unreachable — build a new one instead.
+There is no eager copy of any composite — bindings share by reference.
+**`bytes.clone()` is the one copy escape hatch**: a one-shot deep copy
+of a buffer's octets. Every other type shares on binding; a divergent
+value of any other type is unreachable — build a new one instead.
 
 Recursive shapes (`next: ?Node`, trees, lists) are legal: composite
 fields and elements are pointer-sized handle slots, and the refcount
@@ -75,10 +74,6 @@ closed tcp://edge
   [the Rc heap](rc-heap.md)'s destruction order.
 - The host side of the same law: a host payload's finalizer runs at
   cell death, before the payload's own Rust `Drop`.
-
-The old attach-a-cleanup builtin `on_drop(p, cleanup)` was removed —
-the per-call attach model is gone; a `Disposal` impl is the one
-cleanup spelling, and the removed name's diagnostic says the same.
 
 Because every shared value now has a single knowable death — its
 refcount reaching zero — a struct can carry its own destructor: no

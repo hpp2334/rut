@@ -82,9 +82,8 @@ JSON, formatting) is the same sync code it always was.
 The std `http` package is **async-only and unsuffixed**: only the
 operations that really wait are async points, everything else is sync
 construction sugar. The five verbs are build sugars (`get`/`post`/
-`put`/`patch`/`del` — the DELETE verb spells `del` because `delete`
-is a removed word in rut's grammar; the wire still sees canonical
-`DELETE`), and `send(cx)` is THE async point, resolving **at
+`put`/`patch`/`del` — the DELETE verb spells `del`; the wire still
+sees canonical `DELETE`), and `send(cx)` is THE async point, resolving **at
 headers** — the wire body stays unread
 ([the async model](../core-concepts/async-model.md)):
 
@@ -194,8 +193,8 @@ const MOUNT_DIRS: &[&str] = &[
 ```
 
 The HTTP bodies install through `http::pkg()` (the reqwest lane);
-the example's own rows are CLI I/O only — `out` (stdout; `print` is a
-removed core name), `eprint`, the file pair, and `exit` — declared in
+the example's own rows are CLI I/O only — `out` (stdout), `eprint`,
+the file pair, and `exit` — declared in
 the example-local `rgh_host` decl package and verified against the
 bindings at boot ([Host fns and declaration
 files](../reference/host-fns.md)). One consequence: `rut run` cannot

@@ -74,10 +74,10 @@ Rules:
   ([value boundary](value-boundary.md)). Everything else (user classes,
   `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the
   declaration.
-- **`any` is not in the language.** The word is no longer reserved — an
-  `any` spelling now fails at resolution as an unknown type — but there
-  is no `any` type to write. Seal polymorphic values with `opaque(v)` /
-  `opaque.downcast<T>(v)` ([opaque](opaque.md)).
+- **`any` is not in the language.** An `any` spelling fails at
+  resolution as an unknown type — there is no `any` type to write.
+  Seal polymorphic values with `opaque(v)` / `opaque.downcast<T>(v)`
+  ([opaque](opaque.md)).
 - **`builtin` is the engine's reservation** — spelled only in the
   toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder
   decl is a compile error. Users implement builtin traits with ordinary

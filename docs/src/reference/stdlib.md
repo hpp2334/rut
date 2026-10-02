@@ -107,23 +107,6 @@ Ambient like the primitives themselves: `x.wrapping_add(y)` needs no
 `NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float
 constants are `calc`'s.
 
-### What core does *not* have
-
-| removed | replacement |
-|---|---|
-| `Option<T>` / `Result<T, E>` | `?T` with `nil` as absence; `(T, err)` tuples ([by-reference and nullable](by-reference-and-nullable.md)) |
-| `own` / `make_ptr` | `?T` bindings are the cell reference |
-| `char` | `str` of one codepoint; `s.code()`/`str.from_code(n)` |
-| free `downcast<T>(o)` | `opaque.downcast<T>(o)` |
-| `Array` as a name | the `[T]` grammar; `[v; n]` repeat construction |
-| `on_drop(p, cleanup)` | implement `Disposal` for the type — the engine calls `dispose` at refcount zero ([the Rc heap](rc-heap.md)) |
-| output builtins (`print`, `console`) | a logger package (`ink`) |
-| `assert(cond, msg?)` | plain rut code over `panic`: `fn assert(c: bool, m: str) { if (!c) { panic(m); } }` — write the helper where you need it |
-| `StrBuf` | `use strbuild::{ StringBuilder }`, or just accumulate: `out = f"{out}{t}"` is engine-optimized ([the builder package](#strbuild--the-builder), [f-strings](literals-and-inference.md)) |
-
-No removed surface keeps compatibility routing: a removed head in an
-unresolvable position is an ordinary unknown-name error.
-
 ## The swappable set
 
 | package | kind | surface |

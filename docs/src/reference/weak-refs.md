@@ -71,8 +71,6 @@ node 1
 - Construction is a **class method** with admission at the
   instantiation: `T` must be a **reference type**. `Weak<i32>` and
   `Weak.new(some_fn)` diagnose; primitives and `fn` values refuse.
-  (The retired type-call spelling — a bare call of the type name —
-  does not compile; the diagnostic names `Weak.new(v)`.)
 - Works over **any cell**: a class, struct, `Vec`, `[T]`, enum, `str`,
   `bytes`, a user `opaque` box, or a host box.
 - `Weak.new(nil)` traps ("weak on nil").

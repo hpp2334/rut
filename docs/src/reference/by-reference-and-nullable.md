@@ -132,15 +132,6 @@ entry fn main() {
 true true
 ```
 
-## Removed spellings
-
-| Removed | Replacement |
-|---|---|
-| `own(x)` | bindings share by reference; `bytes.clone()` is the one copy |
-| `make_ptr(v)` / `*T` / `T?` | write `?T`: a `T` widens into `?T` on assignment, `nil` is the null |
-| `*x` / `&x` in expressions | pass `x` directly — sharing needs no spelling |
-| `Option<T>` / `Result<T, E>` | absence is `nil` on a `?T`; errors are the `(?T, err)` pair |
-
 ## Containers under sharing
 
 - `Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero

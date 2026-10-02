@@ -136,9 +136,6 @@ ridge geo
   when the name rebinds. Documented holes (the gate under-fires, never
   over-fires): closure bodies compile with fresh provenance;
   destructuring carries none; a shadowing rebind resets it.
-- **`where` is removed.** The trailing clause is gone; `where` is an
-  ordinary identifier, and a stray clause diagnoses with the inline
-  replacement: `fn f<T requires B>(..)`.
 - **Class generics take bounds; struct/trait/surface generics do not**:
 
   ```rut
