@@ -118,7 +118,7 @@ is `true`.
 
 ## The answer channel: a pair
 
-There is no exception type and no `Result` monad. Failures are data in
+There is no exception type. Failures are data in
 the second element of a record — `(value, err)` — with one documented
 convention:
 

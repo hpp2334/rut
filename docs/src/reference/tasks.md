@@ -1,6 +1,6 @@
 # Tasks
 
-There is **no `Task` noun** in rut. A launched future's receipt —
+A launched future's receipt —
 `LaunchedFutureHandle<T>` — is its own type, and it is the entire
 task-management surface. Everything in this chapter is spelled in that
 vocabulary ([async and await](async.md)).
@@ -76,7 +76,7 @@ async fn job(cx: RunContext, seen: ?Drops) -> nil {
 
 ## Join (specified)
 
-There is no `spawn` and no `Task<T>`. The receipt is the join surface:
+The receipt is the join surface:
 `await h` joins the launched future and produces its completion value.
 Until the join tier lands, `await h` diagnoses with the join law and
 the receipt stays non-awaitable.

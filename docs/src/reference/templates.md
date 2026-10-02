@@ -34,8 +34,7 @@ fn work(name: str, n: i32) -> nil {
 A `Template` is `{ parts: [str], args: [opaque] }` — the literal chunks,
 and the interpolated values **boxed with their runtime types** through the
 erasure box ([opaque — erasure and downcast](opaque.md)). Construction is
-an internal native call; there is no user-spellable constructor and no
-other way to mint one.
+an internal native call — the only way to mint one.
 
 | API | Meaning |
 |---|---|

@@ -84,8 +84,8 @@ from_code=H
 `s.slice` deserves a second look: no octets move; the view records a
 window over the parent, prints, compares by content, iterates, and can
 re-slice. Codepoint access is spelled with integers — `str.from_code(n)`
-builds the 1-codepoint `str` for a `u32`. There is no `split` primitive;
-tokenizing rides `s.scan(from, set)` over a caller-owned `[u8]` class
+builds the 1-codepoint `str` for a `u32`. Tokenizing rides
+`s.scan(from, set)` over a caller-owned `[u8]` class
 table. See [string slicing and views](../reference/string-views.md).
 
 ### `bytes` members
@@ -352,7 +352,7 @@ struct with `.at`/`.got`/`.expected` — see
 
 ## `ink` — logging
 
-There is no `console`, no `print` — all output goes through a logger:
+All output goes through a logger:
 
 ```rut
 use ink::{ Logger };

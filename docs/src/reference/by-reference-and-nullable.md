@@ -112,9 +112,8 @@ and the lint on obviously-fresh composites.
 
 `b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot
 deep copy, the **only copy syntax in the language**. `bytes.from(a)`
-also deep-copies. There is no generic `clone(x)` and no `own`: every
-other type shares on binding, and a divergent value of any other type
-is unreachable — build a new one instead.
+also deep-copies. Every other type shares on binding, and a divergent
+value of any other type is unreachable — build a new one instead.
 
 ```rut
 use ink::{ Logger };

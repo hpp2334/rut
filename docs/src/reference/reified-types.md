@@ -40,9 +40,8 @@ entry fn main() {
   module-level `let` initializers, see
   [Modules and visibility](modules-and-visibility.md)), folded from the
   type table, never executed.
-- There is no `size_of<T>()` / `align_of<T>()` and no runtime payload
-  footprint accessor: value size and alignment are implementation
-  details, not a language surface.
+- Value size and alignment are implementation details, not a language
+  surface.
 - Constructing a value *from* raw bytes is deliberately not provided:
   it could forge private fields and class invariants.
 

@@ -55,7 +55,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `entry` | `entry fn` at module scope publishes the function to the embedder |
 | `self` | the explicit receiver, first parameter of an instance method |
 | `Self` | names the enclosing class inside its body; the class-private literal `Self { .. }` |
-| `new` | not special — the conventional construction-method name (`Rect.new(..)`); there is no `new` expression |
+| `new` | not special — the conventional construction-method name (`Rect.new(..)`) |
 | `as` | the numeric cast (`x as u32`) and the `select` arm bind |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
@@ -82,7 +82,8 @@ legal rut.
 ## Naming conventions (enforced)
 
 - **Types are PascalCase** — user types and parameterized builtins:
-  `Vec<T>`, `[T]`, `Weak<T>`, `opaque`, `Task<T>`, `Point`, `Drawable`.
+  `Vec<T>`, `[T]`, `Weak<T>`, `opaque`, `LaunchedFutureHandle<T>`,
+  `Point`, `Drawable`.
   Scalars and simple buffers stay lowercase: `i32`, `u8`, `f32`, `bool`,
   `str`, `bytes`.
 - **Functions and methods are lower_snake_case** — `unwrap_or(d)`,

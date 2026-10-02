@@ -28,7 +28,7 @@ entry fn main() {
 ```
 
 - Construction is the **repeat expression** `[v; n]` — a value and a
-  count; there is no type-in-expression form. A scalar/`nil` fill is
+  count. A scalar/`nil` fill is
   the memset-class op; a ref fill retains the cell handle `n` times —
   every slot aliases the one cell (the sharing law: the repeat never
   copies).
@@ -90,8 +90,7 @@ alias the stored cells, and binding an element copies nothing.
 | `Vec.from(arr)` | copy a `[T]` |
 
 Explicit type arguments may be spelled at the call:
-`Vec<i32>.from([1, 2, 3])`. There is no `Vec<T>(..)` type-call —
-construction is always a method call (see
+`Vec<i32>.from([1, 2, 3])`. Construction is always a method call (see
 [Classes and constructors](classes.md)).
 
 | Member | Meaning |
@@ -156,9 +155,6 @@ floats have no stable equality contract. The API is
 copy (the aliasing law).
 
 ## Absence and errors
-
-There are no `Option`/`Result` builtins — the spellings are ordinary
-identifiers, and an unresolved use diagnoses as the unknown name it is:
 
 - **Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil`
   means "not found".

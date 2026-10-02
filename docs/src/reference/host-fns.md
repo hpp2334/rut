@@ -7,7 +7,7 @@ One linkage keyword, one implementer:
 | `host fn` / `host struct` | the **embedding Rust** — a typed registration | the load-time contract (below) |
 | `prelude builtin` / `pub builtin` rows | **the engine itself** — compiler-lowered | nothing; the decl is a pure signature contract |
 
-`extern` does not exist: rut→rut names resolve through use paths
+rut→rut names resolve through use paths
 ([modules and visibility](modules-and-visibility.md)); host→rut entry
 points are `entry fn` ([loading and the embed loop](loading.md)).
 

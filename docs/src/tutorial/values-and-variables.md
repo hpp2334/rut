@@ -20,7 +20,7 @@ For the full grammar of literals and inference rules, see
 | binary | `bytes` | immutable octet buffer, compared by content |
 | erased | `opaque` | a box holding any value — see [errors and optionality](errors.md) |
 
-There is no `null`, no `undefined`, and no character type. A `str`
+There is no character type. A `str`
 iterates as one-codepoint `str`s, and codepoints read as `u32`
 (`s.code()`, `s.code_at(i)`) — see
 [string slicing and views](../reference/string-views.md).

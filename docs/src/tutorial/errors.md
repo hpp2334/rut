@@ -1,6 +1,6 @@
 # Errors and optionality
 
-rut has no exceptions you catch, no `Result` enum, and no `null`. Two
+rut has no exceptions you catch. Two
 mechanisms cover everything:
 
 - **Absence** is `nil` on a nullable `?T`.

@@ -98,10 +98,9 @@ Each embedder mounts `rut/async_engine` (the rows `__launch`, `__abort`,
 bodies. A session that mounts neither simply has no launcher; `await`
 still works inline.
 
-The crossings cross as **`opaque`** — there is no `any` in the
-vocabulary: `opaque(f)` seals a frame on the way out,
-`opaque.downcast<Future<nil>>(b) -> ?Future<nil>` recovers it on the
-way in ([opaque — erasure and downcast](opaque.md)). `sleep(ms)` is
+The crossings cross as **`opaque`**: `opaque(f)` seals a frame on the
+way out, `opaque.downcast<Future<nil>>(b) -> ?Future<nil>` recovers it
+on the way in ([opaque — erasure and downcast](opaque.md)). `sleep(ms)` is
 literally that downcast over the engine's minted sleep frame.
 
 Host async fns declared in a declaration file —

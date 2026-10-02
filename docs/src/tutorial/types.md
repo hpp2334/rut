@@ -156,12 +156,11 @@ count=2
 ## Classes — sealed records
 
 A class adds two things to a struct: module-private fields and
-construction gated through class methods. There is no `constructor`
-keyword, no `new` operator, and no outside literal — the only way to
-build a class value from outside is to call a class method that chooses
-to. (Cleanup hooks are not a class privilege: implement `Disposal` for
-either shape, and the engine calls `dispose` when the value's cell
-refcount reaches zero — see
+construction gated through class methods. There is no outside literal —
+the only way to build a class value from outside is to call a class
+method that chooses to. (Cleanup hooks are not a class privilege:
+implement `Disposal` for either shape, and the engine calls `dispose`
+when the value's cell refcount reaches zero — see
 [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)
 
 ```rut
@@ -204,8 +203,7 @@ The pieces:
 - **The `Self { .. }` literal is class-private** — legal anywhere in
   the class's own impl block, never outside. This is the seal.
 - **Instance methods spell `self` explicitly** as the first parameter;
-  `mut self` marks methods that write. There is no `this`, no static
-  methods, no `get`/`set` syntax — a computed property is a method
+  `mut self` marks methods that write. A computed property is a method
   (`c.count()`).
 - **Construction is validation.** A constructor is an ordinary
   function — it can check arguments and refuse:

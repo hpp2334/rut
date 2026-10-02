@@ -35,8 +35,8 @@ refunded (v1 overcounts rather than undercounts).
 - `Trap::OutOfFuel` parks the frame exactly like any resumable stop:
   nothing is unwound. Resumption is `vm.add_fuel(n)` then
   `vm.resume()` — the frame *is* the loop state. Fuel is chosen at
-  construction: `add_fuel` is a no-op on an unbounded machine, and
-  there is no `set_fuel` twin — by design.
+  construction: `add_fuel` is a no-op on an unbounded machine, and the
+  runtime budget is read-only — by design.
 - Fuel is the **deterministic** budget: the same program with the same
   fuel dies at the same op, every run — reproducible reports and hang
   proofs in tests.

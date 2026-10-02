@@ -134,7 +134,7 @@ Every type test is a small, pure read:
 - **Downcast** (`opaque.downcast<T>(o)`): the same type-id compare,
   followed by the guarded payload extract.
 
-There is no `type_of(x)` returning a manipulable value and no runtime
+There is no runtime
 layout introspection — the descriptors serve the VM, the checks, and
 tooling, not userland metaprogramming. Reflection over data (walking
 fields to serialize) is a library facility built on the same tables; see

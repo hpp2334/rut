@@ -13,10 +13,9 @@ trait Shape {
 }
 ```
 
-- **Methods only, no bodies.** No fields, no properties (there is no
-  `get`/`set` syntax anywhere), and **no default implementations,
-  ever** — one member kind, one dispatch candidate per call. Anything
-  that reads like a property is a method.
+- **Methods only, no bodies.** No fields, no properties, and **no
+  default implementations, ever** — one member kind, one dispatch
+  candidate per call. Anything that reads like a property is a method.
 - Methods are instance methods and spell the `self` receiver like every
   other method (`fn draw(self, g: Canvas) -> nil;`), except where an
   engine contract spells a receiver-less descriptor method (`Future`).
@@ -157,7 +156,7 @@ call its methods on `T`".
 exactly where the registry holds a visible `impl I for T` — on
 assignment, argument passing, and returns. The explicit, greppable
 form is the trait annotation at the receiving position
-(`let d: Drawable = s;`). There is no `upcast` builtin. A trait-typed
+(`let d: Drawable = s;`). A trait-typed
 value **cannot be downcast**: use it through the trait, or erase
 explicitly through `opaque`.
 

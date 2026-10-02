@@ -147,6 +147,3 @@ parameters reject `requires`):
   records on the class descriptor and admits every instantiation:
   `pub class HashMap<K requires i8 | .. | bytes, V>` (see
   [Builtin generic types](builtin-generic-types.md)).
-
-The trailing `where` clause does not exist: `where` is an ordinary
-identifier, and a stray clause diagnoses with the inline replacement.

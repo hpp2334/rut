@@ -61,8 +61,8 @@ runtime negotiation:
 
 Everything else — user structs and classes, `Vec`s, trait-typed values,
 closures — stays inside the VM. A declaration that violates the set is
-a compile error at the declaration, not a failed call at 2 a.m. There
-is no `any`: a polymorphic crossing seals its value in an erasure box
+a compile error at the declaration, not a failed call at 2 a.m. A
+polymorphic crossing seals its value in an erasure box
 (`opaque(v)` at the call, `opaque.downcast<T>` after), checked, never
 silent — see [reified types](reified-types.md).
 

@@ -2,7 +2,7 @@
 
 rut has the classic structured statements — `if`/`else`, `while`,
 `for` — and exactly one match construct: `when`, an exhaustive pattern
-*expression*. There is no `switch`, no `case`, no fallthrough. The full
+*expression*. The full
 rules live in [the reference on control flow](../reference/control-flow.md).
 
 ## `if` and `else`

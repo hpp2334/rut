@@ -40,9 +40,7 @@ area=9
 ```
 
 - **Classes construct through their own class methods — nothing else is
-  constructible.** There is no `constructor` keyword and no type-call:
-  `Rect(3, 4)` does not parse as construction, and no outside literal
-  exists:
+  constructible.** No outside literal exists:
 
   ```rut
   let r = Rect.new(3, 4);            // the one construction surface
@@ -82,18 +80,17 @@ area=9
 
 - **The receiver is explicit.** An instance method spells its receiver
   as the first parameter — `fn add(self, x: i32, y: i32)` — and the
-  body reads fields through `self`. There is no `this` keyword. A
+  body reads fields through `self`. A
   method that mutates declares `mut self` and requires a `let mut`
   receiver (see [Modules and visibility](modules-and-visibility.md)).
 - A method **without** a `self` parameter is a **class method** —
   invoked on the class itself (`Rect.new(..)`, `Self.new(..)` inside
-  the body). Presence or absence of `self` is the whole distinction;
-  there is no separate "static" method form (`static fn` does not
-  parse). Class methods are ordinary functions: they validate, default,
+  the body). Presence or absence of `self` is the whole distinction.
+  Class methods are ordinary functions: they validate, default,
   cache, register, or hand out singletons.
-- **No `get`/`set` accessor syntax anywhere** — a computed property is
-  a method (`c.count()`), and a settable one takes an argument
-  (`c.set_count(n)`). One member kind, one call convention.
+- **A computed property is a method** (`c.count()`), and a settable one
+  takes an argument (`c.set_count(n)`). One member kind, one call
+  convention.
 - **Static fields** are declared `static name: T = init;` in the class
   body, with the same visibility forms as fields.
 

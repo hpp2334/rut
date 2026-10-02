@@ -17,8 +17,8 @@ have deterministic lifetimes**.
 
 ## The pillars
 
-**Fully static, reified types.** There is no dynamic typing, no `any`,
-no gradual typing. Every value's exact type is known to the compiler and
+**Fully static, reified types.** There is no dynamic typing and no
+gradual typing. Every value's exact type is known to the compiler and
 carried at runtime — type tests, checked erasure, and host-boundary
 checks all read the same runtime truth. See [reified types and
 layouts](reified-types.md).

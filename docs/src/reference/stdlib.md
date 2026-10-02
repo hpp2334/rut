@@ -124,7 +124,7 @@ constants are `calc`'s.
 
 ### `ink_host` and `ink` — logging
 
-There is no `print`, no global output builtin. All logging goes through a
+There is no global output builtin. All logging goes through a
 used logger; the host owns the sink, and an uninstalled sink is a silent
 no-op — a script cannot accidentally spam an embedded host's stdout.
 

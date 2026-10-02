@@ -28,14 +28,13 @@ integers:
 | `s.code_at(i: i32) -> u32` | the codepoint at codepoint index `i` (traps out of bounds — the index is a bug, not data) |
 | `str.from_code(n: u32) -> str` | the 1-codepoint `str` for `n` |
 
-There is no `null` and no `undefined`: absence is `nil` on a nullable
+Absence is `nil` on a nullable
 `?T`.
 
 ## Size and members
 
 `.len()` is the sequence member shared by every sequence: `[T]`,
-`Vec<T>`, `str` (codepoints), `bytes` (octets). There is no `.length`
-property or `.count()` variant anywhere in the language.
+`Vec<T>`, `str` (codepoints), `bytes` (octets).
 
 `str` members: `len()`, `code()`, `code_at(i)`, `encode() -> bytes`,
 `slice(from, to) -> str`, `starts_with(from, head) -> bool`,

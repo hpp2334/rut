@@ -115,9 +115,7 @@ carries a visibility:
 | `pub(super) fn ..` | visible to the **parent module** only |
 | `pub(self) fn ..` | module-private — **the default** |
 
-- Unannotated = `pub(self)`: nothing leaks unless it says `pub`. There
-  is no `private` keyword — the unannotated default *is* the private
-  spelling.
+- Unannotated = `pub(self)`: nothing leaks unless it says `pub`.
 - Applies uniformly: `let`, `enum`, `struct`, `class`, `trait`, `impl`
   (an impl exports with its target type), `fn`, `type` aliases. On a
   `class` declaration it means the *type name* is visible.
