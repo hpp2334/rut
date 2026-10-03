@@ -6318,7 +6318,7 @@ msgstr ""
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:30
 #: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
-#: src/reference/host-futures.md:115
+#: src/reference/host-futures.md:122
 msgid "\"main\""
 msgstr ""
 
@@ -16460,7 +16460,14 @@ msgstr ""
 #: src/reference/launched-futures.md:92
 msgid ""
 "```rut\n"
-"use async_host::{ sleep, select2, Either2 };\n"
+"use ink::{ Logger };\n"
+"use async_host::{ launch_future, sleep, select2, Either2 };\n"
+"\n"
+"async fn slow_fetch() -> str {            // the stand-in for any slow "
+"producer\n"
+"    await sleep(200);\n"
+"    return \"data\";\n"
+"}\n"
 "\n"
 "async fn fetch_or_timeout() -> str {\n"
 "    let winner = await select2(slow_fetch(), sleep(50));\n"
@@ -16469,10 +16476,20 @@ msgid ""
 "    }\n"
 "    return \"timeout\";\n"
 "}\n"
+"\n"
+"async fn run_race(log: Logger) -> nil {\n"
+"    log.info(await fetch_or_timeout());   // \"timeout\" — sleep(50) wins "
+"the race\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger.new(\"race\");\n"
+"    launch_future(run_race(log));\n"
+"}\n"
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:104
+#: src/reference/launched-futures.md:119
 msgid ""
 "`select2(a, b)` races two futures; the call **mints the race** — nothing "
 "runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, "
@@ -16481,7 +16498,7 @@ msgid ""
 "computed at the call site, never a cast."
 msgstr ""
 
-#: src/reference/launched-futures.md:110
+#: src/reference/launched-futures.md:125
 msgid ""
 "The **losers are cancelled** the moment a winner is settled: their drop "
 "paths run (pending sleeps die with them, `[disposal]` members fire). A "
@@ -16489,34 +16506,36 @@ msgid ""
 "children."
 msgstr ""
 
-#: src/reference/launched-futures.md:114
+#: src/reference/launched-futures.md:129
 msgid ""
 "`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with "
 "`(i, v)` — the winner's index and value — cancelling every other still-live "
 "member. Ties (two members already retired) break by index order."
 msgstr ""
 
-#: src/reference/launched-futures.md:119
+#: src/reference/launched-futures.md:134
 msgid ""
 "`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums "
 "are the C-style member set, so the two-sided answer is private fields plus "
 "accessors, not pattern arms."
 msgstr ""
 
-#: src/reference/launched-futures.md:123
+#: src/reference/launched-futures.md:138
 msgid "Manual futures — `completer<T>()`"
 msgstr ""
 
-#: src/reference/launched-futures.md:125
+#: src/reference/launched-futures.md:140
 msgid ""
 "`completer<T>()` mints a cold `Future<T>` **and** the resolution right "
 "beside it — the primitive that turns a plain callback into a future the "
 "whole `await`/`select2` vocabulary drives:"
 msgstr ""
 
-#: src/reference/launched-futures.md:129
+#: src/reference/launched-futures.md:144
 msgid ""
 "```rut\n"
+"use core::{ Future };\n"
+"use ink::{ Logger };\n"
 "use async_host::{ completer, Completer, launch_future, sleep };\n"
 "\n"
 "// a PLAIN fn returning a Future; no async block needed:\n"
@@ -16530,49 +16549,59 @@ msgid ""
 "    await sleep(10);\n"
 "    done.resolve(tag);\n"
 "}\n"
+"\n"
+"async fn consume(log: Logger) -> nil {\n"
+"    let v = await fetch_like(\"tag!\");         // parks until the resolve\n"
+"    log.info(v);\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger.new(\"completer\");\n"
+"    launch_future(consume(log));\n"
+"}\n"
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:145
+#: src/reference/launched-futures.md:172
 msgid ""
 "`done.resolve(v)` settles the future and wakes its awaiter; it answers "
 "`false` when the future already retired — resolved, cancelled, or abandoned "
 "(the same stability `abort()` has). The right consumes itself: one resolve."
 msgstr ""
 
-#: src/reference/launched-futures.md:149
+#: src/reference/launched-futures.md:176
 msgid ""
 "`Completer<T>` is only the **right**, not the future — a "
 "`LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted "
 "future it settles is the awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:153
+#: src/reference/launched-futures.md:180
 msgid "Structure and fairness"
 msgstr ""
 
-#: src/reference/launched-futures.md:155
+#: src/reference/launched-futures.md:182
 msgid ""
 "v1 launched futures are **unstructured**: aborting a frame does not abort "
 "frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
 "exit — are the specified remedy."
 msgstr ""
 
-#: src/reference/launched-futures.md:158
+#: src/reference/launched-futures.md:185
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
 "or completion, so one greedy future cannot starve the queue. Priorities are "
 "not in the model."
 msgstr ""
 
-#: src/reference/launched-futures.md:161
+#: src/reference/launched-futures.md:188
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
 "parked on Completers — the embedder's idle test ([async and "
 "await](async.md))."
 msgstr ""
 
-#: src/reference/launched-futures.md:164
+#: src/reference/launched-futures.md:191
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
 "the frame is retired either way, and its locals ran their drop path."
@@ -16833,32 +16862,39 @@ msgstr ""
 #: src/reference/host-futures.md:97
 msgid ""
 "```rut\n"
-"use async_host::launch_future;\n"
+"use async_host::{ launch_future, sleep };\n"
+"\n"
+"// `fetch` is the host's async fn (the mypkg::fetch row family above);\n"
+"// a stand-in body keeps the block runnable end to end:\n"
+"async fn fetch(path: str) -> bytes {\n"
+"    await sleep(5);\n"
+"    return \"hostname\".encode();\n"
+"}\n"
 "\n"
 "async fn grab(path: str) -> bytes {\n"
 "    let body = await fetch(path);\n"
 "    return body;\n"
 "}\n"
 "\n"
-"fn main() -> nil {\n"
+"entry fn main() {\n"
 "    launch_future(grab(\"/etc/hostname\"));\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/host-futures.md:110
+#: src/reference/host-futures.md:117
 msgid "The embedder's loop"
 msgstr ""
 
-#: src/reference/host-futures.md:112
+#: src/reference/host-futures.md:119
 msgid "The engine polls every future parked on a completer:"
 msgstr ""
 
-#: src/reference/host-futures.md:117
+#: src/reference/host-futures.md:124
 msgid "// drain + poll + drain\n"
 msgstr ""
 
-#: src/reference/host-futures.md:122
+#: src/reference/host-futures.md:129
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each "
 "poll runs the `__yield` probe; a ready one is driven through `__take` and "
@@ -16868,17 +16904,17 @@ msgid ""
 "loop alive — the flip side of best-effort cancellation."
 msgstr ""
 
-#: src/reference/host-futures.md:130
+#: src/reference/host-futures.md:137
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` "
 "for deterministic tests ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/host-futures.md:134
+#: src/reference/host-futures.md:141
 msgid "In-tree users"
 msgstr ""
 
-#: src/reference/host-futures.md:136
+#: src/reference/host-futures.md:143
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send`, "
 "`http_body`, and `http_stream_next` are `pub host async fn` rows whose "
@@ -16888,7 +16924,7 @@ msgid ""
 "example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 
-#: src/reference/host-futures.md:143
+#: src/reference/host-futures.md:150
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) "
 "are the other half of the boundary — see [embedding and native "

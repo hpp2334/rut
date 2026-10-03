@@ -95,14 +95,21 @@ Rut side, the closure's own surface is invisible — callers see a
 normal async fn (the cx is injected, never spelled):
 
 ```rut
-use async_host::launch_future;
+use async_host::{ launch_future, sleep };
+
+// `fetch` is the host's async fn (the mypkg::fetch row family above);
+// a stand-in body keeps the block runnable end to end:
+async fn fetch(path: str) -> bytes {
+    await sleep(5);
+    return "hostname".encode();
+}
 
 async fn grab(path: str) -> bytes {
     let body = await fetch(path);
     return body;
 }
 
-fn main() -> nil {
+entry fn main() {
     launch_future(grab("/etc/hostname"));
 }
 ```

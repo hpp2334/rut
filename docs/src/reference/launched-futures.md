@@ -90,7 +90,13 @@ through a callback.
 ## Racing — `select2` / `select_all` (stdlib)
 
 ```rut
-use async_host::{ sleep, select2, Either2 };
+use ink::{ Logger };
+use async_host::{ launch_future, sleep, select2, Either2 };
+
+async fn slow_fetch() -> str {            // the stand-in for any slow producer
+    await sleep(200);
+    return "data";
+}
 
 async fn fetch_or_timeout() -> str {
     let winner = await select2(slow_fetch(), sleep(50));
@@ -98,6 +104,15 @@ async fn fetch_or_timeout() -> str {
         return winner.a_value();
     }
     return "timeout";
+}
+
+async fn run_race(log: Logger) -> nil {
+    log.info(await fetch_or_timeout());   // "timeout" — sleep(50) wins the race
+}
+
+entry fn main() {
+    let log = Logger.new("race");
+    launch_future(run_race(log));
 }
 ```
 
@@ -127,6 +142,8 @@ beside it — the primitive that turns a plain callback into a future the
 whole `await`/`select2` vocabulary drives:
 
 ```rut
+use core::{ Future };
+use ink::{ Logger };
 use async_host::{ completer, Completer, launch_future, sleep };
 
 // a PLAIN fn returning a Future; no async block needed:
@@ -139,6 +156,16 @@ fn fetch_like(tag: str) -> Future<str> {
 async fn settle_later(done: Completer<str>, tag: str) -> nil {
     await sleep(10);
     done.resolve(tag);
+}
+
+async fn consume(log: Logger) -> nil {
+    let v = await fetch_like("tag!");         // parks until the resolve
+    log.info(v);
+}
+
+entry fn main() {
+    let log = Logger.new("completer");
+    launch_future(consume(log));
 }
 ```
 

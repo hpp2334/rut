@@ -7510,7 +7510,7 @@ msgstr "队列归 VM 所有；循环归嵌入方所有："
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:30
 #: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
-#: src/reference/host-futures.md:115
+#: src/reference/host-futures.md:122
 msgid "\"main\""
 msgstr "\"main\""
 
@@ -18788,7 +18788,13 @@ msgstr "竞速——`select2` / `select_all`（标准库）"
 #: src/reference/launched-futures.md:92
 msgid ""
 "```rut\n"
-"use async_host::{ sleep, select2, Either2 };\n"
+"use ink::{ Logger };\n"
+"use async_host::{ launch_future, sleep, select2, Either2 };\n"
+"\n"
+"async fn slow_fetch() -> str {            // the stand-in for any slow producer\n"
+"    await sleep(200);\n"
+"    return \"data\";\n"
+"}\n"
 "\n"
 "async fn fetch_or_timeout() -> str {\n"
 "    let winner = await select2(slow_fetch(), sleep(50));\n"
@@ -18797,52 +18803,63 @@ msgid ""
 "    }\n"
 "    return \"timeout\";\n"
 "}\n"
+"\n"
+"async fn run_race(log: Logger) -> nil {\n"
+"    log.info(await fetch_or_timeout());   // \"timeout\" — sleep(50) wins the race\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger.new(\"race\");\n"
+"    launch_future(run_race(log));\n"
+"}\n"
 "```"
 msgstr ""
 
 
-#: src/reference/launched-futures.md:104
+#: src/reference/launched-futures.md:119
 msgid ""
 "`select2(a, b)` races two futures; the call **mints the race** — nothing runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, U>`: `is_a()`/`a_value()` read the first future's side, `is_b()`/`b_value()` the second's. The winner's type is the fn signature's `Either2<T, U>` — computed at the call site, never a cast."
 msgstr ""
 "`select2(a, b)` 对两个 future 竞速；这次调用**铸造竞速本身**——在被 `await`（或 `launch_future`）驱动之前什么都不会运行。应答是 `Either2<T, U>`：`is_a()`/`a_value()` 读第一个 future 一侧，`is_b()`/`b_value()` 读第二个。胜者的类型就是函数签名里的 `Either2<T, U>`——在调用点计算，绝不需要转换。"
 
 
-#: src/reference/launched-futures.md:110
+#: src/reference/launched-futures.md:125
 msgid ""
 "The **losers are cancelled** the moment a winner is settled: their drop paths run (pending sleeps die with them, `[disposal]` members fire). A cancelled race (`h.abort()` on the race future) cascades through its children."
 msgstr ""
 
 
-#: src/reference/launched-futures.md:114
+#: src/reference/launched-futures.md:129
 msgid ""
 "`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with `(i, v)` — the winner's index and value — cancelling every other still-live member. Ties (two members already retired) break by index order."
 msgstr ""
 "`select_all<T>(futs)` 对整组 `[Future<T>]` 竞速，应答 `(i, v)`——胜者的下标与值——并取消其余所有仍在运行的成员。平局（两个成员都已结束）按下标顺序裁决。"
 
 
-#: src/reference/launched-futures.md:119
+#: src/reference/launched-futures.md:134
 msgid ""
 "`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums are the C-style member set, so the two-sided answer is private fields plus accessors, not pattern arms."
 msgstr ""
 "`Either2` 是一个普通的泛型类（`left: ?A; right: ?B`）——rut 的枚举是 C 风格的成员集，所以这种两侧应答用的是私有字段加访问器，而不是模式分支。"
 
 
-#: src/reference/launched-futures.md:123
+#: src/reference/launched-futures.md:138
 msgid "Manual futures — `completer<T>()`"
 msgstr "手工 future——`completer<T>()`"
 
 
-#: src/reference/launched-futures.md:125
+#: src/reference/launched-futures.md:140
 msgid ""
 "`completer<T>()` mints a cold `Future<T>` **and** the resolution right beside it — the primitive that turns a plain callback into a future the whole `await`/`select2` vocabulary drives:"
 msgstr ""
 "`completer<T>()` 铸造一个冷的 `Future<T>`，并在旁边交出完成权——这个原语把普通回调变成整个 `await`/`select2` 词汇都能驱动的 future："
 
 
-#: src/reference/launched-futures.md:129
+#: src/reference/launched-futures.md:144
 msgid ""
 "```rut\n"
+"use core::{ Future };\n"
+"use ink::{ Logger };\n"
 "use async_host::{ completer, Completer, launch_future, sleep };\n"
 "\n"
 "// a PLAIN fn returning a Future; no async block needed:\n"
@@ -18856,51 +18873,61 @@ msgid ""
 "    await sleep(10);\n"
 "    done.resolve(tag);\n"
 "}\n"
+"\n"
+"async fn consume(log: Logger) -> nil {\n"
+"    let v = await fetch_like(\"tag!\");         // parks until the resolve\n"
+"    log.info(v);\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger.new(\"completer\");\n"
+"    launch_future(consume(log));\n"
+"}\n"
 "```"
 msgstr ""
 
 
-#: src/reference/launched-futures.md:145
+#: src/reference/launched-futures.md:172
 msgid ""
 "`done.resolve(v)` settles the future and wakes its awaiter; it answers `false` when the future already retired — resolved, cancelled, or abandoned (the same stability `abort()` has). The right consumes itself: one resolve."
 msgstr ""
 "`done.resolve(v)` 落定 future 并唤醒其等待者；当该 future 已经结束——已完成、已取消或已被遗弃——它应答 `false`（与 `abort()` 同样的稳定性）。完成权自我消费：仅可 resolve 一次。"
 
 
-#: src/reference/launched-futures.md:149
+#: src/reference/launched-futures.md:176
 msgid ""
 "`Completer<T>` is only the **right**, not the future — a `LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted future it settles is the awaitable."
 msgstr ""
 "`Completer<T>` 只是**完成权**，不是 future——它是 `LaunchedFutureHandle` 的同类。对它 `await` 会被诊断；它所落定的、由引擎铸造的 future 才是可等待的那个。"
 
 
-#: src/reference/launched-futures.md:153
+#: src/reference/launched-futures.md:180
 msgid "Structure and fairness"
 msgstr "结构与公平性"
 
 
-#: src/reference/launched-futures.md:155
+#: src/reference/launched-futures.md:182
 msgid ""
 "v1 launched futures are **unstructured**: aborting a frame does not abort frames it awaits. Structured scopes — `scope { .. }` cancelling children on exit — are the specified remedy."
 msgstr ""
 "v1 已启动的 future 是**非结构化的**：abort 一个帧不会 abort 它所 await 的帧。结构化作用域——`scope { .. }` 在退出时取消子帧——是已规定的补救。"
 
 
-#: src/reference/launched-futures.md:158
+#: src/reference/launched-futures.md:185
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park or completion, so one greedy future cannot starve the queue. Priorities are not in the model."
 msgstr ""
 "就绪环是**轮转（round-robin）**的：每次驱动把一个帧运行到它的下一次停放或完成，因此一个贪婪的 future 无法饿死队列。优先级不在模型之中。"
 
 
-#: src/reference/launched-futures.md:161
+#: src/reference/launched-futures.md:188
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the embedder's idle test ([async and await](async.md))."
 msgstr ""
 "`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——这是嵌入方的空闲判据（[异步与 await](async.md)）。"
 
 
-#: src/reference/launched-futures.md:164
+#: src/reference/launched-futures.md:191
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; the frame is retired either way, and its locals ran their drop path."
 msgstr ""
@@ -19211,63 +19238,70 @@ msgstr ""
 #: src/reference/host-futures.md:97
 msgid ""
 "```rut\n"
-"use async_host::launch_future;\n"
+"use async_host::{ launch_future, sleep };\n"
+"\n"
+"// `fetch` is the host's async fn (the mypkg::fetch row family above);\n"
+"// a stand-in body keeps the block runnable end to end:\n"
+"async fn fetch(path: str) -> bytes {\n"
+"    await sleep(5);\n"
+"    return \"hostname\".encode();\n"
+"}\n"
 "\n"
 "async fn grab(path: str) -> bytes {\n"
 "    let body = await fetch(path);\n"
 "    return body;\n"
 "}\n"
 "\n"
-"fn main() -> nil {\n"
+"entry fn main() {\n"
 "    launch_future(grab(\"/etc/hostname\"));\n"
 "}\n"
 "```"
 msgstr ""
 
 
-#: src/reference/host-futures.md:110
+#: src/reference/host-futures.md:117
 msgid "The embedder's loop"
 msgstr "嵌入方的循环"
 
 
-#: src/reference/host-futures.md:112
+#: src/reference/host-futures.md:119
 msgid "The engine polls every future parked on a completer:"
 msgstr "引擎轮询每一个停放在 completer 上的 future："
 
 
-#: src/reference/host-futures.md:117
+#: src/reference/host-futures.md:124
 msgid ""
 "// drain + poll + drain\n"
 msgstr ""
 "// drain + poll + drain\n"
 
 
-#: src/reference/host-futures.md:122
+#: src/reference/host-futures.md:129
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each poll runs the `__yield` probe; a ready one is driven through `__take` and its awaiter re-enqueued), then drains again — one pass settles a completed host future end to end. `vm.pending_tasks()` counts ready frames, armed timers, and the host-pending set, so a worker that never completes keeps the loop alive — the flip side of best-effort cancellation."
 msgstr ""
 "`run_ready()` 排空就绪队列，轮询停放中的宿主 future（每次轮询运行 `__yield` 探针；就绪者经由 `__take` 被驱动，其 awaiter 重新入队），然后再排空一次——一趟就把一个已完成的宿主 future 端到端落定。`vm.pending_tasks()` 统计就绪帧、已布防定时器和宿主 pending 集，因此一个永不完成的 worker 会让循环一直活着——这是尽力而为取消的另一面。"
 
 
-#: src/reference/host-futures.md:130
+#: src/reference/host-futures.md:137
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` for deterministic tests ([resource limits](resource-limits.md))."
 msgstr "虚拟时钟在这里同样适用：以有限燃料驱动并配合 `vm.set_now` 做确定性测试（[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/host-futures.md:134
+#: src/reference/host-futures.md:141
 msgid "In-tree users"
 msgstr "树内使用者"
 
 
-#: src/reference/host-futures.md:136
+#: src/reference/host-futures.md:143
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send`, `http_body`, and `http_stream_next` are `pub host async fn` rows whose bodies park `Completer`s answered from reqwest worker threads (or the fixture lane's virtual clock). Mount it with `rut/http_host` + `rut/http`; the full walk-through is [the GitHub viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 "标准 HTTP 链路就是一个 `register_async!` 客户端：`http_send`、`http_body`、`http_stream_next` 都是 `pub host async fn` 行，它们的体停放一些 `Completer`，由 reqwest 的 worker 线程（或夹具链路的虚拟时钟）应答。用 `rut/http_host` + `rut/http` 挂载它；完整演练见 [GitHub 查看器示例](../examples/06-github-viewer-cli.md)。"
 
 
-#: src/reference/host-futures.md:143
+#: src/reference/host-futures.md:150
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) are the other half of the boundary — see [embedding and native modules](embedding.md)."
 msgstr "普通的 `host fn` 行（同步的，在跨越内部一次运行到底）是边界的另一半——见[嵌入与原生模块](embedding.md)。"
