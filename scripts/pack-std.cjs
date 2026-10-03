@@ -32,7 +32,7 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG, default std-v4). An ADVANCING
+ *                    RUT_STD_TAG, default std-v6). An ADVANCING
  *                    number: never re-point a published tag (jsDelivr
  *                    caches aggressively; a re-pointed tag lies).
  *   -h, --help
@@ -52,7 +52,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const DEFAULT_TAG = "std-v4";
+const DEFAULT_TAG = "std-v6";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
