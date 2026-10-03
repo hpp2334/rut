@@ -55,7 +55,7 @@ refunded (v1 overcounts rather than undercounts).
 let limits = Limits { fuel: Some(1_000_000),
                       heap_limit_bytes: Some(64 * 1024 * 1024),
                       interrupt_every: 1024 };
-let mut vm = Vm::new(prog, limits, HostHooks::default(), hosts)?;
+let mut vm = Vm::builder().compiled(compiled).limits(limits).build()?;
 
 match vm.call::<_, ()>("main", ()) {
     Err(t) if t.name() == "OutOfFuel" => {

@@ -168,8 +168,8 @@ A consumer may pin a bundle by url instead of vendoring it:
 ```
 
 The mount is the bundle mount, one gate earlier: the embedder's
-remote produces the bytes (`DepRemote` — the standard `HttpRemote` is
-cache-first), then the loader runs the same container/layout/name checks and —
+remote produces the bytes (`DepRemote` — the standard
+`rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and —
 before all of them — the **pin law**: the bytes must hash to the
 manifest row's `sha256`, on every load, or the load refuses naming the
 dep, the url, and both hashes. The url dep mounts as a **leaf**: its
@@ -232,9 +232,9 @@ its group files too (the riding law), and the on-demand recompile
 splices exactly the rows whose peers are in the consumer's closure.
 
 **The ledger namespaces per archive.** Each archive's scope rows shift
-into a fresh numeric range of the mounting session (boot passes
+into a fresh numeric range of the consuming run's world (boot passes
 through), and its binaries rebase with that same map **before**
-mounting — so two independently packed bundles can share one session
+mounting — so two independently packed bundles can share one world
 without their pack-time numberings ever arguing. First-mount-wins
 still decides which body a shared group name keeps, and a group's
 ledger row must still be the scope its own binary carries (refuse,
@@ -246,14 +246,17 @@ numbering its own closure.
 
 The container codec, the `rut.jsonc` grammar, the source file-set
 collector, and the reader (both root kinds) live in the driver's
-`rut_driver::bundle` module — **filesystem-free**. Every read goes
-through a one-method `Source` trait: `rut_driver::bundle::FsSource` is
-the real filesystem (the CLI, native hosts); an in-memory path→bytes
-map serves tests and wasm hosts. The packer itself needs the compiler
-and lives beside it (`rut_driver::pack_dir`) — it returns the bundle
-bytes; writing the output file stays with the caller. Mounting a bundle
-into a session stays in the loader ([Loading](loading.md)), over
-`rut_driver::bundle::Bundle` and its parsed `rut_driver::bundle::Layout`
+`rut_driver::bundle` module — **pure and in-memory**: the walk adds
+every filesystem read. That half lives in `rut-native`, whose
+one-method `Source` trait is the one filesystem door:
+`rut_native::FsSource::at(dir)` is the real filesystem (the CLI,
+native hosts); an in-memory path→bytes map serves tests and wasm
+hosts. The packer needs the walk and lives beside it
+(`rut_native::pack_dir`) — it returns the bundle bytes; writing the
+output file stays with the caller. Loading a bundle into a run goes
+through `rut_native::load_bundle_session(path)` (the file read) or
+`rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the
+parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout`
 — the compiled root and its ledger + groups, or the decl root and its
 surface.
 
@@ -363,15 +366,15 @@ same name resolution, same compile, same splice rules:
 
 ```rust
 // from a file
-let (session, root) = rut_driver::load_path_session(Path::new("vendor/plugin.rutbundle"))?;
-// from bytes (embedders, tests, wasm)
-let (session, root) = rut_driver::load_bundle_bytes(&bytes, Path::new("mem"))?;
+let loaded = rut_native::load_bundle_session(Path::new("vendor/plugin.rutbundle"))?;
+// from bytes (embedders, tests, wasm) — the pure container parse
+let loaded = rut_driver::Pkg::from_bundle(&bytes)?;
 ```
 
-After mounting, the package name resolves exactly as the directory form
+After the offer, the package name resolves exactly as the directory form
 does — with one difference: a compiled group's body is the decoded
-program itself. The graph assigns it a fresh scope, rebases its packed
-ids through the ledger, and pushes it; source groups mount as sources
+program itself. The run assigns it a fresh scope, rebases its packed
+ids through the ledger, and pushes it; source groups offer as sources
 and compile (or splice) exactly as a directory world. Then the normal
 pipeline takes over ([Loading and the embed loop](loading.md)). Loose
 directories and loose `.rut` files stay valid share layouts; the bundle

@@ -49,7 +49,8 @@ tables**, all visible in the examples:
   consumer to mount the collection packages, so those live as optional
   peers and as `dev-deps` for json's own tests. [02 —
   Digest](02-digest.md) consumes json *light*; [06 — GitHub viewer
-  CLI](06-github-viewer-cli.md) calls `assemble_peers` and mounts the
+  CLI](06-github-viewer-cli.md) walks the whole closure — the peer
+  gate rides the walk — and mounts the
   wrapper groups for real because
   the collections are in its closure.
 - **`dev-deps`** — mounted only while building the package itself,

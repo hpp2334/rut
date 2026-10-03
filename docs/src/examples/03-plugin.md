@@ -132,7 +132,8 @@ rut_vm::pkg_fn!(pkg, "emit", (Opaque<EventBus>, &str, &str) -> (),
         })?
     },
 );
-hosts.install_host_pkg(&ctx, pkg.build());
+// the built pkg rides the run chain:
+// RutRun::new().pkgs(&loaded).host_pkg(pkg.build())...compile()
 ```
 
 (The comment above this code in the source is worth reading too.) The
@@ -191,7 +192,8 @@ pub host fn subscribe(bus: opaque, topic: str, handler: str);
 pub host fn emit(bus: opaque, topic: str, payload: str);
 ```
 
-`main.rs` packs the same directory with `rut_driver::pack_dir` — a
+`main.rs` packs the same directory with `rut_native::pack_dir_opts_with`
+— a
 v9 **compiled** bundle: the plugin rides as a `.rutc` binary, its host
 pkg `server` as a source group — writes `plugin.rutbundle` to temp, and
 loads it back through the identical `Plugin::load`. The transcript

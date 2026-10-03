@@ -12,16 +12,17 @@ rut run app/            # a directory with rut.jsonc
 rut run plugin/plugin.rutbundle
 ```
 
-The loader side (`rut-driver`) turns a path into a booted `Vm` in five
-steps:
+Turning a path into a booted `Vm` is the walk (`rut-native`) feeding
+the run chain (`rut-driver`) feeding the builder door (`rut-vm`) —
+five steps:
 
 | step | what happens |
 |---|---|
-| 1. mount | A **directory is one module**: its `rut.jsonc` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.jsonc](project-structure.md)). A `.rutbundle` mounts identically from a zip ([Module bundles](bundles.md)). The graph walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — then runs one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). |
-| 2. resolve surfaces | Use paths resolve against mounted modules, exact and single-step: a package name resolves or the diagnostic names the consumer manifest. A `.d.rut` surface compiles through the checker and publishes signatures only. |
-| 3. compile the graph | Each module compiles (sources, in dependency post-order); `inline = true` packages splice into their consumers instead of linking; host packages synthesize bodyless thunks from their declared surfaces; a mounted bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md)). |
+| 1. the walk | A **directory is one module**: its `rut.jsonc` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.jsonc](project-structure.md)). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`. |
+| 2. the offer | `RutRun::new().pkgs(&loaded)` offers every walked pkg — first-pkg-wins — and `.host_pkg(..)` hands over the host bodies. `core` auto-rides unless a pkg named `core` was offered; the closure check refuses a `use` name nothing offered resolves. |
+| 3. compile the graph | `.compile()` mounts the offers into the run's internal table, runs the peer-gate append pass (idempotent per pkg), then compiles each module (sources, in dependency post-order); `inline = true` packages splice into their consumers instead of linking; host packages synthesize bodyless thunks from their declared surfaces; a bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md)). |
 | 4. link + flatten | Module-local type/function/const ids rebase into the global tables; the shared boot prefix passes through; name tables merge; interface declarations merge by name and duplicate module names are link errors. Cyclic use is a compile-graph error, never a runtime event. |
-| 5. verify + boot | The load verifier re-checks every function ([Module binary and verification](module-binary.md)); the `Vm` constructor joins the program's host thunks against the embedder's `HostRegistry` — a declared-but-unbound host fn is a boot error. |
+| 5. verify + boot | The load verifier re-checks every function ([Module binary and verification](module-binary.md)); `Vm::builder().compiled(compiled).build()` joins the program's host thunks against the `Compiled`'s `HostRegistry` — a declared-but-unbound host fn is a boot error. |
 
 Loading a `.rutc` binary (`vm.load_binary`-style paths, and the wasm
 runner) skips steps 2–3 and lands directly in verify + boot.
@@ -40,19 +41,19 @@ surface; only the host's calls run code.
 
 ## The embedder surface
 
-Everything the host needs is a method on `Vm` (plus the registries built
-before it):
+Everything the host needs is the chain plus a handful of `Vm` methods
+(the registries build before the `Vm` boots):
 
 | call | purpose |
 |---|---|
-| `HostRegistry::register(name, f)` | bind a host-fn body; signatures derived from the Rust shape |
-| `hosts.install_host_pkg(&ctx, pkg)` | the installer lane: one built `HostPkg` per host pkg, checked against the mount snapshot (`session.host_pkg_context()`) |
-| `pkg_fn!` / `pkg_async_fn!` | the builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
-| `mount_std_core(session)` / `mount_std(session)` / `mount_std_async(session)` | mount the builtin packages (`core`; `core` + `calc`; the async pair) |
-| `load_path_session(path)` / `load_bundle_bytes(bytes, origin)` | mount a directory / an in-memory bundle |
-| `load_path_session_with(path, &remote)` | the fetched lane: `deps` url rows ride the host's `DepRemote`, the `sha256` pin verified at the mount door |
-| `compile_graph(&session, root)` | compile + link the mounted graph |
-| `Vm::new(prog, &limits, hooks, registry)` | boot; fails if a declared host fn is unbound |
+| `rut_native::load_dir(dir)` / `load_dir_with(dir, &remote)` | the walk: a directory's whole closure as `rut_driver::Loaded` |
+| `rut_native::load_bundle_session(path)` / `Pkg::from_bundle(&bytes)` | load a packed `.rutbundle` from a file / from bytes |
+| `rut_native::dir_pkgs(dir)` / `tree_pkg(name)` | the offer lanes: a dep-style directory walk / one toolchain-tree package |
+| `HostRegistry::register(name, f)` | bind a host-fn body on the raw lane; signatures derived from the Rust shape |
+| `pkg_fn!` / `pkg_async_fn!` | the `HostPkg` builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
+| `RutRun::new().pkg(..).host_pkg(..).entrypoint(..).compile()` | the run chain: offers, host bodies, the root — one terminal step compiles (`Result<Compiled, RunError>`) |
+| `.symbols(&map)` | restore a [stripped artifact's](symbol-stripping.md) private symbol table into the offered compiled pkgs |
+| `Vm::builder().compiled(c).limits(l).hooks(h).build()` | boot; joins every declared host fn to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call(export, args) -> Result<Value, Trap>` | sync entry — typed arg/ret adapters over the boundary |
 | `vm.resume()` | continue a parked frame after `add_fuel` |
 | `vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)` | the async driving verbs |
@@ -82,8 +83,8 @@ fn on_vsync(&mut self) {
 `pending_tasks()` is the idle test — zero means the program has nothing
 runnable. There is no job executor inside the VM: parking, waking, and
 timing are these three verbs plus `set_now`
-([Async and await](async.md)). A program that mounts no async packages
-simply has no launcher; `await` stays cold-poll inline
+([Async and await](async.md)). A program whose world offers no async
+packages simply has no launcher; `await` stays cold-poll inline
 ([The async model](../core-concepts/async-model.md)).
 
 ## The soft-fail law (the err channel)

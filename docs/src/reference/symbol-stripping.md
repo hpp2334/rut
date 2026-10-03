@@ -115,7 +115,8 @@ rut run <mod.rutbundle> [--symbols <file.rutsym>]
 
 Embedders get the same lane as library calls: the packer's
 `pack_dir_opts` returns the sidecar bytes beside the bundle, and
-`apply_symbols_to_session` restores into a mounted session.
+`.symbols(&map)` on the run chain restores into the offered compiled
+pkgs.
 
 ## Determinism and limitations
 

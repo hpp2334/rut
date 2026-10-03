@@ -12,21 +12,28 @@ both sides.
 ## The embedding model
 
 ```rust
-let mut session = Session::new();
-mount_std_core(&mut session);
-session.register_module("app:gfx", lower_decl_module(GFX_DECL, "gfx.d.rut")?);
+// the surface offers as a pkg — a .d.rut lowered to host rows
+let gfx = rut_driver::Pkg::decl("app:gfx", GFX_DECL);
 
+// the raw lane: bind the bodies on a bare registry, full `scope::name`
+// strings (the HostPkg/pkg_fn! builder lane is [host fns](../reference/host-fns.md))
 let mut hosts = HostRegistry::new();
 hosts.register::<_, (i32, i32), Opaque<Canvas>, _>(
     "app:gfx::newCanvas",
     |_vm, w: i32, h: i32| Ok(Canvas::new(w, h)),
 );
 
-// the join: every declared row must have a binding, and vice versa —
-// verified BEFORE any script runs
-hosts.verify_against(&session.expected_host_fns())?;
+// one chain composes and compiles; the boot join (at .build()) proves
+// every declared row the world mounts has a binding — BEFORE any
+// script runs. `verify_against` checks both directions, now.
+hosts.verify_against(&rut_driver::declared_host_fns(&[gfx.clone()]))?;
 
-let mut vm = Vm::new(program, &limits, hooks, hosts)?;
+let compiled = rut_driver::RutRun::new()
+    .pkg(gfx)
+    .entrypoint("app")
+    .compile()?;
+
+let mut vm = Vm::builder().compiled(compiled).limits(limits).hosts(hosts).build()?;
 vm.call::<_, ()>("main", ())?;      // an entry point
 vm.run_ready()?;                    // drive async work to idle
 ```
@@ -40,8 +47,8 @@ pub host fn circle(h: opaque, x: f32, y: f32, r: f32) -> nil;
 
 and the load-time join rejects three wiring bugs as panics — an
 embedder mistake, never a script diagnostic: a declared row with no
-binding, a binding with no declaration, and signature drift. "Mount
-what you bind": an embedder that mounts a package declares its rows
+binding, a binding with no declaration, and signature drift. "Offer
+what you bind": an embedder that offers a package declares its rows
 and must bind them.
 
 ## The crossing set

@@ -51,8 +51,10 @@ git ls-remote https://github.com/hpp2334/rut.git HEAD
 
 Pin **all** the rut crates to the **same** rev — cargo then resolves
 them to a single checkout, one consistent engine. These four are the
-minimal embedder set: the driver pipeline, binary decode, the parser's
-`Mode`, and verify + the VM itself.
+minimal embedder set: the run chain, binary decode, the parser's
+`Mode`, and verify + the VM itself. Add `rut-native` the same way when
+the program walks in from a directory — it is the filesystem/wire half
+([embedding and native modules](../reference/embedding.md)).
 
 ### Pin the nightly
 
@@ -82,7 +84,7 @@ use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 const SRC: &str = "entry fn answer() -> i32 { return 6 * 7; }";
 
 fn main() -> Result<(), String> {
-    // 1. compile the module (a fresh session mounts core + calc)
+    // 1. compile the module — the core prelude auto-rides
     let out = rut_driver::compile_module(SRC, Mode::Impl, "app");
     if !out.diags.is_empty() {
         for d in &out.diags {
@@ -97,13 +99,13 @@ fn main() -> Result<(), String> {
 
     // 3. boot the VM — `Limits::default()` is uncapped
     let limits = Limits::default();
-    let mut vm = Vm::new(
-        Rc::new(prog),
-        &limits,
-        HostHooks::default(),
-        HostRegistry::new(),
-    )
-    .map_err(|t| t.msg)?;
+    let mut vm = Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(HostRegistry::new())
+        .build()
+        .map_err(|e| e.msg)?;
 
     // 4. call an export, get a Rust value back
     let answer: i32 = vm.call::<_, i32>("answer", ()).map_err(|t| t.msg)?;

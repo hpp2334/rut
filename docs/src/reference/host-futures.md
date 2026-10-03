@@ -76,7 +76,7 @@ rut_vm::pkg_async_fn!(pkg, "fetch", (String,) -> Vec<u8>,
         });
         c                       // returned immediately: the future parks
     });
-hosts.install_host_pkg(&ctx, pkg.build());
+// the built pkg rides the run chain: .host_pkg(pkg.build())
 ```
 
 | Emitted row | Signature | Role |

@@ -3,8 +3,8 @@
 The standard library splits in two:
 
 - **`core`** — the only standard. The prelude surface, uniformly
-  engine-implemented: it registers **no** host bodies and needs no mount
-  beyond the base one.
+  engine-implemented: it registers **no** host bodies and needs no
+  offer — every run's `.compile()` auto-rides it.
 - **the swappable packages** — in-tree rut/host packages that a module
   declares in its manifest `deps`
   ([project structure](project-structure.md)). The community may replace
@@ -151,8 +151,9 @@ started
 | `warn(msg)` | 2 |
 | `error(msg)` | 3 |
 
-Embedder side: `hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")))` (the ctx is `session.host_pkg_context()` — [embedding](embedding.md)).
-Mounting `ink` pulls `ink_host` along (`deps`).
+Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!("{s}")))`
+on the run chain ([embedding](embedding.md)). Offering `ink` pulls
+`ink_host` along (`deps`).
 
 ### `pouch` — `Vec<T>`
 
@@ -284,7 +285,7 @@ Constants: `Math.PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`,
 
 ### `json` — the serde package
 
-Pure rut, `inline = true`, zero host fns — a json mount adds no host
+Pure rut, `inline = true`, zero host fns — offering json adds no host
 bindings.
 
 ```rut
@@ -349,8 +350,8 @@ The builder is a host package now (the `ink`/`Logger` pattern): the
 `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` /
 `sb_push_code` / `sb_len` / `sb_finish`, registered under the
 pkg-name scope), and the `strbuild` package wraps them in the
-`StringBuilder` class. Core ships no string-building machinery; a
-strbuild mount pairs with the bodies:
+`StringBuilder` class. Core ships no string-building machinery; offering
+strbuild pairs with the bodies:
 
 ```rut
 use ink::{ Logger };
@@ -387,10 +388,9 @@ consults the embedder's heap budget BEFORE growing (the geometric
 next-capacity is charged), so the wasm 4 MiB cap governs builder growth
 exactly as it governs engine allocations.
 
-Embedder side:
-`hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg())`. Mounting
-`strbuild` pulls `strbuild_host` along (`deps`); mounting `json`
-pulls both (its writer rides the builder).
+Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain.
+Offering `strbuild` pulls `strbuild_host` along (`deps`); offering
+`json` pulls both (its writer rides the builder).
 
 For the common accumulator shape no builder is needed at all:
 `out = f"{out}{t}"` appends in place, linear in the total output
@@ -402,9 +402,10 @@ For the common accumulator shape no builder is needed at all:
   `__sleep`, `__sleep_yield`); `futures` restores the typed surface:
   `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`,
   `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
-  Each embedder mounts the pair **and** installs
-  `rut_std::async_host::pkg()`; a session that mounts neither
-  has no launcher ([launched futures](launched-futures.md), [host futures](host-futures.md)).
+  Each embedder offers `rut/futures` (a `rut_native::tree_pkg` walk) and
+  installs `rut_std::async_host::pkg()` on the chain; a world that
+  offers neither has no launcher
+  ([launched futures](launched-futures.md), [host futures](host-futures.md)).
 - `http_host` declares the transport rows (three async, five sync
   readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` /
   `Request` / `Response` / `ByteStream` — async only at the points that
@@ -426,12 +427,16 @@ For the common accumulator shape no builder is needed at all:
   `byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved
   for transport failure. The reqwest lane is native-only.
 
-## Mounting
+## Offering
 
-- `mount_std` mounts `core` + `calc`; `mount_std_async` adds the async
-  pair. Swappable packages mount by directory or bundle ([module
-  bundles](bundles.md)); the `rut` CLI mounts the tree packages a loose
-  file names by `use` ([the rut CLI](cli.md)).
+- `core` auto-rides — every run's `.compile()` offers the core prelude
+  unless a pkg named `core` was offered. `calc` and the async pair are
+  ordinary tree packages: the host offers them
+  (`rut_native::tree_pkg(..)`) when the program's surface names them,
+  and binds the bodies (`rut_std::math::pkg()`,
+  `rut_std::async_host::pkg()`) on the chain ([embedding](embedding.md)).
+  The `rut` CLI offers the tree packages a loose file names by `use`
+  ([the rut CLI](cli.md)).
 - `inline = true` packages (ink, pouch, nmapset, json, strbuild,
   futures) are source-inlined into each consumer — required for
   class-method surfaces, whose inherent impls cross no module link

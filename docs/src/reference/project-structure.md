@@ -81,7 +81,8 @@ loudly naming the fix — comments are the prose now.
 - **The cross-table law.** A name in `deps` beside `peer-deps` or
   `dev-deps` is an error naming both rows; peer + dev together is the
   sanctioned pairing.
-- **`core` needs no `deps`** — the driver mounts it unconditionally;
+- **`core` needs no `deps`** — `.compile()` auto-offers it
+  unconditionally ([core and the swappable packages](stdlib.md));
   every name still requires `use core::{ .. };` per
   [core and the swappable packages](stdlib.md).
 
@@ -122,7 +123,8 @@ rut/
 │   ├── rut-core/         # types, ops, binary encode/decode, link, sym
 │   ├── rut-vm/           # heap, interpreter, verifier, driving loop
 │   ├── rut-vm-threaded/  # tail-call threaded dispatch (nightly `become`)
-│   ├── rut-driver/       # session, loader, bundles, dep graph, decl
+│   ├── rut-driver/       # the run chain: Pkg, RutRun, Compiled; bundles, dep graph, decl
+│   ├── rut-native/       # the walk and the world: Source/FsSource, DepRemote/HttpRemote, pack
 │   ├── rut-fmt/          # the formatter
 │   ├── rut-std/          # host bodies: log, math, nmap, http, async
 │   ├── rut-wasm/         # the wasm ABI (compile/run envelope)
@@ -139,20 +141,22 @@ rut/
 Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver →
 rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the
 driver sits on the vm's `HostPkgContext`/`HostRegistry` for the
-installer lane), hosts
+install law), `rut-native` beside the driver (it depends on the
+driver, never the reverse — the driver is provably pure: no fs, no
+net, no `std::path`), hosts
 (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those.
 `rut-lsp` sits on the frontend crates only — tokens, diagnostics, and
 symbols need no VM.
 
 ## The in-tree packages
 
-`rut/` carries the standard and swappable packages the CLI mounts on
+`rut/` carries the standard and swappable packages the CLI offers on
 demand:
 
 | package | shape |
 |---|---|
-| `core` | the only standard package — the builtin surface, mounted unconditionally |
-| `calc` | host pkg: math surface (`mount_calc`) |
+| `core` | the only standard package — the builtin surface, auto-offered by every run's `.compile()` |
+| `calc` | host pkg: the math surface — offer `rut_native::tree_pkg("calc")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
 | `ink`, `http`, `strbuild`, `futures` | inline rut wrappers over host rows (`inline = true`) |
 | `pouch` | the sequence library (plain linked package) |

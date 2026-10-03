@@ -85,7 +85,7 @@ directory:
   transport, caching, offline policy — by implementing the `DepRemote`
   contract (`fetch(url)` — one required method returning a boxed future
   of bytes — plus optional `lookup`/`write`; the standard
-  `HttpRemote` is cache-first). The *loader*
+  `rut_native::HttpRemote` is cache-first). The *walk*
   owns WHAT the bytes are declared to be: the `sha256` pin is manifest
   law, verified at the mount door on **every** load — fresh fetch,
   cache hit, vendored map, test fixture. A check the call site
@@ -172,10 +172,11 @@ learns what a peer is.
    session's peer registry (it reads every dep's manifest anyway).
 2. **The dev pass — root only.** The program root's `dev-deps` mount
    exactly like `deps`. A dep's dev table is **never** walked — a
-   consumer's world never contains another package's dev table. Embedder
-   mounting (`mount_dir`) offers a package to someone else's program: it
-   mounts no dev-deps and runs no gate (its peer declarations are still
-   recorded).
+   consumer's world never contains another package's dev table.
+   Offering a package to someone else's program
+   (`rut_native::dir_pkgs`, or `.pkg(..)` by hand) is the same law:
+   it walks no dev-deps and runs no gate (its peer declarations are
+   still recorded).
 3. **The peer gate — one post-closure pass.** After the full closure
    exists, for every mounted package and every `peer-deps` entry:
    - **required**: the peer must resolve in the session, else the D1

@@ -123,9 +123,11 @@ pub struct Limits {
 - **Interrupts** are cooperative: the budget check cadence bounds how
   long any host-requested stop can take. Native (host) bodies run outside
   the fuel budget and are expected to be fast.
-- `Vm::new(prog, &limits, hooks, registry)` takes the limits; a default
-  construction uses unbounded fuel and heap — embedders that need budgets
-  pass them explicitly ([Resource limits and fuel](resource-limits.md)).
+- `Vm::builder().compiled(c).limits(l).build()` takes the limits
+  (`.limits(..)` on the builder, or the parts a `Compiled` hands
+  over); unset limits mean unbounded fuel and heap — embedders that
+  need budgets pass them explicitly
+  ([Resource limits and fuel](resource-limits.md)).
 
 ## Coroutines and the driving loop
 

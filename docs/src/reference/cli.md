@@ -1,9 +1,10 @@
 # The rut CLI
 
 The `rut` binary is the toolchain's command-line face. It is also a
-**full host**: running a program mounts the base packages, binds the
-standard native bodies, and drives the async loop — the same contract an
-embedded host implements ([embedding and native modules](embedding.md)).
+**full host**: running a program walks its directory, offers the tree
+packages its surface names, binds the standard native bodies, and
+drives the async loop — the same contract an embedded host implements
+([embedding and native modules](embedding.md)).
 
 It is the **temporary-run** lane: running module directories and
 bundles, `fmt`, `dump`, `pack`. The intended consumption path is depending on the engine
@@ -49,9 +50,9 @@ Flags and defaults:
 | heap limit | fixed at 64 MiB |
 | interrupt check | every 1024 ops |
 
-Bodies bound by `run`:
+Bodies bound by `run` (each rides the chain as `.host_pkg(..)`):
 
-| installer | purpose |
+| chain step | purpose |
 |---|---|
 | `math::pkg()` | `calc`'s float fns |
 | `logger::pkg` (sink: stdout) | the logger; silent no-op unless the program uses `ink` |
@@ -130,9 +131,9 @@ rut dump main.rut
 
 Prints the compiler's view of one file: the `== AST ==` section followed
 by `== IR ==` (per-function typed register tables and op listings).
-Compilation is the same base-mounted pipeline `run` uses, minus execution
-and verification. `.d.rut` inputs dump in declaration mode — useful for
-inspecting a host surface's slots.
+Compilation is the same offered-world pipeline `run` uses, minus
+execution and verification. `.d.rut` inputs dump in declaration mode —
+useful for inspecting a host surface's slots.
 
 ## `fetch`
 
@@ -140,20 +141,20 @@ inspecting a host surface's slots.
 rut fetch app/            # CI: warm the cache while the network is up
 ```
 
-Loads a module **directory** with the url-dep remote and discards the
-session — every `deps` url is fetched (or found in the cache) and
+Walks a module **directory** with the url-dep remote and discards the
+result — every `deps` url is fetched (or found in the cache) and
 pinned, so a later offline `run` hits only the cache. A `.rutbundle`
 argument is refused: bundles are closed — there is nothing to fetch.
 The cache and the eviction law are the same lane `run`/`pack` use:
 
 | item | behavior |
 |---|---|
-| cache root | `<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the driver never reads env). Entries named `<sha256(url)>.rutbundle` |
+| cache root | `<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the walk never reads env). Entries named `<sha256(url)>.rutbundle` |
 | cache-first | a hit never touches the network — offline reloads are the point |
 | miss | GET (redirects on), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename) |
 | poisoned entry | the `sha256` pin is the loader's law at the mount door; when it refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals |
 
-The wire is the driver's `http` feature (default on) — a build with
+The wire is `rut-native`'s `http` feature (default on) — a build with
 `default-features = false` (the wasm graphs) has no transport at all:
 a cache miss errors loudly instead of networking.
 
@@ -178,9 +179,9 @@ Diagnostics go to stderr; `pack`'s success line goes to stdout.
 
 ## Notes
 
-- The CLI mounts and binds on behalf of the program, but it never
+- The CLI offers and binds on behalf of the program, but it never
   injects names the program did not declare: a program that never spells
-  `use ink::` gets no logger; one that never mounts the async packages
+  `use ink::` gets no logger; one that never offers the async packages
   has no launcher and `await` stays cold-poll inline
   ([core and the swappable packages](stdlib.md)).
 - The HTTP lane is native-only: the CLI build carries it, wasm builds do

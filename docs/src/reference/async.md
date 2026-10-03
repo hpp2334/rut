@@ -126,9 +126,9 @@ pub fn sleep(ms: u32) -> Future<nil>;
 // LaunchedFutureHandle<T>: the receipt — one member, abort() -> bool
 ```
 
-Each embedder mounts `rut/async_host` (the rows `__launch`, `__abort`,
+Each embedder offers `rut/async_host` (the rows `__launch`, `__abort`,
 `__sleep`, `__sleep_yield`) plus `rut/futures`, and installs the row
-bodies. A session that mounts neither simply has no launcher; `await`
+bodies. A world that offers neither simply has no launcher; `await`
 still works inline.
 
 The crossings cross as **`opaque`**: `opaque(f)` seals a frame on the

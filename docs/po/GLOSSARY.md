@@ -135,11 +135,18 @@ context; after that, use the zh-CN rendering alone.
    sidebar, search index, and anchors derive from them. Do not add the
    English in parentheses to titles.
 | seeded fetcher | 预置取回器 | RETIRED — the seed shape is gone; the remote policy is named explicitly now（远程策略） |
-| builder | 构建器 | `HostPkg` builder → `HostPkg` 构建器（`HostPkg` stays code） |
-| installer lane | 安装者车道 | 对照 the raw lane → 原生车道 |
-| mount snapshot | 挂载快照 | `session.host_pkg_context()` stays code |
+| builder | 构建器 | `HostPkg` builder → `HostPkg` 构建器（`HostPkg` stays code）；`Vm::builder()` stays code |
+| installer lane | 安装者车道 | 对照 the raw lane → 原生车道；宿主函数体经 `.host_pkg(..)` 上链安装 |
+| rows snapshot | 行快照 | RETIRED as `mount snapshot` — the snapshot now reads off the offered pkgs（`rut_driver::host_pkg_ctx(pkgs)` stays code） |
 | first-mount-wins | 先挂载者胜 | |
 | inert merge | 惰性合并 | inert extras → 惰性额外物 |
 | decl root / compiled root | 声明根 / 编译根 | the v6/v5 pairing → 配对是完全的（the pairing is total） |
+| walk | 遍历 | rut-native 的目录遍历（the walk）；the deps walk → deps 遍历；动词 walk → 遍历；对照 offer |
+| offer | offer | 保留不译（`.pkg(..)` 的提供法则，名词）；动词 offer(s) → 提供；first-pkg-wins → 先提供者优先；the offer lane → offer 车道 |
+| first-pkg-wins | 先提供者优先 | 链上的 first-mount-wins（先挂载者胜） |
+| run chain | 运行链 | `RutRun::new()..compile()` 的组合 —— `Pkg` → `RutRun` → `Compiled` → `Vm` 一值贯通 |
+| auto-ride / auto-offer | 自动承载 / 自动 offer | core 在 `.compile()` 中自动承载（riding → 承载）；除非已 offer 了名为 `core` 的包 |
+| yield | 产出 | a walk's yield → 遍历的产出（`Loaded { pkgs, root }`） |
+| world | 世界 | the walk's world → 遍历的世界；close the world → 收束世界；the consumer's world → 消费者的世界 |
 | named record | 具名记录 | user struct/class rows; never cross → 具名记录永不跨越 |
 | anonymous tuple | 匿名元组 | the `(T, ..)` spelling crosses field-by-field → 匿名元组逐字段跨越 |

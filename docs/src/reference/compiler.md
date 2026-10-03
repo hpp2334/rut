@@ -42,9 +42,9 @@ site is checked against its inline `requires` bounds as it is compiled.
 
 Name resolution walks the AST and binds every path to a symbol:
 
-- `use` imports resolve against the mounted session — exact,
-  single-step: a use path resolves only if a module with that name is
-  mounted. Missing modules diagnose against the consumer manifest (see
+- `use` imports resolve against the run's offered pkgs — exact,
+  single-step: a use path resolves only if a pkg with that name was
+  offered. Missing pkgs diagnose against the consumer manifest (see
   [Loading](loading.md) and [Dependency kinds](dependency-kinds.md)).
 - `Self` binds inside impls; `pub` visibility is checked per
   [Modules and visibility](modules-and-visibility.md).

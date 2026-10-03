@@ -175,32 +175,38 @@ impl Response {
     pub fn read_error(self) -> ?str { return http_read_err(self.r); }
 ```
 
-### The embedder's mount list
+### The embedder's offer list
 
-`src/main.rs` shows the whole program closure in one table — the
-collections, json, and the http pair, then `assemble_peers` runs the
-peer gate so json's impl-only integration groups mount because the
-collections are in the closure
-([Dependency kinds](../reference/dependency-kinds.md)):
+`src/main.rs` shows the whole program closure in one chain — the walk
+feeds the run, the async pair and `calc` offer beside it, and the
+host bodies ride `.host_pkg(..)`:
 
 ```rust
-const MOUNT_DIRS: &[&str] = &[
-    "rut/pouch",
-    "rut/nmapset",
-    "rut/json",
-    "rut/http_host",
-    "rut/http",
-];
+let loaded = block_on(rut_native::load_path_session_with(base, &remote))?;
+let rgh_host = rut_native::dir_pkgs(&base.join("rgh_host"))?;   // example-local rows
+
+let mut chain = rut_driver::RutRun::new().pkgs(&loaded);        // the manifest closure
+chain = chain
+    .pkg(rut_native::tree_pkg("calc")?)
+    .pkgs(&rgh_host)
+    .host_pkg(rut_std::math::pkg())
+    .host_pkg(rut_std::nmap::pkg())
+    .host_pkg(rut_std::async_host::pkg())
+    .host_pkg(rut_std::http::pkg());
+let compiled = chain.entrypoint(&root).compile()?;
 ```
 
-The HTTP bodies install through `http::pkg()` (the reqwest lane);
+The walk runs the peer gate over its closure, so json's impl-only
+integration groups mount because the collections are in the closure
+([Dependency kinds](../reference/dependency-kinds.md)). The HTTP
+bodies install through `http::pkg()` (the reqwest lane);
 the example's own rows are CLI I/O only — `out` (stdout), `eprint`,
 the file pair, and `exit` — declared in
 the example-local `rgh_host` decl package and verified against the
 bindings at boot ([Host fns and declaration
 files](../reference/host-fns.md)). One consequence: `rut run` cannot
 host rgh itself — its rows are example-local — but ordinary HTTP
-programs do run under `rut run`, which mounts the std http pair by
+programs do run under `rut run`, which offers the std http pair by
 presence.
 
 ## Takeaways

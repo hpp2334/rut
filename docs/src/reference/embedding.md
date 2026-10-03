@@ -1,14 +1,17 @@
 # Embedding and native modules
 
-The host is a Rust program. It owns the VM, mounts packages, binds native
-function **bodies** to declared **surfaces**, and drives rut entry points.
-Compiling and type-checking rut code never requires any Rust: surfaces are
-declared in rut source ([host fns and declaration files](host-fns.md)), and
-the boot join proves every referenced native member has a bound,
-signature-equal implementation before the first instruction runs.
+The host is a Rust program. It walks the program's packages off disk (or
+offers them by hand), composes **one run** fluently, binds native
+function **bodies** to declared **surfaces**, and drives rut entry
+points. One value flows end to end: **`Pkg` → `RutRun` → `Compiled` →
+`Vm`**. Compiling and type-checking rut code never requires any Rust:
+surfaces are declared in rut source ([host fns and declaration
+files](host-fns.md)), and the boot join proves every referenced native
+member has a bound, signature-equal implementation before the first
+instruction runs.
 
-There is no load-time execution: loading verifies and links; the host runs
-entry points explicitly.
+There is no load-time execution: composing and compiling verify and
+link; the host runs entry points explicitly.
 
 ## Getting the crates
 
@@ -19,101 +22,166 @@ crates.io. Name the repository once per crate, every crate on the
 ```toml
 [dependencies]
 rut-driver = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-native = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-core   = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-parser = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-vm     = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 ```
 
-The build needs the nightly this repo pins (`rut-vm-threaded` uses
-incomplete features) — your project's `rust-toolchain.toml` carries the
-pin. Add `rut-std` the same way when the program uses std packages; the
-full walk-through (hash lookup, nightly pin, a runnable smoke test) is
+`rut-native` is the walk and the world — everything with a filesystem
+or a wire ([the walk vs the offer](#the-walk-vs-the-offer)). A host
+that offers every
+`Pkg` by hand (a wasm page, an in-memory test) depends on the driver
+alone and skips it. The build needs the nightly this repo pins
+(`rut-vm-threaded` uses incomplete features) — your project's
+`rust-toolchain.toml` carries the pin. Add `rut-std` the same way when
+the program uses std packages; the full walk-through (hash lookup,
+nightly pin, a runnable smoke test) is
 [installation](../quick-start/installation.md).
 
 ## The embed loop
 
 ```rust
-use std::rc::Rc;
+// 1. The walk (rut-native): a directory's whole closure as walked
+//    pkgs — `[deps]` recursion, the sha256 pins, the peer gate.
+let loaded = block_on(rut_native::load_dir_with(
+    std::path::Path::new("plugins/server"),
+    &rut_native::HttpRemote::project_local(project_dir),
+))?;
 
-// 1. Mount the packages the program uses. core + calc are the base.
-let mut session = rut_driver::Session::new();
-rut_driver::mount_std(&mut session);        // core + calc
-rut_driver::mount_std_async(&mut session);  // async_host + futures (optional)
-rut_driver::mount_dir(&mut session, "plugins/server")?;
-rut_driver::assemble_peers(&mut session)?;  // peer-gated impl groups
+// 2. The chain (rut-driver): offer the walk's yield, hand over the
+//    host bodies, name the root — and ONE terminal step compiles.
+let compiled = rut_driver::RutRun::new()
+    .pkgs(&loaded)                                     // first-pkg-wins
+    .host_pkg(rut_std::math::pkg())                    // calc's bodies
+    .host_pkg(rut_std::logger::pkg(|s| println!("{s}")))
+    .entrypoint(&loaded.root)
+    .compile()?;
+if !compiled.graph.diags.is_empty() { /* render and exit */ }
+rut_vm::verify::verify(compiled.graph.program.as_ref().unwrap())?;
 
-// 2. Compile the program against the mounted surfaces.
-let out = rut_driver::compile_module_in(&mut session, &src,
-                                        rut_parser::Mode::Impl, "app");
-if !out.diags.is_empty() { /* render and exit */ }
-let prog = rut_core::binary::decode(&out.binary.unwrap())?;
-rut_vm::verify::verify(&prog)?;
+// 3. Boot and drive — `Vm::builder()` is the only construction door.
+let limits = rut_vm::interp::Limits {
+    fuel: Some(1_000_000),
+    heap_limit_bytes: Some(64 * 1024 * 1024),
+    interrupt_every: 1024,
+};
+let mut vm = rut_vm::interp::Vm::builder()
+    .compiled(compiled)          // the run's product; also .limits/.hooks/.hosts
+    .build()?;
+let answer: i64 = vm.call("compute", (41,))?;
+```
 
-// 3. Snapshot the mounts, then bind bodies BEFORE the Vm exists —
-//    the registry is a pre-VM table and the ctx is the declared side.
-let ctx = session.host_pkg_context();
-let mut hosts = rut_vm::interp::HostRegistry::new();
-hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")));
-// a hand-rolled pkg for your own host rows (or the raw `register!`
-// escape hatch on the bare registry — same machinery, flat names)
+A hand-rolled pkg for your own host rows rides the same chain step
+(the raw `register!` escape hatch on the bare registry — same
+machinery, flat names — stays for hosts that bind outside the chain):
+
+```rust
 let mut server = rut_vm::HostPkg::new("server");
 rut_vm::pkg_fn!(server, "emit", (OpaqueRef, &str, &str) -> (),
     |vm: &mut rut_vm::interp::Vm, bus, topic, payload| -> Result<(), rut_vm::Trap> {
         // re-entrant rut calls are legal here (see "Native fn rules")
         Ok(())
     });
-hosts.install_host_pkg(&ctx, server.build());
-// The decl ↔ impl contract check. Panics, loudly, on any mismatch —
-// an embedder wiring bug is never a rut diagnostic.
-hosts.verify_against(&ctx.flatten());
 
-// 4. Boot and drive.
-let limits = rut_vm::interp::Limits {
-    fuel: Some(1_000_000),
-    heap_limit_bytes: Some(64 * 1024 * 1024),
-    interrupt_every: 1024,
-};
-let mut vm = rut_vm::interp::Vm::new(
-    Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts,
-)?;
-let answer: i64 = vm.call("compute", (41,))?;
+let compiled = rut_driver::RutRun::new()
+    /* ..offers.. */
+    .host_pkg(server.build())
+    .entrypoint("app")
+    .compile()?;
 ```
 
-The compile step is the **embedder's string lane**: the host owns the
-source text — from its own config, a database, an editor buffer — and
-`compile_module_in` compiles it against the mounted surfaces. It is not
-a file-running lane: the CLI's `rut run` accepts only a module directory
-or a packed `.rutbundle` ([the rut CLI](cli.md)).
+### The `.compile()` law
 
-The registry is consumed by `Vm::new`: every host thunk the program declares
-is resolved against it once, at boot. A declared-but-unbound fn is a
-**construction error**, never a mid-run trap.
+`RutRun::compile()` is the single terminal step. In order:
 
-## Url deps — the remote policy (`Loader` + `HttpRemote`)
+1. **auto-offer the core prelude** — unless a pkg named `core` was
+   offered (first-pkg-wins override);
+2. **close the world** — every offered pkg mounts into the run's
+   internal table, then the mount-by-mount world runs its ONE
+   peer-gate append pass (a walk's yield already carried its groups;
+   the pass is idempotent per pkg);
+3. **the host registry** — every `.host_pkg(..)` installs against the
+   mounted rows snapshot. A mounted scope whose declared rows the
+   installer does not bind is the loud panic (the `.d.rut` ↔ host-impl
+   contract); an unmounted scope's rows merge inert — an embedder
+   wiring bug is never a rut diagnostic;
+4. **the closure check** — every `use` name in every offered source
+   resolves; a miss is `Err(RunError)`, carrying the resolver's own
+   diagnostic;
+5. **parse → check → LIR → link.**
+
+Shape/closure failures (a bad package name, a missing entrypoint, an
+unresolved use) are `Err(RunError)`. Compile diagnostics are NOT
+errors: they ride inside `Compiled::graph` exactly as they always did —
+check `compiled.graph.diags` before trusting `compiled.graph.program`.
+
+The registry is consumed by `.build()`: every host thunk the program
+declares is resolved against it once, at boot. A declared-but-unbound
+fn is a **construction error**, never a mid-run trap.
+
+## The walk vs the offer
+
+Two doors produce `Pkg`s; both feed the same chain.
+
+**The walk** ([`rut-native`](#getting-the-crates)) reads a module
+directory — or a packed `.rutbundle` — and yields the closure:
+
+| lane | what it does |
+|---|---|
+| `load_dir(dir)` | the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch is an error), the `sha256` pin verified at the mount door, the root-only `[dev-deps]` pass, ONE peer-gate pass over the closed set. Url deps are the loud no-fetcher error. |
+| `load_dir_with(dir, &remote)` | the same walk; url `deps` rows are collected, fetched over the host's `DepRemote`, and pinned at the mount door |
+| `load_dir_fetched(dir, &map)` | the walk over PRE-fetched url bytes — the sync core; tests and offline hosts hand a `url → bytes` map |
+| `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: a directory walks (above); a `.rutbundle` loads closed (below) |
+
+The yield is `rut_driver::Loaded { pkgs, root }` — pure pkgs plus the
+root's name. Offer it with `.pkgs(&loaded)` (every pkg,
+first-pkg-wins) or pick pieces with `loaded.pkg(name)`.
+
+**The offer** is a `Pkg` value handed to the chain by hand:
+
+| constructor | builds |
+|---|---|
+| `Pkg::source(name, text)` | the ordinary `.rut` body |
+| `Pkg::decl(name, text)` | a `.d.rut` surface (declaration mode) |
+| `Pkg::host(name, rows)` | the native rows — exported constants, bodyless host fns |
+| `Pkg::compiled(name, program)` | a decoded `.rutc` binary pushed as-is |
+| `Pkg::from_bundle(bytes)` | the pure container parse — the bundle's pkgs as a `Loaded` (below) |
+| `lower_decl_module(text, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane |
+
+`Pkg` is pure data: the walker-found metadata (the `[deps]` table, the
+`[peer-deps]` declarations, the peer-integration group texts) is pub
+data on it, and a host whose world has no filesystem (wasm) appends
+peer groups by hand — the graph only reads.
+
+Two offer lanes walk a directory **for someone else's program**:
+
+| lane | what it does |
+|---|---|
+| `rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | offer one package directory — and, recursively, its `[deps]` — as walked pkgs. No dev-deps pass, no peer gate: presence is the program's own `.compile()` law. |
+| `rut_native::tree_pkg(name)` | one toolchain-tree package (`rut/calc`, `rut/futures`, …). A pkg whose `[deps]` pull a closure is refused — offer the whole walk (`load_dir`) instead, never a silently-truncated world. |
+
+`core` is never offered — `.compile()` auto-rides it. `calc` and the
+async pair are ordinary tree packages: the host offers
+`rut_native::tree_pkg("calc")` when the program's surface needs it and
+binds `rut_std::math::pkg()` for the bodies ([core and the swappable
+packages](stdlib.md)).
+
+## Url deps — the remote policy (`DepRemote` + `HttpRemote`)
 
 The embedder owns exactly three things: the fs policy ([`Source`]),
-the remote policy ([`DepRemote`]), and its own runtime. The door is
-the **`Loader`** — non-generic, no remote default, and the check is
-LAZY: `build()` validates only the path shape; the remote matters only
-when the dep walk actually reaches a url row, and the panic fires
-there (naming the dep, the url, and the fix). Url-free projects and
+the remote policy ([`DepRemote`]), and its own runtime. The `_with`
+lanes take `&dyn DepRemote` and nothing else: the remote matters only
+when the dep walk actually reaches a url row. Url-free projects and
 `.rutbundle`s are closed — they load with no remote named at all.
 
-```rust
-// the ENTIRE embedder load half for a project with url rows
-let app = rut_driver::Loader::new(project_dir)
-    .dep_remote(rut_driver::HttpRemote::project_local(project_dir))
-    .build();
-let (mut session, root) = block_on(app.load())?;   // Result<_, rut_driver::LoadError>
-```
-
-The standard remote is **`HttpRemote`** — cache-first: a hit NEVER
-touches the network, a miss GETs (redirects on, loud status errors, a
-size cap) on the remote's own private worker thread and writes the
-cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`.
-The futures come back READY, so any executor works — including the
-std-only noop-waker `block_on` poll loop the examples spell.
+The standard remote is **`rut_native::HttpRemote`** — cache-first: a
+hit NEVER touches the network, a miss GETs (redirects on, loud status
+errors, a size cap) on the remote's own private worker thread and
+writes the cache back atomically. Cache layout law:
+`<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any
+executor works — including the std-only noop-waker `block_on` poll
+loop the examples spell.
 
 | constructor | behavior |
 |---|---|
@@ -127,12 +195,11 @@ std-only noop-waker `block_on` poll loop the examples spell.
 the wire — `DepRemote::write` is the stand-in for the GET:
 
 ```rust
-let remote = rut_driver::HttpRemote::offline(&cache_root);
+let remote = rut_native::HttpRemote::offline(&cache_root);
 for (url, bytes) in vendored_rows {                  // parsed from rut.jsonc
-    rut_driver::DepRemote::write(&remote, &url, &bytes)?;  // prime the cache
+    rut_native::DepRemote::write(&remote, &url, &bytes)?;  // prime the cache
 }
-let (mut session, root) =
-    block_on(rut_driver::Loader::new(project_dir).dep_remote(remote).build().load())?;
+let loaded = block_on(rut_native::load_dir_with(project_dir, &remote))?;
 ```
 
 **Memory hosts** (wasm, in-process tests) hand-roll the trait — one
@@ -141,45 +208,62 @@ required method, sync impls are first-class via `std::future::ready`:
 ```rust
 struct Mem(Vec<(String, Vec<u8>)>);
 
-impl rut_driver::DepRemote for Mem {
+impl rut_native::DepRemote for Mem {
     fn fetch(&self, url: &str)
-        -> Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_driver::RemoteError>> + '_>> {
+        -> Pin<Box<dyn Future<Output = Result<Vec<u8>, rut_native::RemoteError>> + '_>> {
         Box::pin(std::future::ready(
-            self.lookup(url).ok_or_else(|| rut_driver::RemoteError::new(
+            self.lookup(url).ok_or_else(|| rut_native::RemoteError::new(
                 format!("no bytes for {url}")))))
     }
     fn lookup(&self, url: &str) -> Option<Vec<u8>> {
         self.0.iter().find(|(u, _)| u == url).map(|(_, b)| b.clone())
     }
-    fn write(&self, url: &str, bytes: &[u8]) -> Result<(), rut_driver::RemoteError> {
+    fn write(&self, url: &str, bytes: &[u8]) -> Result<(), rut_native::RemoteError> {
         self.0.retain(|(u, _)| u != url);
         Ok(self.0.push((url.to_string(), bytes.to_vec())))
     }
 }
 ```
 
-The loader still owns WHAT the bytes are: the `sha256` pin is manifest
+The walk still owns WHAT the bytes are: the `sha256` pin is manifest
 law, verified at the mount door on every load — fresh fetch, cache
 hit, vendored map, test fixture.
 
-**Mounting a bundle into an existing session** — the in-memory
-counterpart of `mount_dir` (the offer law: no dev-deps, no gate, the
-compile owns presence) — is
-`rut_driver::mount_bundle_bytes(&mut session, &bytes) -> Result<String, String>`:
-both root kinds mount (a v9 compiled root with its groups, the ledger
-namespaced into the session; a v10 decl root as the pkg's host rows),
-first-mount-wins, and the bundle root's package name comes back. Wasm
-hosts `include_bytes!` the committed artifact and mount through this —
-05-todolist-web's mirror lane takes the `nmap_host` surface from the
-CDN artifact that way. For the url-dep *walk* (pins, closure checks,
-the peer gate over archive groups) stay on the load/pack lanes —
-`mount_bundle_bytes` is the offer, not the walk.
+**The filesystem policy** is `rut_native::Source` — string keys, all
+key math in the impl. `FsSource::at(dir)` is the real filesystem with
+the root baked in; a `Path` lives only inside its impls. A test or a
+memory host answers `read`/`resolve` with lookups instead of files.
+The `load_dir*` lanes bake `FsSource` in; a custom `Source` hosts the
+walk through `dir_pkgs`-shaped collectors of your own.
+
+## Module bundles
+
+A packed `.rutbundle` is the same contract zipped — loading it never
+fetches (bundles are closed; their closure rode inside at pack time):
+
+```rust
+// from a file: the walk adds only the file read
+let loaded = rut_native::load_bundle_session(Path::new("vendor/plugin.rutbundle"))?;
+
+// from bytes (embedders, tests, wasm): the pure container parse
+let loaded = rut_driver::Pkg::from_bundle(&bytes)?;
+```
+
+Both root kinds load (a v9 compiled root with its groups and its
+pack-time scope ledger, rebased at the close of the world; a v10 decl
+root as the pkg's host rows), first-mount-wins, and the bundle root's
+package name is `loaded.root`. Wasm hosts `include_bytes!` the
+committed artifact and parse through `Pkg::from_bundle`. For the
+url-dep *walk* (pins, closure checks, the peer gate over archive
+groups) stay on the `load_dir*` lanes — a bundle mount is the offer,
+not the walk. The container, the manifest grammar, and the reader are
+[module bundles](bundles.md).
 
 **What to take from a url** is the engine's instantiation law, read
 from the embedding side: a compiled bundle serves host surfaces,
 concrete-class libs, **and** — since the generic-source riding law —
 the generic owners: a request the pack-time ledger lacks lowers the
-ridden source in the consumer's session and compiles the monomorphized
+ridden source in the consumer's world and compiles the monomorphized
 body under the declaring pkg's spec, at the link, nothing persisted
 (`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the
 std-CDN section). A legacy bundle without the riding refuses such a
@@ -187,48 +271,64 @@ request loudly (re-pack it), and a bundle-mounted json names its
 pack-time dev closure in its ledger, so the consumer's closure must
 contain those names.
 
-## Driver API (`rut-driver`)
+## The walk API (`rut-native`)
 
 | API | Meaning |
 |---|---|
-| `Session::new()` | an empty mounting session |
-| `mount_std(&mut s)` | mount `core` + `calc` |
-| `mount_std_async(&mut s)` | mount `async_host` + `futures` |
-| `mount_dir(&mut s, dir)` | mount a package directory (`rut.jsonc`); returns its name |
-| `assemble_peers(&mut s)` | append peer-gated impl groups ([dependency kinds](dependency-kinds.md)) |
-| `compile_module(src, mode, name)` | full pipeline over one module against a fresh core+calc session |
-| `compile_module_in(&mut s, src, mode, name)` | the same against a caller-built session; returns diags, AST/IR dumps, and the binary |
-| `compile_graph(&s, root)` | compile a whole module directory graph |
-| `s.host_pkg_context()` | the mounted surfaces' declared rows, partitioned per pkg — the declared side `install_host_pkg` checks against (build once per boot lane; owned) |
-| `s.expected_host_fns()` | the same rows flattened to one table — the raw lane's `verify_against` input |
-| `load_path_session(path)` | load a module **directory** or `.rutbundle`; returns `(session, root)` |
-| `Loader::new(project)` / `.source(&src)` / `.dep_remote(r)` / `.build()` / `loaded.load()` | THE embedder door: a directory or `.rutbundle`, the fs + remote policies explicit, one `async load()` — the no-remote check is lazy (it fires only when a url row is reached, as a panic naming the fix) |
+| `Source` | the one filesystem door, STRING keys: `read(key)`, `resolve(from, spec)`, `root()` — the key math is the impl's; a `Path` crosses nothing |
+| `FsSource::at(dir)` | the real filesystem with the root baked in |
 | `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
 | `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete |
-| `load_path_session_with(path, &remote)` / `load_dir_session_with(dir, &remote)` | the fetched lanes: url deps in `deps` are collected, fetched, and pinned at the mount door ([dependency kinds](dependency-kinds.md), [module bundles](bundles.md)) |
-| `mount_dir_with(&mut s, dir, &remote)` | mount a package directory with url deps — the offer law unchanged (no dev-deps, no gate) |
-| `pack_dir_with(dir, &remote)` / `pack_dir_opts_with(dir, opts, remote)` | pack over fetched url deps; same determinism law (same manifest + same pins ⇒ byte-identical) |
-| `pack_dir(dir)` | pack a module directory into a deterministic `.rutbundle` — a **v9 compiled** root for a lib pkg, a **v10 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
-| `mount_bundle_bytes(&mut s, &bytes)` | mount a bundle's contents into an existing session — the offer law over bytes (wasm hosts `include_bytes!` the committed artifacts) |
+| `load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, &map)` | the walk and its fetched lanes — the yield is `rut_driver::Loaded` ([the walk vs the offer](#the-walk-vs-the-offer)) |
+| `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: directory walk or closed `.rutbundle` |
+| `load_bundle_session(path)` | load a packed `.rutbundle` from disk — the pure container lane plus the file read |
+| `dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | the OFFER lane: a package directory walked for someone else's program (no dev pass, no gate) |
+| `tree_pkg(name)` | one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused |
+| `load_module_source(path)` | one `.rut` file's text — a loose file is a single module, no manifest |
+| `prefetch_urls(&src, &dir, &remote)` | collect a manifest's url rows and fetch them — the `_with` lanes' input step |
+| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **v9 compiled** root for a lib pkg, a **v10 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
+| `default_out_path(dir)` | the conventional pack output path |
 
-The container, manifest grammar, and reader (both root kinds) live in
-the driver's `rut_driver::bundle` module — filesystem-free over a
-one-method `Source` trait.
+## The run chain API (`rut-driver`)
+
+| API | Meaning |
+|---|---|
+| `RutRun::new()` | the chain's head; compose with the chain methods, end at `.compile()` |
+| `.pkg(pkg)` / `.pkgs(&loaded)` | offer — FIRST OFFER WINS: a pkg whose name is already offered is ignored |
+| `.host_pkg(host_pkg)` | hand over one host pkg's bodies; installed at `.compile()` against the rows snapshot |
+| `.symbols(&map)` | restore a stripped artifact's symbol table into the offered compiled pkgs ([symbol stripping](symbol-stripping.md)) |
+| `.entrypoint(name)` | the root pkg — the graph compiles it and its transitive uses |
+| `.compile() -> Result<Compiled, RunError>` | the terminal step ([the law](#the-compile-law)) |
+| `Compiled { graph, hosts }` | the linked graph (diags inside — check `graph.diags` before trusting `graph.program`) and the host registry every `.host_pkg(..)` installed |
+| `Loaded { pkgs, root }` | a walk's yield; `loaded.pkg(name)` picks one pkg |
+| `Pkg::source / decl / host / compiled / from_bundle` | the offer constructors ([the offer](#the-walk-vs-the-offer)) |
+| `RunError` | why a run refused to compose or compile — shape (bad name, missing entrypoint) or closure (a `use` nothing offered resolves); the message IS the diagnostic |
+| `declared_host_fns(pkgs)` | the declared rows, async-expanded, flattened — the raw lane's `verify_against` input |
+| `host_pkg_ctx(pkgs)` | the declared rows, partitioned by scope — for hosts that build registries OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row host's `verify_against`) |
+| `compile_module(src, mode, name)` | the single-source lane: the core prelude auto-rides, the source offers as the root pkg, one `.compile()` — returns diags, AST/IR dumps, and the binary. The walked packages (`calc`'s `Math`, the async pair) are NOT here: a host that wants them offers `rut_native::tree_pkg(..)` |
+| `compile_program(src, mode, name)` / `compile_program_resolved(..)` / `ir_dump_of(..)` | the raw pipeline pieces (tooling) |
+| `lower_decl_module(text, file)` | lower a `.d.rut` surface to host rows |
+| `bundle::{parse_manifest, Bundle, Layout, ..}` | the container codec, the `rut.jsonc` grammar, the reader (both root kinds) — pure, in-memory |
+| `pack::{pack, PackOpts, ..}` | the pure emit half of packing (`rut-native` owns the walk + dev tables + the gate) |
+| `sha256_hex(bytes)` | pin arithmetic (pure) |
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`
 ([host fns and declaration files](host-fns.md)).
+
+The driver is provably pure: no fs, no net, no walk, no `std::path`
+anywhere in `rut-driver` — everything with a filesystem or a wire
+lives in `rut-native`.
 
 ## VM API (`rut_vm::interp`)
 
 | API | Meaning |
 |---|---|
-| `HostRegistry::new()` | an empty binding table |
+| `Vm::builder()` | the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hooks(h)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts |
+| `HostRegistry::new()` | an empty binding table (the raw lane) |
 | `HostPkg::new(scope)` | a pkg builder; rows register under bare names, the scope prefixes at the install |
 | `pkg_fn!` / `pkg_async_fn!` | the builder's sugar: one spelling → one row / the five-row async family |
-| `hosts.install_host_pkg(&ctx, pkg)` | install one built pkg: bind every row its mounted scope declares (drift/unbound ⇒ panic); an unmounted scope merges inert |
 | `hosts.register::<_, (P…), R, _>(name, f)` | the raw lane: bind one body under a full `scope::name` string |
 | `hosts.verify_against(&expected)` | the raw lane's net: panic on declared-unbound / bound-undeclared / signature drift |
-| `Vm::new(prog, &limits, hooks, hosts)` | boot; joins every declared host thunk to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call::<A, R>(export, args)` | call an export with Rust values, get a Rust value back ([value boundary](value-boundary.md)) |
 | `vm.resume::<R>()` | resume a budget-parked call after refueling |
 | `vm.run_ready()` | drain the async ready queue once; returns frames run |
@@ -305,10 +405,11 @@ their own registered modules.
 
 ## Host-side helpers (`rut-std`)
 
-One `pkg()` builder per module; each installs through
-`HostRegistry::install_host_pkg` against the session's mount snapshot
-(see [host fns](host-fns.md) for the asymmetric contract — an unmounted
-scope merges inert, so hosts blanket-install their subset):
+One `pkg()` builder per module; each rides the chain —
+`.host_pkg(rut_std::math::pkg())` — and installs at `.compile()`
+against the rows snapshot (see [host fns](host-fns.md) for the
+asymmetric contract — an unmounted scope merges inert, so hosts
+blanket-install their subset):
 
 | builder | binds |
 |---|---|
@@ -325,6 +426,6 @@ scope merges inert, so hosts blanket-install their subset):
 - [03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut
   moderator plugin, loaded from a module directory and from a packed
   `.rutbundle`; re-entrant `emit` crossings.
-- [06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): mounts the
+- [06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the
   std packages, binds example-local I/O rows, launches an async entry fn,
   and pumps the driving loop to idle.

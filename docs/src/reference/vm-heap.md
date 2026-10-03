@@ -94,7 +94,7 @@ leak report. The heap never outlives the `Vm`, and no rut cell can
 outlive the heap.
 
 ```rust
-let mut vm = Vm::new(prog, limits, hooks, hosts)?;
+let mut vm = Vm::builder().compiled(compiled).build()?;
 vm.call::<_, ()>("main", ())?;
 println!("used {} bytes (peak {})", vm.heap_usage(), vm.heap_peak());
 // dropping `vm` frees every remaining slab

@@ -40,7 +40,8 @@ Consumers reach a host pkg two ways:
 - declared in the manifest's `deps`
   ([project structure](project-structure.md), [dependency kinds](dependency-kinds.md));
   resolution is recursive, **first mount wins**;
-- mounted programmatically: `rut_driver::mount_dir(&mut session, dir)`
+- offered programmatically: `rut_native::dir_pkgs(dir)` for a dep-style
+  walk, `rut_native::tree_pkg(name)` for a toolchain-tree package
   ([embedding and native modules](embedding.md)).
 
 The loader lowers the declared signatures into the mounted surface at load
@@ -152,8 +153,8 @@ any fn/class body, statements. Symmetrically, a `.rut` file that spells
 
 The registered callable's Rust shape **is** the `.d.rut` row. The
 **installer lane** is a `HostPkg` builder per pkg — rows under bare
-names, the scope (the pkg's name) spelled once — installed through
-`HostRegistry::install_host_pkg`:
+names, the scope (the pkg's name) spelled once — handed to the chain
+with `.host_pkg(..)`:
 
 ```rust
 // one builder per host pkg; the scope string appears exactly once
@@ -163,10 +164,13 @@ rut_vm::pkg_fn!(logger, "make", (&str,) -> OpaqueRef,
 rut_vm::pkg_fn!(logger, "emit", (OpaqueRef, &str, &str) -> (),
     |_vm, _bus, _topic, _payload| Ok(()));
 
-// the session's mount snapshot — built once, owned, shared by every install
-let ctx = session.host_pkg_context();
-let mut hosts = rut_vm::interp::HostRegistry::new();
-hosts.install_host_pkg(&ctx, logger.build());
+// the built pkg rides the run chain; .compile() installs it against
+// the offered rows snapshot
+let compiled = rut_driver::RutRun::new()
+    /* ..offers.. */
+    .host_pkg(logger.build())
+    .entrypoint("app")
+    .compile()?;
 ```
 
 `pkg_async_fn!` is the async twin: one row spelling emits the five-row
@@ -195,28 +199,31 @@ hosts.register::<_, (&str,), OpaqueRef, _>(
 - `&str` / `&[u8]` params are zero-copy borrows scoped to exactly the
   call ([value boundary](value-boundary.md)).
 - One installer per pkg: a duplicate row name inside a builder panics,
-  a second `install_host_pkg` for the same scope panics, and a pkg
+  a second `.host_pkg(..)` for the same scope panics (at the
+  `.compile()` install), and a pkg
   cannot spell another pkg's rows — the scope comes solely from
   `HostPkg::new`.
 
 ## The load-time contract — asymmetric, by design
 
-Mounting a host pkg **declares**; the embedding Rust **binds**. The
-`install_host_pkg` call checks the two sides against each other, per
-pkg, against the mount snapshot (`session.host_pkg_context()`):
+Offering a host pkg **declares**; the embedding Rust **binds**. The
+`.compile()` install checks the two sides against each other, per
+pkg, against the offered rows snapshot
+(`rut_driver::host_pkg_ctx(pkgs)` — the same snapshot exposed for
+hosts that bind outside the chain):
 
-- **scope mounted, a declared row never bound** — a panic naming the
-  pkg (the installer left it out), and the `Vm` constructor refuses a
-  boot naming it again when the installer never ran at all;
+- **scope offered, a declared row never bound** — a panic naming the
+  pkg (the installer left it out), and `.build()` refuses a boot
+  naming it again when the installer never ran at all;
 - **signature drift** on a declared row — a panic; this is the only
   drift gate on the boot path;
-- **scope NOT mounted** — the whole pkg merges **inert**: no panic, no
+- **scope NOT offered** — the whole pkg merges **inert**: no panic, no
   gate. Blanket installs are legal (the CLI installs all of them; a
-  program that mounts a subset carries the rest as dead bindings), and
+  program that offers a subset carries the rest as dead bindings), and
   rows the decl does not name ride as inert extras.
 
-The raw lane's `verify_against(&ctx.flatten())` — or
-`session.expected_host_fns()` — re-checks the whole flat table and
+The raw lane's `verify_against(&rut_driver::declared_host_fns(&pkgs))`
+re-checks the whole flat table and
 panics on all three mismatch classes:
 
 1. **declared but unbound** — a rut call would trap mid-run;
@@ -224,8 +231,8 @@ panics on all three mismatch classes:
 3. **signature drift** — the decl says `(opaque, str, str) -> nil`, the
    binding took `(opaque, i64, str)`.
 
-The law follows the mount: **mount what you bind** — with the asymmetry
-the mount law needs: rut-declares-but-host-never-binds is loud;
+The law follows the offer: **offer what you bind** — with the asymmetry
+the offer law needs: rut-declares-but-host-never-binds is loud;
 host-binds-but-rut-never-declares rides inert.
 
 ## Slots, not strings
@@ -268,7 +275,7 @@ rut_vm::pkg_async_fn!(http, "http_send",
     },
     /* optional abort hook: */ move |_c| { /* best-effort cancel */ },
 );
-hosts.install_host_pkg(&ctx, http.build());
+// the built pkg rides the chain: RutRun::new()...host_pkg(http.build())
 
 // the raw lane (bare registry, full `scope::name` strings) — the
 // escape hatch, same emitter:
