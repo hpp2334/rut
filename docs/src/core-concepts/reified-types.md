@@ -46,9 +46,6 @@ always reachable:
 3. **Distinct instantiations.** `Vec<f32>` and `Vec<f64>` are different
    types everywhere — in the type table, in method resolution, at the
    host boundary. Nothing about a generic's type argument is erased.
-4. **Serialization and tooling.** Reflection walks the same descriptors,
-   which is how userland JSON encoding is complete without annotations
-   or macros on your types.
 
 ## Slots: the untagged hot path
 
@@ -137,9 +134,7 @@ Every type test is a small, pure read:
 
 There is no runtime
 layout introspection — the descriptors serve the VM, the checks, and
-tooling, not userland metaprogramming. Reflection over data (walking
-fields to serialize) is a library facility built on the same tables; see
-the reference on [reflection](../reference/reflection.md).
+tooling, not userland metaprogramming.
 
 ## What this buys you
 

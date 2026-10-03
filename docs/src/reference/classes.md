@@ -164,10 +164,6 @@ A class value is a **heap cell handle** like every non-primitive (see
 assignment shares, mutation is visible through aliases. `==` is cell
 identity; field-wise comparison is an interface you write for it.
 
-Reflection is opt-in: a class is walkable only where a serialization
-member has been written for it by hand; structs are the open,
-auto-walkable records.
-
 ## No inheritance
 
 - **No `extends` for classes** — no base-class constructors

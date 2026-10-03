@@ -342,89 +342,84 @@ msgid "Templates — f\"...\" across the boundary"
 msgstr "模板——跨越边界的 f\"...\""
 
 
-#: src/SUMMARY.md:93 src/reference/reflection.md:1
-msgid "Reflection"
-msgstr "反射"
-
-
-#: src/SUMMARY.md:95
+#: src/SUMMARY.md:94
 msgid "Standard library"
 msgstr "标准库"
 
 
-#: src/SUMMARY.md:97 src/reference/stdlib.md:1
+#: src/SUMMARY.md:96 src/reference/stdlib.md:1
 msgid "core and the swappable packages"
 msgstr "core 与可换包"
 
 
-#: src/SUMMARY.md:99
+#: src/SUMMARY.md:98
 msgid "Toolchain"
 msgstr "工具链"
 
 
-#: src/SUMMARY.md:101 src/reference/frontend.md:1
+#: src/SUMMARY.md:100 src/reference/frontend.md:1
 msgid "The frontend"
 msgstr "前端"
 
 
-#: src/SUMMARY.md:102 src/reference/compiler.md:1
+#: src/SUMMARY.md:101 src/reference/compiler.md:1
 msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:103 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
 
 
-#: src/SUMMARY.md:104 src/reference/module-binary.md:1
+#: src/SUMMARY.md:103 src/reference/module-binary.md:1
 msgid "Module binary and verification"
 msgstr "模块二进制与校验"
 
 
-#: src/SUMMARY.md:105 src/reference/symbol-stripping.md:1
+#: src/SUMMARY.md:104 src/reference/symbol-stripping.md:1
 msgid "Symbol stripping and `.rutsym` sidecars"
 msgstr "符号剥离与 `.rutsym` 旁车"
 
 
-#: src/SUMMARY.md:106 src/reference/vm-core.md:1
+#: src/SUMMARY.md:105 src/reference/vm-core.md:1
 msgid "VM core"
 msgstr "VM 核心"
 
 
-#: src/SUMMARY.md:107 src/reference/loading.md:1
+#: src/SUMMARY.md:106 src/reference/loading.md:1
 msgid "Loading and the embed loop"
 msgstr "加载与嵌入循环"
 
 
-#: src/SUMMARY.md:108 src/reference/diagnostics.md:1
+#: src/SUMMARY.md:107 src/reference/diagnostics.md:1
 msgid "Diagnostics, traces, and symbolication"
 msgstr "诊断、追踪与符号化"
 
 
-#: src/SUMMARY.md:109 src/reference/embedding.md:239 src/reference/bundles.md:1
+#: src/SUMMARY.md:108 src/reference/embedding.md:239 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr "模块捆绑包"
 
 
-#: src/SUMMARY.md:111
+#: src/SUMMARY.md:110
 msgid "Packages and tooling"
 msgstr "包与工具"
 
 
-#: src/SUMMARY.md:113 src/reference/project-structure.md:1
+#: src/SUMMARY.md:112 src/reference/project-structure.md:1
 msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:114 src/tutorial/modules.md:208
+#: src/SUMMARY.md:113 src/tutorial/modules.md:208
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
 
 
-#: src/SUMMARY.md:115 src/reference/cli.md:1
+#: src/SUMMARY.md:114 src/reference/cli.md:1
 msgid "The rut CLI"
 msgstr "rut CLI"
 
@@ -6236,7 +6231,7 @@ msgstr ""
 "**陷阱止步于边界。**脚本中的 panic（溢出、对 nil 解引用）会以 `Trap` 值的形式沿栈展开到宿主调用——rut 代码永远捕获不到它。bug 变成宿主可见、带脚本回溯的错误，而不是被破坏的状态。"
 
 
-#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:144
+#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:284
 #: src/core-concepts/memory.md:208
 msgid "What this buys you"
@@ -6726,183 +6721,176 @@ msgstr ""
 "**不同的实例化互不相同。**`Vec<f32>` 和 `Vec<f64>` 在任何地方都是不同的类型——类型表里、方法解析里、宿主边界上。泛型类型实参的任何信息都不会被擦除。"
 
 
-#: src/core-concepts/reified-types.md:49
-msgid ""
-"**Serialization and tooling.** Reflection walks the same descriptors, which is how userland JSON encoding is complete without annotations or macros on your types."
-msgstr "**序列化与工具链。**反射遍历的正是同一批描述符，用户态的 JSON 编码因此无需在类型上加注解或宏就已然完备。"
-
-
-#: src/core-concepts/reified-types.md:53
+#: src/core-concepts/reified-types.md:50
 msgid "Slots: the untagged hot path"
 msgstr "槽位：无标签的热路径"
 
 
-#: src/core-concepts/reified-types.md:55
+#: src/core-concepts/reified-types.md:52
 msgid ""
 "Inside the VM, registers and record fields are **untagged 8-byte slots**. The bytecode is typed — every register's static type is recorded in the function's signature and re-verified at load — so hot paths carry no type tags at all:"
 msgstr ""
 "在 VM 内部，寄存器和记录字段都是**无标签的 8 字节槽位**。字节码是类型化的——每个寄存器的静态类型都记录在函数签名中，并在加载时重新校验——所以热路径上完全不带类型标签："
 
 
-#: src/core-concepts/reified-types.md:63
+#: src/core-concepts/reified-types.md:60
 msgid ""
 "// ints, bool: the canonical scalar width\n"
 msgstr ""
 "// 整数、bool：规范的标量宽度\n"
 
 
-#: src/core-concepts/reified-types.md:64
+#: src/core-concepts/reified-types.md:61
 msgid ""
 "// floats: f32 widened\n"
 msgstr ""
 "// 浮点数：f32 宽化\n"
 
 
-#: src/core-concepts/reified-types.md:65
+#: src/core-concepts/reified-types.md:62
 msgid ""
 "// every non-primitive: a cell handle\n"
 msgstr ""
 "// 每个非原始类型：一个单元句柄\n"
 
 
-#: src/core-concepts/reified-types.md:69
+#: src/core-concepts/reified-types.md:66
 msgid ""
 "A primitive is its bits; a composite is a handle to a cell. The tagged world — a value that carries its type with it — exists only at the host boundary, where Rust code that cannot trust static types receives checked, typed values."
 msgstr ""
 "原始类型就是它的比特位；复合类型是指向单元的句柄。带标签的世界——值随身携带自己的类型——只存在于宿主边界：那里运行的是无法信任静态类型的 Rust 代码，接收的是经过检查、带类型的值。"
 
 
-#: src/core-concepts/reified-types.md:74
+#: src/core-concepts/reified-types.md:71
 msgid "Record layout: one slot per field"
 msgstr "记录布局：每个字段一个槽位"
 
 
-#: src/core-concepts/reified-types.md:76
+#: src/core-concepts/reified-types.md:73
 msgid ""
 "Both `struct` and `class` values live in a cell: a header (refcount + type id), a pointer to the type's vtable when the type has methods, and the payload — **a slot array, one untagged slot per field, in declaration order**."
 msgstr ""
 "`struct` 和 `class` 值都住在一个单元里：一个头部（引用计数 + 类型 id）、一个指向类型 vtable 的指针（当该类型有方法时），以及载荷——**一个槽数组，按声明顺序每字段一个无标签槽位**。"
 
 
-#: src/core-concepts/reified-types.md:81
+#: src/core-concepts/reified-types.md:78
 msgid ""
 "Primitive fields are widened into their slot; composite fields are cell handles."
 msgstr "原始类型字段宽化后放入槽位；复合类型字段是单元句柄。"
 
 
-#: src/core-concepts/reified-types.md:83
+#: src/core-concepts/reified-types.md:80
 msgid ""
 "Visibility, generic parameters, and impl blocks elsewhere add _nothing_ — the payload depends only on the field list."
 msgstr "可见性、泛型参数以及别处的 impl 块都_不_占分毫——载荷只取决于字段列表。"
 
 
-#: src/core-concepts/reified-types.md:85
+#: src/core-concepts/reified-types.md:82
 msgid ""
 "Field access is by index; there are no hidden members and no inheritance, so there is no base-class prefix and nothing to walk."
 msgstr "字段访问按索引进行；没有隐藏成员，也没有继承，因此没有基类前缀，也无需遍历什么。"
 
 
-#: src/core-concepts/reified-types.md:87
+#: src/core-concepts/reified-types.md:84
 msgid ""
 "Fixed arrays of primitives (`[f32]`) keep their elements **flat and packed** at machine width — the one place values live inline. Growable sequences are rut-library classes over such arrays."
 msgstr ""
 "原始类型的定长数组（`[f32]`）让元素以机器宽度**扁平且紧实**地存放——这是值唯一内联存在的地方。可增长序列是 rut 库在这类数组之上实现的类。"
 
 
-#: src/core-concepts/reified-types.md:91
+#: src/core-concepts/reified-types.md:88
 msgid "Consequences:"
 msgstr "由此带来的后果："
 
 
-#: src/core-concepts/reified-types.md:93
+#: src/core-concepts/reified-types.md:90
 msgid ""
 "`size_of`/`align_of` do not exist, deliberately. Layout is an implementation detail, not an API — rut has no C-ABI struct surface for hosts to mirror. Hosts see records only through the checked boundary (see [the host boundary](host-boundary.md))."
 msgstr ""
 "`size_of`/`align_of` 被刻意省去。布局是实现细节，不是 API——rut 没有可供宿主镜像的 C-ABI 结构体表面。宿主只能透过受检边界看见记录（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/reified-types.md:97
+#: src/core-concepts/reified-types.md:94
 msgid ""
 "A record's memory cost is its field count times 8 bytes plus the cell header, which is exactly what the heap budget charges."
 msgstr "一条记录的内存开销是字段数乘 8 字节再加单元头部，而这正是堆预算所计费的。"
 
 
-#: src/core-concepts/reified-types.md:99
+#: src/core-concepts/reified-types.md:96
 msgid ""
 "Widening a value to an interface type allocates nothing: the interface-typed value _is_ the same cell, reinterpreted through its vtable."
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:102
+#: src/core-concepts/reified-types.md:99
 msgid "Vtables: one per type, attached at construction"
 msgstr "vtable：每个类型一张，构造时挂接"
 
 
-#: src/core-concepts/reified-types.md:104
+#: src/core-concepts/reified-types.md:101
 msgid ""
 "A cell's vtable is filled when the value is constructed and never changes. It names the exact type and holds one entry per interface member the type was satisfaction-boxed at, keyed by a global (interface instantiation, member) id — `Slice<Point>` and `Slice<str>` have separate slot sets, because they are separate interface instantiations."
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:111
+#: src/core-concepts/reified-types.md:108
 msgid "A call through an interface object is two loads and an indirect jump:"
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:120
+#: src/core-concepts/reified-types.md:117
 msgid ""
 "An inherent method call — `c.area()` on a concrete `c` — compiles to a direct call with no table involved. The dispatch rules that choose between the two are the subject of the next chapter, [interfaces and dispatch](interfaces-and-dispatch.md)."
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:125
+#: src/core-concepts/reified-types.md:122
 msgid "Type tests, lowered"
 msgstr "类型测试的下层形态"
 
 
-#: src/core-concepts/reified-types.md:127
+#: src/core-concepts/reified-types.md:124
 msgid "Every type test is a small, pure read:"
 msgstr "每个类型测试都是一次小型、纯粹的读取："
 
 
-#: src/core-concepts/reified-types.md:129
+#: src/core-concepts/reified-types.md:126
 msgid ""
 "**Concrete test** (`d is Circle`): load the value's runtime type id, compare. When the receiver's static type already answers, the compiler folds it to a constant."
 msgstr "**具体类型测试**（`d is Circle`）：加载值的运行时类型 id，比较。当接收者的静态类型已能作答时，编译器将其折叠为常量。"
 
 
-#: src/core-concepts/reified-types.md:132
+#: src/core-concepts/reified-types.md:129
 msgid ""
 "**Interface probe** (`x is Drawable`): load the type id, scan the descriptor's registered impl list. Pure in its inputs, so repeated probes deduplicate and invariant ones hoist."
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:135
+#: src/core-concepts/reified-types.md:132
 msgid ""
 "**Downcast** (`opaque.downcast<T>(o)`): the same type-id compare, followed by the guarded payload extract."
 msgstr "**向下转型**（`opaque.downcast<T>(o)`）：同样的类型 id 比较，随后是带守卫的载荷提取。"
 
 
-#: src/core-concepts/reified-types.md:138
+#: src/core-concepts/reified-types.md:135
 msgid ""
-"There is no runtime layout introspection — the descriptors serve the VM, the checks, and tooling, not userland metaprogramming. Reflection over data (walking fields to serialize) is a library facility built on the same tables; see the reference on [reflection](../reference/reflection.md)."
+"There is no runtime layout introspection — the descriptors serve the VM, the checks, and tooling, not userland metaprogramming."
 msgstr ""
-"这里没有运行时布局内省——描述符服务于 VM、各项检查与工具链，而不是用户态元编程。对数据做反射（遍历字段以序列化）是一个建立在同一批表之上的库设施；参见关于[反射](../reference/reflection.md)的参考章节。"
 
 
-#: src/core-concepts/reified-types.md:146
+#: src/core-concepts/reified-types.md:141
 msgid ""
 "Type errors are **runtime facts, not conventions**: a host call, a downcast, or an interface probe is checked against the same table the VM dispatches through."
 msgstr ""
 
 
-#: src/core-concepts/reified-types.md:149
+#: src/core-concepts/reified-types.md:144
 msgid ""
 "**One runtime truth per value** — the vtable that answers dispatch is the same one that answers `is`."
 msgstr "**每个值只有一份运行时事实**——回答分派的 vtable 与回答 `is` 的是同一张。"
 
 
-#: src/core-concepts/reified-types.md:151
+#: src/core-concepts/reified-types.md:146
 msgid ""
 "The tag-free hot path keeps the interpreter's arithmetic and field traffic at raw slot speed while reification costs only what the program's dynamic features actually use."
 msgstr "无标签的热路径让解释器的算术和字段流量保持裸槽位速度，而具体化只收程序动态特性真正用到的那部分费用。"
@@ -11612,7 +11600,6 @@ msgstr "`enum`"
 
 
 #: src/reference/lexical-structure.md:45 src/reference/host-fns.md:144
-#: src/reference/reflection.md:34
 msgid "`struct`"
 msgstr "`struct`"
 
@@ -14430,30 +14417,24 @@ msgstr ""
 
 
 #: src/reference/classes.md:167
-msgid ""
-"Reflection is opt-in: a class is walkable only where a serialization member has been written for it by hand; structs are the open, auto-walkable records."
-msgstr ""
-
-
-#: src/reference/classes.md:171
 msgid "No inheritance"
 msgstr "没有继承"
 
 
-#: src/reference/classes.md:173
+#: src/reference/classes.md:169
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`."
 msgstr ""
 "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。"
 
 
-#: src/reference/classes.md:175
+#: src/reference/classes.md:171
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or free functions; polymorphism is only the structural kind — a type used through an interface whose members it has (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/classes.md:179
+#: src/reference/classes.md:175
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell payload (see [Reified types and layout](reified-types.md)) — no prefix layout, no fat pointers, and every object has exactly one concrete class forever. That keeps `is` a single descriptor check."
 msgstr ""
@@ -16990,7 +16971,6 @@ msgstr ""
 
 
 #: src/reference/rc-heap.md:80 src/reference/launched-futures.md:28
-#: src/reference/reflection.md:109
 msgid "Laws:"
 msgstr "法则："
 
@@ -21167,7 +21147,6 @@ msgstr "`?bytes`"
 
 
 #: src/reference/value-boundary.md:43 src/reference/value-boundary.md:44
-#: src/reference/reflection.md:35
 msgid "as above"
 msgstr "同上"
 
@@ -21187,7 +21166,7 @@ msgid "`Option<T>` (other `T`)"
 msgstr "`Option<T>`（其他 `T`）"
 
 
-#: src/reference/value-boundary.md:45 src/reference/reflection.md:37
+#: src/reference/value-boundary.md:45
 msgid "—"
 msgstr "—"
 
@@ -22044,11 +22023,10 @@ msgid "emitted row"
 msgstr "生成行"
 
 
-#: src/reference/host-fns.md:289 src/reference/reflection.md:87
-#: src/reference/stdlib.md:35 src/reference/stdlib.md:162
-#: src/reference/stdlib.md:211 src/reference/stdlib.md:375
-#: src/reference/typed-bytecode.md:101 src/reference/project-structure.md:43
-#: src/reference/cli.md:172
+#: src/reference/host-fns.md:289 src/reference/stdlib.md:35
+#: src/reference/stdlib.md:162 src/reference/stdlib.md:211
+#: src/reference/stdlib.md:375 src/reference/typed-bytecode.md:101
+#: src/reference/project-structure.md:43 src/reference/cli.md:172
 msgid "meaning"
 msgstr "含义"
 
@@ -22748,464 +22726,6 @@ msgid ""
 "A `Template` crosses the host boundary, and crosses isolate channels like any builtin ([workers and channels](workers-and-channels.md)) — a worker may return one where the main VM expects `Template`."
 msgstr ""
 "`Template` 可以跨越宿主边界，也像任何内建类型一样跨越隔离体通道（[worker 与通道](workers-and-channels.md)）——在主 VM 期望 `Template` 的地方，worker 可以返回一个。"
-
-
-#: src/reference/reflection.md:3
-msgid ""
-"Reflection is an **interface**, not a keyword privilege. `Reflectable` is the mechanism protocol; compiler auto-fills (structs, enums) and builtin fills (records, `Vec`, `[T]`) cover the member set for the data world; classes join by spelling the members by hand with a **curated** view. Libraries layer contracts on top and take interface-typed consumers or bounded producers. Nothing in the language names a builtin; no strings are matched; nothing changes under `--release` stripping. Userland serde is the proving application."
-msgstr ""
-
-
-#: src/reference/reflection.md:12
-msgid ""
-"Status: this page specifies the reflection surface; the protocols are not yet wired into the engine. The surfaces it builds on — structural interfaces ([interfaces](interfaces.md)), [opaque](opaque.md), reified descriptors ([reified types](reified-types.md)) — are live."
-msgstr ""
-
-
-#: src/reference/reflection.md:18
-msgid "The protocols"
-msgstr "协议"
-
-
-#: src/reference/reflection.md:20
-msgid ""
-"```rut\n"
-"// reflect/reflect.d.rut\n"
-"pub interface Reflectable {                  // the mechanism protocol\n"
-"    fn reflect(self) -> opaque;              // exact descriptor handle\n"
-"    fn arity(self) -> i32;                   // children of THIS value\n"
-"    fn child(self, i: i32) -> ?opaque;       // i-th child, boxed\n"
-"}\n"
-"pub interface Deserializable {\n"
-"    fn construct(fields: [opaque]) -> ?Self; // the descriptor-backed mint\n"
-"}\n"
-"```"
-msgstr ""
-
-
-#: src/reference/reflection.md:32
-msgid "type"
-msgstr "类型"
-
-
-#: src/reference/reflection.md:32
-msgid "`Reflectable`"
-msgstr "`Reflectable`"
-
-
-#: src/reference/reflection.md:32
-msgid "`Deserializable`"
-msgstr "`Deserializable`"
-
-
-#: src/reference/reflection.md:32
-msgid "stringify"
-msgstr "stringify"
-
-
-#: src/reference/reflection.md:32
-msgid "deserialize"
-msgstr "deserialize"
-
-
-#: src/reference/reflection.md:34 src/reference/reflection.md:35
-msgid "compiler auto-fill"
-msgstr ""
-
-
-#: src/reference/reflection.md:34 src/reference/reflection.md:35
-msgid "auto"
-msgstr "自动"
-
-
-#: src/reference/reflection.md:34
-msgid "spelling the member set costs zero lines — the auto-fill covers it"
-msgstr ""
-
-
-#: src/reference/reflection.md:34 src/reference/reflection.md:36
-#: src/reference/reflection.md:38
-msgid "yes"
-msgstr "是"
-
-
-#: src/reference/reflection.md:35
-msgid "user `enum`"
-msgstr "用户 `enum`"
-
-
-#: src/reference/reflection.md:35
-msgid "yes (`[T; N]` minting excepted — deserialize targets `Vec<T>`)"
-msgstr "是（`[T; N]` 的铸造除外——deserialize 面向 `Vec<T>`）"
-
-
-#: src/reference/reflection.md:36
-msgid "`Option`/`Result`/`Vec`/`[T]`"
-msgstr "`Option`/`Result`/`Vec`/`[T]`"
-
-
-#: src/reference/reflection.md:36
-msgid "builtin fill, every instantiation"
-msgstr ""
-
-
-#: src/reference/reflection.md:36
-msgid "builtin"
-msgstr ""
-
-
-#: src/reference/reflection.md:36
-msgid "as _fields_ only"
-msgstr "仅作为 _字段_"
-
-
-#: src/reference/reflection.md:37
-msgid "`class`, no members"
-msgstr ""
-
-
-#: src/reference/reflection.md:37
-msgid "compile error at the call"
-msgstr "调用处编译错误"
-
-
-#: src/reference/reflection.md:38
-msgid "`class`, members spelled by hand"
-msgstr ""
-
-
-#: src/reference/reflection.md:38
-msgid "hand-written (curated)"
-msgstr "手写（策展）"
-
-
-#: src/reference/reflection.md:38
-msgid ""
-"spellable by hand — reflective construction still routes through the descriptor mint"
-msgstr ""
-
-
-#: src/reference/reflection.md:38
-msgid "yes (positional view)"
-msgstr "是（按位置视图）"
-
-
-#: src/reference/reflection.md:40
-msgid ""
-"**Auto-fills** are ordinary member fills: a struct's member set walks its fields (arity = field count, child `i` = field `i`, boxed); an enum's walks the current variant's payloads. Satisfaction is structural, so the filled members are the type's members — nothing registers, nothing duplicates. Auto-fills satisfy `requires` edges of contract layers written on top — a `User` satisfies a `Stringify<T requires Reflectable>` bound for free."
-msgstr ""
-
-
-#: src/reference/reflection.md:47
-msgid ""
-"**`Deserializable` is auto-filled for the data world**: the member is the construct capability, and reflective construction is descriptor-backed. Classes construct through their own class methods — reflection never calls one, so a class joins by spelling the member as a curated mint (or not at all). Under structural satisfaction there is no registration gate that could make the member auto-only; what keeps the law honest is that the member's only sane body routes through the descriptor mint."
-msgstr ""
-
-
-#: src/reference/reflection.md:55
-msgid ""
-"**Manual class views are curated**: private fields stay hidden because the members do not expose them — privacy is what the members say. They serialize **positionally**."
-msgstr ""
-
-
-#: src/reference/reflection.md:59
-msgid "The engine surface"
-msgstr "引擎表面"
-
-
-#: src/reference/reflection.md:61
-msgid ""
-"```rut\n"
-"pub interface ReflectEngine {\n"
-"    fn reflect_engine(self) -> i32;          // the admission member (below)\n"
-"}\n"
-"pub enum TypeKind { Leaf, Record, Sum, Seq }\n"
-"pub enum LeafKind  { Bool, Int, Float, String, Class, Iface }\n"
-"\n"
-"builtin fn reflect<T>() -> opaque;          // static T (incl. interface T):\n"
-"                                            // the descriptor, folded at\n"
-"                                            // compile time\n"
-"pub host fn type_of(a: opaque) -> opaque;   // content descriptor, boxed\n"
-"```"
-msgstr ""
-
-
-#: src/reference/reflection.md:74
-msgid ""
-"An interface with no members would be satisfied by everything — the empty member set is vacuously true — so the admission contract spells one member. A `TypeInfo` **is** an `opaque` handle; the rut surface wraps it:"
-msgstr ""
-
-
-#: src/reference/reflection.md:79
-msgid ""
-"```rut\n"
-"pub class TypeInfo { d: opaque; .. }        // methods forward to the fns below\n"
-"pub class FieldInfo { d: opaque; .. }       // name / ty / default\n"
-"pub class SumVariant { d: opaque; .. }      // name / payload ordinals\n"
-"```"
-msgstr ""
-"```rut\n"
-"pub class TypeInfo { d: opaque; .. }        // methods forward to the fns below\n"
-"pub class FieldInfo { d: opaque; .. }       // name / ty / default\n"
-"pub class SumVariant { d: opaque; .. }      // name / payload ordinals\n"
-"```"
-
-
-#: src/reference/reflection.md:85
-msgid "The fn surface the wrapper forwards to:"
-msgstr "包装类转发到的 fn 表面："
-
-
-#: src/reference/reflection.md:87
-msgid "fn"
-msgstr "fn"
-
-
-#: src/reference/reflection.md:89
-msgid "`type_kind(t: opaque) -> i32`"
-msgstr "`type_kind(t: opaque) -> i32`"
-
-
-#: src/reference/reflection.md:89
-msgid "`TypeKind` ordinal"
-msgstr "`TypeKind` 序数"
-
-
-#: src/reference/reflection.md:90
-msgid "`type_leaf(t: opaque) -> i32`"
-msgstr "`type_leaf(t: opaque) -> i32`"
-
-
-#: src/reference/reflection.md:90
-msgid "`LeafKind` ordinal"
-msgstr "`LeafKind` 序数"
-
-
-#: src/reference/reflection.md:91
-msgid "`type_name(t: opaque) -> str`"
-msgstr "`type_name(t: opaque) -> str`"
-
-
-#: src/reference/reflection.md:91
-msgid "the type's name"
-msgstr "类型的名字"
-
-
-#: src/reference/reflection.md:92
-msgid "`type_id(t: opaque) -> u32`"
-msgstr "`type_id(t: opaque) -> u32`"
-
-
-#: src/reference/reflection.md:92
-msgid "equals `type_id<T>()` for static `T`"
-msgstr "对静态 `T` 而言等于 `type_id<T>()`"
-
-
-#: src/reference/reflection.md:93
-msgid "`type_is_a(t: opaque, i: opaque) -> bool`"
-msgstr "`type_is_a(t: opaque, i: opaque) -> bool`"
-
-
-#: src/reference/reflection.md:93
-msgid "the nested-node gate (descriptor walking)"
-msgstr "嵌套节点的门（描述符遍历）"
-
-
-#: src/reference/reflection.md:94
-msgid "`type_fields_len(t: opaque) -> i32` / `type_field(t, i) -> opaque`"
-msgstr "`type_fields_len(t: opaque) -> i32` / `type_field(t, i) -> opaque`"
-
-
-#: src/reference/reflection.md:94
-msgid "`Record`: fields in declaration order"
-msgstr "`Record`：按声明顺序的字段"
-
-
-#: src/reference/reflection.md:95
-msgid "`type_variants_len(t: opaque) -> i32` / `type_variant(t, i) -> opaque`"
-msgstr "`type_variants_len(t: opaque) -> i32` / `type_variant(t, i) -> opaque`"
-
-
-#: src/reference/reflection.md:95
-msgid "`Sum`: variants in declaration order"
-msgstr "`Sum`：按声明顺序的成员"
-
-
-#: src/reference/reflection.md:96
-msgid "`type_elem(t: opaque) -> opaque`"
-msgstr "`type_elem(t: opaque) -> opaque`"
-
-
-#: src/reference/reflection.md:96
-msgid "`Seq`: the element descriptor of `Vec<T>` / `[T]`"
-msgstr "`Seq`：`Vec<T>` / `[T]` 的元素描述符"
-
-
-#: src/reference/reflection.md:97
-msgid "`type_arity(t, a) -> i32`"
-msgstr "`type_arity(t, a) -> i32`"
-
-
-#: src/reference/reflection.md:97
-msgid "dynamic re-entry: `Seq` length; `Sum` = current variant's payload count"
-msgstr "动态重入：`Seq` 长度；`Sum` = 当前成员的载荷数"
-
-
-#: src/reference/reflection.md:98
-msgid "`type_child(t, a, i) -> ?opaque`"
-msgstr "`type_child(t, a, i) -> ?opaque`"
-
-
-#: src/reference/reflection.md:98
-msgid "dynamic re-entry: the `i`\\-th child, boxed"
-msgstr "动态重入：第 `i` 个子节点，装盒"
-
-
-#: src/reference/reflection.md:99
-msgid "`type_variant_of(t, a) -> i32`"
-msgstr "`type_variant_of(t, a) -> i32`"
-
-
-#: src/reference/reflection.md:99
-msgid "`Sum`: the current variant index"
-msgstr "`Sum`：当前成员索引"
-
-
-#: src/reference/reflection.md:100
-msgid "`type_construct(t, vals…) -> ?opaque`"
-msgstr "`type_construct(t, vals…) -> ?opaque`"
-
-
-#: src/reference/reflection.md:100
-msgid "`Record` mint; re-checks every box — mismatch is `nil`, never a trap"
-msgstr "`Record` 铸造；重新检查每个盒——不匹配是 `nil`，绝不是陷阱"
-
-
-#: src/reference/reflection.md:101
-msgid "`type_construct_variant(t, i, vals…) -> ?opaque`"
-msgstr "`type_construct_variant(t, i, vals…) -> ?opaque`"
-
-
-#: src/reference/reflection.md:101
-msgid "`Sum` mint"
-msgstr "`Sum` 铸造"
-
-
-#: src/reference/reflection.md:102
-msgid "`type_make_vec(t, vals…) -> ?opaque`"
-msgstr "`type_make_vec(t, vals…) -> ?opaque`"
-
-
-#: src/reference/reflection.md:102
-msgid "`Seq` → `Vec<T>` mint"
-msgstr "`Seq` → `Vec<T>` 铸造"
-
-
-#: src/reference/reflection.md:104
-msgid ""
-"`FieldInfo`/`SumVariant` accessors over their own handles: `name: str`, `ty: TypeInfo` box, `default: ?opaque` (the folded load-time initializer — the parse-time default), payload ordinals (`[]` for C-like enums, `[T]`\\-shaped for `Some`/`None`/`Ok`/`Err`)."
-msgstr ""
-"`FieldInfo`/`SumVariant` 在各自句柄之上的访问器：`name: str`、`ty: TypeInfo` 盒、`default: ?opaque`（折叠后的加载期初始化器——解析期默认值）、载荷序数（C 风格枚举为 `[]`，`Some`/`None`/`Ok`/`Err` 为 `[T]` 形状）。"
-
-
-#: src/reference/reflection.md:111
-msgid ""
-"No builtin is named anywhere. `Option`/`Result` appear only as sum-shaped descriptors (`Some/None` is a `{0,1}` sum, `Ok/Err` a `{1,1}` sum; a C-like enum is an all-payloadless sum)."
-msgstr ""
-"任何地方都不指名内建类型。`Option`/`Result` 只以和类型形状的描述符出现（`Some/None` 是一个 `{0,1}` 和类型，`Ok/Err` 是一个 `{1,1}` 和类型；C 风格枚举是全无载荷的和类型）。"
-
-
-#: src/reference/reflection.md:114
-msgid ""
-"Composite children box the **cell handle** — a child of a record field _aliases_ the parent's field, so mutation through the original is observable in the box. Walkers treat them as their own Record/Sum nodes via the box's descriptor."
-msgstr ""
-"复合子节点装盒的是**单元句柄**——记录字段的子节点_别名_父级的字段，因此经由原件做出的变更在盒中可见。遍历器经由盒的描述符把它们当作自己的 Record/Sum 节点。"
-
-
-#: src/reference/reflection.md:118
-msgid ""
-"**Boxing widens**: an `opaque` of an int stores i64 sign/zero-extended; a float, f64. A `Leaf` branch + `downcast<i64>` / `downcast<f64>` / `downcast<bool>` / `downcast<str>` is therefore total ([opaque](opaque.md))."
-msgstr ""
-"**装盒即宽化**：整数的 `opaque` 以 i64 符号扩展/零扩展存储；浮点数则存为 f64。因此 `Leaf` 分支加 `downcast<i64>` / `downcast<f64>` / `downcast<bool>` / `downcast<str>` 是全函数（[opaque](opaque.md)）。"
-
-
-#: src/reference/reflection.md:122
-msgid ""
-"**No string identity**: field/variant names are descriptor data, never symbols — stripping native names never touches them. Sum policy dispatches on **payload structure**, never variant-name matching."
-msgstr ""
-"**没有字符串同一性**：字段/成员名字是描述符数据，绝不是符号——剥离原生名字从不触及它们。和类型策略依据**载荷结构**分派，绝不依据成员名字匹配。"
-
-
-#: src/reference/reflection.md:125
-msgid ""
-"Accessors are total; optional/`i32` results signal mismatch. There is no field setter: children alias their source cells, so v1 reflection is **read-only**."
-msgstr "访问器是全函数；可空/`i32` 结果表示不匹配。没有字段 setter：子节点别名其源单元，因此 v1 反射是**只读**的。"
-
-
-#: src/reference/reflection.md:129
-msgid "Rules"
-msgstr "规则"
-
-
-#: src/reference/reflection.md:131
-msgid ""
-"**Engine admission**: the structural symbols (`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`) resolve only in modules whose types satisfy `ReflectEngine` — at least one local type carries the member; the violation is a compile error naming the fix. Calling `stringify`/`deserialize` needs no engine — the argument type or the bound carries the contract. The `is` keyword is likewise ungated: it answers the capability bit, while descriptor _walking_ stays behind admission — probing and walking are different powers."
-msgstr ""
-
-
-#: src/reference/reflection.md:139
-msgid ""
-"**Walkability = satisfies the protocol** (auto-fill, builtin fill, or hand-spelled members). Callers may demand a contract (`Stringify<T requires Reflectable>`) or an admission bound — admission-only; it grants no method calls on bare `T`. Nested nodes are gated by the descriptor `is_a(Reflectable)` query; misses are value-shaped errors, never traps."
-msgstr ""
-
-
-#: src/reference/reflection.md:146
-msgid "The walker"
-msgstr "遍历器"
-
-
-#: src/reference/reflection.md:148
-msgid "Every call below exists in the tables above — this trace is the API's test:"
-msgstr "下面每次调用都存在于上文的表格里——这条轨迹就是这个 API 的测试："
-
-
-#: src/reference/reflection.md:151
-msgid ""
-"```rut\n"
-"pub fn stringify(v: Reflectable) -> (str, err) {\n"
-"    return write_val(v.reflect(), v);    // vtable reflect(); descends to opaque\n"
-"}\n"
-"\n"
-"pub fn deserialize<T requires Deserializable>(v: str) -> (?T, err) {\n"
-"    let t = reflect<T>();                // guaranteed descriptor-backed by\n"
-"    let (tree, e1) = parse_tree(v);      // the bound — no runtime pre-check\n"
-"    if (e1 != nil) { return (nil, e1); }\n"
-"    let (built, e2) = build(t, tree);\n"
-"    if (e2 != nil) { return (nil, e2); }\n"
-"    let opt = opaque.downcast<T>(built); // monomorphized type compare -> ?T\n"
-"    if (opt == nil) { return (nil, construction_failed(t)); }\n"
-"    return (opt, nil);                   // refined to exact T in this branch\n"
-"}\n"
-"```"
-msgstr ""
-
-
-#: src/reference/reflection.md:168
-msgid ""
-"`write_val`: Record → fields + children joined; Seq → arity/child loop (`Vec` and `[T]` alike); Sum → all-payloadless renders the variant name, a `{0,1}` sum renders `null`/the payload, otherwise \"unwrap first\"; Leaf → downcast the widened scalars; a Leaf class → `is_a(Reflectable)` query, then the positional walk or an error. `build`: Record → member lookup, absent → the field's folded default, then `construct`; Sums → `construct_variant`; Seq → `make_vec`; Leaves → `opaque(v)`."
-msgstr ""
-"`write_val`：Record → 字段 + 子节点拼接；Seq → 元数/子节点循环（`Vec` 与 `[T]` 一视同仁）；Sum → 全无载荷的渲染成员名，`{0,1}` 和类型渲染 `null`/载荷，否则\"先拆包\"；Leaf → 向下转型被宽化的标量；Leaf 类 → `is_a(Reflectable)` 查询，然后按位置遍历或报错。`build`：Record → 成员查找，缺席 → 字段折叠后的默认值，然后 `construct`；Sum → `construct_variant`；Seq → `make_vec`；Leaf → `opaque(v)`。"
-
-
-#: src/reference/reflection.md:176
-msgid "Reflection vs the shipped `json`"
-msgstr "反射与随树交付的 `json`"
-
-
-#: src/reference/reflection.md:178
-msgid ""
-"The in-tree `json` package does **not** ride reflection — its interfaces are direct and its wrappers live in the package itself, which measures decisively faster for schema-driven decode ([core and the swappable packages](stdlib.md)). Reflection is the right tool for generic tooling: debug walkers, schema printers, generic editors, and userland serde where flexibility outranks raw throughput."
-msgstr ""
 
 
 #: src/reference/stdlib.md:3

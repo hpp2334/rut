@@ -90,7 +90,6 @@
 - [Host fns and declaration files](reference/host-fns.md)
 - [Native containers API surface](reference/native-containers.md)
 - [Templates — f"..." across the boundary](reference/templates.md)
-- [Reflection](reference/reflection.md)
 
 ## Standard library
 
