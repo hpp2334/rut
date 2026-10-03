@@ -286,11 +286,13 @@ if (!doBuild) {
     die("mdbook not found — install it with `cargo install mdbook --locked`");
   }
   info(dim(`building docs/ (en) — mdbook build docs (${(v.stdout || "").trim()})`));
-  if (!dryRun) {
-    const r = spawnSync("mdbook", ["build", "docs"], { cwd: ROOT, stdio: "inherit" });
-    if (r.status !== 0) die(`book build failed (exit ${r.status ?? "?"})`);
-    buildZhEdition(v.stdout || "");
-  }
+  // ALWAYS built — under --dry-run too: the lane's promise is that the
+  // assembled docs/dist-book/ holds REAL renders (the zh edition
+  // especially: a stale gitignored docs/book-zh/ would silently pass
+  // the sanity gates against pages that no longer exist in the source)
+  const r = spawnSync("mdbook", ["build", "docs"], { cwd: ROOT, stdio: "inherit" });
+  if (r.status !== 0) die(`book build failed (exit ${r.status ?? "?"})`);
+  buildZhEdition(v.stdout || "");
 } else {
   info(dim("building demo/ — npm run build"));
   if (!dryRun) {
