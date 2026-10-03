@@ -777,9 +777,9 @@ pub fn compile_program_resolved(
     {
         let boot_len = ctx.types.boot_len as usize;
         surface.types = ctx.types.types[boot_len..].to_vec();
-        // the type block's trait-object references: each carried
-        // `[trait] ..` row names a trait-table index the consumer's
-        // `use_types` remaps through the trait map — generic ifaces'
+        // the type block's interface-object references: each carried
+        // `[interface] ..` row names an interface-table index the consumer's
+        // `use_types` remaps through the interface map — generic ifaces'
         // per-argument-list INST DESCRIPTORS ride here (their base
         // declarations export above; neither row carries signatures —
         // dispatch reads the impl rows)
@@ -877,8 +877,8 @@ pub fn compile_program_resolved(
             });
         }
         // trait surface: declared ifaces with their
-        // resolved signatures, keyed by the exporter's trait-table
-        // index (`local`) — the key the carried `[trait] ..` descriptors
+        // resolved signatures, keyed by the exporter's interface-table
+        // index (`local`) — the key the carried `[interface] ..` descriptors
         // reference. Generic ifaces instantiate per argument list where
         // they are declared (their methods are per-inst, so the base
         // row carries none) but the DECLARATION itself crosses: a

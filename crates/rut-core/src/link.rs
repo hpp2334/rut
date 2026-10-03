@@ -8,11 +8,11 @@
 //! type, trait, const, function or op is remapped ("type_id<T>()
 //! constants are re-based with everything else").
 //!
-//! **Trait ids are global, not offset**: a trait bound as an
-//! extern in one module and declared in another is ONE trait — the merged
+//! **Interface ids are global, not offset**: an interface bound as an
+//! extern in one module and declared in another is ONE interface — the merged
 //! table dedups by (mapped) name, so every module's `IfaceObj` ids,
-//! `IsIface` probes and trait-method slots land on the same global trait.
-//! Trait-method slots re-lay through the merged table's enumeration.
+//! `IsIface` probes and interface-method slots land on the same global interface.
+//! Interface-method slots re-lay through the merged table's enumeration.
 //!
 //! Impl registrations (`surface.impls`) merge here too: a duplicate
 //! `(trait, type)` pair — unobservable per-module, since trait impls may
@@ -901,7 +901,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                             .all(|(a, b)| a.name == nm(b.name));
                     if !same {
                         return Err(LinkError(format!(
-                            "link: trait `{}` has different members across modules",
+                            "link: interface `{}` has different members across modules",
                             out.interner.name(key)
                         )));
                     }
@@ -941,7 +941,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 Some(&s) => slot_map.push(s),
                 None => {
                     return Err(LinkError(format!(
-                        "link: module `{}` names trait slot ({t}, {meth}) outside its trait table",
+                        "link: module `{}` names interface slot ({t}, {meth}) outside its interface table",
                         m.name
                     )));
                 }
@@ -1395,7 +1395,7 @@ mod tests {
                     Op::IsIface { want, .. } => *want == 0,
                     _ => true,
                 }),
-                "slots and trait ids land on the global trait: {f:?}"
+                "slots and interface ids land on the global interface: {f:?}"
             );
         }
     }

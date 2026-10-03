@@ -353,7 +353,7 @@ impl<'a> Ctx<'a> {
                         ptys.push(self.resolve_iface_sig_ty(*t, id, &[]));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
-                        self.err(self.ast.span(p.id()), "trait method parameters need types");
+                        self.err(self.ast.span(p.id()), "interface method parameters need types");
                         ptys.push(TY_I32);
                     }
                     _ => ptys.push(TY_I32),

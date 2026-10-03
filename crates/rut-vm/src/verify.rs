@@ -86,7 +86,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::CallI { slot, .. } => {
                     if *slot as usize >= prog.iface_slots.len() {
-                        return Err(bad(format!("trait slot {slot} out of range")));
+                        return Err(bad(format!("interface slot {slot} out of range")));
                     }
                 }
                 Op::MakeClosure { func, .. } => {
@@ -240,7 +240,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::IsIface { want, .. } => {
                     if *want as usize >= prog.ifaces.len() {
-                        return Err(bad("IsIface want not in the trait table".into()));
+                        return Err(bad("IsIface want not in the interface table".into()));
                     }
                 }
                 Op::AddF { prim, a, b, .. }

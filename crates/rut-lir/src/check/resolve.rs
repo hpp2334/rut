@@ -1,140 +1,18 @@
 //! Type resolution: primitives, builtins (Array/Option/Result), user types
-//! (including `pouch`'s `Vec` class), trait objects, fn types;
+//! (including `pouch`'s `Vec` class), interface objects, fn types;
 //! naming-position resolution.
 
 use super::*;
 
 impl<'a> Ctx<'a> {
 
-    pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
-        self.resolve_trait_ref_env(node, &[])
-    }
-
-    /// The impl-head trait ref, resolved under `env`: the ordinary
-    /// (empty-env) resolution except that a parameterized trait impl
-    /// (`impl Readable<T> for Source<T>`, v1) passes the target's own
-    /// type parameters bound to template placeholder types, so the
-    /// head's bare-parameter arguments name them instead of dying as
-    /// unknown types (see `collect_impl_trait`'s shape guard and
-    /// [`Ctx::param_placeholder`]).
-    pub fn resolve_trait_ref_env(
-        &mut self,
-        node: NodeHandle<AnyTy>,
-        env: &[(IdentId, TypeId)],
-    ) -> Option<u32> {
-        match self.ast.ty(node).clone() {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                let tname = segs[0].name;
-                // the engine contracts are GONE from the impl-head lane
-                // (v20): `Iterable`/`Disposal` are the bracket markers,
-                // `Future`/`RunContext` are closed builtin classes. The
-                // diagnostics name the replacement — the marker word is
-                // free-standing in an inherent impl; an unbound gated
-                // name still gets the scope fix.
-                if let Some(msg) = self.engine_contract_head_error(tname) {
-                    let bound = self.extern_native_types.contains_key(&tname);
-                    let goes = tname == sym::ITERABLE
-                        || tname == sym::DISPOSAL
-                        || bound;
-                    if goes {
-                        self.err(self.ast.span(node.id()), msg);
-                        return None;
-                    }
-                }
-                let id = if let Some(t) = self.find_iface(tname).cloned() {
-                    if segs[0].generics.is_empty() {
-                        if t.id == u32::MAX {
-                            self.err(self.ast.span(node.id()), format!(
-                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
-                                self.name(tname), self.name(tname)
-                            ));
-                            None
-                        } else {
-                            Some(t.id)
-                        }
-                    } else {
-                        let args: Vec<TypeId> = segs[0]
-                            .generics
-                            .iter()
-                            .map(|g| self.resolve_type(*g, env))
-                            .collect();
-                        if args.len() != t.generics.len() {
-                            self.err(self.ast.span(node.id()), format!(
-                                "`{}` takes {} type parameter(s), {} given",
-                                self.name(tname), t.generics.len(), args.len()
-                            ));
-                            None
-                        } else {
-                            Some(self.mk_iface_inst(tname, args))
-                        }
-                    }
-                } else if let Some(ext) = self.extern_trait(tname).cloned() {
-                    // a used module's exported trait. A non-generic trait
-                    // binds the carried descriptor; a GENERIC trait
-                    // instantiates it — the head's arguments resolve under
-                    // `env` (the target's parameter placeholders ride in),
-                    // and the carried placeholder descriptor substitutes
-                    // per argument list (the same mint the dispatch sites
-                    // run). Genericity is no longer a cross-module gate:
-                    // the one restriction on an `impl` head is the orphan
-                    // rule (collect_impl_trait's placement gate).
-                    if segs[0].generics.is_empty() {
-                        if ext.generics > 0 {
-                            self.err(self.ast.span(node.id()), format!(
-                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
-                                self.name(tname), self.name(tname)
-                            ));
-                            None
-                        } else {
-                            Some(ext.id)
-                        }
-                    } else {
-                        let args: Vec<TypeId> = segs[0]
-                            .generics
-                            .iter()
-                            .map(|g| self.resolve_type(*g, env))
-                            .collect();
-                        if args.len() != ext.generics {
-                            self.err(self.ast.span(node.id()), format!(
-                                "`{}` takes {} type parameter(s), {} given",
-                                self.name(tname), ext.generics, args.len()
-                            ));
-                            None
-                        } else {
-                            Some(self.mint_extern_iface_inst(tname, args))
-                        }
-                    }
-                } else {
-                    let msg = self
-                        .not_in_core_scope(tname)
-                        .unwrap_or_else(|| format!("unknown trait `{}`", self.name(tname)));
-                    self.err(self.ast.span(node.id()), msg);
-                    None
-                };
-                id
-            }
-            _ => {
-                self.err(self.ast.span(node.id()), "expected a trait name");
-                None
-            }
-        }
-    }
-
-    /// The `Iterable`/`Disposal` trait mints are GONE (v20): the
-    /// bracket markers (`[iterable]` / `[disposal]`) replaced the
-    /// ifaces. The element type falls out of the marked member's own
-    /// signature, for-of reads the designated member slot, the engine's
-    /// release path reads the per-type disposal row built off the
-    /// marked member — never a trait lookup.
-    /// The engine-minted `RunContext` cx record: one field —
-
-    /// Mint (or fetch) the CONCRETE instantiation of an impl's trait
-    /// under a target substitution — the template re-resolution law's
-    /// mint half (the dispatch half that per-instantiation consumers
-    /// run: the for-of weave, the vtable fills). A local trait
-    /// instantiates from its AST. The `iface_inst` cache is shared, so
-    /// an instantiation the ordinary trait-ref resolution minted
-    /// earlier is fetched, never duplicated. (The native contracts are
+    /// Mint (or fetch) the CONCRETE interface instantiation of an
+    /// impl's member set under a target substitution — the template
+    /// re-resolution law's mint half (the dispatch half that
+    /// per-instantiation consumers run: the for-of weave, the vtable
+    /// fills). A local interface instantiates from its AST. The
+    /// `iface_inst` cache is shared, so an instantiation the ordinary
+    /// interface resolution minted earlier is fetched, never duplicated. (The native contracts are
     /// gone — the markers are designated member slots, not ifaces — so
     /// there is no `Iterable` arm anymore.)
     pub fn mint_impl_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
@@ -522,12 +400,12 @@ impl<'a> Ctx<'a> {
                     }
                 }
                         if let Some(t) = self.find_iface(name).cloned() {
-                            // a trait name in type position IS the
+                            // an interface name in type position IS the
                             // object type — the bare name spells it
                             if seg.generics.is_empty() {
                                 if t.id == u32::MAX {
                                     self.err(sp, format!(
-                                        "generic trait `{}` needs type arguments (e.g. `{}<i32>`)",
+                                        "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
                                         self.name(name),
                                         self.name(name)
                                     ));
@@ -550,10 +428,10 @@ impl<'a> Ctx<'a> {
                             let id = self.mk_iface_inst(name, args);
                             return self.mk_iface_obj(id);
                         }
-                        // a used module's exported trait:
+                        // a used module's exported interface:
                         // the object type here, exactly like a declared
                         // one. A GENERIC head instantiates the carried
-                        // placeholder descriptor — the trait's shape
+                        // placeholder descriptor — the interface's shape
                         // crosses the surface, so the spelling dispatches
                         // by the existing law (single concrete origin ⇒
                         // static, merged origins ⇒ vtable).
@@ -563,7 +441,7 @@ impl<'a> Ctx<'a> {
                             }
                             if seg.generics.is_empty() {
                                 self.err(sp, format!(
-                                    "generic trait `{}` needs type arguments (e.g. `{}<i32>`)",
+                                    "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
                                     self.name(name),
                                     self.name(name)
                                 ));

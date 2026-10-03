@@ -171,7 +171,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => true,
                 };
                 if !sealed {
-                    self.ctx.err(sp, "`opaque` rejects trait objects —they are never boxed");
+                    self.ctx.err(sp, "`opaque` rejects interface objects —they are never boxed");
                     return Err(());
                 }
                 let src = self.last_reg;

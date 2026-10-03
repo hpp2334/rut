@@ -667,9 +667,9 @@ impl<'a> Ctx<'a> {
     /// field names re-intern from the exporter's interner into this
     /// module's — name ids are only comparable within one interner
     /// (well-known ids pass through: they mean the same name everywhere).
-    /// `tmap` maps the exporter's trait-table indices to THIS module's
-    /// trait ids: trait-typed descriptors (`[trait] Shape`) carried
-    /// across must name the trait here.
+    /// `tmap` maps the exporter's interface-table indices to THIS module's
+    /// interface ids: interface-typed descriptors (`[interface] Shape`) carried
+    /// across must name the interface here.
     pub fn use_types(
         &mut self,
         descs: Vec<RutType>,
@@ -1243,7 +1243,7 @@ impl<'a> Ctx<'a> {
     /// type reaches the vtable
     pub fn mk_iface_obj(&mut self, iface_id: u32) -> TypeId {
         let tname = self.interner.name(self.ifaces[iface_id as usize].name).to_string();
-        let name = self.intern(&format!("[trait] {tname}"));
+        let name = self.intern(&format!("[interface] {tname}"));
         self.types.intern(RutType {
             name,
             kind: TyKind::IfaceObj { iface_id },

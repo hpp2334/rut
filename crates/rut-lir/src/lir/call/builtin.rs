@@ -223,7 +223,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         _ => true,
                     };
                     if !downcastable {
-                        self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path");
+                        self.ctx.err(sp, "downcast needs a CONCRETE type —interface objects have no recovery path");
                         return Err(());
                     }
                     let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;

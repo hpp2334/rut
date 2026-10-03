@@ -284,7 +284,7 @@ entry fn main() -> i32 {
 // FOREIGN-OWNED concrete type in the consumer's unit (`let s: Shape =
 // foreign_point;`). The fill's member is extern there, and the
 // extern-fill mirror is still landing compiler-side (a nil-stub verify
-// failure, or a runtime "no impl for trait slot N"). Every crossing
+// failure, or a runtime "no impl for interface slot N"). Every crossing
 // above proves satisfaction in the members' own unit; when the mirror
 // lands, a consumer-side box of a foreign type belongs here as a test.
 

@@ -266,7 +266,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let want = self.resolve_type_now(ty);
                         if !self.ctx.types.is_ref(want) && want != TY_STR {
                             self.ctx.err(sp, format!(
-                                "`is` needs a concrete (cell) or trait type —`{}` is by-value",
+                                "`is` needs a concrete (cell) or interface type —`{}` is by-value",
                                 self.ctx.type_name(want)
                             ));
                         }

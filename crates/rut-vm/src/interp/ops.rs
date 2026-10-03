@@ -457,7 +457,7 @@ impl Vm {
                 Trap::new(
                     TrapKind::Invalid,
                     format!(
-                        "no impl for trait slot {slot} on {} — `is` would have said false",
+                        "no impl for interface slot {slot} on {} — `is` would have said false",
                         self.prog.type_name(ty)
                     ),
                 )
