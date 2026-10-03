@@ -124,7 +124,7 @@ impl<'a> GraphCompiler<'a> {
                 let scope = self.next_scope;
                 self.next_scope += 1;
                 self.in_flight.insert(spec.to_string(), scope);
-                let out = self.ensure_compiled(spec, prog, scope);
+                let out = self.ensure_compiled(spec, prog, scope, &module.bundle_scopes);
                 self.in_flight.remove(spec);
                 out
             }
@@ -264,7 +264,13 @@ impl<'a> GraphCompiler<'a> {
     /// load-time value, rebase, push. A scope naming a unit that is
     /// being compiled RIGHT NOW (the requester whose seeded rows travel
     /// in this binary) maps forward through `in_flight`.
-    fn ensure_compiled(&mut self, spec: &str, prog: &Program, scope: rut_core::ScopeId) -> Option<Unit> {
+    fn ensure_compiled(
+        &mut self,
+        spec: &str,
+        prog: &Program,
+        scope: rut_core::ScopeId,
+        ledger: &[(rut_core::id::ScopeId, String)],
+    ) -> Option<Unit> {
         let Some(own_pack) = rut_core::link::own_scope(prog) else {
             self.diags.push(Diag::new(
                 Span::new(0, 0),
@@ -299,6 +305,28 @@ impl<'a> GraphCompiler<'a> {
             }
             let dep = self.ensure(&dep_spec)?;
             mapped.push((pack_scope, dep.scope));
+        }
+        // the bundle's OWN ledger: the pack-time module set (this root
+        // plus its groups), ascending — the same post-order replay, dep
+        // before user. v21's split-pack root carries its bodies as
+        // riding source, so the binary's foreign scan sees none of
+        // these; the ledger is the mounted bundle's own word on the
+        // closure it ships. A row mid-compile (the requester whose rows
+        // this closure carries) rides `in_flight` — nothing to ensure.
+        let mut ledger_rows: Vec<(rut_core::id::ScopeId, &str)> =
+            ledger.iter().map(|(s, sp)| (*s, sp.as_str())).collect();
+        ledger_rows.sort_by_key(|(s, _)| *s);
+        for (_, dep_spec) in &ledger_rows {
+            // the ambient prelude rides no manifest row (the source
+            // walk's own law — the prelude ride below re-ensures it when
+            // mounted); a packed graph's ledger carries its scope row
+            if *dep_spec == "core" {
+                continue;
+            }
+            if *dep_spec == spec || self.in_flight.contains_key(*dep_spec) {
+                continue;
+            }
+            self.ensure(dep_spec)?;
         }
         // the prelude ride, exactly as the source walk spells it: every
         // unit binds `core`'s ambient names whether or not its ids
@@ -385,14 +413,10 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds::none(),
         );
-        if !out.diags.is_empty() {
-            eprintln!("DBG unit {}: {:?}", spec, out.diags.iter().map(|x| x.msg.clone()).collect::<Vec<_>>());
-        }
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
-            
             self.diags.extend(out.diags);
             if out.program.is_none() && self.diags.is_empty() {
                 self.diags.push(Diag::new(
@@ -693,9 +717,6 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds { groups: &groups },
         );
-        if !out.diags.is_empty() {
-            eprintln!("DBG reseed_compiled_owner {}: {:?}", owner, out.diags.iter().map(|x| x.msg.clone()).collect::<Vec<_>>());
-        }
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
         }

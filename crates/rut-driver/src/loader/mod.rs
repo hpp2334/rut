@@ -542,6 +542,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             body: ModuleBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
+            bundle_scopes: scopes.clone(),
             ..Default::default()
         },
     )?;
@@ -1136,6 +1137,7 @@ fn mount_url_dep(
             body: ModuleBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
+            bundle_scopes: scopes.clone(),
             ..Default::default()
         },
     )?;
@@ -1317,6 +1319,7 @@ pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String,
                 body: ModuleBody::Compiled(root),
                 entry: manifest.entry.clone(),
                 gen_source,
+                bundle_scopes: scopes.clone(),
                 ..Default::default()
             };
             (root_spec, module, Some((scopes, groups, remap)), manifest)

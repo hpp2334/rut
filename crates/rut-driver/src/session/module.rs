@@ -92,6 +92,13 @@ pub struct Module {
     /// the generic-bearing source a compiled bundle unit rides beside
     /// its binary ([`GenSource`]) — the on-demand recompile's input
     pub gen_source: Option<GenSource>,
+    /// The mounted bundle's own scope ledger — the pack-time module set
+    /// (this root plus its groups), already namespaced into this
+    /// session's numbering. The compiled walk's dep list: v21's
+    /// split-pack root carries no foreign references (its bodies ride as
+    /// source), so the binary's foreign scan sees none of these. Empty
+    /// for source, host, and decl-root mounts.
+    pub bundle_scopes: Vec<(rut_core::id::ScopeId, String)>,
 }
 
 /// One recorded `[peer-deps]` declaration: the declaring

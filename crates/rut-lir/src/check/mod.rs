@@ -885,20 +885,13 @@ impl<'a> Ctx<'a> {
         if d.generics.is_empty() {
             return;
         }
-        let mut cargs = Vec::new();
-        let mut depth = 0usize;
-        let mut cur = String::new();
-        for ch in args_text.chars() {
-            match ch {
-                '<' => { depth += 1; cur.push(ch); }
-                '>' => { depth = depth.saturating_sub(1); cur.push(ch); }
-                ',' if depth == 0 => { cargs.push(cur.trim().to_string()); cur = String::new(); }
-                _ => cur.push(ch),
-            }
-        }
-        if !cur.trim().is_empty() {
-            cargs.push(cur.trim().to_string());
-        }
+        // the argument list splits at TOP-LEVEL commas only — a tuple
+        // argument's comma is not a separator (`Mutation<str, (str, str)>`
+        // is two arguments; the seed-scan arm's own law). A bare
+        // depth-`<`/`>` split reads three and strands the row unbound —
+        // the admit then misses the member set that the local mint
+        // carries.
+        let cargs = collect::split_top_commas(args_text);
         if cargs.len() != d.generics.len() {
             return;
         }
