@@ -162,10 +162,10 @@ stay the class's own business within its module.
 A class value is a **heap cell handle** like every non-primitive (see
 [By-reference and nullable](by-reference-and-nullable.md)):
 assignment shares, mutation is visible through aliases. `==` is cell
-identity; field-wise comparison is an opted-in trait contract.
+identity; field-wise comparison is an interface you write for it.
 
 Reflection is opt-in: a class is walkable only where a serialization
-contract has been implemented for it by hand; structs are the open,
+member has been written for it by hand; structs are the open,
 auto-walkable records.
 
 ## No inheritance
@@ -173,8 +173,9 @@ auto-walkable records.
 - **No `extends` for classes** — no base-class constructors
   (`super(..)`), no method overriding, no `super.m()`, no `protected`.
 - Code sharing is composition (hold a helper object or struct in a
-  field) or free functions; subtyping is only class→trait widening
-  (see [Traits and dispatch](traits.md)).
+  field) or free functions; polymorphism is only the structural kind —
+  a type used through an interface whose members it has (see
+  [Interfaces and dispatch](interfaces.md)).
 - Layout stays trivial: fields at fixed offsets — identical inside every
   cell payload (see [Reified types and layout](reified-types.md)) — no
   prefix layout, no fat pointers, and every object has exactly one

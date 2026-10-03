@@ -121,12 +121,14 @@ struct Entry {
     files: ?Vec<Entry>;  // present = a directory (walked, never printed)
 }
 
-// The files array. The trait-static form `Vec<Entry>.decode(r)` has no
-// admitted receiver spelling (struct instantiations are outside the
-// static-call receiver set — the json-roundtrip bench inlines the same
-// loop for the same reason), so the array row rides a generic shim: at
-// T = Entry it monomorphizes in THIS unit (its own fn), and
-// `T.decode(r)` dispatches Entry's impl recursively.
+// The files array. A bare `Vec<Entry>` never satisfies anything —
+// satisfaction is having the members on the type's OWN inherent impl,
+// and a container carries none — so the array shape rides this LOCAL
+// generic fn: at T = Entry it monomorphizes in THIS unit, and
+// `T.decode(r)` dispatches Entry's own `decode` member recursively.
+// (The wrapper route exists — `decodeJson<JsonVec<Entry>>` over
+// json's pouch group, `.to_vec()` unwraps — but the direct reader
+// loop keeps the recursive shape in one spelled place.)
 fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
     let mut v = Vec<T>.new();
     r.begin_array();
@@ -140,8 +142,12 @@ fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>
     return (v, nil);
 }
 
-impl JsonDeserialize for Entry {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+// the entry's decode member — spelled on Entry's OWN inherent impl,
+// which is the whole admission: json's `JsonDeserialize` interface is
+// satisfied STRUCTURALLY, by having the member (its `requires` bounds
+// check the member set at instantiation).
+impl Entry {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
         let mut name: ?str = nil;
         let mut size: ?i64 = nil;
@@ -191,15 +197,12 @@ impl JsonDeserialize for Entry {
     }
 }
 
-// the serialize twin — load-bearing, not decoration. The peer-gated
-// `impl JsonSerialize for Vec<T>` (json's pouch group) is
-// owner-anchored: its per-shape instantiation compiles at JSON, and
-// only what json's own pack closure spells rides its compiled binary —
-// `Vec<Entry>` could never be seeded there (this pkg's Entry did not
-// exist at json's pack time; the orphan rule forbids spelling the impl
-// here). So the array row rides a LOCAL generic shim, the
-// `decode_entry_files` twin: at T = Entry it monomorphizes in THIS
-// unit, and `x.encode(w)` dispatches Entry's own encode recursively.
+// the serialize twin — load-bearing, not decoration. `Vec<T>` has no
+// encode members of its own (a bare container never satisfies — the
+// wrapper route is `JsonVec(kids).encode(w)` over json's pouch group),
+// so the array row rides a LOCAL generic shim, the `decode_entry_files`
+// twin: at T = Entry it monomorphizes in THIS unit, and `x.encode(w)`
+// dispatches Entry's own `encode` member recursively.
 fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, mut w: JsonWriter) -> ?EncodeJsonError {
     w.begin_array();
     for (let x of kids) {
@@ -210,8 +213,10 @@ fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, mut w: JsonWriter)
     return nil;
 }
 
-impl JsonSerialize for Entry {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+// the entry's encode member — Entry's own inherent impl again (the
+// structural twin of `decode` above).
+impl Entry {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("name");
         w.write_str(self.name);
@@ -238,13 +243,15 @@ struct Root {
     files: ?Vec<Entry>;
 }
 
-// decodeJsonBytes<Root>, shimmed locally. THE BUNDLE LAW: json's
+// the root decode, shimmed locally. The entry `decodeJsonBytes<Root>`
+// itself stays out of reach for the old CDN-bundle reason: json's
 // generic-fn bodies are owner-anchored — only what json's own pack
 // closure spells rides its compiled binary, and `decodeJsonBytes<Root>`
 // could never be seeded there (this pkg's Root did not exist at json's
 // pack time). This shim is the wrapper's reader-route tail as a LOCAL
 // generic fn: it monomorphizes in THIS unit, `T.decode(r)` dispatches
-// Root's own impl, and the wrapper's trailing-data check is spelled
+// Root's own `decode` member, and the wrapper's trailing-data check is
+// spelled
 // verbatim. The wrapper's strict UTF-8 DFA stays json-side — jsDelivr's
 // tree JSON is UTF-8, and `bytes.decode()` (lossy) never fires on it;
 // a body that somehow carried a broken octet surfaces as a reader
@@ -261,8 +268,10 @@ fn decode_root_bytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonEr
     return (v, nil);
 }
 
-impl JsonDeserialize for Root {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+// the root's decode member — Root's own inherent impl (the structural
+// admission again: having the member is the interface).
+impl Root {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
         let mut files: ?Vec<Entry> = nil;
         while (r.more()) {

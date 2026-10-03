@@ -202,12 +202,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // trait-typed parameters specialize per concrete argument (RFC
         // 0012 §5): the Inst carries one origin per trait-obj param
-        let mut trait_origins = Vec::new();
+        let mut iface_origins = Vec::new();
         for (i, _) in args.iter().enumerate() {
-            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
-                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. })
             {
-                trait_origins.push(arg_tys[i]);
+                iface_origins.push(arg_tys[i]);
             }
         }
         // small instance methods inline at the call site: the class's
@@ -222,7 +222,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst,
-            trait_origins,
+            iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
@@ -261,92 +261,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let _ = (dname, class_subst, self_ty, mnode, mname, mut_self, recv, aregs, ptys, ret_ty, sp);
         return false;
     }
-    #[allow(dead_code, clippy::too_many_arguments)]
-    pub(crate) fn try_inline_method_orig(
-        &mut self,
-        dname: IdentId,
-        class_subst: &[(IdentId, TypeId)],
-        self_ty: TypeId,
-        mnode: NodeHandle<MethodDeclNode>,
-        mname: IdentId,
-        mut_self: bool,
-        recv: u16,
-        aregs: &[u16],
-        ptys: &[TypeId],
-        ret_ty: TypeId,
-        sp: rut_lexer::span::Span,
-    ) -> bool {
-        const MAX_STMTS: usize = 24;
-        const MAX_DEPTH: usize = 4;
-        // nested splices (a method body that itself calls inlined methods)
-        // are where the pooled host-val call sites lose their register
-        // identity — v1 keeps those bodies as real calls
-        if !self.inline_stack.is_empty() {
-            return false;
-        }
-        if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(dname, mname)) {
-            return false;
-        }
-        let md = self.ctx.ast.method_decl(mnode).clone();
-        if md.is_async {
-            return false; // `async` is diagnosed when the body is compiled
-        }
-        let Some(body) = md.body else { return false };
-        let stmts = match self.ctx.ast.kind(body.id()) {
-            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
-            _ => return false,
-        };
-        if stmts.len() > MAX_STMTS {
-            return false;
-        }
-        let saved_self_ty = self.self_ty;
-        let saved_subst = std::mem::replace(&mut self.subst, class_subst.to_vec());
-        let saved_class = self.current_class;
-        let saved_ret = self.ret_ty;
-        let saved_inline_ret = self.inline_ret;
-        let saved_inline_self = self.inline_self;
-        let saved_ub = std::mem::take(&mut self.union_bounds);
-        let saved_us = std::mem::take(&mut self.union_syms);
-        self.arm_union_bounds(&md.bounds, Some(dname));
-        self.self_ty = Some(self_ty);
-        self.current_class = Some(dname);
-        self.ret_ty = ret_ty;
-        let base = self.locals.len();
-        // bind `self` (well-known symbol) for the inlined body
-        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
-        self.inline_self = Some((sym::SELF, recv));
-        let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
-        let mut ai = 0usize;
-        for p in &params {
-            if let MemberKind::Param(ParamData { name, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
-                self.note_union_binding(*name, *ty);
-                ai += 1;
-            }
-        }
-        let res = self.new_reg(ret_ty);
-        let l_end = self.new_label();
-        self.inline_ret = Some((res, l_end));
-        self.inline_stack.push((dname, mname));
-        let ok = self.compile_block(body.id()).is_ok();
-        self.inline_stack.pop();
-        self.bind(l_end);
-        self.locals.truncate(base);
-        self.self_ty = saved_self_ty;
-        self.subst = saved_subst;
-        self.current_class = saved_class;
-        self.ret_ty = saved_ret;
-        self.inline_ret = saved_inline_ret;
-        self.inline_self = saved_inline_self;
-        self.union_bounds = saved_ub;
-        self.union_syms = saved_us;
-        let _ = sp;
-        if !ok {
-            return false;
-        }
-        self.last_reg = res;
-        true
-    }
+
 
     /// Inline a small, non-recursive free-fn body at the call site.
     /// Returns `true` when it compiled the body; `false` to emit `Call`.
@@ -376,7 +291,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // in an inline (one clone per concrete argument,
         // each binding statically) — that boundary can't splice, so the
         // call stays a call
-        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
+        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. })) {
             return false;
         }
         let fd = self.ctx.ast.fn_decl(fnode).clone();
@@ -439,114 +354,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         true
     }
 
-    /// Inline a small, non-recursive trait-impl method body at a
-    /// bare-receiver static call site (P1.3). Mirrors
-    /// [`Self::try_inline_method`]: `self` (and the `Self`-spelled
-    /// params) bind to the concrete registers the call carries — the
-    /// receiver register is already bare concrete at these sites.
-    /// Returns `true` when it compiled the body; `false` to emit the
-    /// concrete-variant `CallM`.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn try_inline_impl_call(
-        &mut self,
-        impl_idx: usize,
-        mnode: NodeHandle<MethodDeclNode>,
-        mname: IdentId,
-        self_ty: TypeId,
-        subst: &[(IdentId, TypeId)],
-        current_class: Option<IdentId>,
-        recv: u16,
-        aregs: &[u16],
-        ptys: &[TypeId],
-        ret_ty: TypeId,
-        sp: rut_lexer::span::Span,
-    ) -> bool {
-        const MAX_STMTS: usize = 24;
-        const MAX_DEPTH: usize = 4;
-        // the inline stack keys (owner, method) — the trait names the
-        // impl body (one impl per (trait, type) pair; two impls of one
-        // trait share the key and just decline the second inline)
-        let trait_name = self.ctx.impls[impl_idx].trait_name;
-        if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(trait_name, mname)) {
-            return false;
-        }
-        // a trait-obj parameter loses its per-call origin specialization
-        // in an inline — that boundary can't splice
-        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
-            return false;
-        }
-        let md = self.ctx.ast.method_decl(mnode).clone();
-        if md.is_async {
-            return false; // `async` is diagnosed when the body is compiled
-        }
-        // a GENERIC method's body stays a call (v1): the spliced body's
-        // nested host-val calls (the nmap `any` lanes) read their site
-        // types from the caller's register file, and the splice's
-        // parameter bindings lose the substitution's register types —
-        // dispatch through the compiled Inst keeps every site type exact
-        if !md.generics.is_empty() {
-            return false;
-        }
-        let Some(body) = md.body else { return false };
-        let stmts = match self.ctx.ast.kind(body.id()) {
-            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
-            _ => return false,
-        };
-        if stmts.len() > MAX_STMTS {
-            return false;
-        }
-        let mut_self = matches!(
-            md.params.first().map(|p| self.ctx.ast.param(*p)),
-            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
-        );
-        let saved_self_ty = self.self_ty;
-        let saved_subst = std::mem::replace(&mut self.subst, subst.to_vec());
-        let saved_class = self.current_class;
-        let saved_ret = self.ret_ty;
-        let saved_inline_ret = self.inline_ret;
-        let saved_inline_self = self.inline_self;
-        let saved_ub = std::mem::take(&mut self.union_bounds);
-        let saved_us = std::mem::take(&mut self.union_syms);
-        self.arm_union_bounds(&md.bounds, current_class);
-        self.self_ty = Some(self_ty);
-        self.current_class = current_class;
-        self.ret_ty = ret_ty;
-        let base = self.locals.len();
-        // bind `self` (well-known symbol) for the inlined body — reads
-        // alias the receiver register (no copy, the accessor rule)
-        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
-        self.inline_self = Some((sym::SELF, recv));
-        let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
-        let mut ai = 0usize;
-        for p in &params {
-            if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
-                self.note_union_binding(*pname, *ty);
-                ai += 1;
-            }
-        }
-        let res = self.new_reg(ret_ty);
-        let l_end = self.new_label();
-        self.inline_ret = Some((res, l_end));
-        self.inline_stack.push((trait_name, mname));
-        let ok = self.compile_block(body.id()).is_ok();
-        self.inline_stack.pop();
-        self.bind(l_end);
-        self.locals.truncate(base);
-        self.self_ty = saved_self_ty;
-        self.subst = saved_subst;
-        self.current_class = saved_class;
-        self.ret_ty = saved_ret;
-        self.inline_ret = saved_inline_ret;
-        self.inline_self = saved_inline_self;
-        self.union_bounds = saved_ub;
-        self.union_syms = saved_us;
-        let _ = sp;
-        if !ok {
-            return false;
-        }
-        self.last_reg = res;
-        true
-    }
+
 
 }

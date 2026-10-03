@@ -115,7 +115,18 @@ impl<'a> GraphCompiler<'a> {
             // does not reach here: a compiled module already linked.
             ModuleBody::Compiled(prog) => {
                 self.body_kind.insert(spec.to_string(), 1);
-                self.ensure_compiled(spec, prog)
+                // the unit's scope is assigned BEFORE its deps ensure,
+                // same law as the source arm: a dep's carried seed rows
+                // may reference THIS unit's packed block (a requester's
+                // rows riding the owner's binary — `Vec<Shape>` with the
+                // element interface the requester declared), and the
+                // mid-compile bind needs the number now
+                let scope = self.next_scope;
+                self.next_scope += 1;
+                self.in_flight.insert(spec.to_string(), scope);
+                let out = self.ensure_compiled(spec, prog, scope);
+                self.in_flight.remove(spec);
+                out
             }
             ModuleBody::Host { .. } => {
                 self.body_kind.insert(spec.to_string(), 2);
@@ -144,7 +155,7 @@ impl<'a> GraphCompiler<'a> {
     /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
-        let ModuleBody::Host { host_funcs, consts, native_types, native_traits, native_fns, native_impls } =
+        let ModuleBody::Host { host_funcs, consts, native_types, native_fns, native_impls } =
             &module.body
         else {
             return None;
@@ -223,10 +234,6 @@ impl<'a> GraphCompiler<'a> {
                 .iter()
                 .map(|(n, k, a)| (surface.names.intern(n), *k, *a))
                 .collect();
-            surface.native_traits = native_traits
-                .iter()
-                .map(|(n, k, a)| (surface.names.intern(n), *k, *a))
-                .collect();
             surface.native_fns = native_fns
                 .iter()
                 .map(|(n, a)| (surface.names.intern(n), *a))
@@ -257,7 +264,7 @@ impl<'a> GraphCompiler<'a> {
     /// load-time value, rebase, push. A scope naming a unit that is
     /// being compiled RIGHT NOW (the requester whose seeded rows travel
     /// in this binary) maps forward through `in_flight`.
-    fn ensure_compiled(&mut self, spec: &str, prog: &Program) -> Option<Unit> {
+    fn ensure_compiled(&mut self, spec: &str, prog: &Program, scope: rut_core::ScopeId) -> Option<Unit> {
         let Some(own_pack) = rut_core::link::own_scope(prog) else {
             self.diags.push(Diag::new(
                 Span::new(0, 0),
@@ -299,8 +306,6 @@ impl<'a> GraphCompiler<'a> {
         if spec != "core" && self.session.resolve("core").is_ok() {
             self.ensure("core")?;
         }
-        let scope = self.next_scope;
-        self.next_scope += 1;
         let map = |s: rut_core::ScopeId| -> rut_core::ScopeId {
             if s == own_pack {
                 scope
@@ -380,6 +385,9 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds::none(),
         );
+        if !out.diags.is_empty() {
+            eprintln!("DBG unit {}: {:?}", spec, out.diags.iter().map(|x| x.msg.clone()).collect::<Vec<_>>());
+        }
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
         }
@@ -445,13 +453,7 @@ impl<'a> GraphCompiler<'a> {
         // the kind + methods ride the key: one (decl, args) pair can carry
         // several method-body requests, and a fn body request is not a
         // type instantiation
-        let kind = if r.is_impl {
-            "i"
-        } else if r.is_fn {
-            "f"
-        } else {
-            "t"
-        };
+        let kind = if r.is_fn { "f" } else { "t" };
         let methods = r
             .methods
             .iter()
@@ -691,6 +693,9 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds { groups: &groups },
         );
+        if !out.diags.is_empty() {
+            eprintln!("DBG reseed_compiled_owner {}: {:?}", owner, out.diags.iter().map(|x| x.msg.clone()).collect::<Vec<_>>());
+        }
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
         }

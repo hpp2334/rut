@@ -49,7 +49,7 @@ i32add, f64mul, ...          ; typed arithmetic — the opcode selects the
                              ; kind, the width rides the op
 icmp, fcmp     rD, a, b      ; compares -> bool
 call / callm   f, args       ; direct call / direct method call
-calli          slot, recv    ; trait vtable call (dynamic dispatch)
+calli          slot, recv    ; interface itable call (dynamic dispatch)
 callnat        nat, args     ; internal natives (string concat, ...)
 newcell / getf / setf        ; mint a record, read/write a field
 arrget / arrset              ; indexing — bounds checked, trap on miss
@@ -62,8 +62,8 @@ The type system also decides what is *not* an op:
 - **Nothing static.** What the type table can answer at compile time
   becomes a constant — no "get type id" instruction, no length load for
   a fixed-size array.
-- **Nothing polymorphic and nothing named.** A trait-typed receiver has
-  exactly one op (the vtable call); string concatenation is a native
+- **Nothing polymorphic and nothing named.** An interface-typed receiver has
+  exactly one op (the itable call); string concatenation is a native
   call, not an opcode.
 - **Concrete memory, control flow, and two readbacks.** Ops touch
   memory only through compile-time-known layouts, plus the two reads
@@ -86,10 +86,10 @@ than its layout:
   later. See the reference on
   [diagnostics](../reference/diagnostics.md).
 - **Link-time identity.** Type ids are module-local at rest and rebased
-  into the VM's global table at link, where impl registries merge and
-  duplicates are rejected. Cross-module trait calls specialize per
+  into the VM's global table at link, where the interface tables merge
+  by name. Cross-module interface-typed calls specialize per
   concrete argument here too — the static-dispatch rule of
-  [traits and dispatch](traits-and-dispatch.md) holds across module
+  [interfaces and dispatch](interfaces-and-dispatch.md) holds across module
   boundaries.
 - **Little-endian everywhere**, by law — every serialized word, so
   artifacts are platform-independent by construction rather than by
@@ -116,8 +116,8 @@ module runs nothing.
 Execution is a decode-dispatch loop over frames. A frame is the
 function's code, a program counter, its typed register file, and (for
 async frames) the resume state. Calls push frames; returns pop them;
-direct calls are an index plus jump, and trait calls are two loads plus
-an indirect jump through the vtable.
+direct calls are an index plus jump, and interface calls are two loads plus
+an indirect jump through the itable.
 
 Failure is a **trap**, not an exception and not a Rust panic: integer
 overflow on the plain operators, a `nil` deref, an out-of-bounds index,

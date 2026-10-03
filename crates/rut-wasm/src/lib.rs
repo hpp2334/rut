@@ -743,19 +743,21 @@ entry fn main() {
     // the docs run buttons must answer the same `rut run` does ----
 
     const BOOK_JSON: &str = r#"
-use json::{ decodeJson };
+use json::{ decodeJson, JsonI64 };
 use strbuild::{ StringBuilder };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger.new("book");
-    let (n, e) = decodeJson<i64>("42");
+    let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        log.info(f"n={n}");
+        let v: JsonI64 = n;
+        let shown: i64 = v.get();
+        log.info(f"n={shown}");
     }
     let mut b = StringBuilder.new();
     b.append("count: ");
-    b.append(f"up to {n}");
+    b.append(f"up to 42");
     log.info(b.build());
 }
 "#;

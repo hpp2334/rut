@@ -1,30 +1,26 @@
-// flow/group-nmapset.rut — the mapset sink group (json's
-// group-nmapset.rut is the shape precedent): HashSet materializes from
-// any iterable. The KEY union bound (`K requires i8 | … | bytes`)
-// already admits exactly the legal keys, so the put loop needs no
-// extra admission.
+// flow/group-nmapset.rut — the mapset sink group: HashSet materializes
+// from any pipeline through the spelled wrapper. The KEY union bound
+// (`K requires i8 | … | bytes`) already admits exactly the legal
+// keys, so the put loop needs no extra admission.
 //
 // IntoFlow for mapset is DEFERRED, not skipped silently: it requires
 // walking the host table, and nmapset ships no iteration surface —
 // the exact gap json documents (its group-nmapset map-encode note).
 // When that surface lands (a host walk + keys/entries), json's map
 // encode and flow's IntoFlow grow together in one step.
-//
-// HashMap's FromFlow sink is deferred for a SECOND documented reason:
-// its trait argument is a TUPLE (`FromFlow<(K, V)>`), and the compiled
-// bundle's impl row carries the trait argument as the trait
-// declaration's own placeholder — one name per generic — which cannot
-// carry a two-generic tuple spelling across the package boundary yet.
-// The impl compiles and dispatches inside flow's own unit (the tests
-// exercise it there); it re-joins the shipped surface when the impl
-// row's trait-argument carrier grows the tuple shape.
 
 use nmapset::{ HashSet };
 
-impl<T> FromFlow<T> for HashSet<T> {
-    fn from_flow(it: Flow<T>) -> Self {
+// The sink wrapper (the FromFlow member): the call site spells
+// `SetFlow<T>.from_flow(it)`, `items()` unwraps.
+pub class SetFlow<T>(HashSet<T>);
+
+impl<T> SetFlow<T> {
+    pub fn from_flow(it: Flow<T>) -> Self {
         let out: HashSet<T> = HashSet.new();
         it.iterate(fn (x: T) -> bool { out.put(x); return true; });
-        return out;
+        return SetFlow(out);
     }
+
+    pub fn items(self) -> HashSet<T> { return self.inner; }
 }

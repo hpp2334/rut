@@ -1,21 +1,23 @@
 //! The `nmap_host` host experiment, driven end to end the way the
 //! `nmapset` wrapper drives it — rut code calls the host surface and the
 //! payload lives Rust-side in `Opaque<NativeTable>`.
-//! (nmap-hostvals P5: the table is a real `HashMap` and the VALUES live
-//! in the entries — the fused h-family keeps `HashSet` fed, and since
-//! the any-lane migration (2a) the valued `hv` family crosses
-//! CONCRETELY: typed keys per flavor, values SEALED as
-//! erasure boxes, and `map_cap` is retired with the sidecar it
-//! pre-sized.)
+//! (nmap-hostvals P5 + the boxed-key law: the table is a real `HashMap`,
+//! the VALUES live in the entries, and every key SEALS at the call —
+//! `opaque(k)` is the wrapper's box, the host opens it for hash/eq and
+//! never stores it. The typed `_i/_u/_b/_s/_y` lanes are gone; one
+//! boxed-key family (`map_hput`/`map_hfind`/`map_hremove`), the str-
+//! range sv twins, and the valued `hv` family over the same boxes.
+//! `map_cap` is retired with the sidecar it pre-sized.)
 //!
 //! Covered per the phase: insert / replace / find / miss / remove with
 //! the packed `(handle << 1) | newly` answers, the dead-handle +
-//! re-birth law (handles are never recycled), the str/bytes/sv key
-//! flavors with lane-crossing content equality, the valued lanes
-//! (bits — including a stored zero, never the miss — and record cells
-//! with the release balance measured on the heap accounting), and the
-//! payload Drop law at rc-0, including through a wrapper record's
-//! `opaque` field.
+//! re-birth law (handles are never recycled), the boxed str/bytes key
+//! flavors with lane-crossing content equality, the sv range lanes
+//! (declared; their host registrations land with the std lane's
+//! binding work), the valued lanes (bits — including a stored zero,
+//! never the miss — and record cells with the release balance measured
+//! on the heap accounting), and the payload Drop law at rc-0,
+//! including through a wrapper record's `opaque` field.
 
 use std::rc::Rc;
 
@@ -27,56 +29,57 @@ const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap_host
 
 const SRC: &str = r#"
 use nmap_host::{ map_new, map_len,
-            map_hput_i, map_hfind_i, map_hremove_i,
-            map_hput_s, map_hfind_s, map_hremove_s,
-            map_hput_y, map_hfind_y, map_hremove_y,
+            map_hput, map_hfind, map_hremove,
             map_hput_sv, map_hfind_sv, map_hremove_sv,
-            map_hvput_i, map_hvget_i, map_hvremove_i };
+            map_hvput, map_hvget, map_hvremove };
 
 entry fn new_map(cap: i64) -> opaque { return map_new(cap); }
 
 entry fn put_i64(t: opaque, k: i64) -> i64 {
-    return map_hput_i(t, k);
+    return map_hput(t, opaque(k));
 }
 
 entry fn find_i64(t: opaque, k: i64) -> i32 {
-    return map_hfind_i(t, k);
+    return map_hfind(t, opaque(k));
 }
 
 entry fn count(t: opaque) -> i32 { return map_len(t); }
 
 // insert / replace / find / miss / remove — a fails accumulator the
 // test asserts at zero. Growth is std's: internal, invisible to the
-// packed answers.
+// packed answers. THE KEY SEALS: every key crosses as its own
+// `opaque(k)` box (the boxed-key law — the typed `_i/_s/_y` lanes are
+// gone), and the host opens it; the literal keys seal with an explicit
+// `as i64` (a bare literal's box holds its own default width).
 entry fn basic_lifecycle() -> i64 {
     let t = map_new(8);
     let mut fails: i64 = 0;
     let mut first: [i32] = [0; 10];
     let mut i: i64 = 0;
     while (i < 10) {
-        let ans = map_hput_i(t, i);
+        let ans = map_hput(t, opaque(i));
         if (ans & 1 != 1) { fails += 100; }   // fresh keys must answer newly
         first[i as i32] = (ans >> 1) as i32;
         i += 1;
     }
     if (map_len(t) != 10) { fails += 1; }
     // replace: the SAME handle back, newly = false
-    let ans = map_hput_i(t, 3);
+    let ans = map_hput(t, opaque(3 as i64));
     if (ans & 1 != 0) { fails += 10; }
     if ((ans >> 1) as i32 != first[3]) { fails += 20; }
     if (map_len(t) != 10) { fails += 40; }
     // hit and miss
-    if (map_hfind_i(t, 7) != first[7]) { fails += 100; }
-    if (map_hfind_i(t, 99) != -1) { fails += 200; }
+    if (map_hfind(t, opaque(7 as i64)) != first[7]) { fails += 100; }
+    if (map_hfind(t, opaque(99 as i64)) != -1) { fails += 200; }
     // remove: the dead key's OWN handle back, then a miss, then a remove-miss
-    let rm = map_hremove_i(t, 7);
+    let rm = map_hremove(t, opaque(7 as i64));
     if (rm != first[7]) { fails += 1000; }
     if (map_len(t) != 9) { fails += 2000; }
-    if (map_hfind_i(t, 7) != -1) { fails += 4000; }
-    if (map_hremove_i(t, 7) != -1) { fails += 8000; }
+    if (map_hfind(t, opaque(7 as i64)) != -1) { fails += 4000; }
+    if (map_hremove(t, opaque(7 as i64)) != -1) { fails += 8000; }
     if (map_len(t) != 9) { fails += 16000; }
     // re-insert: a NEW birth, never the recycled 7
-    let ans = map_hput_i(t, 7);
+    let ans = map_hput(t, opaque(7 as i64));
     if (ans & 1 != 1) { fails += 32000; }
     if ((ans >> 1) as i32 <= first[9]) { fails += 64000; }
     if (map_len(t) != 10) { fails += 128000; }
@@ -87,46 +90,47 @@ entry fn basic_lifecycle() -> i64 {
 // births, never recycled (the removed slot's sidecar nil stays correct)
 entry fn remove_rebirth() -> i64 {
     let t = map_new(8);
-    if (map_hput_i(t, 11) & 1 != 1) { return -1; }
-    if (map_hput_i(t, 22) & 1 != 1) { return -2; }
-    let before = map_hfind_i(t, 11);
+    if (map_hput(t, opaque(11 as i64)) & 1 != 1) { return -1; }
+    if (map_hput(t, opaque(22 as i64)) & 1 != 1) { return -2; }
+    let before = map_hfind(t, opaque(11 as i64));
     if (before < 0) { return -3; }
-    if (map_hremove_i(t, 11) != before) { return -4; }
+    if (map_hremove(t, opaque(11 as i64)) != before) { return -4; }
     if (map_len(t) != 1) { return -5; }
-    let ans = map_hput_i(t, 11);
+    let ans = map_hput(t, opaque(11 as i64));
     if (ans & 1 != 1) { return -6; }
     if ((ans >> 1) as i32 <= before) { return -7; }   // a NEW birth
     // the untouched key keeps its handle
-    if (map_hfind_i(t, 22) < 0) { return -8; }
+    if (map_hfind(t, opaque(22 as i64)) < 0) { return -8; }
     return 0;
 }
 
 // str keys: content equality — a fresh instance of the same text finds
 // the same handle, replaces answer it not-newly, remove kills it
+// (the sealed-box spelling: the str key crosses as `opaque(s)`)
 entry fn str_keys() -> i64 {
     let t = map_new(8);
     let mut fails: i64 = 0;
     let a: str = "alpha";
     let b: str = "beta";
     let c: str = "gamma";
-    if (map_hput_s(t, a) & 1 != 1) { fails += 1; }
-    if (map_hput_s(t, b) & 1 != 1) { fails += 1; }
-    if (map_hput_s(t, c) & 1 != 1) { fails += 1; }
+    if (map_hput(t, opaque(a)) & 1 != 1) { fails += 1; }
+    if (map_hput(t, opaque(b)) & 1 != 1) { fails += 1; }
+    if (map_hput(t, opaque(c)) & 1 != 1) { fails += 1; }
     if (map_len(t) != 3) { fails += 2; }
     // content equality: a fresh instance of the same text finds the handle
     let again: str = "beta";
-    let beta = map_hfind_s(t, again);
+    let beta = map_hfind(t, opaque(again));
     if (beta < 0) { fails += 4; }
     let miss: str = "delta";
-    if (map_hfind_s(t, miss) != -1) { fails += 8; }
+    if (map_hfind(t, opaque(miss)) != -1) { fails += 8; }
     // replace: the found handle back, not newly
-    let ans = map_hput_s(t, a);
+    let ans = map_hput(t, opaque(a));
     if (ans & 1 != 0) { fails += 16; }
-    if (map_hfind_s(t, a) != (ans >> 1) as i32) { fails += 32; }
+    if (map_hfind(t, opaque(a)) != (ans >> 1) as i32) { fails += 32; }
     if (map_len(t) != 3) { fails += 64; }
-    if (map_hremove_s(t, c) < 0) { fails += 128; }
+    if (map_hremove(t, opaque(c)) < 0) { fails += 128; }
     if (map_len(t) != 2) { fails += 256; }
-    if (map_hfind_s(t, c) != -1) { fails += 512; }
+    if (map_hfind(t, opaque(c)) != -1) { fails += 512; }
     return fails;
 }
 
@@ -136,16 +140,16 @@ entry fn bytes_keys() -> i64 {
     let mut fails: i64 = 0;
     let b1 = bytes.from([1, 2, 3]);
     let b2 = bytes.from([9, 9]);
-    if (map_hput_y(t, b1) & 1 != 1) { fails += 1; }
-    if (map_hput_y(t, b2) & 1 != 1) { fails += 1; }
+    if (map_hput(t, opaque(b1)) & 1 != 1) { fails += 1; }
+    if (map_hput(t, opaque(b2)) & 1 != 1) { fails += 1; }
     if (map_len(t) != 2) { fails += 2; }
     // octet equality on a fresh copy
     let again = bytes.from([1, 2, 3]);
-    if (map_hfind_y(t, again) < 0) { fails += 4; }
+    if (map_hfind(t, opaque(again)) < 0) { fails += 4; }
     let miss = bytes.from([4, 5]);
-    if (map_hfind_y(t, miss) != -1) { fails += 8; }
-    if (map_hput_y(t, b1) & 1 != 0) { fails += 16; }
-    if (map_hremove_y(t, b2) < 0) { fails += 32; }
+    if (map_hfind(t, opaque(miss)) != -1) { fails += 8; }
+    if (map_hput(t, opaque(b1)) & 1 != 0) { fails += 16; }
+    if (map_hremove(t, opaque(b2)) < 0) { fails += 32; }
     if (map_len(t) != 1) { fails += 64; }
     return fails;
 }
@@ -164,54 +168,58 @@ entry fn churn_tables(n: i64) -> nil {
     let mut i: i64 = 0;
     while (i < n) {
         let b = Bag.adopt(map_new(16));
-        map_hput_i(b.t, i);
+        map_hput(b.t, opaque(i));
         i += 1;
     }
 }
 
 // ---- the sv lanes (strings-round1, phase 1) -------------------------
 // keys carve BYTE ranges out of a str parent; the host hashes/compares
-// over the range, and the entry + HANDLE are the s lanes'.
+// over the range, and the entry + HANDLE are the plain lanes'. The sv
+// trio stays a DECLARED surface (nmapset's `has_range`/`remove_range`
+// ride it); the Rust-side registration of these three rows is landing
+// with the std lane's host-binding work — the entries here are spelled
+// and ready, the boot gate is the only thing they wait on.
 
-// the parity law end to end: sv keys and s keys of the same content
-// are THE SAME key — same handles, replaces/removes cross lanes, and a
-// slice VIEW reads as its range through the s lane
+// the parity law end to end: sv keys and boxed-str keys of the same
+// content are THE SAME key — same handles, replaces/removes cross
+// lanes, and a slice VIEW reads as its range through the boxed lane
 entry fn sv_parity() -> i64 {
     let t1 = map_new(8);
     let t2 = map_new(8);
     let parent: str = "alpha-beta-gamma-delta";
     let mut fails: i64 = 0;
-    // sv inserts into t1; s inserts of the same texts into t2
+    // sv inserts into t1; boxed-str inserts of the same texts into t2
     if (map_hput_sv(t1, parent, 0, 5) & 1 != 1) { fails += 1; }    // alpha
     if (map_hput_sv(t1, parent, 6, 4) & 1 != 1) { fails += 1; }    // beta
     if (map_hput_sv(t1, parent, 11, 5) & 1 != 1) { fails += 1; }   // gamma
     let a: str = "alpha";
     let b: str = "beta";
     let g: str = "gamma";
-    if (map_hput_s(t2, a) & 1 != 1) { fails += 2; }
-    if (map_hput_s(t2, b) & 1 != 1) { fails += 2; }
-    if (map_hput_s(t2, g) & 1 != 1) { fails += 2; }
+    if (map_hput(t2, opaque(a)) & 1 != 1) { fails += 2; }
+    if (map_hput(t2, opaque(b)) & 1 != 1) { fails += 2; }
+    if (map_hput(t2, opaque(g)) & 1 != 1) { fails += 2; }
     if (map_len(t1) != 3 || map_len(t2) != 3) { fails += 4; }
     // same content either way: the handles agree, and each lane
     // finds what the other stored
     let s1 = map_hfind_sv(t1, parent, 0, 5);
-    let s2 = map_hfind_s(t2, a);
+    let s2 = map_hfind(t2, opaque(a));
     if (s1 < 0 || s1 != s2) { fails += 8; }
-    if (map_hfind_s(t1, a) != s1) { fails += 16; }
+    if (map_hfind(t1, opaque(a)) != s1) { fails += 16; }
     if (map_hfind_sv(t2, parent, 0, 5) != s2) { fails += 32; }
-    // a slice VIEW crosses the s lane as its range (zero-copy read)
+    // a slice VIEW crosses the boxed lane as its range (zero-copy read)
     let view = parent.slice(6, 10);
-    if (map_hfind_s(t1, view) < 0) { fails += 64; }
-    if (map_hfind_s(t1, view) != map_hfind_sv(t1, parent, 6, 4)) { fails += 128; }
+    if (map_hfind(t1, opaque(view)) < 0) { fails += 64; }
+    if (map_hfind(t1, opaque(view)) != map_hfind_sv(t1, parent, 6, 4)) { fails += 128; }
     // replace through the opposite lane: the found handle back, not newly
-    if (map_hput_s(t1, b) != ((map_hfind_sv(t1, parent, 6, 4) as i64) << 1)) { fails += 256; }
+    if (map_hput(t1, opaque(b)) != ((map_hfind_sv(t1, parent, 6, 4) as i64) << 1)) { fails += 256; }
     if (map_len(t1) != 3) { fails += 512; }
     // remove through the sv lane
     let rm = map_hremove_sv(t1, parent, 0, 5);
     if (rm < 0 || rm != s1) { fails += 1024; }
     if (map_len(t1) != 2) { fails += 2048; }
     if (map_hfind_sv(t1, parent, 0, 5) != -1) { fails += 4096; }
-    if (map_hfind_s(t2, g) != map_hfind_sv(t2, parent, 11, 5)) { fails += 8192; }
+    if (map_hfind(t2, opaque(g)) != map_hfind_sv(t2, parent, 11, 5)) { fails += 8192; }
     return fails;
 }
 
@@ -224,7 +232,7 @@ entry fn sv_empty_range() -> i64 {
     if (map_len(t) != 1) { return 2; }
     if (map_hfind_sv(t, s, 3, 0) < 0) { return 3; }
     let e: str = "";
-    if (map_hfind_s(t, e) < 0) { return 4; }
+    if (map_hfind(t, opaque(e)) < 0) { return 4; }
     return 0;
 }
 
@@ -257,30 +265,32 @@ entry fn sv_put_ok(t: opaque) -> i64 {
 entry fn valued_bits(t: opaque) -> i64 {
     let mut fails: i64 = 0;
     // the box TAGS the payload's type (the downcast law): seal an
-    // explicit i64, or `opaque(0)` faithfully holds the literal's own
-    // default width and downcast<i64> correctly misses
-    if (map_hvput_i(t, 1, opaque(0 as i64)) & 1 != 1) { fails += 1; }   // fresh; the box holds 0
-    let raw = map_hvget_i(t, 1);
+    // explicit i64, or `opaque(0 as i64)` faithfully holds the
+    // literal's own width and downcast<i64> correctly misses. THE KEY
+    // SEALS too (the boxed-key law) — the typed-key valued lanes are
+    // gone; every valued crossing spells `map_hvput(t, opaque(k), v)`.
+    if (map_hvput(t, opaque(1 as i64), opaque(0 as i64)) & 1 != 1) { fails += 1; }   // fresh; the box holds 0
+    let raw = map_hvget(t, opaque(1 as i64));
     if (raw == nil) { fails += 10; }                             // a hit, never the miss
     let z: ?i64 = opaque.downcast<i64>(raw);
     if (z != 0) { fails += 100; }                                // the box holds a zero
-    if (map_hvget_i(t, 2) != nil) { fails += 1000; }             // the miss
-    if (map_hvput_i(t, 1, opaque(5 as i64)) & 1 != 0) { fails += 10000; }  // replace: not newly
-    let raw2 = map_hvget_i(t, 1);
+    if (map_hvget(t, opaque(2 as i64)) != nil) { fails += 1000; }             // the miss
+    if (map_hvput(t, opaque(1 as i64), opaque(5 as i64)) & 1 != 0) { fails += 10000; }  // replace: not newly
+    let raw2 = map_hvget(t, opaque(1 as i64));
     if (raw2 == nil) { fails += 100000; }
     let v: ?i64 = opaque.downcast<i64>(raw2);
     if (v != 5) { fails += 1000000; }
-    if (map_hvremove_i(t, 1) < 0) { fails += 10000000; }
-    if (map_hvget_i(t, 1) != nil) { fails += 100000000; }
-    if (map_hvremove_i(t, 1) != -1) { fails += 1000000000; }
+    if (map_hvremove(t, opaque(1 as i64)) < 0) { fails += 10000000; }
+    if (map_hvget(t, opaque(1 as i64)) != nil) { fails += 100000000; }
+    if (map_hvremove(t, opaque(1 as i64)) != -1) { fails += 1000000000; }
     return fails;
 }
 
 // an hput birth (the Empty placeholder) read through a valued lane
 // traps loudly — a caller bug, never a silent nil (§0.8 g)
 entry fn empty_read_trap(t: opaque) -> i64 {
-    let _ = map_hput_i(t, 7);
-    let _ = map_hvget_i(t, 7);   // TRAPS: the placeholder is not a box
+    let _ = map_hput(t, opaque(7 as i64));
+    let _ = map_hvget(t, opaque(7 as i64));   // TRAPS: the placeholder is not a box
     return 0;
 }
 
@@ -291,14 +301,14 @@ entry fn empty_read_trap(t: opaque) -> i64 {
 entry fn valued_strs(t: opaque) -> i64 {
     let mut fails: i64 = 0;
     let a: str = "alpha-alpha-alpha-alpha";
-    if (map_hvput_i(t, 1, opaque(a)) & 1 != 1) { fails += 1; }
-    let got: ?str = opaque.downcast<str>(map_hvget_i(t, 1));
+    if (map_hvput(t, opaque(1 as i64), opaque(a)) & 1 != 1) { fails += 1; }
+    let got: ?str = opaque.downcast<str>(map_hvget(t, opaque(1 as i64)));
     if (got != a) { fails += 10; }
-    if (map_hvput_i(t, 2, opaque("beta-value")) & 1 != 1) { fails += 100; }
-    if (map_hvput_i(t, 1, opaque("gamma-value")) & 1 != 0) { fails += 1000; }   // replace
-    let g: ?str = opaque.downcast<str>(map_hvget_i(t, 1));
+    if (map_hvput(t, opaque(2 as i64), opaque("beta-value")) & 1 != 1) { fails += 100; }
+    if (map_hvput(t, opaque(1 as i64), opaque("gamma-value")) & 1 != 0) { fails += 1000; }   // replace
+    let g: ?str = opaque.downcast<str>(map_hvget(t, opaque(1 as i64)));
     if (g != "gamma-value") { fails += 10000; }
-    let b: ?str = opaque.downcast<str>(map_hvget_i(t, 2));
+    let b: ?str = opaque.downcast<str>(map_hvget(t, opaque(2 as i64)));
     if (b != "beta-value") { fails += 100000; }
     return fails;
 }

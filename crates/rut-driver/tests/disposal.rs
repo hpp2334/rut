@@ -175,14 +175,16 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     );
     assert!(out.binary.is_none(), "the bare source must not compile");
 
-    // the removed trait spelling names its marker
+    // the removed `impl Disposal for Q` spelling dies at the parser
+    // (the `for` branch is deleted from the impl grammar — disposal is
+    // the `[disposal]` marker on the type's own inherent impl)
     let gone = format!("use core::{{ DisposalContext }};\nclass Q {{ }}\nimpl Disposal for Q {{ fn dispose(mut self, cx: DisposalContext) {{ }} }}\nentry fn main() -> i32 {{ return 0; }}\n");
     let out = rut_driver::compile_module(&gone, rut_parser::Mode::Impl, "app_main");
     assert!(
         out.diags
             .iter()
-            .any(|d| d.msg.contains("`Disposal` is gone")),
-        "the removed spelling names the marker: {:?}",
+            .any(|d| d.msg.contains("expected {, found `for`")),
+        "the removed spelling dies at the parser: {:?}",
         out.diags
     );
 

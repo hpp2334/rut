@@ -55,7 +55,7 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let session = session_with(app_src);
     let ctx = session.host_pkg_context();
     for f in ["map_new", "map_len",
-              "map_hput_i", "map_hfind_i", "map_hremove_i",
+              "map_hput", "map_hfind", "map_hremove",
               "map_hvput", "map_hvget", "map_hvremove"]
     {
         assert!(

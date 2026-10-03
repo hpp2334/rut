@@ -602,7 +602,7 @@ impl Heap {
                     }
                 }
             }
-            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace | TyKind::Weak { .. }
+            TyKind::Enum { .. } | TyKind::IfaceObj { .. } | TyKind::Trace | TyKind::Weak { .. }
             | TyKind::DisposalContext => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,

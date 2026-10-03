@@ -170,7 +170,7 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::EnumNew { .. } => T_ENUMNEW,
         Op::TidOf { .. } => T_TIDOF,
         Op::IsType { .. } => T_ISTYPE,
-        Op::IsTrait { .. } => T_ISTRAIT,
+        Op::IsIface { .. } => T_ISTRAIT,
         Op::Unbox { .. } => T_UNBOX,
         Op::Box { .. } => T_BOX,
         Op::MakeClosure { .. } => T_MAKECLOSURE,

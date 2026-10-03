@@ -252,12 +252,12 @@ impl Vm {
                 // never the payload — `o is X` misses for every payload
                 // X, `o is opaque` (or an alias) hits; recovery is
                 // `downcast<T>` only (its own TidOf keeps reading the
-                // payload). IsTrait below probes the box for the same
+                // payload). IsIface below probes the box for the same
                 // reason.
                 let ty = self.is_ty(r!(obj));
                 self.cur_regs[dst as usize] = Slot::bool(ty == want);
             }
-            Op::IsTrait { dst, obj, want } => {
+            Op::IsIface { dst, obj, want } => {
                 let ty = match self.scalar_recv_ty(obj) {
                     Some(t) => t,
                     // the box probes its own vtable — TY_OPAQUE has no
@@ -266,7 +266,7 @@ impl Vm {
                 };
                 let has = self
                     .prog
-                    .trait_slots
+                    .iface_slots
                     .iter()
                     .enumerate()
                     .any(|(slot, &(t, _))| {

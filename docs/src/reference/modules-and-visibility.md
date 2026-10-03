@@ -12,8 +12,8 @@ Allowed at module scope:
 |---|---|
 | import | `use pkg::{ A, B };` / `use pkg::A;` |
 | binding | `let name: T = expr;` (also under `pub`) |
-| enum / struct / class / trait | `enum E { .. }`, `struct S { .. }`, `class C { .. }`, `trait I { .. }` |
-| impl block | `impl T { .. }`, `impl I for T { .. }` |
+| enum / struct / class / interface | `enum E { .. }`, `struct S { .. }`, `class C { .. }`, `interface I { .. }` |
+| impl block | `impl T { .. }` — inherent, the type's module only |
 | function | `fn f(..) { .. }`, `async fn f(..) { .. }` |
 | entry point | `entry fn f(..) { .. }` |
 | alias | `type X = A;` (see [Type aliases and union bounds](type-aliases.md)) |
@@ -118,7 +118,7 @@ carries a visibility:
 | `pub(self) fn ..` | module-private — **the default** |
 
 - Unannotated = `pub(self)`: nothing leaks unless it says `pub`.
-- Applies uniformly: `let`, `enum`, `struct`, `class`, `trait`, `impl`
+- Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl`
   (an impl exports with its target type), `fn`, `type` aliases. On a
   `class` declaration it means the *type name* is visible.
 - **Class members take the same forms**: an unannotated field or method
@@ -128,9 +128,10 @@ carries a visibility:
   (see [Structs](structs.md)). **Impl-block methods take the `pub`
   dial** — `pub fn` exports cross-module, plain `fn` is
   module-private — the same law a class's methods follow, enums
-  included (see [Structs](structs.md) and [Enums](enums.md)). Trait
-  method signatures and impl methods are as visible as their trait
-  (see [Traits and dispatch](traits.md)).
+  included (see [Structs](structs.md) and [Enums](enums.md)).
+  Interface members take no `pub` at all — they are as visible as
+  their interface; satisfaction reads a type's **public** inherent
+  members (see [Interfaces and dispatch](interfaces.md)).
 - Visibility is checked at compile time; it has no runtime
   representation. Only `pub` names enter a module's export table; a
   non-exported declaration is *known* inside its module but *nameable*

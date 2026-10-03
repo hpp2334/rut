@@ -19,7 +19,7 @@ construct is exhaustive.
 Iterating form — vecs, fixed arrays, slices, strings (one-codepoint
 `str`s per step), `bytes` (`u8` per step), and any type carrying an
 `[iterable]`-marked member — an enum value included (see
-[Traits and dispatch](traits.md) and [Enums](enums.md)). Both spellings
+[Interfaces and dispatch](interfaces.md) and [Enums](enums.md)). Both spellings
 of this form are one loop: the loop variable is a single binding
 reassigned per iteration, and over a marked type the loop calls that
 ONE designated member with an `emit` closure that follows the capture

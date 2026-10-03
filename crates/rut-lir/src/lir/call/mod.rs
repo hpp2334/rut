@@ -159,10 +159,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // with `any` gone, the erasure box is the only value
                 // lane — polymorphism crosses sealed).
                 let sealed = match self.ctx.types.kind(t) {
-                    TyKind::TraitObj { trait_id } => {
-                        let tid = *trait_id;
+                    TyKind::IfaceObj { iface_id } => {
+                        let tid = *iface_id;
                         self.ctx
-                            .trait_inst
+                            .iface_inst
                             .iter()
                             .find(|(_, &id)| id == tid)
                             .map(|((n, _), _)| *n == sym::FUTURE)
@@ -383,16 +383,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
 
-    /// mut-binding law: writing through a handle requires the
-    /// head binding to be `let mut`
-    /// Implicit widening — exact > trait-typed when an impl
-    /// is REGISTERED for the (trait, type) pair. Nominal: no structural
-    /// shape is ever consulted. Same-type always widens.
-    /// A value of the enclosing class's generic parameter
-    /// also widens through its recorded `requires` bound — the registry
-    /// hit normally answers first (admission proved the impl at the
-    /// instantiation), so this only carries a body whose impl is not
-    /// (yet) registered.
+    /// Implicit widening — exact > interface-typed when the concrete
+    /// type SATISFIES the interface structurally (the member-set check
+    /// at the boundary: every member present, signature compatible).
+    /// Checking, never search; the proven pair records the itable fill
+    /// demand. Same-type always widens.
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
             return true;
@@ -402,41 +397,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.same_instantiation(from, to) {
             return true;
         }
-        if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
-            if self.ctx.find_impl_ex(trait_id, from).is_some() {
-                return true;
-            }
-            // the parameterized-trait-impl door (the phase-2 dispatch
-            // half): on a miss, a registered template
-            // (`impl Readable<T> for Source<T>`) unifies against the
-            // concrete instantiation and MINTS the pair — `Source<str>`
-            // widens to `Readable<str>` exactly when the template's
-            // substitution says so
-            if self.ctx.find_or_mint_impl(trait_id, from).is_some() {
-                return true;
-            }
-            let Some(dname) = self.current_class else {
-                return false;
-            };
-            let Some(d) = self.ctx.find_data(dname).cloned() else {
-                return false;
-            };
-            for (g, bnode) in &d.requires {
-                let Some(&conc) = self.subst.iter().find(|(n, _)| n == g).map(|(_, t)| t) else {
-                    continue;
-                };
-                if conc != from {
-                    continue;
-                }
-                let members = self.ctx.resolve_bound_members(*bnode, &self.subst);
-                if members
-                    .iter()
-                    .any(|m| matches!(m, crate::check::BoundMember::Trait(tid) if *tid == trait_id))
-                {
+        if let TyKind::IfaceObj { iface_id } = self.ctx.types.kind(to).clone() {
+            match self.ctx.check_satisfies(from, iface_id) {
+                Ok(()) => {
+                    self.ctx.demand_iface_fill(from, iface_id);
                     return true;
                 }
+                Err(detail) => {
+                    let tname = self.ctx.iface_base_name(iface_id);
+                    self.ctx.err(rut_lexer::span::Span::new(self.span, self.span), format!(
+                        "`{}` does not satisfy `{}`: {}",
+                        self.ctx.type_name(from),
+                        tname,
+                        detail
+                    ));
+                    return false;
+                }
             }
-            return false;
         }
         false
     }

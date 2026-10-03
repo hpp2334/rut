@@ -4,8 +4,9 @@
 //! asserts canonical strings, no DOM, no clock, no host surface.
 //!
 //! The fixtures: `tests/data/jsonpkg` (json + pouch + nmapset — every
-//! group impl dispatches) and `tests/data/jsonlight` (json alone — the
-//! base mounts light, the peer-gated container rows never exist).
+//! group wrapper dispatches) and `tests/data/jsonlight` (json alone —
+//! the base mounts light, the peer-gated container wrappers never
+//! exist).
 //!
 //! Entry answer shape:
 //!   successes  ->  `OK:<payload>`
@@ -315,7 +316,7 @@ fn arr_encodes() {
     let three: String = vm.call("enc_arr_three", ()).unwrap();
     assert_eq!(three, "[7,8,9]");
     let nested: String = vm.call("enc_arr_nested", ()).unwrap();
-    assert_eq!(nested, "[[1,2],[3]]");
+    assert_eq!(nested, "OK:[[1,2],[3]]");
 }
 
 // ---- ?T: null <-> nil (survey §2.6's optional row) ----
@@ -648,6 +649,25 @@ fn light_consumer_base_rows() {
     // Option crossing); read it as an Option
     let arr: Option<String> = vm.call("enc_a", ()).unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(arr, Some("[1,2]".to_string()));
+}
+
+// ---- the user-type lane: the fixture's DocRow satisfies both
+// interfaces on its own inherent impl (the structural fork's whole
+// point), and the group wrapper dispatches it per instantiation ----
+
+#[test]
+fn user_type_satisfies_structurally() {
+    let mut vm = vm_at(PKG);
+    let enc: String = vm.call("enc_rows", ()).unwrap();
+    assert_eq!(enc, r#"[{"id":1,"name":"one"},{"id":2,"name":"two"}]"#);
+    let mut vm = vm_at(PKG);
+    let dec: String = vm.call("dec_row", (r#"{"id":7,"name":"seven"}"#.to_string(),)).unwrap();
+    assert_eq!(dec, "OK:7:seven");
+    let mut vm = vm_at(PKG);
+    let rows: String = vm
+        .call("dec_rows", (r#"[{"id":1,"name":"a"},{"id":2,"name":"b"}]"#.to_string(),))
+        .unwrap();
+    assert_eq!(rows, "OK:len=2:first=a");
 }
 
 // ---- the json-perf batch phase 1: the reader's per-byte classification

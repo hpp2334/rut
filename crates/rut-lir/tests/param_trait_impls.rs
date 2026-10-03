@@ -1,17 +1,16 @@
-//! Parameterized trait impls: phase 1 registered the TEMPLATE (the
-//! checker half — the shape guard, the placeholder env, coverage); phase
-//! 2 is the DISPATCH half — unification, coercion, vtables. The tests
-//! here execute: a registered template's instantiation widens where
-//! `Readable<str>` is expected, the call dispatches to the template's
-//! method monomorphized at that instantiation, two instantiations get
-//! distinct correct vtable rows, the same works inside generic fn bodies
-//! (the fat-ref headline), repeated trait parameters
-//! (`Writable<T, T>`) resolve positionally, and a concrete impl still
-//! shadows the template's instantiation of the same pair (concrete-first).
-//! Phase 3 adds the generic INSTANCE-method call: the method's own type
-//! arguments join the class instantiation to key the monomorphized
-//! frame, and a spelled lambda argument takes its parameter types from
-//! the bound part of the expected shape (the placeholder hint).
+//! Structural interfaces: the dispatch laws that survived the
+//! trait/impl fork, spelled in the new surface. An `interface Name<..>`
+//! is an observed capability, satisfied STRUCTURALLY by pub inherent
+//! members; `requires` bounds gate generic instantiations and prove the
+//! widening; wrapper newtype classes (`class W<T>(inner);`) manufacture
+//! capability. The tests here execute: a bound-spelled generic fn whose
+//! bound-parameter signature resolves over two satisfying classes, the
+//! wrapper-construction inference (`let w = JsonW(t);` binds T from the
+//! wrapped arg) dispatching per instantiation, per-monomorphization
+//! dispatch inside generic fn bodies, the itable fill for a
+//! generic-interface instantiation (branch-merged origins), generic
+//! INSTANCE-method frames computing like free fns, and deterministic
+//! generic-instance emission (two compiles, byte-identical binaries).
 
 use rut_parser::Mode;
 use rut_driver::{Module, ModuleBody, Session};
@@ -61,7 +60,7 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // the core surface bound as the one use: these tests
-    // exercise impl registration, not use discipline
+    // exercise interface satisfaction, not use discipline
     rut_driver::compile_program(
         src,
         Mode::Impl,
@@ -79,313 +78,182 @@ fn diags_of(src: &str) -> Vec<String> {
         .collect()
 }
 
-#[test]
-fn parameterized_trait_impl_registers_as_a_template() {
-    // the head's parameter names the target's own parameter — the
-    // checker's blocker ("unknown type `T`") is gone, and the concrete
-    // form still compiles beside it
-    let out = compile(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         impl Readable<i64> for Source<i64> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-}
+// DEAD with parameterized trait impls: the template registry —
+// `impl<T> I for T` no longer parses, so nothing registers as a
+// dispatch template.
 
+// DEAD with parameterized trait impls: the (trait, type) impl registry —
+// structural satisfaction registers nothing, so there are no duplicates
+// to diagnose.
+
+// DEAD with parameterized trait impls: concrete-first shadowing of the
+// template's instantiation — with no registry there is no template
+// instantiation for a concrete impl to shadow.
+
+// DEAD with parameterized trait impls: impl-head trait-argument
+// substitution (parameter slots substituting beside concrete ones) —
+// the impl head is gone.
+
+// DEAD with parameterized trait impls: the v1 guard diagnosing a
+// parameter nested inside an impl-head trait argument — no impl heads,
+// no trait arguments.
+
+// DEAD with parameterized trait impls: the impl-head guard diagnosing a
+// parameter naming neither the target's parameters nor a type in scope —
+// the head it guarded is gone.
+
+// DEAD with parameterized trait impls: repeated impl-head parameters
+// (`I<T, T>`) — the impl-head grammar that spelled them is gone.
+
+// DEAD with parameterized trait impls: positional dispatch of repeated
+// impl-head parameter spellings — died with the impl-head grammar.
+
+// ---- the surviving dispatch laws (these tests EXECUTE) ----------------
+
+/// a bound-parameter signature resolves: `fn use_it<C requires Calc>`
+/// admits two satisfying classes, and the bound proves the widening —
+/// the call dispatches to each origin's own member
 #[test]
 fn trait_parameter_in_the_impl_methods_signature_resolves() {
-    // the coverage check resolves both sides under the placeholder env —
-    // a parameter-spelled impl signature must not die as an unknown type
-    let ds = diags_of(
-        "trait Store<T> {\n\
-             fn get(self, k: T) -> u32;\n\
-             fn put(self, k: T, v: u32);\n\
+    let mut vm = boot(
+        "interface Calc { fn calc(self, v: i32) -> i32; }\n\
+         class Adder { n: i32 }\n\
+         impl Adder { pub fn calc(self, v: i32) -> i32 { return self.n + v; } }\n\
+         class Multer { n: i32 }\n\
+         impl Multer { pub fn calc(self, v: i32) -> i32 { return self.n * v; } }\n\
+         fn use_it<C requires Calc>(c: C) -> i32 {\n\
+             let w: Calc = c;\n\
+             return w.calc(3);\n\
          }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Store<T> for Source<T> {\n\
-             fn get(self, k: T) -> u32 { return self.id; }\n\
-             fn put(self, k: T, v: u32) { }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert!(ds.is_empty(), "{ds:?}");
+         entry fn main() -> i32 {\n\
+             let a = Adder { n: 4 };\n\
+             let m = Multer { n: 5 };\n\
+             return use_it(a) * 100 + use_it(m);\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: i32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 715, "use_it(Adder)=7 and use_it(Multer)=15 — both dispatch");
 }
 
-#[test]
-fn repeated_parameter_in_two_trait_slots_is_legal() {
-    let ds = diags_of(
-        "trait Pair2<A, B> { fn one(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Pair2<T, T> for Source<T> {\n\
-             fn one(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert!(ds.is_empty(), "{ds:?}");
-}
-
-#[test]
-fn parameter_nested_in_a_trait_argument_is_a_v1_error() {
-    let ds = diags_of(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<Vec<T>> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
-    assert!(
-        ds[0].contains("a parameter nested inside a type is not supported yet"),
-        "{ds:?}"
-    );
-}
-
-#[test]
-fn trait_argument_naming_no_target_parameter_and_no_type_is_a_v1_error() {
-    // `T` is declared but is not a parameter of the target (`Source<U>`)
-    // nor a type in scope — the guard diagnoses the shape, once
-    let ds = diags_of(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<U> { id: u32 = 0; }\n\
-         impl<T, U> Readable<T> for Source<U> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
-    assert!(
-        ds[0].contains(
-            "`T` is declared but is not a type parameter of the impl target"
-        ),
-        "{ds:?}"
-    );
-}
-
-#[test]
-fn exact_template_duplicate_still_errors() {
-    // same trait template (same parameters) + same class: the ordinary
-    // (trait, type) duplicate check. A template OVERLAPPING a concrete
-    // impl for a specific instantiation (`Readable<T>` vs
-    // `Readable<i64>`) is deliberately NOT checked at collect time —
-    // the phase-2 dispatch half owns that resolution.
-    let ds = diags_of(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() {}\n",
-    );
-    assert_eq!(ds.len(), 1, "one diagnostic: {ds:?}");
-    assert!(
-        ds[0].contains("duplicate impl for the same (trait, type) pair"),
-        "{ds:?}"
-    );
-}
-
-// ---- phase 2: the dispatch half (these tests EXECUTE) ----------------
-
-/// widening OUTSIDE a generic fn: two instantiations of one template,
-/// each boxed into its trait-object slot, each dispatching to its own
-/// monomorphized method body
+/// the wrapper-construction inference: `let w = JsonW(t);` binds the
+/// wrapper's T from the wrapped arg (the unified-wrapper law), and each
+/// instantiation widens to its own `Src<T>` slot and dispatches there
 #[test]
 fn widening_dispatches_to_the_instantiated_template() {
     let mut vm = boot(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
+        "interface Src<T> { fn get(self) -> T; }\n\
+         class JsonW<T>(T);\n\
+         impl<T> JsonW<T> {\n\
+             pub fn get(self) -> T { return self.inner; }\n\
          }\n\
-         entry fn main() -> u32 {\n\
-             let r: Readable<str> = Source<str> { id: 7 };\n\
-             let r2: Readable<i64> = Source<i64> { id: 9 };\n\
-             return r.atom_id() * 10 + r2.atom_id();\n\
+         fn grab_i(w: Src<i64>) -> i64 { return w.get(); }\n\
+         fn grab_s(w: Src<str>) -> i64 { return w.get().len() as i64; }\n\
+         entry fn main() -> i64 {\n\
+             let t = 41 as i64;\n\
+             let w = JsonW(t);\n\
+             let s = JsonW(\"hi\");\n\
+             return grab_i(w) + grab_s(s);\n\
          }\n",
     )
     .expect("compiles");
-    let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 79, "both instantiations dispatch correctly");
+    let r: i64 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 43, "JsonW(t) is JsonW<i64> (41); JsonW(\"hi\") is JsonW<str> (len 2)");
 }
 
-/// the same inside a GENERIC fn body: the fat-ref parameter (the
-/// phase's headline gate) — one body, two monomorphizations, each
-/// statically bound to its origin's method
+/// the same inside a GENERIC fn body: one body, two monomorphizations,
+/// each dispatching to its origin's own member (the fat-ref headline,
+/// spelled with interface bounds)
 #[test]
 fn generic_fn_body_dispatches_per_monomorphization() {
     let mut vm = boot(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         class Derived<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
+        "interface Read { fn read_id(self) -> u32; }\n\
+         class SA { id: u32 }\n\
+         impl SA { pub fn read_id(self) -> u32 { return self.id; } }\n\
+         class SB { id: u32 }\n\
+         impl SB { pub fn read_id(self) -> u32 { return self.id + 1; } }\n\
+         fn read_of<R requires Read>(a: R) -> u32 {\n\
+             let w: Read = a;\n\
+             return w.read_id();\n\
          }\n\
-         impl<T> Readable<T> for Derived<T> {\n\
-             fn atom_id(self) -> u32 { return self.id + 1; }\n\
-         }\n\
-         fn read_id<T>(a: Readable<T>) -> u32 { return a.atom_id(); }\n\
-         entry fn main() -> u64 {\n\
-             let s = Source<str> { id: 7 };\n\
-             let d = Derived<i64> { id: 9 };\n\
-             return (read_id(s) + read_id(d)) as u64;\n\
+         entry fn main() -> u32 {\n\
+             let s = SA { id: 7 };\n\
+             let d = SB { id: 9 };\n\
+             return read_of(s) * 100 + read_of(d);\n\
          }\n",
     )
     .expect("compiles");
-    let r: u64 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 17, "read_id(s)=7 and read_id(d)=10 — per-instantiation dispatch");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 710, "read_of(s)=7 and read_of(d)=10 — per-instantiation dispatch");
 }
 
-/// the vtable: a trait-typed binding with TWO possible origins (a
+/// the itable: an interface-typed binding with TWO possible origins (a
 /// runtime branch) cannot bind statically — the call dispatches through
-/// the vtable rows the template filled for each concrete instantiation
+/// the itable rows the boxing sites filled for each concrete origin
 #[test]
 fn vtable_row_is_filled_for_the_instantiation() {
     let mut vm = boot(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         class Derived<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         impl<T> Readable<T> for Derived<T> {\n\
-             fn atom_id(self) -> u32 { return self.id + 100; }\n\
-         }\n\
-         entry fn main() -> u32 {\n\
-             let a: Readable<str> = Source<str> { id: 5 };\n\
-             let b: Readable<i64> = Derived<i64> { id: 6 };\n\
-             let mut pick: Readable<str> = a;\n\
-             let mut pick2: Readable<i64> = b;\n\
+        "interface Src<T> { fn get(self) -> T; }\n\
+         class IntW(i64);\n\
+         impl IntW { pub fn get(self) -> i64 { return self.inner; } }\n\
+         class AltW(i64);\n\
+         impl AltW { pub fn get(self) -> i64 { return self.inner + 100; } }\n\
+         entry fn main() -> i64 {\n\
+             let a: Src<i64> = IntW(5);\n\
+             let b: Src<i64> = AltW(6);\n\
+             let mut pick: Src<i64> = a;\n\
+             let mut pick2: Src<i64> = b;\n\
              let use_b = 6 == 6;\n\
              if (use_b) {\n\
-                 pick2 = Derived<i64> { id: 7 };\n\
+                 pick2 = AltW(7);\n\
              }\n\
-             return pick.atom_id() + pick2.atom_id();\n\
+             return pick.get() + pick2.get();\n\
          }\n",
     )
     .expect("compiles");
-    let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 112, "pick via the vtable (5) + pick2 via the vtable (107)");
+    let r: i64 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 112, "pick via the static bind (5) + pick2 via the itable (107)");
 }
-
-/// repeated parameters (`Writable<T, T>`): the substitution is
-/// positional, every trait-argument node re-resolves independently, and
-/// the widened value dispatches to the template's method
-#[test]
-fn repeated_trait_parameters_dispatch() {
-    let mut vm = boot(
-        "trait Writable<A, R> { fn stamp(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Writable<T, T> for Source<T> {\n\
-             fn stamp(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() -> u32 {\n\
-             let w: Writable<str, str> = Source<str> { id: 21 };\n\
-             return w.stamp();\n\
-         }\n",
-    )
-    .expect("compiles");
-    let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 21, "Writable<T, T> over Source<str> dispatches");
-}
-
-/// concrete-first (the v1 law): a hand-written impl for a specific
-/// instantiation shadows the template's instantiation of the same pair
-#[test]
-fn concrete_impl_shadows_the_template_instantiation() {
-    let mut vm = boot(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
-         }\n\
-         impl Readable<i64> for Source<i64> {\n\
-             fn atom_id(self) -> u32 { return 999; }\n\
-         }\n\
-         entry fn main() -> u32 {\n\
-             let t: Readable<str> = Source<str> { id: 7 };\n\
-             let c: Readable<i64> = Source<i64> { id: 5 };\n\
-             return t.atom_id() * 1000 + c.atom_id();\n\
-         }\n",
-    )
-    .expect("compiles");
-    let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 7999, "the template serves str; the concrete impl serves i64");
-}
-
-/// a template over TWO type parameters with MIXED concrete and
-/// parameter trait arguments (`R<Vec<i64>, T>`): only the parameter
-/// slots substitute, the concrete slots stay put
-#[test]
-fn mixed_concrete_and_parameter_trait_arguments() {
-    let mut vm = boot(
-        "trait Store<A, B> { fn mark(self) -> u32; }\n\
-         class Bag<T> { n: u32 = 1; }\n\
-         class Box2<T> { id: u32 = 0; }\n\
-         impl<T> Store<Bag<i64>, T> for Box2<T> {\n\
-             fn mark(self) -> u32 { return self.id; }\n\
-         }\n\
-         entry fn main() -> u32 {\n\
-             let b: Store<Bag<i64>, str> = Box2<str> { id: 33 };\n\
-             return b.mark();\n\
-         }\n",
-    )
-    .expect("compiles");
-    let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 33, "the concrete slot (Bag<i64>) stayed; the parameter slot substituted");
-}
-
-// ---- phase 3: generic instance-method frames --------------------------
 
 /// The stale-frame repro, minimized: the same generic body must compute
 /// identically as a FREE fn and as an INSTANCE method of a class. The
 /// method's own type arguments — spelled (`s.get<i64>(..)`) or inferred
-/// through the `Readable<T>` template (`s.get(..)`) — join the class
-/// instantiation to key the Inst, so the callee frame's parameters and
-/// the trait call inside it type per instantiation (v1 typed method
-/// parameters under the CLASS instantiation only, which left the
-/// generic-method frames computing stale/wrong values). The spelled
-/// lambda argument types its parameter from the BOUND part of the
-/// expected fn shape (the placeholder hint, the free-fn door's law,
-/// now wired in the method door too).
+/// from an interface-typed argument's instantiation (`s.get(boxed)`) —
+/// join the class instantiation to key the frame, so the callee frame's
+/// parameters and the interface call inside it type per instantiation.
+/// The spelled lambda argument types its parameter from the BOUND part
+/// of the expected fn shape (the placeholder hint).
 #[test]
 fn generic_instance_method_frames_compute_like_free_fns() {
     let mut vm = boot(
-        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-         class Source<T> { id: u32 = 0; }\n\
-         impl<T> Readable<T> for Source<T> {\n\
-             fn atom_id(self) -> u32 { return self.id; }\n\
+        "interface Read<T> { fn peek(self) -> u32; }\n\
+         class Src2<T> { id: u32 }\n\
+         impl<T> Src2<T> {\n\
+             pub fn peek(self) -> u32 { return self.id; }\n\
          }\n\
-         class Ctx2 { x: i32 = 6; }\n\
+         class Ctx2 { x: i32 }\n\
          class Store { cell: opaque; }\n\
          impl Store {\n\
-             pub fn get<T>(self, a: Readable<T>) -> T {\n\
-                 let _ = a.atom_id();\n\
+             pub fn get<T>(self, a: Read<T>) -> T {\n\
+                 let _ = a.peek();\n\
                  return opaque.downcast<T>(self.cell);\n\
              }\n\
              pub fn lift<T>(self, f: fn(Ctx2) -> T) -> T {\n\
                  return f(Ctx2 { x: 6 });\n\
              }\n\
          }\n\
-         pub fn get_free<T>(st: Store, a: Readable<T>) -> T {\n\
-             let _ = a.atom_id();\n\
+         pub fn get_free<T>(st: Store, a: Read<T>) -> T {\n\
+             let _ = a.peek();\n\
              return opaque.downcast<T>(st.cell);\n\
          }\n\
          entry fn main() -> i64 {\n\
              let s = Store { cell: opaque(41 as i64) };\n\
-             let src = Source<i64> { id: 3 };\n\
+             let src = Src2<i64> { id: 3 };\n\
+             let boxed: Read<i64> = src;\n\
              let m_i = s.get<i64>(src);\n\
-             let m_infer = s.get(src);\n\
+             let m_infer = s.get(boxed);\n\
              let f_i = get_free<i64>(s, src);\n\
-             let f_infer = get_free(s, src);\n\
+             let f_infer = get_free(s, boxed);\n\
              let lifted = s.lift(fn (c) -> i64 { return c.x as i64; });\n\
              return m_i + m_infer + f_i + f_infer + lifted;\n\
          }\n",
@@ -416,47 +284,49 @@ fn method_generic_arity_mismatch_is_one_clean_diagnostic() {
     assert!(ds[0].contains("takes 1 generic argument(s), 2 given"), "{ds:?}");
 }
 
-/// deterministic generic-instance emission (phase 4b): the same source
-/// compiled twice — two fresh contexts in this process — must encode
+/// deterministic generic-instance emission: the same source compiled
+/// twice — two fresh contexts in this process — must encode
 /// byte-identical binaries. `build_vtables` used to walk `inst_data`
 /// (a std HashMap) in RandomState order, so the generic-target arm's
-/// `mk_trait_inst` calls interned trait ids in a per-context random
+/// `mk_iface_inst` calls interned interface ids in a per-context random
 /// order and the two binaries diverged (swapped dense receiver-type
-/// ids / vtable rows). The walk is canonicalized on the dense type id.
+/// ids / itable rows). The walk is canonicalized on the dense type id.
 ///
 /// The harness choice: an in-process double compile is the strongest
 /// guard available in this layout — each `Ctx` builds its own HashMaps
 /// with independent hasher seeds, so the two compiles here really do
-/// iterate `inst_data` in different orders (the same leak the scratch
-/// rutdiag repro's `ndet` subcommand caught run-to-run; its
-/// `selfcheck`/`lanes` subcommands cover the cross-process and
-/// two-lane shapes).
+/// iterate `inst_data` in different orders.
 #[test]
 fn double_compile_of_one_source_emits_identical_bytes() {
-    // four instantiations of the same generic target — the multi-entry
+    // four instantiations of one generic interface — the multi-entry
     // `inst_data` shape that makes the (pre-fix) HashMap walk order
-    // observable in the emitted trait ids, function ids, and vtable rows
-    let src = "trait Readable<T> { fn atom_id(self) -> u32; }\n\
-               class Source<T> { id: u32 = 0; }\n\
-               impl<T> Readable<T> for Source<T> {\n\
-                   fn atom_id(self) -> u32 { return self.id; }\n\
+    // observable in the emitted interface ids, function ids, and itable
+    // rows
+    let src = "interface Read<T> { fn peek(self) -> u32; }\n\
+               class Src2<T> { id: u32 }\n\
+               impl<T> Src2<T> {\n\
+                   pub fn peek(self) -> u32 { return self.id; }\n\
                }\n\
-               pub fn read_id<T>(a: Readable<T>) -> u32 {\n\
-                   return a.atom_id();\n\
+               pub fn read_id<T>(a: Read<T>) -> u32 {\n\
+                   return a.peek();\n\
                }\n\
                class W {\n\
-                   a$: Source<i64>;\n\
-                   b$: Source<str>;\n\
-                   c$: Source<f64>;\n\
-                   d$: Source<bool>;\n\
+                   a$: Src2<i64>;\n\
+                   b$: Src2<str>;\n\
+                   c$: Src2<f64>;\n\
+                   d$: Src2<bool>;\n\
                }\n\
                entry fn main() -> u32 {\n\
-                   let w = W { a$: Source { id: 1 }, b$: Source { id: 2 }, c$: Source { id: 3 }, d$: Source { id: 4 } };\n\
+                   let w = W { a$: Src2 { id: 1 }, b$: Src2 { id: 2 }, c$: Src2 { id: 3 }, d$: Src2 { id: 4 } };\n\
+                   let a: Read<i64> = w.a$;\n\
+                   let b: Read<str> = w.b$;\n\
+                   let c: Read<f64> = w.c$;\n\
+                   let d: Read<bool> = w.d$;\n\
                    let mut total: u32 = 0;\n\
-                   total = total + read_id(w.a$);\n\
-                   total = total + read_id(w.b$);\n\
-                   total = total + read_id(w.c$);\n\
-                   total = total + read_id(w.d$);\n\
+                   total = total + read_id(a);\n\
+                   total = total + read_id(b);\n\
+                   total = total + read_id(c);\n\
+                   total = total + read_id(d);\n\
                    return total;\n\
                }\n";
     let first = compile(src);
@@ -471,5 +341,5 @@ fn double_compile_of_one_source_emits_identical_bytes() {
     // canonicalization must not move semantics: the dispatch still runs
     let mut vm = boot(src).expect("compiles");
     let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 10, "1 + 2 + 3 + 4 through the vtable rows");
+    assert_eq!(r, 10, "1 + 2 + 3 + 4 through the itable rows");
 }

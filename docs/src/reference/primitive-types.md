@@ -51,7 +51,7 @@ copy on assignment, passing, and return — plain slot moves. **Every
 other type is a refcounted heap cell handle**: assignment shares, and
 mutation through any alias is visible through all of them — struct and
 class instances, `str`, `bytes`, `Vec`, `[T]`, enums, `opaque` boxes,
-trait-typed values, `?T` boxes alike. Writing is gated by the
+interface-typed values, `?T` boxes alike. Writing is gated by the
 `mut`-binding law (see [Modules and visibility](modules-and-visibility.md)),
 never by the sharing.
 

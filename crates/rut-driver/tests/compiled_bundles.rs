@@ -1,6 +1,6 @@
 //! v5 compiled bundles: the mixed closure — linkable pkgs ride as
 //! `.rutc` binaries (bodies + surface, the linking truth), splice-needed
-//! deps (inline / generic export / trait-object params) and host pkgs
+//! deps (inline / generic export / interface-typed params) and host pkgs
 //! ride as source file sets — plus the pinned equivalence (compiled
 //! bundle vs source directory ⇒ identical linked binaries), determinism,
 //! and the refusal matrix.
@@ -228,7 +228,7 @@ fn same_dir_packs_byte_identical() {
 /// compile, so the dep's group binary carries every instantiation the
 /// closure uses.
 #[test]
-fn generic_and_trait_param_roots_publish_compiled() {
+fn generic_and_iface_param_roots_publish_compiled() {
     // a generic root: the exported template rides the binary, the
     // instantiation the root itself spells compiles inside it, and the
     // ledger names the row
@@ -267,9 +267,10 @@ fn generic_and_trait_param_roots_publish_compiled() {
     assert_eq!(got, 3);
     let _ = std::fs::remove_dir_all(&root);
 
-    // a trait-object parameter: the fn crosses and dispatches through
-    // the consumer's impl registration (the vtable merge) — no splice
-    let root = scratch("traitroot");
+    // an interface-typed parameter: the fn crosses and dispatches through
+    // the per-type itable fill (the boxing site is here in the same
+    // unit) — no splice
+    let root = scratch("ifaceroot");
     let app = root.join("app");
     write(
         &app,
@@ -279,17 +280,17 @@ fn generic_and_trait_param_roots_publish_compiled() {
     write(
         &app,
         "app.rut",
-        "pub trait Shape { fn area(self) -> i32; }\n\
+        "pub interface Shape { fn area(self) -> i32; }\n\
          pub fn draw(s: Shape) -> i32 { return s.area(); }\n\n\
          entry fn go() -> i32 {\n\
          \x20   return draw(Square { side: 6 });\n\
          }\n\n\
          struct Square { side: i32; }\n\n\
-         impl Shape for Square {\n\
-         \x20   fn area(self) -> i32 { return self.side * self.side; }\n\
+         impl Square {\n\
+         \x20   pub fn area(self) -> i32 { return self.side * self.side; }\n\
          }\n",
     );
-    let bytes = pack_dir(&app).expect("a trait-param root publishes compiled");
+    let bytes = pack_dir(&app).expect("an iface-param root publishes compiled");
     let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
     let got: i32 = run_entry(session, &app_root, "go");
     assert_eq!(got, 36);
@@ -353,7 +354,9 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     // — the directory world and the bundle world compile identically.
     let root = scratch("peers");
 
-    // peered: the trait + the peer-gated impl group
+    // peered: the interface + the peer-gated wrapper group (the json
+    // group shape: a wrapper class per peer type, its inherent impl
+    // carries the members)
     let peered = root.join("peered");
     write(
         &peered,
@@ -367,18 +370,21 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     write(
         &peered,
         "peered.rut",
-        "pub trait Tag { fn tag(self) -> str; }\n\n\
-         impl Tag for str {\n\
-         \x20   fn tag(self) -> str { return self; }\n\
+        "pub interface Tag { fn tag(self) -> str; }\n\n\
+         pub class TagStr(str);\n\
+         impl TagStr {\n\
+         \x20   pub fn tag(self) -> str { return self.inner; }\n\
          }\n",
     );
     write(
         &peered,
-        // the group file carries its own use: the impl's target joins
-        // the declarer's unit through the ordinary scan of the combined
-        // source (the orphan rule holds — one unit, one text)
+        // the group file carries its own use: the wrapper's field type
+        // joins the declarer's unit through the ordinary scan of the
+        // combined source (one unit, one text)
         "ser_tag.rut",
-        "use tagger::{ Badge };\n\nimpl Tag for Badge { fn tag(self) -> str { return \"badged\"; } }\n",
+        "use tagger::{ Badge };\n\n\
+         pub class TagBadge(Badge);\n\
+         impl TagBadge { pub fn tag(self) -> str { return \"badged\"; } }\n",
     );
 
     // the peer: a concrete class
@@ -408,11 +414,11 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     write(
         &app,
         "app.rut",
-        "use peered::{ Tag };\nuse tagger::{ Badge };\nuse base::{ b };\n\n\
+        "use peered::{ TagBadge };\nuse tagger::{ Badge };\nuse base::{ b };\n\n\
          entry fn go() -> str {\n\
          \x20   let b2 = Badge.new();\n\
          \x20   let _ = b();\n\
-         \x20   return b2.tag();\n\
+         \x20   return TagBadge(b2).tag();\n\
          }\n",
     );
 
@@ -434,7 +440,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     assert!(names.contains(&"base/base.rutc".to_string()), "{names:?}");
     assert!(names.contains(&"tagger/tagger.rutc".to_string()), "{names:?}");
 
-    // and the group's impl dispatches
+    // and the group's wrapper dispatches
     let got: String = run_entry(session, &app_root, "go");
     assert_eq!(got, "badged");
 }

@@ -122,15 +122,15 @@ float formatting anywhere in the file.
 
 ### The encode half rides the std `json` package
 
-The encode side is not private code: it is an `impl` of the std
-`json` package's serialization trait, driving the package's writer.
-This is the orphan rule's type-local case — json owns the trait, this
-file owns `Json`, so the pair is legal exactly here
-([Traits and dispatch](../core-concepts/traits-and-dispatch.md)):
+The encode side is not private code: it is a member on `Json`'s own
+inherent impl matching the std `json` package's serialization
+interface — satisfaction is structural, so spelling the member is the
+whole admission; the package's writer does the byte work
+([Interfaces and dispatch](../core-concepts/interfaces-and-dispatch.md)):
 
 ```rut
-impl JsonSerialize for Json {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+impl Json {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         when (self.tag) {
             JTag.Null -> { w.write_raw("null"); },
             JTag.False -> { w.write_raw("false"); },
@@ -203,9 +203,9 @@ call.
   asserted, against independent Rust.
 - `bytes` crosses the boundary directly; `opaque` is for the one
   place recursion needs breaking.
-- The std `json` package is usable from day one: implement its
-  serialize trait for your own type and its writer does the byte
-  work ([core and the swappable packages](../reference/stdlib.md)).
+- The std `json` package is usable from day one: spell its
+  serialize interface's member on your own type and its writer does
+  the byte work ([core and the swappable packages](../reference/stdlib.md)).
 - Errors are values, and the host-as-oracle pattern is the strongest
   test shape in this chapter.
 

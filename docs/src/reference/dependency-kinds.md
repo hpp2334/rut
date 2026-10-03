@@ -200,13 +200,17 @@ learns what a peer is.
    order preserved); in the no-collision case the composed text is
    byte-identical to the pre-peer law.
 
-**Groups are impl-only.** A group file contains `impl` blocks (and their
-private helpers); it declares no new public names — the base owns the
-trait and every public surface. This is what makes the diagnostic matrix
-total: the only ways to reference the integration are trait-method
-dispatch or a `use` of the peer's package name, and both have dedicated
-peer-aware diagnostics. A group appended to a module with no rut body (a
-`.d.rut` surface) is a load error — declaration surfaces do not gate.
+**Groups are satisfaction-only.** A group file contains the peer
+integration's wrapper families — newtype class decls and their
+inherent impls (and private helpers); it declares no host fns and no
+manifest rows — the base owns the interfaces and every other public
+name, and the wrappers are the group's whole addition. This is what
+keeps the diagnostic matrix total: the only ways to reach the
+integration are through the wrapper names (which `use` paths route
+into the declaring package) or the base package's interfaces, and both
+have dedicated peer-aware diagnostics. A group appended to a module
+with no rut body (a `.d.rut` surface) is a load error — declaration
+surfaces do not gate.
 
 ## The missing-peer matrix
 
@@ -238,20 +242,23 @@ never runtime traps):
 
 ## Interplay
 
-- **Placement and orphans — the gate precedes the check.** The peer gate
-  runs at load; impl placement and pair-uniqueness run at compile/link.
-  Peer absent ⇒ the group text was never assembled ⇒ there is no impl
-  anywhere to place. Peer present ⇒ the group's impl is a trait impl in
-  the declaring package — legal placement, since trait impls may live in
-  any module ([Traits and dispatch](traits.md)).
-- **The duplicate-pair link error is the consumer-side guard**: a
-  consumer who hand-writes the same `impl Trait for Type` in a world
-  where the group mounted gets the link-time duplicate — loud and
-  correct; the group already provides it.
-- **Binary format untouched.** Impl-only groups declare no host fns
+- **Placement and the gate — the gate precedes the compile.** The peer
+  gate runs at load; the group compiles inside the declaring package's
+  unit. Peer absent ⇒ the group text was never assembled ⇒ the wrapper
+  families are nowhere in the program. Peer present ⇒ the group's
+  wrapper classes and their inherent impls compile in the declaring
+  package — the inherent impl's one home
+  ([Interfaces and dispatch](interfaces.md)).
+- **Structural satisfaction is the consumer-side story**: a consumer's
+  own types satisfy json's interfaces by having the members, whether
+  or not any peer mounted; what the peer gate controls is the
+  wrapper families only — a `JsonVec` spelling with `pouch` absent
+  produces D2, never a mystery.
+- **Binary format untouched.** Group files declare no host fns
   (no binding obligations appear or vanish), add no binary sections, and
-  touch nothing the verifier reads. A consumer's binary differs only by
-  which impls registered — ordinary program content.
+  touch nothing the verifier reads — the wrapper classes are ordinary
+  program content. A consumer's binary differs only by which wrappers
+  mounted.
 - **Dev-deps are invisible to bundles-as-consumers.** A packed package
   carries its peer groups; a consumer packing *their* app never pulls
   the package's dev table (pass 2 is root-only), so dev-only
@@ -277,5 +284,5 @@ never runtime traps):
 
 The group mounts because `pouch` is anywhere in the closure — no extra
 declaration beyond having the package. Drop the `pouch` row and `json`
-mounts light; the first `use pouch::` or trait dispatch into the
-integration produces D2 instead of a mystery.
+mounts light; the first `use` naming a `JsonVec`-family wrapper
+produces D2 instead of a mystery.

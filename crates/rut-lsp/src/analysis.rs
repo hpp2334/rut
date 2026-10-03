@@ -366,7 +366,7 @@ fn symbol_kind(k: SymKind) -> SymbolKind {
         SymKind::Class => SymbolKind::CLASS,
         SymKind::Field => SymbolKind::FIELD,
         SymKind::Method => SymbolKind::METHOD,
-        SymKind::Trait => SymbolKind::INTERFACE,
+        SymKind::Interface => SymbolKind::INTERFACE,
         SymKind::Module => SymbolKind::MODULE,
     }
 }

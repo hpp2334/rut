@@ -10,7 +10,7 @@ and [dependency kinds](../reference/dependency-kinds.md).
 ## What lives at module scope
 
 Module scope contains **declarations only**: `use`, `let`, `fn`,
-`struct`, `class`, `enum`, `trait`, `impl`. Every statement lives
+`struct`, `class`, `enum`, `interface`, `impl`. Every statement lives
 inside a function — and **loading a module executes nothing**. There is
 no load-time side-effect ordering to reason about; the host loads your
 module and calls one of its `entry fn`s (`entry fn main` for a plain
@@ -74,7 +74,7 @@ use json::{ decodeJsonBytes, JsonDeserialize };
 Builtin names — the primitives, `str`/`bytes` members, `panic`,
 `Vec`-free array grammar, `opaque` — are **ambient**: no
 `use` needed. The exceptions are core's import-gated names — the
-`Disposal`/`DisposalContext` pair and the weak reference `Weak` —
+disposal context `DisposalContext` and the weak reference `Weak` —
 they resolve only through `use core::{ .. }`, like any package name.
 Package names from your manifest are imported the same way; an unused
 name in a `use` is a lint, not an error.

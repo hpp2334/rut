@@ -27,7 +27,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
             "struct" => Some(Frame::Struct(TyDeclFrame::new(false, Vis::Self_))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
-            "trait" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
+            "interface" => Some(Frame::Interface(InterfaceFrame::new(Vis::Self_))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
             // `async fn` — the async declaration
             "async" if p.at_kw2("fn") => {
@@ -99,7 +99,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
             "struct" => Some(Frame::Struct(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
-            "trait" => Some(Frame::Trait(TraitFrame::new(vis))),
+            "interface" => Some(Frame::Interface(InterfaceFrame::new(vis))),
             // `async fn` — the async declaration
             "async" if p.at_kw2("fn") => {
                 p.bump();
@@ -368,7 +368,7 @@ impl EnumFrame {
 //
 // fn/method generic parameters may carry inline admission
 // bounds (`<T requires A | B>`), and so do CLASS generics (§A5 —
-// `class HashMap<K requires Hashable, V>`); struct/trait/surface
+// `class HashMap<K requires Hashable, V>`); struct/interface/surface
 // generics reject them. A bound suspends the enclosing frame at a
 // GenBound stage — the bound itself is a child Type frame — and
 // `generic_params_more` hands back the generic whose bound is being
@@ -584,95 +584,70 @@ impl TyDeclFrame {
     }
 }
 
-// ---- trait ----
+// ---- interface ----
+//
+// `interface Name<..> { fn sig(..) -> T; .. }` — the observed-capability
+// declaration: SIGNATURES ONLY (bodiless member fns), `Self` and
+// generics allowed. Satisfaction is structural — a type qualifies by
+// HAVING the members (its inherent `impl`), never by registering.
 
-pub(crate) struct TraitFrame {
+pub(crate) struct InterfaceFrame {
     vis: Vis,
     lo: u32,
-    stage: TrStage,
     name: IdentId,
     generics: Vec<IdentId>,
-    requires: Vec<NodeHandle<AnyTy>>,
 }
 
-#[derive(Clone, Copy)]
-enum TrStage {
-    Requires,
-    Body,
-}
-
-impl TraitFrame {
+impl InterfaceFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        TraitFrame {
+        InterfaceFrame {
             vis,
             lo: 0,
-            stage: TrStage::Requires,
             name: IdentId(0),
             generics: Vec::new(),
-            requires: Vec::new(),
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // trait
-        let Some(name) = p.expect_ident("a trait name") else {
+        self.lo = p.bump().span.lo; // interface
+        let Some(name) = p.expect_ident("an interface name") else {
             return Step::Pop(Done::Failed);
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            let (gens, pending) = generic_params(p, false, "trait");
+            let (gens, pending) = generic_params(p, false, "interface");
             self.generics = gens;
             debug_assert!(pending.is_none(), "rejected bounds never suspend");
         }
-        if p.at_kw("requires") {
-            p.bump();
-            return Step::Push(Frame::Type(TypeFrame::new(p)));
-        }
-        self.stage = TrStage::Body;
-        Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Trait)))
+        Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Interface)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
-        match (self.stage, d) {
-            (TrStage::Requires, Done::Ty(t)) => {
-                self.requires.push(t);
-                if p.eat_punct(Tok::Comma) {
-                    Step::Push(Frame::Type(TypeFrame::new(p)))
-                } else {
-                    self.stage = TrStage::Body;
-                    Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Trait)))
-                }
-            }
-            // v1: a failed requires entry breaks to the body
-            (TrStage::Requires, Done::Failed) => {
-                self.stage = TrStage::Body;
-                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Trait)))
-            }
-            (TrStage::Body, Done::Body(_, methods)) => {
-                let (vis, name, generics, requires) = (
+        match (d) {
+            Done::Body(_, methods) => {
+                let (vis, name, generics) = (
                     self.vis,
                     self.name,
                     std::mem::take(&mut self.generics),
-                    std::mem::take(&mut self.requires),
                 );
                 let node = p.item(
-                    ItemKind::Trait { vis, name, generics, requires, methods },
+                    ItemKind::Interface { vis, name, generics, methods },
                     Span::new(self.lo, p.span().hi),
                 );
                 Step::Pop(Done::Item(node))
             }
-            (TrStage::Body, Done::Failed) => Step::Pop(Done::Failed),
-            _ => unreachable!("trait frame receives types or a body"),
+            Done::Failed => Step::Pop(Done::Failed),
+            _ => unreachable!("interface frame receives a body"),
         }
     }
 }
 
 // ---- impl ----
 //
-// The two impl forms: `impl T { .. }` — inherent, the type's
-// module only — and `impl I for T { .. }` — a trait impl, any module.
-// The first type IS the target unless `for` follows it; bodies are
-// braced, methods only.
+// The one impl form: `impl T { .. }` — inherent, the type's module
+// only. Bodies are braced, methods only. (`impl I for T` is gone —
+// observed capability is satisfied by having the members, never by
+// registering a block.)
 
 pub(crate) struct ImplFrame {
     lo: u32,
@@ -686,7 +661,6 @@ pub(crate) struct ImplFrame {
     bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     /// the generic whose `requires` bound is being parsed (GenBound stage)
     pending: Option<IdentId>,
-    trait_ref: Option<NodeHandle<AnyTy>>,
     target: Option<NodeHandle<AnyTy>>,
 }
 
@@ -696,10 +670,8 @@ enum ImStage {
     Generics,
     /// the bound of a suspended generic — a child Type frame
     GenBound,
-    /// the first type — target or trait ref, decided by `for`
+    /// the target type
     Head,
-    /// the trait impl's target (after `impl Trait for`)
-    Target,
     /// the braced method body
     Methods,
 }
@@ -712,7 +684,6 @@ impl ImplFrame {
             generics: Vec::new(),
             bounds: Vec::new(),
             pending: None,
-            trait_ref: None,
             target: None,
         }
     }
@@ -755,29 +726,16 @@ impl ImplFrame {
             }
             (ImStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (ImStage::Head, Done::Ty(t)) => {
-                if p.at_kw("for") {
-                    p.bump();
-                    self.trait_ref = Some(t);
-                    self.stage = ImStage::Target;
-                    Step::Push(Frame::Type(TypeFrame::new(p)))
-                } else {
-                    // inherent impl: `impl Type { .. }`
-                    self.target = Some(t);
-                    self.stage = ImStage::Methods;
-                    Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
-                }
-            }
-            (ImStage::Target, Done::Ty(t)) => {
+                // inherent impl: `impl Type { .. }` — the one form
                 self.target = Some(t);
                 self.stage = ImStage::Methods;
-                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Impl)))
+                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
             }
             (ImStage::Methods, Done::Body(_, methods)) => {
                 let node = p.item(
                     ItemKind::Impl {
                         generics: std::mem::take(&mut self.generics),
                         bounds: std::mem::take(&mut self.bounds),
-                        trait_ref: self.trait_ref.take(),
                         target: self.target.take().expect("impl without a target"),
                         methods,
                     },
@@ -791,7 +749,7 @@ impl ImplFrame {
     }
 }
 
-// ---- struct/class/trait/impl bodies ----
+// ---- struct/class/interface/impl bodies ----
 
 pub(crate) enum BodyMode {
     /// struct/class body: FIELDS ONLY — methods live in `impl` blocks
@@ -800,12 +758,9 @@ pub(crate) enum BodyMode {
     /// `host struct` body: fields only, no initializers — the host
     /// constructs the record
     HostStruct,
-    /// trait body: bodiless method signatures (`async` and no-`self`
+    /// interface body: bodiless method signatures (`async` and no-`self`
     /// signatures legal — no bodies)
-    Trait,
-    /// `impl I for T` body: method implementations — `async` where the
-    /// trait says so; no `pub` (visibility rides the trait); no fields
-    Impl,
+    Interface,
     /// `impl T` body: inherent methods — `pub` and `async` legal
     /// (checker restricts `pub` to classes); no fields
     Inherent,
@@ -851,11 +806,10 @@ impl TypeBodyFrame {
         }
     }
 
-    /// the leading clause for a malformed trait/impl member diagnostic
+    /// the leading clause for a malformed interface/impl member diagnostic
     fn mode_noun(&self) -> &'static str {
         match self.mode {
-            BodyMode::Trait => "traits declare method signatures",
-            BodyMode::Impl => "impl blocks contain trait methods",
+            BodyMode::Interface => "interfaces declare method signatures",
             BodyMode::Inherent => "inherent impl blocks declare methods",
             BodyMode::HostStruct => "host structs declare fields",
             BodyMode::Class { .. } => "type bodies declare fields —methods live in `impl` blocks",
@@ -863,9 +817,9 @@ impl TypeBodyFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        // v1 brace strictness: struct/class and trait bodies bail on a
+        // v1 brace strictness: struct/class and interface bodies bail on a
         // missing `{`; impl and surface bodies had already expected it
-        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Trait);
+        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Interface);
         if strict {
             if p.expect(Tok::LBrace).is_none() {
                 return Step::Pop(Done::Failed);
@@ -1013,12 +967,11 @@ impl TypeBodyFrame {
                         }
                     }
                 }
-                BodyMode::Trait | BodyMode::Impl => {
+                BodyMode::Interface => {
                     // modifier loop: the bracket marker parsed here and
-                    // diagnosed (markers are inherent-members-only — the
-                    // checker never sees one on a trait impl); `pub`
-                    // rejected (a trait impl rides the trait's
-                    // visibility); `async` accepted on the method
+                    // diagnosed (markers are inherent-members-only); `pub`
+                    // rejected (the interface's own visibility governs);
+                    // `async` accepted on the signature
                     let lo = p.span();
                     let mut is_async = false;
                     let marker = Self::parse_member_marker(p);
@@ -1027,11 +980,7 @@ impl TypeBodyFrame {
                             "pub" => {
                                 p.bump();
                                 let _ = pub_scope(p);
-                                let why = match self.mode {
-                                    BodyMode::Impl => "trait impl methods carry no `pub` —they are as visible as the trait",
-                                    _ => "trait methods carry no `pub` —the trait's visibility rules",
-                                };
-                                p.err(lo, why);
+                                p.err(lo, "interface members carry no `pub` —the interface's visibility rules");
                             }
                             "async" => {
                                 is_async = true;
@@ -1042,14 +991,13 @@ impl TypeBodyFrame {
                     }
                     if let Some(word) = marker {
                         p.err(lo, format!(
-                            "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never a trait or a trait impl",
+                            "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never an interface",
                             p.interner.name(word)
                         ));
                     }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        let with_body = matches!(self.mode, BodyMode::Impl);
-                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, with_body, true)));
+                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false, true)));
                     }
                     if is_async {
                         p.err(lo, "expected `fn` after `async`");
@@ -1501,8 +1449,6 @@ pub(crate) struct SurfaceFrame {
     /// minted rows (`__start`/`__yield`/`__take`/`__cancel`) drive an
     /// embedder `Completer` through the engine-woven frame
     is_async: bool,
-    /// `builtin trait Name { .. }` — collects members like BuiltinTy
-    /// but emits the trait node
     /// `builtin impl i32 { .. }` — collects bodiless methods like
     /// BuiltinTy but emits the builtin-impl node
     is_impl: bool,

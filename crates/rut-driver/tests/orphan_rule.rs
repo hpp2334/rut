@@ -1,31 +1,37 @@
-//! The orphan rule (the orphan-rule batch phase 1): for
-//! every `impl Trait for Type` at least one of the pair is defined in
-//! the pkg whose source declared the block — tracked through the
-//! mount/splice model by the unit's origin map (a spliced leaf keeps its
-//! origin pkg; a bound name carries its exporter's spec; a builtin —
-//! `?T`, `[T]`, a primitive, `opaque` — is in no pkg, and only a local
-//! trait may be implemented for one).
+//! Cross-module structural satisfaction — the orphan rule's replacement
+//! law set. The orphan gate itself is GONE (nothing registers, so there
+//! is nothing to gate; `impl Trait for Type` is unparseable), and the
+//! laws that replace it are about WHERE MEMBERS LIVE:
 //!
-//! Covered: the legal shapes (local type + foreign trait; foreign type +
-//! local trait; both local), the orphan errors (both foreign; builtin
-//! self type + foreign trait; `?T`/`[T]` heads; generic heads by the
-//! head's locality), the diagnostic's exact text (the survey §3.1's two
-//! renderings, probe B's shape first), the mount model (the same pair is
-//! legal in the owning pkg's unit and an orphan in a consumer's — the
-//! origin, not the unit, decides), and the no-map inertness (a
-//! single-file unit compiles its local impls untouched).
+//! - a consumer proves a FOREIGN interface by spelling the members on
+//!   its OWN type — the boundary check at the interface-typed call
+//!   admits it (the old "foreign trait + local type" shape, without any
+//!   registration);
+//! - a used type takes no consumer impl blocks — its members live where
+//!   the type was declared (the inherent-placement law);
+//! - a primitive takes no impl blocks — capability on a value type is
+//!   manufactured by a wrapper (a newtype class) whose inherent impl
+//!   carries the members;
+//! - `?T`/`[T]` heads are exactly the same law — composites never carry
+//!   members, and the wrapper manufacture is the only door;
+//! - a unit compiled with no origin map has no registration machinery
+//!   to consult at all — a local type's members compile untouched
+//!   through the raw compile_program path (the no-map inertness, in its
+//!   modern form).
 
 use rut_driver::{GraphOutput, Module, ModuleBody, Session};
 use rut_parser::Mode;
 
-/// A non-generic trait pkg — LINKED into its users (its names bind as
-/// used decls carrying the exporter's spec).
-const TR: &str = "pub trait Mark { fn mark(self) -> i32; }\n";
+/// An interface pkg — LINKED into its users (its names bind as used
+/// decls carrying the exporter's spec).
+const IFACE: &str = "pub interface Mark { fn mark(self) -> i32; }\n";
 
 /// A generic-exporting pkg — SPLICED into its users: its text becomes
-/// leaves of the consumer's unit, and its origin survives the splice.
-const FMT: &str = "\
-pub trait Show { fn show(self) -> str; }
+/// leaves of the consumer's unit. The concrete box exports the wrapped
+/// manufacture (a newtype over the generic, minted where the generic is
+/// local — a consumer wrapping a USED generic instantiation is the one
+/// shape the fork does not spell).
+const BOX: &str = "\
 pub class Box<T> {
     v: T;
 }
@@ -33,23 +39,12 @@ impl<T> Box<T> {
     pub fn new(v: T) -> Self {
         return Self { v: v };
     }
+    pub fn get(self) -> T { return self.v; }
 }
-";
-
-/// A generic-exporting pkg that owns a side of a pair with `tr` — the
-/// mount model's legal home for `impl Mark for Set<T>`.
-const COLL: &str = "\
-use tr::{Mark};
-pub class Set<T> {
-    v: T;
-}
-impl<T> Set<T> {
-    pub fn new(v: T) -> Self {
-        return Self { v: v };
-    }
-}
-impl<T> Mark for Set<T> {
-    fn mark(self) -> i32 { return 1; }
+pub class IntBox(Box<i32>);
+impl IntBox {
+    pub fn new(v: i32) -> Self { return IntBox(Box<i32>.new(v)); }
+    pub fn get(self) -> i32 { return self.inner.get(); }
 }
 ";
 
@@ -57,8 +52,9 @@ fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     let mut s = Session::new();
     for (spec, src) in modules {
         // every module links now (the linkable-classes phase): foreign
-        // classes cross on their surfaces, and these tests pin the
-        // orphan rule over LINKED foreign types and traits
+        // classes cross on their surfaces, and these tests pin
+        // structural satisfaction over LINKED foreign types and
+        // interfaces
         let _ = s.register_module(
             spec,
             Module { spec: spec.to_string(), body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() },
@@ -75,22 +71,22 @@ fn diags_of(g: &GraphOutput) -> String {
 // ---- the legal shapes ------------------------------------------------
 
 #[test]
-fn local_type_and_foreign_trait_is_legal() {
-    // the digest shape: the trait splices from `fmt` (origin fmt), the
-    // type is the consumer's own — the type-local side of §2a
+fn consumer_proves_a_foreign_interface_on_its_own_type() {
+    // the digest shape: the interface links from `fmt` (origin fmt),
+    // the type and its members are the consumer's own — the boundary
+    // check at the interface-typed call runs the member-set match
     let g = graph(&[
-        ("tr", TR),
-        ("fmt", FMT),
+        ("fmt", IFACE),
         ("app", "\
-use fmt::{Show};
+use fmt::{Mark};
+pub fn prove(x: Mark) -> i32 { return x.mark(); }
 struct Thing { n: i32 }
-impl Show for Thing {
-    fn show(self) -> str { return \"thing\"; }
+impl Thing {
+    pub fn mark(self) -> i32 { return self.n; }
 }
 entry fn main() -> i32 {
-    let t = Thing { n: 1 };
-    let s = t.show();
-    return s.len() as i32;
+    let t = Thing { n: 7 };
+    return prove(t);
 }
 "),
     ]);
@@ -99,35 +95,16 @@ entry fn main() -> i32 {
 }
 
 #[test]
-fn foreign_type_and_local_trait_is_legal() {
-    // the json-group shape: the type splices from `coll` (origin coll),
-    // the trait is the consumer's own — the trait-local side of §2a
-    let g = graph(&[
-        ("tr", TR),
-        ("coll", COLL),
-        ("app", "\
-use coll::{Set};
-trait Named { fn tag(self) -> str; }
-impl<T> Named for Set<T> {
-    fn tag(self) -> str { return \"set\"; }
-}
-entry fn main() -> i32 { return 0; }
-"),
-    ]);
-    assert!(g.diags.is_empty(), "{}", diags_of(&g));
-    assert!(g.program.is_some());
-}
-
-#[test]
-fn both_local_is_legal() {
-    // the trivially-legal shape every pre-rule program relied on
+fn the_owning_pkg_proves_its_interface_on_its_own_type() {
+    // the trivially-legal shape every program relies on: interface and
+    // type in one module, the members on the type's inherent impl
     let g = graph(&[(
         "app",
         "\
-trait Mark { fn mark(self) -> i32; }
+interface Mark { fn mark(self) -> i32; }
 struct Thing { n: i32 }
-impl Mark for Thing {
-    fn mark(self) -> i32 { return self.n; }
+impl Thing {
+    pub fn mark(self) -> i32 { return self.n; }
 }
 entry fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 ",
@@ -136,18 +113,46 @@ entry fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 }
 
 #[test]
-fn inherent_impl_on_a_used_class_is_the_orphan_error() {
+fn a_consumer_wraps_a_foreign_type_to_prove_the_interface() {
+    // the structural fork's third-party shape: the consumer cannot grow
+    // members on a used type, so it spells a WRAPPER (a newtype class)
+    // over the foreign value and carries the members there — the
+    // boundary check admits the wrapper, never the bare type
+    let g = graph(&[
+        ("mark", IFACE),
+        ("box", BOX),
+        ("app", "\
+use mark::{Mark};
+use box::{IntBox};
+class MarkedBox(IntBox);
+impl MarkedBox {
+    pub fn mark(self) -> i32 { return self.inner.get(); }
+}
+entry fn main() -> i32 {
+    let m: MarkedBox = MarkedBox(IntBox.new(7));
+    return m.mark();
+}
+"),
+    ]);
+    assert!(g.diags.is_empty(), "{}", diags_of(&g));
+    assert!(g.program.is_some());
+}
+
+// ---- the placement errors (the orphan gate's replacements) -----------
+
+#[test]
+fn inherent_impl_on_a_used_class_is_refused() {
     // the probe A law, restated for linked packages: an INHERENT block
     // on a used class lives in the type's module — the class's surface
     // carries its methods, and a consumer's block would need the
-    // private layout. Only `impl Trait for UsedType` may name a used
-    // type; the inherent head is the orphan error.
+    // private layout. The old `impl Trait for UsedType` escape is gone
+    // with the grammar; satisfaction of a foreign interface is proven
+    // on the consumer's OWN types (or a wrapper over the foreign value).
     let g = graph(&[
-        ("tr", TR),
-        ("coll", COLL),
+        ("box", BOX),
         ("app", "\
-use coll::{Set};
-impl<T> Set<T> {
+use box::{Box};
+impl<T> Box<T> {
     pub fn probe_hi(self) -> i64 { return 7; }
 }
 entry fn main() -> i32 { return 0; }
@@ -161,216 +166,87 @@ entry fn main() -> i32 { return 0; }
     );
 }
 
-// ---- the orphan errors ----------------------------------------------
-
 #[test]
-fn both_foreign_is_the_orphan_error() {
-    // probe B (the survey §1.5/§2.7): the consumer unit splices `fmt`
-    // and binds `tr`; the block is the consumer's own, and neither side
-    // of the pair is defined in it — the §3.1 rendering, pinned verbatim
+fn impl_for_is_unparseable() {
+    // the grammar law: `impl I for T` is gone — the impl head is a type
+    // and the body must follow, so the deleted branch dies at the
+    // parser, naming the one inherent form
     let g = graph(&[
-        ("tr", TR),
-        ("fmt", FMT),
+        ("mark", IFACE),
         ("app", "\
-use fmt::{Show, Box};
-use tr::{Mark};
-impl<T> Mark for Box<T> {
-    fn mark(self) -> i32 { return 1; }
+use mark::{Mark};
+struct Thing { n: i32 }
+impl Mark for Thing {
+    fn mark(self) -> i32 { return self.n; }
 }
 entry fn main() -> i32 { return 0; }
 "),
     ]);
-    assert!(g.program.is_none(), "the orphan must refuse to compile");
+    assert!(g.program.is_none(), "the trait-impl spelling must refuse");
     let ds = diags_of(&g);
     assert!(
-        ds.contains(
-            "orphan impl: neither `Mark` nor `Box` is defined in this pkg — \
-             `Mark` is tr's, `Box` is fmt's; an `impl Trait for Type` needs \
-             at least one of the pair declared in its own pkg"
-        ),
+        ds.contains("expected {, found `for`"),
         "{ds}"
     );
 }
 
 #[test]
-fn builtin_head_and_foreign_trait_is_the_orphan_error() {
-    // the §2a builtin clause: a primitive is in NO pkg, so a foreign
-    // trait's impl for one errs — the builtin-head rendering, pinned
-    // verbatim (`?T` peels the same way; the matrix below)
+fn primitive_head_takes_no_impl_blocks() {
+    // the builtin clause, restated: a primitive is in NO pkg and takes
+    // NO impl blocks — the wrapper manufacture is the sanctioned door
+    // (the diagnostic names it)
     let g = graph(&[
-        ("tr", TR),
-        ("fmt", FMT),
         ("app", "\
-use tr::{Mark};
-impl Mark for str {
-    fn mark(self) -> i32 { return 1; }
+impl str {
+    pub fn mark(self) -> i32 { return 1; }
 }
 entry fn main() -> i32 { return 0; }
 "),
     ]);
-    assert!(g.program.is_none(), "the orphan must refuse to compile");
+    assert!(g.program.is_none(), "the prim impl must refuse");
     let ds = diags_of(&g);
     assert!(
-        ds.contains(
-            "orphan impl: neither `Mark` nor `str` is defined in this pkg — \
-             `Mark` is tr's, `str` is a builtin, in no pkg; only a trait of \
-             this pkg may be implemented for a builtin"
-        ),
+        ds.contains("a primitive takes no impl blocks")
+            && ds.contains("wrapper"),
         "{ds}"
     );
 }
 
 #[test]
-fn opt_and_array_heads_peel_to_no_pkg() {
-    // the `?T`/`[T]` matrix: the head peels to its element — a type
-    // parameter, so the head's locality is "builtin, in no pkg". Under
-    // a foreign trait the block is an orphan; under a local trait it is
-    // legal (json's twelve).
-    let orphan_opt = graph(&[
-        ("tr", TR),
-        (
-            "app",
+fn opt_and_array_heads_take_no_impl_blocks() {
+    // the `?T`/`[T]` matrix: a composite head carries no members and
+    // takes no impl block here — the impl-target diagnosis covers the
+    // whole composite family (the old local-trait escape died with the
+    // grammar)
+    for head in ["?T", "[T]"] {
+        let src = format!(
             "\
-use tr::{Mark};
-impl<T> Mark for ?T {
-    fn mark(self) -> i32 { return 1; }
+impl<T> {head} {{
+    pub fn mark(self) -> i32 {{ return 1; }}
+}}
+entry fn main() -> i32 {{ return 0; }}
+"
+        );
+        let g = graph(&[("app", src.as_str())]);
+        assert!(
+            g.diags.iter().any(|d| d.msg.contains("impl target must be a struct, class, or enum of this module")),
+            "{head}: {}",
+            diags_of(&g)
+        );
+    }
 }
-entry fn main() -> i32 { return 0; }
-",
-        ),
-    ]);
-    assert!(orphan_opt.program.is_none(), "{}", diags_of(&orphan_opt));
-    assert!(
-        orphan_opt.diags.iter().any(|d| d.msg.contains("orphan impl")
-            && d.msg.contains("`?T` is a builtin, in no pkg")),
-        "{}",
-        diags_of(&orphan_opt)
-    );
 
-    let orphan_array = graph(&[
-        ("tr", TR),
-        (
-            "app",
-            "\
-use tr::{Mark};
-impl<T> Mark for [T] {
-    fn mark(self) -> i32 { return 1; }
-}
-entry fn main() -> i32 { return 0; }
-",
-        ),
-    ]);
-    assert!(orphan_array.program.is_none(), "{}", diags_of(&orphan_array));
-    assert!(
-        orphan_array.diags.iter().any(|d| d.msg.contains("orphan impl")
-            && d.msg.contains("`[T]` is a builtin, in no pkg")),
-        "{}",
-        diags_of(&orphan_array)
-    );
-
-    let legal = graph(&[(
-        "app",
-        "\
-trait Mark { fn mark(self) -> i32; }
-impl<T> Mark for ?T {
-    fn mark(self) -> i32 { return 1; }
-}
-impl<T> Mark for [T] {
-    fn mark(self) -> i32 { return 2; }
-}
-entry fn main() -> i32 { return 0; }
-",
-    )]);
-    assert!(legal.diags.is_empty(), "{}", diags_of(&legal));
-}
+// ---- the real std pkgs ------------------------------------------------
 
 #[test]
-fn generic_heads_classify_by_the_head() {
-    // locality is of the HEAD: `Box` splices from `fmt` (origin fmt),
-    // so the consumer's `impl Mark for Box<T>` is an orphan — the type
-    // PARAMETER never satisfies locality; the same head under a local
-    // trait is legal
-    let orphan = graph(&[
-        ("tr", TR),
-        ("fmt", FMT),
-        (
-            "app",
-            "\
-use fmt::{Box};
-use tr::{Mark};
-impl<T> Mark for Box<T> {
-    fn mark(self) -> i32 { return 1; }
-}
-entry fn main() -> i32 { return 0; }
-",
-        ),
-    ]);
-    assert!(orphan.program.is_none(), "{}", diags_of(&orphan));
-    assert!(
-        orphan.diags.iter().any(|d| d.msg.contains("`Box` is fmt's")),
-        "{}",
-        diags_of(&orphan)
-    );
-
-    let legal = graph(&[
-        ("fmt", FMT),
-        (
-            "app",
-            "\
-use fmt::{Box};
-trait Mark { fn mark(self) -> i32; }
-impl<T> Mark for Box<T> {
-    fn mark(self) -> i32 { return 1; }
-}
-entry fn main() -> i32 { return 0; }
-",
-        ),
-    ]);
-    assert!(legal.diags.is_empty(), "{}", diags_of(&legal));
-}
-
-// ---- the mount model -------------------------------------------------
-
-#[test]
-fn the_origin_not_the_unit_decides() {
-    // `coll` owns `impl Mark for Set<T>` (trait foreign, type local):
-    // legal in coll's own compile AND in every unit that splices it —
-    // the block's origin is coll's leaf. The SAME pair written in a
-    // consumer's own block is the orphan: nothing about the unit's
-    // compilation changes the block's declaring pkg.
-    let g = graph(&[
-        ("tr", TR),
-        ("coll", COLL),
-        ("app", "\
-use coll::{Set};
-use tr::{Mark};
-impl<T> Mark for Set<T> {
-    fn mark(self) -> i32 { return 2; }
-}
-entry fn main() -> i32 { return 0; }
-"),
-    ]);
-    assert!(g.program.is_none(), "{}", diags_of(&g));
-    let ds = diags_of(&g);
-    assert!(
-        ds.contains("orphan impl: neither `Mark` nor `Set` is defined in this pkg"),
-        "{ds}"
-    );
-    // placement precedes registration: the orphan gate fires on the
-    // app's block before the duplicate-pair check ever sees the pair
-    assert!(!ds.contains("duplicate impl"), "{ds}");
-}
-
-// ---- the survey's canonical case (the real std pkgs) ------------------
-
-#[test]
-fn consumer_impl_of_jsonserialize_for_hashset_errors() {
-    // the survey §1.5 probe B verbatim — the rule's first error on the
-    // real mounted pkgs: json's trait, nmapset's container, the block
-    // the consumer's own. The §3.1 rendering, pinned exactly.
+fn consumer_proves_jsonserialize_on_its_own_type() {
+    // the survey probe B's modern replacement: json's interface, the
+    // consumer's own type, the members on the consumer's inherent impl
+    // — the boundary check at the encodeJson entry admits it and the
+    // document comes back
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
+    rut_driver::mount_std(&mut s);
     for dir in ["rut/pouch", "rut/nmapset", "rut/json"] {
         rut_driver::mount_dir(&mut s, &root.join(dir)).expect("mount tree pkg");
     }
@@ -381,15 +257,29 @@ fn consumer_impl_of_jsonserialize_for_hashset_errors() {
             spec: "main".into(),
             body: ModuleBody::Source {
                 text: "\
-use json::{ JsonSerialize, JsonWriter, EncodeJsonError };
-use nmapset::{ HashSet };
+use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError, JsonVec };
+use pouch::{ Vec };
 
-impl<T> JsonSerialize for HashSet<T> {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError { return nil; }
+class Todo { name: str; n: i64; }
+
+impl Todo {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_object();
+        w.key(\"name\");
+        w.write_str(self.name);
+        w.key(\"n\");
+        w.write_i64(self.n);
+        w.end_object();
+        return nil;
+    }
 }
 
-entry fn main() -> nil {
-    let x: i64 = 0;
+entry fn main() -> ?str {
+    let mut v = Vec<Todo>.new();
+    v.push(Todo { name: \"a\", n: 1 });
+    let (doc, e) = encodeJson(JsonVec(v));
+    if (e != nil) { return nil; }
+    return doc;
 }
 "
                 .into(),
@@ -400,38 +290,24 @@ entry fn main() -> nil {
     )
     .unwrap();
     let g = rut_driver::compile_graph(&s, "main");
-    assert!(g.program.is_none(), "the orphan must refuse to compile");
     let ds = diags_of(&g);
-    assert!(
-        ds.contains(
-            "orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — \
-             `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` \
-             needs at least one of the pair declared in its own pkg"
-        ),
-        "{ds}"
-    );
+    assert!(g.program.is_some(), "{ds}");
 }
 
 // ---- the no-map inertness ---------------------------------------------
 
 #[test]
 fn no_map_unit_is_inert() {
-    // the single-file law (the survey §2.3's fallback): a unit compiled
-    // with no origin map has every definition's origin = its own spec —
-    // the check reduces to names that resolve here, and a local impl
-    // compiles untouched through the raw compile_program path
+    // the single-file law (the survey §2.3's fallback, in its modern
+    // form): a unit compiled with no origin map has no registration
+    // machinery at all — a local type's inherent members compile
+    // untouched through the raw compile_program path
     let out = rut_driver::compile_program(
         "\
-trait Mark { fn mark(self) -> i32; }
+interface Mark { fn mark(self) -> i32; }
 struct Thing { n: i32 }
-impl Mark for Thing {
-    fn mark(self) -> i32 { return self.n; }
-}
-impl<T> Mark for ?T {
-    fn mark(self) -> i32 { return 1; }
-}
-impl<T> Mark for [T] {
-    fn mark(self) -> i32 { return 2; }
+impl Thing {
+    pub fn mark(self) -> i32 { return self.n; }
 }
 entry fn main() -> i32 { let t = Thing { n: 7 }; return t.mark(); }
 ",

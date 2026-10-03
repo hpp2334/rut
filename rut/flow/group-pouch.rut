@@ -1,20 +1,30 @@
-// flow/group-pouch.rut — the pouch-dependent impl group (json's
-// group-pouch.rut is the shape precedent): Vec's entry and sink rows,
-// mounted only when `pouch` is anywhere in the consumer's closure.
-// The trait's module owns its impls — the owning-module law governs
-// INHERENT impls; a local-trait/foreign-type impl group is the
-// json/group-pouch precedent.
+// flow/group-pouch.rut — the pouch-dependent flow group: the Vec
+// wrapper family, mounted only when `pouch` is anywhere in the
+// consumer's closure. Appended to flow's own source by the peer gate
+// when `pouch` is in the program's closure; a consumer without pouch
+// mounts flow light and these names simply never exist.
+//
+// THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
+// class, and satisfaction is having the members on the type's own
+// inherent impl — flow cannot grow members on another module's class.
+// The adapters are the spelled manufacture: `VecFlow(xs).into_flow()`
+// at the entry, `VecFlow<T>.from_flow(pipe)` at the sink (the call
+// site spells it; nothing is auto-inserted).
 
 use pouch::{ Vec };
 
-// The entry: a growable Vec walks its backing through the fused loop
-// (the same walk `for..of` fuses), the emit's `false` stopping it.
-impl<T> IntoFlow<T> for Vec<T> {
-    fn into_flow(self) -> Flow<T> {
+// The entry AND the sink: a growable Vec walks its backing through the
+// fused loop (the same walk `for..of` fuses), the emit's `false`
+// stopping it; `from_flow` materializes the pipeline into a fresh Vec
+// and wraps it, `collected` unwraps.
+pub class VecFlow<T>(Vec<T>);
+
+impl<T> VecFlow<T> {
+    pub fn into_flow(self) -> Flow<T> {
         return
             Flow.new(
                 fn (emit: fn(T) -> bool) -> nil {
-                    for (let x of self) {
+                    for (let x of self.inner) {
                         if (!emit(x)) {
                             return;
                         }
@@ -22,15 +32,17 @@ impl<T> IntoFlow<T> for Vec<T> {
                 },
             );
     }
-}
 
-// The sink: the EXPLICIT pipeline (the call site manufactures it —
-// `xs.into_flow()`). No new type variables (T is Vec's own), so
-// no generic-method support is needed here.
-impl<T> FromFlow<T> for Vec<T> {
-    fn from_flow(it: Flow<T>) -> Self {
+    // the sink (the FromFlow member): the EXPLICIT pipeline — the
+    // call site manufactures the wrapper (`VecFlow<T>.from_flow(it)`).
+    // No new type variables (T is the class's own), so no
+    // generic-method support is needed here.
+    pub fn from_flow(it: Flow<T>) -> Self {
         let out: Vec<T> = Vec.new();
         it.iterate(fn (x: T) -> bool { out.push(x); return true; });
-        return out;
+        return VecFlow(out);
     }
+
+    // the wrapper's unwrap: the materialized Vec
+    pub fn collected(self) -> Vec<T> { return self.inner; }
 }

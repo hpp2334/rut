@@ -13,7 +13,7 @@ use rut_lexer::token::Tok;
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame};
 use crate::item::{
     classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, TypeAliasFrame, UseFrame,
-    MethodFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TraitFrame, TyDeclFrame, TypeBodyFrame,
+    InterfaceFrame, MethodFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TyDeclFrame, TypeBodyFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
 use crate::ty::TypeFrame;
@@ -34,7 +34,7 @@ pub(crate) enum Done {
     Pat(NodeHandle<AnyPat>),
     Members(Vec<NodeHandle<AnyParam>>),
     Method(NodeHandle<MethodDeclNode>),
-    /// a struct/class/trait/impl body: (fields, methods)
+    /// a struct/class/interface/impl body: (fields, methods)
     Body(Vec<NodeHandle<FieldDeclNode>>, Vec<NodeHandle<MethodDeclNode>>),
     WhenParts { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Failed,
@@ -54,7 +54,7 @@ pub(crate) enum Frame {
     Enum(EnumFrame),
     Struct(TyDeclFrame),
     Class(TyDeclFrame),
-    Trait(TraitFrame),
+    Interface(InterfaceFrame),
     Impl(ImplFrame),
     Fn(FnFrame),
     Method(MethodFrame),
@@ -85,7 +85,7 @@ impl Frame {
                 Frame::Enum(f) => f.step(p),
                 Frame::Struct(f) => f.step(p),
                 Frame::Class(f) => f.step(p),
-                Frame::Trait(f) => f.step(p),
+                Frame::Interface(f) => f.step(p),
                 Frame::Impl(f) => f.step(p),
                 Frame::Fn(f) => f.step(p),
                 Frame::Method(f) => f.step(p),
@@ -112,7 +112,7 @@ impl Frame {
                 Frame::Enum(f) => f.absorb(p, d),
                 Frame::Struct(f) => f.absorb(p, d),
                 Frame::Class(f) => f.absorb(p, d),
-                Frame::Trait(f) => f.absorb(p, d),
+                Frame::Interface(f) => f.absorb(p, d),
                 Frame::Impl(f) => f.absorb(p, d),
                 Frame::Fn(f) => f.absorb(p, d),
                 Frame::Method(f) => f.absorb(p, d),

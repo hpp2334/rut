@@ -1,17 +1,17 @@
-// T3's consumer: both impl sets dispatch — Vec and Map ride json's
+// T3's consumer: both wrapper sets dispatch — Vec and Map ride json's
 // spliced unit (both groups mounted), so both resolve locally. Both
 // fns are entry fns so T12 can run the packed bundle through the host
 // boundary and pin both dispatch results.
-use json::{JsonSerialize};
+use json::{JVecI64, JMapStrI64};
 use pouch::{Vec};
 use nmapset::{Map};
 
 entry fn go_vec() -> str {
-    let v = Vec<str>.filled("x", 2);
-    return v.json_serialize();
+    let v = Vec<i64>.filled(7, 2);
+    return JVecI64(v).json_serialize();
 }
 
 entry fn go_map() -> str {
     let m = Map<str, i64>.single("k", 1);
-    return m.json_serialize();
+    return JMapStrI64(m).json_serialize();
 }

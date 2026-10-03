@@ -60,15 +60,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// over `Vec<i32>` spells `#E := i32`).
     pub(crate) fn descriptor_leaf_env(
         &self,
-        tm: &rut_core::binary::TraitMethod,
-        trait_id: u32,
+        tm: &rut_core::binary::IfaceMethod,
+        iface_id: u32,
         class_args: &[TypeId],
     ) -> HashMap<String, TypeId> {
         let mut sig = String::new();
         for &p in &tm.params {
-            // a TraitObj param of THIS trait is the receiver slot
-            if let TyKind::TraitObj { trait_id: t } = self.ctx.types.kind(p) {
-                if *t == trait_id {
+            // a IfaceObj param of THIS trait is the receiver slot
+            if let TyKind::IfaceObj { iface_id: t } = self.ctx.types.kind(p) {
+                if *t == iface_id {
                     continue;
                 }
             }
@@ -293,7 +293,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let inst = crate::check::Inst {
                 key: crate::check::FnKey::Method { data, name },
                 subst: full_subst.iter().map(|(g, t)| (*g, *t)).collect(),
-                trait_origins: vec![],
+                iface_origins: vec![],
             };
             self.ctx.mirror_inst(inst)
         } else {
@@ -408,7 +408,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
-            trait_origins: vec![],
+            iface_origins: vec![],
         };
         let fid = self.ctx.mirror_inst(inst);
         let dst = if ret == TY_NIL { None } else { Some(self.new_reg(ret)) };
@@ -483,82 +483,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Ok(())
                 }
             }
-            (TyKind::TraitObj { trait_id: _ }, TyKind::Data { .. }) => {
-                // a trait-parameter slot (`a: Readable<T>`) against a
-                // concrete record: the TypeObj row's own name spells the
-                // trait and its arguments ("[trait] Readable<#T>") — the
-                // only carrier across a binding (the trait-table index
-                // is unit-local and may not resolve in the consumer).
-                // The args unify against the target's registered
-                // parameterized impl's trait arguments — the impl may
-                // live in the OWNING package, crossing as an extern row
-                let row_text =
-                    self.ctx.name(self.ctx.types.type_at(param).name).to_string();
-                let inner = row_text.strip_prefix("[trait] ").unwrap_or(&row_text[..]);
-                let Some((tbase, targs_text)) = inner.split_once('<') else {
-                    return Ok(());
-                };
-                let Some(targs_text) = targs_text.strip_suffix('>') else {
-                    return Ok(());
-                };
-                let tname = self.ctx.intern(tbase);
-                let arity = split_top_commas(targs_text).len();
-                let local_args = self.ctx.template_trait_args(tname, arity, arg);
-                let concrete_args = local_args.or_else(|| {
-                    // the impl row's carried trait args spell the
-                    // TARGET's own generic parameters (`impl
-                    // Writable<A, R> for Source<A>` carries `#A, #A`);
-                    // each maps through the target's instantiation to
-                    // the concrete value (`Source<Vec<Req>>` →
-                    // `Writable<Vec<Req>, Vec<Req>>`)
-                    let Some((d, cargs)) = self.ctx.inst_data.get(&arg).cloned() else {
-                        return None;
-                    };
-                    let (g_params, im_targs) = {
-                        let Some(g) = self.ctx.extern_generics.get(&d) else {
-                            return None;
-                        };
-                        let Some(im) = self.ctx.extern_impls.iter().find(|im| {
-                            self.ctx.name(im.trait_name) == tbase && g.template == im.target
-                        }) else {
-                            return None;
-                        };
-                        (g.params.clone(), im.trait_args.clone())
-                    };
-                    if im_targs.len() != arity {
-                        return None;
-                    }
-                    let mut concrete = cargs.clone();
-                    concrete.resize(arity, concrete[0]);
-                    for (i, &ta) in im_targs.iter().enumerate() {
-                        let ta_text =
-                            self.ctx.name(self.ctx.types.type_at(ta).name).to_string();
-                        let Some(tparam) = ta_text.strip_prefix('#') else { continue };
-                        let tid = self.ctx.intern(tparam);
-                        if let Some(pos) = g_params.iter().position(|&p| p == tid) {
-                            if pos < cargs.len() {
-                                concrete[i] = cargs[pos];
-                            }
-                        }
-                    }
-                    Some(concrete)
-                });
-                let Some(concrete_args) = concrete_args else {
-                    return Ok(());
-                };
-                let param_args = split_top_commas(targs_text);
-                if param_args.len() != concrete_args.len() {
-                    return Ok(());
-                }
-                for (pa, ca) in param_args.iter().zip(concrete_args.iter()) {
-                    let Some(prow) = self.ctx.resolve_elem_text(pa) else {
-                        continue;
-                    };
-                    self.infer_named_placeholders(prow, *ca, names, env, _sp)?;
-                }
-                Ok(())
-            }
-            (TyKind::TraitObj { .. }, TyKind::TraitObj { .. }) => {
+            (TyKind::IfaceObj { .. }, TyKind::IfaceObj { .. }) => {
                 // the Future protocol's element rides the trait-inst
                 // name (its only carrier — the kind holds a unit-local
                 // trait-table index): decode both sides and recurse
@@ -622,7 +547,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let inst = crate::check::Inst {
                     key: crate::check::FnKey::Method { data: d, name },
                     subst,
-                    trait_origins: vec![],
+                    iface_origins: vec![],
                 };
                 self.ctx.mirror_inst(inst)
             }
@@ -631,201 +556,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(ret_ty)
     }
 
-    /// A used generic-target trait impl's method
-    /// (`impl JsonSerialize for Vec<T>`, compiled in json): the
-    /// concrete instantiation's body lives in the impl's owner, so the
-    /// site mints the mirror impl-method request — the stub's ledger
-    /// row keys the instantiation canonically (the same spelling the
-    /// owner's compiled row carries), and link binds the call to the
-    /// owner's fn. The trait's declared signature (registered from the
-    /// surface) types the call; the receiver crosses bare (a
-    /// reference-repr target's ABIs coincide).
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn compile_extern_impl_template_call(
-        &mut self,
-        eidx: usize,
-        midx: usize,
-        concrete: TypeId,
-        subst: Vec<TypeId>,
-        rreg: u16,
-        args: Vec<NodeHandle<AnyExpr>>,
-        expected: Option<TypeId>,
-        sp: rut_lexer::span::Span,
-    ) -> TcResult<TypeId> {
-        let im = self.ctx.extern_impls[eidx].clone();
-        let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
-        let tm = tdesc.methods[midx].clone();
-        // the trait method must be instance-shaped here: a template
-        // impl's no-self method is a type-parameter call, routed by the
-        // trait-param arm instead. The binary desc's params EXCLUDE the
-        // receiver (the compiler passes self as arg0) — a `Self`-spelled
-        // remaining parameter maps to the concrete target. The
-        // descriptor's OTHER leaves spell the impl head's trait
-        // arguments as `#<param>` rows (`into_flow(self) -> Flow<#E>`)
-        // — positionally the target's own parameters (the v1 template
-        // law), so the target substitution re-spells them (`Flow<i32>`).
-        // the descriptor's leaves spell the impl head's trait arguments
-        // as `#<param>` rows (`into_flow(self) -> Flow<#E>`) —
-        // positionally the target's own parameters (the v1 template
-        // law), so the target substitution re-spells them (`Flow<i32>`)
-        let class_args = self
-            .ctx
-            .inst_data
-            .get(&concrete)
-            .cloned()
-            .map(|(_, a)| a)
-            .unwrap_or_else(|| match self.ctx.types.kind(concrete).clone() {
-                TyKind::Opt { elem } | TyKind::Array { elem } => vec![elem],
-                _ => vec![],
-            });
-        // the descriptor's leaves spell the trait's own generics as
-        // `#<name>` rows (`into_flow(self) -> Flow<#E>`) — the k-th
-        // DISTINCT leaf, in first-appearance order, is the trait's k-th
-        // generic, and the v1 template law makes that the target's k-th
-        // class argument (`impl<E> IntoFlow<E> for Vec<E>` over
-        // `Vec<i32>`: `#E := i32`)
-        let env = self.descriptor_leaf_env(&tm, im.trait_id, &class_args);
-        let (ptys, ret_ty): (Vec<TypeId>, TypeId) = {
-            let mut ps = Vec::new();
-            for p in tm.params.iter() {
-                ps.push(match self.ctx.types.kind(*p) {
-                    TyKind::TraitObj { trait_id: t } if *t == im.trait_id => concrete,
-                    _ => {
-                        let sub = self.ctx.subst_template_ty(*p, &env);
-                        self.respell_template_row(sub, &env)
-                    }
-                });
-            }
-            let sub = self.ctx.subst_template_ty(tm.ret, &env);
-            let ret = self.respell_template_row(sub, &env);
-            (ps, ret)
-        };
-        let _ = expected;
-        if args.len() != ptys.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
-            return Err(());
-        }
-        let mut aregs = Vec::new();
-        for (i, a) in args.iter().enumerate() {
-            let t = self.compile_expr(*a, Some(ptys[i]))?;
-            if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                ));
-            }
-            aregs.push(self.last_reg);
-        }
-        // the mirror: owner = the ROW's mint anchor when it carries one
-        // (the consumer-registered foreign-trait rows — the impl's home
-        // compiles the bodies), else the trait's declaring pkg (the
-        // impl is its to compile), else this unit
-        let owner = im
-            .origin
-            .clone()
-            .or_else(|| self.ctx.extern_origins.get(&im.trait_name).cloned())
-            .unwrap_or_else(|| self.ctx.own_spec.clone());
-        let fid = self
-            .ctx
-            .mirror_impl_method(owner.clone(), im.trait_name, concrete, tm.name, subst);
-        // the body request: the owner's unit mints the template impl at
-        // this concrete target and compiles the method
-        self.ctx.request_inst_impl_method(owner, im.trait_name, concrete, tm.name);
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
-        Ok(ret_ty)
-    }
 
-    /// The no-self twin of `compile_extern_impl_template_call`: a trait
-    /// impl's no-self static called through the TYPE name across a
-    /// package boundary — `Vec.from_flow(it)` against flow's mounted
-    /// group. The mirror request is the same (the owner mints the
-    /// template impl at the concrete target); the ABI carries no
-    /// receiver slot, so the call is a plain `Call` over the args.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn compile_extern_impl_template_static(
-        &mut self,
-        eidx: usize,
-        midx: usize,
-        concrete: TypeId,
-        subst: Vec<TypeId>,
-        args: Vec<NodeHandle<AnyExpr>>,
-        expected: Option<TypeId>,
-        sp: rut_lexer::span::Span,
-    ) -> TcResult<TypeId> {
-        let im = self.ctx.extern_impls[eidx].clone();
-        let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
-        let tm = tdesc.methods[midx].clone();
-        // the trait method must be no-self here (the receiver-shaped
-        // form routes through the template call above); the
-        // descriptor's `#<param>` leaves re-spell under the target
-        // substitution (`from_flow(it: Iterable<#T>) -> Vec<#T>` over
-        // `Vec<i32>` answers `Iterable<i32>` / `Vec<i32>`)
-        let class_args = self
-            .ctx
-            .inst_data
-            .get(&concrete)
-            .cloned()
-            .map(|(_, a)| a)
-            .unwrap_or_else(|| match self.ctx.types.kind(concrete).clone() {
-                TyKind::Opt { elem } | TyKind::Array { elem } => vec![elem],
-                _ => vec![],
-            });
-        // the descriptor leaves → the target's class arguments (the
-        // same law the receiver route runs)
-        let env = self.descriptor_leaf_env(&tm, im.trait_id, &class_args);
-        let (ptys, ret_ty): (Vec<TypeId>, TypeId) = {
-            let mut ps = Vec::new();
-            for p in tm.params.iter() {
-                ps.push(match self.ctx.types.kind(*p) {
-                    TyKind::TraitObj { trait_id: t } if *t == im.trait_id => concrete,
-                    _ => {
-                        let sub = self.ctx.subst_template_ty(*p, &env);
-                        self.respell_template_row(sub, &env)
-                    }
-                });
-            }
-            let sub = self.ctx.subst_template_ty(tm.ret, &env);
-            // `fn from_flow(..) -> Self` — the descriptor spells `Self`
-            // as this trait's object; the impl's concrete target answers it
-            let ret = match self.ctx.types.kind(sub) {
-                TyKind::TraitObj { trait_id: t } if *t == im.trait_id => concrete,
-                _ => self.respell_template_row(sub, &env),
-            };
-            (ps, ret)
-        };
-        let _ = expected;
-        if args.len() != ptys.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
-            return Err(());
-        }
-        let mut aregs = Vec::new();
-        for (i, a) in args.iter().enumerate() {
-            let t = self.compile_expr(*a, Some(ptys[i]))?;
-            if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1,
-                    self.ctx.type_name(t),
-                    self.ctx.type_name(ptys[i])
-                ));
-            }
-            aregs.push(self.last_reg);
-        }
-        // the same owner law the receiver route runs: the row's mint
-        // anchor first (the consumer-registered rows), the trait's
-        // declaring pkg otherwise
-        let owner = im
-            .origin
-            .clone()
-            .or_else(|| self.ctx.extern_origins.get(&im.trait_name).cloned())
-            .unwrap_or_else(|| self.ctx.own_spec.clone());
-        let fid = self
-            .ctx
-            .mirror_impl_method(owner.clone(), im.trait_name, concrete, tm.name, subst);
-        self.ctx.request_inst_impl_method(owner, im.trait_name, concrete, tm.name);
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
-        Ok(ret_ty)
-    }
+
+
 }

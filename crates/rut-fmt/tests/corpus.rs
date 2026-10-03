@@ -234,3 +234,39 @@ fn corpus_dump_trees_match_through_format() {
     }
     assert!(failures.is_empty(), "round-trip failures ({}):\n{}", failures.len(), failures.join("\n"));
 }
+
+/// the structural-interfaces fork: an `interface` and its satisfying
+/// inherent `impl` round-trip — the printed source reparses clean and
+/// formatting is idempotent, and the printer spells the new forms
+/// (`interface Name { .. }`, `impl T { .. }` — no `for` clause).
+#[test]
+fn interface_and_inherent_impl_round_trip() {
+    let src = "\
+pub interface Shape {
+    fn area(self) -> f64;
+}
+
+interface Wrap<T> {
+    fn unwrap_or(self, d: T) -> T;
+}
+
+class Circle {
+    r: f64;
+}
+
+impl Circle {
+    pub fn area(self) -> f64 { return self.r * 3.0; }
+}
+";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "the fixture must parse clean: {diags:?}");
+    let out = rut_fmt::format(src, Mode::Impl, &rut_fmt::Style::default()).expect("fmt accepts it");
+    assert!(out.contains("pub interface Shape {"), "vis prefix as spelled: {out}");
+    assert!(out.contains("interface Wrap<T> {"), "generics print: {out}");
+    assert!(out.contains("impl Circle {"), "inherent impl prints without a for-clause: {out}");
+    assert!(!out.contains(" for "), "no impl-for spelling anywhere: {out}");
+    let (_, diags2) = parse(&out, Mode::Impl);
+    assert!(diags2.is_empty(), "the formatted text must reparse clean: {diags2:?}");
+    let out2 = rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
+    assert_eq!(out2, out, "formatting must be idempotent");
+}

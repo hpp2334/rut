@@ -1,12 +1,14 @@
 {
   // json — the 9th std pkg (the rut-json batch, phase 1). The base owns
-  // every public name (traits, reader/writer classes, entries, errors);
-  // the optional peers carry the impl-only integration groups — the
-  // container rows of the survey's §2.6 matrix. Presence-based mounting:
-  // a consumer whose closure holds `pouch` gets the Vec rows, one that
-  // holds `nmapset` the map/set rows; the dev-deps guarantee both while
-  // json builds itself (the peer gate's D3 path checks run on this very
-  // manifest), so every group impl dispatches in json's own test runs.
+  // every public name (interfaces, reader/writer classes, entries,
+  // errors, the scalar/optional/array wrapper families); the optional
+  // peers carry the wrapper groups — the container shapes of the
+  // survey's §2.6 matrix. Presence-based mounting: a consumer whose
+  // closure holds `pouch` gets the JsonVec wrapper, one that holds
+  // `nmapset` the map/set wrapper families; the dev-deps guarantee both
+  // while json builds itself (the peer gate's D3 path checks run on
+  // this very manifest), so every wrapper compiles in json's own test
+  // runs.
   // Landed as the mechanism's first real consumer.
   //
   // Publishes COMPILED (the linkable-classes phase): the entries are

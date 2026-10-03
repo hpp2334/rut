@@ -27,7 +27,8 @@
 //            mutation; the framework runs it on the firing event)
 //
 // The ctx forms are the only read/write spellings in app code:
-// `ctx.get(a)` inside a derive, `ctx.set(a, v)` inside a mutation —
+// `ctx.get<V, K>(a)` inside a derive, `ctx.set<R, A, K>(a, v)` inside
+// a mutation (the shape annotation is the fork's call-site law) —
 // deps DISCOVERED through the ctx, never declared. The store's own
 // verbs are ui-MODULE-PRIVATE and the handles' verbs belong to the
 // frozen test surface (entries.rut) and ui's resolver — neither
@@ -58,13 +59,12 @@
 // THE LAW GATE (tests/app_law.rs pins the import set): the handles'
 // vocabulary, the widget vocabulary, the framework's names, and ONE
 // crossing name, tim_after. No tag, no token, no listener id, no
-// machinery trait (Readable/Writable are ui-private — biz cannot name
-// them even to import them), and NO STORE VERB anywhere in biz —
-// the store's get/set are module-private; the gate greps for their
-// spellings and fails loud.
+// store machinery (the plumbing members are ui-private — the gate
+// greps their spellings out of biz), and NO STORE VERB anywhere in
+// biz — the store's get/set are module-private; the gate fails loud.
 
 use ui::{
-    Store, Source, Derived, Mutation,
+    Store, Source, Derived, Mutation, Readable, Writable,
     Widget, T1Root, t1_mount, t1_render, t1_event,
     col, row, card, field, check, text, done, pending, muted, btn, quiet, live,
 };

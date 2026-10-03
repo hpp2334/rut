@@ -9,7 +9,9 @@
   // sha256-pinned here — the pin is law at the mount door on every load).
   // All three are GENERIC owners, and since the generic-source riding law
   // their bundles carry the source beside the binaries: this consumer
-  // spells `Vec<opaque>` and drives json's traits + writer directly, and
+  // spells `Vec<opaque>` and drives json's writer directly through its
+  // own `encode` member (json's interface observes it structurally),
+  // and
   // the shapes compile from the bundles at the link. The embedder names
   // its remote policy (Loader + HttpRemote::project_local) — a cold start
   // networks on its misses, a warm start is pure cache; the TESTS prime
@@ -28,8 +30,8 @@
     "lib": "./digest.rut"
   },
   "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "ce820058dd64669bb018331e03c8557ed9e6d16d946d045e482dac302c52698a" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/json.rutbundle", "sha256": "32e7237efcd6c963d5d865ac6aa209ebcbef1d07e689c99bcdab332fce007e2d" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "941d76d97c67c0fe54eb7b0ea8ca7de399478d61b0584274a29229602dc8ba2a" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/pouch.rutbundle", "sha256": "55ef9c4be9ba7ae9d14f070e5c097b5c917c8dfd9106274f4568035468144dbe" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/json.rutbundle", "sha256": "f6083582b1210d7c9fd8799188e6fabb8f25bea9ceb2d92d2e525050b842787c" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v3/dist/std/nmapset.rutbundle", "sha256": "2553f084ce207b82c9b5f23c9813daab5054b8a4d489ef84d915369152155901" }
   }
 }

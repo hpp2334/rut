@@ -1,73 +1,81 @@
 use json::{encodeJson, decodeJson};
+use json::{JsonI64, JsonStr, JsonBool, JsonF64, JsonArr, SOpt};
 
 // the light consumer: json mounts with NO peers in the closure — the
-// base alone (traits, reader/writer, prims, ?T, [T], entries). The
-// peer-gated container rows never exist here; referencing them
-// diagnoses D2. Answers use the same canonical-string
-// convention as the jsonpkg fixture.
+// base alone (interfaces, reader/writer, the scalar wrappers, SOpt,
+// JsonArr, entries). The peer-gated container wrappers never exist
+// here; referencing them diagnoses D2. Answers use the same
+// canonical-string convention as the jsonpkg fixture. Primitives cross
+// ONLY inside their wrappers — the spelled constructor is the
+// manufacture, at the call site, forever.
 
 entry fn enc_i(v: i64) -> str {
-    let (s, e) = encodeJson(v);
+    let (s, e) = encodeJson(JsonI64(v));
     if (e != nil) { return "ERR"; }
     let doc: str = s;
     return doc;
 }
 
 entry fn dec_i(s: str) -> str {
-    let (v, e) = decodeJson<i64>(s);
+    let (v, e) = decodeJson<JsonI64>(s);
     if (e != nil) { return "ERR"; }
-    let n: i64 = v;
-    return f"OK:{n}";
+    let w: JsonI64 = v;
+    return f"OK:{w.get()}";
 }
 
 entry fn dec_o(s: str) -> str {
-    let (v, e) = decodeJson<str>(s);
+    let (v, e) = decodeJson<JsonStr>(s);
     if (e != nil) { return "ERR"; }
-    let out: str = v;
-    return f"OK:{out}";
+    let w: JsonStr = v;
+    return f"OK:{w.get()}";
 }
 
 entry fn dec_b(s: str) -> str {
-    let (v, e) = decodeJson<bool>(s);
+    let (v, e) = decodeJson<JsonBool>(s);
     if (e != nil) { return "ERR"; }
-    if (v) { return "OK:true"; }
+    let w: JsonBool = v;
+    if (w.get()) { return "OK:true"; }
     return "OK:false";
 }
 
 entry fn dec_f(s: str) -> str {
-    let (v, e) = decodeJson<f64>(s);
+    let (v, e) = decodeJson<JsonF64>(s);
     if (e != nil) { return "ERR"; }
-    let x: f64 = v;
-    return f"OK:{x}";
+    let w: JsonF64 = v;
+    return f"OK:{w.get()}";
 }
 
-// [T] rides the BASE (no peers needed)
+// [T] rides the BASE (no peers needed) — through JsonArr, the base's
+// structural-array wrapper
 entry fn enc_a() -> ?str {
-    let mut a: [i64] = [1; 2];
-    a[1] = 2;
-    let (s, e) = encodeJson(a);
+    let mut a: [JsonI64] = [JsonI64(1); 2];
+    a[1] = JsonI64(2);
+    let (s, e) = encodeJson(JsonArr(a));
     if (e != nil) { return nil; }
     return s;
 }
 
 entry fn dec_a(s: str) -> str {
-    let (v, e) = decodeJson<[i64]>(s);
+    let (v, e) = decodeJson<JsonArr<JsonI64>>(s);
     if (e != nil) { return "ERR"; }
-    let a: [i64] = v;
+    let w: JsonArr<JsonI64> = v;
+    let a: [JsonI64] = w.to_arr();
     let n = a.len();
     let mut acc = f"OK:len={n}";
     let mut i: i32 = 0;
     while (i < n) {
-        acc = f"{acc}:{a[i]}";
+        acc = f"{acc}:{a[i].get()}";
         i += 1;
     }
     return acc;
 }
 
-// ?T rides the BASE
+// ?T rides the BASE — through SOpt, the optional wrapper
 entry fn dec_q(s: str) -> str {
-    let (v, e) = decodeJson<?i64>(s);
+    let (v, e) = decodeJson<SOpt<JsonI64>>(s);
     if (e != nil) { return "ERR"; }
-    if (v == nil) { return "nil"; }
+    let w: SOpt<JsonI64> = v;
+    let inner: ?JsonI64 = w.get();
+    if (inner == nil) { return "nil"; }
     return "set";
 }

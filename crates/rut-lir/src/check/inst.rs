@@ -38,7 +38,7 @@ impl<'a> Ctx<'a> {
         // unit-local by construction (their keys name this unit's AST
         // nodes) and never referenced across packages — no row.
         let subst: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
-        let origins = inst.trait_origins.clone();
+        let origins = inst.iface_origins.clone();
         match inst.key {
             FnKey::Lambda(_) | FnKey::ForOfEmit { .. } | FnKey::AsyncBlock(_) => {}
             FnKey::Free(n) => {
@@ -58,29 +58,17 @@ impl<'a> Ctx<'a> {
                 });
             }
             FnKey::Method { data, name, .. } => {
-                let owner = self.intern(&self.owner_of_data(data));
+                // the carried-type law: a mirror over a REQUESTER-CARRIED
+                // row names the row's HOME unit (set by the mirror site),
+                // so link unifies the stub with the real body there
+                let owner = match self.pending_mirror_owner.take() {
+                    Some(o) => o,
+                    None => self.owner_of_data(data),
+                };
+                let owner = self.intern(&owner);
                 self.ledger_fns.push(rut_core::binary::InstFn {
                     owner,
                     kind: rut_core::binary::InstFnKind::Method { data, name, subst, origins },
-                    fid,
-                });
-            }
-            FnKey::ImplMethod { idx, name, slot_abi } => {
-                let (origin, trait_name, target) = match self.impls.get(idx) {
-                    Some(im) => (im.origin.clone(), im.trait_name, im.target),
-                    None => (self.own_spec.clone(), sym::NIL, TY_I32),
-                };
-                let owner = self.intern(&origin);
-                self.ledger_fns.push(rut_core::binary::InstFn {
-                    owner,
-                    kind: rut_core::binary::InstFnKind::ImplMethod {
-                        trait_name,
-                        target,
-                        name,
-                        slot_abi,
-                        subst,
-                        origins,
-                    },
                     fid,
                 });
             }
@@ -144,69 +132,10 @@ impl<'a> Ctx<'a> {
         fid
     }
 
-    /// The impl-method mirror: a consumer's static call into a used
-    /// GENERIC-target trait impl (`json`'s
-    /// `impl JsonSerialize for Vec<T>` at the consumer's `Vec<i64>`).
-    /// The row spells `(trait, target instantiation, name, concrete
-    /// ABI, arguments)` under the impl owner's spec; link canonicalizes
-    /// the target through the instantiation ledger, so the key matches
-    /// the owner's compiled row wherever the bodies live. No local
-    /// [`FnKey`] exists for a foreign impl — the fn is bodyless here.
-    pub fn mirror_impl_method(
-        &mut self,
-        owner: String,
-        trait_name: IdentId,
-        target: TypeId,
-        name: IdentId,
-        subst: Vec<TypeId>,
-    ) -> u32 {
-        let owner_id = self.intern(&owner);
-        let fid = self.funcs.len() as u32;
-        let fname = self.intern(&format!("{}${}", self.name(trait_name), self.name(name)));
-        self.funcs.push(FuncCode {
-            name: fname,
-            params: vec![],
-            ret: TY_NIL,
-            is_method: false,
-            n_captures: 0,
-            regs: vec![],
-            argv: vec![],
-            labels: vec![],
-            code: vec![],
-            spans: vec![],
-            pos: vec![],
-            host_id: None,
-        });
-        self.ledger_fns.push(rut_core::binary::InstFn {
-            owner: owner_id,
-            kind: rut_core::binary::InstFnKind::ImplMethod {
-                trait_name,
-                target,
-                name,
-                slot_abi: false,
-                subst,
-                origins: vec![],
-            },
-            fid,
-        });
-        fid
-    }
-
     pub(crate) fn inst_name(&self, inst: &Inst) -> String {
         match inst.key {
             FnKey::Free(n) => self.name(n).to_string(),
             FnKey::Method { data, name } => format!("{}${}", self.name(data), self.name(name)),
-            FnKey::ImplMethod { idx, name, .. } => {
-                let im = &self.impls[idx];
-                if im.inherent {
-                    // inherent impl on a native builtin class: no trait id
-                    format!("{}${}", self.name(im.trait_name), self.name(name))
-                } else {
-                    let tid = im.trait_id;
-                    let tname = self.name(self.traits[tid as usize].name);
-                    format!("{}#${}${}", tname, idx, self.name(name))
-                }
-            }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
             FnKey::AsyncBlock(node) => format!("async@{}", node.0),
             FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
@@ -245,124 +174,58 @@ impl<'a> Ctx<'a> {
         Ok(())
     }
 
-    /// after all instantiations: fill per-(type × trait) vtables from the
-    /// registered impls (nominal satisfaction — a slot is
-    /// filled exactly when an impl exists). Engine-named contracts
-    /// (`Iterable`) flow through the same registry. Each slot's method
-    /// compiles here (with its transitive calls) so every reachable slot
-    /// carries a real function id. A fill body that cannot compile (a
-    /// nominal pair whose element type misses a member impl) is a unit
-    /// error — the diag is already in `ctx.diags`; swallowing it here
-    /// would ship the reserved empty fn and fail verification instead.
+    /// after all instantiations: materialize the demanded itables.
+    /// Each fill is a (concrete type × interface) pair a boxing site
+    /// PROVED (structural satisfaction at a widen); the pair's row
+    /// binds every interface member slot to the concrete type's own
+    /// inherent member — the member compiles here (with its transitive
+    /// calls) so every reachable slot carries a real function id. A
+    /// fill body that cannot compile is a unit error — the diag is
+    /// already in `ctx.diags`; swallowing it here would ship the
+    /// reserved empty fn and fail verification instead.
     pub fn build_vtables(&mut self) -> TcResult<Vec<Vec<Option<u32>>>> {
-        // (type, trait, method slot, inst) — collected first, compiled
-        // after, so queue-driven interning cannot mutate what we walk.
-        // Prim-target impl methods also queue their concrete-ABI twin
-        // (`extra`) — vtable rows bind the SLOT variant only, but a
-        // bare-receiver static call (and the exported surface) needs
-        // the concrete one compiled too.
+        // (type, slot, inst) — collected first, compiled after, so
+        // queue-driven interning cannot mutate what we walk. Generic
+        // classes' fills sort on the dense type id (deterministic
+        // emission — the same source always emits the same binary).
         let mut fills: Vec<(TypeId, u32, Inst)> = Vec::new();
-        let mut extra: Vec<Inst> = Vec::new();
-        // snapshot: the template arm re-resolves under &mut self, so the
-        // walk runs over an owned copy
-        let impls = self.impls.clone();
-        for (idx, im) in impls.iter().enumerate() {
-            if im.inherent {
-                continue; // inherent methods dispatch statically, never a slot
-            }
-            let dual = self.impl_is_dual_abi(idx);
-            let tdesc = self.trait_by_id(im.trait_id).clone();
-            match im.target_data.clone() {
-                None => {
-                    for (midx, tm) in tdesc.methods.iter().enumerate() {
-                        let Some(slot) = self.trait_slot(im.trait_id, midx as u32) else {
-                            continue;
-                        };
-                        if !im.methods.iter().any(|(n, _)| *n == tm.name) {
-                            continue;
-                        }
-                        fills.push((im.target, slot, Inst {
-                            key: self.impl_method_key(idx, tm.name, true),
-                            subst: vec![],
-                            trait_origins: vec![],
-                        }));
-                        if dual {
-                            extra.push(Inst {
-                                key: self.impl_method_key(idx, tm.name, false),
-                                subst: vec![],
-                                trait_origins: vec![],
-                            });
-                        }
+        let mut pairs = self.iface_fills.clone();
+        pairs.sort_by_key(|(ty, _)| self.types.dense(*ty));
+        for (concrete, iface_id) in pairs {
+            let desc = self.iface_by_id(iface_id).clone();
+            for (midx, tm) in desc.methods.iter().enumerate() {
+                let Some(slot) = self.iface_slot(iface_id, midx as u32) else {
+                    continue;
+                };
+                let Some(member) = self.find_inherent_member(concrete, tm.name) else {
+                    continue; // the site's satisfaction check already spoke
+                };
+                let inst = match member {
+                    crate::check::impls::MemberSrc::Local { env, data, .. } => Inst {
+                        key: FnKey::Method { data, name: tm.name },
+                        subst: env,
+                        iface_origins: vec![],
+                    },
+                    crate::check::impls::MemberSrc::Extern { subst, data, .. } => {
+                        // the exporter's compiled fn, mirrored: the stub's
+                        // ledger row names the declaring package, link
+                        // redirects it onto the owner's copy
+                        self.mirror_inst(Inst {
+                            key: FnKey::Method { data, name: tm.name },
+                            subst,
+                            iface_origins: vec![],
+                        });
+                        continue;
                     }
-                }
-                Some((dname, params)) => {
-                    // generic target: fill every concrete instantiation
-                    // already in the table (`Vec<i32>`, …). A
-                    // parameterized trait impl (`impl Readable<T> for
-                    // Source<T>`) re-resolves its trait args per
-                    // instantiation, so the row lands under the CONCRETE
-                    // trait inst (`Readable<str>`), not the placeholder
-                    // template id — and yields to a hand-written concrete
-                    // impl for the same pair (concrete-first, the v1 law)
-                    let mut insts: Vec<(TypeId, Vec<(IdentId, TypeId)>)> = self
-                        .inst_data
-                        .iter()
-                        .filter(|(_, (d, _))| *d == dname)
-                        .map(|(ty, (_, args))| (*ty, params.iter().cloned().zip(args.iter().cloned()).collect()))
-                        .collect();
-                    // canonicalization (deterministic emission): `inst_data`
-                    // is a HashMap, and its iteration order feeds
-                    // `mk_trait_inst` (fresh trait ids append in call order),
-                    // the `fills` order (monomorphization queue → function
-                    // ids), and the vtable walk. Sort on the dense type id —
-                    // a stable key (type-table interning order is
-                    // source-order deterministic) — so the same source
-                    // always emits the same binary, run to run.
-                    insts.sort_by_key(|(ty, _)| self.types.dense(*ty));
-                    for (ty, env) in insts {
-                        let fill_trait_id = if im.is_template {
-                            let args: Vec<TypeId> = im
-                                .trait_arg_nodes
-                                .iter()
-                                .map(|g| self.resolve_type(*g, &env))
-                                .collect();
-                            let cid = self.mint_impl_trait_inst(im.trait_name, args);
-                            let concrete_wins = self
-                                .find_impl(cid, ty)
-                                .map(|i| !self.impls[i].is_template)
-                                .unwrap_or(false);
-                            if concrete_wins {
-                                continue;
-                            }
-                            cid
-                        } else {
-                            im.trait_id
-                        };
-                        for (midx, tm) in tdesc.methods.iter().enumerate() {
-                            let Some(slot) = self.trait_slot(fill_trait_id, midx as u32) else {
-                                continue;
-                            };
-                            if !im.methods.iter().any(|(n, _)| *n == tm.name) {
-                                continue;
-                            }
-                            fills.push((ty, slot, Inst {
-                                key: self.impl_method_key(idx, tm.name, true),
-                                subst: env.clone(),
-                                trait_origins: vec![],
-                            }));
-                        }
-                    }
-                }
+                };
+                fills.push((concrete, slot, inst));
             }
         }
         for (_, _, inst) in &fills {
             self.compile_queue(inst.clone())?;
         }
-        for inst in extra {
-            self.compile_queue(inst)?;
-        }
 
-        let total_slots: usize = self.traits.iter().map(|t| t.methods.len()).sum();
+        let total_slots: usize = self.ifaces.iter().map(|t| t.methods.len()).sum();
         let mut vt = vec![Vec::new(); self.types.types.len()];
         for t in vt.iter_mut() {
             *t = vec![None; total_slots];
@@ -372,7 +235,7 @@ impl<'a> Ctx<'a> {
                 vt[self.types.dense(ty) as usize][slot as usize] = Some(fid);
             }
         }
-        // the async weave's engine-minted impls: the hidden
+        // the async weave's engine-minted fills: the hidden
         // frame's `Future::yield` row and the sleep future's engine-
         // backed row — no AST method nodes, so the walk above can't
         // see them; their (type, slot, fid) fills were recorded at mint.
@@ -409,7 +272,7 @@ impl<'a> Ctx<'a> {
                 let key = Inst {
                     key: FnKey::Method { data: dname, name: *n },
                     subst: vec![],
-                    trait_origins: vec![],
+                    iface_origins: vec![],
                 };
                 if let Some(&fid) = self.inst_map.get(&key) {
                     out[self.types.dense(d.ty) as usize] = Some(fid);

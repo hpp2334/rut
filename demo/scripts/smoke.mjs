@@ -319,7 +319,7 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
     ['dataclass (the dead record keyword — records are spelled `struct`)', /\bdataclass/],
     ['`where` clause (removed — inline `requires`)', /\bwhere\b/],
     ['`Ptr<` (the removed pointer type — the shape is the nullable `?T`)', /Ptr</],
-    ['`Hashable` (the removed trait — keys are admitted by the union bound)', /\bHashable\b/],
+    ['`Hashable` (the removed key contract — keys are admitted by the union bound)', /\bHashable\b/],
     ['`mapset` (the removed pkg — the lane is the mounted nmapset)', /\bmapset\b/],
     ['postfix `?T` (the nullable is prefix-only)', /[A-Za-z0-9_\]]\?(?=[;,=>)]|\s*$)/],
   ];
@@ -421,7 +421,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['sieve', /^use pouch::\{Vec\};/, 'use', 'keyword'],
     ['fuel-demo', /while \(true\) \{/, 'while', 'keyword'],
     ['fuel-demo', /while \(true\) \{/, 'true', 'keyword'],
-    ['ex-type-aliases', /^trait Labeled \{/, 'trait', 'keyword'],
+    ['ex-type-aliases', /^interface Labeled \{/, 'interface', 'keyword'],
     ['ex-type-aliases', /fn label\(self\) -> str;/, 'self', 'keyword'],
     ['ex-classes', /^class Rect \{/, 'class', 'keyword'],
     // primitives (contextual type names — the `type` class in type position)
@@ -449,7 +449,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['values-and-pointers', /^struct Point \{/, 'Point', 'class'],
     ['when-exhaustive', /Color\.Red\s+-> "red\+red",/, 'Red', 'enumMember'],
     ['hello-format', /let name = "rut";/, 'name', 'variable'],
-    ['ex-type-aliases', /^trait Labeled \{/, 'Labeled', 'trait'],
+    ['ex-type-aliases', /^interface Labeled \{/, 'Labeled', 'interface'],
     ['ex-type-aliases', /fn label\(self\) -> str;/, 'label', 'method'],
   ];
 

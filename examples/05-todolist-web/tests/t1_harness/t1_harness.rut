@@ -8,11 +8,11 @@
 //
 // The imports are the two-package shape: the framework's names from
 // `ui` — the type + the four t1 names + the component vocabulary (the
-// one package now; its machinery traits are module-private and CANNOT
+// one package now; its store machinery is module-private and CANNOT
 // be imported even by name).
 use ui::{
     Widget, WKind, T1Root, t1_mount, t1_render, t1_event,
-    Store, Source, Derived, Mutation, live,
+    Store, Source, Derived, Mutation, Readable, Writable, live,
     col, row, card, spacer, field, check,
     text, done, title, pending, muted, btn, quiet,
 };
@@ -41,9 +41,9 @@ fn log_m(h: ?Harness, label: str) -> Mutation<str, opaque> {
     let lg = h.log$;
     let lab = label;
     return h.store.mutation(fn (ctx, ev: str) -> opaque {
-        let l = ctx.get(lg);
+        let l = ctx.get<Vec<str>, Source<Vec<str>>>(lg);
         l.push(lab);
-        ctx.set(lg, l);
+        ctx.set<Vec<str>, Vec<str>, Source<Vec<str>>>(lg, l);
         return opaque(nil);
     });
 }
@@ -56,10 +56,10 @@ entry fn main() -> opaque {
     let log$ = store.source<Vec<str>>(Vec.new());
     let num$ = store.source<i64>(7);
     let num_view$ = store.derive(fn (ctx) -> str {
-        return f"n={ctx.get(num$)}";
+        return f"n={ctx.get<i64, Source<i64>>(num$)}";
     });
     let each_view$ = store.derive(fn (ctx) -> Widget {
-        return col().hook("lvc").w(text(f"v={ctx.get(num$)}").hook("lvt"));
+        return col().hook("lvc").w(text(f"v={ctx.get<i64, Source<i64>>(num$)}").hook("lvt"));
     });
     let h: ?Harness = Harness {
         root: t1_mount("app"),

@@ -7,7 +7,7 @@
 // crossings and the contract is all-or-nothing; NO test here
 // fires a crossing. ----
 
-use ui::{Store, Source, Derived, Mutation};
+use ui::{Store, Source, Derived, Mutation, Readable, Writable};
 use app::{World, world_boot, Todo};
 use pouch::{ Vec };
 
@@ -137,7 +137,7 @@ entry fn atom_counts(c: opaque) -> str {
 /// successor: the DAG is now WHAT THE PROGRAM READS.
 entry fn atom_deps(c: opaque) -> str {
     let w = wt(c);
-    return w.store.deps_of(w.counts$);
+    return w.store.deps_of<str, Derived<str>>(w.counts$);
 }
 
 /// Write a str atom by name (the str cells: draft, note, last).
@@ -201,12 +201,12 @@ entry fn probes_new() -> opaque {
     let items$ = store.source<i64>(0);
     let log: Vec<str> = Vec.new();
     let up$ = store.derive(fn (ctx) -> i64 {
-        let v = ctx.get(items$);
+        let v = ctx.get<i64, Source<i64>>(items$);
         log.push("up");
         return v * 2;
     });
     let down$ = store.derive(fn (ctx) -> i64 {
-        let v = ctx.get(up$); // the DERIVED dep
+        let v = ctx.get<i64, Derived<i64>>(up$); // the DERIVED dep
         log.push("down");
         return v * 2;
     });
@@ -288,11 +288,11 @@ entry fn probes_cycle_new() -> opaque {
     let mut h: CycleHolder = CycleHolder { };
     let a$ = store.derive(fn (ctx) -> i64 {
         let b: Derived<i64> = h.b$;
-        let v = ctx.get(b);
+        let v = ctx.get<i64, Derived<i64>>(b);
         return v + 1;
     });
     let b$ = store.derive(fn (ctx) -> i64 {
-        let v = ctx.get(a$);
+        let v = ctx.get<i64, Derived<i64>>(a$);
         return v * 2;
     });
     h.b$ = b$;

@@ -1,21 +1,24 @@
-//! Cross-module traits & the impl registry: a
-//! trait impl lives where a side of the pair is owned — a trait
-//! declared in one module, a type in another, the impl in a module of
-//! either. Per-module compiles cannot see each other's registrations,
-//! so module surfaces export traits + impls, the link merges them
-//! (duplicate `(trait, type)` pairs are a link error, global trait ids,
-//! cross-scope vtable fill), and the use-both gate holds at the call
-//! site.
+//! Cross-module interfaces & structural satisfaction: an interface is
+//! declared in one module, a type in another, and a consumer proves the
+//! foreign interface by HAVING the members — on its own type's inherent
+//! impl (a used type's members live where the type was declared; a
+//! third-party inherent block is refused). Satisfaction is boundary
+//! checking (the member-set match), interface-typed values dispatch
+//! through per-type itable fills (global iface ids, one slot per
+//! member), and the use statement governs which names the call site
+//! sees.
 
 use rut_driver::{GraphOutput, Module, ModuleBody, Session};
 use rut_parser::Mode;
 
+/// The shapes library: the interface AND both satisfying types live
+/// here (each type's inherent impl carries `area`).
 const SHAPES: &str = "\
-trait Shape { fn area(self) -> f64; }
+interface Shape { fn area(self) -> f64; }
 struct Point { x: f64 }
 struct Circle { r: f64 }
-impl Shape for Point { fn area(self) -> f64 { return self.x; } }
-impl Shape for Circle { fn area(self) -> f64 { return self.r; } }
+impl Point { pub fn area(self) -> f64 { return self.x; } }
+impl Circle { pub fn area(self) -> f64 { return self.r; } }
 pub fn make_point() -> Point { return Point { x: 3.0 }; }
 pub fn pick(k: bool) -> Shape {
     if (k) { return Point { x: 1.0 }; }
@@ -23,38 +26,22 @@ pub fn pick(k: bool) -> Shape {
 }
 ";
 
-/// A type library with NO trait and NO impls — the trait and the impl
-/// live elsewhere.
+/// A type library with NO interface and NO members — the interface and
+/// the satisfaction live elsewhere (the consumer's own types satisfy).
 const SHAPES_LIB: &str = "\
 struct Point { x: f64 }
 pub fn make_point() -> Point { return Point { x: 3.0 }; }
 ";
 
-/// The trait + impl module: the trait is extras' own, the type is USED
-/// from shapes — the trait-local side. The impl lives
-/// outside the type's module, so the registration crosses modules and
-/// the link merges it.
+/// The interface + describing module: the interface is extras' own, the
+/// satisfying type is the consumer's own — the consumer proves the
+/// foreign interface structurally, at the boundary where it passes its
+/// value to extras' interface-typed fn.
 const EXTRAS: &str = "\
-use shapes::{Point};
-pub trait Shape { fn area(self) -> f64; }
-impl Shape for Point {
-    fn area(self) -> f64 { return 42.0; }
+interface Shape { fn area(self) -> f64; }
+pub fn describe(s: Shape) -> f64 {
+    return s.area();
 }
-pub fn describe() -> f64 {
-    let p = Point { x: 1.0 };
-    return p.area();
-}
-";
-
-/// A duplicate-writing module: `impl ForeignTrait for ForeignType` —
-/// both sides foreign to it (the orphan), re-registering a
-/// pair `shapes` already provides.
-const EXTRAS_DUP: &str = "\
-use shapes::{Shape, Point};
-impl Shape for Point {
-    fn area(self) -> f64 { return 42.0; }
-}
-pub fn make_point() -> Point { return Point { x: 5.0 }; }
 ";
 
 fn graph(modules: &[(&str, &str)]) -> GraphOutput {
@@ -96,8 +83,8 @@ fn ir(p: &rut_core::binary::Program) -> String {
     rut_driver::ir_dump_of(&p.funcs, &p.interner)
 }
 
-fn trait_of<'p>(p: &'p rut_core::binary::Program, name: &str) -> Option<(u32, &'p rut_core::binary::TraitDesc)> {
-    p.traits
+fn iface_of<'p>(p: &'p rut_core::binary::Program, name: &str) -> Option<(u32, &'p rut_core::binary::IfaceDesc)> {
+    p.ifaces
         .iter()
         .enumerate()
         .find(|(_, t)| p.name_of(t.name) == name)
@@ -109,11 +96,13 @@ fn type_of(p: &rut_core::binary::Program, name: &str) -> Option<u32> {
 }
 
 #[test]
-fn cross_module_trait_call_binds_statically() {
+fn cross_module_member_call_binds_statically() {
+    // the member lives on Point's inherent impl in `shapes`; the call
+    // binds to its compiled fn directly — static dispatch, no vtable hop
     let p = linked(&[
         ("shapes", SHAPES),
         ("app", "\
-use shapes::{Shape, Point, make_point};
+use shapes::{Point, make_point};
 entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
@@ -122,14 +111,15 @@ entry fn main() -> i32 {
 "),
     ]);
     let dump = ir(&p);
-    // the impl lives in `shapes`; the call binds to its compiled fn
-    // directly — static dispatch, no vtable hop
     assert!(dump.contains("callm"), "static bind through the foreign impl:\n{dump}");
     assert!(!dump.contains("calli"), "no vtable hop for a single concrete origin:\n{dump}");
 }
 
 #[test]
-fn cross_module_trait_call_uses_the_vtable_when_origins_merge() {
+fn cross_module_iface_call_uses_the_vtable_when_origins_merge() {
+    // `pick` returns the interface: both origins (Point, Circle) flow
+    // through one global interface, and the dispatch hops the slot —
+    // each concrete type's row carries its own fill
     let p = linked(&[
         ("shapes", SHAPES),
         ("app", "\
@@ -143,10 +133,8 @@ entry fn main() -> i32 {
     ]);
     let dump = ir(&p);
     assert!(dump.contains("calli"), "merged origins dispatch through the vtable:\n{dump}");
-    // both impls filled the merged (global) slot — pick()'s runtime
-    // result finds its method whichever concrete type it carries
-    let Some((gid, tdesc)) = trait_of(&p, "Shape") else {
-        panic!("one global Shape trait: {:?}", p.traits.iter().map(|t| p.name_of(t.name)).collect::<Vec<_>>());
+    let Some((gid, tdesc)) = iface_of(&p, "Shape") else {
+        panic!("one global Shape interface: {:?}", p.ifaces.iter().map(|t| p.name_of(t.name)).collect::<Vec<_>>());
     };
     assert_eq!(tdesc.methods.len(), 1);
     let slot = p.slot_of(gid, 0).expect("global slot");
@@ -163,119 +151,72 @@ entry fn main() -> i32 {
 }
 
 #[test]
-fn trait_local_impl_for_a_used_type_dispatches() {
-    // `Point` is declared in `shapes`; the trait AND the impl live in
-    // `extras`, which uses the type — the trait-local side (the json-group shape): the impl lives outside the type's
-    // module, and the consumer calls through the module that registered
-    // it.
-    let p = linked(&[
+fn inherent_impl_on_a_used_class_is_refused() {
+    // the placement law, restated for structural satisfaction: an
+    // INHERENT block on a used class lives in the type's module — the
+    // class's surface carries its members, and a consumer's block would
+    // need the private layout. Satisfaction of a foreign interface is
+    // proven on the consumer's OWN types, never by growing members on
+    // a foreign one.
+    let g = graph(&[
         ("shapes", SHAPES_LIB),
-        ("extras", EXTRAS),
         ("app", "\
-use shapes::make_point;
-use extras::{Shape, describe};
-entry fn main() -> i32 {
-    let p = make_point();
-    let a = p.area();
-    let d = describe();
-    return 0;
+use shapes::{Point};
+impl<T> Point {
+    pub fn probe_hi(self) -> i64 { return 7; }
 }
-"),
-    ]);
-    let dump = ir(&p);
-    assert!(dump.contains("callm"), "static bind through extras' impl:\n{dump}");
-    assert!(!dump.contains("calli"), ":\n{dump}");
-    // cross-scope vtable fill: extras' registration fills the GLOBAL row
-    // of shapes' Point under extras' trait (link merges used-block rows)
-    let Some((gid, _)) = trait_of(&p, "Shape") else { panic!("Shape in the global trait table") };
-    let slot = p.slot_of(gid, 0).expect("global slot");
-    let point = type_of(&p, "Point").expect("one global Point");
-    let f = p.vtables[point as usize][slot as usize];
-    assert!(f.is_some(), "extras' impl fills Point's row: {:?}", p.vtables[point as usize]);
-    let fname = p.name_of(p.funcs[f.unwrap() as usize].name);
-    assert!(fname.contains("area"), "the fill names the area impl: {fname}");
-}
-
-#[test]
-fn third_party_impl_is_the_orphan_error() {
-    // a module owning NEITHER side of the pair cannot
-    // write the impl — the old any-module placement (both sides foreign
-    // to the writer) is exactly what the orphan rule rejects. The gate
-    // fires in the impl module's own compile, before anything links.
-    let extras = "\
-use shapes::{Shape, Point};
-impl Shape for Point {
-    fn area(self) -> f64 { return 42.0; }
-}
-pub fn make_point() -> Point { return Point { x: 5.0 }; }
-";
-    let g = graph(&[
-        ("shapes", "\
-pub trait Shape { fn area(self) -> f64; }
-struct Point { x: f64 }
-pub fn make_point() -> Point { return Point { x: 3.0 }; }
-"),
-        ("extras", extras),
-        ("app", "\
-use shapes::{Shape, Point};
-use extras::make_point;
-entry fn main() -> i32 {
-    let p = make_point();
-    let a = p.area();
-    return 0;
-}
-"),
-    ]);
-    assert!(g.program.is_none(), "the orphan impl must refuse to link");
-    assert!(
-        g.diags.iter().any(|d| d.msg.contains("orphan impl")
-            && d.msg.contains("`Shape` is shapes's")
-            && d.msg.contains("`Point` is shapes's")
-            && d.msg.contains("needs at least one of the pair declared in its own pkg")),
-        "{:?}",
-        g.diags
-    );
-}
-
-#[test]
-fn duplicate_impl_pair_reports_the_orphan_before_the_link() {
-    // `shapes` registers (Shape, Point) itself; `extras` writes the same
-    // pair owning NEITHER side. The ordering — placement
-    // precedes registration — fires the orphan gate in extras' own
-    // compile, so the collision never reaches §5's link check (which
-    // keeps its surface-level test in rut-core's link.rs).
-    let g = graph(&[
-        ("shapes", SHAPES),
-        ("extras", EXTRAS_DUP),
-        ("app", "\
-use extras::make_point;
 entry fn main() -> i32 { return 0; }
 "),
     ]);
+    assert!(g.program.is_none(), "the foreign inherent block must refuse");
+    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
     assert!(
-        g.program.is_none(),
-        "the orphan impl must refuse to link"
-    );
-    assert!(
-        g.diags.iter().any(|d| d.msg.contains("orphan impl")
-            && d.msg.contains("`Shape` is shapes's")
-            && d.msg.contains("`Point` is shapes's")),
-        "{:?}",
-        g.diags
-    );
-    assert!(
-        !g.diags.iter().any(|d| d.msg.contains("duplicate impl")),
-        "the orphan precedes the pair registration: {:?}",
-        g.diags
+        ds.contains("inherent impls live in the type's module"),
+        "{ds}"
     );
 }
 
 #[test]
-fn unused_but_implemented_trait_gives_the_use_gate_diagnostic() {
-    // `Point` is used, `Shape` is not in any `use` — the impl exists,
-    // but the use-both gate keeps its methods uncallable and says so.
+fn consumer_satisfies_a_foreign_interface_on_its_own_type() {
+    // the structural fork's replacement for the old third-party shape:
+    // the interface is extras' (foreign to app), the type is app's own,
+    // and app proves `Shape` by spelling `area` on its inherent impl —
+    // the boundary check at the interface-typed call admits it.
     let g = graph(&[
-        ("shapes", SHAPES),
+        ("extras", EXTRAS),
+        ("app", "\
+use extras::{Shape, describe};
+struct Square { s: f64 }
+impl Square {
+    pub fn area(self) -> f64 { return self.s * self.s; }
+}
+entry fn main() -> i32 {
+    let d = describe(Square { s: 3.0 });
+    return 0;
+}
+"),
+    ]);
+    assert!(g.diags.is_empty(), "{:?}", g.diags);
+    let p = g.program.expect("the consumer's own type satisfies the foreign interface");
+    // the consumer's boxing site filled the GLOBAL row of its own type
+    // under extras' interface (link merges used-interface ids)
+    let Some((gid, _)) = iface_of(&p, "Shape") else { panic!("Shape in the global interface table: {:?}", p.ifaces.iter().map(|t| p.name_of(t.name)).collect::<Vec<_>>()) };
+    let slot = p.slot_of(gid, 0).expect("global slot");
+    let square = type_of(&p, "Square").expect("one global Square");
+    let f = p.vtables[square as usize][slot as usize];
+    assert!(f.is_some(), "the boxing site fills Square's row: {:?}", p.vtables[square as usize]);
+    let fname = p.name_of(p.funcs[f.unwrap() as usize].name);
+    assert!(fname.contains("area"), "the fill names the area member: {fname}");
+}
+
+#[test]
+fn member_missing_on_the_receiver_is_the_unknown_member_diag() {
+    // the use-gate diagnostic's nearest surviving law: a member call on
+    // a type with no such member is the plain unknown-member error —
+    // there is no registration for a `use` to complete, so the miss
+    // names the type and the member.
+    let g = graph(&[
+        ("shapes", SHAPES_LIB),
         ("app", "\
 use shapes::{Point, make_point};
 entry fn main() -> i32 {
@@ -285,23 +226,20 @@ entry fn main() -> i32 {
 }
 "),
     ]);
+    assert!(g.program.is_none(), "the memberless receiver must refuse");
+    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
     assert!(
-        g.diags.iter().any(|d| {
-            d.msg.contains("use `Shape` to call its methods on `Point`")
-        }),
-        "{:?}",
-        g.diags
+        ds.contains("area"),
+        "the diag names the missing member: {ds}"
     );
 }
 
 #[test]
-fn trait_typed_parameter_links_and_dispatches_through_the_vtable() {
-    // `describe(s: Shape)` LINKS: with instantiation owner-anchored, a
-    // trait-typed parameter no longer forces a splice — the parameter is
-    // an ordinary value and the call dispatches through the vtable slot
-    // the consumer's impl registration filled. `main` calls the linked
-    // fn through a plain Call, and the fn's body hops the slot (CallI) —
-    // the merged registry answers for every argument type.
+fn iface_typed_parameter_links_and_dispatches_through_the_vtable() {
+    // `describe(s: Shape)` LINKS: an interface-typed parameter is an
+    // ordinary value and the call dispatches through the itable slot
+    // the consumer's boxing site filled. `main` calls the linked fn
+    // through a plain Call, and the fn's body hops the slot (CallI).
     let g = graph(&[
         ("shapes", &format!("{SHAPES}\npub fn describe(s: Shape) -> f64 {{ return s.area(); }}\n")),
         ("app", "\
@@ -326,8 +264,8 @@ entry fn main() -> i32 {
         "main calls the linked describe:\n{}",
         ir(&p)
     );
-    // the linked body dispatches through the trait slot — the merged
-    // registry, not a per-argument clone
+    // the linked body dispatches through the interface slot — the
+    // per-type fill, not a per-argument clone
     assert!(
         p.funcs[didx].code.iter().any(|op| matches!(op, rut_core::ops::Op::CallI { .. })),
         "describe dispatches through the vtable:\n{}",
@@ -335,23 +273,74 @@ entry fn main() -> i32 {
     );
     // and the dispatch answers at run time
     let got = run_main(p);
-    assert_eq!(got, 0, "the linked trait-param call runs");
+    assert_eq!(got, 0, "the linked interface-param call runs");
 }
 
 #[test]
-fn two_phase_surfaces_carry_traits_and_impls() {
-    // the lower-level pattern: a library's surface publishes its trait
-    // decls and impl registrations; a consumer compiled against it
-    // links into one program with one merged trait
+fn satisfaction_failure_names_the_missing_member() {
+    // the boundary check's diagnostic: passing a concrete where the
+    // interface is expected runs the member-set match — the Go-shape
+    // error names the type, the interface, and the first missing member
+    let g = graph(&[
+        ("extras", EXTRAS),
+        ("app", "\
+use extras::{Shape, describe};
+struct TheirType { n: i32 }
+entry fn main() -> i32 {
+    let d = describe(TheirType { n: 1 });
+    return 0;
+}
+"),
+    ]);
+    assert!(g.program.is_none(), "an unsatisfied concrete must refuse");
+    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    assert!(
+        ds.contains("`TheirType` does not satisfy `Shape`: no member `area`"),
+        "{ds}"
+    );
+}
+
+#[test]
+fn satisfaction_failure_names_the_signature_mismatch() {
+    // the member present but wrong-shaped: the check names the first
+    // mismatched member instead
+    let g = graph(&[
+        ("extras", EXTRAS),
+        ("app", "\
+use extras::{Shape, describe};
+struct Odd { n: i32 }
+impl Odd {
+    pub fn area(self) -> i32 { return self.n; }
+}
+entry fn main() -> i32 {
+    let d = describe(Odd { n: 1 });
+    return 0;
+}
+"),
+    ]);
+    assert!(g.program.is_none(), "a mismatched member must refuse");
+    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    assert!(
+        ds.contains("`Odd` does not satisfy `Shape`")
+            && ds.contains("member `area`'s signature differs from the interface's"),
+        "{ds}"
+    );
+}
+
+#[test]
+fn two_phase_surfaces_carry_interfaces() {
+    // the lower-level pattern: a library's surface publishes its
+    // interface decls; a consumer compiled against it links into one
+    // program with one merged interface table (no impl registrations —
+    // the fills are demand-recorded at boxing sites)
     let dep = rut_driver::compile_program(SHAPES, Mode::Impl, "shapes", 1, &[]);
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep");
     let surface = dep.surface.clone();
     assert!(
-        surface.traits.iter().any(|t| surface.names.name(t.name) == "Shape"),
+        surface.ifaces.iter().any(|t| surface.names.name(t.name) == "Shape"),
         "surface exports the Shape decl"
     );
-    assert_eq!(surface.impls.len(), 2, "surface carries both impl registrations");
     let app = rut_driver::compile_program(
         "use shapes::{Shape, Point, make_point};\n\
          entry fn main() -> i32 {\n\
@@ -366,8 +355,7 @@ fn two_phase_surfaces_carry_traits_and_impls() {
     );
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let out = rut_core::link::link(vec![dep, app.program.expect("app")]).expect("link");
-    assert!(trait_of(&out, "Shape").is_some(), "one merged Shape");
+    assert!(iface_of(&out, "Shape").is_some(), "one merged Shape");
     let dump = ir(&out);
     assert!(dump.contains("callm") && !dump.contains("calli"), "\n{dump}");
 }
-

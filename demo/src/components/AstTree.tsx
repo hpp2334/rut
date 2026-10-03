@@ -95,17 +95,15 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "fields", list: n.fields },
         { label: "methods", list: n.methods },
       ];
-    case "Trait":
+    case "Interface":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
-        { label: "requires", list: n.requires },
         { label: "methods", list: n.methods },
       ];
     case "Impl":
       return [
-        { label: "trait", node: n.trait },
         { label: "target", node: n.target },
         { label: "methods", list: n.methods },
       ];

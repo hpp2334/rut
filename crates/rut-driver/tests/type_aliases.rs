@@ -1,8 +1,9 @@
 //! Type aliases, union bounds, and inline `requires` end to end
 //!: transparency through params/fields/chains, the
 //! recursion and bound-only diagnostics, admission at the call site
-//! (concrete by id, traits via the impl registry, trait objects satisfy
-//! nothing), and cross-module `pub type` export.
+//! (concrete by id, interfaces via the structural member-set match,
+//! interface objects satisfy nothing), and cross-module `pub type`
+//! export.
 
 use rut_parser::Mode;
 
@@ -137,51 +138,60 @@ entry fn main() -> i32 {\n\
 }
 
 #[test]
-fn trait_member_bound_via_the_impl_registry() {
+fn iface_member_bound_via_structural_satisfaction() {
     let src = "\
-trait Enc { fn enc(self) -> bytes; }\n\
-struct Token { v: i32 }\n\
-impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
-fn seal<T requires Enc>(x: T) -> i32 {\n\
-    let e: Enc = x;\n\
-    return e.enc().len();\n\
-}\n\
-entry fn main() -> i32 { let t: Token = Token { v: 1 }; return seal(t); }\n\
+interface Enc { fn enc(self) -> bytes; }
+class Token { v: i32 }
+impl Token {
+    pub fn new() -> Self { return Token { v: 1 }; }
+    pub fn enc(self) -> bytes { return bytes(0); }
+}
+fn seal<T requires Enc>(x: T) -> i32 {
+    let e: Enc = x;
+    return e.enc().len();
+}
+entry fn main() -> i32 { let t: Token = Token.new(); return seal(t); }
 ";
     let out = compile(src);
     assert!(out.diags.is_empty(), "Token satisfies Enc: {:?}", out.diags);
 
-    // str has no `Enc` impl — the bound names it
+    // str has no members — the bound names it
     let ds = diags_of(
-        "trait Enc { fn enc(self) -> bytes; }\n\
-         struct Token { v: i32 }\n\
-         impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         class Token { v: i32 }\n\
+         impl Token {\n\
+             pub fn new() -> Self { return Token { v: 1 }; }\n\
+             pub fn enc(self) -> bytes { return bytes(0); }\n\
+         }\n\
          fn seal<T requires Enc>(x: T) -> i32 { return 0; }\n\
          entry fn main() -> i32 { return seal(\"nope\"); }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("`str` does not satisfy") && d.contains("Enc")),
-        "no impl Enc for str: {ds:?}"
+        "no satisfaction for str: {ds:?}"
     );
 }
 
 #[test]
-fn trait_object_satisfies_nothing() {
-    // a trait-object instantiation satisfies no bound —
-    // only a concrete type with a registered impl does
+fn iface_object_satisfies_nothing() {
+    // an interface-object value satisfies no bound —
+    // only a concrete type with the members does
     let ds = diags_of(
-        "trait Enc { fn enc(self) -> bytes; }\n\
-         struct Token { v: i32 }\n\
-         impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         class Token { v: i32 }\n\
+         impl Token {\n\
+             pub fn new() -> Self { return Token { v: 1 }; }\n\
+             pub fn enc(self) -> bytes { return bytes(0); }\n\
+         }\n\
          fn seal<T requires Enc>(x: T) -> i32 { return 0; }\n\
          entry fn main() -> i32 {\n\
-             let w: Enc = Token { v: 1 };\n\
+             let w: Enc = Token.new();\n\
              return seal(w);\n\
          }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("does not satisfy")),
-        "a trait object satisfies nothing: {ds:?}"
+        "an interface object satisfies nothing: {ds:?}"
     );
 }
 
@@ -216,9 +226,9 @@ fn method_bounds_parse_and_collect() {
     // a bounded method parses, collects, and compiles when uncalled —
     // the bound rides the method declaration
     let out = compile(
-        "trait Enc { fn enc(self) -> bytes; }\n\
-         struct Token { v: i32 }\n\
-         impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         class Token { v: i32 }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
          class W { v: i32; }\n\
          impl W {\n\
              fn new() -> Self { return Self { v: 0 }; }\n\
@@ -380,10 +390,10 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
         ds.iter().any(|d| d.contains("duplicate type name `A`")),
         "two aliases, one name: {ds:?}"
     );
-    // alias-vs-enum and alias-vs-trait (the legs that never had a lift)
+    // alias-vs-enum and alias-vs-interface (the legs that never had a lift)
     let ds = diags_of("enum E { M }\n type E = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(ds.iter().any(|d| d.contains("duplicate type name `E`")), "{ds:?}");
-    let ds = diags_of("trait T { }\n type T = i64;\n entry fn main() -> i32 { return 0; }\n");
+    let ds = diags_of("interface T { }\n type T = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(ds.iter().any(|d| d.contains("duplicate type name `T`")), "{ds:?}");
 }
 

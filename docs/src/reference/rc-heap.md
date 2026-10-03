@@ -14,7 +14,7 @@ Everything except primitives and `fn` values is a heap cell:
 
 | Inline (moved by plain copy) | Heap cells (refcounted handles) |
 |---|---|
-| `u8..u64`, `i8..i64`, `u`/`isize`, `f32`, `f64`, `bool`, `nil` | `str`, `bytes`, `Vec<T>`, `[T]`, enums, structs, classes, trait objects, `opaque` boxes, host boxes, `?T` boxes, coroutine frames |
+| `u8..u64`, `i8..i64`, `u`/`isize`, `f32`, `f64`, `bool`, `nil` | `str`, `bytes`, `Vec<T>`, `[T]`, enums, structs, classes, interface objects, `opaque` boxes, host boxes, `?T` boxes, coroutine frames |
 
 Assignment, argument passing, and returning copy the **handle** (retain),
 never the bytes. Mutation through one alias is visible through every
@@ -91,7 +91,7 @@ Laws:
   kills a child whose own `dispose` is next): the drain loops until
   the queue stays empty.
 - The context `cx` is engine-minted and empty today; it grows
-  additively, never by touching the trait signature.
+  additively, never by touching the marker's signature.
 - Cancellation drops locals at the suspension point through the same
   machinery ([launched futures](launched-futures.md)) — no special case.
 

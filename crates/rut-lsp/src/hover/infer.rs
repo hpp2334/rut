@@ -137,9 +137,9 @@ fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option
 }
 
 /// a member's declared type on `ty_name`: own-surface methods and
-/// fields, then inherent impl-block methods. Trait methods stay out —
-/// the use-gate is member_hover's call to make with the full answer;
-/// inference stays conservative
+/// fields, then inherent impl-block methods. Interface members stay
+/// out — the use-gate is member_hover's call to make with the full
+/// answer; inference stays conservative
 fn member_ret(idxs: &[&DefIndex], ty_name: &str, member: &str) -> Option<String> {
     for i in idxs {
         if let Some(t) = i.ty(ty_name) {
@@ -147,9 +147,8 @@ fn member_ret(idxs: &[&DefIndex], ty_name: &str, member: &str) -> Option<String>
                 return m.ty.clone();
             }
         }
-        let owner = format!("impl {ty_name}");
         for f in &i.fns {
-            if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
+            if f.name == member && f.owner.as_deref() == Some(ty_name) {
                 return f.ret.clone();
             }
         }

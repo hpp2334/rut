@@ -14,9 +14,9 @@
 //!      `ui` (the store + the handle types + the event binding + the
 //!      widget type + the framework's four names + the component
 //!      constructors), `pouch` (Vec), and `web` contributing ONLY
-//!      `tim_after`. The store's machinery traits (Readable/Writable)
-//!      are ui-PRIVATE — they cannot be imported even by name; the set
-//!      equality is the second half of that law.
+//!      `tim_after`. The store's machinery (the shared plumbing
+//!      members) is ui-PRIVATE — it cannot be imported even by name;
+//!      the set equality is the second half of that law.
 //!   2. the biz file contains NO `Node`, no `ui_` (the crossing
 //!      prefix), no `class=`/quoted `"class"`, and no tag literals or
 //!      DOM method names.
@@ -75,8 +75,11 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
         "ui",
         &[
             // the store's public vocabulary — the store itself (boot's
-            // mint) and the handle types
-            "Store", "Source", "Derived", "Mutation",
+            // mint), the handle types, and the capability interfaces
+            // the ctx verbs' bounds observe (the handles carry the
+            // members; the names ride the import so the bounds resolve
+            // at biz's call sites)
+            "Store", "Source", "Derived", "Mutation", "Readable", "Writable",
             // the widget type and the framework's four names
             "Widget", "T1Root", "t1_mount", "t1_render", "t1_event",
             // the component constructors (+ live: the reactive subtree)
@@ -341,9 +344,13 @@ fn the_retired_store_api_survives_nowhere_in_biz() {
         "counts$.value",
         // the surface's own retired spellings: the store verbs moved
         // onto the handles (ui-module-private on the store itself),
-        // and the subject machinery died with the mutation props
+        // the subject machinery died with the mutation props, and the
+        // store's shared plumbing members (atom_id/materialize) are
+        // ui-private — the compiler refuses them; the grep pins it
         "store.get(",
         "store.set(",
+        ".atom_id(",
+        ".materialize(",
         ".subject(",
         "fn dispatch(",
     ];

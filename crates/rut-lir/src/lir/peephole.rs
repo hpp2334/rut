@@ -708,7 +708,7 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::EnumNew { dst, .. }
         | Op::TidOf { dst, .. }
         | Op::IsType { dst, .. }
-        | Op::IsTrait { dst, .. }
+        | Op::IsIface { dst, .. }
         | Op::Unbox { dst, .. }
         | Op::Box { dst, .. }
         | Op::MakeClosure { dst, .. }
@@ -858,7 +858,7 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             u.push(*idx);
             u.push(*val);
         }
-        Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsTrait { dst, obj, .. } => {
+        Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsIface { dst, obj, .. } => {
             d.push(*dst);
             u.push(*obj);
         }
@@ -983,7 +983,7 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
             f(idx);
             f(val);
         }
-        Op::TidOf { obj, .. } | Op::IsType { obj, .. } | Op::IsTrait { obj, .. } => f(obj),
+        Op::TidOf { obj, .. } | Op::IsType { obj, .. } | Op::IsIface { obj, .. } => f(obj),
         Op::Unbox { box_, .. } => f(box_),
         Op::Box { val, .. } => f(val),
 

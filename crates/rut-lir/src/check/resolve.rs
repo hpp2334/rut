@@ -41,7 +41,7 @@ impl<'a> Ctx<'a> {
                         return None;
                     }
                 }
-                let id = if let Some(t) = self.find_trait(tname).cloned() {
+                let id = if let Some(t) = self.find_iface(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
                             self.err(self.ast.span(node.id()), format!(
@@ -65,7 +65,7 @@ impl<'a> Ctx<'a> {
                             ));
                             None
                         } else {
-                            Some(self.mk_trait_inst(tname, args))
+                            Some(self.mk_iface_inst(tname, args))
                         }
                     }
                 } else if let Some(ext) = self.extern_trait(tname).cloned() {
@@ -101,7 +101,7 @@ impl<'a> Ctx<'a> {
                             ));
                             None
                         } else {
-                            Some(self.mint_extern_trait_inst(tname, args))
+                            Some(self.mint_extern_iface_inst(tname, args))
                         }
                     }
                 } else {
@@ -122,7 +122,7 @@ impl<'a> Ctx<'a> {
 
     /// The `Iterable`/`Disposal` trait mints are GONE (v20): the
     /// bracket markers (`[iterable]` / `[disposal]`) replaced the
-    /// traits. The element type falls out of the marked member's own
+    /// ifaces. The element type falls out of the marked member's own
     /// signature, for-of reads the designated member slot, the engine's
     /// release path reads the per-type disposal row built off the
     /// marked member — never a trait lookup.
@@ -132,18 +132,18 @@ impl<'a> Ctx<'a> {
     /// under a target substitution — the template re-resolution law's
     /// mint half (the dispatch half that per-instantiation consumers
     /// run: the for-of weave, the vtable fills). A local trait
-    /// instantiates from its AST. The `trait_inst` cache is shared, so
+    /// instantiates from its AST. The `iface_inst` cache is shared, so
     /// an instantiation the ordinary trait-ref resolution minted
     /// earlier is fetched, never duplicated. (The native contracts are
-    /// gone — the markers are designated member slots, not traits — so
+    /// gone — the markers are designated member slots, not ifaces — so
     /// there is no `Iterable` arm anymore.)
-    pub fn mint_impl_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+    pub fn mint_impl_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
         // a used module's exported GENERIC trait: the carried descriptor
         // mints the instantiation (no local AST exists)
         if self.extern_trait(name).is_some() {
-            return self.mint_extern_trait_inst(name, args);
+            return self.mint_extern_iface_inst(name, args);
         }
-        self.mk_trait_inst(name, args)
+        self.mk_iface_inst(name, args)
     }
 
     /// The FOREIGN generic trait's mint half: one descriptor per
@@ -156,17 +156,17 @@ impl<'a> Ctx<'a> {
     /// same first-appearance reading the dispatch sites run
     /// (`descriptor_leaf_env`) — and the trait's own object leaves
     /// (`?Self`-spelled parameters) re-spell to the NEW instantiation's
-    /// object. Cached in `trait_inst` alongside the local mints, so a
+    /// object. Cached in `iface_inst` alongside the local mints, so a
     /// spelling and an impl head land on one descriptor.
-    pub fn mint_extern_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
-        if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
+    pub fn mint_extern_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
             return id;
         }
         let base_id = self
             .extern_trait(name)
             .map(|e| e.id)
             .unwrap_or(u32::MAX);
-        let id = self.traits.len() as u32;
+        let id = self.ifaces.len() as u32;
         let tname = if args.is_empty() {
             self.interner.name(name).to_string()
         } else {
@@ -177,10 +177,10 @@ impl<'a> Ctx<'a> {
             )
         };
         let tname = self.intern(&tname);
-        self.traits.push(TraitDesc { name: tname, methods: vec![] });
-        self.trait_inst.insert((name, args.clone()), id);
+        self.ifaces.push(IfaceDesc { name: tname, methods: vec![] });
+        self.iface_inst.insert((name, args.clone()), id);
         let Some(base) = (base_id != u32::MAX)
-            .then(|| self.traits.get(base_id as usize).cloned())
+            .then(|| self.ifaces.get(base_id as usize).cloned())
             .flatten()
         else {
             return id; // unreachable — extern_trait guarantees the row
@@ -200,9 +200,9 @@ impl<'a> Ctx<'a> {
                 .map(|&p| self.subst_carried_sig(p, base_id, id, &env))
                 .collect();
             let ret = self.subst_carried_sig(tm.ret, base_id, id, &env);
-            methods.push(rut_core::binary::TraitMethod { name: tm.name, params, ret });
+            methods.push(rut_core::binary::IfaceMethod { name: tm.name, params, ret });
         }
-        self.traits[id as usize].methods = methods;
+        self.ifaces[id as usize].methods = methods;
         id
     }
 
@@ -211,7 +211,7 @@ impl<'a> Ctx<'a> {
     /// the shared crossing substitute), and a `?Self` leaf (the BASE
     /// placeholder descriptor's object type, at any depth) re-spells to
     /// the minted instantiation's object — the impl-side law's mint
-    /// twin (`resolve_trait_sig_ty` spells `Self` the same way for a
+    /// twin (`resolve_iface_sig_ty` spells `Self` the same way for a
     /// local trait).
     fn subst_carried_sig(
         &mut self,
@@ -221,8 +221,8 @@ impl<'a> Ctx<'a> {
         env: &std::collections::HashMap<String, TypeId>,
     ) -> TypeId {
         let s = self.subst_template_ty(t, env);
-        if matches!(self.types.kind(s), TyKind::TraitObj { trait_id } if *trait_id == base_id) {
-            return self.mk_trait_obj(minted);
+        if matches!(self.types.kind(s), TyKind::IfaceObj { iface_id } if *iface_id == base_id) {
+            return self.mk_iface_obj(minted);
         }
         s
     }
@@ -254,21 +254,21 @@ impl<'a> Ctx<'a> {
     /// elem fills it (`extra_vtable_fills`). No surface row exists;
     /// nothing in source can name or implement it.
     pub fn mk_future_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {
-        if let Some(&id) = self.trait_inst.get(&(name, vec![arg])) {
+        if let Some(&id) = self.iface_inst.get(&(name, vec![arg])) {
             return id;
         }
-        let id = self.traits.len() as u32;
+        let id = self.ifaces.len() as u32;
         let tname = self.intern(&format!("Future<{}>", self.elem_spelling(arg)));
         let cx = self.run_context_ty();
-        self.traits.push(TraitDesc {
+        self.ifaces.push(IfaceDesc {
             name: tname,
-            methods: vec![rut_core::binary::TraitMethod {
+            methods: vec![rut_core::binary::IfaceMethod {
                 name: sym::YIELD,
                 params: vec![cx],
                 ret: TY_NIL,
             }],
         });
-        self.trait_inst.insert((name, vec![arg]), id);
+        self.iface_inst.insert((name, vec![arg]), id);
         id
     }
 
@@ -521,7 +521,7 @@ impl<'a> Ctx<'a> {
                         return TY_I32;
                     }
                 }
-                        if let Some(t) = self.find_trait(name).cloned() {
+                        if let Some(t) = self.find_iface(name).cloned() {
                             // a trait name in type position IS the
                             // object type — the bare name spells it
                             if seg.generics.is_empty() {
@@ -533,7 +533,7 @@ impl<'a> Ctx<'a> {
                                     ));
                                     return TY_I32;
                                 }
-                                return self.mk_trait_obj(t.id);
+                                return self.mk_iface_obj(t.id);
                             }
                             if seg.generics.len() != t.generics.len() {
                                 self.err(sp, format!(
@@ -547,8 +547,8 @@ impl<'a> Ctx<'a> {
                                 .iter()
                                 .map(|g| self.resolve_type(*g, env))
                                 .collect();
-                            let id = self.mk_trait_inst(name, args);
-                            return self.mk_trait_obj(id);
+                            let id = self.mk_iface_inst(name, args);
+                            return self.mk_iface_obj(id);
                         }
                         // a used module's exported trait:
                         // the object type here, exactly like a declared
@@ -559,7 +559,7 @@ impl<'a> Ctx<'a> {
                         // static, merged origins ⇒ vtable).
                         if let Some(ext) = self.extern_trait(name).cloned() {
                             if seg.generics.is_empty() && ext.generics == 0 {
-                                return self.mk_trait_obj(ext.id);
+                                return self.mk_iface_obj(ext.id);
                             }
                             if seg.generics.is_empty() {
                                 self.err(sp, format!(
@@ -581,8 +581,8 @@ impl<'a> Ctx<'a> {
                                 .iter()
                                 .map(|g| self.resolve_type(*g, env))
                                 .collect();
-                            let id = self.mint_extern_trait_inst(name, args);
-                            return self.mk_trait_obj(id);
+                            let id = self.mint_extern_iface_inst(name, args);
+                            return self.mk_iface_obj(id);
                         }
                         // used type: the exporter's
                         // scope-qualified id; link rebases it

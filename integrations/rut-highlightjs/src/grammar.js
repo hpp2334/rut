@@ -38,7 +38,7 @@ const KEYWORDS = {
   keyword:
     // RESERVED_KW — the grammar's one canonical reserved set
     'fn let mut if else while for of return when ' +
-    'enum class struct trait impl requires use pub ' +
+    'enum class struct interface impl requires use pub ' +
     'static async await extern is host select ' +
     // contextual words — ordinary identifiers elsewhere, keywords in
     // their slots

@@ -136,7 +136,7 @@
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|class|struct|trait|impl|requires|use|pub|static|extern|is|host|fn|as|super|default|self)\\b"
+      "match": "\\b(let|mut|enum|class|struct|interface|impl|requires|use|pub|static|extern|is|host|fn|as|super|default|self)\\b"
     },
     "builtin-keyword": {
       "match": "\\b(builtin)(?=\\s+(?:fn|primitive|impl|trait)\\b)",

@@ -1,7 +1,7 @@
 use ink::{ Logger };
 use pouch::{ Vec };
 use json::{
-    decodeJson, encodeJson, DecodeErrorKind, DecodeJsonError, EncodeJsonError,
+    decodeJson, encodeJson, DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonVec,
     JsonDeserialize, JsonReader, JsonSerialize, JsonWriter,
 };
 
@@ -19,7 +19,7 @@ fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 //
 // Per rep: `decodeJson<Vec<DocRow>>(&doc)` DIRECT into typed rows (the
 // schema decides the grammar; no DOM), then `encodeJson(rows)` through
-// the same trait path, then the fold. This row is the first that
+// the same encode path, then the fold. This row is the first that
 // exercises std json end to end — and the peer model's own proof (the
 // rut.toml declares `[deps] json` + `[deps] pouch`; the gate assembles
 // group-pouch because pouch is present, and the `Vec<i64>`/`Vec<str>`
@@ -120,8 +120,9 @@ fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
 // -------------------------------------------------------- the row type ---
 //
 // The user story the impl matrix must demo (survey §2.6): the types are
-// THIS module's, the traits are json's — orphan-legal because the trait
-// is local (RFC 0012). The doc's fixed shape:
+// THIS module's, the interfaces are json's — satisfaction is
+// structural (the members live on this module's inherent impls). The
+// doc's fixed shape:
 //   {"id":I,"name":"mm-AB","active":B,"score":IIII.FFFF,
 //    "vals":[v0..v5],"tags":["ab","cd","ef"],"note":null,
 //    "meta":{"rev":R,"kind":"kl"}}
@@ -138,8 +139,8 @@ struct DocRow {
     meta: DocMeta;
 }
 
-impl JsonSerialize for DocMeta {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+impl DocMeta {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("rev");
         w.write_i64(self.rev);
@@ -150,14 +151,15 @@ impl JsonSerialize for DocMeta {
     }
 }
 
-// DocMeta's DECODE is not spelt as a trait impl here: the trait-static
-// form `DocMeta.decode(r)` is not an admitted receiver (struct types
-// aren't in the static-call receiver set), so DocRow's decode inlines
-// the shape directly onto the reader — see the "meta" arm below. The
-// ENCODE side rides normal method dispatch (`self.meta.encode(w)`).
+// DocMeta's DECODE is not spelt as a delegating member here: the
+// interface-static form `DocMeta.decode(r)` is not an admitted
+// receiver (struct types aren't in the static-call receiver set), so
+// DocRow's decode inlines the shape directly onto the reader — see
+// the "meta" arm below. The ENCODE side rides normal method dispatch
+// (`self.meta.encode(w)` — the interface satisfaction is structural).
 
-impl JsonSerialize for DocRow {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+impl DocRow {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("id");
         w.write_i64(self.id);
@@ -168,22 +170,23 @@ impl JsonSerialize for DocRow {
         w.key("score");
         w.write_f64(self.score);
         w.key("vals");
-        let e = self.vals.encode(w);
-        if (e != nil) { return e; }
+        for (let v of self.vals) {
+            w.write_i64(v);
+        }
         w.key("tags");
-        let e = self.tags.encode(w);
-        if (e != nil) { return e; }
+        for (let tag of self.tags) {
+            w.write_str(tag);
+        }
         w.key("note");
-        // the ?T row, spelled explicitly (the tree's law: deref then
-        // delegate — nil writes null, else the inner value's impl;
+        // the optional, spelled explicitly (the tree's law: deref then
+        // delegate — nil writes null, else the inner value's writer;
         // a method call ON a ?T receiver nil-derefs at runtime, so the
         // nil test is spelled out here)
         if (self.note == nil) {
             w.write_raw("null");
         } else {
             let nv: i64 = self.note;
-            let e = nv.encode(w);
-            if (e != nil) { return e; }
+            w.write_i64(nv);
         }
         w.key("meta");
         let e = self.meta.encode(w);
@@ -193,8 +196,8 @@ impl JsonSerialize for DocRow {
     }
 }
 
-impl JsonDeserialize for DocRow {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+impl DocRow {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
         let mut id: ?i64 = nil;
         let mut name: ?str = nil;
@@ -271,10 +274,10 @@ impl JsonDeserialize for DocRow {
                 },
                 "meta" -> {
                     // DocMeta's shape inlined onto the reader (the
-                    // trait-static form `DocMeta.decode(r)` is not an
-                    // admitted receiver here — struct types aren't in
-                    // the static-call receiver set, so the loop is
-                    // spelled directly, exactly the shape the trait fn
+                    // interface-static form `DocMeta.decode(r)` is not
+                    // an admitted receiver here — struct types aren't
+                    // in the static-call receiver set, so the loop is
+                    // spelled directly, exactly the shape the member
                     // would run)
                     r.begin_object();
                     let mut rev: ?i64 = nil;
@@ -398,12 +401,12 @@ entry fn main() -> nil {
     let mut first: i64 = 0;
     let mut first_len: i32 = 0;
     for (let r = 0; r < reps; r += 1) {
-        let d = decodeJson<Vec<DocRow>>(doc);
+        let d = decodeJson<JsonVec<DocRow>>(doc);
         if (d.1 != nil) {
             panic("json-roundtrip: decode failed");
         }
-        let decoded: Vec<DocRow> = d.0;
-        let et = encodeJson(decoded);
+        let decoded: Vec<DocRow> = d.0.to_vec();
+        let et = encodeJson(JsonVec(decoded));
         if (et.1 != nil) {
             panic("json-roundtrip: encode failed");
         }

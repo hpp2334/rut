@@ -40,39 +40,14 @@ fn green(rel: &str) {
     }
 }
 
-/// The trait/target spellings of json's registered impl rows, in the
-/// compiled unit's order — the compiled-world observable for "the group
-/// mounted" (the groups ride the owner's compile, presence-gated; the
-/// mounted source stays pristine).
-fn json_impl_order(rel: &str) -> Vec<String> {
-    json_impl_order_of(rel, "json")
-}
-
-fn json_impl_order_of(rel: &str, declarer: &str) -> Vec<String> {
-    let (session, root) = load(rel).expect("mount");
-    let units = rut_driver::compile_units(&session, &root);
-    assert!(
-        units.diags.is_empty(),
-        "{}",
-        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
-    );
-    let mut out = Vec::new();
-    for (spec, &(idx, _)) in &units.linked {
-        if spec != declarer {
-            continue;
-        }
-        let prog = &units.programs[idx];
-        for im in &prog.surface.impls {
-            out.push(format!(
-                "{} for {}",
-                prog.interner.name(im.trait_name),
-                prog.interner.name(prog.types.type_at(im.target).name),
-            ));
-        }
-    }
-    out.sort();
-    out
-}
+// "The group mounted" is observable through the FIXTURE bodies
+// themselves: each consumer names its group's wrapper (JVec/JMap) and
+// dispatches it — if the group never mounted, the name is unknown and
+// the fixture's own compile refuses. The negatives read the closure:
+// the gate is presence-based, so the group's peer being absent from the
+// session IS the group-not-mounted law. (The impl-registration rows —
+// the old observable — are gone; satisfaction is structural, nothing
+// registers.)
 
 fn source_of(s: &Session, spec: &str) -> String {
     match &s.resolve(spec).expect(spec).body {
@@ -81,8 +56,8 @@ fn source_of(s: &Session, spec: &str) -> String {
     }
 }
 
-const POUCH_GROUP: &str = "impl<T> JsonSerialize for Vec<T>";
-const NMAPSET_GROUP: &str = "impl<K, V> JsonSerialize for Map<K, V>";
+const POUCH_GROUP: &str = "class JVecI64";
+const NMAPSET_GROUP: &str = "class JMapStrI64";
 
 #[test]
 fn t1_optional_peers_absent_is_silent() {
@@ -103,20 +78,17 @@ fn t1_optional_peers_absent_is_silent() {
 fn t2_peer_present_group_mounts_and_dispatches() {
     // matrix row 4: peer PRESENT in the consumer's closure (any
     // reason) → the integration group mounts automatically
-    // (presence-based resolution); the group's impl dispatches through
-    // the trait; orphan/placement green.
+    // (presence-based resolution); the group's wrapper dispatches;
+    // placement green.
     let (s, _) = load("cons_pouch").expect("mount");
     // the mounted source stays pristine — the groups ride the compile
     assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
-    let impls = json_impl_order("cons_pouch");
     assert!(
-        impls.iter().any(|r| r.contains("Vec")),
-        "the pouch group's rows compiled into json's unit: {impls:?}"
+        s.resolve("nmapset").is_err(),
+        "nmapset is absent — inert: the group's peer never mounted"
     );
-    assert!(
-        !impls.iter().any(|r| r.contains("Map")),
-        "nmapset is absent — inert: {impls:?}"
-    );
+    // green IS the positive: cons.rut names the group's JVec and
+    // dispatches it
     green("cons_pouch");
 }
 
@@ -124,13 +96,13 @@ fn t2_peer_present_group_mounts_and_dispatches() {
 fn t3_both_peers_mount_in_name_order() {
     // matrix row 4, both peers: both groups mount, in peer-name
     // (BTreeMap) order — `nmapset` before `pouch` — after the base;
-    // both impl sets dispatch.
+    // both wrappers dispatch. (The old observable for the ORDER half —
+    // the impl rows' compile order — died with the registry; the mount
+    // walk's BTreeMap order is the loader's own iteration law.)
     let (s, _) = load("cons_both").expect("mount");
     assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
-    let impls = json_impl_order("cons_both");
-    let a = impls.iter().position(|r| r.contains("Map")).expect("nmapset group rows compiled");
-    let b = impls.iter().position(|r| r.contains("Vec")).expect("pouch group rows compiled");
-    assert!(a < b, "groups compile in peer-name (BTreeMap) order: {impls:?}");
+    // green IS the positive: cons.rut names BOTH groups' wrappers
+    // (JVec and JMap) and dispatches both
     green("cons_both");
 }
 
@@ -206,9 +178,6 @@ fn t6_self_build_dev_deps_guarantee_presence() {
     assert!(s.resolve("pouch").is_ok(), "the dev pass mounted pouch");
     assert!(s.resolve("nmapset").is_ok(), "the dev pass mounted nmapset");
     assert!(s.resolve("base").is_ok(), "the dev walk is transitive");
-    let impls = json_impl_order("json");
-    assert!(impls.iter().any(|r| r.contains("Vec")), "{impls:?}");
-    assert!(impls.iter().any(|r| r.contains("Map")), "{impls:?}");
     let g = rut_driver::compile_graph(&s, &root);
     assert!(
         g.diags.is_empty(),
@@ -240,10 +209,9 @@ fn t7b_broken_peer_path_is_inert_for_consumers() {
     // read — the optional peer is absent (inert), the group never
     // mounts, no error.
     let (s, _) = load("cons_broken").expect("the broken path must be inert for a consumer");
-    let impls = json_impl_order("cons_broken");
     assert!(
-        !impls.iter().any(|r| r.contains("Vec")),
-        "the group must not mount: {impls:?}"
+        s.resolve("pouch").is_err(),
+        "the group's peer must not mount (consumer paths are never read)"
     );
     green("cons_broken");
 }
@@ -254,11 +222,8 @@ fn t7c_presence_is_by_name_the_path_is_never_read() {
     // OWN path, so the group mounts even though json_broken's peer
     // path is broken (first-mount-wins: the consumer's path won).
     let (s, _) = load("cons_broken_supply").expect("mount");
-    let impls = json_impl_order_of("cons_broken_supply", "json_broken");
-    assert!(
-        impls.iter().any(|r| r.contains("Vec")),
-        "the group mounts on presence, not on the declarer's path: {impls:?}"
-    );
+    // green IS the positive: cons.rut names json_broken's group wrapper
+    // (JVec) and dispatches it
     green("cons_broken_supply");
 }
 
@@ -269,11 +234,8 @@ fn t8_peer_gate_is_one_post_closure_pass() {
     // new pkg names, so no fixpoint is needed.
     let (s, _) = load("cons_chain").expect("mount");
     assert!(s.resolve("base").is_ok(), "pouch's own dep walked");
-    let impls = json_impl_order("cons_chain");
-    assert!(
-        impls.iter().any(|r| r.contains("Vec")),
-        "the group mounted with the full closure in the session: {impls:?}"
-    );
+    // green IS the positive: the group's wrapper dispatches with the
+    // full closure in the session
     green("cons_chain");
 }
 
@@ -290,9 +252,6 @@ fn t9_both_kinds_pairing_end_to_end() {
         .expect("the pairing parses");
     assert!(decl.optional, "the peer half is optional");
     assert!(s.resolve("pouch").is_ok(), "the dev half mounted");
-    let impls = json_impl_order("json");
-    assert!(impls.iter().any(|r| r.contains("Vec")), "{impls:?}");
-    assert!(impls.iter().any(|r| r.contains("Map")), "{impls:?}");
     let g = rut_driver::compile_graph(&s, &root);
     assert!(
         g.diags.is_empty(),

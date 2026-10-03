@@ -154,8 +154,8 @@ mod tests {
         // with the probing core)
         assert!(
             idxs.iter()
-                .any(|i| i.fns.iter().any(|f| f.name == "map_hput_i")),
-            "std surface lacks nmap_host's map_hput_i"
+                .any(|i| i.fns.iter().any(|f| f.name == "map_hput")),
+            "std surface lacks nmap_host's map_hput"
         );
         // the round-1 lane's negative pin: the opaque-keyed crossing is
         // GONE from the surface (the P4 cull)

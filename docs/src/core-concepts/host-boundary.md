@@ -59,7 +59,7 @@ runtime negotiation:
   on; a *panic* is drift and arrives on the trap channel, never filling
   an err field.
 
-Everything else — user structs and classes, `Vec`s, trait-typed values,
+Everything else — user structs and classes, `Vec`s, interface-typed values,
 closures — stays inside the VM. A declaration that violates the set is
 a compile error at the declaration, not a failed call at 2 a.m. A
 polymorphic crossing seals its value in an erasure box
@@ -124,10 +124,10 @@ host fn name(params) -> T;        // concrete signature; no generics —
 host struct Name { fields };      // flat record of crossing fields
 ```
 
-`builtin` declarations (the engine's own fns, classes, and traits —
+`builtin` declarations (the engine's own fns and classes —
 `str` methods, `Weak`, `Future`) are engine surface: the embedder
-cannot spell them, and users implement their traits with ordinary impl
-blocks. Async rows (`pub host async fn`) are declared like any row and
+cannot spell them, and the engine's contracts are the bracket markers
+and the closed classes — no interface machinery behind them. Async rows (`pub host async fn`) are declared like any row and
 expand into a small row family the driving loop uses — the embedder
 binds them with one closure per future; see
 [the async model](async-model.md).

@@ -9,7 +9,7 @@ every other page assumes them.
 - **Primitives and `fn` values copy** (immediate slots): `u8..u64`,
   `i8..i64`, `f32`/`f64`, `bool`, and closures' function values.
 - **Every cell type shares its cell**: `str`, `bytes`, struct/class
-  records, `[T]` arrays, enums, trait objects, `opaque` boxes, closures'
+  records, `[T]` arrays, enums, interface objects, `opaque` boxes, closures'
   captured cells, and `?T` boxes.
 - `let b = a` — any cell type — is an O(1) handle move (retain new,
   release old). Mutation through any alias is visible through all of
@@ -99,11 +99,11 @@ expected-type position, transitive through `??T`:
 | numeric / `bool` primitives | value | IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`) |
 | `str` | content (codepoints) | content compare |
 | `bytes` | content (octets) | content compare |
-| everything else — records, arrays, enums, closures, trait objects, `opaque`, `?T` | **cell identity** | the raw slot compare |
+| everything else — records, arrays, enums, closures, interface objects, `opaque`, `?T` | **cell identity** | the raw slot compare |
 
 `[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no
 deep walk; compare content where content is the contract (a loop, or a
-hash/eq trait contract for keys). `?T == ?T` is slot identity: two
+hash/eq interface contract for keys). `?T == ?T` is slot identity: two
 `nil`s are equal, a null and a box are not. See
 [Rc, dispose, and identity](rc-dispose-identity.md) for the full law
 and the lint on obviously-fresh composites.

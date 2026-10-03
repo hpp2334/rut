@@ -18,7 +18,7 @@ pub enum TokenType {
     Enum,
     EnumMember,
     Class,
-    Trait,
+    Interface,
     Operator,
 }
 
@@ -35,7 +35,7 @@ pub const ALL: [TokenType; 14] = [
     TokenType::Enum,
     TokenType::EnumMember,
     TokenType::Class,
-    TokenType::Trait,
+    TokenType::Interface,
     TokenType::Operator,
 ];
 
@@ -54,7 +54,7 @@ impl TokenType {
             TokenType::Enum => "enum",
             TokenType::EnumMember => "enumMember",
             TokenType::Class => "class",
-            TokenType::Trait => "trait",
+            TokenType::Interface => "interface",
             TokenType::Operator => "operator",
         }
     }

@@ -13,24 +13,25 @@ use ink::{ Logger };
 type Meters = i64;
 type Km = Meters;
 
-// the bound the generic fns name — any type with a registered impl
-trait Labeled {
+// the bound the generic fns name — an interface: a type satisfies it
+// by HAVING the member on its own inherent impl
+interface Labeled {
     fn label(self) -> str;
 }
 
 struct Ridge { h: i32 }
 struct Trench { d: i32 }
 
-impl Labeled for Ridge {
-    fn label(self) -> str { return "ridge"; }
+impl Ridge {
+    pub fn label(self) -> str { return "ridge"; }
 }
 
-impl Labeled for Trench {
-    fn label(self) -> str { return "trench"; }
+impl Trench {
+    pub fn label(self) -> str { return "trench"; }
 }
 
-// a trait bound: the concrete type must have a registered impl —
-// the widening `let w: Labeled = x` compiles BECAUSE the bound holds
+// an interface bound: the concrete type must SATISFY the member set —
+// the widening `let w: Labeled = x` compiles BECAUSE it does
 fn name<T requires Labeled>(x: T) -> str {
     let w: Labeled = x;
     return w.label();

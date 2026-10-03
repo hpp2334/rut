@@ -1,9 +1,11 @@
-// the nmapset integration group: impl-only, like the
+// the nmapset integration group: wrapper-only, like the
 // pouch group. Mounted when `nmapset` is in the program's closure.
 use nmapset::{Map};
 
-impl<K, V> JsonSerialize for Map<K, V> {
-    fn json_serialize(self) -> str {
+pub class JMapStrI64(Map<str, i64>);
+
+impl JMapStrI64 {
+    pub fn json_serialize(self) -> str {
         return "[map]";
     }
 }

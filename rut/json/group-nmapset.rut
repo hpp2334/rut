@@ -1,216 +1,201 @@
 // --------------------------------------------------------------
-// the nmapset integration group (the rut-json batch, phase 1): impl-ONLY
-// by law — no new public names; appended to json's own
-// source by the peer gate when `nmapset` is in the program's closure.
+// the nmapset integration group (the wrapper family over the maps):
+// appended to json's own source by the peer gate when `nmapset` is in
+// the program's closure.
 //
-// THE SURVEY §2.6 MATRIX, AS LANDED — the DECODE half:
+// THE WRAPPER LAW, AS LANDED — the map/set families are one wrapper
+// per KEY SHAPE (`JMapStr`, `JMapI64`, `JMapBool`, `JMapU64`,
+// `JMapBytes`) plus `JSet<T>`: the KEY is a primitive, and primitives
+// carry no members, so the key-text parse cannot dispatch through the
+// type — it is baked into the wrapper. The key law (the survey §2.6's
+// prim-key policy): `str` verbatim, integers decimal, `bool`
+// true/false; an unparsable key text is WrongType naming the text;
+// duplicates that normalize together ("01" and "1") are LAST WINS —
+// nmapset's `put` semantics. (`f64` keys have no row: the union bound
+// never admitted them — floats have no stable equality contract — so
+// there was never a shape to wrap.) `bytes` keys have no JSON
+// spelling: the wrapper exists so the LAW is testable — every decode
+// answers WrongType with the disclosure in `expected`.
 //
-//   HashMap<K, V> / HashSet<T> — ONE map impl (the type-name-law
-//   batch: the alias-row form is repealed — one name, one decl — and
-//   the three val-column impls that used to register beside the
-//   generic one FOLDED into it; without the rows a generic impl and a
-//   partial-instantiation impl over one class collide at link). The
-//   val lane is V's OWN `decode` dispatch, per instantiation:
-//   `i64`/`f64` ride json's scalar impls, `u64` rides the gnu64
-//   impl below — objects for the maps, arrays for the set, keys and
-//   elements through K's/T's own impls. K's key text parses by K's
-//   own shape (§2.6's prim-key policy): `str` verbatim, integers
-//   decimal, `bool` true/false, `f64` through the §2.4 parse; an
-//   unparsable key text is WrongType naming the text; duplicates that
-//   normalize together ("01" and "1") are LAST WINS — nmapset's `put`
-//   semantics. `HashMap<K, i64/u64/f64>` now spells the generic class
-//   (the `[?V]` sidecar): same decoded values, sidecar storage.
+// The value lane is V's OWN `decode` dispatch, per instantiation: the
+// scalar values ride json's wrapper shapes (`JsonI64`, `JsonU64`,
+// …) — a bare primitive value cannot satisfy the bound, so
+// `JMapStr<JsonU64>` is the u64-valued spelling, `to_map()` answers
+// `HashMap<str, JsonU64>`, and each entry reads through its own
+// `get()`.
 //
-// THE ENCODE HALF IS NOT LANDED — disclosed, not dropped silently: json
-// can encode a map only by WALKING it, and nmapset ships no iteration
-// surface (`keys`/`values`/`iter` — its §2.6-census comment says so
-// itself), and its private table is another module's field. The batch
-// law pins nmapset's source this batch (its bench rows are the
-// bit-identical gates), so phase 1 does not grow a sibling std pkg's
-// public surface to finish this half; an nmapset iteration surface is
-// the recorded menu item, and the encode rows land with it. Everything
-// else in the matrix — base, pouch group, this group's decode — is
-// functional.
-//
-// `bytes` keys (the union bound admits them): JSON has no binary key
-// spelling, and base64 would be a policy this pkg does not invent —
-// the survey §2.3 census kind `KeyUnsupported` names the ENCODE-side
-// answer and stays DECLARED-BUT-DORMANT this phase (its only fire site
-// is inside the map encode rows, deferred with that half). On the
-// DECODE side the same no-binary-spelling law answers `WrongType` —
-// the only honest kind of the six `DecodeErrorKind`s for a doc key
-// this map's key type can parse — with the `expected` field spelling
-// out WHY (`bytes keys have no JSON spelling`), so the diagnostic
-// carries the disclosure the kind would have carried.
+// THE ENCODE HALF IS NOT LANDED — disclosed, not dropped silently:
+// json can encode a map only by WALKING it, and nmapset ships no
+// iteration surface (`keys`/`values`/`iter`). An nmapset iteration
+// surface is the recorded menu item, and the encode wrappers land
+// with it. The decode half is functional.
 
 use core::{opaque}; // the spliced nmapset source's field type — `t: opaque` — must be in this unit's scope
 use nmapset::{HashMap, HashSet};
 
-// the key-text parsers (§2.6), one private impl per landed key shape —
-// dispatched per instantiation through `K.key_from_text(..)`, the
-// sanctioned type-parameter static receiver (survey §1.4 item 2)
-trait KeyText {
-    fn key_from_text(t: str) -> ?Self;
-    fn key_spells() -> bool; // false: this key type has no JSON spelling
-}
+// ---- the key-text folds (§2.6), one private fn per key shape ------
 
-impl KeyText for str {
-    fn key_from_text(t: str) -> ?Self {
-        // verbatim (escaped by the reader's string law already)
-        return t;
-    }
-    fn key_spells() -> bool { return true; }
-}
-
-impl KeyText for i64 {
-    fn key_from_text(t: str) -> ?Self {
-        // §2.6's key-text law is LENIENT where JSON values are strict:
-        // `"01"` and `"1"` normalize together (last wins), so the fold
-        // skips no grammar and accepts leading zeros — only the width
-        // bound is enforced (pre-checked, never wraps)
-        let n = t.len();
-        if (n == 0) { return nil; }
-        let mut i: i32 = 0;
-        let mut neg = false;
-        let first = t.slice(0, 1).code() as i32;
-        if (first == 0x2D) {
-            neg = true;
-            i = 1;
-            if (n == 1) { return nil; }
-        }
-        let mut acc: i64 = 0;
-        while (i < n) {
-            let c = t.slice(i, i + 1).code() as i32;
-            if (c < 0x30 || c > 0x39) { return nil; }
-            if (acc < -922337203685477580i64) { return nil; }
-            acc = acc * 10;
-            if (acc < -9223372036854775807i64 - 1i64 + (c - 0x30) as i64) { return nil; }
-            acc = acc - (c - 0x30) as i64;
-            i += 1;
-        }
-        if (!neg && acc == -9223372036854775807i64 - 1i64) { return nil; }
-        if (neg) { return acc; }
-        return -acc;
-    }
-    fn key_spells() -> bool { return true; }
-}
-
-impl KeyText for bool {
-    fn key_from_text(t: str) -> ?Self {
-        if (t == "true") { return true; }
-        if (t == "false") { return false; }
-        return nil;
-    }
-    fn key_spells() -> bool { return true; }
-}
-
-// the u64 digit fold — the u64 VAL lane's values (below) and the u64
-// KEY shape; the fold pre-checks its bound (no wrapping ops)
-fn gnu64(t: str) -> ?u64 {
+// §2.6's key-text law is LENIENT where JSON values are strict: `"01"`
+// and `"1"` normalize together (last wins), so the fold skips no
+// grammar and accepts leading zeros — only the width bound is
+// enforced (pre-checked, never wraps)
+fn key_i64(t: str) -> ?i64 {
     let n = t.len();
     if (n == 0) { return nil; }
-    let mut acc: u64 = 0;
     let mut i: i32 = 0;
+    let mut neg = false;
+    let first = t.slice(0, 1).code() as i32;
+    if (first == 0x2D) {
+        neg = true;
+        i = 1;
+        if (n == 1) { return nil; }
+    }
+    let mut acc: i64 = 0;
     while (i < n) {
         let c = t.slice(i, i + 1).code() as i32;
         if (c < 0x30 || c > 0x39) { return nil; }
-        let (m, ok1) = acc.checked_mul(10u64);
-        let d = (c - 0x30) as u64;
-        let (a, ok2) = m.checked_add(d);
-        if (!ok1 || !ok2) { return nil; }
-        acc = a;
+        if (acc < -922337203685477580i64) { return nil; }
+        acc = acc * 10;
+        if (acc < -9223372036854775807i64 - 1i64 + (c - 0x30) as i64) { return nil; }
+        acc = acc - (c - 0x30) as i64;
         i += 1;
     }
-    return acc;
+    if (!neg && acc == -9223372036854775807i64 - 1i64) { return nil; }
+    if (neg) { return acc; }
+    return -acc;
 }
 
-impl KeyText for u64 {
-    fn key_from_text(t: str) -> ?Self {
-        return gnu64(t);
-    }
-    fn key_spells() -> bool { return true; }
+// the u64 key fold — the base's gnu64 (the same law)
+fn key_u64(t: str) -> ?u64 {
+    return gnu64(t);
 }
 
-// the u64 VAL lane (the fold): decodeJson<u64> and every `V.decode`
-// dispatch with V = u64 — `HashMap<str, u64>`'s element read — answer
-// the reader's number TEXT through the gnu64 fold, so a value beyond
-// i64's reach lands exactly and anything unparsable is WrongType
-// naming the text (the deleted val-row impl's body, verbatim)
-impl JsonDeserialize for u64 {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let t = r.read_number_text();
-        if (r.failed()) { return (nil, r.error()); }
-        let v = gnu64(t);
-        if (v == nil) {
-            return (nil, DecodeJsonError {
-                kind: DecodeErrorKind.WrongType,
-                at: r.here() as i64,
-                got: t,
-                expected: "a u64",
-            });
-        }
-        return (v, nil);
-    }
+fn key_bool(t: str) -> ?bool {
+    if (t == "true") { return true; }
+    if (t == "false") { return false; }
+    return nil;
 }
 
-impl KeyText for f64 {
-    fn key_from_text(t: str) -> ?Self {
-        // §2.4's two-tier parse; spelling normalizes (`1` back as 1.0 —
-        // value-equal, the survey's disclosed f64-key normalization)
-        let mut r = JsonReader.of(t);
-        let v = r.read_f64();
-        if (r.failed() || !r.at_end()) { return nil; }
-        return v;
-    }
-    fn key_spells() -> bool { return true; }
+// the WrongType mint for an unparsable key text (the failure law:
+// the text names itself; `at` rides the reader's position)
+fn map_err(at: i64, kt: str, want: str) -> DecodeJsonError {
+    return DecodeJsonError {
+        kind: DecodeErrorKind.WrongType,
+        at: at,
+        got: kt,
+        expected: want,
+    };
 }
 
-impl KeyText for bytes {
-    fn key_from_text(t: str) -> ?Self {
-        // JSON has no binary key spelling, and base64 would be a policy
-        // this pkg does not invent (survey §2.6) — always unsupported
-        let _ = t;
-        return nil;
-    }
-    fn key_spells() -> bool { return false; }
-}
+// ---- the family ----------------------------------------------------
 
-impl<K, V> JsonDeserialize for HashMap<K, V> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<K, V>.new();
+pub class JMapStr<V requires JsonDeserialize>(HashMap<str, V>);
+
+impl<V> JMapStr<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<str, V>.new();
         r.begin_object();
         while (r.more()) {
             let kt = r.next_key();
             if (r.failed()) { return (nil, r.error()); }
-            let k = K.key_from_text(kt);
-            if (k == nil) {
-                // unparsable key text names itself (§2.6: WrongType); a
-                // bytes key is unparsable by definition — no JSON
-                // spelling (the header's disclosure)
-                let mut want = "a key this map's key type can parse";
-                if (!K.key_spells()) {
-                    want = "a key type JSON can spell (bytes keys have no JSON spelling)";
-                }
-                return (nil, DecodeJsonError {
-                    kind: DecodeErrorKind.WrongType,
-                    at: r.here() as i64,
-                    got: kt,
-                    expected: want,
-                });
-            }
-            let kk: K = k;
+            // verbatim (escaped by the reader's string law already)
+            let kk: str = kt;
             let (v, e) = V.decode(r);
             if (e != nil) { return (nil, e); }
             let _ = m.put(kk, v);
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
-        return (m, nil);
+        return (JMapStr(m), nil);
     }
+    pub fn to_map(self) -> HashMap<str, V> { return self.inner; }
 }
 
-impl<T> JsonDeserialize for HashSet<T> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+pub class JMapI64<V requires JsonDeserialize>(HashMap<i64, V>);
+
+impl<V> JMapI64<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<i64, V>.new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_i64(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: i64 = k;
+            let (v, e) = V.decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapI64(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<i64, V> { return self.inner; }
+}
+
+pub class JMapBool<V requires JsonDeserialize>(HashMap<bool, V>);
+
+impl<V> JMapBool<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<bool, V>.new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_bool(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: bool = k;
+            let (v, e) = V.decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapBool(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<bool, V> { return self.inner; }
+}
+
+pub class JMapU64<V requires JsonDeserialize>(HashMap<u64, V>);
+
+impl<V> JMapU64<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<u64, V>.new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_u64(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: u64 = k;
+            let (v, e) = V.decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapU64(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<u64, V> { return self.inner; }
+}
+
+pub class JMapBytes<V requires JsonDeserialize>(HashMap<bytes, V>);
+
+impl<V> JMapBytes<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let kt = r.next_key();
+        if (r.failed()) { return (nil, r.error()); }
+        return (nil, map_err(r.here() as i64, kt, "a key type JSON can spell (bytes keys have no JSON spelling)"));
+    }
+    pub fn to_map(self) -> HashMap<bytes, V> { return self.inner; }
+}
+
+pub class JSet<T requires JsonDeserialize>(HashSet<T>);
+
+impl<T> JSet<T> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         let mut s = HashSet<T>.new();
         r.begin_array();
         while (r.more()) {
@@ -220,6 +205,7 @@ impl<T> JsonDeserialize for HashSet<T> {
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
-        return (s, nil);
+        return (JSet(s), nil);
     }
+    pub fn to_set(self) -> HashSet<T> { return self.inner; }
 }

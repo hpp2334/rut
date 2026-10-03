@@ -124,27 +124,22 @@ fn body_methods_are_a_hard_error() {
 
 #[test]
 fn bodyless_impl_is_rejected() {
-    // exactly two braced impl forms — no `impl I for T;`
-    let (_, diags) = parse("trait I { fn m(self) -> nil; } struct T { x: i32 } impl I for T;", Mode::Impl);
+    // exactly one braced impl form — the grammar has no `for` branch,
+    // so `impl I for T;` is the missing-`{` shape
+    let (_, diags) = parse("struct T { x: i32 } impl I for T;", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("expected {")),
         "a bodyless impl must diagnose: {diags:?}"
     );
 }
 
-#[test]
-fn impl_pub_is_rejected() {
-    // trait impl methods ride the trait's visibility
-    let (_, diags) = parse("trait I { fn m(self) -> nil; } struct T { x: i32 } impl I for T { pub fn m(self) -> nil { } }", Mode::Impl);
-    assert!(
-        diags.iter().any(|d| d.msg.contains("trait impl methods carry no `pub`")),
-        "pub in a trait impl must diagnose: {diags:?}"
-    );
-}
+// the `impl I for T { .. }` visibility law (trait impl methods ride the
+// trait's visibility) died with trait impls — structural satisfaction
+// has no registration form to gate.
 
 #[test]
-fn trait_bodies_accept_async_and_no_self_sigs() {
-    let src = "trait T {\n\
+fn interface_bodies_accept_async_and_no_self_sigs() {
+    let src = "interface T {\n\
         fn area(self) -> f64;\n\
         async fn poll(self) -> bool;\n\
         fn yield_now(cx: u32);\n\
@@ -152,26 +147,77 @@ fn trait_bodies_accept_async_and_no_self_sigs() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Trait { methods, .. } = ast.item(items[0]) else {
-        panic!("expected a trait");
+    let ItemKind::Interface { methods, .. } = ast.item(items[0]) else {
+        panic!("expected an interface");
     };
     assert!(ast.method_decl(methods[1]).is_async);
     assert!(!ast.method_decl(methods[2]).is_async);
 }
 
 #[test]
-fn both_impl_forms_parse() {
+fn inherent_impl_is_the_one_form() {
     let src = "struct P { x: i32 } \
         impl P { fn new(x: i32) -> Self { return Self { x: x }; } } \
-        trait Show { fn show(self) -> str; } \
-        impl Show for P { fn show(self) -> str { return \"\"; } }";
+        interface Show { fn show(self) -> str; } \
+        impl P { fn show(self) -> str { return \"\"; } }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Impl { trait_ref: None, .. } = ast.item(items[1]) else {
+    let ItemKind::Impl { target, .. } = ast.item(items[1]) else {
         panic!("expected an inherent impl");
     };
-    let ItemKind::Impl { trait_ref: Some(_), .. } = ast.item(items[3]) else {
-        panic!("expected a trait impl");
+    let TypeKind::TyPath { segs } = ast.ty(*target) else {
+        panic!("expected a path target");
     };
+    assert_eq!(ast.name(segs[0].name), "P");
+    let ItemKind::Impl { .. } = ast.item(items[3]) else {
+        panic!("expected a second inherent impl");
+    };
+}
+
+#[test]
+fn interface_vis_parses_into_the_item() {
+    // the interface carries its own visibility — members carry none
+    let src = "pub interface Show {\n\
+        fn show(self) -> str;\n\
+    }";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    let ItemKind::Interface { vis, name, methods, .. } = ast.item(items[0]) else {
+        panic!("expected an interface");
+    };
+    assert_eq!(*vis, Vis::Pub);
+    assert_eq!(ast.name(*name), "Show");
+    assert_eq!(methods.len(), 1);
+}
+
+#[test]
+fn interface_member_pub_is_diagnosed() {
+    // the interface's visibility rules govern — members take no `pub`
+    let (_, diags) = parse("interface Show { pub fn show(self) -> str; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("interface members carry no `pub`")),
+        "member `pub` must diagnose: {diags:?}"
+    );
+}
+
+#[test]
+fn interface_member_marker_is_diagnosed() {
+    // `[marker]` is an inherent-impl spelling — never an interface's
+    let (_, diags) = parse("interface I { [iterable] fn it(self) -> i32; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("marks an inherent impl member")),
+        "an interface-body marker must diagnose: {diags:?}"
+    );
+}
+
+#[test]
+fn interface_non_fn_member_is_diagnosed() {
+    // interfaces declare method signatures — nothing else
+    let (_, diags) = parse("interface I { x: i32; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("interfaces declare method signatures") && d.msg.contains("expected `fn`")),
+        "a non-fn member must diagnose: {diags:?}"
+    );
 }

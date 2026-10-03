@@ -39,7 +39,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 members.join(", ")
             )));
         }
-        TyForm::Trait | TyForm::Builtin | TyForm::Primitive => {
+        TyForm::Interface | TyForm::Builtin | TyForm::Primitive => {
             let mut body = String::new();
             for m in &ty.methods {
                 body.push_str("    ");
@@ -90,7 +90,7 @@ pub(crate) fn render_member(i: &DefIndex, ty: &TyDef, m: &MemberSrc, via: Option
     let mut out = code_block(&m.src);
     match via {
         Some(v) => out.push_str(&format!("\nfrom `{v}`")),
-        None if ty.form == TyForm::Trait => {
+        None if ty.form == TyForm::Interface => {
             out.push_str(&format!("\ndeclared in `{}`", ty.name));
         }
         None => out.push_str(&format!("\nin `{}`", ty.name)),

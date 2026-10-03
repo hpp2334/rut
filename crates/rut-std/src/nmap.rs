@@ -77,7 +77,7 @@ use hashbrown::HashTable;
 
 use rut_vm::heap::{Heap};
 use rut_vm::interp::{HostPkg, Ret, Vm};
-use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot};
+use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
 
 /// Which payload flavor the table stores — fixed by the first inserted
 /// key and admitted thereafter (the wrapper is generic over `K`, so keys
@@ -110,6 +110,18 @@ pub enum KeyVal {
     Str(String),
     /// an owned `bytes` copy — fresh inserts only
     Bytes(Vec<u8>),
+}
+
+impl KeyVal {
+    /// The key's flavor — what `admit` checks (always equal to the
+    /// probe's own flavor over the same content).
+    pub fn kind(&self) -> KeyKind {
+        match self {
+            KeyVal::Bits(_) => KeyKind::Bits,
+            KeyVal::Str(_) => KeyKind::Str,
+            KeyVal::Bytes(_) => KeyKind::Bytes,
+        }
+    }
 }
 
 /// The BORROWED probe key (nmap-borrow-probe): what every crossing
@@ -855,148 +867,155 @@ pub fn pkg() -> HostPkg {
         },
     );
 
-    // ---- the fused handle lanes (nmapset-hostops) ----------------------
-    // 18 fns `map_h{put,find,remove}_{i,u,b,s,y,sv}`: the takeover
-    // surface. The key crosses DIRECTLY on the typed lanes; the answer
-    // is the packed `(handle << 1) | newly` i64 (`hput`) or the key's
-    // STABLE birth handle (or `-1`), which the wrapper's `[?V]` sidecar
-    // is indexed by. `HashSet` shares `hput` and reads bit 0. Growth is
-    // std's — internal, and invisible to every answer (the handle is a
-    // birth, not an address).
+    // ---- the fused handle lanes (the boxed-key law) -------------------
+    // Six crossings. The key SEALS at the wrapper's edge — `opaque(k)`,
+    // exactly the law the values always followed — and the host opens
+    // the box ([`rut_vm::rut_box_payload`]): the register word's raw
+    // bits for the integer and `bool` lanes (bits ARE the key identity,
+    // bit-for-bit the words the typed lanes bucketed), the octets for
+    // `str`/`bytes` (the same FNV-1a 64). Anything else outside the
+    // closed key set traps `Invalid` by name — the wrapper's union
+    // bound is the compile-time admission, this is the host's defense.
+    // The answers are unchanged: the packed `(handle << 1) | newly` i64
+    // from `map_hput` (HashSet reads bit 0), the birth handle or `-1`
+    // from `map_hfind`, the was-present i32 from `map_hremove`, and the
+    // valued trio keeps its seal/answer laws (the box IS the `?opaque`).
+    fn key_val_of(vm: &Vm, k: &OpaqueRef) -> Result<KeyVal, Trap> {
+        let (_ty, v) = rut_vm::rut_box_payload(vm, k)?;
+        match v {
+            Value::I64(bits) => Ok(KeyVal::Bits(bits as u64)),
+            Value::Bool(b) => Ok(KeyVal::Bits(b as u64)),
+            Value::Str(s) => Ok(KeyVal::Str(s)),
+            Value::Bytes(b) => Ok(KeyVal::Bytes(b)),
+            Value::F64(_) => Err(Trap::new(
+                TrapKind::Invalid,
+                "nmap: a float key — the closed key set admits the integer primitives, `bool`, `str`, `bytes` (floats have no stable equality contract)",
+            )),
+            _ => Err(Trap::new(
+                TrapKind::Invalid,
+                "nmap: key box outside the closed key set — the integer primitives, `bool`, `str`, `bytes`",
+            )),
+        }
+    }
+
     rut_vm::pkg_fn!(
         pkg,
-        "map_hput_i",
-        (Opaque<NativeTable>, i64) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k as u64)))?
+        "map_hput",
+        (Opaque<NativeTable>, OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef| -> Result<i64, Trap> {
+            let key = key_val_of(vm, &k)?;
+            b.with_mut(vm, |_vm, t| {
+                t.check_kind(key.kind())?;
+                fused_put(t, key)
+            })?
         },
     );
     rut_vm::pkg_fn!(
         pkg,
-        "map_hput_u",
-        (Opaque<NativeTable>, u64) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k)))?
+        "map_hfind",
+        (Opaque<NativeTable>, OpaqueRef) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef| -> Result<i32, Trap> {
+            let key = key_val_of(vm, &k)?;
+            b.with(|t| {
+                t.check_kind(key.kind())?;
+                fused_find(t, &key)
+            })?
         },
     );
     rut_vm::pkg_fn!(
         pkg,
-        "map_hput_b",
-        (Opaque<NativeTable>, bool) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bits(k as u64)))?
+        "map_hremove",
+        (Opaque<NativeTable>, OpaqueRef) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef| -> Result<i32, Trap> {
+            let key = key_val_of(vm, &k)?;
+            b.with_mut(vm, |vm, t| {
+                t.check_kind(key.kind())?;
+                fused_remove(vm, t, &key)
+            })?
+        },
+    );
+
+    // ---- the valued lanes (the boxed-key law; values seal as ever) ----
+    // Three crossings + the `_sv` range twins. The KEY is the seal box
+    // (opened for hash/eq, never stored — a fresh insert materializes
+    // the owned copy, the one alloc the probe law always had); the
+    // VALUE is never inspected, so it seals: the put's `v: opaque` is
+    // the erasure box, the entry takes over the param handle's one
+    // reference ([`seal_transfer`], after admission — the leak law),
+    // and the get answers `?opaque` — the STORED box ([`seal_answer`];
+    // nil = absent; a `Bits` cell traps by name, never a reinterpret;
+    // an `Empty` birth traps loudly, a caller bug).
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_hvput",
+        (Opaque<NativeTable>, OpaqueRef, OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef, v: OpaqueRef| -> Result<i64, Trap> {
+            let key = key_val_of(vm, &k)?;
+            b.with_mut(vm, |vm, t| {
+                // admission BEFORE the transfer: a trapped put strands
+                // nothing — until `seal_transfer` the handle's own Drop
+                // releases (the leak law)
+                t.check_kind(key.kind())?;
+                let sealed = seal_transfer(v, vm)?;
+                t.hvput_ref(vm, KeyRef::from(&key), sealed)
+            })?
         },
     );
     rut_vm::pkg_fn!(
         pkg,
-        "map_hput_s",
-        (Opaque<NativeTable>, &str) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put_s(t, k))?
+        "map_hvget",
+        (Opaque<NativeTable>, OpaqueRef) -> Option<OpaqueRef>,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef| -> Result<Option<OpaqueRef>, Trap> {
+            let key = key_val_of(vm, &k)?;
+            let stored = b.with(|t| {
+                t.check_kind(key.kind())?;
+                t.hvget_ref(KeyRef::from(&key))
+            })??;
+            seal_answer(vm, stored)
         },
     );
     rut_vm::pkg_fn!(
         pkg,
-        "map_hput_y",
-        (Opaque<NativeTable>, &[u8]) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| t.hput_ref(KeyRef::Bytes(k)))?
+        "map_hvremove",
+        (Opaque<NativeTable>, OpaqueRef) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: OpaqueRef| -> Result<i32, Trap> {
+            let key = key_val_of(vm, &k)?;
+            b.with_mut(vm, |vm, t| {
+                t.check_kind(key.kind())?;
+                t.hremove_ref(vm, KeyRef::from(&key))
+            })?
         },
     );
+
+    // the `_sv` range twins — the key is a borrowed `(parent, off,
+    // len)` BYTE range (the house UTF-8 boundary traps; the range runs
+    // BEFORE the transfer, as admission does)
+    // the range twins' key-only faces: the same borrowed
+    // `(parent, off, len)` BYTE range, no value machinery (HashSet's
+    // put/has/remove over a range key)
     rut_vm::pkg_fn!(
         pkg,
         "map_hput_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put_sv(t, parent, off, len))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hfind_i",
-        (Opaque<NativeTable>, i64) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
-            b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hfind_u",
-        (Opaque<NativeTable>, u64) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i32, Trap> {
-            b.with(|t| fused_find(t, &KeyVal::Bits(k)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hfind_b",
-        (Opaque<NativeTable>, bool) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i32, Trap> {
-            b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hfind_s",
-        (Opaque<NativeTable>, &str) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with(|t| fused_find_s(t, k))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hfind_y",
-        (Opaque<NativeTable>, &[u8]) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
-            b.with(|t| t.hfind_ref(KeyRef::Bytes(k)))?
+            let range = sv_range(parent, off, len)?;
+            let key = KeyVal::Str(range.to_owned());
+            b.with_mut(vm, |_vm, t| {
+                t.check_kind(key.kind())?;
+                fused_put(t, key)
+            })?
         },
     );
     rut_vm::pkg_fn!(
         pkg,
         "map_hfind_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
-            b.with(|t| fused_find_sv(t, parent, off, len))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hremove_i",
-        (Opaque<NativeTable>, i64) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k as u64)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hremove_u",
-        (Opaque<NativeTable>, u64) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: u64| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hremove_b",
-        (Opaque<NativeTable>, bool) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: bool| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bits(k as u64)))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hremove_s",
-        (Opaque<NativeTable>, &str) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove_s(vm, t, k))?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hremove_y",
-        (Opaque<NativeTable>, &[u8]) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
+        |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            let key = KeyVal::Str(sv_range(parent, off, len)?.to_owned());
+            b.with(|t| {
+                t.check_kind(key.kind())?;
+                fused_find(t, &key)
+            })?
         },
     );
     rut_vm::pkg_fn!(
@@ -1004,134 +1023,14 @@ pub fn pkg() -> HostPkg {
         "map_hremove_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove_sv(vm, t, parent, off, len))?
-        },
-    );
-
-    // ---- the valued lanes (nmap-hostvals P5; typed at phase 2a) ----
-    // Twelve crossings — `map_hv{put,get,remove}` in THREE key flavors
-    // (bare = `str`, `_i` = the bits lane, one `i64` crossing for every
-    // integer primitive and `bool` — the casts keep the bits, and bits
-    // ARE the key identity — `_y` = `bytes`) plus the `_sv` range
-    // twins. KEYS are INSPECTED (hashed, kind-admitted) so they stay
-    // TYPED; VALUES are never inspected, so they SEAL: the
-    // put's `v: opaque` is the wrapper's `opaque(v)` erasure box, the
-    // entry takes over the param handle's one reference
-    // ([`seal_transfer`], after admission — the leak law), and the get
-    // answers `?opaque` — the STORED box ([`seal_answer`]; nil =
-    // absent).
-    //
-    // - `*_hvput*`: the entry API with the box inside — replace
-    //   releases the old box in-crossing, a fresh birth holds the new;
-    //   the packed `(handle << 1) | newly` answer is bit-identical to
-    //   the h-family's.
-    // - `*_hvget*`: the stored box as `?opaque` — a fresh owning
-    //   handle, the register's rc (the aliasing law rides the box); a
-    //   `Bits` cell traps by name (never a reinterpret), an `Empty`
-    //   h-family birth TRAPS loudly (§0.8 g).
-    // - `*_hvremove*`: the held box releases in-crossing; the dead
-    //   key's handle answers, `-1` when absent.
-
-    // the str lane (the bare names)
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvput",
-        (Opaque<NativeTable>, &str, OpaqueRef) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str, v: OpaqueRef| -> Result<i64, Trap> {
+            let key = KeyVal::Str(sv_range(parent, off, len)?.to_owned());
             b.with_mut(vm, |vm, t| {
-                // admission BEFORE the transfer: a trapped put strands
-                // nothing — until `seal_transfer` the handle's own Drop
-                // releases (the leak law)
-                t.check_kind(KeyKind::Str)?;
-                let sealed = seal_transfer(v, vm)?;
-                t.hvput_ref(vm, KeyRef::Str(k), sealed)
+                t.check_kind(key.kind())?;
+                fused_remove(vm, t, &key)
             })?
         },
     );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvget",
-        (Opaque<NativeTable>, &str) -> Option<OpaqueRef>,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<Option<OpaqueRef>, Trap> {
-            let stored = b.with(|t| t.hvget_ref(KeyRef::Str(k)))??;
-            seal_answer(vm, stored)
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvremove",
-        (Opaque<NativeTable>, &str) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(k)))?
-        },
-    );
 
-    // the bits lane — one `i64` crossing for every integer primitive
-    // and `bool` (the wrapper casts; the bits are the identity)
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvput_i",
-        (Opaque<NativeTable>, i64, OpaqueRef) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64, v: OpaqueRef| -> Result<i64, Trap> {
-            b.with_mut(vm, |vm, t| {
-                t.check_kind(KeyKind::Bits)?;
-                let sealed = seal_transfer(v, vm)?;
-                t.hvput_ref(vm, KeyRef::Bits(k as u64), sealed)
-            })?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvget_i",
-        (Opaque<NativeTable>, i64) -> Option<OpaqueRef>,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<Option<OpaqueRef>, Trap> {
-            let stored = b.with(|t| t.hvget_ref(KeyRef::Bits(k as u64)))??;
-            seal_answer(vm, stored)
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvremove_i",
-        (Opaque<NativeTable>, i64) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bits(k as u64)))?
-        },
-    );
-
-    // the bytes lane
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvput_y",
-        (Opaque<NativeTable>, &[u8], OpaqueRef) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8], v: OpaqueRef| -> Result<i64, Trap> {
-            b.with_mut(vm, |vm, t| {
-                t.check_kind(KeyKind::Bytes)?;
-                let sealed = seal_transfer(v, vm)?;
-                t.hvput_ref(vm, KeyRef::Bytes(k), sealed)
-            })?
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvget_y",
-        (Opaque<NativeTable>, &[u8]) -> Option<OpaqueRef>,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<Option<OpaqueRef>, Trap> {
-            let stored = b.with(|t| t.hvget_ref(KeyRef::Bytes(k)))??;
-            seal_answer(vm, stored)
-        },
-    );
-    rut_vm::pkg_fn!(
-        pkg,
-        "map_hvremove_y",
-        (Opaque<NativeTable>, &[u8]) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
-        },
-    );
-
-    // the `_sv` range twins — the key is a borrowed `(parent, off,
-    // len)` BYTE range (the house UTF-8 boundary traps; the range runs
-    // BEFORE the transfer, as admission does)
     rut_vm::pkg_fn!(
         pkg,
         "map_hvput_sv",

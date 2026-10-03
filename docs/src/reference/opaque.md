@@ -73,12 +73,12 @@ wrong == nil: true
 - **A mismatch is `nil`.** There is no flag and no zero value — the miss
   is the nullable's null; an unguarded dereference traps `NilDeref`,
   never a silent zero.
-- **The type argument must be concrete.** A trait-typed type argument
-  (`opaque.downcast<Drawable>`) is a compile error — trait-typed values
+- **The type argument must be concrete.** An interface-typed type argument
+  (`opaque.downcast<Drawable>`) is a compile error — interface-typed values
   have no recovery path by design.
 - **The opaque-is law: `is` names the box, never the payload.**
   `o is T` and `o is I` answer **by the box** — false for every payload
-  type, concrete and trait alike. The one check that names what it is —
+  type, concrete and interface alike. The one check that names what it is —
   `o is opaque` — is `true`. Recovery is `downcast<T>` only. On a
   non-box receiver, `x is opaque` is the ordinary concrete test for the
   box type.
@@ -99,7 +99,7 @@ wrong == nil: true
 
 - **Boxes are never equal unless identical**: `opaque(v) == opaque(v)`
   is `false` — two boxes, two cells. Box once, compare boxes.
-- **Trait-typed values cannot be boxed**: erasure takes a concrete
+- **Interface-typed values cannot be boxed**: erasure takes a concrete
   value. Fixed arrays box fine; their identity covers the element type.
 
 ## Composition and costs

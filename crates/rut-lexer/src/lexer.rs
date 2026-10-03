@@ -27,7 +27,7 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 
 /// Decl-mode lexing: a `.d.rut` surface parses the same
 /// token vocabulary as `.rut` source — the reserved-word law
-/// (a closed five-word list) is mode-independent.
+/// (a closed three-word list) is mode-independent.
 pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let normalized = normalize(src);
     let mut lx = Lexer::new(&normalized);
@@ -379,7 +379,7 @@ impl<'a> Lexer<'a> {
             "false" => self.push(Tok::Bool(false), lo),
             w => {
                 // the reservation is mode-independent: the same closed
-                // five-word list draws the diagnostic in `.rut` source
+                // three-word list draws the diagnostic in `.rut` source
                 // and `.d.rut` decls alike; everything else — including
                 // words like `switch` or `null` — is an ordinary identifier
                 if let Some(msg) = reserved_word_msg(w) {
@@ -638,17 +638,17 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"@", Tok::At),
 ];
 
-/// The reserved words — a closed five-word list; hard errors naming
+/// The reserved words — a closed three-word list; hard errors naming
 /// the rut replacement. Everything else, including words that are
 /// keywords in other languages (`switch`, `match`, `null`, `var`, …),
 /// lexes as an ordinary identifier.
 /// NOTE: `super` and `as` are NOT here — they are contextual
 /// (`pub(super)`; `as` is the numeric-cast word); the parser rejects
-/// them in every other position.
+/// them in every other position. `trait` left the list with the
+/// structural-interfaces fork: it is an ordinary identifier now.
 fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "void" => "rut spells the empty type `nil`",
-        "interface" => "rut spells this `trait`",
         "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
         "private" => {
             "members are private by default —add `pub`"

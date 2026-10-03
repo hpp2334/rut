@@ -181,7 +181,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     && !segs[0].generics.is_empty()
                     && self
                         .ctx
-                        .find_trait(segs[0].name)
+                        .find_iface(segs[0].name)
                         .map(|t| !t.generics.is_empty())
                         .unwrap_or(false)
                     && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
@@ -198,12 +198,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let tname = segs[0].name;
                 let arg_nodes = segs[0].generics.clone();
                 let concrete: Vec<TypeId> = match self.ctx.types.kind(arg_ty).clone() {
-                    TyKind::TraitObj { trait_id } => {
+                    TyKind::IfaceObj { iface_id } => {
                         let hit = self
                             .ctx
-                            .trait_inst
+                            .iface_inst
                             .iter()
-                            .find(|(_, &id)| id == trait_id)
+                            .find(|(_, &id)| id == iface_id)
                             .map(|(k, _)| k.clone());
                         match hit {
                             Some((n, args)) if n == tname => args,
@@ -217,17 +217,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                         }
                     }
-                    _ => match self.ctx.template_trait_args(tname, arg_nodes.len(), arg_ty) {
-                        Some(args) => args,
-                        None => {
-                            self.ctx.err(sp, format!(
-                                "no impl of `{}` for `{}` — a parameterized trait impl must cover the widening",
-                                self.ctx.name(tname),
-                                self.ctx.type_name(arg_ty)
-                            ));
-                            return Err(());
-                        }
-                    },
+                    _ => {
+                        // no parameterized impl infers the interface's
+                        // arguments from a CONCRETE argument — the
+                        // concrete type does not spell the interface
+                        // (satisfaction is member-set checking, not a
+                        // registration that carries args). The call must
+                        // pass an interface-typed value or annotate.
+                        self.ctx.err(sp, format!(
+                            "cannot infer `{}`'s type arguments from `{}` — annotate the binding or pass an interface-typed value",
+                            self.ctx.name(tname),
+                            self.ctx.type_name(arg_ty)
+                        ));
+                        return Err(());
+                    }
                 };
                 if concrete.len() != arg_nodes.len() {
                     self.ctx.err(sp, format!(

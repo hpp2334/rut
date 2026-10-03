@@ -1,7 +1,7 @@
 // nmapset — the keyed-collection lane. `HashMap<K, V>` and `HashSet<T>`
 // wrap the native key table (the `nmap_host` crossings): the key crosses
 // DIRECTLY on a typed lane and the host hashes it (FNV-1a for `str` /
-// `bytes`, mix64 for the integers) — there is no hashing trait to
+// `bytes`, mix64 for the integers) — there is no hasher to implement,
 // implement. Admission is the compile-time union bound:
 // `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str |
 // bytes` — a key type outside the set fails AT the instantiation (the

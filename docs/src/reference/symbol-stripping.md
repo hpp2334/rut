@@ -1,7 +1,7 @@
 # Symbol stripping and `.rutsym` sidecars
 
 A publisher can ship a compiled artifact whose function, type, field,
-trait, and method names — and source positions — are unreadable, while
+interface, and method names — and source positions — are unreadable, while
 keeping a private **symbol table** that, when supplied at load time,
 restores the real names and line/col for
 [stack-trace symbolication](diagnostics.md). Users holding only the
@@ -35,7 +35,7 @@ It is also not encrypted or obfuscated — see the limitations below.
 ## What is renamed
 
 Everything name-shaped a binary carries: function names, type names,
-field names, trait and method names, enum members, and the exported
+field names, interface and method names, enum members, and the exported
 surface rows. Renaming is purely a **tail rewrite**: every name in a
 `.rutc` is an interned-id index, and the binary serializes only the
 name table's instance-local tail
@@ -53,7 +53,7 @@ by construction.
 
 Mangling is one closure-wide string→string map applied to every compiled
 group in the bundle — never per-group random names. Bundles link across
-`.rutc` groups by name text at load (trait merge-by-name, the
+`.rutc` groups by name text at load (interface merge-by-name, the
 instantiation-ledger keys), and a consistent map preserves all
 cross-group identity for free.
 

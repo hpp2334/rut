@@ -481,7 +481,6 @@ mod tests {
                     host_funcs: vec![],
                     consts: vec![],
                     native_types: vec![],
-                    native_traits: vec![],
                     native_fns: vec![],
                     native_impls: vec![],
                 },

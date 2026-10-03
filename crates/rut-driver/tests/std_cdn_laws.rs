@@ -153,8 +153,9 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
         &rows,
         table,
         // json's compiled rows: the Writer class binds from the binary;
-        // the trait registers; the impl is THIS app's (local dispatch)
-        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl JsonSerialize for Item {\n    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let mut w = JsonWriter.new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
+        // the interface crosses on the surface; the satisfaction is THIS
+        // app's own members (structural, local dispatch)
+        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl Item {\n    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let mut w = JsonWriter.new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
     )
     .expect("the six-pin world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -273,13 +274,13 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
 
 #[test]
 fn a_json_peer_shape_compiles_with_the_consumer_type() {
-    // json's peer groups inherit the riding law: `impl JsonSerialize
-    // for Vec<T>` is itself generic — the group impl file rides, and
-    // the consumer's `T` instantiates at the link. The consumer type
-    // impls BOTH json traits (the container impl set is fixed; the
-    // vtable fills demand both), and the round trip runs through
-    // json's own generic entries — whose bodies are `f`-kind requests
-    // the recompiled owner also serves.
+    // json's peer groups inherit the riding law: the group files cross
+    // wrapper families (`JsonVec<T>` is itself generic over the bound),
+    // the group source rides, and the consumer's `T` instantiates at
+    // the link. The consumer type satisfies BOTH json interfaces on its
+    // own inherent impls (the structural law), and the round trip runs
+    // through json's own generic entries — whose bodies are `f`-kind
+    // requests the recompiled owner also serves.
     let mut table = BTreeMap::new();
     let mut rows = String::new();
     for key in ["json", "pouch", "nmapset"] {
@@ -293,13 +294,13 @@ fn a_json_peer_shape_compiles_with_the_consumer_type() {
     let base = std::env::temp_dir().join(format!("rut-std-cdn-json-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let src = r#"use json::{ JsonSerialize, JsonDeserialize, JsonWriter, JsonReader,
-             EncodeJsonError, DecodeJsonError, encodeJson, decodeJson };
+             EncodeJsonError, DecodeJsonError, encodeJson, decodeJson, JsonVec };
 use pouch::{ Vec };
 
 class Todo { name: str; n: i64; }
 
-impl JsonSerialize for Todo {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+impl Todo {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("name");
         w.write_str(self.name);
@@ -310,8 +311,8 @@ impl JsonSerialize for Todo {
     }
 }
 
-impl JsonDeserialize for Todo {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+impl Todo {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
         let mut name: ?str = nil;
         let mut n: ?i64 = nil;
@@ -326,7 +327,10 @@ impl JsonDeserialize for Todo {
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
-        return (Todo { name: name, n: n }, nil);
+        if (name == nil || n == nil) { return (nil, r.error()); }
+        let nm: str = name;
+        let nv: i64 = n;
+        return (Todo { name: nm, n: nv }, nil);
     }
 }
 
@@ -334,11 +338,14 @@ entry fn main() -> i32 {
     let mut v: Vec<Todo> = Vec<Todo>.new();
     v.push(Todo { name: "write the book", n: 1 });
     v.push(Todo { name: "ship the CDN", n: 2 });
-    let (text, e) = encodeJson(v);
+    let (text, e) = encodeJson(JsonVec(v));
     if (e != nil) { return -1; }
-    let (back, e2) = decodeJson<Vec<Todo>>(text);
+    let doc: str = text;
+    let (back, e2) = decodeJson<JsonVec<Todo>>(doc);
     if (e2 != nil) { return -2; }
-    return back.len() as i32;
+    let w: JsonVec<Todo> = back;
+    let rows: Vec<Todo> = w.to_vec();
+    return rows.len() as i32;
 }
 "#;
     let (diags, program, session) = load_compile_run(&base, &rows, table, src)

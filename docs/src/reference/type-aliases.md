@@ -43,7 +43,7 @@ entry fn main() {
   is not expressible — a generic alias would be a type constructor, not
   a transparent name.
 - **One name = one type**: an alias may not share its name with an
-  alias, enum, struct, class, or trait in the same module — the
+  alias, enum, struct, class, or interface in the same module — the
   duplicate-name check is symmetric and fires in both orders.
 - Visibility: `pub`, `pub(mod)`, `pub(super)`, `pub(self)` all parse on
   `type` (see [Modules and visibility](modules-and-visibility.md)).
@@ -64,7 +64,8 @@ type Num = i32 | str;    // legal — here and in requires bounds ONLY
 - The union exists only in the type **grammar**; the compiler never
   interns a union runtime kind. There is no runtime union value, no
   subtyping, and no `is`/`when` support over unions (heterogeneous data
-  goes through traits — see [Traits and dispatch](traits.md) — or
+  goes through interfaces — see
+  [Interfaces and dispatch](interfaces.md) — or
   enums, see [Enums](enums.md)).
 - **Value positions reject unions**: a union (or a union-alias name) in
   a param/field/return/let/`is` position is diagnosed as *bound-only*.
@@ -83,11 +84,12 @@ gparam := Ident ('requires' bound)?
 ```rut
 use ink::{ Logger };
 
-trait Labeled { fn label(self) -> str; }
+interface Labeled { fn label(self) -> str; }
 struct Ridge { depth: i32; }
 struct Trench { depth: i32; }
 
-impl Labeled for Ridge { fn label(self) -> str { return "ridge"; } }
+impl Ridge { fn label(self) -> str { return "ridge"; } }
+impl Trench { fn label(self) -> str { return "trench"; } }
 
 fn name<T requires Labeled>(x: T) -> str {
     let w: Labeled = x;      // the widening compiles BECAUSE the bound holds
@@ -108,16 +110,18 @@ ridge geo
 
 - Members may be concrete type names (satisfied by exact type identity
   at instantiation), aliases (expanded before detection), or a **type
-  union** of those. **Type names only in a union**: a trait member
-  inside a union spelling parses but diagnoses at admission — a trait
-  bound must stand alone.
+  union** of those. **Type names only in a union**: an interface member
+  inside a union spelling parses but diagnoses at admission — an
+  interface bound must stand alone.
 - **Enforcement at every substitution-completing site**: free-fn calls,
   direct and instance method instantiation, and impl-method enqueue. A
   failing instantiation diagnoses with the bound spelled out:
   "`bool` does not satisfy `T` requires `i32 | str` — no matching type
-  or impl is registered".
-- **Trait objects satisfy nothing**: instantiating `T` at a trait type
-  fails any bound — only a concrete type with a registered impl admits.
+  in the bound". An interface bound fails with the member set:
+  "`T`'s instantiation does not satisfy `Labeled`: no member `label`".
+- **Interface-typed values satisfy nothing**: instantiating `T` at an
+  interface type fails any bound — only a concrete type with the
+  members admits.
 - **Bounds may reference the item's other generics**:
   `fn hold<T, U requires [T]>(x: U)` — members resolve under the
   call-site substitution.
@@ -136,7 +140,7 @@ ridge geo
   when the name rebinds. Documented holes (the gate under-fires, never
   over-fires): closure bodies compile with fresh provenance;
   destructuring carries none; a shadowing rebind resets it.
-- **Class generics take bounds; struct/trait/surface generics do not**:
+- **Class generics take bounds; struct/interface/surface generics do not**:
 
   ```rut
   pub class HashMap<K requires i8 | .. | str | bytes, V> { .. }

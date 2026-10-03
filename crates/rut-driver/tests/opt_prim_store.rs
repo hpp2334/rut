@@ -431,7 +431,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount nmapset");
     let ctx = session.host_pkg_context();
-    for f in ["map_new", "map_len", "map_hput_i", "map_hfind_i", "map_hremove_i"] {
+    for f in ["map_new", "map_len", "map_hput", "map_hfind", "map_hremove"] {
         assert!(
             ctx.rows_of("nmap_host").is_some_and(|r| r.contains_key(f)),
             "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
@@ -519,7 +519,7 @@ fn version_gate_rejects_stale_artifacts() {
     // (91), never re-meaninged; every codepoint rides a plain u32 and
     // the new `Nat::StrFromCode` (21) rides the same bump); v11 was the
     // opaque-is law (the opaque-is batch phase 1: `is` on an
-    // opaque box answers BY THE BOX — the IsType/IsTrait op bodies read
+    // opaque box answers BY THE BOX — the IsType/IsIface op bodies read
     // `cell.ty`, `o is X` misses for every payload X, `o is opaque`
     // (or an alias) stays true, `downcast<T>` is the only recovery; a
     // POLICY bump per the v9 precedent — the op stream is
@@ -544,9 +544,9 @@ fn version_gate_rejects_stale_artifacts() {
     // misread); v16 is surfaces on the wire — the encoded program
     // carries its full exported surface after the main tables
     // (namespace, fns, consts, types + scope blocks + type exports,
-    // traits, impls in both ABI lists, native rows with their ambient
-    // bits, and the reserved inherent-impl table): a declared-surface
-    // change, and stale v15 artifacts carry no surface section at all;
+    // native rows with their ambient bits, and the reserved
+    // inherent-impl table): a declared-surface change, and stale v15
+    // artifacts carry no surface section at all;
     // v17 was owner-anchored instantiation — type exports carry their
     // generic parameter lists and the program carries the
     // instantiation ledger (type rows + fn identities keyed by
@@ -556,12 +556,15 @@ fn version_gate_rejects_stale_artifacts() {
     // generic fns' placeholder signatures; v19 withdraws the builder's
     // engine surface (kind tag 15, native-type tag 2, the five
     // `Nat::StrBuf*` rows — every later nat's tag shifts down); v20
-    // kills the `builtin trait` row kind — `Future`/`RunContext` became
-    // CLOSED builtin classes and `Iterable`/`Disposal` the bracket
-    // markers, and the inherent-method surface rows gained the
-    // designated-slot marker byte (a stale v19 artifact misparses the
-    // first marked method row)
-    assert_eq!(VERSION, 20, "the bracket-marker/closed-async-class landing owns this VERSION bump");
+    // closes the async classes (`Future`/`RunContext` became CLOSED
+    // builtin classes and `Iterable`/`Disposal` the bracket markers,
+    // and the inherent-method surface rows gained the
+    // designated-slot marker byte — a stale v19 artifact misparses the
+    // first marked method row); v21 is the structural-interfaces fork —
+    // the trait tables leave the wire (`SurfaceImpl` rows and the
+    // native-trait name table are gone; `SurfaceIface` crosses
+    // interface decls, the program carries `ifaces`/`iface_slots`)
+    assert_eq!(VERSION, 21, "the structural-interfaces fork owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

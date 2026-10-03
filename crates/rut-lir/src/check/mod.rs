@@ -1,5 +1,5 @@
 //! Resolve + collect over the flat arena: module symbols,
-//! the type table, traits & impls (the requires-graph shape lives here),
+//! the type table, ifaces & impls (the requires-graph shape lives here),
 //! visibility. Body compilation (fused typecheck + codegen — see lir.rs)
 //! runs over what this pass collects. Errors are Diags; a module with any
 //! diag stops before emit.
@@ -8,7 +8,7 @@ use rut_ast::ast::*;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 use rut_lexer::token::{FloatSuffix, IntSuffix};
-use rut_core::binary::{ConstVal, FuncCode, TraitDesc};
+use rut_core::binary::{ConstVal, FuncCode, IfaceDesc};
 use rut_core::types::*;
 use rut_core::{Interner, sym};
 
@@ -18,6 +18,8 @@ mod externs;
 mod impls;
 mod inst;
 mod resolve;
+
+pub(crate) use impls::{MemberReq, MemberSrc};
 
 // ---- decl indices ----
 
@@ -61,7 +63,7 @@ pub struct DataDecl {
 }
 
 #[derive(Clone, Debug)]
-pub struct TraitDeclInfo {
+pub struct IfaceDeclInfo {
     pub id: u32,
     pub node: NodeId,
     /// generic parameters (`trait Foo<T>`) — empty for non-generic ones
@@ -161,53 +163,10 @@ pub struct Capture {
     pub cell: Option<TypeId>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ImplDecl {
-    pub trait_id: u32,
-    /// the trait's source name (`Iterable`, a user trait); for an inherent
-    /// impl, the target type's name
-    pub trait_name: IdentId,
-    pub target: TypeId,
-    /// `impl Trait<T> for Vec<T>`: the generic class and the target's
-    /// generic parameter idents. The impl's methods are monomorphized per
-    /// instantiation through the `Inst` substitution; `None` for ordinary
-    /// concrete impls.
-    pub target_data: Option<(IdentId, Vec<IdentId>)>,
-    /// the trait ref's type arguments, as written (`impl Iter<T>` →
-    /// `[T]`, `impl Iterable<char>` → `[char]`). The element type of the
-    /// sequence/iterator contracts is argument 0, resolved at the use site
-    /// under the target substitution.
-    pub trait_arg_nodes: Vec<NodeHandle<AnyTy>>,
-    /// A parameterized trait impl (`impl Readable<T> for Source<T>`, the
-    /// phase-1 template form) — `trait_id` names the PLACEHOLDER trait
-    /// instantiation (its args are `#param` types), so every exact-match
-    /// consumer re-resolves the trait args per target instantiation (the
-    /// dispatch half: vtable fills, iterate, `find_or_mint_impl`). The
-    /// per-instantiation clones the mint registers carry the flag too, so
-    /// the concrete-first law sees them as the template's own rows.
-    pub is_template: bool,
-    /// `impl T { .. }` — inherent methods (no trait involved); dispatch is
-    /// always static (the receiver's concrete type names the impl)
-    pub inherent: bool,
-    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
-    /// the pkg whose source the impl block lives in (the splice-origin
-    /// rule) — the instantiation ledger's owner anchor for the impl's
-    /// monomorphized methods
-    pub origin: String,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FnKey {
     Free(IdentId),
     Method { data: IdentId, name: IdentId },
-    /// `slot_abi` — which ABI variant this is. A prim-target trait-impl
-    /// method interns TWO variants: the slot ABI (vtable rows; `self`
-    /// and `Self`-spelled params cross boxed, prologue unboxes) and the
-    /// concrete ABI (bare-receiver static calls; params cross raw —
-    /// P1 of the mapset perf plan). Ref-repr targets compile ONE
-    /// variant (`slot_abi: false`): the ABIs coincide, the receiver
-    /// already is a cell handle.
-    ImplMethod { idx: usize, name: IdentId, slot_abi: bool },
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
     Lambda(NodeId),
@@ -252,7 +211,7 @@ pub struct AsyncBlockSig {
 }
 
 /// A monomorphization instantiation: fn key + generic substitution.
-/// `trait_origins` specializes trait-typed parameters per concrete
+/// `iface_origins` specializes trait-typed parameters per concrete
 /// argument (a trait parameter IS an implicit generic bound):
 /// one clone of the fn per distinct origin list, each body statically
 /// binding calls on those parameters.
@@ -262,7 +221,7 @@ pub struct Inst {
     /// generic param → concrete type
     pub subst: Vec<(IdentId, TypeId)>,
     /// concrete origins for the fn's trait-obj parameters, in order
-    pub trait_origins: Vec<TypeId>,
+    pub iface_origins: Vec<TypeId>,
 }
 
 pub struct Ctx<'a> {
@@ -278,8 +237,8 @@ pub struct Ctx<'a> {
     pub used: std::collections::HashSet<IdentId>,
     pub diags: Vec<Diag>,
     pub types: TypeTable,
-    pub traits: Vec<TraitDesc>,
-    pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
+    pub ifaces: Vec<IfaceDesc>,
+    pub iface_decls: Vec<(IdentId, IfaceDeclInfo)>,
     /// type aliases: `type X = A;` / `type X = A | B;`
     pub aliases: Vec<AliasDecl>,
     /// the sequence-contract trait id once referenced (`Iter`) —
@@ -293,7 +252,30 @@ pub struct Ctx<'a> {
     // decl tables
     pub enums: Vec<(IdentId, EnumDecl)>,
     pub datas: Vec<(IdentId, DataDecl)>,
-    pub impls: Vec<ImplDecl>,
+    /// the demand-recorded itable fills: every (concrete type ×
+    /// interface) pair a boxing site proved (structural satisfaction
+    /// at a widen). build_vtables materializes one row per pair —
+    /// each interface member slot binding the concrete type's own
+    /// inherent member. Demand-driven (finiteness: keyed by the
+    /// spelled sites), never a registration scan.
+    pub iface_fills: Vec<(TypeId, u32)>,
+    pub iface_fill_set: std::collections::HashSet<(TypeId, u32)>,
+    /// the interface bounds in scope for THIS unit's generic items
+    /// (`fn f<T requires Shape>` / class requires naming an interface):
+    /// generic param ident → interface id. The mirror-body law reads
+    /// these — a member call on a carried instantiation binds through
+    /// the bound's descriptor.
+    pub iface_bounds: std::collections::HashMap<IdentId, u32>,
+    /// the REQUESTER-CARRIED type rows (the seed blocks): dense range
+    /// → the rows this unit carries as bare data (an owner-anchored
+    /// mirror body sees the consumer's types, never its impls), plus
+    /// each carried row's home spec (the mirror ledger's owner anchor).
+    pub carried_dense: Vec<(u32, u32)>,
+    pub carried_names: std::collections::HashMap<String, String>,
+    /// the owner override for the next mirrored method inst (the
+    /// carried-type law: the mirror's ledger row names the type's HOME
+    /// unit, so link unifies it with the real body)
+    pub pending_mirror_owner: Option<String>,
     pub lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)>,
     // name → index maps
     pub fn_index: Vec<IdentId>,
@@ -339,15 +321,13 @@ pub struct Ctx<'a> {
     /// The prelude is used, never ambient — `Array`/`Opaque` resolve
     /// only through this map
     pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
-    /// used core builtin traits: name -> contract
+    /// used core builtin ifaces: name -> contract
     /// (`Disposal`/`Index`/`Iterable`)
-    pub extern_traits: std::collections::HashMap<IdentId, rut_core::binary::NativeTrait>,
-    /// traits exported by used modules' surfaces:
+    /// ifaces exported by used modules' surfaces:
     /// name -> the descriptor registered in this module's table. The
     /// name binds only when the module used it — the use-both gate.
-    pub extern_trait_decls: std::collections::HashMap<IdentId, ExternTrait>,
+    pub extern_iface_decls: std::collections::HashMap<IdentId, ExternIface>,
     /// trait impls registered by used modules' surfaces
-    pub extern_impls: Vec<ExternImpl>,
     /// used enums (the linkable-classes phase): name → (the enum's
     /// type id, its members as bound) — a used enum's member paths
     /// (`EncodeErrorKind.Depth`) resolve through this registry; the
@@ -382,7 +362,7 @@ pub struct Ctx<'a> {
     /// monomorphization cache: (decl, type args) -> id
     pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
     /// generic-trait instantiation cache: (trait, type args) -> trait id
-    pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
+    pub iface_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
     /// the async weave's engine-minted types: the `RunContext`
     /// cx record (lazily interned once), and per-async-fn hidden frame
     /// types with their checkpoint enums. Engine frames are exactly the
@@ -508,37 +488,9 @@ pub struct HostAsyncLayout {
 /// so an impl whose trait was never `use`d stays
 /// invisible to dispatch but visible to the "use `I` .." diagnostic.
 #[derive(Clone, Debug)]
-pub struct ExternTrait {
+pub struct ExternIface {
     pub id: u32,
     pub generics: usize,
-}
-
-/// A trait impl registered by another module's surface.
-/// Dispatch and widening consult
-/// these exactly like local impls; the methods are the exporter's
-/// scope-qualified fn ids, called directly (static dispatch) and
-/// carried into vtable fills (link merges the rows). `methods` binds
-/// the slot-ABI variant, `methods_concrete` the concrete one (identical
-/// ids for single-ABI impls — see [`SurfaceImpl`]).
-#[derive(Clone, Debug)]
-pub struct ExternImpl {
-    pub trait_id: u32,
-    pub trait_name: IdentId,
-    pub target: TypeId,
-    /// trait method name → the exporter's scope-qualified fn id
-    pub methods: Vec<(IdentId, u32)>,
-    /// trait method name → the exporter's scope-qualified fn id
-    /// (concrete-ABI variant; falls back to `methods` when absent)
-    pub methods_concrete: Vec<(IdentId, u32)>,
-    /// a parameterized impl head's trait arguments as placeholder rows
-    pub trait_args: Vec<TypeId>,
-    /// the pkg that mints this impl's per-instantiation bodies. A
-    /// DECLARED trait's row leaves it None — the owner is the trait's
-    /// declaring pkg, read off `extern_origins`. A NATIVE trait's row
-    /// (`impl Iterable<E> for Flow<E>`) carries it: no decl names an
-    /// owner, and the impl's exporter is the pkg that compiles the
-    /// bodies (the shape-only row's mint anchor).
-    pub origin: Option<String>,
 }
 
 /// One used class's inherent method surface (the linkable-classes
@@ -568,18 +520,8 @@ pub struct ExternGenericFn {
     pub ret: TypeId,
 }
 
-/// Where a satisfying impl was found: a local impl block
-/// (its methods monomorphize here) or another module's registration
-/// (its compiled fns are called through scope-qualified ids).
-#[derive(Clone, Copy, Debug)]
-pub enum ImplHit {
-    Local(usize),
-    Extern(usize),
-}
-
 /// One `requires` member: a concrete type (exact `TypeId`
-/// equality) or a trait (any registered impl satisfies, via the
-/// registry).
+/// equality) or an interface (structural member-set satisfaction).
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum BoundMember {
     Concrete(TypeId),
@@ -633,15 +575,14 @@ impl<'a> Ctx<'a> {
             used: std::collections::HashSet::new(),
             diags: Vec::new(),
             types: TypeTable::boot_scoped(scope),
-            traits: Vec::new(),
-            trait_decls: Vec::new(),
+            ifaces: Vec::new(),
+            iface_decls: Vec::new(),
             aliases: Vec::new(),
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),
             enums: Vec::new(),
             datas: Vec::new(),
-            impls: Vec::new(),
             lets: Vec::new(),
             fn_index: Vec::new(),
             fn_nodes: Vec::new(),
@@ -656,9 +597,13 @@ impl<'a> Ctx<'a> {
             extern_classes: std::collections::HashSet::new(),
             extern_newtypes: std::collections::HashSet::new(),
             extern_native_types: std::collections::HashMap::new(),
-            extern_traits: std::collections::HashMap::new(),
-            extern_trait_decls: std::collections::HashMap::new(),
-            extern_impls: Vec::new(),
+            extern_iface_decls: std::collections::HashMap::new(),
+            iface_fills: Vec::new(),
+            iface_fill_set: std::collections::HashSet::new(),
+            iface_bounds: std::collections::HashMap::new(),
+            carried_dense: Vec::new(),
+            carried_names: std::collections::HashMap::new(),
+            pending_mirror_owner: None,
             extern_inherents: Vec::new(),
             extern_enums: std::collections::HashMap::new(),
             extern_generic_fns: std::collections::HashMap::new(),
@@ -667,7 +612,7 @@ impl<'a> Ctx<'a> {
             extern_namespaces: std::collections::HashSet::new(),
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
-            trait_inst: std::collections::HashMap::new(),
+            iface_inst: std::collections::HashMap::new(),
             run_context_ty: None,
             engine_frames: std::collections::HashSet::new(),
             extra_vtable_fills: Vec::new(),
@@ -754,9 +699,9 @@ impl<'a> Ctx<'a> {
                             *n = re(&mut self.interner, *n);
                         }
                     }
-                    TyKind::TraitObj { trait_id } => {
-                        if let Some(&g) = tmap.get(trait_id) {
-                            *trait_id = g;
+                    TyKind::IfaceObj { iface_id } => {
+                        if let Some(&g) = tmap.get(iface_id) {
+                            *iface_id = g;
                         }
                     }
                     _ => {}
@@ -906,11 +851,127 @@ impl<'a> Ctx<'a> {
     pub fn find_enum(&self, name: IdentId) -> Option<&EnumDecl> {
         self.enums.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
+    /// Is this type a generic parameter's placeholder row (the
+    /// `#<param>` template law)? The engine's own `#frame@`/`#s` rows
+    /// are excluded — they are minted values, never deferred
+    /// instantiations.
+    pub fn ty_is_placeholder(&self, t: TypeId) -> bool {
+        use rut_core::async_frame::{CKPT_PREFIX, FRAME_PREFIX, HOST_FRAME_PREFIX};
+        let Some(row) = self.types.types.get(self.types.dense(t) as usize) else {
+            return false;
+        };
+        let name = self.interner.name(row.name);
+        name.starts_with('#')
+            && !name.starts_with(FRAME_PREFIX)
+            && !name.starts_with(HOST_FRAME_PREFIX)
+            && !name.starts_with(CKPT_PREFIX)
+    }
+
+    /// Register `concrete` in `inst_data` when it spells a LOCAL
+    /// generic class's instantiation (`JsonVec<Row>`) whose row arrived
+    /// carried (the seed block's dedup) and no value use has minted the
+    /// inst row yet. A no-op for every other shape.
+    pub fn ensure_local_inst_row(&mut self, concrete: TypeId) {
+        if self.inst_data.contains_key(&concrete) {
+            return;
+        }
+
+        let name = self.types.type_at(concrete).name;
+        let text = self.interner.name(name).to_string();
+        let Some((head, args_text)) = text.split_once('<') else { return };
+        let Some(args_text) = args_text.strip_suffix('>') else { return };
+        let head_id = self.intern(head);
+        let Some(d) = self.find_data(head_id) else { return; };
+        if d.generics.is_empty() {
+            return;
+        }
+        let mut cargs = Vec::new();
+        let mut depth = 0usize;
+        let mut cur = String::new();
+        for ch in args_text.chars() {
+            match ch {
+                '<' => { depth += 1; cur.push(ch); }
+                '>' => { depth = depth.saturating_sub(1); cur.push(ch); }
+                ',' if depth == 0 => { cargs.push(cur.trim().to_string()); cur = String::new(); }
+                _ => cur.push(ch),
+            }
+        }
+        if !cur.trim().is_empty() {
+            cargs.push(cur.trim().to_string());
+        }
+        if cargs.len() != d.generics.len() {
+            return;
+        }
+        let mut ok = true;
+        let mut args = Vec::new();
+        for at in &cargs {
+            let resolved = self
+                .interner
+                .lookup(at)
+                .and_then(|iid| self.types.dense_id_of_name(iid))
+                .or_else(|| self.synth_text_type(at));
+            match resolved {
+                Some(a) => args.push(a),
+                None => { ok = false; break; }
+            }
+        }
+        if !ok {
+            return;
+        }
+        // the carried row IS the instantiation — register it directly
+        // (mk_data_inst would mint a second row; the seed-scan's own
+        // law, the used-generic arm's shape)
+        self.inst_data.entry(concrete).or_insert((head_id, args));
+    }
+
+    /// Synthesize a type from its row-name spelling when no row named
+    /// `text` is interned (`?X`, `(A, B)` — the structural shapes the
+    /// seed rows' NAMES spell). `None` when the shape's leaves don't
+    /// resolve here.
+    pub fn synth_text_type(&mut self, text: &str) -> Option<TypeId> {
+        if let Some(bare) = text.strip_prefix('?') {
+            let e = self
+                .interner
+                .lookup(bare)
+                .and_then(|iid| self.types.dense_id_of_name(iid))
+                .or_else(|| self.synth_text_type(bare))?;
+            return Some(self.mk_opt(e));
+        }
+        if text.starts_with('(') && text.ends_with(')') {
+            let inner = &text[1..text.len() - 1];
+            let mut parts = Vec::new();
+            let mut depth = 0usize;
+            let mut cur = String::new();
+            for ch in inner.chars() {
+                match ch {
+                    '<' | '(' => { depth += 1; cur.push(ch); }
+                    '>' | ')' => { depth = depth.saturating_sub(1); cur.push(ch); }
+                    ',' if depth == 0 => { parts.push(cur.trim().to_string()); cur = String::new(); }
+                    _ => cur.push(ch),
+                }
+            }
+            if !cur.trim().is_empty() {
+                parts.push(cur.trim().to_string());
+            }
+            let mut etys = Vec::new();
+            for p in &parts {
+                let r = self
+                    .interner
+                    .lookup(p)
+                    .and_then(|iid| self.types.dense_id_of_name(iid))
+                    .or_else(|| self.synth_text_type(p))?;
+                etys.push(r);
+            }
+            return Some(self.mk_tuple(etys));
+        }
+        None
+    }
+
     pub fn find_data(&self, name: IdentId) -> Option<&DataDecl> {
         self.datas.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
-    pub fn find_trait(&self, name: IdentId) -> Option<&TraitDeclInfo> {
-        self.trait_decls.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
+    pub fn find_iface(&self, name: IdentId) -> Option<&IfaceDeclInfo> {
+        self.iface_decls.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
     pub fn find_alias(&self, name: IdentId) -> Option<&AliasDecl> {
         self.aliases.iter().find(|a| a.name == name)
@@ -966,37 +1027,6 @@ impl<'a> Ctx<'a> {
                 is_fn: false,
                 is_impl: false,
                 impl_target: 0,
-            });
-        }
-    }
-
-    /// Route a mirrored GENERIC-TARGET impl method request (the
-    /// linkable-classes phase): the trait + the concrete target row (in
-    /// the consumer's space — the seed block registers it verbatim) +
-    /// the method whose body the owner must mint + compile.
-    pub fn request_inst_impl_method(
-        &mut self,
-        owner: String,
-        trait_name: IdentId,
-        target: TypeId,
-        method: IdentId,
-    ) {
-        let key = (
-            owner.clone(),
-            format!("impl:{}", self.name(trait_name)),
-            vec![target],
-            self.name(method).to_string(),
-        );
-        if self.requests_seen.insert(key) {
-            
-            self.inst_requests.push(InstRequest {
-                owner,
-                decl: trait_name,
-                args: vec![target],
-                methods: vec![method],
-                is_fn: false,
-                is_impl: true,
-                impl_target: target,
             });
         }
     }
@@ -1114,17 +1144,17 @@ impl<'a> Ctx<'a> {
     pub fn find_free_fn(&self, name: IdentId) -> bool {
         self.fn_index.contains(&name)
     }
-    pub fn trait_id_of(&self, name: IdentId) -> Option<u32> {
+    pub fn iface_id_of(&self, name: IdentId) -> Option<u32> {
         // a generic trait has no uninstantiated id (`u32::MAX` sentinel)
-        if let Some(t) = self.find_trait(name) {
+        if let Some(t) = self.find_iface(name) {
             return (t.id != u32::MAX).then_some(t.id);
         }
         // a used module's exported trait — the name is
         // bound only when the module used it (the gate)
-        self.extern_trait_decls.get(&name).map(|t| t.id)
+        self.extern_iface_decls.get(&name).map(|t| t.id)
     }
-    pub fn trait_by_id(&self, id: u32) -> &TraitDesc {
-        &self.traits[id as usize]
+    pub fn iface_by_id(&self, id: u32) -> &IfaceDesc {
+        &self.ifaces[id as usize]
     }
     /// Resolve a signature type under `env`, with `self_ty` spelling the
     /// method's `Self` (the impl target inside an impl block). Bare
@@ -1188,12 +1218,12 @@ impl<'a> Ctx<'a> {
     }
 
     /// global trait-method slot id (assigned per trait
-    /// instantiation; v1 non-generic traits only)
-    pub fn trait_slot(&self, trait_id: u32, method: u32) -> Option<u32> {
+    /// instantiation; v1 non-generic ifaces only)
+    pub fn iface_slot(&self, iface_id: u32, method: u32) -> Option<u32> {
         let mut slot = 0;
-        for (i, t) in self.traits.iter().enumerate() {
+        for (i, t) in self.ifaces.iter().enumerate() {
             for m in 0..t.methods.len() {
-                if i as u32 == trait_id && m as u32 == method {
+                if i as u32 == iface_id && m as u32 == method {
                     return Some(slot);
                 }
                 slot += 1;
@@ -1218,12 +1248,12 @@ impl<'a> Ctx<'a> {
     }
     /// A trait-typed value (`i: I`) — the trait object type: a cell handle whose cell's own
     /// type reaches the vtable
-    pub fn mk_trait_obj(&mut self, trait_id: u32) -> TypeId {
-        let tname = self.interner.name(self.traits[trait_id as usize].name).to_string();
+    pub fn mk_iface_obj(&mut self, iface_id: u32) -> TypeId {
+        let tname = self.interner.name(self.ifaces[iface_id as usize].name).to_string();
         let name = self.intern(&format!("[trait] {tname}"));
         self.types.intern(RutType {
             name,
-            kind: TyKind::TraitObj { trait_id },
+            kind: TyKind::IfaceObj { iface_id },
         })
     }
     /// `?T` — nil-able cell (the old `*T` pointer)

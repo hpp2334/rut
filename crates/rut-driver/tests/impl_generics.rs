@@ -115,10 +115,7 @@ fn concrete_head_names_stay_concrete() {
         "class Holder<T> { v: T; }\n\
          impl<T> Holder<T> {\n\
              pub fn new() -> Self { return Self { v: 0 }; }\n\
-         }\n\
-         trait Coded { fn coded(self) -> str; }\n\
-         impl Coded for Holder<i32> {\n\
-             fn coded(self) -> str { return \"holder\"; }\n\
+             pub fn coded(self) -> str { return \"holder\"; }\n\
          }\n\
          entry fn main() -> str {\n\
              let h: Holder<i32> = Holder.new();\n\

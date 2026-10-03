@@ -57,8 +57,8 @@ pub fn world_boot(boot_line: str) -> World {
     // never declared. The SAME formula the status line has always
     // shown; the first get computes it.
     let counts$ = store.derive(fn (ctx) -> str {
-        let items = ctx.get(items$);
-        let reqs = ctx.get(reqs$);
+        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
+        let reqs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         let mut open = 0;
         for (let t of items) {
             if (t.done == false) {
@@ -74,8 +74,8 @@ pub fn world_boot(boot_line: str) -> World {
     /// Book an add: the request table grows, the list does not — the
     /// list changes when the timer's answer lands, as its own turn.
     let add_m = store.mutation(fn (ctx, title: str) -> Req {
-        let id = ctx.get(next_req$);
-        ctx.set(next_req$, id + 1);
+        let id = ctx.get<i64, Source<i64>>(next_req$);
+        ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
         let req = Req {
             id: id,
             tag: f"req:{id}",
@@ -84,21 +84,21 @@ pub fn world_boot(boot_line: str) -> World {
             title: title,
             latency: LATENCY_ADD,
         };
-        let rs = ctx.get(reqs$);
+        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         rs.push(req);
-        ctx.set(reqs$, rs); // the write point: store + mark
+        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs); // the write point: store + mark
         return req;
     });
 
     /// Book a toggle; nil when the todo id is unknown — the caller
     /// (the UI) turns that into its loud listener-drift trap.
     let toggle_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
-        let items = ctx.get(items$);
+        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
         if (find_todo(items, todo) < 0) {
             return nil;
         }
-        let id = ctx.get(next_req$);
-        ctx.set(next_req$, id + 1);
+        let id = ctx.get<i64, Source<i64>>(next_req$);
+        ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
         let req = Req {
             id: id,
             tag: f"req:{id}",
@@ -107,20 +107,20 @@ pub fn world_boot(boot_line: str) -> World {
             title: "",
             latency: LATENCY_TOGGLE,
         };
-        let rs = ctx.get(reqs$);
+        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         rs.push(req);
-        ctx.set(reqs$, rs);
+        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs);
         return req;
     });
 
     /// Book a remove; nil when the todo id is unknown.
     let remove_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
-        let items = ctx.get(items$);
+        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
         if (find_todo(items, todo) < 0) {
             return nil;
         }
-        let id = ctx.get(next_req$);
-        ctx.set(next_req$, id + 1);
+        let id = ctx.get<i64, Source<i64>>(next_req$);
+        ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
         let req = Req {
             id: id,
             tag: f"req:{id}",
@@ -129,9 +129,9 @@ pub fn world_boot(boot_line: str) -> World {
             title: "",
             latency: LATENCY_REMOVE,
         };
-        let rs = ctx.get(reqs$);
+        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         rs.push(req);
-        ctx.set(reqs$, rs);
+        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs);
         return req;
     });
 
@@ -140,7 +140,7 @@ pub fn world_boot(boot_line: str) -> World {
     /// the turn reads (the ("", why) leg). Consumes the answered row,
     /// then commits per kind, writing items$/last$ through the ctx.
     let answer_m = store.mutation(fn (ctx, tag: str) -> (str, str) {
-        let rs = ctx.get(reqs$);
+        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         let at = find_req(rs, tag);
         if (at < 0) {
             panic(f"server: no request '{tag}' — the answer names no booked row");
@@ -152,62 +152,62 @@ pub fn world_boot(boot_line: str) -> World {
                 kept.push(r);
             }
         }
-        ctx.set(reqs$, kept); // consume the answered row
+        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, kept); // consume the answered row
 
         if (req.kind == KIND_ADD) {
             // commit_add
             let title = req.title;
             if (title == "") {
                 let line = "rejected '' — the title is empty";
-                ctx.set(last$, line);
+                ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let items = ctx.get(items$);
+            let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
             if (find_by_title(items, title) >= 0) {
                 let line = f"rejected '{title}' — already on the list";
-                ctx.set(last$, line);
+                ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let id = ctx.get(next_todo$);
-            ctx.set(next_todo$, id + 1);
-            let its = ctx.get(items$);
+            let id = ctx.get<i64, Source<i64>>(next_todo$);
+            ctx.set<i64, i64, Source<i64>>(next_todo$, id + 1);
+            let its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
             its.push(Todo { id: id, title: title });
-            ctx.set(items$, its); // the write point: store + mark
+            ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, its); // the write point: store + mark
             let line = f"added '{title}' as #{id}";
-            ctx.set(last$, line);
+            ctx.set<str, str, Source<str>>(last$, line);
             return (line, "");
         }
         if (req.kind == KIND_TOGGLE) {
             // commit_toggle
-            let items = ctx.get(items$);
+            let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
             let at2 = find_todo(items, req.todo);
             if (at2 < 0) {
                 // the lost-id shape: a remove landed first — the answer
                 // says so, the turn moves on
                 let line = f"skipped toggle #{req.todo} — the row is gone";
-                ctx.set(last$, line);
+                ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let mut its = ctx.get(items$);
+            let mut its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
             its[at2].done = its[at2].done == false;
-            ctx.set(items$, its); // the write point: store + mark
+            ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, its); // the write point: store + mark
             let mut to = "open";
             if (its[at2].done) {
                 to = "done";
             }
             let line = f"toggled #{req.todo} to {to}";
-            ctx.set(last$, line);
+            ctx.set<str, str, Source<str>>(last$, line);
             return (line, "");
         }
         // commit_remove
-        let items = ctx.get(items$);
+        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
         let at3 = find_todo(items, req.todo);
         if (at3 < 0) {
             let line = f"skipped remove #{req.todo} — the row is gone";
-            ctx.set(last$, line);
+            ctx.set<str, str, Source<str>>(last$, line);
             return ("", line);
         }
-        let its = ctx.get(items$);
+        let its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
         let gone = its[at3].title;
         let kept2: Vec<Todo> = Vec.new();
         for (let t of its) {
@@ -215,9 +215,9 @@ pub fn world_boot(boot_line: str) -> World {
                 kept2.push(t);
             }
         }
-        ctx.set(items$, kept2); // the write point: store + mark
+        ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, kept2); // the write point: store + mark
         let line = f"removed '{gone}' (#{req.todo})";
-        ctx.set(last$, line);
+        ctx.set<str, str, Source<str>>(last$, line);
         return (line, "");
     });
 
@@ -231,21 +231,21 @@ pub fn world_boot(boot_line: str) -> World {
 
     /// typing: mirror the carried value into the draft, note the line.
     let draft_ev = store.mutation(fn (ctx, text: str) -> opaque {
-        ctx.set(draft$, text);
-        ctx.set(note$, f"typing '{text}'");
+        ctx.set<str, str, Source<str>>(draft$, text);
+        ctx.set<str, str, Source<str>>(note$, f"typing '{text}'");
         return opaque(nil);
     });
 
     /// the Add click: read the draft, gate, book, clear, note.
     let add_ev = store.mutation(fn (ctx, ev: str) -> opaque {
-        let title = ctx.get(draft$);
+        let title = ctx.get<str, Source<str>>(draft$);
         if (title == "") {
-            ctx.set(note$, "type a title first");
+            ctx.set<str, str, Source<str>>(note$, "type a title first");
             return opaque(nil);
         }
-        let req = ctx.set(add_m, title);
-        ctx.set(draft$, ""); // the draft moved into the request
-        ctx.set(note$, f"requested add '{title}'");
+        let req = ctx.set<str, Req, Mutation<str, Req>>(add_m, title);
+        ctx.set<str, str, Source<str>>(draft$, ""); // the draft moved into the request
+        ctx.set<str, str, Source<str>>(note$, f"requested add '{title}'");
         return opaque(req);
     });
 
@@ -253,22 +253,22 @@ pub fn world_boot(boot_line: str) -> World {
     /// unknown todo) is DATA — nothing to book, no trap (the twins
     /// pin the empty-tag answer; the lost-id shape is the answer's).
     let toggle_row = store.mutation(fn (ctx, todo: i64) -> opaque {
-        let req = ctx.set(toggle_m, todo);
+        let req = ctx.set<i64, ?Req, Mutation<i64, ?Req>>(toggle_m, todo);
         if (req == nil) {
             return opaque(nil);
         }
-        ctx.set(note$, f"requested toggle #{todo}");
+        ctx.set<str, str, Source<str>>(note$, f"requested toggle #{todo}");
         let r: Req = req;
         return opaque(r);
     });
 
     /// a row's del: book the remove, note it. Same nil law.
     let remove_row = store.mutation(fn (ctx, todo: i64) -> opaque {
-        let req = ctx.set(remove_m, todo);
+        let req = ctx.set<i64, ?Req, Mutation<i64, ?Req>>(remove_m, todo);
         if (req == nil) {
             return opaque(nil);
         }
-        ctx.set(note$, f"requested remove #{todo}");
+        ctx.set<str, str, Source<str>>(note$, f"requested remove #{todo}");
         let r: Req = req;
         return opaque(r);
     });
@@ -277,11 +277,11 @@ pub fn world_boot(boot_line: str) -> World {
     /// status line's tail (the why on an err leg, the line on an ok
     /// leg) — the app's timer door no longer writes anything itself.
     let answer_ev = store.mutation(fn (ctx, tag: str) -> (str, str) {
-        let ans = ctx.set(answer_m, tag);
+        let ans = ctx.set<str, (str, str), Mutation<str, (str, str)>>(answer_m, tag);
         if (ans.1 != "") {
-            ctx.set(note$, ans.1);
+            ctx.set<str, str, Source<str>>(note$, ans.1);
         } else {
-            ctx.set(note$, ans.0);
+            ctx.set<str, str, Source<str>>(note$, ans.0);
         }
         return ans;
     });
@@ -296,13 +296,13 @@ pub fn world_boot(boot_line: str) -> World {
 
     /// the draft mirror: the field's value, reactive.
     let draft_view$ = store.derive(fn (ctx) -> str {
-        return ctx.get(draft$);
+        return ctx.get<str, Source<str>>(draft$);
     });
 
     /// the status line: counts$ + note$ composed — "N open | M done |
     /// K in flight — <note>", byte-identical to every phase before.
     let status_line$ = store.derive(fn (ctx) -> str {
-        return f"{ctx.get(counts$)} — {ctx.get(note$)}";
+        return f"{ctx.get<str, Derived<str>>(counts$)} — {ctx.get<str, Source<str>>(note$)}";
     });
 
     /// THE LIST, reactive (tur's Each): the whole card is a derived —
@@ -312,8 +312,8 @@ pub fn world_boot(boot_line: str) -> World {
     /// from its CREATE; a row's id is stable for its lifetime, so the
     /// captured args are equivalent).
     let list_tree$ = store.derive(fn (ctx) -> Widget {
-        let items = ctx.get(items$);
-        let rs = ctx.get(reqs$);
+        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
+        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
         let mut list = card().pad(12).gap(8).hook("list");
         for (let t of items) {
             list.w(todo_row(t, has_pending_for(rs, t.id), toggle_row, remove_row));

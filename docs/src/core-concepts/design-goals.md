@@ -30,7 +30,7 @@ and none is needed — the code shape a JS JIT exists to speculate on
 (polymorphic property loads) does not exist in rut.
 
 **Everything is a value — with two honest regimes.** Primitives move by
-value; every composite (`str`, `bytes`, records, arrays, trait objects,
+value; every composite (`str`, `bytes`, records, arrays, interface objects,
 erasure boxes) is a reference-counted cell whose handle copies in O(1).
 Sharing is the default and visible; there is no hidden copying. See
 [everything is a value](everything-is-a-value.md).
@@ -94,9 +94,9 @@ implementation — is fourfold, and each item has a structural answer:
 
 Erasure is never silent — it is spelled and checked:
 
-- **Trait-typed values** (`d: Drawable`) for polymorphism. Dispatch is
-  dynamic only where a value may be one of several concrete types, and a
-  trait-typed value still carries its exact class at runtime.
+- **Interface-typed values** (`s: Drawable`) for polymorphism. Dispatch is
+  dynamic only where a value may be one of several concrete types, and an
+  interface-typed value still carries its exact class at runtime.
 - **The `opaque` box** (`opaque(v)`, `opaque.downcast<T>(o)`) for
   storage. Erasure mints a checked box; recovery checks the runtime type
   and yields `nil` on a mismatch — never a silent wrong-type read.

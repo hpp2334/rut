@@ -7,26 +7,28 @@
 // (a closure per STAGE, never per element). Pipelines are the clarity
 // tier: the fused builtin loops stay the perf tier.
 //
-// The base is pouch-free by law (json.rut's base shape): the entry and
-// sink rows for the builtin structural targets (`[T]`, `str`, `bytes`)
-// compile here — the array sink counts and seeds via json's decode
-// technique, no growable needed — while the Vec rows live in
-// group-pouch.rut and the map/set sinks in group-nmapset.rut, the
-// peer-gated integration groups.
+// The base is pouch-free by law (json.rut's base shape): the entry
+// adapters for the builtin structural targets (`[T]`, `str`, `bytes`)
+// compile here, while the Vec family lives in group-pouch.rut and the
+// set sink in group-nmapset.rut, the peer-gated integration groups.
 
-// The entry trait: a source becomes a pipeline. Builtin sequences
-// (`[T]`, `str`, `bytes`), growable `Vec<T>`, and `Flow` itself (the
-// identity row) all register it — generic `X requires IntoFlow<E>`
-// code accepts chains and sources alike.
-pub trait IntoFlow<E> {
+// The entry interface: a source becomes a pipeline. A type satisfies
+// it STRUCTURALLY — by having `into_flow` on its own inherent impl —
+// so `Flow` itself carries the identity member, and the builtin
+// structural targets (which can carry no members) enter through the
+// spelled adapters (`ArrFlow(xs).into_flow()`). Generic
+// `X requires IntoFlow<E>` code accepts chains and adapters alike.
+pub interface IntoFlow<E> {
     fn into_flow(self) -> Flow<E>;
 }
 
-// The sink trait: a pipeline materializes into the implementing type.
-// The parameter takes the EXPLICIT wrapper — `xs.into_flow()`
-// manufactures it at the call site (wrappers are explicit manufacture;
-// nothing is auto-inserted), so one drive feeds every sink.
-pub trait FromFlow<E> {
+// The sink interface: a pipeline materializes into the implementing
+// type — the member is a no-self static (`fn from_flow(it: Flow<E>)
+// -> Self`), and the adapters are the only shapes that can carry it
+// (the sink targets are foreign classes). The call site spells it:
+// `VecFlow<T>.from_flow(pipe)`, `collected()` unwraps — wrappers are
+// explicit manufacture; nothing is auto-inserted.
+pub interface FromFlow<E> {
     fn from_flow(it: Flow<E>) -> Self;
 }
 
@@ -175,16 +177,32 @@ impl<E> Flow<E> {
     }
 }
 
-// ---- the builtin sources enter through IntoFlow rows ----
+// ---- the satisfaction rows ----
+
+// The identity member: a chain re-enters as a source, so generic
+// `X requires IntoFlow<E>` code accepts pipelines unchanged. `Flow`'s
+// own inherent impl carries it — the one registration-free row.
+impl<E> Flow<E> {
+    pub fn into_flow(self) -> Flow<E> {
+        return self;
+    }
+}
+
+// The builtin structural targets carry no members (primitives and
+// composites never satisfy anything), so they enter through the
+// spelled adapters — newtype classes whose inherent impls carry
+// `into_flow`.
 
 // The fixed array: a fused loop over the shared handle, the emit's
 // `false` stopping the walk.
-impl<T> IntoFlow<T> for [T] {
-    fn into_flow(self) -> Flow<T> {
+pub class ArrFlow<T>([T]);
+
+impl<T> ArrFlow<T> {
+    pub fn into_flow(self) -> Flow<T> {
         return
             Flow.new(
                 fn (emit: fn(T) -> bool) -> nil {
-                    for (let x of self) {
+                    for (let x of self.inner) {
                         if (!emit(x)) {
                             return;
                         }
@@ -194,12 +212,14 @@ impl<T> IntoFlow<T> for [T] {
     }
 }
 
-impl IntoFlow<str> for str {
-    fn into_flow(self) -> Flow<str> {
+pub class StrFlow(str);
+
+impl StrFlow {
+    pub fn into_flow(self) -> Flow<str> {
         return
             Flow.new(
                 fn (emit: fn(str) -> bool) -> nil {
-                    for (let c of self) {
+                    for (let c of self.inner) {
                         if (!emit(c)) {
                             return;
                         }
@@ -209,25 +229,19 @@ impl IntoFlow<str> for str {
     }
 }
 
-impl IntoFlow<u8> for bytes {
-    fn into_flow(self) -> Flow<u8> {
+pub class BytesFlow(bytes);
+
+impl BytesFlow {
+    pub fn into_flow(self) -> Flow<u8> {
         return
             Flow.new(
                 fn (emit: fn(u8) -> bool) -> nil {
-                    for (let b of self) {
+                    for (let b of self.inner) {
                         if (!emit(b)) {
                             return;
                         }
                     }
                 },
             );
-    }
-}
-
-// The identity row: a chain re-enters as a source, so generic
-// `X requires IntoFlow<E>` code accepts pipelines unchanged.
-impl<E> IntoFlow<E> for Flow<E> {
-    fn into_flow(self) -> Flow<E> {
-        return self;
     }
 }

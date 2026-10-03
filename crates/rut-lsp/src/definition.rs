@@ -296,7 +296,7 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
                 let ty_text = match &target {
                     MemberTarget::Member(_, _, m, _)
                     | MemberTarget::EnumMember(_, _, m)
-                    | MemberTarget::TraitMember(_, _, m, _) => m.ty.clone(),
+                    | MemberTarget::IfaceMember(_, _, m) => m.ty.clone(),
                     MemberTarget::ImplFn(_, f) => f.ret.clone(),
                 };
                 return ty_text
@@ -394,7 +394,7 @@ fn member_locations(ctx: &Ctx, target: &MemberTarget) -> Vec<DefLocation> {
     match target {
         MemberTarget::Member(i, _, m, _)
         | MemberTarget::EnumMember(i, _, m)
-        | MemberTarget::TraitMember(i, _, m, _) => match member_span(m) {
+        | MemberTarget::IfaceMember(i, _, m) => match member_span(m) {
             Some(sp) => vec![loc_at(ctx.doc_uri, i, sp)],
             // a member whose name recovery failed has no span to jump
             // to — an empty answer, never a wrong jump

@@ -16,7 +16,7 @@ pub enum SymKind {
     Class,
     Field,
     Method,
-    Trait,
+    Interface,
     Module,
 }
 
@@ -93,14 +93,14 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             let children = member_symbols(toks, ast, fields, methods);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Trait { name, methods, .. } => {
+        ItemKind::Interface { name, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            Some(sym(ast.name(*name), SymKind::Trait, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
+        ItemKind::Impl { generics, target, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
@@ -111,10 +111,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 let gs = generics.iter().map(|&g| ast.name(g).to_string()).collect::<Vec<_>>().join(", ");
                 format!("<{}>", gs)
             };
-            let name = match trait_ref {
-                Some(tr) => format!("impl{} {} for {}", gen_head, ty_text(ast, *tr), ty_text(ast, *target)),
-                None => format!("impl{} {}", gen_head, ty_text(ast, *target)),
-            };
+            let name = format!("impl{} {}", gen_head, ty_text(ast, *target));
             Some(sym(&name, SymKind::Module, None, children))
         }
         ItemKind::SurfaceFn { name, .. } => Some(sym(
@@ -144,7 +141,9 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             let children = member_symbols(toks, ast, fields, &[]);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Use { .. } | ItemKind::Module { .. } => None,
+        // `use` symbols render above (the pkg-shaped entry); modules
+        // carry no outline entry
+        ItemKind::Module { .. } => None,
     }
 }
 
@@ -184,7 +183,7 @@ fn method_symbol(toks: &[Token], ast: &Ast, m: NodeHandle<MethodDeclNode>) -> Ra
     }
 }
 
-/// Best-effort type text for impl headers (`impl Drawable for Circle`).
+/// Best-effort type text for impl headers (`impl Circle`).
 fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     match ast.ty(h) {
         TypeKind::TyPath { segs } => {

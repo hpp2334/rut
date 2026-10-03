@@ -31,7 +31,7 @@ impl Vm {
     /// the payload — any opaque (host or rut) answers TY_OPAQUE, so
     /// `o is opaque` (or an alias) hits and `o is T` misses for every
     /// payload T; recovery is `downcast<T>` only (its own TidOf keeps
-    /// reading the payload). IsTrait probes the same type.
+    /// reading the payload). IsIface probes the same type.
     pub(crate) fn is_ty(&self, s: Slot) -> TypeId {
         if crate::heap::store::is_entry(s) {
             return rut_core::types::TY_OPAQUE;

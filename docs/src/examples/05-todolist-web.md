@@ -117,26 +117,35 @@ A wiring bug is loud: a missing id traps (`web::ui_get: no element
 app-specific crossing — the entire widget system fits over these ten
 rows, unchanged.
 
-### The store: jotai's shape over private traits
+### The store: jotai's shape over private interfaces
 
 `rut/ui/store.rut` is the kernel. Handles are keys, not objects —
 `Source<T>`, `Derived<T>`, `Mutation<A, R>` carry ids and have no
 logic of their own beyond routing through their store. The machinery
-traits are **module-private**, so the domain package cannot name them
-even to import them — which is how "a derived cell is not writable"
-is enforced at the type level
-([Traits and dispatch](../core-concepts/traits-and-dispatch.md)):
+interfaces are **module-private** — the domain package cannot name
+them even to import them — and satisfaction is structural: each
+handle carries the members on its own inherent impl, and the
+member-set match at the store's boundary is the whole admission
+([Interfaces and dispatch](../core-concepts/interfaces-and-dispatch.md)):
 
 ```rut
-trait Readable<T> {
+interface Readable {
     fn atom_id(self) -> u32;
     fn materialize(self, st: Store) -> nil; // first touch: the seed lands
 }
 
-trait Writable<A, R> {
+interface Writable {
     fn atom_id(self) -> u32;
 }
 ```
+
+"Non-writability" rides the **shape, not a seal**: a derived cell is
+not writable because the write verb does not exist where a derive
+could reach it — the derive ctx exposes `get` only, and the one write
+lane takes a `Mutation` handle (the store re-checks, loud). Under
+structural satisfaction no interface can fence a member set, so the
+guarantee is the API's shape; the private interfaces are the store's
+uniform plumbing over handles.
 
 Freshness is **pull-on-read**: a write bumps a generation, and a
 `get` recomputes a stale derived at most once per write-set. There is
@@ -235,8 +244,8 @@ lanes to byte-identical binaries.
 - Ten thin crossings carried an entire reactive framework — the host
   stayed generic and never learned the word "todo".
 - The store is jotai's shape in rut: discovered deps, pull-on-read
-  freshness, mutations as the write lane, and type-level
-  non-writability through private traits.
+  freshness, mutations as the write lane, and non-writability by
+  shape — the derive ctx has no write verb to reach.
 - Widgets are values; the keyed diff is the only thing that speaks
   DOM, and patch-in-place is what makes the UI animatable.
 - Soft failures are data (`(nil, why)` and the pump keeps draining);

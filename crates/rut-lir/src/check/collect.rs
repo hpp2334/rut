@@ -1,8 +1,8 @@
 //! Collection: pass 1 declares types (enums, structs,
-//! classes, traits), pass 2 impls/fns/lets. Record payloads are slot arrays
+//! classes, ifaces), pass 2 impls/fns/lets. Record payloads are slot arrays
 //!; impl methods enter the instantiation queue eagerly.
 
-use rut_core::binary::TraitDesc;
+use rut_core::binary::IfaceDesc;
 use super::*;
 
 
@@ -12,7 +12,7 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.module_items(self.ast.root).to_vec();
-        // pass 1a: declare types (enums, structs, classes, traits,
+        // pass 1a: declare types (enums, structs, classes, ifaces,
         // aliases) so every name is in scope before any field/signature
         // is resolved
         for it in &items {
@@ -24,8 +24,8 @@ impl<'a> Ctx<'a> {
             ItemKind::Class { vis, name, generics, requires, methods, .. } => {
                 self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, requires, methods);
             }
-            ItemKind::Trait { vis, name, generics, methods, .. } => {
-                self.declare_trait(it.id(), *vis, *name, generics, methods)
+            ItemKind::Interface { vis, name, generics, methods, .. } => {
+                self.declare_iface(it.id(), *vis, *name, generics, methods)
             }
             ItemKind::Alias(d) => self.declare_alias(it.id(), d),
                 _ => {}
@@ -59,8 +59,8 @@ impl<'a> Ctx<'a> {
                         self.resolve_data_fields(*name, fields);
                     }
                 }
-                ItemKind::Trait { name, methods, .. } => {
-                    self.resolve_trait_sigs(it.id(), *name, methods)
+                ItemKind::Interface { name, methods, .. } => {
+                    self.resolve_iface_sigs(it.id(), *name, methods)
                 }
                 _ => {}
             }
@@ -68,11 +68,11 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                // the two impl forms: inherent + trait impls
-                ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
+                // the one impl form: inherent
+                ItemKind::Impl { generics, target, methods, .. } => {
                     let methods = methods.clone();
                     let generics = generics.clone();
-                    self.collect_impl(it.id(), &generics, *trait_ref, *target, &methods)
+                    self.collect_impl(it.id(), &generics, *target, &methods)
                 }
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
@@ -123,7 +123,7 @@ impl<'a> Ctx<'a> {
 
     pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[(IdentId, Option<i64>)]) {
         let sp = self.ast.node(node).span;
-        if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_trait(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
@@ -157,7 +157,7 @@ impl<'a> Ctx<'a> {
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_trait(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
@@ -284,7 +284,7 @@ impl<'a> Ctx<'a> {
         if self.find_alias(d.name).is_some()
             || self.find_data(d.name).is_some()
             || self.find_enum(d.name).is_some()
-            || self.find_trait(d.name).is_some()
+            || self.find_iface(d.name).is_some()
         {
             self.err(sp, format!("duplicate type name `{}`", self.name(d.name)));
             return;
@@ -299,7 +299,7 @@ impl<'a> Ctx<'a> {
 
     /// Pass 1a — reserve the trait's id and register its name; signatures
     /// are resolved in pass 1b, once every type name is in scope.
-    pub(crate) fn declare_trait(
+    pub(crate) fn declare_iface(
         &mut self,
         node: NodeId,
         vis: Vis,
@@ -308,20 +308,20 @@ impl<'a> Ctx<'a> {
         _methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_trait(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_iface(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
         let id = if generics.is_empty() {
-            let id = self.traits.len() as u32;
-            self.traits.push(TraitDesc { name, methods: vec![] });
+            let id = self.ifaces.len() as u32;
+            self.ifaces.push(IfaceDesc { name, methods: vec![] });
             id
         } else {
-            // a generic trait has no single id — `mk_trait_inst` allocates
+            // a generic trait has no single id — `mk_iface_inst` allocates
             // one per type-argument list
             u32::MAX
         };
-        self.trait_decls.push((name, TraitDeclInfo {
+        self.iface_decls.push((name, IfaceDeclInfo {
             id,
             node,
             generics: generics.to_vec(),
@@ -330,13 +330,13 @@ impl<'a> Ctx<'a> {
     }
 
     /// Pass 1b — resolve a declared trait's method signatures.
-    pub(crate) fn resolve_trait_sigs(
+    pub(crate) fn resolve_iface_sigs(
         &mut self,
         _node: NodeId,
         name: IdentId,
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
-        let Some(id) = self.trait_id_of(name) else {
+        let Some(id) = self.iface_id_of(name) else {
             return;
         };
         let mut tms = Vec::new();
@@ -350,7 +350,7 @@ impl<'a> Ctx<'a> {
                         self.err(self.ast.span(p.id()), "`self` must be the first parameter");
                     }
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_trait_sig_ty(*t, id, &[]));
+                        ptys.push(self.resolve_iface_sig_ty(*t, id, &[]));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
                         self.err(self.ast.span(p.id()), "trait method parameters need types");
@@ -359,47 +359,47 @@ impl<'a> Ctx<'a> {
                     _ => ptys.push(TY_I32),
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
+            let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &[]));
             tms.push((md.name, ptys, rty));
         }
         // trait methods take `self` — except engine-contract
         // members, which may spell plain parameters only (`fn yield(cx: ..)`).
         // Either way the binary desc's params exclude the receiver: the
         // compiler passes self as arg0 for receiver methods.
-        let mut desc = TraitDesc { name, methods: vec![] };
+        let mut desc = IfaceDesc { name, methods: vec![] };
         for (mname, ptys, rty) in tms {
-            desc.methods.push(rut_core::binary::TraitMethod {
+            desc.methods.push(rut_core::binary::IfaceMethod {
                 name: mname,
                 params: ptys,
                 ret: rty.unwrap_or(TY_NIL),
             });
         }
-        self.traits[id as usize] = desc;
+        self.ifaces[id as usize] = desc;
     }
 
     /// Resolve a trait-method signature type under `env`: a bare
     /// `Self` is the trait's object type.
-    fn resolve_trait_sig_ty(
+    fn resolve_iface_sig_ty(
         &mut self,
         node: NodeHandle<AnyTy>,
-        trait_id: u32,
+        iface_id: u32,
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
         // a trait declaration's `Self` is the trait object at any
         // structural depth (`(?Self, ?E)` — the rut-json batch phase 1,
         // gap 2's signature half); the impl side resolves against its
         // concrete target through resolve_sig_ty
-        let tobj = self.mk_trait_obj(trait_id);
+        let tobj = self.mk_iface_obj(iface_id);
         self.resolve_sig_ty_deep(node, env, Some(tobj))
     }
 
     /// Instantiate a generic trait for concrete type arguments:
-    /// one `TraitDesc` (and trait id) per type-argument list, cached.
-    pub fn mk_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
-        if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
+    /// one `IfaceDesc` (and trait id) per type-argument list, cached.
+    pub fn mk_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
             return id;
         }
-        let id = self.traits.len() as u32;
+        let id = self.ifaces.len() as u32;
         let tname = if args.is_empty() {
             self.interner.name(name).to_string()
         } else {
@@ -410,35 +410,35 @@ impl<'a> Ctx<'a> {
             )
         };
         let tname = self.intern(&tname);
-        self.traits.push(TraitDesc { name: tname, methods: vec![] });
-        self.trait_inst.insert((name, args.clone()), id);
-        let Some(info) = self.find_trait(name).cloned() else { return id };
+        self.ifaces.push(IfaceDesc { name: tname, methods: vec![] });
+        self.iface_inst.insert((name, args.clone()), id);
+        let Some(info) = self.find_iface(name).cloned() else { return id };
         let subst: Vec<(IdentId, TypeId)> =
             info.generics.iter().cloned().zip(args.iter().cloned()).collect();
         let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
-            ItemKind::Trait { methods, .. } => methods.clone(),
+            ItemKind::Interface { methods, .. } => methods.clone(),
             _ => Vec::new(),
         };
-        let mut desc = TraitDesc { name: tname, methods: vec![] };
+        let mut desc = IfaceDesc { name: tname, methods: vec![] };
         for m in &methods {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
             for p in md.params.iter() {
                 match self.ast.param(*p) {
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_trait_sig_ty(*t, id, &subst));
+                        ptys.push(self.resolve_iface_sig_ty(*t, id, &subst));
                     }
                     _ => {}
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst));
-            desc.methods.push(rut_core::binary::TraitMethod {
+            let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &subst));
+            desc.methods.push(rut_core::binary::IfaceMethod {
                 name: md.name,
                 params: ptys,
                 ret: rty.unwrap_or(TY_NIL),
             });
         }
-        self.traits[id as usize] = desc;
+        self.ifaces[id as usize] = desc;
         id
     }
 
@@ -727,7 +727,7 @@ impl<'a> Ctx<'a> {
             // a user trait object: the kind holds a unit-local
             // trait-table index with no structural element to
             // substitute — passes through
-            TyKind::TraitObj { .. } => None,
+            TyKind::IfaceObj { .. } => None,
             // a TUPLE (record with numeric fields) mentioning a
             // placeholder (`(?#T, ?DecodeJsonError)` — the generic fns'
             // return shapes): rebuild with the substituted fields. A

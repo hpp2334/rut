@@ -19,8 +19,8 @@ pub struct Program {
     pub inst_types: Vec<InstTy>,    // the instantiation ledger (v17)
     pub inst_fns: Vec<InstFn>,      //   — link unifies rows by key
     pub types: TypeTable,           // type descriptors, dense ids
-    pub traits: Vec<TraitDesc>,     // trait tables
-    pub trait_slots: Vec<(u32, u32)>,   // global trait-method slots
+    pub ifaces: Vec<IfaceDesc>,     // interface tables
+    pub iface_slots: Vec<(u32, u32)>,   // global interface-member slots
     pub vtables: Vec<Vec<Option<u32>>>, // per type: slot -> func id
     pub disposal_impls: Vec<Option<u32>>, // per type: dispose fn id
     pub consts: Vec<ConstVal>,      // the constant pool
@@ -29,11 +29,12 @@ pub struct Program {
 }
 ```
 
-The `Surface` is the export record — functions, constants, types, traits,
-impl registrations, and the builtin names `core` publishes. It is how a
-*using* module binds a *used* module's members at compile time; since v16
-it is part of the wire format too — the surface section rides after
-`exports`, and decode validates every row against the tables above it.
+The `Surface` is the export record — functions, constants, types,
+interface declarations, inherent method surfaces, and the builtin
+names `core` publishes. It is how a *using* module binds a *used*
+module's members at compile time; since v16 it is part of the wire
+format too — the surface section rides after `exports`, and decode
+validates every row against the tables above it.
 
 ## Wire layout
 
@@ -49,8 +50,8 @@ offset  field
 8       name: str
         name table: u32 count, then count × str
         types: u32 count, then per type { name: IdentId, kind }
-        traits: u32 count, then per trait { name, methods[] }
-        trait slots: u32 count, then (trait: u32, method: u32) pairs
+        ifaces: u32 count, then per iface { name, methods[] }
+        iface slots: u32 count, then (iface: u32, member: u32) pairs
         vtables: u32 entries, then per entry { ty, [(slot, func)] }  # sparse
         disposal rows: u32 entries, then (ty, func) pairs            # sparse
         consts: u32 count, then tag + payload (below)
@@ -58,20 +59,20 @@ offset  field
         exports: u32 count, then (name: IdentId, func: u32) pairs
         instantiation ledger: type rows, then fn identities   # v17, below
         surface: namespace, funcs, consts, types + scope blocks + type
-                 exports, traits, impls (both ABI lists), the reserved
-                 inherent-impl table, native rows   # v16, below
+                 exports, interface decls, inherent method surfaces,
+                 the native rows   # v16, below
 ```
 
 - **Name table.** Names are interner ids everywhere — type names, field
-  names, enum members, trait/method names, function names, exports. The
-  binary carries only the interner's *non-well-known tail*; the fixed
+  names, enum members, interface/method names, function names, exports.
+  The binary carries only the interner's *non-well-known tail*; the fixed
   well-known prefix (`self`, `nil`, the builtin members, the primitives,
   …) is implied by the format. Decoding rebuilds the interner, so a
   decoded program is self-contained; at link, each module's tail merges
   into the linked program's table with the same rebase the type ids get.
 - **Type kinds** encode as a one-byte tag: nil, primitives, `str`,
   `bytes`, arrays, enums (member + value pairs), records (field table),
-  trait objects, `opaque`, fn types, `?T`, trace, string builder, `Weak<T>`.
+  interface objects, `opaque`, fn types, `?T`, trace, `Weak<T>`.
 - **Const tags**: `0` i64, `1` f64, `2` bool, `4` str, `5` type id.
   Retired tags fail decode loudly rather than being reinterpreted.
 - **Funcs** serialize in full: name, param/ret types, `is_method`,
@@ -89,15 +90,20 @@ offset  field
 - **Surface** (v16): the exported surface rides after `exports` — the
   namespace head, funcs (with their async/host rows), consts, the
   carried type descriptors + scope blocks + type exports (generic
-  exports carry their parameter names in order, v17), trait decls,
-  impl registrations in both ABI lists, a reserved length-prefixed
-  inherent-impl table (zero rows until class methods link), and the
-  native rows with their ambient bits. Names are ids into the name
-  table above; decode rejects any id its tables cannot resolve.
+  exports carry their parameter names in order, v17), interface
+  declarations (`SurfaceIface` — every module publishes the interfaces
+  it declares; a consumer links them into one merged table), the
+  inherent method surfaces (the linkable-classes phase's one row per
+  class with methods), and the native rows with their ambient bits.
+  There are no impl-registration rows on the wire since v21 —
+  satisfaction is structural, so nothing registers. Names are ids into
+  the name table above; decode rejects any id its tables cannot
+  resolve.
 - **Versioning policy**: the version `u32` must equal the toolchain's
   exactly — there is no migration or best-effort decode. A byte that
   changes observable behavior bumps the version; artifacts from older
-  compilers are refused with the standard version error.
+  compilers are refused with the standard version error (v21 refused
+  the v20 artifacts that still carried the impl-registration rows).
 
 ## Determinism
 
@@ -133,7 +139,7 @@ Type ids are program-global in a linked binary only because **link**
 already rebased them. At rest (per module, pre-link) ids are module-local;
 the boot table — the fixed primitive and builtin prefix — is shared by
 every module, and each module's remaining types append after it. Every
-type id reachable from a type descriptor, trait signature, constant,
+type id reachable from a type descriptor, interface signature, constant,
 function signature, or op operand is remapped at link, and
 `type_id<T>()` constants rebase with everything else.
 
@@ -143,19 +149,18 @@ type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]`
 across modules — identity is assigned at link
 ([Reified types and layout](reified-types.md)).
 
-## Trait and impl tables
+## Interface and vtable tables
 
-- Traits serialize with their method signatures; trait ids merge by name
-  at link — a trait imported in one module and declared in another is one
-  trait, and every `IsTrait` probe and vtable slot lands on the same
-  global table.
-- Trait-method slots are a global table of `(trait, method)` pairs;
+- Interfaces serialize with their member signatures; interface ids
+  merge by name at link — an interface imported in one module and
+  declared in another is one interface, and every capability probe and
+  itable slot lands on the same global table.
+- Interface-member slots are a global table of `(iface, member)` pairs;
   vtables are per-type sparse maps slot → function id, merged at link.
-  A trait impl registered in any module reaches every call site.
-- **Impl registrations** `(trait, target)` merge at link; a duplicate
-  pair is a **link error** — per-module compiles cannot see each other,
-  so the pair's uniqueness is a link-level law
-  ([Traits and dispatch](traits.md)).
+  The slots a type fills are decided at its boxing sites — the
+  boundaries where satisfaction was proved — and reach every call site
+  from there. Nothing registers: a type that never crosses an
+  interface-typed boundary fills nothing.
 
 ## Verification (load time)
 
@@ -170,6 +175,7 @@ binary:
 | jump targets | every `jmp`/`br`/`brtable` target is in range |
 | call arity | call argument counts match the callee's declared signature |
 | enum members | `EnumNew` member indices in range, target actually an enum |
+| interface slots | `CallI` slot ids name a row of the global iface-slot table |
 | host thunks | bodyless functions are skipped (nothing to verify) |
 
 A failed verification is a **load error** naming the module and function —

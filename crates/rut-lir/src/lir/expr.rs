@@ -220,23 +220,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // trait RHS —capability probe (or fold). A generic
                         // head (`Vec<i64>`) is never a trait spelling.
                         if segs[0].generics.is_empty() {
-                            if let Some(tid) = self.ctx.trait_id_of(segs[0].name) {
+                            if let Some(tid) = self.ctx.iface_id_of(segs[0].name) {
                                 match self.ctx.types.kind(rt).clone() {
-                                    TyKind::TraitObj { trait_id } if trait_id == tid => {
+                                    TyKind::IfaceObj { iface_id } if iface_id == tid => {
                                         self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo); // fold
                                     }
-                                    TyKind::TraitObj { .. } => {
-                                        self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
+                                    TyKind::IfaceObj { .. } => {
+                                        self.emit(Op::IsIface { dst, obj: recv, want: tid }, sp.lo);
                                     }
                                     TyKind::Opaque => {
-                                        self.emit(Op::IsTrait { dst, obj: recv, want: tid }, sp.lo);
+                                        self.emit(Op::IsIface { dst, obj: recv, want: tid }, sp.lo);
                                     }
                                     exact => {
                                         let _ = exact;
-                                        // exact receiver: fold — the impl is
-                                        // registered or it is not, wherever it
-                                        // lives (nominal)
-                                        let has = self.ctx.find_impl_ex(tid, rt).is_some();
+                                        // exact receiver: fold — the type
+                                        // satisfies the member set or it does
+                                        // not (structural, compile-time)
+                                        let has = self.ctx.check_satisfies(rt, tid).is_ok();
                                         self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
                                     }
                                 }
@@ -675,7 +675,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let inst = crate::check::Inst {
                 key: crate::check::FnKey::Free(name),
                 subst: vec![],
-                trait_origins: vec![],
+                iface_origins: vec![],
             };
             let fid = self.ctx.ensure_inst(inst);
             return Some(self.make_fn_value(fid, ptys, ret_ty, sp));

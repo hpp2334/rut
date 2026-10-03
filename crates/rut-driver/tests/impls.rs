@@ -1,10 +1,13 @@
-//! Impl blocks and nominal trait semantics: the two impl
-//! forms, coverage/placement checks, the use-both gate, and the two
-//! dispatch rules — static bind when the call site names exactly one
-//! concrete receiver type, vtable when origins merge.
+//! Inherent impl blocks and structural interface satisfaction: the
+//! impl forms (struct/class/enum targets, coverage/placement checks),
+//! the boundary satisfaction check (missing member, signature differs,
+//! receiver form), and the two dispatch rules — static bind when the
+//! call site names exactly one concrete origin, vtable when origins
+//! merge. Primitives carry no members: capability on a value type is
+//! manufactured by a spelled wrapper (a newtype class) whose inherent
+//! impl carries the members.
 
 use rut_parser::Mode;
-use rut_core::types::TY_I32;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // core + pouch bound as the uses; these
@@ -27,99 +30,52 @@ fn diags_of(src: &str) -> Vec<String> {
         .collect()
 }
 
+// The old nominal laws — `impl I for T` coverage/extra-member checks,
+// the duplicate (trait, type) pair error, and the nominal (not
+// structural) satisfaction — died with the trait registry. Their
+// nearest surviving laws live at the BOUNDARY (the member-set match:
+// `satisfaction_fails_names_the_missing_member` /
+// `receiver_form_must_match_the_interface` below and in
+// cross_traits.rs) and in the duplicate-inherent-member check
+// (`duplicate_inherent_member_diagnoses`).
+
 #[test]
-fn trait_impl_coverage_is_checked() {
-    // a missing trait method diagnoses
+fn duplicate_inherent_member_diagnoses() {
+    // two inherent blocks spelling the same member: the second is a
+    // duplicate-method error (the registry's old duplicate-pair law,
+    // restated for the members that replaced it)
     let ds = diags_of(
-        "trait Shape { fn area(self) -> f32; }\n\
-         struct Circle { r: f32 }\n\
-         impl Shape for Circle { }\n\
+        "struct S { x: i32 }\n\
+         impl S { pub fn m(self) -> i32 { return 1; } }\n\
+         impl S { pub fn m(self) -> i32 { return 2; } }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl is missing `area`")),
-        "missing method must diagnose: {ds:?}"
-    );
-    // so does an extra one — inherent methods go in `impl Circle`
-    let ds = diags_of(
-        "trait Shape { fn area(self) -> f32; }\n\
-         struct Circle { r: f32 }\n\
-         impl Shape for Circle {\n\
-             fn area(self) -> f32 { return self.r; }\n\
-             fn extra(self) -> i32 { return 1; }\n\
-         }\n\
-         entry fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("`extra` is not a member of Shape")),
-        "extra method must diagnose: {ds:?}"
-    );
-    // and a signature that does not match the trait's
-    let ds = diags_of(
-        "trait Shape { fn area(self) -> f32; }\n\
-         struct Circle { r: f32 }\n\
-         impl Shape for Circle {\n\
-             fn area(self) -> i32 { return 4; }\n\
-         }\n\
-         entry fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("does not match the trait's signature")),
-        "signature mismatch must diagnose: {ds:?}"
+        ds.iter().any(|d| d.contains("duplicate method `m` on `S`")),
+        "duplicate member must diagnose: {ds:?}"
     );
 }
 
 #[test]
-fn receiver_form_must_match_the_trait() {
-    let ds = diags_of(
-        "trait T { fn m(mut self) -> nil; }\n\
+fn satisfaction_is_structural() {
+    // S HAS the member `m` on its inherent impl — it satisfies I at the
+    // boundary (the fork's inversion of the old nominal law): the
+    // widening compiles, dispatches, and the probe folds true
+    let out = compile(
+        "interface I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
-         impl T for S { fn m(self) -> nil { } }\n\
-         entry fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("must match the trait's receiver")),
-        "receiver form mismatch must diagnose: {ds:?}"
-    );
-}
-
-#[test]
-fn duplicate_trait_type_pair_is_an_error() {
-    let ds = diags_of(
-        "trait I { fn m(self) -> i32; }\n\
-         struct S { x: i32 }\n\
-         impl I for S { fn m(self) -> i32 { return 1; } }\n\
-         impl I for S { fn m(self) -> i32 { return 2; } }\n\
-         entry fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("duplicate impl for the same (trait, type) pair")),
-        "duplicate pair must diagnose: {ds:?}"
-    );
-}
-
-#[test]
-fn satisfaction_is_nominal_not_structural() {
-    // S has the method `m` and NO impl — it is not an I, so the widening
-    // errors and the probe folds false
-    let ds = diags_of(
-        "trait I { fn m(self) -> i32; }\n\
-         struct S { x: i32 }\n\
-         impl S { fn m(self) -> i32 { return self.x; } }\n\
+         impl S { pub fn m(self) -> i32 { return self.x; } }\n\
          entry fn main() -> i32 {\n\
              let s = S { x: 1 };\n\
              let i: I = s;\n\
              return i.m();\n\
          }\n",
     );
-    assert!(
-        ds.iter().any(|d| d.contains("the initializer is")),
-        "structural satisfaction must not widen: {ds:?}"
-    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
     let out = compile(
-        "trait I { fn m(self) -> i32; }\n\
+        "interface I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
-         impl S { fn m(self) -> i32 { return self.x; } }\n\
+         impl S { pub fn m(self) -> i32 { return self.x; } }\n\
          entry fn main() -> i32 {\n\
              let s = S { x: 1 };\n\
              if (s is I) { return 1; }\n\
@@ -130,26 +86,72 @@ fn satisfaction_is_nominal_not_structural() {
 }
 
 #[test]
-fn marker_impls_are_legal() {
-    // an empty body on a method-less trait
-    let out = compile(
-        "trait Mark { }\n\
+fn satisfaction_fails_names_the_missing_member() {
+    // S has NO member `m` — the boundary check names the type, the
+    // interface, and the member
+    let ds = diags_of(
+        "interface I { fn m(self) -> i32; }\n\
          struct S { x: i32 }\n\
-         impl Mark for S { }\n\
-         entry fn main() -> i32 { return 0; }\n",
+         entry fn main() -> i32 {\n\
+             let s = S { x: 1 };\n\
+             let i: I = s;\n\
+             return i.m();\n\
+         }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("`S` does not satisfy `I`: no member `m`")),
+        "structural satisfaction must diagnose at the boundary: {ds:?}"
+    );
+}
+
+#[test]
+fn receiver_form_must_match_the_interface() {
+    // the member is there but spelled `self` where the interface asks
+    // `mut self` — the signature differs, at the boundary
+    let ds = diags_of(
+        "interface I { fn m(mut self) -> nil; }\n\
+         struct S { x: i32 }\n\
+         impl S { pub fn m(self) -> nil { } }\n\
+         entry fn main() -> i32 {\n\
+             let s = S { x: 1 };\n\
+             let i: I = s;\n\
+             return 0;\n\
+         }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("`S` does not satisfy `I`")
+            && d.contains("signature differs")),
+        "receiver form mismatch must diagnose: {ds:?}"
+    );
+}
+
+#[test]
+fn empty_interface_admits_every_class() {
+    // an interface with no members: the member-set match is vacuous, so
+    // any class satisfies it at the boundary
+    let out = compile(
+        "interface Mark { }\n\
+         struct S { x: i32 }\n\
+         entry fn main() -> i32 {\n\
+             let s = S { x: 1 };\n\
+             let m: Mark = s;\n\
+             return 0;\n\
+         }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }
 
 #[test]
 fn static_dispatch_when_the_origin_is_single() {
-    // `w` is trait-typed with ONE concrete origin — the call binds
-    // statically to the impl method (no vtable hop)
+    // `w` is interface-typed with ONE concrete origin — the call binds
+    // statically to the member (no vtable hop)
     let out = compile(
-        "trait Get { fn get(self) -> i32; }\n\
+        "interface Get { fn get(self) -> i32; }\n\
          struct B { v: i32 }\n\
-         impl B { fn new(v: i32) -> Self { return Self { v: v }; } }\n\
-         impl Get for B { fn get(self) -> i32 { return self.v; } }\n\
+         impl B {\n\
+             pub fn new(v: i32) -> Self { return Self { v: v }; }\n\
+             pub fn get(self) -> i32 { return self.v; }\n\
+         }\n\
          entry fn main() -> i32 {\n\
              let b = B.new(7);\n\
              let w: Get = b;\n\
@@ -167,11 +169,11 @@ fn vtable_dispatch_when_origins_merge() {
     // branch-merged origins: the compiler cannot name one concrete
     // receiver, so the call consults the descriptor (CallI)
     let out = compile(
-        "trait Get { fn get(self) -> i32; }\n\
+        "interface Get { fn get(self) -> i32; }\n\
          struct A { v: i32 }\n\
          struct B { v: i32 }\n\
-         impl Get for A { fn get(self) -> i32 { return self.v; } }\n\
-         impl Get for B { fn get(self) -> i32 { return self.v; } }\n\
+         impl A { pub fn get(self) -> i32 { return self.v; } }\n\
+         impl B { pub fn get(self) -> i32 { return self.v; } }\n\
          fn pick(k: bool) -> Get {\n\
              if (k) { return A { v: 1 }; }\n\
              return B { v: 2 };\n\
@@ -207,15 +209,43 @@ fn for_of_without_an_impl_names_the_missing_contract() {
 }
 
 #[test]
-fn impl_target_must_be_a_local_type_or_owned_builtin() {
+fn impl_target_must_be_a_local_type() {
+    // an unknown name keeps the target diagnosis...
     let ds = diags_of(
-        "trait I { fn m(self) -> i32; }\n\
-         impl I for Missing { fn m(self) -> i32 { return 1; } }\n\
+        "impl Missing { fn m(self) -> i32 { return 1; } }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum of this module")),
         "foreign target must diagnose: {ds:?}"
+    );
+    // ...and a USED class refuses the block outright: its members live
+    // where the type was declared (the structural fork's placement law)
+    let dep = rut_driver::compile_program(
+        "pub struct Used { v: i32 }\n",
+        Mode::Impl,
+        "dep",
+        1,
+        &[],
+    );
+    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
+    let dep = dep.program.expect("dep program");
+    let ds: Vec<String> = rut_driver::compile_program(
+        "use dep::{Used};\n\
+         impl Used { pub fn probe(self) -> i32 { return 7; } }\n\
+         entry fn main() -> i32 { return 0; }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, dep.surface.clone(), "dep".to_string())],
+    )
+    .diags
+    .iter()
+    .map(|d| d.msg.clone())
+    .collect();
+    assert!(
+        ds.iter().any(|d| d.contains("inherent impls live in the type's module")),
+        "a used type takes no consumer impl blocks: {ds:?}"
     );
 }
 
@@ -241,17 +271,17 @@ fn self_spells_the_impl_target() {
 fn reassignment_invalidates_a_stale_origin() {
     // `w` starts as A (single origin → static bind) but is re-assigned to
     // B. The compiler must re-derive the origin at the assignment: the
-    // later call must dispatch as B — statically re-bound to B's impl
+    // later call must dispatch as B — statically re-bound to B's member
     // (still a single known origin) or through the vtable — never run
-    // A's method on a B (a mis-analysis must not be able
+    // A's member on a B (a mis-analysis must not be able
     // to produce a wrong call). Runtime-checked in rut-cli's e2e
     // (`reassigned_trait_binding_dispatches_as_the_new_type`).
     let out = compile(
-        "trait Get { fn get(self) -> i32; }\n\
+        "interface Get { fn get(self) -> i32; }\n\
          struct A { v: i32 }\n\
          struct B { v: i32 }\n\
-         impl Get for A { fn get(self) -> i32 { return 10; } }\n\
-         impl Get for B { fn get(self) -> i32 { return 20; } }\n\
+         impl A { pub fn get(self) -> i32 { return 10; } }\n\
+         impl B { pub fn get(self) -> i32 { return 20; } }\n\
          entry fn main() -> i32 {\n\
              let mut w: Get = A { v: 1 };\n\
              w = B { v: 2 };\n\
@@ -259,48 +289,51 @@ fn reassignment_invalidates_a_stale_origin() {
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
-    // whatever call form the origin analysis chose, A's method body must
+    // whatever call form the origin analysis chose, A's member body must
     // not be the statically bound callee (its id would be `callm f0`,
     // the first compiled fn here)
     let p = out.program.expect("program");
     let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
     assert!(
         !ir.contains("callm f0"),
-        "A's impl must not be the static callee after reassignment:\n{ir}"
+        "A's member must not be the static callee after reassignment:\n{ir}"
     );
 }
 
 #[test]
-fn builtin_class_inherent_impls_compile() {
-    // the array type `[T]` takes an inherent impl (the
-    // `LaunchedTask<T>` pattern): generic through the
-    // element parameter, dispatched statically through the shape
-    let out = compile(
+fn builtin_composites_take_no_impl_blocks() {
+    // the closed-contract law: a builtin class's members are the
+    // engine's closed surface — the fork withdrew the `[T]`/`opaque`
+    // impl-block escape entirely (the old `LaunchedTask<T>` pattern
+    // dies with it; capability on a composite is a wrapper's job)
+    let ds = diags_of(
         "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
-         entry fn main() -> i32 {\n\
-             let a = [0; 2];\n\
-             return a.first();\n\
-         }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    assert!(
+        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum")),
+        "a builtin composite takes no impl block: {ds:?}"
+    );
     // and the concrete builtin class
-    let out = compile(
-        "\n\
-         impl opaque {\n\
+    let ds = diags_of(
+        "impl opaque {\n\
              fn peek(self) -> i32 { return 1; }\n\
          }\n\
-         entry fn main() -> i32 {\n\
-             let o = opaque(5);\n\
-             return o.peek();\n\
-         }\n",
+         entry fn main() -> i32 { return 0; }\n",
     );
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    assert!(
+        ds.iter().any(|d| d.contains("a builtin class takes no impl blocks")
+            && d.contains("closed contract")),
+        "a builtin class takes no impl block: {ds:?}"
+    );
 }
 
-// ---- primitive trait-impl targets (the inherent surface
-// stays core's `builtin impl`) ----
+// ---- primitive capability is wrapper-manufactured --------------------
+// (the prim trait-impl rows died with the registry: a primitive takes no
+// impl blocks and never satisfies an interface — a newtype wrapper
+// class is the spelled manufacture)
 
 /// Compile, flatten, verify, and run a single-module
 /// `main` returning i32.
@@ -324,17 +357,20 @@ fn run_main(src: &str) -> i32 {
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
+const WI: &str = "interface Num { fn m(self) -> i32; }\n\
+                  class WI(i32);\n\
+                  impl WI { pub fn m(self) -> i32 { return self.inner + 100; } }\n";
+
 #[test]
-fn prim_trait_impl_compiles_and_dispatches_statically() {
-    // `impl T for i32` compiles; `let w: T = 5` widens nominally once
-    // the impl registers, and the single-origin call binds statically —
-    // the scalar receiver crosses as an ordinary argument
-    let src = "trait T { fn m(self) -> i32; }\n\
-               impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
-               entry fn main() -> i32 {\n\
-                   let w: T = 5;\n\
-                   return w.m();\n\
-               }\n";
+fn prim_capability_rides_a_wrapper_and_dispatches_statically() {
+    // the wrapper satisfies; `let w: Num = WI(5)` widens at the spelled
+    // constructor, and the single-origin call binds statically —
+    // the wrapped scalar rides inside the ref-repr wrapper
+    let src = &format!("{WI}\
+                entry fn main() -> i32 {{\n\
+                    let w: Num = WI(5);\n\
+                    return w.m();\n\
+                }}\n");
     assert_eq!(run_main(src), 105);
     let out = compile(src);
     let p = out.program.expect("program");
@@ -343,36 +379,57 @@ fn prim_trait_impl_compiles_and_dispatches_statically() {
 }
 
 #[test]
-fn prim_is_probe_answers_the_registered_impl() {
-    // `is` folds at the exact receiver (nominal): true where
-    // the impl is registered, false where it is not
-    let src = "trait T { fn m(self) -> i32; }\n\
-               trait U { fn n(self) -> i32; }\n\
-               impl T for i32 { fn m(self) -> i32 { return 1; } }\n\
+fn primitive_takes_no_impl_blocks() {
+    // the wrapper law's gate: `impl i32 { .. }` diagnoses, naming the
+    // wrapper manufacture
+    let ds = diags_of(
+        "impl i32 { fn f(self) -> i32 { return self; } }\n\
+         entry fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("a primitive takes no impl blocks")
+            && d.contains("wrapper")),
+        "inherent impl on a prim must diagnose: {ds:?}"
+    );
+}
+
+#[test]
+fn probe_answers_the_boxed_satisfaction() {
+    // `is` folds at the exact receiver: true where the type's itable
+    // carries a fill for the interface (it was satisfaction-boxed
+    // somewhere in the program), false where it did not
+    let src = "interface T { fn m(self) -> i32; }\n\
+               class WI(i32);\n\
+               impl WI { pub fn m(self) -> i32 { return 1; } }\n\
+               class Plain(i32);\n\
                entry fn main() -> i32 {\n\
                    let mut acc = 0;\n\
-                   if (5 is T) { acc = acc + 1; }\n\
-                   if (5 is U) { acc = acc + 10; }\n\
+                   let w: T = WI(5);\n\
+                   if (w is T) { acc = acc + 1; }\n\
+                   let p = Plain(7);\n\
+                   if (p is T) { acc = acc + 10; }\n\
                    return acc;\n\
                }\n";
     assert_eq!(run_main(src), 1);
 }
 
 #[test]
-fn merged_origins_prim_and_struct_emit_calli() {
-    // i32 and a struct both implement T: the merged-origin call consults
-    // the vtable (IR-level — the prim fills the same slot as the record)
+fn merged_origins_wrapper_and_struct_emit_calli() {
+    // a wrapper class and a struct both satisfy Num: the merged-origin
+    // call consults the vtable (IR-level — the wrapper fills the same
+    // slot as the record)
     let out = compile(
-        "trait T { fn m(self) -> i32; }\n\
+        "interface Num { fn m(self) -> i32; }\n\
+         class WI(i32);\n\
+         impl WI { pub fn m(self) -> i32 { return self.inner + 1; } }\n\
          struct S { v: i32 }\n\
-         impl T for i32 { fn m(self) -> i32 { return self + 1; } }\n\
-         impl T for S { fn m(self) -> i32 { return self.v; } }\n\
-         pub fn pick(k: bool) -> T {\n\
-             if (k) { return 5; }\n\
+         impl S { pub fn m(self) -> i32 { return self.v; } }\n\
+         fn pick(k: bool) -> Num {\n\
+             if (k) { return WI(5); }\n\
              return S { v: 1 };\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let w: T = pick(true);\n\
+             let w: Num = pick(true);\n\
              let v = w.m();\n\
              return 0;\n\
          }\n",
@@ -384,27 +441,16 @@ fn merged_origins_prim_and_struct_emit_calli() {
 }
 
 #[test]
-fn inherent_impl_on_a_primitive_diagnoses() {
-    let ds = diags_of(
-        "impl i32 { fn f(self) -> i32 { return self; } }\n\
-         entry fn main() -> i32 { return 0; }\n",
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("a primitive takes trait impls only")
-            && d.contains("`builtin impl`")),
-        "inherent impl on a prim must diagnose: {ds:?}"
-    );
-}
-
-#[test]
-fn foreign_trait_for_a_builtin_is_an_orphan() {
-    // the §2a builtin clause: a primitive is in NO pkg, so a foreign
-    // trait's impl for one errs — the sanctioned direction is the
-    // trait's own pkg implementing it (the dep's `impl T for str`
-    // above compiled: the trait is local there)
+fn dep_manufactures_capability_via_a_wrapper() {
+    // the old `impl ForeignTrait for str` shape is gone with the
+    // registry; the surviving cross-module shape: the dep exports a
+    // WRAPPER over the value type, its inherent impl carries the
+    // members, and the consumer wraps at the spelled constructor
     let dep = rut_driver::compile_program(
-        "trait T { fn m(self) -> i32; }\n\
-         impl T for str { fn m(self) -> i32 { return 7; } }\n",
+        "pub class Tag(str);\n\
+         impl Tag {\n\
+             pub fn m(self) -> i32 { return 7; }\n\
+         }\n",
         Mode::Impl,
         "dep",
         1,
@@ -415,72 +461,28 @@ fn foreign_trait_for_a_builtin_is_an_orphan() {
     let surface = dep.surface.clone();
 
     let app = rut_driver::compile_program(
-        "use dep::{T};\n\
-         impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
-         entry fn main() -> i32 { return 0; }\n",
+        "use dep::{Tag};\n\
+         entry fn main() -> i32 { return Tag(\"s\").m(); }\n",
         Mode::Impl,
         "app",
         2,
         &[(1, surface, "dep".to_string())],
     );
-    assert!(app.program.is_none(), "the orphan must refuse to compile");
-    assert!(
-        app.diags.iter().any(|d| d.msg.contains("orphan impl")
-            && d.msg.contains("`T` is dep's")
-            && d.msg.contains("`i32` is a builtin, in no pkg")
-            && d.msg.contains("only a trait of this pkg may be implemented for a builtin")),
-        "{:?}",
-        app.diags
-    );
+    assert!(app.diags.is_empty(), "{:?}", app.diags);
 }
 
 #[test]
-fn duplicate_prim_pair_reports_the_orphan_before_the_link() {
-    // placement precedes registration: the app's
-    // `impl T for i32` is foreign-trait × builtin — the orphan gate
-    // fires at collect, so the (T, i32) pair never reaches §5's
-    // duplicate link check (which keeps its own surface-level test in
-    // rut-core's link.rs)
+fn class_vtable_fill_survives_the_link() {
+    // regression (link boot-row merge), restated for the itable: the
+    // dep module's fill of its class's GLOBAL row must not be dropped
+    // when the module merges — pre-fix, rows below the boot prefix hit
+    // `continue` and the fill was silently lost. The cross-module call
+    // then runs end-to-end.
     let dep = rut_driver::compile_program(
-        "trait T { fn m(self) -> i32; }\n\
-         impl T for i32 { fn m(self) -> i32 { return 1; } }\n",
-        Mode::Impl,
-        "dep",
-        1,
-        &[],
-    );
-    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
-    let dep = dep.program.expect("dep program");
-
-    let app = rut_driver::compile_program(
-        "use dep::{T};\n\
-         impl T for i32 { fn m(self) -> i32 { return 2; } }\n\
-         entry fn main() -> i32 { return 0; }\n",
-        Mode::Impl,
-        "app",
-        2,
-        &[(1, dep.surface.clone(), "dep".to_string())],
-    );
-    assert!(
-        app.program.is_none()
-            && app.diags.iter().any(|d| d.msg.contains("orphan impl")
-                && d.msg.contains("`T` is dep's")),
-        "the orphan gate precedes the pair registration: {:?}",
-        app.diags
-    );
-}
-
-#[test]
-fn prim_vtable_fill_survives_the_link() {
-    // regression (link boot-row merge): the dep module's fill of the
-    // GLOBAL i32 row must not be dropped when its module merges —
-    // pre-fix, rows below the boot prefix hit `continue` and the fill
-    // was silently lost. The cross-module call then runs end-to-end
-    // (the app's single-origin call binds statically to the dep's
-    // compiled method through the extern registration).
-    let dep = rut_driver::compile_program(
-        "trait T { fn m(self) -> i32; }\n\
-         impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n",
+        "interface Num { fn m(self) -> i32; }\n\
+         class WI(i32);\n\
+         impl WI { pub fn m(self) -> i32 { return self.inner + 100; } }\n\
+         pub fn boxed() -> Num { return WI(5); }\n",
         Mode::Impl,
         "dep",
         1,
@@ -491,9 +493,9 @@ fn prim_vtable_fill_survives_the_link() {
     let surface = dep.surface.clone();
 
     let app = rut_driver::compile_program(
-        "use dep::{T};\n\
+        "use dep::{Num, boxed};\n\
          entry fn main() -> i32 {\n\
-             let mut w: T = 5;\n\
+             let w: Num = boxed();\n\
              return w.m();\n\
          }\n",
         Mode::Impl,
@@ -504,20 +506,22 @@ fn prim_vtable_fill_survives_the_link() {
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let linked = rut_core::link::link(vec![dep, app.program.expect("app program")]).expect("link");
 
-    // the fill survived: the global i32 row carries the dep's impl method
+    // the fill survived: the global WI row carries the dep's member
     let gid = linked
-        .traits
+        .ifaces
         .iter()
-        .position(|t| linked.name_of(t.name) == "T")
-        .expect("one global T") as u32;
+        .position(|t| linked.name_of(t.name) == "Num")
+        .expect("one global Num") as u32;
     let slot = linked.slot_of(gid, 0).expect("global slot");
-    let fill = linked.vtables[TY_I32 as usize][slot as usize];
-    assert!(fill.is_some(), "i32's vtable row must carry the dep's impl: {:?}", linked.vtables[TY_I32 as usize]);
+    let wi_ty = (0..linked.types.types.len() as u32)
+        .find(|&i| linked.type_name(i) == "WI")
+        .expect("WI in the global table") as usize;
+    let fill = linked.vtables[wi_ty][slot as usize];
+    assert!(fill.is_some(), "WI's vtable row must carry the dep's member: {:?}", linked.vtables[wi_ty]);
     let fname = linked.name_of(linked.funcs[fill.unwrap() as usize].name);
-    assert!(fname.contains("m"), "the fill names the impl method: {fname}");
+    assert!(fname.contains("m"), "the fill names the member: {fname}");
 
-    // and the cross-module call runs end-to-end: the receiver crosses
-    // as a scalar argument into the dep's compiled method
+    // and the cross-module call runs end-to-end
     rut_vm::verify::verify(&linked).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -535,30 +539,34 @@ fn prim_vtable_fill_survives_the_link() {
 }
 
 #[test]
-fn widened_scalar_slots_survive_calls_and_vtable_dispatch() {
-    // the slot ABI: a widened scalar is a BOXED slot —
-    // it survives ref copies and call boundaries, a `Self`-spelled
-    // parameter unboxes at the callee, and a merged-origin calli reads
-    // the box cell's own type. Pre-slot-ABI, a scalar slot crashed on
-    // its first ref op (MovRef retained the raw bits).
-    let src = "trait K { fn key(self) -> u64; fn same(self, other: Self) -> bool; }\n\
-               impl K for i32 {\n\
-               \x20   fn key(self) -> u64 { return (self as u64).wrapping_mul(7); }\n\
-               \x20   fn same(self, other: Self) -> bool { return self == other; }\n\
+fn wrapper_slots_survive_calls_and_vtable_dispatch() {
+    // the ref-repr slot ABI, over wrappers: interface-typed values
+    // survive ref copies and call boundaries, a `Self`-spelled member
+    // parameter binds per instantiation (the satisfaction check reads
+    // the member under the substitution), and a merged-origin calli
+    // dispatches on the carried type. (The prim-slot shapes this test
+    // once pinned died with prim satisfaction — wrappers are the
+    // surviving manufacture.)
+    let src = "interface K { fn key(self) -> u64; fn same(self, other: Self) -> bool; }\n\
+               class KI(i32);\n\
+               impl KI {\n\
+               \x20   pub fn key(self) -> u64 { return (self.inner as u64).wrapping_mul(7); }\n\
+               \x20   pub fn same(self, other: KI) -> bool { return self.inner == other.inner; }\n\
                }\n\
-               impl K for u8 {\n\
-               \x20   fn key(self) -> u64 { return self as u64; }\n\
-               \x20   fn same(self, other: Self) -> bool { return self == other; }\n\
+               class KU(u8);\n\
+               impl KU {\n\
+               \x20   pub fn key(self) -> u64 { return self.inner as u64; }\n\
+               \x20   pub fn same(self, other: KU) -> bool { return self.inner == other.inner; }\n\
                }\n\
                fn probe(k: K, h: u64) -> bool {\n\
                \x20   return k.key() == h && k.same(k);\n\
                }\n\
                fn pick(k: bool) -> K {\n\
-               \x20   if (k) { return 5; }\n\
-               \x20   return 9u8;\n\
+               \x20   if (k) { return KI(5); }\n\
+               \x20   return KU(9u8);\n\
                }\n\
                entry fn main() -> i32 {\n\
-               \x20   let w: K = 5;\n\
+               \x20   let w: K = KI(5);\n\
                \x20   if (!probe(w, 35)) { return -1; }\n\
                \x20   let v: K = pick(true);\n\
                \x20   if (!v.same(v)) { return -2; }\n\
@@ -642,9 +650,9 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
 
 // ---- enums as impl targets ------------------------------------------
 // `impl Color { .. }` attaches to the enum's decl slot: non-self
-// statics (`Color.default()`), self methods (`c.label()`), and trait
-// impls (`impl Iterable<E> for Color` — `for (let v of c)` rides the
-// same desugar as a class's).
+// statics (`Color.default()`), self methods (`c.label()`), and the
+// `[iterable]` member (`for (let v of c)` rides the same desugar as a
+// class's).
 
 #[test]
 fn enum_inherent_statics_and_self_calls_compile() {

@@ -104,26 +104,54 @@ return c.area();
 }
 
 #[test]
-fn trait_method_via_impl() {
+fn interface_member_resolves_through_the_interface() {
+    // an interface-typed receiver sees exactly the interface's declared
+    // signatures — satisfaction is structural (a type qualifies by
+    // having the members), so no impl lookup rides this path
     let src = "\
-trait Drawable {
+interface Drawable {
 fn draw(self) -> nil;
 }
 class Circle {
 r: f64;
 }
-impl Drawable for Circle {
-fn draw(self) -> nil { }
+impl Circle {
+pub fn draw(self) -> nil { }
 }
-fn render(d: Circle) -> nil {
+fn render(d: Drawable) -> nil {
 d.draw();
 }
 ";
     // 3rd occurrence: the call `d.draw()` — param-typed receiver,
-    // resolved through the impl (the unified rule)
+    // resolved through the interface itself
     let md = hover_nth(src, "draw", 2).unwrap();
     assert!(md.contains("fn draw(self) -> nil"), "{md}");
-    assert!(md.contains("from `impl Drawable for Circle`"), "{md}");
+    assert!(md.contains("declared in `Drawable`"), "{md}");
+}
+
+#[test]
+fn satisfied_member_resolves_to_the_inherent_impl() {
+    // the satisfaction shape: an interface + the inherent impl that
+    // carries the members — a CONCRETE receiver resolves to the impl
+    // fn (the type's own surface), never to the interface's signature
+    let src = "\
+interface Get {
+fn get(self) -> i32;
+}
+class A {
+x: i32;
+}
+impl A {
+pub fn get(self) -> i32 { return self.x; }
+}
+fn go(a: A) -> i32 {
+return a.get();
+}
+";
+    // 3rd occurrence: the call `a.get()` — resolved through the impl
+    let md = hover_nth(src, "get", 2).unwrap();
+    assert!(md.contains("fn get(self) -> i32"), "{md}");
+    assert!(md.contains("in `A`"), "{md}");
 }
 
 #[test]
@@ -230,8 +258,8 @@ fn miss_is_none() {
 
 #[test]
 fn inherent_impl_block_method_hover() {
-    // methods live in `impl` blocks — the call resolves
-    // through the block's owner, not a type body
+    // methods live in `impl` blocks — the call resolves through the
+    // block's target type (the owner string IS the type's name)
     let src = "\
 struct Counter {
 n: i32;
@@ -246,15 +274,16 @@ return c.bump();
 ";
     let md = hover_nth(src, "bump", 1).unwrap();
     assert!(md.contains("fn bump(mut self) -> i32"), "{md}");
-    assert!(md.contains("in `impl Counter`"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
     assert!(md.contains("add one"), "doc: {md}");
 }
 
 #[test]
-fn foreign_trait_method_requires_use() {
-    // the use-both gate: the trait lives in another module,
-    // so the call resolves only once the document `use`s it
-    let surf_src = "trait Greeter {\nfn greet(self) -> nil;\n}\n";
+fn foreign_interface_member_requires_use() {
+    // the use-both gate: the interface lives in another module, so its
+    // members resolve only once the document `use`s it — a foreign
+    // interface's members need the use
+    let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
     let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
     let (stoks, _) = rut_lexer::lexer::lex(&s2);
@@ -268,17 +297,17 @@ fn foreign_trait_method_requires_use() {
         let mut di = index(&d2, &ast, &toks);
         di.origin = "main.rut".to_string();
         let idxs = [&di, &surf];
-        let pos = find_ident_pos(&toks, "greet", 1).unwrap();
+        let pos = find_ident_pos(&toks, "greet", 0).unwrap();
         hover(&idxs, &toks, &ast, pos).map(|h| h.markdown)
     };
 
-    let gated = "class Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r.greet(); }\n";
-    assert!(mk(gated).is_none(), "unused foreign trait must not resolve");
+    let gated = "fn go(g: Greeter) -> nil { g.greet(); }\n";
+    assert!(mk(gated).is_none(), "unused foreign interface must not resolve");
 
-    let used = "use greets::{ Greeter };\nclass Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r.greet(); }\n";
+    let used = "use greets::{ Greeter };\nfn go(g: Greeter) -> nil { g.greet(); }\n";
     let md = mk(used).unwrap();
     assert!(md.contains("fn greet(self) -> nil"), "{md}");
-    assert!(md.contains("from `impl Greeter for Robot`"), "{md}");
+    assert!(md.contains("declared in `Greeter`"), "{md}");
 }
 
 // ---- phase 1 (lsp-features): the binding pass + decl layer + M7 ----

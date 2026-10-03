@@ -109,14 +109,14 @@ fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 The caller destructures and checks the err half first:
 
 ```rut
-use json::{ decodeJson };
+use json::{ decodeJson, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger.new("json");
-    let (n, e) = decodeJson<i64>("42");
+    let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        log.info(f"n={n}");
+        log.info(f"n={n.get()}");
     } else {
         let why = e;
         log.info(f"decode failed at {why.at}");
@@ -153,12 +153,12 @@ pub struct DecodeJsonError {
 The caller picks: branch on `kind`, or just render the fields:
 
 ```rut
-use json::{ decodeJson };
+use json::{ decodeJson, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger.new("json");
-    let (bad, be) = decodeJson<i64>("[1,2,3]");
+    let (bad, be) = decodeJson<JsonI64>("[1,2,3]");
     if (be != nil) {
         let why = be;
         // rejected at 0: got '[', wanted an i64
@@ -233,23 +233,24 @@ point 1 2
 ## Put it together
 
 ```rut
-use json::{ decodeJson, encodeJson };
+use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger.new("json");
 
     // a successful decode: (value, nil)
-    let (n, e) = decodeJson<i64>("42");
+    let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        log.info(f"n={n}");
+        log.info(f"n={n.get()}");
     } else {
         let why = e;
         log.info(f"decode failed at {why.at}: {why.expected}");
     }
 
-    // encode answers the same shape: (?str, ?EncodeJsonError)
-    let (s, ee) = encodeJson<[i64]>([1, 2, 3]);
+    // encode answers the same shape: (?str, ?EncodeJsonError) —
+    // through the spelled wrapper: a bare [i64] never satisfies
+    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));
     if (ee == nil) {
         let text = s;
         log.info(f"s={text}");
@@ -258,7 +259,7 @@ entry fn main() {
     }
 
     // a bad decode: the (nil, err) half answers the failure
-    let (bad, be) = decodeJson<i64>("[1,2,3]");
+    let (bad, be) = decodeJson<JsonI64>("[1,2,3]");
     if (be == nil) {
         log.info("unexpected success");
     } else {

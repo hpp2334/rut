@@ -42,7 +42,7 @@ The keyword set is exactly:
 |---|---|---|---|---|
 | `fn` | `let` | `mut` | `if` | `else` |
 | `while` | `for` | `of` | `return` | `when` |
-| `enum` | `struct` | `class` | `trait` | `impl` |
+| `enum` | `struct` | `class` | `interface` | `impl` |
 | `requires` | `use` | `pub` | `static` | `async` |
 | `await` | `extern` | `is` | `host` | |
 | `true` | `false` | `nil` | | |
@@ -59,7 +59,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
-| `disposal` / `iterable` | the bracket markers — `[disposal] fn` / `[iterable] fn` designate an inherent impl member as an engine contract slot (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([traits](traits.md)) |
+| `disposal` / `iterable` | the bracket markers — `[disposal] fn` / `[iterable] fn` designate an inherent impl member as an engine contract slot (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md)) |
 
 `panic(msg)` is a prelude function, not a keyword.
 
@@ -71,14 +71,14 @@ replacement:
 | Reserved | Error replacement |
 |---|---|
 | `void` | the empty type spells `nil` |
-| `interface` | rut spells this `trait` |
 | `in` | iteration is `for (let x of ..)` |
 | `private` | members are private by default; add `pub` |
 
 The list is short and closed. Words that are keywords in JavaScript or
 Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … —
 are ordinary identifiers here: `let null = 5;` and `fn match()` are
-legal rut.
+legal rut — and so is `trait`: an ordinary identifier (name your pet
+snake `trait` if you like; it carries no meaning).
 
 ## The async block
 

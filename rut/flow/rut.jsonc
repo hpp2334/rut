@@ -1,18 +1,17 @@
 {
   // flow — the push-pipeline package: `Flow<E>` chains, the
-  // `IntoFlow`/`FromFlow` entry/sink traits. The base owns every public
-  // name (the class, the traits, the builtin structural rows) and is
-  // pouch-free by law (the array sink counts and seeds without a
-  // growable — json's decode technique); the optional peers carry the
-  // integration groups exactly like json's do: a consumer whose closure
-  // holds `pouch` gets the Vec rows, one that holds `nmapset` the
-  // map/set sink rows. The dev-deps guarantee both while flow builds
-  // itself, so every group impl dispatches in flow's own test runs.
+  // `IntoFlow`/`FromFlow` entry/sink interfaces. The base owns every
+  // public name (the class, the interfaces, the builtin structural
+  // adapters) and is pouch-free by law; the optional peers carry the
+  // wrapper groups exactly like json's do: a consumer whose closure
+  // holds `pouch` gets the VecFlow family, one that holds `nmapset`
+  // the SetFlow sink. The dev-deps guarantee both while flow builds
+  // itself, so every adapter compiles in flow's own test runs.
   //
   // Publishes COMPILED (the linkable-classes phase), mirroring json's
-  // manifest shape; the generic-source riding law carries the class and
-  // trait sources beside the binary, so a consumer's `Flow<i32>`
-  // compiles at the consumer's link.
+  // manifest shape; the generic-source riding law carries the class
+  // sources beside the binary, so a consumer's `Flow<i32>` compiles at
+  // the consumer's link.
   "format": "rutbundle",
   "format_version": 9,
   "name": "flow",

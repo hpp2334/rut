@@ -6,7 +6,7 @@ heap cell; destruction is deterministic; `==` is identity for cells.
 ## Reference semantics
 
 Every non-primitive value — struct and class records, `str`, `bytes`,
-`Vec`, `[T]`, enums, `opaque` boxes, trait-typed values, `?T` boxes,
+`Vec`, `[T]`, enums, `opaque` boxes, interface-typed values, `?T` boxes,
 closures' captured cells — is a **heap cell handle**:
 
 - assignment, argument passing, and returning copy the handle
@@ -69,8 +69,8 @@ closed tcp://edge
   ([core and the swappable packages](stdlib.md)). Using it without the
   use line diagnoses
   `` `DisposalContext` is not in scope — `use core::{ DisposalContext }` ``.
-  The `Disposal` trait is GONE — the `[disposal]` marker needs no
-  import, and the removed spelling diagnoses with the marker's shape.
+  The marker stands alone — there is no `Disposal` interface behind it
+  and no import for the bracket word itself.
 - One marked member per class, by the marker's own law — there is no
   per-value attach and nothing to attach twice.
 - The body runs at a call boundary, not re-entrantly inside the
@@ -123,7 +123,7 @@ element-wise story. `a != b` is its negation.
 | numeric / `bool` primitives | value | compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`) |
 | `str` | content (codepoints) | content compare |
 | `bytes` | content (octets) | content compare |
-| everything else — records, arrays, `Vec`, enums, closures, trait objects, `opaque`, `?T` | **cell identity** | the raw slot compare |
+| everything else — records, arrays, `Vec`, enums, closures, interface objects, `opaque`, `?T` | **cell identity** | the raw slot compare |
 
 - Identity is the only `==` sharing can defend: with aliasing
   everywhere, structural equality of two independently built cells is
@@ -138,8 +138,8 @@ element-wise story. `a != b` is its negation.
   composites (`Vec.from([..]) == Vec.from([..])`): "always false —
   compare fields". Asserting distinctness is legitimate and
   suppressible.
-- Field-wise comparison is a library trait contract (`hash` + `eq`
-  implemented per type) — the mechanism value-keyed maps ride. It is
+- Field-wise comparison is a library interface contract (`hash` + `eq`
+  spelled per type) — the mechanism value-keyed maps ride. It is
   not connected to `==`.
 - `when` literal patterns are unaffected: arms match compile-time
   values, never runtime `==`.

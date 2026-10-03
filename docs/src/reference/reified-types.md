@@ -9,7 +9,7 @@ is VM data, not a script value.
 
 | Surface | Mechanism |
 |---|---|
-| `is` type tests — concrete and trait RHS | the value cell's descriptor (see [Traits and dispatch](traits.md)) |
+| `is` type tests — concrete and interface RHS | the value cell's descriptor (see [Interfaces and dispatch](interfaces.md)) |
 | `opaque.downcast<T>` recovery | the box's recorded runtime type (see [opaque — erasure and downcast](opaque.md)) |
 | `type_id<T>()` | the compile-time type-identity constant |
 | host boundary checks | every crossing is checked against the declared parameter type |
@@ -72,26 +72,28 @@ header + (vtable, when the type has impls) + the payload.
 
 ```text
 RutCell := Header { rc, type id } VTable* Payload
-VTable := { exact type id, dispose trampoline, trait method slots }
+VTable := { exact type id, dispose trampoline, interface member slots }
 ```
 
 - The **exact runtime type** lives in the cell (via the vtable when
   present, the header otherwise). Every cell is minted at construction
   with its vtable already attached.
-- Trait method ids are assigned **globally per trait instantiation** at
-  compile time (`Slice<Point>` ≠ `Slice<str>`); a type's vtable fills
-  every slot of every trait instantiation it has an impl for — user
-  impl blocks, auto-fills, and registry entries alike.
-- Widening a composite to a trait `I` **reuses the same cell and
-  vtable**: the trait-typed value is the handle plus the vtable pointer
-  — no allocation, no copy. The vtable reserves no base-prefix room:
-  there is no inheritance.
-- A call through a trait object is two loads and an indirect jump
-  (the receiver's vtable, the method slot). Trait members never
+- Interface member ids are assigned **globally per interface
+  instantiation** at compile time (`Slice<Point>` ≠ `Slice<str>`); a
+  type's vtable fills every slot of every interface instantiation it
+  was satisfaction-boxed at — the fill is synthesized by the boxing
+  site's boundary check, and a type that never crosses an
+  interface-typed boundary fills nothing.
+- Widening a composite to an interface `I` **reuses the same cell and
+  vtable**: the interface-typed value is the handle plus the vtable
+  pointer — no allocation, no copy. The vtable reserves no
+  base-prefix room: there is no inheritance.
+- A call through an interface object is two loads and an indirect jump
+  (the receiver's vtable, the member slot). Interface members never
   devirtualize; inherent calls bind directly:
 
 ```text
-Op::CallTrait { recv, slot: 3, args }   // d.draw(g) — vtable slot 3
+Op::CallI { recv, slot: 3, args }   // s.area() — itable slot 3
 Op::Call     { func: "Circle$area", recv, args }   // c.area() — inherent
 ```
 
@@ -99,10 +101,10 @@ Op::Call     { func: "Circle$area", recv, args }   // c.area() — inherent
 
 `is` with a concrete right-hand side lowers to: load the object's
 exact type id, compare — a compile-time constant comparison when the
-static type already answers. The trait-RHS capability probe is:
-exact-type compare, then a flat scan of the descriptor's registered
-impls — no inheritance chain to walk (see
-[Traits and dispatch](traits.md)).
+static type already answers. The interface-RHS capability probe is:
+exact-type compare, then a flat scan of the descriptor's filled
+itable slots — no inheritance chain to walk (see
+[Interfaces and dispatch](interfaces.md)).
 
 `opaque` interacts with exactly one of these reads: `is` reads the
 **box's** own type, so every payload probe misses; only

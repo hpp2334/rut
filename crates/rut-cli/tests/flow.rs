@@ -2,12 +2,32 @@
 //! bundle lane: the consumer world mounts the committed `dist/std`
 //! bundles (pouch + nmapset + flow — the exact bytes jsDelivr serves),
 //! and every case runs the full pipeline: compile → decode → verify →
-//! interpret. The surface: `into_flow` entries (Vec / `[T]` / `str` /
-//! `bytes`), the adapters (`map`/`filter`/`take`/`skip`/`count`/
-//! `fold`/`enumerate`/`for_each`), the `Vec.from_flow` sink, the
-//! `HashSet::from_flow` sink, chains feeding
-//! `for..of` (the `[iterable]` marker path), the identity row, and
-//! stop-propagation through `take`.
+//! interpret. The surface: the spelled adapters at every entry
+//! (`VecFlow<i32>(nums).into_flow()` / `ArrFlow<i32>(a).into_flow()` /
+//! `StrFlow(s).into_flow()` / `BytesFlow(b).into_flow()` — primitives
+//! and bare containers carry no members, the wrappers ARE the
+//! manufacture), the adapters (`map`/`filter`/`take`/`skip`/`count`/
+//! `fold`/`enumerate`/`for_each`), the `VecFlow.from_flow` +
+//! `collected()` sink, the `SetFlow.from_flow` + `items()` sink, chains
+//! feeding `for..of` (the `[iterable]` marker path), the identity row,
+//! and stop-propagation through `take`.
+//!
+//! BLOCKED-ON note (compile-state, not spelling): two out-of-lane gaps
+//! keep cases here red today —
+//! 1. the generic-newtype CONSTRUCTION check: a consumer-spelled
+//!    `VecFlow<i32>(nums)` diagnoses "`VecFlow`'s parameter `T` is not
+//!    determined by `Vec<T>`", and the same check fires on the bundled
+//!    `from_flow` instantiation — until the checker binds the
+//!    constructor's `T`, no Vec/Arr entry or `VecFlow` sink compiles;
+//! 2. the `nmap_host` sv trio (`map_hput_sv`/`map_hfind_sv`/
+//!    `map_hremove_sv`) is declared by the mounted pkg but not
+//!    registered by the `rut_std::nmap` installer — `install_host_pkg`
+//!    panics at boot for ANY session that mounts nmapset, and skipping
+//!    the install leaves `map_new` unbound at `Vm::new`. One
+//!    registration block in `crates/rut-std/src/nmap.rs` (the fused sv
+//!    helpers already sit beside it) unblocks every case.
+//! The spellings below are the target surface; when the two land, the
+//! suite goes green without further edits.
 
 use rut_driver::{Module, ModuleBody, Session, compile_graph, mount_bundle_bytes, mount_std};
 use rut_vm::interp::{HostRegistry, Limits, Vm};
@@ -62,23 +82,23 @@ fn run(src: &str) -> Vec<String> {
 
 #[test]
 fn vec_pipeline_map_filter_take_into_vec_sink() {
-    // the README surface: entry, adapters, the Vec sink
+    // the README surface: spelled entry, adapters, the Vec sink
     // (adapted at landing: `count`/`for_each` are Flow's one-drive
     // consumers, not Vec's — the drain reads the sink's fields)
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5); nums.push(6);
-    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()
+    let picked: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow()
         .map(fn(x: i32) -> i32 { return x * 2; })
         .filter(fn(x: i32) -> bool { return x > 3; })
-        .take(4));
+        .take(4)).collected();
     log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]}");
 }
 "#,
@@ -92,14 +112,11 @@ entry fn main() -> nil {
 #[test]
 fn adapters_take_skip_count_and_chain_for_of() {
     // take/skip/count over a Vec source; a chain feeding plain for..of
-    // (the `[iterable]` marker desugar). The drain accumulates through a
-    // ref-headed binding — the capture law's pinned primitive copy
-    // means a captured `i32` in the emit closure copies its slot (the
-    // fused Vec loop owns the in-place `+=` shape).
+    // (the `[iterable]` marker desugar)
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
@@ -107,12 +124,12 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     let mut i = 0;
     while (i < 10) { nums.push(i); i += 1; }
-    let page: Vec<i32> = Vec.from_flow(nums.into_flow().skip(2).take(3));
+    let page: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
     log.info(f"page n={page.len} first={page[0]} last={page[page.len-1]}");
-    let total: i32 = nums.into_flow().filter(fn(x: i32) -> bool { return x % 2 == 0; }).count();
+    let total: i32 = VecFlow<i32>(nums).into_flow().filter(fn(x: i32) -> bool { return x % 2 == 0; }).count();
     log.info(f"evens={total}");
     let grabbed: Vec<i32> = Vec.new();
-    for (let x of nums.into_flow().take(4)) {
+    for (let x of VecFlow<i32>(nums).into_flow().take(4)) {
         grabbed.push(x);
     }
     log.info(f"for_of n={grabbed.len} first={grabbed[0]} last={grabbed[grabbed.len-1]}");
@@ -130,20 +147,22 @@ entry fn main() -> nil {
 
 #[test]
 fn builtin_sources_array_str_bytes() {
-    // the structural template entries: `[T]`, `str`, `bytes`
+    // the structural targets carry no members (primitives and composites
+    // never satisfy anything) — the spelled adapters are the entries:
+    // `ArrFlow` / `StrFlow` / `BytesFlow`
     let lines = run(
         r#"
-use flow::{ Flow, IntoFlow };
+use flow::{ ArrFlow, StrFlow, BytesFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let a: [i32] = [7, 8, 9];
-    let n1: i32 = a.into_flow().count();
+    let n1: i32 = ArrFlow<i32>(a).into_flow().count();
     let s: str = "abc";
-    let n2: i32 = s.into_flow().count();
-    let b: bytes = bytes.zeroed(3);
-    let n3: i32 = b.into_flow().count();
+    let n2: i32 = StrFlow(s).into_flow().count();
+    let b: bytes = bytes(3);
+    let n3: i32 = BytesFlow(b).into_flow().count();
     log.info(f"array={n1} str={n2} bytes={n3}");
 }
 "#,
@@ -157,16 +176,16 @@ fn fold_and_enumerate() {
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow };
+use flow::{ VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(10); nums.push(20); nums.push(30);
-    let total: i32 = nums.into_flow().fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
+    let total: i32 = VecFlow<i32>(nums).into_flow().fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
     let idx: Vec<str> = Vec.new();
-    nums.into_flow().enumerate().for_each(fn(p: (i32, i32)) -> nil {
+    VecFlow<i32>(nums).into_flow().enumerate().for_each(fn(p: (i32, i32)) -> nil {
         idx.push(f"{p.0}:{p.1}");
     });
     log.info(f"total={total} idx0={idx[0]} idx2={idx[2]}");
@@ -179,13 +198,14 @@ entry fn main() -> nil {
 #[test]
 fn identity_row_and_user_iterable_sink() {
     // the identity row: a chain re-enters as a source; a user iterable
-    // (no Flow machinery in the type itself) feeds the Vec sink through
-    // its own IntoFlow row — the sink parameter takes the EXPLICIT
-    // wrapper now, so the widening is spelled at the call site
+    // feeds the Vec sink through its own `into_flow` member —
+    // satisfaction is STRUCTURAL now: the member rides the type's
+    // inherent impl (pub), the sink parameter takes the EXPLICIT
+    // wrapper, and the widening is spelled at the call site
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 class CountUp {
@@ -193,8 +213,6 @@ class CountUp {
 }
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl CountUp {
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
         let mut i = 1;
         while (i <= self.n) {
@@ -202,12 +220,10 @@ impl CountUp {
             i += 1;
         }
     }
-}
-// the local type rides flow's entry trait into the sink: a local
-// trait/foreign-type impl (IntoFlow is flow's), the same law the
-// generic crossing probe pins below
-impl IntoFlow<i32> for CountUp {
-    fn into_flow(self) -> Flow<i32> {
+    // the IntoFlow member, satisfied structurally: a local type
+    // carries it on its own inherent impl — the same law the generic
+    // crossing probe pins below
+    pub fn into_flow(self) -> Flow<i32> {
         let n: i32 = self.n;
         return Flow.new(fn (emit: fn(i32) -> bool) -> nil {
             let mut i = 1;
@@ -224,33 +240,32 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2);
     // identity: the chain re-enters as a source
-    let reentered: Vec<i32> = Vec.from_flow(nums.into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow());
+    let reentered: Vec<i32> = VecFlow<i32>.from_flow(CountUp.new(4).into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow()).collected();
     log.info(f"reentered n={reentered.len} last={reentered[reentered.len-1]}");
-    // the user iterable widens through its row, spelled at the sink
-    let out: Vec<i32> = Vec.from_flow(CountUp.new(4).into_flow());
+    // the user iterable widens through its member, spelled at the sink
+    let out: Vec<i32> = VecFlow<i32>.from_flow(CountUp.new(4).into_flow()).collected();
     log.info(f"countup n={out.len} last={out[out.len-1]}");
 }
 "#,
     );
     assert_eq!(lines.len(), 2, "{lines:?}");
-    assert!(lines[0].contains("last=3"), "{lines:?}");
+    assert!(lines[0].contains("last=5"), "{lines:?}");
     assert!(lines[1].contains("countup n=4"), "{lines:?}");
     assert!(lines[1].contains("last=4"), "{lines:?}");
 }
 
 #[test]
-fn consumer_impls_flow_generic_trait_for_local_type() {
-    // the generic foreign-trait crossing, std-shaped: the consumer
-    // implements FLOW's generic `IntoFlow<T>` (the trait's declaration
-    // crosses the flow bundle; the trait is foreign to this unit) for a
-    // LOCAL generic type, and the pipeline drives through it — the impl
-    // head registers against the carried `IntoFlow<#T>` descriptor, the
-    // concrete `IntoFlow<i32>` mints at the call, and `map`/`count` run
-    // on the returned chain (flow's own rows answer downstream).
+fn consumer_satisfies_flow_generic_interface_for_local_type() {
+    // the generic foreign-interface crossing, std-shaped: the consumer's
+    // LOCAL generic type carries `into_flow` (flow's generic
+    // `IntoFlow<T>` satisfied STRUCTURALLY — the interface's declaration
+    // crosses the flow bundle; nothing registers), and the pipeline
+    // drives through it — `map`/`count` run on the returned chain
+    // (flow's own rows answer downstream).
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow };
+use flow::{ VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 class Tube<T> {
@@ -258,9 +273,7 @@ class Tube<T> {
 }
 impl<T> Tube<T> {
     fn of(items: Vec<T>) -> Self { return Tube { items: items }; }
-}
-impl<T> IntoFlow<T> for Tube<T> {
-    fn into_flow(self) -> Flow<T> {
+    pub fn into_flow(self) -> Flow<T> {
         let src: Vec<T> = self.items;
         return Flow.new(fn (emit: fn(T) -> bool) -> nil {
             for (let x of src) {
@@ -288,24 +301,23 @@ fn array_entry_empty_and_nonempty() {
     // DECISION RECORD (the `[T]` sink is gone): the fixed-array sink's
     // only call spelling (`[i32].from_flow(..)`) needed a type-path
     // receiver form the grammar will not grow — the owner dropped that
-    // surface, and the `impl<T> FromFlow<T> for [T]` row was removed
-    // with it (an impl whose call cannot be spelled is dead surface).
-    // The case drives the `[T]` ENTRY, which stays: a drained empty
+    // surface, and the wrappers are the only sinks now. The case drives
+    // the `[T]` ENTRY through its spelled adapter: a drained empty
     // array and a full one, one drive each.
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow };
+use flow::{ ArrFlow, VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let empty: [i32] = [];
-    log.info(f"empty n={empty.len()} walked={empty.into_flow().count()}");
+    log.info(f"empty n={empty.len()} walked={ArrFlow<i32>(empty).into_flow().count()}");
     let nums: Vec<i32> = Vec.new();
     nums.push(5); nums.push(6); nums.push(7);
     let arr: [i32] = [5, 6, 7];
-    let folded: i32 = arr.into_flow().fold(0, fn(a: i32, x: i32) -> i32 { return a * 10 + x; });
+    let folded: i32 = ArrFlow<i32>(arr).into_flow().fold(0, fn(a: i32, x: i32) -> i32 { return a * 10 + x; });
     log.info(f"arr n={arr.len()} mid={arr[1]} folded={folded}");
 }
 "#,
@@ -315,18 +327,19 @@ entry fn main() -> nil {
 
 #[test]
 fn hashset_sink() {
-    // the mapset sink: a put-loop over the flow (the key union bound
-    // admits the legal keys)
+    // the mapset sink: the spelled `SetFlow` wrapper materializes the
+    // flow (the key union bound admits the legal keys), `items()`
+    // unwraps
     let lines = run(
         r#"
-use flow::{ Flow, FromFlow, IntoFlow };
+use flow::{ ArrFlow, SetFlow, Flow, FromFlow, IntoFlow };
 use nmapset::{ HashSet };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let words: [str] = ["a", "b", "a", "c"];
-    let set: HashSet<str> = HashSet.from_flow(words.into_flow());
+    let set: HashSet<str> = SetFlow<str>.from_flow(ArrFlow<str>(words).into_flow()).items();
     let has_a: bool = set.has("a");
     let has_c: bool = set.has("c");
     let has_z: bool = set.has("z");
@@ -342,17 +355,15 @@ entry fn main() -> nil {
 
 #[test]
 fn take_stops_the_source() {
-    // stop-propagation (adapted at landing: a consumer cannot implement
-    // the generic `IntoFlow` across the package boundary — the v1 gate
-    // reserves generic foreign traits for their declaring module — so
-    // the source-stop rides the LOCAL `[iterable]` member: a for-of
-    // `break` answers `false` at the emit exactly like flow's take
-    // stage, and the counting source stops at the third drive; flow's
-    // own `take(2)` feeds the sink the same two elements).
+    // stop-propagation: flow's own `take(2)` feeds the sink exactly two
+    // elements — the emit's `false` stops the source mid-drive. The
+    // local `[iterable]` member rides the same law: a for-of `break`
+    // answers `false` at the emit exactly like the take stage, and the
+    // counting source stops at the third drive.
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 class Counting {
@@ -382,7 +393,7 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     let mut i = 0;
     while (i < 100) { nums.push(i + 1); i += 1; }
-    let out: Vec<i32> = Vec.from_flow(nums.into_flow().take(2));
+    let out: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
     log.info(f"out n={out.len} first={out[0]} last={out[1]}");
 }
 "#,
@@ -405,7 +416,7 @@ fn map_inference_fn_path_and_explicit_type_arg() {
     let lines = run(
         r#"
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 fn double(x: i32) -> i32 { return x * 2; }
@@ -415,9 +426,9 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2);
     // the bare fn path: `map(double)` infers R from double's return
-    let a: Vec<i32> = Vec.from_flow(nums.into_flow().map(double));
+    let a: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map(double)).collected();
     // the explicit spelling
-    let b: Vec<i32> = Vec.from_flow(nums.into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; }));
+    let b: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; })).collected();
     log.info(f"a={a.len} b={b.len}");
 }
 "#,
@@ -439,11 +450,11 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
     }
     s.register_module("app", Module { body: ModuleBody::Source { text: r#"
 use pouch::{ Vec };
-use flow::{ Flow, FromFlow, IntoFlow };
+use flow::{ VecFlow, Flow, FromFlow, IntoFlow };
 
 entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
-    let out: Vec<i32> = Vec.from_flow(nums.into_flow().map(fn(x) { return x * 2; }));
+    let out: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map(fn(x) { return x * 2; })).collected();
 }
 "#.into(), is_decl: false }, ..Default::default() }).expect("app");
     let out = compile_graph(&s, "app");

@@ -96,30 +96,25 @@ fn run_entry<R: rut_vm::interp::Ret>(session: rut_driver::Session, root: &str, e
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
-fn impls_of(session: &rut_driver::Session, root: &str, declarer: &str) -> Vec<String> {
-    let units = rut_driver::compile_units(session, root);
-    assert!(
-        units.diags.is_empty(),
-        "{}",
-        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
-    );
-    let mut out = Vec::new();
-    for (spec, &(idx, _)) in &units.linked {
-        if spec != declarer {
-            continue;
-        }
-        let prog = &units.programs[idx];
-        for im in &prog.surface.impls {
-            out.push(format!(
-                "{} for {}",
-                prog.interner.name(im.trait_name),
-                prog.interner.name(prog.types.type_at(im.target).name),
-            ));
-        }
-    }
-    out.sort();
-    out
+/// Does a probe module naming the group's wrapper compile over this
+/// session? The wrapper name is the compiled-world observable for "the
+/// group mounted" — the impl-registration rows are gone (satisfaction
+/// is structural), so the group's exported wrapper is what resolves.
+fn probe_compiles(session: &rut_driver::Session, probe: &str) -> bool {
+    let mut s = session.clone();
+    s.register_module(
+        "probe",
+        rut_driver::Module {
+            body: rut_driver::ModuleBody::Source { text: probe.to_string(), is_decl: false },
+            ..Default::default()
+        },
+    )
+    .expect("register probe");
+    let g = compile_graph(&s, "probe");
+    g.diags.is_empty()
 }
+
+const CODEC_POUCH_PROBE: &str = "use codec::{ CodedVec };\nclass P(CodedVec);\nentry fn main() -> i32 { return 0; }\n";
 
 // ------------------------------------------------------------------
 // the tests
@@ -326,8 +321,9 @@ fn embedder_mount_outranks_the_url_dep() {
     }
 }
 
-/// The peer world: `codec` (inline, trait + impl-only pouch group,
-/// dev-deps for its own build) packed INSIDE `zeta` as a declared-but-
+/// The peer world: `codec` (inline, interface + wrapper-only pouch
+/// group, dev-deps for its own build) packed INSIDE `zeta` as a
+/// declared-but-
 /// unused dep, so it rides the archive as a SOURCE group (the group
 /// files ride with it) — the consumer sees codec as an ARCHIVE SOURCE
 /// GROUP, and the one unified peer gate must read the group file from
@@ -344,8 +340,8 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
         "pouch.rut",
         "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let mut items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
     );
-    // codec — the json shape: the trait and public names in the base,
-    // the impl-only group beside it, dev-deps for its own build
+    // codec — the json shape: the interface and public names in the
+    // base, the wrapper-only group beside it, dev-deps for its own build
     write(
         &root.join("codec"),
         "rut.jsonc",
@@ -358,12 +354,12 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("codec"),
         "codec.rut",
-        "pub trait Coded {\n    fn coded(self) -> str;\n}\n\nimpl Coded for str {\n    fn coded(self) -> str {\n        return self;\n    }\n}\n\npub fn encode(s: str) -> str {\n    return s.coded();\n}\n",
+        "pub interface Coded {\n    fn coded(self) -> str;\n}\n\npub class CodedStr(str);\n\nimpl CodedStr {\n    pub fn coded(self) -> str {\n        return self.inner;\n    }\n}\n\npub fn encode(s: str) -> str {\n    return CodedStr(s).coded();\n}\n",
     );
     write(
         &root.join("codec"),
         "codec_pouch.rut",
-        "use pouch::{Vec};\n\nimpl Coded for Vec<i32> {\n    fn coded(self) -> str {\n        return \"[vec]\";\n    }\n}\n",
+        "use pouch::{Vec};\n\npub class CodedVec(Vec<i32>);\n\nimpl CodedVec {\n    pub fn coded(self) -> str {\n        return \"[vec]\";\n    }\n}\n",
     );
     // zeta — packs codec as a declared-but-unused (source) group
     write(
@@ -421,11 +417,10 @@ fn mixed_dir_and_archive_peer_gate() {
         ModuleBody::Source { .. }
     ));
     // THE unification proof: the group file was read FROM THE ARCHIVE
-    // and compiled into codec's unit (the impl row rides the surface)
-    let impls = impls_of(&session, "app", "codec");
+    // and compiled into codec's unit (the group's wrapper resolves)
     assert!(
-        impls.iter().any(|r| r.contains("Coded for Vec")),
-        "the archive group must mount through the unified gate: {impls:?}"
+        probe_compiles(&session, CODEC_POUCH_PROBE),
+        "the archive group must mount through the unified gate"
     );
 
     // the absence twin: no pouch dir, codec mounts light — the same
@@ -439,10 +434,9 @@ fn mixed_dir_and_archive_peer_gate() {
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
     let (session2, _) = block_on(rut_driver::load_dir_session_with(&app2, &Table::from(table)))
         .expect("light load");
-    let impls2 = impls_of(&session2, "app2", "codec");
     assert!(
-        !impls2.iter().any(|r| r.contains("Coded for Vec")),
-        "absent peer stays inert: {impls2:?}"
+        !probe_compiles(&session2, CODEC_POUCH_PROBE),
+        "absent peer stays inert: the group never mounted"
     );
 }
 

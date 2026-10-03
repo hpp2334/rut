@@ -1,6 +1,6 @@
 use pouch::{ Vec };
 use calc::{ Math };
-use json::{ EncodeJsonError, JsonSerialize, JsonWriter };
+use json::{ EncodeJsonError, JsonWriter };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //
 // The second algorithmic example: everything here operates on `bytes`
@@ -656,8 +656,10 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 // `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
 //
 // Since the rut-json batch's phase 2, the ENCODE half rides the std
-// json pkg (`impl JsonSerialize for Json` below — this example now
-// teaches the lib); the DECODE half stays the private cursor parser
+// json pkg (`impl Json { pub fn encode(..) }` below — this example now
+// teaches the lib: `Json` satisfies json's `JsonSerialize` interface
+// STRUCTURALLY, by spelling the member on its own inherent impl);
+// the DECODE half stays the private cursor parser
 // until json's schema-less `JsonValue` lands (survey §2.10 keeps it as
 // the err-channel batch's historical proof).
 
@@ -931,18 +933,21 @@ fn unwrap_box(r: (opaque, str)) -> opaque {
 /// Encode a tree back to compact JSON — through the std json pkg's
 /// writer. This is the rut-json batch's phase-2 migration (survey
 /// §2.10): the private `jencode`/`jquote` f-string economy is gone,
-/// and this impl drives `JsonWriter` exactly as a user type would —
-/// the orphan-legal direction (json owns the trait, `Json` is
-/// this file's). Byte-identical to the old encoder on every input the
-/// golden tests pin: same member order, same verbatim number lexemes,
-/// same minimal escapes. Two disclosed deltas: (1) the old per-char
-/// `jquote` vec is the writer's RFC 8259 escape policy now — a raw C0
-/// control (which the old encoder passed through unescaped) renders
-/// `\u00xx` (stricter, never corrupt); (2) the old encoder recursed
-/// unboundedly — a deeper-than-128 tree now answers the writer's
-/// recoverable `Depth` err instead of exhausting the call stack.
-impl JsonSerialize for Json {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+/// and this member drives `JsonWriter` exactly as a user type would —
+/// the structural-satisfaction direction: json owns the
+/// `JsonSerialize` interface, `Json` is this file's, and `Json`
+/// qualifies by HAVING the member on its own inherent impl (no
+/// registration exists anymore). Byte-identical to the old encoder on
+/// every input the golden tests pin: same member order, same verbatim
+/// number lexemes, same minimal escapes. Two disclosed deltas: (1) the
+/// old per-char `jquote` vec is the writer's RFC 8259 escape policy
+/// now — a raw C0 control (which the old encoder passed through
+/// unescaped) renders `\u00xx` (stricter, never corrupt); (2) the old
+/// encoder recursed unboundedly — a deeper-than-128 tree now answers
+/// the writer's recoverable `Depth` err instead of exhausting the call
+/// stack.
+impl Json {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         when (self.tag) {
             JTag.Null -> { w.write_raw("null"); },
             JTag.False -> { w.write_raw("false"); },
@@ -1004,11 +1009,12 @@ fn json_parse(s: str) -> (opaque, str) {
 
 entry fn json_enc(o: opaque) -> str {
     let j = opaque.downcast<Json>(o);
-    // the trait+writer route, spelled directly (the CDN-bundle law:
+    // the member+writer route, spelled directly (the CDN-bundle law:
     // json's generic-fn bodies are owner-anchored — `encodeJson<Json>`
     // can never ride json's binary, because THIS pkg's Json did not
-    // exist at json's pack time; the impl dispatch below is local).
-    // Same semantics as the `encodeJson` wrapper it replaces.
+    // exist at json's pack time; the member dispatch here is local —
+    // `j.encode(w)` binds Json's own inherent member). Same semantics
+    // as the `encodeJson` wrapper it replaces.
     let mut w = JsonWriter.new();
     let e = j.encode(w);
     if (e != nil) {
@@ -1028,7 +1034,7 @@ entry fn json_roundtrip(s: str) -> (str, str) {
         return ("", v.1);
     }
     let vv = opaque.downcast<Json>(v.0);
-    // the trait+writer route — see json_enc's note (the CDN-bundle
+    // the member+writer route — see json_enc's note (the CDN-bundle
     // law); same semantics as the `encodeJson` wrapper it replaces
     let mut w = JsonWriter.new();
     let e = vv.encode(w);

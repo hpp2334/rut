@@ -38,10 +38,13 @@
 //
 // The handles carry ids, seeds, and a PRIVATE store back-ref — the
 // verbs are the handles' own pub methods, so biz never needs the store
-// after boot; the machinery traits (Readable/Writable) are
-// module-private, so biz cannot name them — and a Derived implements
-// no Writable and no set, so a derived is not writable AT THE TYPE
-// LEVEL. A derive's ctx exposes get ONLY (derives are pure by
+// after boot; the store's plumbing members (atom_id/materialize) are
+// module-private, so biz cannot spell them — and a Derived carries no
+// set, so a derived is not writable AT THE TYPE LEVEL. The ctx forms
+// are the app's only read/write spellings and they spell their shape:
+// `ctx.get<V, K>(a)` / `ctx.set<R, A, K>(a, v)` (the fork's
+// annotation law — the call site names the value type and the handle
+// shape). A derive's ctx exposes get ONLY (derives are pure by
 // construction); a mutation's ctx exposes get + set. Freshness is
 // PULL-ON-READ: get() recomputes a stale derived at most once per
 // write-set; there is no flush and no dirty set. The cycle guard (an

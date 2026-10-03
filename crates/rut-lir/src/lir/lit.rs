@@ -218,10 +218,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(args[0], Some(fty))?;
             (inst, fty, t)
         } else {
-            let hint = self.hint_with_placeholders(fd.ty, &d.generics, &[]);
+            // the binders the wrapped argument determines — the wrapped
+            // type resolved under the `#<param>` placeholder env (the
+            // template row's spelling) against the argument, the same
+            // TypeId-level unification the used-newtype arm runs
+            // (structural: `Vec<#T>` against `Vec<str>` binds `T := str`)
+            let env: Vec<(IdentId, TypeId)> = d
+                .generics
+                .iter()
+                .map(|&g| (g, self.ctx.param_placeholder(g)))
+                .collect();
+            let hint = self.ctx.resolve_type(fd.ty, &env);
             let t = self.compile_expr(args[0], Some(hint))?;
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
-            self.unify_generic(fd.ty, t, &d.generics, &mut subst, sp)?;
+            if !self.unify_template_field(hint, t, &d.generics, &mut subst) {
+                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                    "the wrapped value is `{}`, the wrapped type of `{}` expected",
+                    self.ctx.type_name(t),
+                    self.ctx.name(name)
+                ));
+                return Err(());
+            }
             let undetermined = d
                 .generics
                 .iter()
@@ -471,6 +488,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .interner
             .name(self.ctx.types.type_at(field).name)
             .to_string();
+        // the parameter may vanish into the HEAD's own spelling
+        // (`HashSet<#T>` — the host-table field carries no `#T`): a head
+        // that spells the parameters decides FIRST — the field walk
+        // would return true vacuously (the fields carry no `#T` to
+        // bind)
+        if text.contains('<') && self.unify_name_args(field, arg, params, subst) {
+            return true;
+        }
         if let Some(stripped) = text.strip_prefix('#') {
             if let Some(id) = self.ctx.lookup_name(stripped) {
                 if params.contains(&id) {
@@ -489,8 +514,92 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             (TyKind::Opt { elem: a }, TyKind::Opt { elem: b }) => {
                 self.unify_template_field(a, b, params, subst)
             }
+            // two instantiations of one generic class unify element-wise
+            // (`Vec<#T>` against `Vec<JsonI64>` — the wrapper-construction
+            // inference at a consumer); the FIELD-WISE walk answers even
+            // when neither row is in `inst_data` (a template's stamped
+            // fields — the local construction's hint)
+            (TyKind::Data { fields: fa }, TyKind::Data { fields: fb })
+                if fa.len() == fb.len()
+                    && self.same_head_text(field, arg) =>
+            {
+                fa.iter().zip(fb.iter()).all(|(x, y)| {
+                    x.name == y.name && self.unify_template_field(x.ty, y.ty, params, subst)
+                })
+            }
+            _ if self.unify_inst_pair(field, arg, params, subst) => true,
             _ => self.same_ty(field, arg),
         }
+    }
+
+    /// Two same-head instantiations whose parameters survive only in
+    /// the ROW NAMES: `HashSet<#T>` against `HashSet<str>` binds
+    /// `T := str` off the spelled argument texts.
+    fn unify_name_args(&mut self, field: TypeId, arg: TypeId, params: &[IdentId], subst: &mut Vec<(IdentId, TypeId)>) -> bool {
+        let ftext = self.ctx.interner.name(self.ctx.types.type_at(field).name).to_string();
+        let atext = self.ctx.interner.name(self.ctx.types.type_at(arg).name).to_string();
+        let Some((fh, fargs)) = ftext.split_once('<') else { return false };
+        let Some((ah, aargs)) = atext.split_once('<') else { return false };
+        let Some(fargs) = fargs.strip_suffix('>') else { return false };
+        let Some(aargs) = aargs.strip_suffix('>') else { return false };
+        if fh != ah {
+            return false;
+        }
+        let fs: Vec<&str> = fargs.split(',').map(|x| x.trim()).collect();
+        let as_: Vec<&str> = aargs.split(',').map(|x| x.trim()).collect();
+        if fs.len() != as_.len() {
+            return false;
+        }
+        for (f, a) in fs.iter().zip(as_.iter()) {
+            let Some(stripped) = f.strip_prefix('#') else {
+                if f != a {
+                    return false;
+                }
+                continue;
+            };
+            let Some(id) = self.ctx.lookup_name(stripped) else { return false };
+            if !params.contains(&id) {
+                return false;
+            }
+            let Some(ty) = self.ctx.interner.lookup(a).and_then(|iid| self.ctx.types.dense_id_of_name(iid)) else {
+                return false;
+            };
+            if let Some(e) = subst.iter_mut().find(|(n, _)| *n == id) {
+                if e.1 != ty {
+                    return false;
+                }
+            } else {
+                subst.push((id, ty));
+            }
+        }
+        true
+    }
+
+    /// Do two rows spell the same generic head (`Vec<..>` — the base
+    /// name text, before the type arguments)?
+    fn same_head_text(&self, a: TypeId, b: TypeId) -> bool {
+        let ta = self.ctx.interner.name(self.ctx.types.type_at(a).name).to_string();
+        let tb = self.ctx.interner.name(self.ctx.types.type_at(b).name).to_string();
+        let base = |t: &str| t.split('<').next().unwrap_or(t).to_string();
+        base(&ta) == base(&tb)
+    }
+
+    /// `field` and `arg` are instantiations of the SAME generic class:
+    /// unify their arguments element-wise. `false` when either side is
+    /// not an instantiation or the heads differ.
+    fn unify_inst_pair(&mut self, field: TypeId, arg: TypeId, params: &[IdentId], subst: &mut Vec<(IdentId, TypeId)>) -> bool {
+        let (Some((fd, fargs)), Some((ad, aargs))) = (self.ctx.inst_data.get(&field).cloned(), self.ctx.inst_data.get(&arg).cloned()) else {
+            return false;
+        };
+        if fd != ad || fargs.len() != aargs.len() {
+            return false;
+        }
+        for (f, a) in fargs.iter().zip(aargs.iter()) {
+            if !self.unify_template_field(*f, *a, params, subst) {
+                return false;
+            }
+        }
+        true
     }
 
     pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
@@ -912,7 +1021,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // resolves annotations against the enclosing generics)
         self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty, self.subst.clone()));
         self.ctx.lambda_info.insert(lambda_node, caps.clone());
-        let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], trait_origins: vec![] };
+        let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], iface_origins: vec![] };
         let fid = self.ctx.ensure_inst(inst);
         // the surface fn type spells the DECLARED params only — the
         // capture tail is ABI, never type-checked against

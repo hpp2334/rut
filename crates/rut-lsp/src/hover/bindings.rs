@@ -98,7 +98,7 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
             }
             ItemKind::Class { methods, .. }
             | ItemKind::Struct { methods, .. }
-            | ItemKind::Trait { methods, .. }
+            | ItemKind::Interface { methods, .. }
             | ItemKind::Impl { methods, .. } => {
                 for m in methods {
                     let d = ast.method_decl(*m);

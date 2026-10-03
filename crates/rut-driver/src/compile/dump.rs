@@ -143,7 +143,7 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         Op::EnumNew { dst, ty, member } => format!("enumnew r{dst}, t{ty}, m{member}"),
         Op::TidOf { dst, obj } => format!("tidof r{dst}, r{obj}"),
         Op::IsType { dst, obj, want } => format!("istype r{dst}, r{obj}, t{want}"),
-        Op::IsTrait { dst, obj, want } => format!("istrait r{dst}, r{obj}, trait{want}"),
+        Op::IsIface { dst, obj, want } => format!("istrait r{dst}, r{obj}, trait{want}"),
         Op::Unbox { dst, box_, ty } => format!("unbox r{dst}, r{box_}, t{ty}"),
         Op::Box { dst, val, ty } => format!("box r{dst}, r{val}, t{ty}"),
         Op::MakeClosure { dst, func, argv_off, argc } => format!(

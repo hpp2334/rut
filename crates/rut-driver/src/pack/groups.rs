@@ -104,66 +104,19 @@ pub(super) fn rides_compiled(
 
 /// Does a compiled program's surface export an OPEN generic surface —
 /// the generic-source riding trigger: exported generic fns
-/// (`launch_future<T>`), generic type exports (`Vec<T>`), generic
-/// methods on an inherent row (`MutCtx::set<A, R>`), or a
-/// generic-target impl registration (`impl JsonSerialize for Vec<T>`).
-/// The impl arm reads the template law, not fn ids: a generic target's
-/// row carries `#`-placeholder fields (the dispatch matcher's own
-/// convention), so its field closure names one — a concrete-target impl
-/// (`impl Tag for Badge`) never does. A false positive costs a few
-/// inert archive entries; a false negative would refuse a shape the
-/// ridden source could have served.
+/// (`launch_future<T>`), generic type exports (`Vec<T>`), or generic
+/// methods on an inherent row (`MutCtx::set<A, R>`). (The old
+/// generic-target impl arm died with the impl registrations — a
+/// generic class's own methods trigger through the inherents arm.) A
+/// false positive costs a few inert archive entries; a false negative
+/// would refuse a shape the ridden source could have served.
 pub(super) fn has_open_generic_surface(prog: &rut_core::binary::Program) -> bool {
     let s = &prog.surface;
-    if !s.fn_generics.is_empty()
+    !s.fn_generics.is_empty()
         || s.type_exports.iter().any(|t| t.is_generic)
         || s.inherents
             .iter()
             .any(|ih| ih.methods.iter().any(|m| !m.generics.is_empty()))
-    {
-        return true;
-    }
-    // the generic-target impl arm: resolve the target row through the
-    // carried blocks and look for a placeholder in its field closure
-    let boot_len = rut_core::types::TypeTable::boot().types.len() as u32;
-    let row_of = |id: rut_core::types::TypeId| -> Option<&rut_core::types::RutType> {
-        let sc = rut_core::id::scope_of(id);
-        let l = rut_core::id::local_of(id);
-        let dense = if sc == rut_core::id::BOOT_SCOPE {
-            l
-        } else {
-            let off = s
-                .scope_blocks
-                .iter()
-                .rev()
-                .find(|&&(b, _)| b == sc)
-                .map(|&(_, off)| off)?;
-            boot_len + off + l
-        };
-        prog.types.types.get(dense as usize)
-    };
-    let placeholder_in = |id: rut_core::types::TypeId| -> bool {
-        let mut stack = vec![id];
-        while let Some(t) = stack.pop() {
-            let Some(row) = row_of(t) else { continue };
-            if is_placeholder(prog.interner.name(row.name)) {
-                return true;
-            }
-            match &row.kind {
-                rut_core::types::TyKind::Array { elem }
-                | rut_core::types::TyKind::Opt { elem }
-                | rut_core::types::TyKind::Weak { elem } => stack.push(*elem),
-                rut_core::types::TyKind::Data { fields } => {
-                    stack.extend(fields.iter().map(|f| f.ty));
-                }
-                _ => {}
-            }
-        }
-        false
-    };
-    s.impls
-        .iter()
-        .any(|im| placeholder_in(im.target))
 }
 
 /// The generic-parameter placeholder spelling (`#<param>` — the `#` is

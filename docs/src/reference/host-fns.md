@@ -73,7 +73,7 @@ Rules:
   cross — a `host struct` decl is surface, not a signature type — and the
   anonymous-tuple lane belongs to the `entry fn` surface
   ([value boundary](value-boundary.md)). Everything else (user classes,
-  `Vec<T>`, `[T]`, trait objects, closures) is a compile error on the
+  `Vec<T>`, `[T]`, interface-typed values, closures) is a compile error on the
   declaration.
 - **`any` is not in the language.** An `any` spelling fails at
   resolution as an unknown type — there is no `any` type to write.
@@ -82,10 +82,9 @@ Rules:
 - **`builtin` is the engine's reservation** — spelled only in the
   toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder
   decl is a compile error. The engine's contracts are spellings on
-  types now: the bracket markers on inherent impl members and the
-  closed `builtin class` pair; library contracts stay plain `trait`
-  ([traits](traits.md)). The `builtin trait` row kind is REMOVED — the
-  spelling diagnoses with the replacement.
+  types: the bracket markers on inherent impl members and the
+  closed `builtin class` pair; library polymorphism stays plain
+  `interface` ([interfaces](interfaces.md)).
 - **`builtin` is a contextual keyword**: `.d.rut`-only; elsewhere it is a
   legal identifier.
 
@@ -104,7 +103,7 @@ diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
   do. Today's rows are the closed async pair — `Future<T>`,
   `RunContext` — the disposal context, `DisposalContext`, and the weak
   reference, `Weak<T>`
-  ([traits](traits.md), [async and await](async.md), [the Rc
+  ([interfaces](interfaces.md), [async and await](async.md), [the Rc
   heap](rc-heap.md), [weak references](weak-refs.md)). The engine's
   weave never consults the gate — it keys on the engine symbols —
   so a module with no imports still iterates, awaits, and launches;
@@ -140,7 +139,7 @@ complete as a surface.
 | `use` / `pub` | visibility exactly as in a module; non-exported decls are known inside the file, nameable nowhere else |
 | `let` | with load-time constant initializers |
 | `enum` | the member list is the whole definition |
-| `trait` | method signatures (+ `requires`) are the whole definition |
+| `interface` | member signatures are the whole definition — signatures-only fits the surface model |
 | `struct` | fields only, with load-time initializers |
 | `host fn` / `host struct` | signatures only, concrete over the crossing set |
 | `prelude builtin` / `pub builtin` rows | toolchain decl files only — the two spellings above |
@@ -311,7 +310,7 @@ A published package ships:
 
 - The surface rides the binary: a consumer binds `p`'s exports from
   `mod.rutc` alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn
-  ids, trait-table indices, and namespace/host rows are not derivable
+  ids, interface-table indices, and namespace/host rows are not derivable
   from text without guesswork.
 - Link compares the consumer's bound surface against the binary's
   export table — a pure data compare. Drift is a load error naming

@@ -17,8 +17,8 @@ The page's UI is not hand-built DOM: the app composes **widgets**, and
 the framework's keyed diff lowers them to those same ten crossings.
 Biz speaks widgets, handles and mutations; tags, class tokens,
 listener ids and the patch loop are the framework's private business —
-literally: the machinery traits are module-private to `ui`, and biz
-cannot name them even to import them.
+literally: the store's machinery is module-private to `ui`, and biz
+cannot name it even to import it.
 
 The `web` crossing is **example-local** by the phase-0 survey's
 decision: the crossing is **example-local**, declared in its own
@@ -127,8 +127,8 @@ makes a UI a VALUE:
   and
   the twin asserts it.
 
-**3. The two-package store: jotai's shape over parameterized trait
-impls** (the design records, decision by decision, the reversal of the
+**3. The two-package store: jotai's shape over generic handle
+verbs** (the design records, decision by decision, the reversal of the
 declared-DAG / flush design). The store is the `ui` package's kernel,
 decoupled from
 biz by construction — nothing in it names a todo, a list, or an app
@@ -143,25 +143,35 @@ store.source<T>(v)                     -> Source<T>      the general cell
 store.source_str(v)                    -> Source<str>    the str lane
 store.derive<T>(fn (ctx) -> T)         -> Derived<T>     deps DISCOVERED
 store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R> the write program
-store.get(a)                           -> T              the one READ
-store.set(w, arg)                      -> R              the one WRITE
-store.recompute_count() / store.deps_of(a)               observability
+a.get()                                -> T              THE read (handle)
+a.set(v)                               -> nil            the plain write (Source)
+m.run(arg)                             -> R              the invocation (Mutation)
+ctx.get<V, K>(a) / ctx.set<R, A, K>(a, v)                the ctx forms
+store.recompute_count() / store.deps_of<V, K>(a)         observability
 ```
 
-* **handles are keys, not objects.** `Source<T>` carries its id and
-  seed; `Derived<T>` carries its id; `Mutation<A, R>` carries its id.
-  The handles have NO methods — every operation goes through the
-  store, so the store can see every read and every write.
-* **the machinery traits are module-private** — `Readable<T>` and
-  `Writable<A, R>` live unexported in `ui`, and `store.get`/`store.set`
-  take TRAIT-TYPED parameters (`a: Readable<T>`, `w: Writable<A, R>`);
-  impl-trait methods ride the trait's visibility
-  ([traits](../../docs/src/reference/traits.md)), the
-  parameterized trait impls (`impl Readable<T> for Source<T>`,
-  `impl Writable<A, R> for Mutation<A, R>`) are the dispatch. Biz
-  cannot name the traits even to import them — which is how
-  `Derived` being unwritable is enforced AT THE TYPE LEVEL (no
-  `Writable` impl for `Derived<T>`), not by a runtime check first.
+* **handles are keys that KNOW their store.** `Source<T>` carries its
+  id and seed; `Derived<T>` carries its id; `Mutation<A, R>` carries
+  its id — plus a PRIVATE store back-ref each, so the two verbs live
+  ON the handles and the app never touches a store object after boot.
+* **the machinery is the handles' shared members** —
+  `Source<T>`/`Derived<T>` carry `atom_id` + `materialize`,
+  `Mutation<A, R>` carries `atom_id`, and
+  `store.get`/`store.set` are GENERIC OVER THE HANDLE SHAPE
+  (`fn get<T, A>(a: A)` binding `Source<T>`/`Derived<T>` per
+  instantiation): a verb admits a handle because the handle CARRIES
+  the member. The members cross pub (the ctx bodies are
+  owner-anchored mirrors over the consumer's shapes — they bind
+  through the exported rows), but they are key plumbing, not verbs,
+  and the law gate greps them out of biz's vocabulary; a shape
+  without them fails ITS compile, loud
+  ([functions, closures, generics](../../docs/src/reference/functions-closures-generics.md)).
+  Biz cannot name the store verbs at all — and a `Derived<T>`
+  carries no `set`, which is how `Derived` being unwritable is
+  enforced AT THE TYPE LEVEL, not by a runtime check first. The ctx
+  verbs cross the pkg boundary, so their call sites spell the shape
+  (the fork's annotation law): `ctx.get<V, K>(a)` / 
+  `ctx.set<R, A, K>(a, v)`.
 * **freshness is PULL-ON-READ.** `get` recomputes a stale derived at
   most once per write-set: the rail is a generation map, a write bumps
   the written atom, a derived's recompute bumps its own gen (what
@@ -279,8 +289,8 @@ examples/05-todolist-web/
     │   │                           set — then the libs splice in array
     │   │                           order, ONE module
     │   ├── store.rut               §1 the atom store kernel (Store,
-    │   │                           Source/Derived/Mutation, the PRIVATE
-    │   │                           Readable/Writable traits)
+    │   │                           Source/Derived/Mutation + the shared
+    │   │                           plumbing members)
     │   ├── widget.rut              §2 the Widget type + builders
     │   ├── lowering.rut            §3 the lowering table (pure)
     │   ├── diff.rut                §4 T1Root + the keyed diff
@@ -337,8 +347,8 @@ examples/05-todolist-web/
   framework's guts** — exactly the store + the handle types + the
   event binding (`capture`), the widget type + mount/render/event, and
   the component constructors; the
-  machinery traits (`Readable`/`Writable`) are ui-private, so biz
-  CANNOT name them even to import them, and the gate pins biz's
+  store's machinery is ui-private, so biz
+  CANNOT name it even to import it, and the gate pins biz's
   import set as a SET EQUALITY. The old per-layer packages (`store/`,
   `t1/`, `components/`, `app/`) are merged, not gone: each is a
   SECTION of its package, and the app_law gate still holds the layer
@@ -359,11 +369,14 @@ the mount and the patch, and biz itself spells exactly ONE crossing
 name, `tim_after`). The host never grew an `ui_create_todo` or an
 `ui_unlisten`.
 
-**6. Idiomatic current rut.** Parameterized trait impls with
-trait-typed fn params (`impl Readable<T> for Source<T>`;
-`fn get<T>(self, a: Readable<T>)` — the store's whole trick),
-module-private traits behind `pub` methods (impl-trait
-visibility, [traits](../../docs/src/reference/traits.md)), first-class fns as values
+**6. Idiomatic current rut.** Generic verbs over structural members
+(`Source<T>` carries `atom_id`/`materialize` privately;
+`fn get<T, A>(a: A)` binds the handle shape per instantiation — the
+store's whole trick), shape-annotated call sites
+(`ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$)` — the fork's
+annotation law,
+[functions, closures, generics](../../docs/src/reference/functions-closures-generics.md)),
+first-class fns as values
 (`store.derive` / `store.mutation`
 take fn literals; `opaque.downcast` unwraps the erased program at the
 trust boundary, [opaque](../../docs/src/reference/opaque.md)), literal structs (`World`,
@@ -418,7 +431,7 @@ retired; freshness is the read's job now.
 | `rut/biz/rut.json` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
 | `rut/ui/rut.json` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), scope = the pkg name) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
-| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
+| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` interfaces, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
 | `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |

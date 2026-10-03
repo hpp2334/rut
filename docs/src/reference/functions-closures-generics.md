@@ -101,11 +101,11 @@ entry fn main() {
   its own typed code. `T` infers from the arguments; explicit type
   arguments may be spelled at call sites, including method calls:
   `self.st.get<T>(self)`.
-- Trait-typed arguments are ordinary arguments: a `T` instantiated at a
-  trait type becomes a handle slot, satisfying no bound.
+- Interface-typed arguments are ordinary arguments: a `T` instantiated at an
+  interface type becomes a handle slot, satisfying no bound.
 - **Generic parameters are unconstrained by default** — you cannot call
-  methods on a bare `T`. Pass values in, or take an `I`-typed parameter
-  instead of a generic.
+  methods on a bare `T`. Pass values in, take an `I`-typed parameter,
+  or spell the bound (`T requires I`).
 - There are no const-generic user parameters. The builtin surfaces fix
   their shapes (`[T]` is one type; lengths are runtime values).
 
@@ -117,7 +117,7 @@ bound := Type ('|' Type)*
 ```
 
 `fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn,
-method, and class generic parameters (struct and trait generic
+method, and class generic parameters (struct and interface generic
 parameters reject `requires`):
 
 - The bound gates which instantiations compile: enforcement is at every
@@ -127,20 +127,22 @@ parameters reject `requires`):
   str`".
 - Members may be concrete type names (satisfied by exact type
   identity), aliases (expanded first — see
-  [Type aliases and union bounds](type-aliases.md)), a single trait
-  (satisfied via the impl registry), or a **type union** of concrete
-  names/aliases. A trait member inside a union spelling is invalid —
-  a trait bound stands alone.
-- **Trait objects satisfy nothing**: a `T` instantiated at a trait type
-  fails any bound — only a concrete type with a registered impl admits.
+  [Type aliases and union bounds](type-aliases.md)), a single interface
+  (satisfied structurally — the member set checks where `T` is
+  chosen), or a **type union** of concrete
+  names/aliases. An interface member inside a union spelling is invalid —
+  an interface bound stands alone.
+- **Interface-typed values satisfy nothing**: a `T` instantiated at an
+  interface type fails any bound — only a concrete type with the
+  members admits.
 - A non-union bound **proves the widening**: the body may widen a
-  `T`-typed value into a bound-member-typed slot
+  `T`-typed value into a bound-interface-typed slot
   (`let w: Labeled = x;`), but gains no method calls on bare `T`.
 - A **union bound** carries the whole-bound contract: a method call on
   a union-bounded value requires **every** member to provide the method
   — even a member that is never actually instantiated. Dispatch is
   untouched: each instantiation still binds the concrete member's own
-  impl.
+  method.
 - Bounds may reference the item's other generics:
   `fn hold<T, U requires [T]>(x: U)`.
 - Generic **classes** take bounds on their parameters — the bound

@@ -10,16 +10,16 @@ use crate::types::{FieldInfo, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
 // ---- the loaded program ----
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TraitMethod {
+pub struct IfaceMethod {
     pub name: IdentId,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
 }
 
 #[derive(Clone, Debug)]
-pub struct TraitDesc {
+pub struct IfaceDesc {
     pub name: IdentId,
-    pub methods: Vec<TraitMethod>,
+    pub methods: Vec<IfaceMethod>,
 }
 
 #[derive(Clone, Debug)]
@@ -130,13 +130,13 @@ pub struct SurfaceType {
 }
 
 /// One exported trait declaration (trait impls may live in
-/// any module, so every module publishes the traits it declares): the
+/// any module, so every module publishes the ifaces it declares): the
 /// name, its generic parameter count, and the resolved method signatures.
 /// `local` is the trait's index in the exporter's own trait table — the
-/// key `TyKind::TraitObj` ids inside carried type descriptors resolve
+/// key `TyKind::IfaceObj` ids inside carried type descriptors resolve
 /// under.
 #[derive(Clone, Debug, PartialEq)]
-pub struct SurfaceTrait {
+pub struct SurfaceIface {
     /// the exporter's trait-table index
     pub local: u32,
     pub name: IdentId,
@@ -147,45 +147,7 @@ pub struct SurfaceTrait {
     /// type position); the orphan rule — not genericity — is the one
     /// cross-module impl restriction
     pub generics: usize,
-    pub methods: Vec<TraitMethod>,
-}
-
-/// One exported trait impl registration: `(trait, target)`
-/// with each trait method bound to the exporter's module-local fn id.
-/// Duplicate `(trait, type)` pairs are detectable only at LINK time —
-/// per-module compiles cannot see each other.
-///
-/// Prim-target impls compile TWO ABI variants per method (the slot ABI
-/// for vtable rows, the concrete ABI for bare-receiver static calls):
-/// `methods` binds the slot variant (the one vtable fills and links
-/// carry), `methods_concrete` the concrete one. Ref-repr targets
-/// (`str`/`bytes`/records) compile one variant — both lists bind the
-/// same fn id, the ABIs coincide. A GENERIC-target impl (`impl I for
-/// Vec<T>`) rides the same row shape with `target` naming the TEMPLATE
-/// row — recognizable at bind time because the target equals a
-/// registered generic template — and its method fn ids are
-/// placeholders (zero): one body exists per instantiation, none at
-/// surface build time, so the consumer mints a mirror instantiation
-/// request instead of binding the ids.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SurfaceImpl {
-    /// the trait's source name (an index into [`Surface::traits`] by name)
-    pub trait_name: IdentId,
-    /// the target type id, as packed in the exporter's table — foreign
-    /// targets (`impl ForeignTrait for ForeignType`) keep the scope they
-    /// were declared under
-    pub target: TypeId,
-    /// trait method name → the exporter's module-local fn id (slot ABI)
-    pub methods: Vec<(IdentId, u32)>,
-    /// trait method name → the exporter's module-local fn id (concrete
-    /// ABI); empty when the exporter predates the dual ABI
-    pub methods_concrete: Vec<(IdentId, u32)>,
-    /// a parameterized impl head's trait arguments, resolved as rows in
-    /// the exporter's table (`impl Readable<T> for Source<T>` carries
-    /// the `#T` placeholder row once per slot) — empty for exact
-    /// (non-generic) heads; the consumer unifies a call's trait inst
-    /// against these
-    pub trait_args: Vec<TypeId>,
+    pub methods: Vec<IfaceMethod>,
 }
 
 /// One exported class's inherent method surface (the linkable-classes
@@ -282,38 +244,6 @@ pub enum NativeTy {
     RunContext,
 }
 
-/// A builtin trait published by `core`'s native surface:
-/// registered on first reference, exactly like a declared trait — but only
-/// for modules that named it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeTrait {
-    /// `Disposal { fn dispose(mut self, cx: DisposalContext) }` — the
-    /// cell-death contract: the engine calls `dispose` when a value of
-    /// an implementing type reaches refcount zero (weak boxes null
-    /// first; fields release after it returns). The `cx` is the
-    /// engine-minted context cell ([`NativeTy::DisposalContext`]), one
-    /// per call.
-    Disposal,
-    /// `Index<T>` — the random-access contract
-    Index,
-    /// `Iterable<E> { fn iterate(self, emit: fn(E) -> bool) }` — the
-    /// push contract: a type is iterable when it registers
-    /// `impl Iterable<E> for T`; `for..of` desugars to
-    /// `it.iterate(emit)`. The old `Iterator` spelling retired.
-    Iterable,
-    /// `Future<T> { fn yield(cx: RunContext) }` — the async protocol's
-    /// driven half. Engine-named, user-open:
-    /// the compiler weaves `impl Future<T>` for every async fn's hidden
-    /// frame type; users may impl it for their own types (launcher-
-    /// drivable; v1 await targets engine-woven futures only).
-    Future,
-    /// `RunContext { checkpoint / next_checkpoint / cancelled }` — the
-    /// cx protocol. The NAME also resolves in type
-    /// position to the engine-minted cx record (`TyKind::Data`, one
-    /// frame-edge field), whose members inline as field ops — the trait
-    /// row is the frozen surface, the record is the lowering.
-    RunContext,
-}
 
 /// One exported GENERIC function (`pub fn decodeJson<T>(..)`): the
 /// usable name, its generic parameters in order, and the
@@ -360,10 +290,9 @@ pub struct Surface {
     /// machinery
     pub fn_generics: Vec<SurfaceGenericFn>,
     /// declared trait declarations (non-generic)
-    pub traits: Vec<SurfaceTrait>,
+    pub ifaces: Vec<SurfaceIface>,
     /// trait impl registrations `(trait, target, [method → fn ref])`
     /// — merged at link, where duplicate pairs error
-    pub impls: Vec<SurfaceImpl>,
     /// inherent method surfaces (the linkable-classes phase): one row
     /// per class with methods — the wire's reserved table, populated
     /// since the phase that retired source-inlining
@@ -374,7 +303,6 @@ pub struct Surface {
     pub native_types: Vec<(IdentId, NativeTy, bool)>,
     /// builtin trait names (`core` only), each with its ambient bit
     /// (same law as [`Surface::native_types`])
-    pub native_traits: Vec<(IdentId, NativeTrait, bool)>,
     /// compiler-lowered builtin function names (`core` only) — no
     /// `FuncCode`; the bodies are rut-lir lowering. Each row carries its
     /// ambient bit (same law as [`Surface::native_types`])
@@ -403,7 +331,7 @@ pub const CORE_FNS: &[IdentId] = &[
 
 impl Surface {
     /// The core prelude surface: the builtin containers,
-    /// the builtin traits, the compiler-lowered functions, the integer
+    /// the builtin ifaces, the compiler-lowered functions, the integer
     /// primitives' `builtin impl` methods, and `NAN`. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
     /// compiler hints from it, and `rut/core/core.d.rut` mirrors it
@@ -449,13 +377,6 @@ impl Surface {
                 (sym::FUTURE, NativeTy::Future, false),
                 (sym::RUN_CONTEXT, NativeTy::RunContext, false),
             ],
-            // the `builtin trait` rows are GONE (v20): `Iterable` and
-            // `Disposal` became the bracket markers (`[iterable]` /
-            // `[disposal]` — designated member slots, not traits), and
-            // `Future`/`RunContext` became the closed native types above.
-            // The wire keeps the table (length-prefixed, empty for every
-            // v20 module) and the `NativeTrait` tags stay decode-stable.
-            native_traits: vec![],
             native_fns: CORE_FNS.iter().map(|&n| (n, true)).collect(),
             // core's one const: `use core::{NAN}` — the unwritable float
             // (f64 bits materialized with `ConstRaw`)
@@ -480,24 +401,14 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     }
 }
 
-/// A core builtin trait by name, if it is one. EMPTY since v20: the
-/// `builtin trait` row kind is gone — `Iterable`/`Disposal` became the
-/// bracket markers, `Future`/`RunContext` the closed native types. The
-/// shell remains so the marker spelling's diagnostics and the removed-
-/// name hints have one place to consult.
-pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
-    let _ = name;
-    None
-}
-
 /// Is `name` one of the core prelude functions?
 pub fn is_core_fn(name: IdentId) -> bool {
     CORE_FNS.contains(&name)
 }
 
-/// Is `name` any core prelude name (type, trait, or function)?
+/// Is `name` any core prelude name (type or function)?
 pub fn is_core_name(name: IdentId) -> bool {
-    is_core_fn(name) || core_native_type(name).is_some() || core_native_trait(name).is_some()
+    is_core_fn(name) || core_native_type(name).is_some()
 }
 
 /// The import-gated core names — `Surface::core`'s NON-ambient rows
@@ -512,7 +423,6 @@ pub fn pub_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentI
         .native_types
         .iter()
         .map(|(n, _, a)| (*n, *a))
-        .chain(core.native_traits.iter().map(|(n, _, a)| (*n, *a)))
         .chain(core.native_fns.iter().map(|(n, a)| (*n, *a)));
     rows.filter(|(_, ambient)| !ambient)
         .map(|(n, _)| (interner.intern(core.names.name(n)), sym::text(n).unwrap_or("")))
@@ -565,17 +475,6 @@ pub enum InstFnKind {
         subst: Vec<TypeId>,
         origins: Vec<TypeId>,
     },
-    ImplMethod {
-        /// the impl's trait source name (or target type name, inherent)
-        trait_name: IdentId,
-        /// the impl's target type id, as packed in this program
-        target: TypeId,
-        name: IdentId,
-        /// `true` — the slot-ABI variant; `false` — the concrete one
-        slot_abi: bool,
-        subst: Vec<TypeId>,
-        origins: Vec<TypeId>,
-    },
     HostThunk {
         name: IdentId,
     },
@@ -604,9 +503,9 @@ pub struct Program {
     /// surface shares the rebuilt table)
     pub surface: Surface,
     pub types: TypeTable,
-    pub traits: Vec<TraitDesc>,
+    pub ifaces: Vec<IfaceDesc>,
     /// global trait-method slots: (trait id, method index)
-    pub trait_slots: Vec<(u32, u32)>,
+    pub iface_slots: Vec<(u32, u32)>,
     /// per-type vtables: entry per type, mapping slot → func id
     pub vtables: Vec<Vec<Option<u32>>>,
     /// per-type disposal rows: entry per type, `Some(dispose func id)`
@@ -647,10 +546,10 @@ impl Program {
             .find(|(n, _)| self.interner.name(*n) == name)
             .map(|(_, f)| *f)
     }
-    pub fn slot_of(&self, trait_id: u32, method: u32) -> Option<u32> {
-        self.trait_slots
+    pub fn slot_of(&self, iface_id: u32, method: u32) -> Option<u32> {
+        self.iface_slots
             .iter()
-            .position(|&(t, m)| t == trait_id && m == method)
+            .position(|&(t, m)| t == iface_id && m == method)
             .map(|i| i as u32)
     }
 }
@@ -696,7 +595,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// and the byte is what says which law it was.
 /// v11: the opaque-is law (opaque-is batch phase 1) — `is` on an
 /// opaque box answers BY THE BOX: `o is X` misses for every payload X
-/// (concrete AND trait — the IsType/IsTrait op bodies read `cell.ty`),
+/// (concrete AND trait — the IsType/IsIface op bodies read `cell.ty`),
 /// `o is opaque` (or an alias) stays true, and `downcast<T>` is the
 /// only recovery (its TidOf keeps reading the payload — the ONE
 /// legitimate see-through). A POLICY bump per the v9 precedent: no new
@@ -729,7 +628,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// misread under the new law.
 /// v14: the disposal surface — a new boot type (`DisposalContext`,
 /// type id 22, kind tag 17) and new declared-surface rows
-/// (`NativeTy::DisposalContext`, `NativeTrait::Disposal`) — the v10
+/// (`NativeTy::DisposalContext`) — the v10
 /// precedent: an artifact compiled here may reference the new boot id
 /// or kind, which an older engine can neither place in its boot table
 /// nor decode, so stale artifacts are refused at the version byte
@@ -788,7 +687,17 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// carries the withdrawn kind, the withdrawn native row, or the
 /// shifted nat tags, so stale artifacts are refused at the version
 /// byte, the v12 precedent.
-pub const VERSION: u32 = 20;
+/// v21: the structural-interfaces fork (the select + type-surface plan's
+/// lane 6). `trait` and `impl I for T` are GONE — observed capability is
+/// satisfied by having the members, so the surface's impl-registration
+/// rows (`SurfaceImpl`), the native-iface table (`NativeTrait`, already
+/// empty since v20), and the `ImplMethod` instantiation-ledger tag (2)
+/// all leave the wire. Interfaces themselves cross exactly as traits
+/// did (`SurfaceIface`, the same layout — renamed, not re-shaped), the
+/// vtable + `CallI` slot dispatch is unchanged, and `IsTrait` keeps its
+/// opcode/tag as the capability probe under its new name `IsIface`.
+/// Old v20 artifacts are refused at the version byte.
+pub const VERSION: u32 = 21;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -811,9 +720,9 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         e.u32(t.name.0);
         encode_kind(&mut e, &t.kind);
     }
-    // traits
-    e.u32(prog.traits.len() as u32);
-    for t in &prog.traits {
+    // ifaces
+    e.u32(prog.ifaces.len() as u32);
+    for t in &prog.ifaces {
         e.u32(t.name.0);
         e.u32(t.methods.len() as u32);
         for m in &t.methods {
@@ -823,8 +732,8 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         }
     }
     // trait slots
-    e.u32(prog.trait_slots.len() as u32);
-    for &(t, m) in &prog.trait_slots {
+    e.u32(prog.iface_slots.len() as u32);
+    for &(t, m) in &prog.iface_slots {
         e.u32(t);
         e.u32(m);
     }
@@ -960,15 +869,6 @@ pub fn encode(prog: &Program) -> Vec<u8> {
                 e.tys(subst);
                 e.tys(origins);
             }
-            InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
-                e.u8(2);
-                e.u32(trait_name.0);
-                e.u32(*target);
-                e.u32(name.0);
-                e.u8(*slot_abi as u8);
-                e.tys(subst);
-                e.tys(origins);
-            }
             InstFnKind::HostThunk { name } => {
                 e.u8(3);
                 e.u32(name.0);
@@ -1068,8 +968,8 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u32(g.ret);
     }
     // trait decls: keyed by the exporter's trait-table index
-    e.u32(s.traits.len() as u32);
-    for t in &s.traits {
+    e.u32(s.ifaces.len() as u32);
+    for t in &s.ifaces {
         e.u32(t.local);
         e.u32(t.name.0);
         e.u32(t.generics as u32);
@@ -1078,26 +978,6 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             e.u32(m.name.0);
             e.tys(&m.params);
             e.u32(m.ret);
-        }
-    }
-    // trait impl registrations — both ABI lists (slot + concrete)
-    e.u32(s.impls.len() as u32);
-    for im in &s.impls {
-        e.u32(im.trait_name.0);
-        e.u32(im.target);
-        e.u32(im.methods.len() as u32);
-        for (n, f) in &im.methods {
-            e.u32(n.0);
-            e.u32(*f);
-        }
-        e.u32(im.methods_concrete.len() as u32);
-        for (n, f) in &im.methods_concrete {
-            e.u32(n.0);
-            e.u32(*f);
-        }
-        e.u32(im.trait_args.len() as u32);
-        for &a in &im.trait_args {
-            e.u32(a);
         }
     }
     // inherent impls (class methods): one row per class with methods —
@@ -1137,18 +1017,6 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             // v20: the async pair became CLOSED builtin classes
             NativeTy::Future => 5,
             NativeTy::RunContext => 6,
-        });
-        e.u8(*ambient as u8);
-    }
-    e.u32(s.native_traits.len() as u32);
-    for (n, k, ambient) in &s.native_traits {
-        e.u32(n.0);
-        e.u8(match k {
-            NativeTrait::Disposal => 0,
-            NativeTrait::Index => 1,
-            NativeTrait::Iterable => 2,
-            NativeTrait::Future => 3,
-            NativeTrait::RunContext => 4,
         });
         e.u8(*ambient as u8);
     }
@@ -1209,9 +1077,9 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
                 e.u32(f.ty);
             }
         }
-        TyKind::TraitObj { trait_id } => {
+        TyKind::IfaceObj { iface_id } => {
             e.u8(9);
-            e.u32(*trait_id);
+            e.u32(*iface_id);
         }
         TyKind::Opaque => e.u8(10),
         TyKind::Fn { params, ret } => {
@@ -1270,7 +1138,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         types.types.push(RutType { name: tname, kind });
     }
     let ntraits = d.u32()? as usize;
-    let mut traits = Vec::with_capacity(ntraits);
+    let mut ifaces = Vec::with_capacity(ntraits);
     for _ in 0..ntraits {
         let tname = interned(&mut d)?;
         let nmethods = d.u32()? as usize;
@@ -1279,23 +1147,23 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let mname = interned(&mut d)?;
             let params = d.tys()?;
             let ret = d.u32()?;
-            methods.push(TraitMethod { name: mname, params, ret });
+            methods.push(IfaceMethod { name: mname, params, ret });
         }
-        traits.push(TraitDesc { name: tname, methods });
+        ifaces.push(IfaceDesc { name: tname, methods });
     }
     let nslots = d.u32()? as usize;
-    let mut trait_slots = Vec::with_capacity(nslots);
+    let mut iface_slots = Vec::with_capacity(nslots);
     for _ in 0..nslots {
         let t = d.u32()?;
         let m = d.u32()?;
-        trait_slots.push((t, m));
+        iface_slots.push((t, m));
     }
     let nvt = d.u32()? as usize;
     let mut vtables = vec![Vec::new(); types.types.len()];
     for _ in 0..nvt {
         let ty = d.u32()? as usize;
         let n = d.u32()? as usize;
-        let mut vt = vec![None; trait_slots.len()];
+        let mut vt = vec![None; iface_slots.len()];
         for _ in 0..n {
             let s = d.u32()? as usize;
             let f = d.u32()?;
@@ -1403,15 +1271,9 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
                 let origins = d.tys()?;
                 InstFnKind::Method { data, name, subst, origins }
             }
-            2 => {
-                let trait_name = interned(&mut d)?;
-                let target = d.u32()?;
-                let name = interned(&mut d)?;
-                let slot_abi = d.u8()? != 0;
-                let subst = d.tys()?;
-                let origins = d.tys()?;
-                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins }
-            }
+            // tag 2 is RETIRED (v21: the `ImplMethod` impl-registration
+            // rows died with `impl I for T` — satisfaction is structural,
+            // nothing registers); a stale artifact carrying it fails loudly
             3 => {
                 let name = interned(&mut d)?;
                 InstFnKind::HostThunk { name }
@@ -1423,14 +1285,14 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     // the surface (v16): names are checked against the rebuilt interner
     // at read, every id against the tables above — a bad binary never
     // reaches the VM
-    let surface = decode_surface(&mut d, &interner, funcs.len(), traits.len())?;
+    let surface = decode_surface(&mut d, &interner, funcs.len(), ifaces.len())?;
     Ok(Program {
         name,
         interner,
         surface,
         types,
-        traits,
-        trait_slots,
+        ifaces,
+        iface_slots,
         vtables,
         disposal_impls,
         consts,
@@ -1541,7 +1403,7 @@ fn decode_surface(
     }
     // trait decls
     let n = d.u32()? as usize;
-    s.traits = Vec::with_capacity(n);
+    s.ifaces = Vec::with_capacity(n);
     for _ in 0..n {
         let local = d.u32()?;
         let tname = name(d)?;
@@ -1552,31 +1414,9 @@ fn decode_surface(
             let mname = name(d)?;
             let params = d.tys()?;
             let ret = d.u32()?;
-            methods.push(TraitMethod { name: mname, params, ret });
+            methods.push(IfaceMethod { name: mname, params, ret });
         }
-        s.traits.push(SurfaceTrait { local, name: tname, generics, methods });
-    }
-    // trait impl registrations — both ABI lists
-    let n = d.u32()? as usize;
-    s.impls = Vec::with_capacity(n);
-    for _ in 0..n {
-        let trait_name = name(d)?;
-        let target = d.u32()?;
-        let mut methods = Vec::new();
-        for _ in 0..(d.u32()? as usize) {
-            let mname = name(d)?;
-            methods.push((mname, d.u32()?));
-        }
-        let mut methods_concrete = Vec::new();
-        for _ in 0..(d.u32()? as usize) {
-            let mname = name(d)?;
-            methods_concrete.push((mname, d.u32()?));
-        }
-        let mut trait_args = Vec::new();
-        for _ in 0..(d.u32()? as usize) {
-            trait_args.push(d.u32()?);
-        }
-        s.impls.push(SurfaceImpl { trait_name, target, methods, methods_concrete, trait_args });
+        s.ifaces.push(SurfaceIface { local, name: tname, generics, methods });
     }
     // inherent impls (class methods): one row per class with methods —
     // v16 reserved the table (zero rows) so this population rides the
@@ -1626,21 +1466,6 @@ fn decode_surface(
         };
         let ambient = d.u8()? != 0;
         s.native_types.push((nname, kind, ambient));
-    }
-    let n = d.u32()? as usize;
-    s.native_traits = Vec::with_capacity(n);
-    for _ in 0..n {
-        let nname = name(d)?;
-        let kind = match d.u8()? {
-            0 => NativeTrait::Disposal,
-            1 => NativeTrait::Index,
-            2 => NativeTrait::Iterable,
-            3 => NativeTrait::Future,
-            4 => NativeTrait::RunContext,
-            t => return Err(format!("bad native trait tag {t}")),
-        };
-        let ambient = d.u8()? != 0;
-        s.native_traits.push((nname, kind, ambient));
     }
     let n = d.u32()? as usize;
     s.native_fns = Vec::with_capacity(n);
@@ -1723,24 +1548,16 @@ fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usiz
     for c in &s.consts {
         ty(c.ty)?;
     }
-    for t in &s.traits {
+    for t in &s.ifaces {
         if t.local as usize >= traits_len {
             let tname = s.names.name(t.name);
-            return Err(format!("bad surface trait `{tname}` (local {} outside the trait table)", t.local));
+            return Err(format!("bad surface interface `{tname}` (local {} outside the iface table)", t.local));
         }
         for m in &t.methods {
             for &p in &m.params {
                 ty(p)?;
             }
             ty(m.ret)?;
-        }
-    }
-    for im in &s.impls {
-        ty(im.target)?;
-        for &(_, f) in im.methods.iter().chain(&im.methods_concrete) {
-            if f as usize >= funcs_len {
-                return Err(format!("bad surface impl method fn ref {f} (outside the func table)"));
-            }
         }
     }
     for (t, _, _) in &s.native_impls {
@@ -1782,7 +1599,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             }
             TyKind::Data { fields }
         }
-        9 => TyKind::TraitObj { trait_id: d.u32()? },
+        9 => TyKind::IfaceObj { iface_id: d.u32()? },
         10 => TyKind::Opaque,
         11 => {
             let params = d.tys()?;
@@ -1868,7 +1685,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::EnumNew { dst, ty, member } => { e.u8(29); e.u16(*dst); e.u32(*ty); e.u32(*member); }
         Op::TidOf { dst, obj } => { e.u8(38); e.u16(*dst); e.u16(*obj); }
         Op::IsType { dst, obj, want } => { e.u8(39); e.u16(*dst); e.u16(*obj); e.u32(*want); }
-        Op::IsTrait { dst, obj, want } => { e.u8(40); e.u16(*dst); e.u16(*obj); e.u32(*want); }
+        Op::IsIface { dst, obj, want } => { e.u8(40); e.u16(*dst); e.u16(*obj); e.u32(*want); }
         Op::Unbox { dst, box_, ty } => { e.u8(41); e.u16(*dst); e.u16(*box_); e.u32(*ty); }
         Op::Box { dst, val, ty } => { e.u8(42); e.u16(*dst); e.u16(*val); e.u32(*ty); }
         Op::MakeClosure { dst, func, argv_off, argc } => { e.u8(43); e.u16(*dst); e.u32(*func); e.u32(*argv_off); e.u16(*argc); }
@@ -1913,7 +1730,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         29 => Op::EnumNew { dst: d.u16()?, ty: d.u32()?, member: d.u32()? },
         38 => Op::TidOf { dst: d.u16()?, obj: d.u16()? },
         39 => Op::IsType { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
-        40 => Op::IsTrait { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
+        40 => Op::IsIface { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
         41 => Op::Unbox { dst: d.u16()?, box_: d.u16()?, ty: d.u32()? },
         42 => Op::Box { dst: d.u16()?, val: d.u16()?, ty: d.u32()? },
         43 => Op::MakeClosure { dst: d.u16()?, func: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
@@ -2157,9 +1974,9 @@ mod tests {
                 ],
             },
         });
-        p.traits.push(TraitDesc {
+        p.ifaces.push(IfaceDesc {
             name: vid,
-            methods: vec![TraitMethod {
+            methods: vec![IfaceMethod {
                 name: sym::ITERATE,
                 params: vec![],
                 ret: TY_NIL,
@@ -2200,7 +2017,7 @@ mod tests {
         } else {
             panic!("expected a record");
         }
-        assert_eq!(q.traits[0].methods[0].name, sym::ITERATE);
+        assert_eq!(q.ifaces[0].methods[0].name, sym::ITERATE);
     }
 
     #[test]
@@ -2260,27 +2077,16 @@ mod tests {
             params: Vec::new(),
             scope: None,
         });
-        p.surface.traits.push(SurfaceTrait {
+        p.surface.ifaces.push(SurfaceIface {
             local: 0,
             name: shape,
             generics: 0,
-            methods: vec![TraitMethod { name: area, params: vec![TY_I32], ret: TY_NIL }],
-        });
-        p.surface.impls.push(SurfaceImpl {
-            trait_name: shape,
-            target: crate::id::pack(7, 0),
-            methods: vec![(area, 0)],
-            methods_concrete: vec![(area, 0)],
-            trait_args: vec![],
+            methods: vec![IfaceMethod { name: area, params: vec![TY_I32], ret: TY_NIL }],
         });
         // native rows (core's builtin surface), ambient bits both ways
         p.surface.native_types = vec![
             (sym::OPAQUE, NativeTy::Opaque, true),
             (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
-        ];
-        p.surface.native_traits = vec![
-            (sym::ITERABLE, NativeTrait::Iterable, true),
-            (sym::DISPOSAL, NativeTrait::Disposal, false),
         ];
         p.surface.native_fns = vec![(sym::ASSERT, true)];
         p.surface.native_impls = vec![(TY_I32, sym::WRAPPING_ADD, Intrinsic::WrappingAdd)];
@@ -2313,33 +2119,13 @@ mod tests {
         assert!(decode(&encode(&p)).is_err(), "name id outside the interner");
 
         let mut p = sample();
-        p.surface.impls.push(SurfaceImpl {
-            trait_name: p.interner.intern("Shape"),
-            target: crate::id::pack(9, 0), // no block carries scope 9
-            methods: vec![],
-            methods_concrete: vec![],
-            trait_args: vec![],
-        });
-        assert!(decode(&encode(&p)).is_err(), "type id outside the carried blocks");
-
-        let mut p = sample();
-        p.surface.traits.push(SurfaceTrait {
+        p.surface.ifaces.push(SurfaceIface {
             local: 7, // the trait table carries one row
             name: p.interner.intern("Shape"),
             generics: 0,
             methods: vec![],
         });
-        assert!(decode(&encode(&p)).is_err(), "trait local outside the trait table");
-
-        let mut p = sample();
-        p.surface.impls.push(SurfaceImpl {
-            trait_name: p.interner.intern("Shape"),
-            target: TY_I32,
-            methods: vec![(p.interner.intern("area"), 42)], // the func table carries one
-            methods_concrete: vec![],
-            trait_args: vec![],
-        });
-        assert!(decode(&encode(&p)).is_err(), "fn ref outside the func table");
+        assert!(decode(&encode(&p)).is_err(), "iface local outside the iface table");
     }
 
     fn boot_len() -> u32 {

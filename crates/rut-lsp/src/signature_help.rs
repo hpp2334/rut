@@ -9,7 +9,7 @@
 //! * methods through the receiver's type head (`self`/`Self`,
 //!   capitalized, primitive, binding, module let — `recv_type`), then
 //!   the inherent impl fn via the shared `impl_method_fn` rule;
-//!   own-surface hits (trait bodies, builtin/primitive surfaces) are
+//!   own-surface hits (interface bodies, builtin/primitive surfaces) are
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
 //!   signature can never leak through (the known-receiver-is-final law).
 //!
@@ -428,17 +428,18 @@ mod tests {
 
     #[test]
     fn own_surface_method_means_no_help() {
-        // the trait-body `m` is the receiver's own surface: FINAL with no
-        // recorded params — the impl fn's signature must not leak through
+        // the interface-body `m` is the receiver's own surface: FINAL
+        // with no recorded params — the impl fn's signature must not
+        // leak through
         let src = [
             "struct P {",
             "    x: i32;",
             "}",
-            "trait Draw {",
+            "interface Draw {",
             "    fn m(self, k: i32) -> i32;",
             "}",
-            "impl Draw for P {",
-            "    fn m(self, k: i32) -> i32 { return k; }",
+            "impl P {",
+            "    pub fn m(self, k: i32) -> i32 { return k; }",
             "}",
             "fn go(d: Draw) -> i32 {",
             "    return d.m(1);",

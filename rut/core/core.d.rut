@@ -1,8 +1,8 @@
 // core/core.d.rut — the prelude surface: what the language
 // itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
 // lowered fns, and the closed async classes `Future` and `RunContext`
-// (the engine-contract `builtin trait` rows are gone: `Iterable` and
-// `Disposal` are the bracket markers now — `[iterable] fn` /
+// (the engine-contract rows are spellings on types now: `Iterable` and
+// `Disposal` are the bracket markers — `[iterable] fn` /
 // `[disposal] fn` on inherent impl members; the `Index` contract is
 // gone, v1.1). The array `[T]` is pure
 // grammar — no decl carries it.
@@ -273,9 +273,9 @@ prelude builtin impl u64 {
 // trait` rows): the bracket markers `[disposal]` and `[iterable]`
 // designate an inherent impl member (one per contract per class, the
 // signature checked against the contract), and the closed `builtin
-// class` pair below carries the async protocol. Library contracts
-// without engine knowledge (a package's own trait — e.g. an encoding
-// contract for map keys) stay plain `trait`.
+// class` pair below carries the async protocol. Library capability
+// contracts (a package's own interface — e.g. an encoding contract)
+// are plain `interface` declarations, satisfied structurally.
 
 // The iteration protocol. A type is iterable when an inherent impl
 // marks a member `[iterable]`; `for (x of it)` calls that ONE
@@ -307,7 +307,7 @@ prelude builtin impl u64 {
 //   }
 
 // The async protocol, the Future-only vocabulary — TWO CLOSED builtin
-// classes (v20: the `builtin trait` pair is gone). Both are `pub
+// classes. Both are `pub
 // builtin` (the import-gated spelling): the ENGINE weaves without
 // them — every async producer's frame mints keyed on the engine
 // symbols, never on user-scope resolution. Source that SPELLS the

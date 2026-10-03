@@ -122,12 +122,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // trait-typed parameters specialize per concrete argument (RFC
         // 0012 §5): the Inst carries one origin per trait-obj param
-        let mut trait_origins = Vec::new();
+        let mut iface_origins = Vec::new();
         for (i, _) in args.iter().enumerate() {
-            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
-                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. })
             {
-                trait_origins.push(arg_tys[i]);
+                iface_origins.push(arg_tys[i]);
             }
         }
         let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
@@ -140,7 +140,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
-            trait_origins,
+            iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
@@ -211,18 +211,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // trait-typed parameters specialize per concrete argument (RFC
         // 0012 §5): the Inst carries one origin per trait-obj param
-        let mut trait_origins = Vec::new();
+        let mut iface_origins = Vec::new();
         for (i, _) in args.iter().enumerate() {
-            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
-                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. })
             {
-                trait_origins.push(arg_tys[i]);
+                iface_origins.push(arg_tys[i]);
             }
         }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: class_subst,
-            trait_origins,
+            iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };

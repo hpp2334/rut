@@ -1,12 +1,13 @@
-//! Generic class bounds — `class HashMap<K requires Hashable, V>`
+//! Generic class bounds — `class Box<K requires Hash, V>`
 //!: the recorded bounds gate every instantiation
 //! (union- and alias-aware, via the same `admit_bounds` helper the
 //! fn/method grammar uses), and the bound is what proves the
-//! parameter-value → trait-slot widening inside the class body. The
+//! parameter-value → interface-slot widening inside the class body. The
 //! bound is admission-only — static dispatch on the bare parameter
-//! stays deferred (OQ-1); frames compile per-instantiation, so body
+//! stays deferred; frames compile per-instantiation, so body
 //! calls on a parameter-typed value are the substituted concrete type's
-//! own calls.
+//! own calls. Interface bounds admit by the structural member-set
+//! match; an interface-typed instantiation satisfies nothing.
 
 use rut_parser::Mode;
 
@@ -29,9 +30,9 @@ fn diags_of(src: &str) -> Vec<String> {
 #[test]
 fn bound_admits_and_rejects_at_the_class_instantiation() {
     let shape = "\
-trait Hash { fn hash(self) -> u64; }
+interface Hash { fn hash(self) -> u64; }
 struct Token { v: i32 }
-impl Hash for Token { fn hash(self) -> u64 { return 9; } }
+impl Token { pub fn hash(self) -> u64 { return 9; } }
 class Box<K requires Hash, V> {
     k: K;
     v: V;
@@ -44,7 +45,7 @@ impl<K, V> Box<K, V> {
     pub fn val(self) -> V { return self.v; }
 }
 ";
-    // Token implements Hash — the instantiation compiles end to end
+    // Token has the member — the instantiation compiles end to end
     let out = compile(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
@@ -58,7 +59,7 @@ impl<K, V> Box<K, V> {
         out.diags
     );
 
-    // str has no Hash impl — the instantiation diagnoses, naming the impl
+    // str has no members — the instantiation diagnoses, naming the member
     let ds = diags_of(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
@@ -68,20 +69,24 @@ impl<K, V> Box<K, V> {
     ));
     assert!(
         ds.iter()
-            .any(|d| d.contains("`str` does not satisfy `K` requires `Hash`")
-                && d.contains("no impl `Hash` for `str` is registered")),
-        "admission names the missing impl: {ds:?}"
+            .any(|d| d.contains("`str` does not satisfy `Hash`")
+                && d.contains("no member `hash`")),
+        "admission names the missing member: {ds:?}"
     );
 }
 
 #[test]
 fn bound_proves_the_widening_inside_the_class_body() {
     // `let hk: Hash = self.k;` — the recorded bound admits the K-value →
-    // Hash-slot widening; the call then dispatches through the slot
+    // interface-slot widening (Token is a ref-repr class, the only shape
+    // that boxes); the call then dispatches through the slot
     let out = compile(
-        "trait Hash { fn hash(self) -> u64; }\n\
-         struct Token { v: i32 }\n\
-         impl Hash for Token { fn hash(self) -> u64 { return 9; } }\n\
+        "interface Hash { fn hash(self) -> u64; }\n\
+         class Token { v: i32 }\n\
+         impl Token {\n\
+         \x20   pub fn new() -> Self { return Self { v: 1 }; }\n\
+         \x20   pub fn hash(self) -> u64 { return 9; }\n\
+         }\n\
          class Box<K requires Hash, V> {\n\
          \x20   k: K;\n\
          \x20   v: V;\n\
@@ -96,7 +101,7 @@ fn bound_proves_the_widening_inside_the_class_body() {
          \x20   }\n\
          }\n\
          entry fn main() -> i32 {\n\
-         \x20   let b: Box<Token, i32> = Box.new(Token { v: 1 }, 2);\n\
+         \x20   let b: Box<Token, i32> = Box.new(Token.new(), 2);\n\
          \x20   return b.key_slot().hash() as i32;\n\
          }\n",
     );
@@ -105,14 +110,14 @@ fn bound_proves_the_widening_inside_the_class_body() {
 
 #[test]
 fn class_bound_expands_through_an_alias() {
-    // `type Key = Hash;` — the bound member expands before trait-vs-
+    // `type Key = Hash;` — the bound member expands before interface-vs-
     // concrete detection, so the alias-spelled bound
-    // admits the impl-registered key and rejects the rest
+    // admits the member-carrying key and rejects the rest
     let shape = "\
-trait Hash { fn hash(self) -> u64; }
+interface Hash { fn hash(self) -> u64; }
 type Key = Hash;
 struct Token { v: i32 }
-impl Hash for Token { fn hash(self) -> u64 { return 9; } }
+impl Token { pub fn hash(self) -> u64 { return 9; } }
 class Box<K requires Key, V> {
     k: K;
     v: V;
@@ -140,7 +145,7 @@ impl<K, V> Box<K, V> {
          }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not satisfy `K` requires")),
+        ds.iter().any(|d| d.contains("`bool` does not satisfy")),
         "the alias-expanded bound still gates: {ds:?}"
     );
 }
@@ -149,9 +154,9 @@ impl<K, V> Box<K, V> {
 fn class_union_bound_admits_each_member() {
     // a union bound spans members — either instantiates, the rest don't
     let shape = "\
-trait Hash { fn hash(self) -> u64; }
+interface Hash { fn hash(self) -> u64; }
 struct Token { v: i32 }
-impl Hash for Token { fn hash(self) -> u64 { return 9; } }
+impl Token { pub fn hash(self) -> u64 { return 9; } }
 class Box<K requires i32 | Token, V> {
     k: K;
     v: V;
@@ -185,8 +190,8 @@ impl<K, V> Box<K, V> {
     );
 }
 
-// NOTE: the full cross-module shape (bounded class in a lib module, key +
-// impl in the consumer) is out of A5 scope — used (imported) types take no
-// generic arguments in this build (resolve.rs, pre-existing v1 rule). The
-// bound gates through the same `find_impl_ex` registry either way.
-
+// NOTE: the full cross-module shape (bounded class in a lib module, key
+// spelled in the consumer) is out of A5 scope — used (imported) types
+// take no generic arguments in this build (resolve.rs, pre-existing v1
+// rule). The bound gates through the same structural member-set match
+// either way.

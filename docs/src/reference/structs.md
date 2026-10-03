@@ -83,9 +83,9 @@ entry fn main() {
 
 `==` on two struct values is a **cell-identity test** — `q == p` is
 true exactly when they name one cell; two separately built literals are
-never equal. Field-wise comparison is a trait contract of your own
-(declare and implement it — see
-[Traits and dispatch](traits.md)).
+never equal. Field-wise comparison is an interface-shaped contract of
+your own (spell a member that compares — see
+[Interfaces and dispatch](interfaces.md)).
 
 ## Construction — the literal, everywhere
 
@@ -129,18 +129,18 @@ also have no `static` members.
 ## Methods live in impl blocks
 
 A struct body is **fields only** — a `fn` member in the body is a hard
-parse error. Inherent methods live in `impl S { .. }`, in the type's
-module only; trait impls in `impl I for S { .. }` (see
-[Traits and dispatch](traits.md)):
+parse error. Methods live in the inherent `impl S { .. }`, in the type's
+module only — the one impl form (see
+[Interfaces and dispatch](interfaces.md)):
 
 ```rut
 impl Point {
     fn dist(self, other: Point) -> f32 { .. }   // inherent — the type's module
 }
 
-impl Hashable for Point {
-    fn hash(self) -> u64 { .. }
-    fn eq(self, other: Point) -> bool { .. }
+impl Point {
+    fn hash(self) -> u64 { .. }                 // a member set, if you want one:
+    fn eq(self, other: Point) -> bool { .. }    // satisfaction reads these
 }
 ```
 
@@ -172,7 +172,7 @@ entry fn main() {
 ```
 
 Free functions over data remain the default idiom; methods are for
-tight helpers, impl blocks for trait contracts.
+tight helpers, impl blocks for the members other code observes.
 
 Limits, exhaustively:
 
@@ -184,16 +184,16 @@ Limits, exhaustively:
   distinction).
 
 Everything else class-shaped is allowed — `impl` blocks, `Self`,
-`Disposal`. And the old "no destructor" limit is gone: a shared value
+`[disposal]`. And the old "no destructor" limit is gone: a shared value
 dies exactly when its cell's refcount reaches zero, so cleanup is one
 `impl` away — mark a `[disposal]` member on the type and the engine calls
 `dispose` at that moment (see
 [Rc, dispose, and identity](rc-dispose-identity.md)).
 
-## Traits and representation
+## Interfaces and representation
 
-- Widening a struct to a trait `I` **attaches the impl vtable to the
-  same handle** — no allocation, no copy: the trait-typed value aliases
+- Widening a struct to an interface `I` **attaches the itable to the
+  same handle** — no allocation, no copy: the interface-typed value aliases
   the record, and mutations through it are visible to every other
   handle.
 - Representation: one slot per field inside the cell, in declaration

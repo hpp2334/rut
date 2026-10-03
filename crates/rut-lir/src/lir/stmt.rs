@@ -63,8 +63,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the origin; a copy of another trait-typed binding takes
                 // its origins; anything else stays unknown (vtable)
                 let mut origins: Vec<TypeId> = Vec::new();
-                if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
-                    origins = if t != ty && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
+                if matches!(self.ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
+                    origins = if t != ty && !matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. }) {
                         // a widening let: the initializer's concrete type
                         // is the single origin
                         vec![t]
@@ -487,7 +487,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// another module's marked member, a template row whose per-
     /// instantiation bodies live in its owner.
     fn iterate_impl(&mut self, ty: TypeId) -> Option<(IterSource, TypeId)> {
-        if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
+        if matches!(self.ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
             // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
             return None;
@@ -696,7 +696,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
-            trait_origins: vec![],
+            iface_origins: vec![],
         };
         let fid = self.ctx.ensure_inst(emit);
         // the surface fn type spells the element parameter only — the
@@ -723,7 +723,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .ensure_inst(crate::check::Inst {
                     key: crate::check::FnKey::Method { data, name: method },
                     subst: env,
-                    trait_origins: vec![],
+                    iface_origins: vec![],
                 }),
             IterSource::Extern { data, method, subst, owner, concrete } => {
                 // the mirror claims under the class decl + method +
@@ -736,7 +736,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.mirror_inst(crate::check::Inst {
                     key: crate::check::FnKey::Method { data, name: method },
                     subst,
-                    trait_origins: vec![],
+                    iface_origins: vec![],
                 })
             }
         };

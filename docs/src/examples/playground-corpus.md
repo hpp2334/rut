@@ -191,7 +191,7 @@ builds on purpose — run it above and look closely.
 - Every case is exercised by **two gates** — native and wasm — over
   the same engine.
 - Seventeen files cover the language surface in run-sized doses:
-  algorithms, types and traits, strings and bytes, erasure, patterns,
+  algorithms, types and interfaces, strings and bytes, erasure, patterns,
   maps, and the memory shapes.
 - When you change the language, these files are the first smoke test
   — and often the clearest place to demonstrate the change.

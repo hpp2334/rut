@@ -50,6 +50,26 @@ pub trait Ret: Sized {
 }
 
 /// check the declared type's kind; a mismatch is a trap naming both sides
+/// The rut-value box's payload, read host-side: `(type id, Value)`.
+/// The nmap key lanes INSPECT a sealed key (hash/eq over its bits or
+/// octets), so the box must open here — the ONE read path host code
+/// has into a rut box (every other crossing keeps the handle). A box
+/// holding a HOST payload reads as an error: those are the embedder's
+/// own values, not seal boxes.
+pub fn rut_box_payload(vm: &Vm, h: &OpaqueRef) -> Result<(TypeId, Value), Trap> {
+    let cell = unsafe { &*h.entry_ptr() };
+    match &cell.e {
+        crate::heap::store::OpaqueEntry::Rut(r) => {
+            let v = crate::interp::util::slot_to_value(r.slot, r.val_ty, &vm.prog, &vm.heap);
+            Ok((r.val_ty, v))
+        }
+        crate::heap::store::OpaqueEntry::Host(_) => Err(Trap::new(
+            TrapKind::Invalid,
+            "the box holds a host payload, not a rut seal box",
+        )),
+    }
+}
+
 pub(super) fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> Result<(), Trap> {
     let bad = |m: String| {
         Trap::new(

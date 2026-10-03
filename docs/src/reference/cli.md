@@ -105,7 +105,7 @@ input, same bytes. Without `-o`, the output is written beside the input
 as `<dir-name>.rutbundle`. A **lib** pkg packs **compiled**
 (format_version 9): the root and every linkable package ride as
 `.rutc` binaries (bodies + surface — the linking truth), splice-needed
-packages (generic exports, trait-object parameters, `inline`) and host
+packages (generic exports, interface-typed parameters, `inline`) and host
 pkgs ride as source groups, and a scope ledger lets any loader rebase
 the binaries onto its own numbering. A root that cannot link is
 refused — share the directory instead. A **`type = "host"` pkg packs

@@ -8,7 +8,10 @@ use rut_lexer::span::Span;
 pub enum TyForm {
     Class,
     Struct,
-    Trait,
+    /// `interface Name<..> { fn sig(..); }` — an observed-capability
+    /// declaration (signatures only; satisfaction is structural, so a
+    /// type qualifies by having the members, never by registering)
+    Interface,
     Enum,
     /// `builtin Name<..>` — an engine builtin's member contract (core
     /// only; members are compiler-lowered)
@@ -27,7 +30,7 @@ impl TyForm {
         match self {
             TyForm::Class => "class",
             TyForm::Struct => "struct",
-            TyForm::Trait => "trait",
+            TyForm::Interface => "interface",
             TyForm::Enum => "enum",
             TyForm::Builtin => "builtin",
             TyForm::Primitive => "primitive",
@@ -124,16 +127,19 @@ pub struct FnDef {
     /// matches against it
     pub params: Vec<String>,
     pub doc: Vec<String>,
-    /// `Circle` for an inherent method, `impl Drawable for Circle` for a
-    /// trait-impl method, `None` for a free fn
+    /// the owning inherent impl's target type (`Circle` — inherent
+    /// impls own their methods, so an impl method renders like the
+    /// type's own surface), `None` for a free fn
     pub owner: Option<String>,
     pub span: Span,
     pub line: u32,
 }
 
+/// an inherent impl block — the target type whose member surface it
+/// extends (`impl Circle { .. }` records `Circle`; `impl I for T` is
+/// gone, so there is no other half to record)
 #[derive(Debug, Clone)]
 pub struct ImplDef {
-    pub trait_name: String,
     pub target_name: String,
 }
 

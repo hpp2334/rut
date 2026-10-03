@@ -70,37 +70,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(nty)
     }
 
-    /// Another module's impl row answering a NO-SELF static through the
-    /// type name: `(extern impl index, method index)` for the (trait,
-    /// class-template) impl whose method `name` takes no receiver.
-    /// The trait must be callable in scope (the use-both law).
-    fn extern_impl_no_self_static(&self, target_template: TypeId, name: IdentId) -> Option<(usize, usize)> {
-        for (eidx, im) in self.ctx.extern_impls.iter().enumerate() {
-            if im.target != target_template {
-                continue;
-            }
-            let tname = im.trait_name;
-            let callable = self.ctx.find_trait(tname).is_some()
-                || self.ctx.used.contains(&tname)
-                || self.ctx.extern_traits.contains_key(&tname);
-            if !callable {
-                continue;
-            }
-            let tdesc = self.ctx.trait_by_id(im.trait_id);
-            for (midx, tm) in tdesc.methods.iter().enumerate() {
-                if tm.name != name {
-                    continue;
-                }
-                // v1 shape law: the member must be no-self IN THE TRAIT
-                // (the descriptor's params are the whole parameter list —
-                // a receiver method's call form is the value dot-call,
-                // routed elsewhere). `FromFlow::from_flow` is the shape's
-                // first citizen; arity mismatches diagnose at the call.
-                return Some((eidx, midx));
-            }
-        }
-        None
-    }
 
     pub(crate) fn compile_static_call(
         &mut self,
@@ -242,10 +211,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // the refusal (the amendment lands with the
                     // any-removal phase).
                     let downcastable = match self.ctx.types.kind(want) {
-                        TyKind::TraitObj { trait_id } => {
-                            let tid = *trait_id;
+                        TyKind::IfaceObj { iface_id } => {
+                            let tid = *iface_id;
                             self.ctx
-                                .trait_inst
+                                .iface_inst
                                 .iter()
                                 .find(|(_, &id)| id == tid)
                                 .map(|((n, _), _)| *n == sym::FUTURE)
@@ -375,9 +344,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 } else {
                     d.ty
                 };
-                if self.find_trait_impl_method(concrete, member).is_some() {
-                    return self.compile_trait_name_static_call(concrete, member, args, expected, sp);
-                }
             }
         }
         // used classes (the linkable-classes phase): the surface's
@@ -388,35 +354,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // owner's unit compiles. (Generic classes ride `extern_types`
         // too — the template row — so the generic arm answers first.)
         if let Some(g) = self.ctx.extern_generics.get(&base).cloned() {
-            // a trait impl's no-self static over the used generic class —
-            // `Vec.from_flow(it)` (the FromFlow sink), the impl row
-            // riding the exporter's surface
-            if let Some((eidx, midx)) = self.extern_impl_no_self_static(g.template, member) {
-                let class_args = if !base_generics.is_empty() {
-                    base_generics.iter().map(|gn| self.resolve_type_now(*gn)).collect()
-                } else {
-                    // infer from the expected type's instantiation
-                    match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
-                        Some((ed, eargs)) if ed == base => eargs,
-                        _ => {
-                            self.ctx.err(sp, format!(
-                                "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
-                                b = self.ctx.name(base), m = self.ctx.name(member)
-                            ));
-                            return Err(());
-                        }
-                    }
-                };
-                let concrete = self.ctx.mk_data_inst(base, class_args.clone(), sp);
-                let subst = self
-                    .ctx
-                    .inst_data
-                    .get(&concrete)
-                    .cloned()
-                    .map(|(_, a)| a)
-                    .unwrap_or(class_args);
-                return self.compile_extern_impl_template_static(eidx, midx, concrete, subst, args, expected, sp);
-            }
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == g.template) {
                 if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
                     let class_args = if !base_generics.is_empty() {
@@ -444,11 +381,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
                     return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
                 }
-            }
-            // no inherent row: a trait impl's no-self static over the
-            // used class (`Vec.from_flow(it)` — the FromFlow sink)
-            if self.find_trait_impl_method(t, member).is_some() {
-                return self.compile_trait_name_static_call(t, member, args, expected, sp);
             }
         }
         // enum statics: `Color.default()` — the decl's own methods,

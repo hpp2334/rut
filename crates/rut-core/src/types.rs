@@ -193,7 +193,7 @@ pub enum TyKind {
     Data { fields: Vec<FieldInfo> },
     /// trait object (`i: I`) — unsized object; the slot stores the cell handle and the
     /// cell's own type reaches the vtable
-    TraitObj { trait_id: u32 },
+    IfaceObj { iface_id: u32 },
     /// erasure box
     Opaque,
     /// engine stack-trace snapshot — the

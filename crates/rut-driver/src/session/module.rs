@@ -36,7 +36,6 @@ pub enum ModuleBody {
         native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
         /// Builtin traits published by name (`core` only), same
         /// ambient-bit law as [`ModuleBody::Host`]'s `native_types`
-        native_traits: Vec<(String, rut_core::binary::NativeTrait, bool)>,
         /// Compiler-lowered builtin function names (`core` only) — no
         /// bodies; rut-lir lowers them. Each row carries its ambient
         /// bit (same law)

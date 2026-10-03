@@ -1,14 +1,16 @@
 // json_broken — the same pouch-free base as json.
-pub trait JsonSerialize {
+pub interface JsonSerialize {
     fn json_serialize(self) -> str;
 }
 
-impl JsonSerialize for str {
-    fn json_serialize(self) -> str {
-        return self;
+pub class JStr(str);
+
+impl JStr {
+    pub fn json_serialize(self) -> str {
+        return self.inner;
     }
 }
 
 pub fn encode_str(s: str) -> str {
-    return s.json_serialize();
+    return JStr(s).json_serialize();
 }

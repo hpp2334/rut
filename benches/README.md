@@ -92,7 +92,7 @@ against the reference in `workloads/expected.json`.
 | `nmap-hashset` | `HashSet<i32>` (**nmapset**): adds, dup adds, probes, removals, intersection count — the op stream of the removed `hashset` mapset row | n = 100 000 | checksum `21500055` |
 | `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): 12-mer fill + fragment probes — the op stream of the removed `knucleotide` mapset row | seq = 200 000 | checksum `2198604` |
 | `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
-| `json-roundtrip` | the **std json pkg's** row (rut-json batch): the SAME generated document as `json-decode` (the LCG generator ported verbatim), decoded DIRECT into typed rows (`decodeJson<Vec<DocRow>>` — user `impl JsonDeserialize` dispatching json's traits) and re-encoded (`encodeJson`), then a value fold; the rut side is a module dir (`[deps] json + pouch + ink`) and the peer gate assembles group-pouch (the `Vec` field impls are load-bearing). The checksum is defined over the ROUND-TRIPPED VALUES, not lexemes — string codepoints, i64 values, bool 0/1, f64 via its shortest-round-trip decimal (rut has no f64↔u64 bitcast — the nmap precedent — so the bit-pattern fold in the survey's register is normalized to the injective decimal fold, mirrored exactly by the JS twin's `String(v)`); the encode output rides a rep-stable length assert, not the pin | doc ~204 KB, reps 3 | checksum `1960875332163557684` |
+| `json-roundtrip` | the **std json pkg's** row (rut-json batch): the SAME generated document as `json-decode` (the LCG generator ported verbatim), decoded DIRECT into typed rows (`decodeJson<JsonVec<DocRow>>` — user types satisfying json's interfaces structurally, the members on their own inherent impls) and re-encoded (`encodeJson(JsonVec(..))`), then a value fold; the rut side is a module dir (`[deps] json + pouch + ink`) and the peer gate assembles group-pouch (the `JsonVec` wrapper is load-bearing). The checksum is defined over the ROUND-TRIPPED VALUES, not lexemes — string codepoints, i64 values, bool 0/1, f64 via its shortest-round-trip decimal (rut has no f64↔u64 bitcast — the nmap precedent — so the bit-pattern fold in the survey's register is normalized to the injective decimal fold, mirrored exactly by the JS twin's `String(v)`); the encode output rides a rep-stable length assert, not the pin | doc ~204 KB, reps 3 | checksum `1960875332163557684` |
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
@@ -339,9 +339,11 @@ never learns json exists:
   classify stage (skip_ws/digit_run/read_str's body scan/more's
   lookahead/skip_value's dispatch) rides `scan` end-to-end.
 
-The json rewire is pkg-source-only: the trait surface, the reader/
-writer APIs, error kinds/offsets (`at` stays a codepoint offset), and
-every byte of output are unchanged — the checksum is the proof.
+The json rewire is pkg-source-only: the interface/wrapper surface
+changed with the structural-interfaces fork (the checksum over
+round-tripped VALUES is the proof of codec equivalence), while the
+reader/writer APIs, error kinds/offsets (`at` stays a codepoint
+offset), and every byte of output are unchanged.
 
 **The pin: `json-roundtrip` checksum `1960875332163557684` is
 UNCHANGED on rut/qjs/node; `expected.json` untouched.**
@@ -589,8 +591,8 @@ per the method).
 ## Performance log — mapset-perf engine phases (Sep 2026)
 
 
-Four engine phases landed against these rows: boxless static trait
-dispatch + trait-impl/free-fn inlining, `MoveVal` last-use move
+Four engine phases landed against these rows: boxless static
+dispatch + free-fn inlining, `MoveVal` last-use move
 elision + clone/alloc fast paths, the array element access fast path,
 and mapset's `[*K]` key storage with K-typed probes. Full-suite
 cross-runtime numbers (net medians, peak RSS; `results/` is gitignored,
@@ -615,7 +617,7 @@ apples probe-exec deltas: hashmap-int **−43%** (319.4 → 183.2 ms),
 hashset **−43%** (227.1 → 129.5 ms), hashmap-str **−13%** (310.0 →
 270.1 ms), knucleotide **−12%** (1.14 s → 999.4 ms). The probe
 decomposes the int-keyed wins into ~12-16% fewer executed ops (no
-box/unbox, no trait frames, move-elided rehash copies) and ~18-21%
+box/unbox, no dispatch frames, move-elided rehash copies) and ~18-21%
 lower per-op cost (fused element access, block clones). VM
 self-accounted heap peaks fell further: hashmap-int 33.0 → 16.4 MB,
 hashset 25.1 → 12.6 MB, hashmap-str 15.9 → 9.8 MB, knucleotide
@@ -1394,7 +1396,8 @@ slots in place), which §0.1 takes off the table for this batch.
 Evidence phase for the wrapper-residual batch: three findings, no engine
 change, nothing committed but this section. The nmapset-int row sits
 ~1.3× its qjs twin after crossing-fastpath; the two candidate levers are
-wrapper-side — the `KeyLane` trait dispatch at the instantiated body,
+wrapper-side — the key dispatch at the instantiated body (the
+`KeyLane` interface dispatch, since replaced by the boxed-key lane),
 and the boxed `[?V]` sidecar store/load. This phase measures both and
 states the per-op budget. Row baselines re-measured for this batch
 (probe, fresh-VM iters, same day, one binary; fuel and VM-heap peaks
@@ -1427,7 +1430,7 @@ dump the actual bench dir's program. What the binary contains:
   `Vm::call_host` — the exact crossing crossing-nop calibrates). Same
   shape everywhere: `get`/`has` → `call f14 map_find_i`, `remove` →
   `call f19 map_remove_i`.
-- **Zero `CallI` (trait-vtable) ops in the entire program** — both the
+- **Zero `CallI` (vtable) ops in the entire program** — both the
   scratch instantiations and the bench row. The 33 compiled
   `nentry/nfind/nremove` impl bodies (11 key types × 3) are dead code
   in the instantiation: nothing references them.
@@ -1448,8 +1451,8 @@ wrapper frame):
 58 arrset r54, r13, r57 :12      ; vals[at] = v
 ```
 
-**Verdict (§0.5 gate for phase 1): SKIP devirt.** The trait call never
-reaches the binary — the sealed-private-trait + inline-pkg + splice
+**Verdict (§0.5 gate for phase 1): SKIP devirt.** The dispatch never
+reaches the binary — the private interface + inline-pkg + splice
 pipeline already resolves it per-instantiation, one step past what a
 devirtualization pass would produce (it removes not just the vtable hop
 but the whole wrapper frame). A devirt phase would have nothing to do;

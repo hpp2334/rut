@@ -132,7 +132,7 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
         host_funcs.push((fname, ptys, rty, *is_async));
     }
     Ok(Module {
-        body: ModuleBody::Host { host_funcs, consts: vec![], native_types: vec![], native_traits: vec![], native_fns: vec![], native_impls: vec![] },
+        body: ModuleBody::Host { host_funcs, consts: vec![], native_types: vec![], native_fns: vec![], native_impls: vec![] },
         ..Default::default()
     })
 }

@@ -89,7 +89,7 @@ machine):
 | weak refs | `WeakNew`, `WeakUpgrade` | [Weak references](weak-refs.md) |
 | arrays | `ArrNew` (zeroed), `ArrLit` (fixed), `ArrGet`/`ArrSet`, `ArrGetF`/`ArrSetF` (fused field+index) | bounds trap; element repr baked in |
 | enums | `EnumNew` | immortal singleton cell per member |
-| type machine | `TidOf`, `IsType`, `IsTrait`, `Unbox`, `Box` | the two readbacks + their guards |
+| type machine | `TidOf`, `IsType`, `IsIface`, `Unbox`, `Box` | the two readbacks + their guards |
 | closures | `MakeClosure` | `{ func, captures }`, captures in the pool |
 | panics | `Panic`, `Assert` | |
 | conversion | `Conv` | `i32(x)` etc.; narrowing traps when the value does not fit |
@@ -102,7 +102,7 @@ Call ops:
 |---|---|
 | `Call { func, argv, dst }` | direct call — free functions, class construction, closure entries, and host thunks |
 | `CallM { func, argv, dst }` | direct method call; receiver is `argv[0]` |
-| `CallI { slot, argv, dst }` | trait vtable call — the only path for trait-declared members: always dynamic, even when the receiver's exact class is statically known |
+| `CallI { slot, argv, dst }` | interface itable call — the only path for interface-typed receivers: always dynamic, even when the receiver's exact class is statically known |
 | `CallFn { fval, argv, dst }` | call through an `fn`-typed value (closures: two consecutive registers, `{ fn_ptr, env }`) |
 | `CallNat { nat, recv, argv, dst }` | internal native, `recv == NOREG` for free functions |
 
@@ -135,9 +135,9 @@ An op exists for exactly one of three reasons:
    op: `type_id<T>()` folds at compile time; `Array<T, N>.len()` *is* the
    constant `N` (`N` is part of the type's identity). Hence no `typeid`
    and no `arrlen` op.
-2. **Nothing polymorphic, nothing named.** A trait-typed receiver gets
-   exactly one op (`CallI`) through its vtable. Slice-view indexing and
-   `len` are ordinary vtable calls through the view's builtin impl. The
+2. **Nothing polymorphic, nothing named.** An interface-typed receiver gets
+   exactly one op (`CallI`) through its itable. Slice-view indexing and
+   `len` are ordinary calls through the view's builtin impl. The
    erasure primitive's names lower to primitives — the type-call
    `opaque(v)` to the
    `Box` op, `opaque.downcast<T>(o)` to prelude code (below) — and both
@@ -154,7 +154,7 @@ An op exists for exactly one of three reasons:
 - `x is T` with concrete `T`: one `TidOf` + an integer compare. On an
   erasure box, `is` answers **by the box** — it misses for every payload
   type; `downcast` is the only see-through.
-- `x is I` with trait `I`: one `IsTrait` descriptor scan — pure in
+- `x is I` with interface `I`: one `IsIface` descriptor scan — pure in
   `(recv, want)`, so repeated probes CSE and invariant ones hoist.
 - `opaque.downcast<T>(o)` (yielding `?T`): `TidOf`; branch on the
   compare against `T`'s id; `Unbox` on the hit arm, a nil box on the

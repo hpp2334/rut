@@ -52,17 +52,15 @@ fn run_returns(src: &str) -> Result<i64, String> {
 }
 
 const WRAPPER: &str = "\
-trait Serializable { fn encode(self) -> str; }
+interface Serializable { fn encode(self) -> str; }
 class JsonI64(i64);
 class JsonF64(f64);
 impl JsonI64 {
     pub fn get(self) -> i64 { return self.inner; }
+    pub fn encode(self) -> str { return f\"{self.inner}\"; }
 }
-impl Serializable for JsonI64 {
-    fn encode(self) -> str { return str(self.inner); }
-}
-impl Serializable for JsonF64 {
-    fn encode(self) -> str { return str(self.inner); }
+impl JsonF64 {
+    pub fn encode(self) -> str { return f\"{self.inner}\"; }
 }
 fn dump(x: Serializable) -> str { return x.encode(); }
 ";

@@ -79,7 +79,7 @@ pub(crate) fn ensure_layout(ctx: &mut Ctx, fid: u32, fname: IdentId, ret_ty: Typ
     // `Future<ret>` instantiation, filled per frame type below (the
     // await's `CallI` and the driving loop's `drive` both aim at it)
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, ret_ty);
-    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, fid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
     ctx.async_fns.insert(fname);
@@ -217,6 +217,7 @@ fn weave_async_body_infer(
         inline_stack: Vec::new(),
         emit_closure: false,
         union_bounds: std::collections::HashMap::new(),
+        iface_bounds: std::collections::HashMap::new(),
         union_syms: std::collections::HashMap::new(),
         async_frame: None,
         assigned: std::collections::HashSet::new(),
@@ -629,7 +630,7 @@ pub(crate) fn compile_await(
     let fut_inst = c.ctx.mk_future_inst(sym::FUTURE, elem);
     let yield_slot = c
         .ctx
-        .trait_slot(fut_inst, 0)
+        .iface_slot(fut_inst, 0)
         .expect("a Future instantiation has exactly one member");
     let k = c.async_frame.as_ref().expect("checked above").next_state;
     let ckpt_ty = c.async_frame.as_ref().expect("checked above").ckpt_ty;
@@ -789,7 +790,7 @@ pub(crate) fn compile_async_call(
     let inst = crate::check::Inst {
         key: crate::check::FnKey::Free(name),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     };
     let fid = c.ctx.ensure_inst(inst.clone());
     if !c.ctx.async_layout.contains_key(&fid) {
@@ -880,7 +881,7 @@ pub(crate) fn compile_async_block(
     let inst = crate::check::Inst {
         key: crate::check::FnKey::AsyncBlock(node),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     };
     let fid = c.ctx.ensure_inst(inst.clone());
     let diags_before = c.ctx.diags.len();
@@ -1023,14 +1024,14 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     // binding): one global yield slot per `Future<nil>`, filled per
     // frame type below
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, TY_NIL);
-    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
     let thunk_name = ctx.intern("async_engine::__sleep_yield");
     // the host thunk must EXIST (the wrapper calls it; the join resolves
     // its binding) even though the fill now points at the wrapper
     ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(thunk_name),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     });
     // the SEALING WRAPPER (the opaque-crossings phase): the yield slot's
     // ABI is engine-wide — recv = the raw frame, argv[1] = the raw cx
@@ -1042,7 +1043,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     let wfid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(wrap_name),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     });
     ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
@@ -1063,12 +1064,12 @@ pub(crate) fn ensure_engine_yield_pair(ctx: &mut Ctx, row: &str) -> TcResult<(u3
     let thunk_fid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(thunk_name),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     });
     let wfid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(wrap_name),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     });
     Ok((thunk_fid, wfid))
 }
@@ -1214,7 +1215,7 @@ fn mint_engine_future(
 /// row exists or is needed; dispatch reads the frame type's fill).
 fn finish_engine_future(ctx: &mut Ctx, frame_ty: TypeId, answer_ty: TypeId, _thunk_fid: u32, wfid: u32) {
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, answer_ty);
-    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
     ctx.engine_frames.insert(frame_ty);
@@ -1265,7 +1266,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
             .get(&crate::check::Inst {
                 key: thunk_key,
                 subst: vec![],
-                trait_origins: vec![],
+                iface_origins: vec![],
             })
             .copied()
             .expect("the sleep thunk is ensured before its wrapper compiles");
@@ -1327,7 +1328,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
             let thunk_key = crate::check::Inst {
                 key: crate::check::FnKey::HostThunk(ctx.intern(&format!("async_engine::{row}"))),
                 subst: vec![],
-                trait_origins: vec![],
+                iface_origins: vec![],
             };
             let thunk_fid = ctx
                 .inst_map
@@ -1458,7 +1459,7 @@ pub(crate) fn ensure_host_async(
     // the Future<ret> designated slot (the closed class's layout
     // binding) — the wrapper's vtable fill carries the yield
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, ret_ty);
-    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
     let cx_ty = ctx.run_context_ty();
     // the four bodyless host thunks; the minted FuncCode's NAME is the
     // registered row name (the join resolves host_id by it)
@@ -1468,7 +1469,7 @@ pub(crate) fn ensure_host_async(
         let fid = ctx.ensure_inst(crate::check::Inst {
             key: crate::check::FnKey::HostThunk(id),
             subst: vec![],
-            trait_origins: vec![],
+            iface_origins: vec![],
         });
         ctx.funcs[fid as usize] = rut_core::binary::FuncCode {
             name: id,
@@ -1500,7 +1501,7 @@ pub(crate) fn ensure_host_async(
     let wfid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(wrap_id),
         subst: vec![],
-        trait_origins: vec![],
+        iface_origins: vec![],
     });
     // regs: r0 frame, r1 cx, r2 state cell, r3 sealed cx, r4 probe
     // answer (i32), r5 the null sentinel, r6 the take answer, r7 the

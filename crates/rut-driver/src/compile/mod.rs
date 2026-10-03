@@ -11,7 +11,7 @@ pub mod std;
 
 pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_resolved, ProgramOutput};
-pub use seeds::{SeedGroup, SeedImpl, Seeds};
+pub use seeds::{SeedGroup, Seeds};
 pub use std::{mount_calc, mount_std, mount_std_async, mount_std_core};
 
 use rut_lexer::diag::Diag;

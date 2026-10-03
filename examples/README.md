@@ -10,7 +10,7 @@ example:
 | [`01-sort/`](01-sort/) | `cargo run -p sort` | a sorting library behind one dispatcher entry; `Result` at the boundary, known-input gates |
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions; the pouch dep rides its CDN bundle (pinned) and the moderator's muted list is a consumer-spelled `Vec<str>` — the pack's rode-along law carries the pouch group inside the published bundle |
-| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits — the user-impl-of-the-builtin-`Future`-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1 (join not yet landed) |
+| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a user-written launcher (`launch_custom`) over the CLOSED builtin `Future` class — per-checkpoint stats, cancellation probes read as data inside the async body (`cx.cancelled()`), resume state at each checkpoint (`cx.checkpoint()`). The engine mints every future (`async fn`/`async {}`/`sleep`); a user type cannot BE a future. `await` targets engine-woven futures in v1 (join not yet landed) |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
 | [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way since the riding law) |
 
@@ -66,14 +66,19 @@ the dep-kinds batch, a manifest relates to other packages through three
 tables: **`[deps]`** — transitively mounted, unchanged; **`[peer-deps]`**
 — **required by default** (the *consumer* supplies the peer; never
 pulled transitively) with `optional = true` marking the presence-mounted
-kind whose integration file — the descriptor's `lib`, an impl-only
+kind whose integration file — the descriptor's `lib`, a
+wrapper-family-only
 `.rut` — mounts only when the peer is anywhere in the program's
 closure; **`[dev-deps]`** — mounted only while building the pkg itself,
 never in a consumer's world.
 
-The motivating case is json's serde-model impls: `impl JsonSerialize
-for Vec<T>` written in json must not force every json consumer to
-mount pouch/nmapset. The pinned grammar:
+The motivating case is json's wrapper families over another pkg's
+containers: json cannot grow members on pouch's `Vec` (satisfaction is
+having the members on the type's OWN inherent impl — a container class
+is not json's to extend), so the `Vec<T>`/map/set shapes ride the
+WRAPPER families in json's optional groups (`JsonVec<T>`,
+`JMapStr<V>`, …), and those groups must not force every json consumer
+to mount pouch/nmapset. The pinned grammar:
 
 ```toml
 # rut/json/rut.jsonc
@@ -117,42 +122,35 @@ Not here, on purpose: registry/index deps and version-range selection
 — `[peer-deps]` is a presence relation over mounted packages, not a
 package manager.
 
-## The orphan rule — one of the pair is local
+## Capability is structural — the interface law
 
-Every `impl Trait for Type { .. }` needs **at least one of the pair
-defined in your pkg** — the trait's pkg or the type's pkg (the
-[traits reference](../docs/src/reference/traits.md), the compiler's law
-since module VERSION 9). Write your impl in
-the pkg that owns a side: your own trait may speak about anyone's
-type, and anyone's trait may speak about your own type — 02-digest's
-`impl JsonSerialize for Json` is the type-local shape (json owns the
-trait, `Json` is that file's).
+Capability is declared as an `interface` and observed, never
+registered: a type satisfies an interface by **having its members on
+its own inherent impl** — there is no `impl Trait for Type` anymore,
+no pair placement rule, no orphan rule (the
+[interfaces reference](../docs/src/reference/traits.md), the
+compiler's law). 02-digest's `Json` is the cross-pkg case: json owns
+the `JsonSerialize` interface, `Json` is that file's, and `Json`
+qualifies by spelling `pub fn encode(self, mut w: JsonWriter) ->
+?EncodeJsonError` on its own inherent impl.
 
-- **Builtin types are in no pkg** — the primitives, `[T]`, `?T`,
-  `opaque`. Only a trait of your own pkg may be implemented for them
-  (json's twelve base impls — prims, `?T`, `[T]` — are the sanctioned
-  shape); a foreign trait over a builtin head is an orphan. The
-  asymmetry is deliberate: builtin *traits* (`Iterable`, `Index`,
-  `Disposal`) are core's decls, so implementing one for your own type
-  is the ordinary local case. `opaque` is a builtin too — a foreign
-  trait can never be implemented for it, so a capability probe on a box
-  finds nothing (`o is I` is `false`; `is` names the box, never the
-  payload — the 2026-09 opaque-is law, [opaque](../docs/src/reference/opaque.md));
-  its cross-type law is [opaque's downcast](../docs/src/reference/opaque.md)
-  (`opaque.downcast<T> -> ?T`, nil on a miss).
-- **Generic impls classify by the head** — `impl JsonSerialize for
-  Vec<T>` is json's to write (it does, peer-gated); your type
-  parameter `T` never makes the impl yours.
-- **Both foreign is an error**, named plainly:
+- **Primitives and bare containers never satisfy** — the primitives,
+  `[T]`, `?T`, `opaque`, and another pkg's container class carry no
+  members, so a capability on them is reached through a WRAPPER: a
+  newtype class whose inherent impl carries the members (`json`'s
+  `JsonI64`/`JsonVec`/`SOpt` families; `class JsonI64(i64);` is the
+  whole manufacture — the wrapper IS the capability).
+- **The bounds are load-bearing** — `fn f<T requires Shape>` /
+  `class W<T requires Shape>` check the member set at every
+  instantiation, and an interface-typed value (`a: Shape`) boxes
+  through a per-type itable the compiler fills from the same check.
+- **The member set is auditable by grep** — "who satisfies
+  `JsonSerialize`" is "who spells `encode` on an inherent impl", one
+  answer in the type's own module. Satisfaction attaches where the
+  type lives: a third-party inherent block over a used type is refused
+  (the type's members live where the type was declared).
 
-  ```
-  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg — the one cross-module impl restriction (generic foreign traits cross freely)
-  ```
-
-The guarantee you get: a pkg's impl set is auditable — "who implements
-`JsonSerialize` for `Vec<T>`" has one answer and a grep to prove it —
-and adding a dependency adds the pairs its pkgs declare, never pairs a
-stranger invented. The full law: [traits and
+The full law: [interfaces and
 dispatch](../docs/src/reference/traits.md).
 
 ## The std `json` package — the surface, the rulings, the run recipe
@@ -160,16 +158,22 @@ dispatch](../docs/src/reference/traits.md).
 `rut/json/` is the ninth std pkg (after `core`, `calc`, `nmap_host`,
 `nmapset`, `pouch`, `ink`, `rt`, `bench-cross`) — pure rut, zero host
 fns, the [stdlib rules](../docs/src/reference/stdlib.md) are its law.
-Three entries and two traits:
+Three entries and two interfaces:
 
 ```rut
 fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
 fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
 
-trait JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
-trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+interface JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
+interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
 ```
+
+A type satisfies them STRUCTURALLY — `pub fn encode` / `pub fn decode`
+on the type's own inherent impl; the scalar shapes ride the wrapper
+families (`JsonI64(i64)` with encode + decode + `get()`, decode-only
+`JsonU64`, optional `SOpt<T>`, array `JsonArr<T>`, and the pouch peer's
+`JsonVec<T>` with `to_vec()`).
 
 The locked rulings, user-visible as spells:
 
@@ -178,7 +182,7 @@ The locked rulings, user-visible as spells:
   halves filled. Your destructure reads the wire: `let (s, e) =
   encodeJson(v);` then check `e == nil`.
 - **`Self`, not a `<T>` param, on `JsonDeserialize`** — you cannot
-  decode an A-reader into B; the trait's static call IS the type.
+  decode an A-reader into B; the decode member's `Self` IS the type.
 - **The streams are never nilable** (`mut w: JsonWriter`, `mut r:
   JsonReader`): [by-reference](../docs/src/reference/by-reference-and-nullable.md)
   sharing is the default; `?` only where
@@ -213,12 +217,14 @@ The run recipe:
 
 - **A module dir** (the full world): `[deps]` json by path — add
   `pouch`/`nmapset` to the same table when you want the `Vec<T>` /
-  map-set impls; they are peer groups, mounted only when the peer is
+  map-set wrapper families; they are peer groups, mounted only when
+  the peer is
   in your closure anyway. `rut run <dir>` runs it, and the peer gate
   (`assemble_peers`) applies the same gating rules.
 - **The worked example**: `cargo run -p digests`
-  ([`02-digest/`](02-digest/)) — its encode half is the lib's
-  `impl JsonSerialize for Json`, golden-tested against serde_json
+  ([`02-digest/`](02-digest/)) — its encode half is `Json` satisfying
+  json's `JsonSerialize` interface structurally (the member on the
+  type's own inherent impl), golden-tested against serde_json
   (9/9).
 - **The bench row**: `node benches/run.mjs --workload json-roundtrip`.
 
@@ -351,9 +357,10 @@ twin; `HashSet` has always been the one spelling.
 
 One compat note: json's decode-side diagnostics did NOT move — a map
 keyed by `bytes` diagnoses exactly as before ("this key type has no
-JSON spelling"), because decode rides the ONE generic map impl and
-its `key_spells` branch (json's three val impls folded into it when
-the rows left; the `dec_hm_bytes_key` pin holds verbatim).
+JSON spelling"), because the decode wrapper family carries the law:
+`JMapBytes.decode` always answers the bytes-keys disclosure error (the
+wrapper exists so the law is testable; the `dec_hm_bytes_key` pin
+holds verbatim).
 
 Consumer-visible behavior of a put/get/has is the exact class the
 spelling names — `HashMap<i32, i64>` IS the generic class, one

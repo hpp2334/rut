@@ -208,13 +208,14 @@ maps and sets answer questions, they don't walk.
 `Flow<E>` chains the push contract. A type is iterable when it marks
 an `[iterable]` member — `for (x of it)` calls that ONE designated
 member — and a Flow wraps one drive in adapter stages: a
-closure per stage, never per element. Entry is `into_flow()`, the exit
-is a sink (`Vec.from_flow`), and everything between is
-chaining:
+closure per stage, never per element. Entry is `into_flow()` — a
+member your value carries directly (`Flow` itself) or gets through a
+spelled adapter wrapper (`VecFlow(nums)`, `ArrFlow(xs)`, `StrFlow(s)`)
+— and everything after is chaining:
 
 ```rut
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ Flow, IntoFlow, FromFlow, VecFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
@@ -222,46 +223,46 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
 
-    // entry → adapters → sink
-    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()
+    // entry through the spelled adapter → adapters → consumer
+    let src: VecFlow<i32> = VecFlow(nums);      // the manufacture, spelled
+    let picked: Flow<i32> = src.into_flow()
         .map(fn(x: i32) -> i32 { return x * 2; })
         .filter(fn(x: i32) -> bool { return x > 4; })
-        .take(3));
-    let joined: Vec<str> = Vec.new();
-    for (let x of picked.into_flow()) {
-        joined.push(f"{x}");
-    }
+        .take(3);
+    let total: i32 = picked.fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
 
-    // chains feed plain for..of (Flow carries the [iterable] member)
-    let mut sum = 0;
-    for (let x of nums.into_flow().skip(1)) {
-        sum += x;
-    }
-    log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]} sum={sum}");
+    // a fresh chain re-drives the same source
+    let mut joined: Vec<str> = Vec.new();
+    src.into_flow().skip(1).for_each(fn(x: i32) -> nil {
+        joined.push(f"{x}");                    // a shared cell survives the closure
+    });
+    log.info(f"total={total} n={joined.len()} first={joined[0]} last={joined[joined.len-1]}");
 }
 ```
 
 ```text
-picked=3 first=6 last=10 sum=14
+total=24 n=4 first=2 last=5
 ```
 
 Three laws to know:
 
-- **The entries and sinks are traits** — `IntoFlow<E>` rows exist for
-  the builtin sequences (`[T]`, `str`, `bytes`), for `Vec<T>`, and for
-  `Flow<E>` itself (the identity row: a chain re-enters as a source),
-  so generic code bounded on `IntoFlow<E>` takes chains and sources
-  alike. The sinks (`FromFlow<E>`) take the explicit wrapper —
-  `it: Flow<E>` — so the call site manufactures it
-  (`xs.into_flow()`); wrappers are explicit manufacture, never
-  auto-inserted.
+- **The entries and sinks are interfaces, satisfied structurally** —
+  `IntoFlow<E>` is `fn into_flow(self) -> Flow<E>`: `Flow` itself
+  carries the identity member (a chain re-enters as a source), and the
+  builtin sequences — which can never carry members — enter through
+  the spelled wrappers (`ArrFlow<T>`, `StrFlow`, `BytesFlow`,
+  `VecFlow<T>`). The sinks (`FromFlow<E>`, the no-self member
+  `fn from_flow(it: Flow<E>) -> Self`) are carried by `VecFlow<T>`
+  (`collected()` unwraps) and `SetFlow<T>` (`items()`). Wrappers are
+  explicit manufacture at the call site, never auto-inserted.
 - **`map` introduces a new type variable.** Annotate the lambda, spell
   the type argument (`.map<i32>(..)`), or pass a fn path — a lambda
   that spells nothing diagnoses with the fix.
 - **Stateful stages are single-shot.** `take`/`skip` hold their
   counter in a record the drive mutates; a drained stage stays
   drained. `take` answers `false` at its stop, which stops the SOURCE
-  — the elements after it are never driven.
+  — the elements after it are never driven. A fresh `into_flow()`
+  chain re-drives the source from its start.
 
 Pipelines are the clarity tier: each stage costs one indirect call per
 element, and the fused builtin loops stay the perf tier. The full
@@ -325,16 +326,15 @@ ladder is *not* here — those are core's, always available.
 ## `json` — encode and decode
 
 ```rut
-use json::{ decodeJson, encodeJson };
+use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger.new("json");
-    let (n, e) = decodeJson<i64>("42");            // (?T, ?E) — see errors
-    let (s, ee) = encodeJson<[i64]>([1, 2, 3]);    // (?str, ?EncodeJsonError)
+    let (n, e) = decodeJson<JsonI64>("42");           // (?JsonI64, ?E) — see errors
+    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));
     if (e == nil && ee == nil) {
-        let text = s;
-        log.info(f"n={n} s={text}");
+        log.info(f"n={n.get()} s={s}");
     }
 }
 ```
@@ -343,11 +343,19 @@ entry fn main() {
 n=42 s=[1,2,3]
 ```
 
-Decode is direct and schema-driven: your type's
-`impl JsonDeserialize` reads exactly the fields it expects, no
-intermediate tree. Your types opt in with two small impls; the
-container impls (`Vec<T>`, the map/set family) mount automatically when
-those packages are in your program. Error values are a kind enum plus a
+A bare `[i64]` never satisfies anything — the wrapper is the
+manufacture, spelled at the call (`JsonArr([JsonI64(1), ..])`), and
+the decode direction names the wrapper as the type argument
+(`decodeJson<JsonArr<JsonI64>>(doc)` then `.to_arr()`); a user type
+skips all of it by spelling `encode`/`decode` on its own inherent
+impl.
+
+Decode is direct and schema-driven: your type's `decode` member reads
+exactly the fields it expects, no intermediate tree. Your types opt in
+with two small members (satisfaction is structural — nothing to
+declare); the wrapper families (`JsonVec<T>` for `Vec<T>`, the
+map/set family) mount automatically when those packages are in your
+program. Error values are a kind enum plus a
 struct with `.at`/`.got`/`.expected` — see
 [errors and optionality](errors.md).
 

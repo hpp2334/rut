@@ -392,7 +392,6 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
                 host_funcs: vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
                 consts: vec![],
                 native_types: vec![],
-                native_traits: vec![],
                 native_fns: vec![],
                 native_impls: vec![],
             },

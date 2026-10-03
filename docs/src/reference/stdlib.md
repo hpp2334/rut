@@ -79,8 +79,8 @@ import-gated — `use core::{ Weak }`) ([opaque](opaque.md),
 
 ### Engine contracts — markers and the closed async pair
 
-The engine's contracts are spellings on types (the `builtin trait`
-row kind is gone):
+The engine's contracts are spellings on types, standing alone — no
+interface machinery behind them:
 
 | contract | spelling | notes |
 |---|---|---|
@@ -118,7 +118,7 @@ constants are `calc`'s.
 | `ink` | inline rut pkg | the `Logger` class over `ink_host` |
 | `pouch` | inline rut pkg | the growable sequence `Vec<T>` |
 | `nmap_host` / `nmapset` | host pkg + inline rut pkg | the native key table; `HashMap`/`HashSet` |
-| `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + traits |
+| `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and their wrapper families |
 | `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |
 | `calc` | host pkg | the `Math` namespace |
 | `async_engine` / `async_host` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
@@ -174,45 +174,58 @@ an `[iterable]` member, and a Flow wraps one drive in
 adapter stages — a closure per STAGE, never per element. Pipelines are
 the clarity tier; the fused builtin loops stay the perf tier.
 
+Entry and sink are **interfaces, satisfied structurally**:
+`IntoFlow<E>` is `fn into_flow(self) -> Flow<E>` — `Flow` itself
+carries the identity member (a chain re-enters as a source), and the
+builtin structural targets (which can never carry members) enter
+through the spelled adapter wrappers `ArrFlow<T>`, `StrFlow`,
+`BytesFlow`, and `VecFlow<T>`. `FromFlow<E>` is the no-self sink
+member `fn from_flow(it: Flow<E>) -> Self` — carried by the wrappers
+`VecFlow<T>` (with `collected()` unwrapping) and `SetFlow<T>` (with
+`items()`). Nothing is auto-inserted: the call site spells the
+wrapper, every time.
+
 ```rut
 use pouch::{ Vec };
-use flow::{ Flow, IntoFlow, FromFlow };
+use flow::{ Flow, IntoFlow, FromFlow, VecFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger.new("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4);
-    // entry → adapters → sink: one drive, stage by stage
-    let picked: Vec<i32> = Vec.from_flow(nums.into_flow()
+    let src: VecFlow<i32> = VecFlow(nums);       // the spelled manufacture
+    // entry → adapters → consumers: one drive, stage by stage
+    let picked: Flow<i32> = src.into_flow()
         .map(fn(x: i32) -> i32 { return x * 10; })
-        .filter(fn(x: i32) -> bool { return x > 15; }));
-    log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]}");
+        .filter(fn(x: i32) -> bool { return x > 15; });
+    log.info(f"picked={picked.count()}");
 }
 ```
 
 ```text
-picked=3 first=20 last=30
+picked=3
 ```
 
 | surface | meaning |
 |---|---|
-| `x.into_flow() -> Flow<E>` | the entry — `IntoFlow<E>` impls: `[T]`, `str`, `bytes`, `Vec<T>`, and `Flow<E>` itself (the identity row: a chain re-enters as a source) |
+| `x.into_flow() -> Flow<E>` | the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest |
+| `VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)` | the adapters — newtype wrappers manufactured at the call site; a primitive or bare container cannot carry members, the wrapper does |
 | `map<R>(f: fn(E) -> R) -> Flow<R>` | transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers |
 | `filter(p: fn(E) -> bool) -> Self` | keep the elements the predicate admits |
 | `take(n)` / `skip(n)` | the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained |
 | `count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>` | the one-drive consumers |
-| `T::from_flow(it: Flow<E>) -> T` | the sink — `FromFlow<E>` impls: `Vec<T>`, `HashSet<T>`; the call site manufactures the wrapper explicitly (`xs.into_flow()`) |
+| `W<T>.from_flow(it: Flow<E>) -> W<T>` | the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and `SetFlow<T>`; `collected()` / `items()` unwrap the materialized container |
 | `for (x of chain)` | chains are iterable — the `[iterable]` member on `Flow<E>` feeds the ordinary desugar |
 
-**Import the traits you spell and the pipeline type**: `use flow::{
+**Import the interfaces you spell and the pipeline type**: `use flow::{
 Flow, IntoFlow, FromFlow }` — the use-both law names each one.
 
 **Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no
-host-table walk — json's map encode grows with it) and
-`HashMap::from_flow` (its `(K, V)` tuple trait argument cannot cross
-the compiled-bundle impl-row carrier yet; it compiles and dispatches
-inside flow's own unit).
+host-table walk — json's map encode grows with it) and a map sink
+(nmapset's `HashMap` has no wrapper family in flow yet — json's
+decode-only `JMap*` wrappers are the precedent such a family would
+follow).
 
 ### `nmapset` — `HashMap`/`HashSet`
 
@@ -279,8 +292,8 @@ fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
 fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
 
-trait JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
-trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+pub interface JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
+pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
 ```
 
 - **The pair law**: `(?T, ?E)` with exactly one nil — success = `(value,
@@ -289,6 +302,26 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
 - **Direct decode**: no intermediate document; a type's `decode` reads its
   expectations straight off the cursor. A `Vec<Row>` decode mints exactly
   the program's values, once.
+- **Satisfaction is structural**: your type satisfies
+  `JsonSerialize`/`JsonDeserialize` by spelling the members on its own
+  inherent impl — `impl Row { pub fn encode(self, mut w: JsonWriter)
+  -> ?EncodeJsonError { .. } }`. json owns the interfaces; user types
+  satisfy them without asking.
+- **The wrapper law**: primitives and bare containers never satisfy —
+  no inherent members to have. The wrapper families are the spelled,
+  per-call manufacture: `encodeJson(JsonI64(64))`, never
+  `encodeJson(64)` — nothing is auto-inserted, forever.
+
+  | wrapper | wraps | members |
+  |---|---|---|
+  | `JsonI64` / `JsonF64` / `JsonBool` / `JsonStr` | `i64` / `f64` / `bool` / `str` | both directions; `get()` unwraps |
+  | `JsonU64` | `u64` | decode-only — satisfaction is per-interface, so it satisfies `JsonDeserialize` alone (an out-of-`i64`-range producer has no encode row); `get()` unwraps |
+  | `SOpt<T requires JsonSerialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction bound means a decode-only `T` cannot ride it) |
+  | `JsonArr<T requires JsonSerialize>` | `[T]` | both; `to_arr()` unwraps |
+  | `JsonVec<T requires JsonSerialize>` | `Vec<T>` | both (the pouch peer group); `to_vec()` unwraps |
+  | `JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>` | `HashMap<K, V>` per key shape | decode-only (the nmapset peer group); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure |
+  | `JSet<T requires JsonDeserialize>` | `HashSet<T>` | decode-only (the nmapset peer group); `to_set()` unwraps |
+
 - **Numbers**: `i64` accepts integer lexemes only (overflow/decimal
   lexeme = `WrongType`, never a silent wrap); `f64` parses IEEE-exact in
   the common range, ±1 ulp beyond (disclosed); encode renders the
@@ -301,11 +334,11 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
   KeyUnsupported }`; decode details carry `at`/`got`/`expected`, encode
   details carry `at` and the lazily built `$.rows[3].name` path.
 - `decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy.
-- **Ownership**: json owns the traits; all container impls live in json,
-  gated by peer groups — `Vec` rows activate when `pouch` is anywhere in
-  the consumer's closure, the map/set rows when `nmapset` is
-  ([dependency kinds](dependency-kinds.md)). A consumer without the peers
-  mounts json light.
+- **Ownership**: json owns the interfaces; all container wrappers live
+  in json, gated by peer groups — `JsonVec` activates when `pouch` is
+  anywhere in the consumer's closure, the `JMap*`/`JSet` rows when
+  `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer
+  without the peers mounts json light.
 - The writer accumulates through `strbuild`'s `StringBuilder`; the reader
   rides the core `str.scan`/`starts_with` primitives and O(1) string
   views.

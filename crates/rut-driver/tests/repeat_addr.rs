@@ -214,9 +214,11 @@ fn prefix_question_binds_the_following_type_term() {
 }
 
 #[test]
-fn impl_over_the_array_type_still_compiles() {
-    // `impl<T> [T] { .. }` — the generic template through the element
-    let out = compile(
+fn impl_over_the_array_type_is_withdrawn() {
+    // `impl<T> [T] { .. }` — the fork withdrew the builtin-composite
+    // impl block (the engine's member surface is closed; capability on
+    // a composite is a wrapper's job)
+    let ds: Vec<String> = compile(
         "impl<T> [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
@@ -224,6 +226,13 @@ fn impl_over_the_array_type_still_compiles() {
              let a = [0; 2];\n\
              return a.first();\n\
          }\n",
+    )
+    .diags
+    .iter()
+    .map(|d| d.msg.clone())
+    .collect();
+    assert!(
+        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum")),
+        "a builtin composite takes no impl block: {ds:?}"
     );
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
 }

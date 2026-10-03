@@ -142,12 +142,17 @@ fn case3_opaque() {
     // is: TRUE. Every cell of the law table pinned below; the case
     // fails if ANY of them regresses. (The pre-law rows said
     // `box1 is Point: true` / `box1 is Hashable: true` — the see-through
-    // this law retires.)
+    // this law retires. The Hashable row stays FALSE under the
+    // structural-interfaces fork for its own reason too: an interface
+    // `is` probe answers true iff the payload type was
+    // satisfaction-boxed somewhere, and this program never boxes
+    // Point as a Hashable — the opaque box was never satisfaction-boxed
+    // at all.)
     let src = r#"
-trait Hashable { fn hash(self) -> i32; }
+interface Hashable { fn hash(self) -> i32; }
 struct Point { x: f32; y: f32 }
-impl Hashable for Point {
-    fn hash(self) -> i32 { return 0; }
+impl Point {
+    pub fn hash(self) -> i32 { return 0; }
 }
 type BoxTy = opaque;
 entry fn main() -> nil {
@@ -298,16 +303,16 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn reassigned_trait_binding_dispatches_as_the_new_type() {
+fn reassigned_interface_binding_dispatches_as_the_new_type() {
     // origin counting must re-derive at assignment: the
-    // call after `w = B { .. }` answers 20 (B's impl) — never 10, which
+    // call after `w = B { .. }` answers 20 (B's member) — never 10, which
     // would mean A's statically-bound callee ran on a B
     let src = r#"
-trait Get { fn get(self) -> i32; }
+interface Get { fn get(self) -> i32; }
 struct A { v: i32 }
 struct B { v: i32 }
-impl Get for A { fn get(self) -> i32 { return 10; } }
-impl Get for B { fn get(self) -> i32 { return 20; } }
+impl A { pub fn get(self) -> i32 { return 10; } }
+impl B { pub fn get(self) -> i32 { return 20; } }
 entry fn main() -> nil {
     let mut w: Get = A { v: 1 };
     Logger.new("app").info(f"first={w.get()}");
@@ -321,29 +326,29 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn case6_trait_dispatch() {
+fn case6_interface_dispatch() {
     let src = r#"
 use pouch::{ Vec };
-trait Shape {
+interface Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
 }
-// nominal satisfaction: a Circle IS a Shape because the
-// `impl Shape for Circle` block is registered — not because the
-// shape happens to match
+// structural satisfaction: a Circle IS a Shape because its inherent
+// impl HAS the members (pub) — not because anything was registered.
+// The `Vec<Shape>` element use is where each value satisfaction-boxes.
 struct Circle {
     r: f32;
 }
-impl Shape for Circle {
-    fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
-    fn name(self) -> str { return "circle"; }
+impl Circle {
+    pub fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
+    pub fn name(self) -> str { return "circle"; }
 }
 struct Square {
     s: f32;
 }
-impl Shape for Square {
-    fn area(self) -> f32 { return self.s * self.s; }
-    fn name(self) -> str { return "square"; }
+impl Square {
+    pub fn area(self) -> f32 { return self.s * self.s; }
+    pub fn name(self) -> str { return "square"; }
 }
 entry fn main() -> nil {
     let shapes: Vec<Shape> = Vec.from([
@@ -1806,21 +1811,20 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn generic_trait_dispatch() {
-    // `Wrap<i32>` — one trait id per type-argument list, implemented
-    // with an ordinary impl block (nominal)
+fn generic_interface_dispatch() {
+    // `Wrap<i32>` — one interface id per type-argument list, satisfied
+    // structurally: B's inherent impl carries the member, the
+    // interface-typed use (`let w: Wrap<i32> = b`) boxes it
     let src = r#"
-trait Wrap<T> {
+interface Wrap<T> {
     fn get(self) -> T;
 }
 class B {
     v: i32;
 }
 impl B {
-    fn new(v: i32) -> Self { return Self { v: v }; }
-}
-impl Wrap<i32> for B {
-    fn get(self) -> i32 { return self.v; }
+    pub fn new(v: i32) -> Self { return Self { v: v }; }
+    pub fn get(self) -> i32 { return self.v; }
 }
 entry fn main() -> nil {
     let b = B.new(7);

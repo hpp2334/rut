@@ -1,4 +1,4 @@
-//! The used-module/extern registry: `use`d fns, consts, types, traits, impls and namespaces, plus the `builtin impl` table — the surface bindings the use-both gate speaks through.
+//! The used-module/extern registry: `use`d fns, consts, types, ifaces, impls and namespaces, plus the `builtin impl` table — the surface bindings the use-both gate speaks through.
 
 use super::*;
 
@@ -113,13 +113,6 @@ impl<'a> Ctx<'a> {
         self.extern_native_types.insert(name, kind);
     }
 
-    /// Bind a used core builtin trait (`Disposal`/`Index`/
-    /// `Iterable`): registered as a trait on first reference, like a
-    /// declared one — but only for modules that named it.
-    pub fn add_extern_trait(&mut self, name: IdentId, native: rut_core::binary::NativeTrait) {
-        self.extern_traits.insert(name, native);
-    }
-
     /// Bind a trait from a used module's surface: the
     /// descriptor joins THIS module's trait table (so slot numbering,
     /// widening and vtables treat it like a declared trait). The name
@@ -133,25 +126,25 @@ impl<'a> Ctx<'a> {
     /// registers the descriptor without a name binding (an impl's trait
     /// the module never named — visible to the use-gate diagnostic,
     /// invisible to resolution).
-    pub fn add_extern_trait_decl(
+    pub fn add_extern_iface_decl(
         &mut self,
         name: Option<IdentId>,
-        desc: &rut_core::binary::SurfaceTrait,
+        desc: &rut_core::binary::SurfaceIface,
         surface_names: &Interner,
     ) -> u32 {
         let tname = self.intern(surface_names.name(desc.name));
         let mut methods = Vec::with_capacity(desc.methods.len());
         for m in &desc.methods {
-            methods.push(rut_core::binary::TraitMethod {
+            methods.push(rut_core::binary::IfaceMethod {
                 name: self.intern(surface_names.name(m.name)),
                 params: m.params.clone(),
                 ret: m.ret,
             });
         }
-        let id = self.traits.len() as u32;
-        self.traits.push(TraitDesc { name: tname, methods });
+        let id = self.ifaces.len() as u32;
+        self.ifaces.push(IfaceDesc { name: tname, methods });
         if let Some(n) = name {
-            self.extern_trait_decls.insert(n, ExternTrait { id, generics: desc.generics });
+            self.extern_iface_decls.insert(n, ExternIface { id, generics: desc.generics });
         }
         id
     }
@@ -160,27 +153,6 @@ impl<'a> Ctx<'a> {
     /// (the impl may live in any module). `methods` pair
     /// each trait method with the exporter's scope-qualified fn id
     /// (slot ABI); `methods_concrete` the concrete-ABI twin.
-    pub fn add_extern_impl(
-        &mut self,
-        trait_name: IdentId,
-        trait_id: u32,
-        target: TypeId,
-        methods: Vec<(IdentId, u32)>,
-        methods_concrete: Vec<(IdentId, u32)>,
-        trait_args: Vec<TypeId>,
-        origin: Option<String>,
-    ) {
-        self.extern_impls.push(ExternImpl {
-            trait_id,
-            trait_name,
-            target,
-            methods,
-            methods_concrete,
-            trait_args,
-            origin,
-        });
-    }
-
     /// The carried mirror rows join the instantiation maps: a field's
     /// type (`Mutation<str, Req>`) arrives through a used struct's type
     /// block, never through this unit's own resolution, so the
@@ -305,30 +277,30 @@ impl<'a> Ctx<'a> {
     pub fn respell_trait_self_deep(
         &mut self,
         t: TypeId,
-        trait_id: u32,
+        iface_id: u32,
         concrete: TypeId,
     ) -> TypeId {
         let kind = self.types.kind(t).clone();
         let rebuilt = match kind {
-            TyKind::TraitObj { trait_id: t } if t == trait_id => Some(concrete),
+            TyKind::IfaceObj { iface_id: t } if t == iface_id => Some(concrete),
             TyKind::Opt { elem } => {
-                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                let e = self.respell_trait_self_deep(elem, iface_id, concrete);
                 (e != elem).then(|| self.mk_opt(e))
             }
             TyKind::Array { elem } => {
-                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                let e = self.respell_trait_self_deep(elem, iface_id, concrete);
                 (e != elem).then(|| self.mk_array(e))
             }
             TyKind::Weak { elem } => {
-                let e = self.respell_trait_self_deep(elem, trait_id, concrete);
+                let e = self.respell_trait_self_deep(elem, iface_id, concrete);
                 (e != elem).then(|| self.mk_weak(e))
             }
             TyKind::Fn { params, ret } => {
                 let ps: Vec<TypeId> = params
                     .iter()
-                    .map(|&p| self.respell_trait_self_deep(p, trait_id, concrete))
+                    .map(|&p| self.respell_trait_self_deep(p, iface_id, concrete))
                     .collect();
-                let r = self.respell_trait_self_deep(ret, trait_id, concrete);
+                let r = self.respell_trait_self_deep(ret, iface_id, concrete);
                 (ps != params || r != ret).then(|| self.mk_fn_ty(ps, r))
             }
             TyKind::Data { fields } if !fields.is_empty() => {
@@ -336,7 +308,7 @@ impl<'a> Ctx<'a> {
                     .iter()
                     .map(|f| FieldInfo {
                         name: f.name,
-                        ty: self.respell_trait_self_deep(f.ty, trait_id, concrete),
+                        ty: self.respell_trait_self_deep(f.ty, iface_id, concrete),
                     })
                     .collect();
                 let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
@@ -472,8 +444,8 @@ impl<'a> Ctx<'a> {
 
     /// The id of a used module's exported trait, if the module used the
     /// name (the use-both gate).
-    pub fn extern_trait(&self, name: IdentId) -> Option<&ExternTrait> {
-        self.extern_trait_decls.get(&name)
+    pub fn extern_trait(&self, name: IdentId) -> Option<&ExternIface> {
+        self.extern_iface_decls.get(&name)
     }
 
     /// The carried placeholder descriptor's generic-parameter leaves, in
@@ -483,7 +455,7 @@ impl<'a> Ctx<'a> {
     /// argument — the crossing template law the dispatch sites read by
     /// (`descriptor_leaf_env`'s per-method walk, lifted to the whole
     /// descriptor so a mint substitutes every signature at once).
-    pub fn carried_trait_leaves(&self, base: &TraitDesc) -> Vec<String> {
+    pub fn carried_trait_leaves(&self, base: &IfaceDesc) -> Vec<String> {
         let mut leaves: Vec<String> = Vec::new();
         let mut scan = |text: &str, leaves: &mut Vec<String>| {
             for piece in text.split(|c: char| !c.is_alphanumeric() && c != '#') {
@@ -518,14 +490,5 @@ impl<'a> Ctx<'a> {
         self.extern_namespaces.contains(&name)
     }
 
-
-    /// Extern impls on `target` whose method set contains `name`
-    /// (registered by any module) — the use-gate diagnostic
-    /// reads these even when the trait's name was never used.
-    pub fn extern_impl_method(&self, target: TypeId, name: IdentId) -> Option<usize> {
-        self.extern_impls.iter().position(|im| {
-            im.target == target && im.methods.iter().any(|(n, _)| *n == name)
-        })
-    }
 
 }

@@ -49,8 +49,8 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<
     let binds = bindings::collect(ast, toks, idxs);
 
     // member position: `recv.member`. A resolved receiver never falls
-    // through to the name search: a miss there is a use-gated trait
-    // method or a genuine miss — either way the member
+    // through to the name search: a miss there is a use-gated interface
+    // member or a genuine miss — either way the member
     // answer is final.
     if let Some(recv) = member_context(toks, t) {
         match member_hover(idxs, ast, &binds, pos, name, recv) {
@@ -114,10 +114,11 @@ pub(crate) fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String>
     }
 }
 
-/// trait names this document `use`s — the use-both gate's document side:
-/// a foreign trait's methods dispatch only when its name
-/// appears here; a trait declared in this document is in scope natively.
-pub(crate) fn used_traits(ast: &Ast) -> HashSet<String> {
+/// interface names this document `use`s — the use-both gate's document
+/// side: a foreign interface's members resolve only when its name
+/// appears here; an interface declared in this document is in scope
+/// natively.
+pub(crate) fn used_ifaces(ast: &Ast) -> HashSet<String> {
     let mut out = HashSet::new();
     for h in ast.module_items(ast.root) {
         if let ItemKind::Use { names, .. } = ast.item(*h) {
@@ -184,8 +185,8 @@ pub(crate) fn recv_type(
     }
 }
 
-/// the type whose body contains `pos` — a class/struct/trait body, or
-/// the target of the enclosing impl (via the method's owner)
+/// the type whose body contains `pos` — a class/struct/interface body,
+/// or the target of the enclosing impl (via the method's owner)
 pub(crate) fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(&'a DefIndex, &'a TyDef)> {
     let mut best: Option<(u32, &'a DefIndex, &'a TyDef)> = None;
     for i in idxs.iter().copied() {
@@ -198,13 +199,9 @@ pub(crate) fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(
             }
         }
         for f in &i.fns {
-            // the impl target: `impl Circle` (inherent)
-            // or the tail of `impl Drawable for Circle`
-            let Some(owner) = f.owner.as_deref() else { continue };
-            let target = match owner.strip_prefix("impl ") {
-                Some(rest) if !rest.contains(" for ") => rest,
-                _ => owner.rsplit(" for ").next().unwrap_or(owner),
-            };
+            // the impl's target — the owner string IS the type's name
+            // (inherent impls own their methods)
+            let Some(target) = f.owner.as_deref() else { continue };
             if let Some(t) = i.ty(target) {
                 if contains(f.span, pos)
                     && best.map(|(l, _, _)| f.span.hi - f.span.lo < l).unwrap_or(true)
@@ -234,17 +231,19 @@ pub(crate) enum MemberHit<'a> {
 /// where a member of `recv` actually declares — the shared resolver
 /// behind hover AND definition, one rule for both faces: own surface
 /// (methods, then fields), enum members, inherent impl-block methods,
-/// use-gated trait methods from impls targeting the receiver's type
+/// and — through an interface-typed receiver — the interface's declared
+/// members (use-gated when the interface is foreign)
 pub(crate) enum MemberTarget<'a> {
-    /// a method/field of the type's own surface (`via` renders trait
-    /// impls: `impl Drawable for Circle`)
+    /// a method/field of the type's own surface (`via` renders a
+    /// qualifying member's provenance when it came through a chain)
     Member(&'a DefIndex, &'a TyDef, &'a MemberSrc, Option<String>),
     /// an enum member — hover shows the whole enum's block
     EnumMember(&'a DefIndex, &'a TyDef, &'a MemberSrc),
     /// an impl-block method (`impl T { fn m(self) ... }`)
     ImplFn(&'a DefIndex, &'a FnDef),
-    /// a trait's declared method, dispatched through an impl
-    TraitMember(&'a DefIndex, &'a TyDef, &'a MemberSrc, String),
+    /// an interface's declared member, observed through the interface
+    /// (the receiver's static type IS the interface)
+    IfaceMember(&'a DefIndex, &'a TyDef, &'a MemberSrc),
 }
 
 pub(crate) fn member_target<'a>(
@@ -259,6 +258,21 @@ pub(crate) fn member_target<'a>(
     let Some(ty_name) = recv_type(idxs, binds, pos, recv) else {
         return MemberHit::UnknownReceiver;
     };
+    // an interface receiver: the declared signatures ARE the members —
+    // satisfaction is structural (a type qualifies by having the
+    // members), so no impl lookup rides this path. The use-both gate:
+    // a foreign interface's members resolve only when this document
+    // names the interface in a `use`; an interface declared here is in
+    // scope natively
+    if let Some((home, iface)) = iface_decl(idxs, &ty_name) {
+        if !std::ptr::eq(home, idxs[0]) && !used_ifaces(ast).contains(&iface.name) {
+            return MemberHit::None;
+        }
+        if let Some(m) = iface.methods.iter().find(|m| m.name == member) {
+            return MemberHit::Found(MemberTarget::IfaceMember(home, iface, m));
+        }
+        return MemberHit::None;
+    }
     let Some((ti, ty)) = find_ty(idxs, &ty_name) else {
         return MemberHit::UnknownReceiver;
     };
@@ -277,36 +291,11 @@ pub(crate) fn member_target<'a>(
         return MemberHit::None;
     }
     // inherent impl-block methods — where methods live since type bodies
-    // went fields-only; one fn per `impl T { .. }` member
-    let owner = format!("impl {ty_name}");
+    // went fields-only; the owner string IS the target type's name
     for i in idxs {
         for f in &i.fns {
-            if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
+            if f.name == member && f.owner.as_deref() == Some(ty_name.as_str()) {
                 return MemberHit::Found(MemberTarget::ImplFn(i, f));
-            }
-        }
-    }
-    // trait methods from impls targeting this type (the unified rule).
-    // The use-both gate rides the trait's HOME module, wherever the impl
-    // block lives: a trait declared in another module dispatches only
-    // when this document names it in a `use`
-    let used = used_traits(ast);
-    for i in idxs {
-        for im in &i.impls {
-            if im.target_name != ty_name || im.trait_name.is_empty() {
-                continue;
-            }
-            let Some((home, t)) = trait_decl(idxs, &im.trait_name) else { continue };
-            if !std::ptr::eq(home, idxs[0]) && !used.contains(&im.trait_name) {
-                continue;
-            }
-            if let Some(m) = t.methods.iter().find(|m| m.name == member) {
-                return MemberHit::Found(MemberTarget::TraitMember(
-                    home,
-                    t,
-                    m,
-                    format!("impl {} for {}", im.trait_name, im.target_name),
-                ));
             }
         }
     }
@@ -343,20 +332,20 @@ pub(crate) fn render_target(t: MemberTarget) -> String {
         MemberTarget::Member(i, ty, m, via) => render_member(i, ty, m, via),
         MemberTarget::EnumMember(i, ty, _) => render_ty(i, ty),
         MemberTarget::ImplFn(i, f) => render_fn_hits(&[(i, f)], f),
-        MemberTarget::TraitMember(i, ty, m, via) => render_member(i, ty, m, Some(via)),
+        MemberTarget::IfaceMember(i, ty, m) => render_member(i, ty, m, None),
     }
 }
 
-/// the index declaring trait `name` — its home module; the declaration
-/// and the impl block may live in different indexes
-pub(crate) fn trait_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
-    find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Trait))
+/// the index declaring interface `name` — its home module; the
+/// declaration and the observing receiver may live in different indexes
+pub(crate) fn iface_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
+    find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Interface))
 }
 
 /// the inherent impl-block fn `impl ty_name { fn member(..) }` — the
 /// phase-3 callee rule, shared by the call-site PARAMETER hints and
 /// signature help (one rule, three consumers now — the `member_target`
-/// precedent). Own-surface methods (trait bodies, builtin/primitive
+/// precedent). Own-surface methods (interface bodies, builtin/primitive
 /// surfaces) have no recorded params: a hit there is FINAL (the
 /// known-receiver-is-final law) and yields `None`, never a wrong
 /// signature from a same-named impl fn in another index.
@@ -367,9 +356,8 @@ pub(crate) fn impl_method_fn<'a>(idxs: &[&'a DefIndex], ty_name: &str, member: &
                 return None;
             }
         }
-        let owner = format!("impl {ty_name}");
         for f in &i.fns {
-            if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
+            if f.name == member && f.owner.as_deref() == Some(ty_name) {
                 return Some(f);
             }
         }

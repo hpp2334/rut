@@ -88,7 +88,7 @@ fn nested() {
     // heterogeneous FIXED array — pure data, one shared cell per slot
     //
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];
-    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS and names the BOX — the payload misses; recover via `opaque.downcast<T>`
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/interface RHS and names the BOX — the payload misses; recover via `opaque.downcast<T>`
     let vec: Vec<opaque> = Vec.from([opaque(5)]);
     log.info(f"vec {vec.len()}");
 }

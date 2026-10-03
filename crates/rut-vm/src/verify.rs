@@ -10,8 +10,12 @@ use rut_core::types::{Repr, TY_U8, TyKind};
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
     for (fi, f) in prog.funcs.iter().enumerate() {
-        // bodyless host functions have no code to verify
-        if f.host_id.is_some() {
+        // bodyless host functions have no code to verify; a BODYLESS
+        // mirror stub (empty code, no params — every compiled body ends
+        // in its implicit Ret) that lost the ledger claim was
+        // redirected at link, and one nothing claimed stays loud at
+        // its (arity-mismatched) call site
+        if f.host_id.is_some() || (f.code.is_empty() && f.params.is_empty()) {
             continue;
         }
         let nregs = f.regs.len();
@@ -81,7 +85,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     let _ = (argv_off, n);
                 }
                 Op::CallI { slot, .. } => {
-                    if *slot as usize >= prog.trait_slots.len() {
+                    if *slot as usize >= prog.iface_slots.len() {
                         return Err(bad(format!("trait slot {slot} out of range")));
                     }
                 }
@@ -114,7 +118,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         // representation); the repr law below is what
                         // protects RC, and the field index is checked at
                         // runtime against the concrete record
-                        TyKind::TraitObj { .. } | TyKind::Future { .. } => None,
+                        TyKind::IfaceObj { .. } | TyKind::Future { .. } => None,
                         _ => None,
                     };
                     match fields {
@@ -141,7 +145,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                                 // on a future-spelled register: the frame
                                 // record is the representation, the index
                                 // is checked at runtime against it
-                                TyKind::TraitObj { .. } | TyKind::Future { .. } => {
+                                TyKind::IfaceObj { .. } | TyKind::Future { .. } => {
                                     if *repr != Repr::Ref {
                                         return Err(bad(
                                             "field access on a future must be a ref slot".into(),
@@ -212,7 +216,19 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             ));
                         }
                         for (i, &v) in vals.iter().enumerate() {
-                            if f.regs[v as usize] != fields[i].ty {
+                            // the register's type and the field's type may
+                            // be two units' rows for ONE instantiation (a
+                            // wrapper construction crosses: the consumer
+                            // mints the record over the owner's claimed
+                            // row) — the layout law compares the SPELLING
+                            // (name + kind), never two units' dense ids
+                            let reg_ty = f.regs[v as usize];
+                            let same = reg_ty == fields[i].ty || {
+                                let rn = |t: u32| prog.interner.name(prog.types.type_at(t).name).to_string();
+                                let kd = |t: u32| format!("{:?}", prog.types.kind(t));
+                                rn(reg_ty) == rn(fields[i].ty) && kd(reg_ty) == kd(fields[i].ty)
+                            };
+                            if !same {
                                 return Err(bad(
                                     "MakeRecord value type does not match the field type".into(),
                                 ));
@@ -222,9 +238,9 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     _ => return Err(bad("MakeRecord over a non-record type".into())),
                     }
                 }
-                Op::IsTrait { want, .. } => {
-                    if *want as usize >= prog.traits.len() {
-                        return Err(bad("IsTrait want not in the trait table".into()));
+                Op::IsIface { want, .. } => {
+                    if *want as usize >= prog.ifaces.len() {
+                        return Err(bad("IsIface want not in the trait table".into()));
                     }
                 }
                 Op::AddF { prim, a, b, .. }
@@ -450,7 +466,7 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*val);
         }
-        Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsTrait { dst, obj, .. } => {
+        Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsIface { dst, obj, .. } => {
             push(*dst);
             push(*obj);
         }

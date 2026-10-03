@@ -7,19 +7,14 @@
 // nmap-hostvals P5: the VALUES live in the entries. `map_cap` retired
 // (with the values host-side there is no rut-side sidecar left to
 // pre-size; the table's own with_capacity hint rides `map_new`'s `cap`).
-// The valued `hv` family (`map_hv{put,get,remove}` + the `_sv` range
-// twins) crosses CONCRETELY since the any-lane migration (phase 2a):
-// KEYS are INSPECTED — hashed and kind-admitted — so they stay TYPED
-// (the bare lanes are the `str` keys, `_i` is the BITS lane — one `i64`
-// crossing for every integer primitive and `bool`, the sign/zero-
-// extension law riding the wrapper's casts exactly as the h-family's —
-// and `_y` is `bytes`; floats have no row at all now), and VALUES are
-// never inspected, so they SEAL: `v: opaque` is the erasure box
-// (`opaque(v)` at the wrapper's edge), the entry retains the box cell,
-// `-> ?opaque` answers the STORED box (nil = absent; the aliasing law
-// rides the box — two gets name one box, and `opaque.downcast<V>` IS
-// the box's inner cell), and `map_hvremove` releases the held box in-
-// crossing (the box's own release walks the payload).
+// The boxed-key law (the structural-interfaces fork): KEYS and VALUES
+// both SEAL — `opaque(k)`/`opaque(v)` at the wrapper's edge, the host
+// opens the key box for hash/eq and admits the closed key set, the
+// entry retains the value box, `-> ?opaque` answers the STORED box
+// (nil = absent; the aliasing law rides the box — two gets name one
+// box, and `opaque.downcast<V>` IS the box's inner cell), and
+// `map_hvremove` releases the held box in-crossing (the box's own
+// release walks the payload).
 // Reading an `Empty` entry — an `hput` birth with no value — TRAPS
 // loudly (a caller bug, never a silent nil, §0.8 g), and so does a
 // `Bits` cell (a raw `map_val_set_*` store is not a seal box; read it
@@ -61,91 +56,56 @@ pub host fn map_val_set_f(m: opaque, handle: i32, v: f64);
 
 pub host fn map_val_get_f(m: opaque, handle: i32) -> f64;
 
-// ---- the fused handle lanes (nmapset-hostops) — the h-family --------
+// ---- the fused handle lanes (the boxed-key law) — the h-family -----
 // ONE crossing per op, ALL control flow host-side. The table carries a
 // STABLE birth handle per key (assigned at first insert, never
-// recycled); `hput` inserts or replaces via the entry API and answers
-// the packed `(handle << 1) | newly` in i64: bit 0 is the newly bit (a
-// replace answers bit 0 = 0; `HashSet` shares the lane and reads
-// exactly that bit), the rest the handle. Growth is std's — internal,
-// and invisible to every answer (the handle is a birth, not an
-// address, so nothing ever relocates). `hfind`/`hremove` answer the
-// key's handle, or `-1` when absent — `hremove` releases the entry's
-// held value cell in-crossing (P5) and answers the dead key's own
-// handle; a re-insert is a NEW birth.
+// recycled); `map_hput` inserts or replaces via the entry API and
+// answers the packed `(handle << 1) | newly` in i64: bit 0 is the
+// newly bit (a replace answers bit 0 = 0; `HashSet` shares the lane
+// and reads exactly that bit), the rest the handle. Growth is std's —
+// internal, and invisible to every answer (the handle is a birth, not
+// an address, so nothing ever relocates). `map_hfind`/`map_hremove`
+// answer the key's handle, or `-1` when absent — `map_hremove`
+// releases the entry's held value box in-crossing and answers the dead
+// key's own handle; a re-insert is a NEW birth.
 //
-// The key shapes: the `i` lane takes `i64` (wrapper-cast from i8..i64,
-// sign-extension is the bits law), `u` takes `u64` raw, `b` takes
-// `bool`, `s`/`y` borrow `str`/`bytes`, `sv` a borrowed `(parent, off,
-// len)` BYTE range with the UTF-8 boundary trap — and the sv lane and
-// the s lane of the same content are ONE key: same entry, same
-// HANDLE.
+// THE KEY SEALS: `k: opaque` is the wrapper's `opaque(k)` box, and the
+// HOST opens it — the register word's raw bits for the integer and
+// `bool` lanes (bits ARE the key identity, bit-for-bit the words the
+// typed lanes bucketed), the octets for `str`/`bytes` (the same FNV-1a
+// 64). Anything outside the closed key set traps `Invalid` by name —
+// the wrapper's union bound is the compile-time admission, the host's
+// decode is the defense.
 
-pub host fn map_hput_i(m: opaque, k: i64) -> i64;
+pub host fn map_hput(m: opaque, k: opaque) -> i64;
 
-pub host fn map_hput_u(m: opaque, k: u64) -> i64;
+pub host fn map_hfind(m: opaque, k: opaque) -> i32;
 
-pub host fn map_hput_b(m: opaque, k: bool) -> i64;
-
-pub host fn map_hput_s(m: opaque, k: str) -> i64;
-
-pub host fn map_hput_y(m: opaque, k: bytes) -> i64;
+pub host fn map_hremove(m: opaque, k: opaque) -> i32;
 
 pub host fn map_hput_sv(m: opaque, parent: str, off: i32, len: i32) -> i64;
 
-pub host fn map_hfind_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_hfind_u(m: opaque, k: u64) -> i32;
-
-pub host fn map_hfind_b(m: opaque, k: bool) -> i32;
-
-pub host fn map_hfind_s(m: opaque, k: str) -> i32;
-
-pub host fn map_hfind_y(m: opaque, k: bytes) -> i32;
-
 pub host fn map_hfind_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
-
-pub host fn map_hremove_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_hremove_u(m: opaque, k: u64) -> i32;
-
-pub host fn map_hremove_b(m: opaque, k: bool) -> i32;
-
-pub host fn map_hremove_s(m: opaque, k: str) -> i32;
-
-pub host fn map_hremove_y(m: opaque, k: bytes) -> i32;
 
 pub host fn map_hremove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
 
-// ---- the valued lanes (nmap-hostvals P5; typed at phase 2a) --------
-// The value crosses INSIDE the put as a SEALED box (`v: opaque`):
-// ONE crossing per op, the entry API with the box inside. The
-// packed put answer is bit-identical to the h-family's; the gets answer
-// the stored box (nil = absent); the removes release the held box and
-// answer the dead key's handle or `-1`. The KEY stays TYPED — the bare
-// lanes are the `str` keys, `_i` the bits lane (one `i64` crossing for
-// every integer primitive and `bool`), `_y` `bytes` — and the sv twins
-// key over a borrowed `(parent, off, len)` BYTE range with the UTF-8
-// boundary trap — the same key and entry as the plain lanes' equal
-// content.
+// ---- the valued lanes (the boxed-key law; values seal as ever) -----
+// The value crosses INSIDE the put as a SEALED box (`v: opaque`), the
+// key as its own seal box (`k: opaque` — opened host-side for hash/eq,
+// never stored; a fresh insert materializes the owned copy, the one
+// alloc the probe law always had). ONE crossing per op, the entry API
+// with the box inside. The packed put answer is bit-identical to the
+// h-family's; the gets answer the stored box (nil = absent); the
+// removes release the held box and answer the dead key's handle or
+// `-1`. The `_sv` twins key over a borrowed `(parent, off, len)` BYTE
+// range with the UTF-8 boundary trap — the same key and entry as the
+// `str` box of the equal content.
 
-pub host fn map_hvput(m: opaque, k: str, v: opaque) -> i64;
+pub host fn map_hvput(m: opaque, k: opaque, v: opaque) -> i64;
 
-pub host fn map_hvget(m: opaque, k: str) -> ?opaque;
+pub host fn map_hvget(m: opaque, k: opaque) -> ?opaque;
 
-pub host fn map_hvremove(m: opaque, k: str) -> i32;
-
-pub host fn map_hvput_i(m: opaque, k: i64, v: opaque) -> i64;
-
-pub host fn map_hvget_i(m: opaque, k: i64) -> ?opaque;
-
-pub host fn map_hvremove_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_hvput_y(m: opaque, k: bytes, v: opaque) -> i64;
-
-pub host fn map_hvget_y(m: opaque, k: bytes) -> ?opaque;
-
-pub host fn map_hvremove_y(m: opaque, k: bytes) -> i32;
+pub host fn map_hvremove(m: opaque, k: opaque) -> i32;
 
 pub host fn map_hvput_sv(m: opaque, parent: str, off: i32, len: i32, v: opaque) -> i64;
 

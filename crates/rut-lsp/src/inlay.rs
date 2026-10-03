@@ -14,7 +14,7 @@
 //!   callee resolves by the same rules phase 1 prices: free fns by
 //!   unique match (the `call_ty` law), methods through the receiver's
 //!   type head (self / capitalized / primitive / binding / module let /
-//!   the display-side expression inference). Own-surface methods (trait
+//!   the display-side expression inference). Own-surface methods (interface
 //!   bodies, builtin/primitive surfaces) carry no recorded params — a
 //!   hit there is FINAL (the known-receiver-is-final law) and yields no
 //!   hints.
@@ -144,7 +144,7 @@ fn call_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
             ItemKind::Fn(d) => cx.walk_block(d.body),
             ItemKind::Class { methods, .. }
             | ItemKind::Struct { methods, .. }
-            | ItemKind::Trait { methods, .. }
+            | ItemKind::Interface { methods, .. }
             | ItemKind::Impl { methods, .. } => {
                 for m in methods {
                     if let Some(body) = ctx.ast.method_decl(*m).body {
@@ -647,18 +647,18 @@ mod tests {
 
     #[test]
     fn own_surface_method_beats_a_same_named_impl_fn() {
-        // a trait-body `m` is the receiver's own surface: the FINAL
+        // an interface-body `m` is the receiver's own surface: the FINAL
         // answer carries no recorded params, so no hints — the impl
         // fn's params must not leak through (never wrong hints)
         let src = [
             "struct P {",
             "    x: i32;",
             "}",
-            "trait Draw {",
+            "interface Draw {",
             "    fn m(self, k: i32) -> i32;",
             "}",
-            "impl Draw for P {",
-            "    fn m(self, k: i32) -> i32 { return k; }",
+            "impl P {",
+            "    pub fn m(self, k: i32) -> i32 { return k; }",
             "}",
             "fn go(d: Draw) -> i32 {",
             "    return d.m(1);",

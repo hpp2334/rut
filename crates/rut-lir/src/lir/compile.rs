@@ -25,14 +25,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::AsyncBlock(node) = inst.key {
             return super::asyncfn::compile_async_block_fn(ctx, fid, node);
         }
-        let (node, self_ty, is_method, class_name, slot_self) = match &inst.key {
+        let (node, self_ty, is_method, class_name) = match &inst.key {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
             FnKey::Free(name) => {
                 let Some(n) = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(()); // unknown fn —already diagnosed
                 };
-                (n.id(), None, false, None, None)
+                (n.id(), None, false, None)
             }
             FnKey::Method { data, name } => {
                 let found = if let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) {
@@ -75,86 +75,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some((node, self_ty, has_self, cname)) = found else {
                     return Ok(());
                 };
-                (node, self_ty, has_self, cname, None)
-            }
-            FnKey::ImplMethod { idx, name, slot_abi } => {
-                let im = ctx.impls[*idx].clone();
-                let Some(m) = im.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
-                    return Ok(());
-                };
-                // self: the concrete target — a generic target instantiates
-                // under the Inst substitution; a native builtin target
-                // rebuilds its shape (`Array<T>`). A FOREIGN generic's
-                // instantiation mirrors through the extern path (the
-                // owner compiles the body, the self row is the mirror)
-                let (self_ty, cname) = match &im.target_data {
-                    Some((dname, params))
-                        if dname == &sym::ARRAY && params.len() == 1 =>
-                    {
-                        let elem = inst
-                            .subst
-                            .iter()
-                            .find(|(n, _)| n == &params[0])
-                            .map(|(_, t)| *t)
-                            .unwrap_or(TY_I32);
-                        (ctx.mk_array(elem), None)
-                    }
-                    Some((dname, params))
-                        if dname == &sym::OPT && params.len() == 1 =>
-                    {
-                        // `impl I for ?T` — self is the nullable itself
-                        // (the rut-json batch phase 1: the body checks
-                        // nil and derefs explicitly; the template's
-                        // element instantiation comes from the subst)
-                        let elem = inst
-                            .subst
-                            .iter()
-                            .find(|(n, _)| n == &params[0])
-                            .map(|(_, t)| *t)
-                            .unwrap_or(TY_I32);
-                        (ctx.mk_opt(elem), None)
-                    }
-                    Some((dname, params)) => {
-                        let args: Vec<TypeId> = params
-                            .iter()
-                            .map(|g| {
-                                inst.subst
-                                    .iter()
-                                    .find(|(n, _)| n == g)
-                                    .map(|(_, t)| *t)
-                                    .unwrap_or(TY_I32)
-                            })
-                            .collect();
-                        (ctx.mk_data_inst(*dname, args, ctx.ast.span(m.id())), Some(*dname))
-                    }
-                    _ => {
-                        let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);
-                        (im.target, cname)
-                    }
-                };
-                // a PRIMITIVE target compiles in one of two ABIs (P1,
-                // mapset perf plan). SLOT ABI (`slot_abi`): `self` and
-                // every `Self`-spelled parameter cross as the trait-object
-                // slot (concrete scalars arrive boxed — `widen_to_slot`),
-                // and the prologue unboxes into the concrete working
-                // registers the body is typed against — this is the
-                // variant vtable rows bind (the box cell's own type
-                // reaches the vtable). CONCRETE ABI: params
-                // cross raw and there is no prologue — body codegen
-                // identical to an inherent fn; bare-receiver static
-                // calls bind this variant. Ref targets
-                // (records/`str`/`bytes`) compile one variant — their
-                // signature stays the concrete type (already cell
-                // handles).
-                let slot_self = if *slot_abi
-                    && !im.inherent
-                    && matches!(ctx.types.kind(im.target), TyKind::Prim(_))
-                {
-                    Some(ctx.mk_trait_obj(im.trait_id))
-                } else {
-                    None
-                };
-                (m.id(), Some(self_ty), true, cname, slot_self)
+                (node, self_ty, has_self, cname)
             }
             FnKey::Lambda(_) | FnKey::AsyncBlock(_) => unreachable!(),
             FnKey::HostThunk(_) => unreachable!(),
@@ -233,6 +154,38 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
+        // interface bounds in scope (the mirror-body law's lookup): a
+        // NON-union bound naming an interface arms param ident →
+        // interface id, so a member call on a carried instantiation
+        // binds through the bound's descriptor
+        let mut iface_bounds: std::collections::HashMap<IdentId, Vec<u32>> =
+            std::collections::HashMap::new();
+        {
+            let bounds: Vec<(IdentId, NodeHandle<AnyTy>)> = match ctx.ast.kind(node) {
+                Kind::Item(ItemKind::Fn(f)) => f.bounds.clone(),
+                Kind::Member(MemberKind::MethodDecl(m)) => m.bounds.clone(),
+                _ => Vec::new(),
+            };
+            for (g, b) in &bounds {
+                let members = ctx.resolve_bound_members(*b, &[]);
+                for m in &members {
+                    if let crate::check::BoundMember::Trait(tid) = m {
+                        iface_bounds.entry(*g).or_default().push(*tid);
+                    }
+                }
+            }
+            if let Some(cn) = class_name {
+                let rs = ctx.find_data(cn).map(|d| d.requires.clone()).unwrap_or_default();
+                for (g, b) in &rs {
+                    let members = ctx.resolve_bound_members(*b, &[]);
+                    for m in &members {
+                        if let crate::check::BoundMember::Trait(tid) = m {
+                            iface_bounds.entry(*g).or_default().push(*tid);
+                        }
+                    }
+                }
+            }
+        }
         let mut c = FnCompiler {
             ctx,
             regs: Vec::new(),
@@ -255,6 +208,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_stack: Vec::new(),
             emit_closure: false,
             union_bounds,
+            iface_bounds,
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
         assigned: std::collections::HashSet::new(),
@@ -267,26 +221,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the body), promotion at each `bind_local` once types resolve
         c.capture_pre_pass(body);
         // signature: params (self first for methods), resolved under subst.
-        // Under the slot ABI (`slot_self`, a prim-target impl method) the
-        // receiver and every `Self`-spelled parameter cross as the slot.
-        let spells_self = |c: &FnCompiler, t: &NodeHandle<AnyTy>| matches!(
-            c.ctx.ast.ty(*t),
-            TypeKind::TyPath { ref segs, .. }
-                if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
-        );
         let mut param_tys: Vec<TypeId> = Vec::new();
-        let mut param_is_slot: Vec<bool> = Vec::new();
         for p in &params {
-            let (ty, is_slot) = match c.ctx.ast.param(*p) {
-                MemberKind::SelfParam(_) => (
-                    slot_self.unwrap_or(self_ty.unwrap_or(TY_NIL)),
-                    slot_self.is_some(),
-                ),
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                    let ty = c.resolve_type_now(*t);
-                    let is_slot = slot_self.is_some() && spells_self(&c, t);
-                    (if is_slot { slot_self.unwrap() } else { ty }, is_slot)
-                }
+            let ty = match c.ctx.ast.param(*p) {
+                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_NIL),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
                 MemberKind::Param(ParamData { ty: None, name, .. }) => {
                     c.ctx.err(
                         c.ctx.ast.span(p.id()),
@@ -295,23 +234,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             c.ctx.name(*name)
                         ),
                     );
-                    (TY_I32, false)
+                    TY_I32
                 }
-                _ => (TY_I32, false),
+                _ => TY_I32,
             };
             param_tys.push(ty);
-            param_is_slot.push(is_slot);
         }
         // ret
         let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
         // this instantiation's concrete origins for the fn's trait-typed
         // parameters, in declaration order
-        let mut param_origins = inst.trait_origins.clone();
+        let mut param_origins = inst.iface_origins.clone();
         let mut param_origins_iter = param_origins.drain(..);
         // bind params as locals — argv maps positionally onto the callee's
-        // registers, so the parameter registers stay contiguous here; the
-        // slot-ABI unboxes run in a second pass below
+        // registers, so the parameter registers stay contiguous here
         for (i, p) in params.iter().enumerate() {
             match c.ctx.ast.param(*p) {
                 MemberKind::SelfParam(SelfParamData { is_mut }) => {
@@ -335,7 +272,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // trait-typed parameters: the Inst carries this call's
                     // concrete origin (a trait parameter IS an implicit
                     // generic bound) — single origin ⇒ static
-                    let origins = if matches!(c.ctx.types.kind(param_tys[i]), TyKind::TraitObj { .. }) {
+                    let origins = if matches!(c.ctx.types.kind(param_tys[i]), TyKind::IfaceObj { .. }) {
                         param_origins_iter.next().map(|t| vec![t]).unwrap_or_default()
                     } else {
                         Vec::new()
@@ -361,33 +298,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => {}
             }
         }
-        // slot-ABI prologue (prim-target impl methods): each slot
-        // parameter unboxes into the concrete working register the body
-        // was typed against — the box cell's own type reaches the vtable,
-        // the payload is the body's value
-        if slot_self.is_some() {
-            let concrete = self_ty.unwrap_or(TY_NIL);
-            for (i, p) in params.iter().enumerate() {
-                if !param_is_slot[i] {
-                    continue;
-                }
-                let name = match c.ctx.ast.param(*p) {
-                    MemberKind::SelfParam(_) => sym::SELF,
-                    MemberKind::Param(ParamData { name, .. }) => *name,
-                    _ => continue,
-                };
-                let li = c.locals.iter().position(|l| l.name == name).expect("param local");
-                let preg = c.locals[li].reg;
-                let u = c.new_reg(concrete);
-                c.emit(Op::Unbox { dst: u, box_: preg, ty: concrete }, 0);
-                c.locals[li].reg = u;
-                c.locals[li].ty = concrete;
-            }
-        }
         // the capture law: params promote too (a captured param
-        // reassigned anywhere in the fn shares its slot). Runs after the
-        // slot-ABI prologue so the cell seeds from the concrete working
-        // value the body is typed against.
+        // reassigned anywhere in the fn shares its slot).
         for li in 0..c.locals.len() {
             c.promote_param(li, 0);
         }
@@ -457,6 +369,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_stack: Vec::new(),
             emit_closure: false,
             union_bounds: std::collections::HashMap::new(),
+            iface_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
         assigned: std::collections::HashSet::new(),
@@ -596,6 +509,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_stack: Vec::new(),
             emit_closure: true,
             union_bounds: std::collections::HashMap::new(),
+            iface_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
         async_frame: None,
         assigned: std::collections::HashSet::new(),

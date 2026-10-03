@@ -1,7 +1,7 @@
 //! The core lockstep gate: `rut/core/core.d.rut` is the
 //! declarative form of the compiler's prelude surface
 //! (`rut_core::binary::Surface::core`), and the two must agree — same
-//! engine builtin types, same engine-woven traits, same
+//! engine builtin types, same engine-woven builtins, same
 //! compiler-lowered functions. The whole prelude is `builtin` (the
 //! engine implements it): core declares NO `host`
 //! surface — that is exclusively the embedder's. The file's own contract
@@ -29,7 +29,7 @@ fn declared_names() -> (
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
-    let mut plain_traits = Vec::new();
+    let mut plain_ifaces = Vec::new();
     let mut builtin_impls = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         match ast.item(it) {
@@ -62,7 +62,7 @@ fn declared_names() -> (
                 }
                 builtin_types.push((n, *ambient));
             }
-            ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
+            ItemKind::Interface { name, .. } => plain_ifaces.push(ast.name(*name).to_string()),
             ItemKind::BuiltinImpl { prim, methods, .. } => {
                 let names = methods
                     .iter()
@@ -75,13 +75,13 @@ fn declared_names() -> (
             other => panic!("core declares an embedder surface item: {other:?}"),
         }
     }
-    (builtin_fns, builtin_types, plain_traits, builtin_impls)
+    (builtin_fns, builtin_types, plain_ifaces, builtin_impls)
 }
 
 #[test]
 fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
-    let (builtin_fns, builtin_types, plain_traits, builtin_impls) = declared_names();
+    let (builtin_fns, builtin_types, plain_ifaces, builtin_impls) = declared_names();
 
     // builtin types: the decl's `builtin` decls are exactly the native
     // types — name AND ambient bit (the decl spelling vs the row)
@@ -92,19 +92,18 @@ fn core_decl_matches_the_compilers_surface() {
     surf_types.sort();
     assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
 
-    // the engine-contract `builtin trait` rows are GONE (v20): the decl
-    // carries no trait rows, the surface registers no native traits —
-    // and nothing in the prelude is a plain library trait
-    let mut surf_traits: Vec<(String, bool)> =
-        surface.native_traits.iter().map(|(n, _, a)| (surface.names.name(*n).to_string(), *a)).collect();
-    surf_traits.sort();
+    // the trait ERA is gone (the structural-interfaces fork): the decl
+    // carries no trait rows, the surface registers no native traits
+    // (the row kind is deleted), and the prelude declares no
+    // `interface` either — the library form lives in packages
+    // (JsonSerialize in json, IntoFlow in flow)
     assert!(
-        surf_traits.is_empty(),
-        "the builtin trait row kind is gone — Surface::core registers no native traits"
+        surface.ifaces.is_empty(),
+        "the native trait row kind is gone — Surface::core crosses no interfaces"
     );
     assert!(
-        plain_traits.is_empty(),
-        "no plain `trait` in the prelude (the library form lives in packages — Hashable in pouch)"
+        plain_ifaces.is_empty(),
+        "no plain `interface` in the prelude (the library form lives in packages — JsonSerialize in json)"
     );
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
@@ -338,11 +337,10 @@ fn own_strbuf_named_type_still_resolves() {
 /// `Linkage::Builtin { ambient }` matches the ambient bit on its
 /// `Surface::core()` row (checked set-wise by the lockstep above); this
 /// pin fixes the phase's intent — the gated native types are `Weak`,
-/// `DisposalContext`, and the closed async pair (`Future`/`RunContext`,
-/// v20's `builtin trait` successors), every fn row stays ambient
-/// (`prelude builtin`), and the native-trait table is EMPTY (the row
-/// kind is gone — the markers need no import). A future row flips only
-/// with a deliberate test update.
+/// `DisposalContext`, and the closed async pair (`Future`/`RunContext`),
+/// every fn row stays ambient (`prelude builtin`), and the interface
+/// table is EMPTY (the prelude crosses no library interface). A future
+/// row flips only with a deliberate test update.
 #[test]
 fn engine_trait_rows_are_import_gated_everything_else_ambient() {
     let surface = rut_core::binary::Surface::core();
@@ -350,10 +348,10 @@ fn engine_trait_rows_are_import_gated_everything_else_ambient() {
         let expected = matches!(surface.names.name(*name), "Weak" | "DisposalContext" | "Future" | "RunContext");
         assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
     }
-    for (name, _, ambient) in &surface.native_traits {
-        let _ = name;
-        assert!(!*ambient, "native trait `{}` is import-gated (`pub builtin`)", surface.names.name(*name));
-    }
+    assert!(
+        surface.ifaces.is_empty(),
+        "the prelude crosses no interfaces (the row kind is a library concern)"
+    );
     for (name, ambient) in &surface.native_fns {
         assert!(*ambient, "native fn `{}` stays ambient", surface.names.name(*name));
     }

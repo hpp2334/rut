@@ -1,8 +1,8 @@
-// T8's consumer: rides the whole chain — json's group impl dispatches
+// T8's consumer: rides the whole chain — json's group wrapper dispatches
 // while pouch's own dep (base) is live beneath it. Vec and pouch_tag
 // ride json's spliced unit (no direct `use pouch`: the T10 shape is
 // avoided).
-use json::{JsonSerialize};
+use json::{JVecI64};
 use pouch::{Vec};
 
 fn tag() -> str {
@@ -11,5 +11,5 @@ fn tag() -> str {
 
 fn go() -> str {
     let v = Vec<i64>.filled(7, 3);
-    return v.json_serialize();
+    return JVecI64(v).json_serialize();
 }

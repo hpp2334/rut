@@ -13,7 +13,7 @@ pub mod session;
 pub use compile::{
     compile_module, compile_module_in, compile_program, compile_program_resolved, ir_dump_of,
     mount_calc, mount_std, mount_std_async, mount_std_core, CompileOutput, ProgramOutput,
-    SeedGroup, SeedImpl, Seeds,
+    SeedGroup, Seeds,
 };
 pub use decl::lower_decl_module;
 pub use graph::{compile_graph, compile_units, GraphOutput, Units};

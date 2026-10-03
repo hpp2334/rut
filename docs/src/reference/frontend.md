@@ -121,7 +121,7 @@ rut's grammar makes shallow peeking enough: statements are keyword-led,
 
 | decision | mechanism |
 |---|---|
-| item dispatch | peek 1 (`use` `let` `enum` `struct` `class` `trait` `impl` `fn`) |
+| item dispatch | peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`) |
 | statement vs expression-statement | peek 1 (leading keyword) |
 | `for`-of vs C-style `for` | peek 4: `for ( let Ident <of or =>` |
 | instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
@@ -196,8 +196,9 @@ enum NodeKind {
     Struct { vis, name, generics, fields: Vec<NodeId> },  // fields only
     Class  { vis, name, generics, fields: Vec<NodeId> },  // fields only —
                                                            // methods live in impls
-    Trait  { vis, name, generics, requires, methods },
-    Impl   { trait_ref: Option<NodeId>, target: NodeId },
+    Interface { vis, name, generics, methods },           // signatures only
+    Impl      { generics, bounds, target: NodeId },       // inherent only —
+              // no trait_ref: `impl I for T` does not parse
     Fn     { vis, name, generics, params, ret, body },
     SurfaceFn / SurfaceClass,                             // .d.rut only
     // statements

@@ -67,8 +67,8 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
     // containers still bind with no `use` statement anywhere in this
     // source. The `for..of` here runs over `[i32]` — a builtin
     // sequence's FUSED loop, which never names `Iterable` — so it works
-    // without the import too; an `impl Iterable<E> for T` or a
-    // trait-typed parameter WOULD gate (see the_gated_traits_require_the_import below).
+    // without the import too; a gated name in type position
+    // WOULD gate (see the_gated_names_require_the_import below).
     let v = run_main(
         "fn total(v: [i32]) -> i32 {\n\
              let mut t = 0;\n\
@@ -90,28 +90,41 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
 /// `use core::{ .. }` — the bare spelling names the fix exactly —
 /// while the engine's weave never consults user scope: the fused
 /// `for..of` over `[i32]` above and every launched host frame
-/// run with no import at all. The `builtin trait` names are GONE
-/// (v20): a bare `Iterable`/`Disposal` names its marker, and with the
-/// gate satisfied a marked member compiles and for..of drives it.
+/// run with no import at all. The trait ERA is gone: `impl I for T`
+/// is unparseable (the impl grammar has the one inherent form), and a
+/// marked member compiles and for..of drives it with no gate.
 #[test]
-fn the_gated_traits_require_the_import() {
+fn the_gated_names_require_the_import() {
     // no use: each bare spelling names its fix (or its replacement)
     for (src, name) in [
-        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "`Iterable` is gone"),
+        // the `for` branch of the impl grammar is DELETED (`impl I for T`
+        // is unparseable — satisfaction is having the members): the head
+        // dies at the parser, naming the one inherent form
+        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "expected {, found `for`"),
         ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\nentry fn main() -> i32 { return f(nil); }\n", "`RunContext` is not in scope"),
-        ("class F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "`Future` is not in scope"),
-        ("use core::{ Future };\nclass F { }\nimpl Future<nil> for F { fn yield(self, cx: RunContext) { } }\nentry fn main() -> i32 { return 0; }\n", "`Future` is a closed builtin class"),
+        ("fn make() -> ?Future<nil> { return nil; }\nentry fn main() -> i32 { let f = make(); return 0; }\n", "`Future` is not in scope"),
+        ("use core::{ Future };\nfn make() -> ?Future<nil> { return nil; }\nentry fn main() -> i32 { let f = make(); return 0; }\n", ""),
     ] {
         let out = compile(src);
-        assert!(
-            out.diags.iter().any(|d| d.msg.contains(name)),
-            "the {name} miss names the fix: {:?}",
-            out.diags
-        );
-        assert!(out.program.is_none(), "the bare spelling must not compile");
+        if !name.is_empty() {
+            assert!(
+                out.diags.iter().any(|d| d.msg.contains(name)),
+                "the {name} miss names the fix: {:?}",
+                out.diags
+            );
+            assert!(out.program.is_none(), "the bare spelling must not compile");
+        } else {
+            // the gated name resolves through the use: the closed
+            // builtin class sits in type position fine
+            assert!(
+                out.diags.is_empty(),
+                "the imported Future type-checks: {:?}",
+                out.diags
+            );
+        }
     }
 
-    // with the import: the marked member registers and for..of drives
+    // with the import: the marked member compiles and for..of drives
     // it (the element type falls out of the marked member's signature)
     let v = run_main(
         "use core::{ Future };\n\

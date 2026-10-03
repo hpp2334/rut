@@ -349,23 +349,27 @@ pub enum ItemKind {
         fields: Vec<NodeHandle<FieldDeclNode>>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
-    Trait {
+    /// `interface Name<..> { fn sig(..) -> T; .. }` — the
+    /// observed-capability declaration: signatures only, `Self` and
+    /// generics allowed. Satisfaction is STRUCTURAL — a type qualifies
+    /// by having the members (its inherent `impl`), never by
+    /// registering anything.
+    Interface {
         vis: Vis,
         name: IdentId,
         generics: Vec<IdentId>,
-        requires: Vec<NodeHandle<AnyTy>>, // type nodes — naming position, bare
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
     },
-    /// The two impl forms: `impl T { .. }` — inherent
-    /// (`trait_ref: None`, the type's module only) — and `impl I for T`
-    /// { .. } — a trait impl (any module). Bodies are braced, methods only.
-    /// Generic binders are DECLARED after `impl` (`impl<T> Vec<T>`) —
-    /// the definition site; bare params in the head are uses that must
-    /// resolve against the declared list (no implicit inference).
+    /// `impl T { .. }` — the inherent impl, the type's module only.
+    /// (`impl I for T` is gone — observed capability is satisfied by
+    /// having the members, never by registering.) Bodies are braced,
+    /// methods only. Generic binders are DECLARED after `impl`
+    /// (`impl<T> Vec<T>`) — the definition site; bare params in the
+    /// head are uses that must resolve against the declared list (no
+    /// implicit inference).
     Impl {
         generics: Vec<IdentId>,
         bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-        trait_ref: Option<NodeHandle<AnyTy>>,
         target: NodeHandle<AnyTy>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
@@ -475,7 +479,7 @@ pub struct MethodDeclData {
     /// inline admission-only bounds on the method's own
     /// generic parameters (`fn m<T requires A>(self, x: T)`)
     pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    pub body: Option<NodeHandle<BlockNode>>, // None in traits / surface classes
+    pub body: Option<NodeHandle<BlockNode>>, // None in interfaces / surface classes
 }
 
 /// `mut`? name: ty — or a type-less lambda param `(x)`

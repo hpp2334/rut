@@ -40,7 +40,6 @@ pub fn mount_std_core(session: &mut Session) {
             // spellings stay import-gated end to end
             body: ModuleBody::Host {
                 native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
-                native_traits: core.native_traits.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
                 native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
                 consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
                 native_impls: core
@@ -141,7 +140,6 @@ pub fn mount_calc(session: &mut Session) {
                 host_funcs,
                 consts,
                 native_types: vec![],
-                native_traits: vec![],
                 native_fns: vec![],
                 native_impls: vec![],
             },

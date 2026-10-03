@@ -1,9 +1,9 @@
 //! Type-union bounds end to end.
 //!
 //! Three behaviors the phase pins down:
-//! - **type unions only** — a union bound takes type NAMES; a trait
-//!   member inside a union (all-trait or mixed) diagnoses, while a
-//!   single-trait bound (`K requires Enc`) stays
+//! - **type unions only** — a union bound takes type NAMES; an interface
+//!   member inside a union (all-interface or mixed) diagnoses, while a
+//!   single-interface bound (`K requires Enc`) stays
 //!   legal;
 //! - **admission per member** — each named member instantiates; a
 //!   record and a user class do not, and the failure names the type and
@@ -11,9 +11,11 @@
 //! - **capability resolution through the union** — a method call on a
 //!   union-bounded `K` (param, annotated let, a copy, or `self.f`) is
 //!   written against the WHOLE bound: every member must provide the
-//!   method (via its impls), so the generic body typechecks the same way
-//!   for every instantiation; each instantiation still dispatches the
-//!   concrete member's own impl (different members → different impls).
+//!   method (its own member surface — the prims' engine `builtin impl`s
+//!   included), so the generic body typechecks the same way
+//!   for every instantiation; each instantiation still runs the
+//!   concrete member's own member (different members → different
+//!   engines).
 
 use rut_driver::{Module, ModuleBody, Session};
 
@@ -102,115 +104,145 @@ fn union_bound_rejects_record_and_user_class_naming_the_bound() {
     );
 }
 
-// ---- type unions only: traits cannot sit in a union bound ----
+// ---- interfaces admit through a union bound --------------------------
+// (the law FLIPPED with the structural fork: a union bound's interface
+// members are legal — any-member-suffices, each admitted by the
+// structural member-set match; a concrete member admits by TypeId
+// membership)
 
 #[test]
-fn all_trait_union_bound_diagnoses() {
+fn iface_union_admits_a_satisfying_type_and_fails_outside() {
+    // a type carrying `enc` admits through the Enc leg; `str` carries no
+    // members and names the whole bound
+    let out = compile_app(
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         interface Shade { fn shade(self) -> i32; }\n\
+         struct Token { v: i32 }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
+         fn tag<K requires Enc | Shade>(k: K) -> i64 { return 0; }\n\
+         entry fn probe() -> i64 { let t: Token = Token { v: 1 }; return tag(t); }\n",
+    );
+    assert!(out.diags.is_empty(), "an Enc-satisfying type admits: {:?}", out.diags);
+
     let ds = diags_of(
-        "trait Enc { fn enc(self) -> bytes; }\n\
-         trait Shade { fn shade(self) -> i32; }\n\
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         interface Shade { fn shade(self) -> i32; }\n\
          fn tag<K requires Enc | Shade>(k: K) -> i64 { return 0; }\n\
          entry fn probe() -> i64 { return tag(\"s\"); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Enc` is a trait — a union bound takes type names only")),
-        "an all-trait union diagnoses: {ds:?}"
-    );
-    assert!(
-        ds.iter().any(|d| d.contains("`Shade` is a trait — a union bound takes type names only")),
-        "every trait member diagnoses: {ds:?}"
+        ds.iter().any(|d| d.contains("`str` does not satisfy `K` requires `Enc | Shade`")),
+        "the failure names the whole bound: {ds:?}"
     );
 }
 
 #[test]
-fn mixed_union_bound_diagnoses_the_trait_member() {
-    let ds = diags_of(
-        "trait Enc { fn enc(self) -> bytes; }\n\
+fn mixed_union_admits_concrete_and_iface_members() {
+    // the union spans a concrete member and an interface member: i32
+    // admits by id, a member-carrying type admits by the member-set
+    // match
+    let out = compile_app(
+        "interface Enc { fn enc(self) -> bytes; }\n\
          struct Token { v: i32 }\n\
-         impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
          fn tag<K requires i32 | Enc>(k: K) -> i64 { return 0; }\n\
-         entry fn probe() -> i64 { return tag(5); }\n",
+         entry fn probe() -> i64 {\n\
+             let a = tag(5);\n\
+             let t: Token = Token { v: 1 };\n\
+             let b = tag(t);\n\
+             return a + b;\n\
+         }\n",
+    );
+    assert!(out.diags.is_empty(), "both members admit: {:?}", out.diags);
+
+    // bool is neither
+    let ds = diags_of(
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         struct Token { v: i32 }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
+         fn tag<K requires i32 | Enc>(k: K) -> i64 { return 0; }\n\
+         entry fn probe() -> i64 { return tag(true); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Enc` is a trait — a union bound takes type names only")),
-        "the trait member of a mixed union diagnoses: {ds:?}"
+        ds.iter().any(|d| d.contains("`bool` does not satisfy `K` requires `i32 | Enc`")),
+        "the failure names the union: {ds:?}"
     );
 }
 
 #[test]
-fn trait_union_through_an_alias_diagnoses_in_bound_position() {
-    // the union alias stays legal as an alias; spelling it as a BOUND
-    // is trait-in-union
-    let ds = diags_of(
-        "trait Enc { fn enc(self) -> bytes; }\n\
+fn iface_union_through_an_alias_admits() {
+    // the union alias carries the interface leg fine as a BOUND; the
+    // admission is the same any-member-suffices match
+    let out = compile_app(
+        "interface Enc { fn enc(self) -> bytes; }\n\
+         struct Token { v: i32 }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
          type Mix = i32 | Enc;\n\
          fn tag<K requires Mix>(k: K) -> i64 { return 0; }\n\
-         entry fn probe() -> i64 { return tag(5); }\n",
+         entry fn probe() -> i64 {\n\
+             let a = tag(5);\n\
+             let t: Token = Token { v: 1 };\n\
+             return a + tag(t);\n\
+         }\n",
     );
-    assert!(
-        ds.iter().any(|d| d.contains("`Enc` is a trait — a union bound takes type names only")),
-        "a union alias bound with a trait member diagnoses: {ds:?}"
-    );
+    assert!(out.diags.is_empty(), "the alias-spelled union admits both: {:?}", out.diags);
 }
 
 #[test]
-fn single_trait_bound_stays_legal() {
-    // the regression guard: `K requires Enc` (one trait, no union) is the
-    // single-trait law — admission via the impl registry, untouched
+fn single_iface_bound_stays_legal() {
+    // the regression guard: `K requires Enc` (one interface, no union) is
+    // the single-interface law — admission via the structural member-set
+    // match
     let out = compile_app(
-        "trait Enc { fn enc(self) -> bytes; }\n\
+        "interface Enc { fn enc(self) -> bytes; }\n\
          struct Token { v: i32 }\n\
-         impl Enc for Token { fn enc(self) -> bytes { return bytes(0); } }\n\
+         impl Token { pub fn enc(self) -> bytes { return bytes(0); } }\n\
          fn seal<T requires Enc>(x: T) -> i64 { return 0; }\n\
          entry fn probe() -> i64 { let t: Token = Token { v: 1 }; return seal(t); }\n",
     );
-    assert!(out.diags.is_empty(), "a single-trait bound admits: {:?}", out.diags);
+    assert!(out.diags.is_empty(), "a single-interface bound admits: {:?}", out.diags);
 }
 
 // ---- capability resolution through the union ----
 
-const LANE_PRELUDE: &str = "\
-trait Lane { fn lane(self) -> i32; }\n\
-impl Lane for i32 { fn lane(self) -> i32 { return 7; } }\n\
-impl Lane for i64 { fn lane(self) -> i32 { return 13; } }\n";
-
+// The prim-impl fixtures died with the registry (a primitive carries no
+// user members). The capability law rides the prims' own engine surface:
+// `wrapping_mul` is a `builtin impl` member on the integer prims, so an
+// i32|i64 bound provides it and a bool member does not.
 #[test]
 fn method_call_resolves_when_every_member_has_the_method() {
-    // the scratch trait IS the phase-1 fixture (the real private KeyLane
-    // arrives in phase 3): every member implements `Lane`, so the body
-    // against `K` typechecks and dispatches per member
+    // every member provides `wrapping_mul` (its engine `builtin impl`),
+    // so the body against `K` typechecks and each instantiation runs its
+    // own member
     let out = run_entry(
-        &format!(
-            "{LANE_PRELUDE}\
-             entry fn dispatch() -> i64 {{\
-                 let a = lane_of(5);\n\
-                 let b = lane_of(6i64);\n\
-                 let c = copy_of(7);\n\
-             return ((a + b) * 10 + c) as i64;\n\
-             }}\n\
-             fn lane_of<K requires i32 | i64>(k: K) -> i32 {{ return k.lane(); }}\n\
-             fn copy_of<K requires i32 | i64>(k: K) -> i32 {{ let kk = k; return kk.lane(); }}\n"
-        ),
+        "entry fn dispatch() -> i64 {\
+             let a = lane_of(5);\n\
+             let b = lane_of(6i64);\n\
+             let c = copy_of(7);\n\
+         return ((a + b) * 10 + c) as i64;\n\
+         }\n\
+         fn lane_of<K requires i32 | i64>(k: K) -> i64 { return k.wrapping_mul(3) as i64; }\n\
+         fn copy_of<K requires i32 | i64>(k: K) -> i64 { let kk = k; return kk.wrapping_mul(3) as i64; }\n",
         "dispatch",
     );
-    // lane_of(5) → 7 (i32's impl), lane_of(6i64) → 13 (i64's), copy → 7:
-    // distinct members dispatched their distinct impls at run time
-    assert_eq!(out, ((7 + 13) as i64) * 10 + 7);
+    // lane_of(5) → 15 (i32's member), lane_of(6i64) → 18 (i64's),
+    // copy → 21: distinct members ran their distinct members at run time
+    assert_eq!(out, (15 + 18) * 10 + 21);
 }
 
 #[test]
 fn method_call_diagnoses_when_a_member_lacks_the_method() {
-    // `bool` carries no `Lane` impl — the union admits `bool` values, so
-    // a body calling `k.lane()` violates the whole-bound contract and the
-    // instantiation diagnoses at compile time (naming the member and the
-    // allowed set), member-instantiated or not
-    let ds = diags_of(&format!(
-        "{LANE_PRELUDE}\
-         fn lane_of<K requires i32 | bool>(k: K) -> i32 {{ return k.lane(); }}\n\
-         entry fn probe() -> i64 {{ let a = lane_of(5); return a as i64; }}\n"
-    ));
+    // `bool` carries no `wrapping_mul` member — the union admits `bool`
+    // values, so a body calling `k.wrapping_mul(..)` violates the
+    // whole-bound contract and the instantiation diagnoses at compile
+    // time (naming the member and the allowed set), member-instantiated
+    // or not
+    let ds = diags_of(
+        "fn lane_of<K requires i32 | bool>(k: K) -> i64 { return k.wrapping_mul(3) as i64; }\n\
+         entry fn probe() -> i64 { let a = lane_of(5); return a; }\n",
+    );
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not provide `lane`")
+        ds.iter().any(|d| d.contains("`bool` does not provide `wrapping_mul`")
             && d.contains("`K` requires `i32 | bool`")
             && d.contains("every member")),
         "the capability failure names the member and the allowed set: {ds:?}"
@@ -219,19 +251,17 @@ fn method_call_diagnoses_when_a_member_lacks_the_method() {
 
 #[test]
 fn class_body_method_call_through_the_union_bound() {
-    // the phase-3 shape: a class field typed by a union-bounded generic,
+    // a class field typed by a union-bounded generic,
     // a method call through `self.field` inside the class body
-    let src = format!(
-        "{LANE_PRELUDE}\
-         class Box<K requires i32 | i64, V> {{\n\
+    let src = "\
+         class Box<K requires i32 | i64, V> {\n\
          \x20   k: K;\n\
          \x20   v: V;\n\
-         }}\n\
-         impl<K, V> Box<K, V> {{\n\
-         \x20   pub fn new(k: K, v: V) -> Self {{ return Self {{ k: k, v: v }}; }}\n\
-         \x20   pub fn go(self) -> i32 {{ let kk = self.k; return kk.lane() * 10; }}\n\
-         }}\n"
-    );
+         }\n\
+         impl<K, V> Box<K, V> {\n\
+         \x20   pub fn new(k: K, v: V) -> Self { return Self { k: k, v: v }; }\n\
+         \x20   pub fn go(self) -> i32 { let kk = self.k; return kk.wrapping_mul(10) as i32; }\n\
+         }\n";
 
     let full = format!(
         "{src}\
@@ -245,23 +275,22 @@ fn class_body_method_call_through_the_union_bound() {
     assert!(out.diags.is_empty(), "both members satisfy the class bound: {:?}", out.diags);
 
     // a member WITHOUT the capability inside a class union bound
-    let ds = diags_of(&format!(
-        "{LANE_PRELUDE}\
-         class Box<K requires i32 | bool, V> {{\n\
+    let ds = diags_of(
+        "class Box<K requires i32 | bool, V> {\n\
          \x20   k: K;\n\
          \x20   v: V;\n\
-         }}\n\
-         impl<K, V> Box<K, V> {{\n\
-         \x20   pub fn new(k: K, v: V) -> Self {{ return Self {{ k: k, v: v }}; }}\n\
-         \x20   pub fn go(self) -> i32 {{ let kk = self.k; return kk.lane(); }}\n\
-         }}\n\
-         entry fn probe() -> i64 {{\
+         }\n\
+         impl<K, V> Box<K, V> {\n\
+         \x20   pub fn new(k: K, v: V) -> Self { return Self { k: k, v: v }; }\n\
+         \x20   pub fn go(self) -> i32 { let kk = self.k; return kk.wrapping_mul(10) as i32; }\n\
+         }\n\
+         entry fn probe() -> i64 {\
              let b: Box<i32, str> = Box.new(5, \"x\");\n\
              return b.go() as i64;\n\
-         }}\n"
-    ));
+         }\n",
+    );
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not provide `lane`")
+        ds.iter().any(|d| d.contains("`bool` does not provide `wrapping_mul`")
             && d.contains("`K` requires `i32 | bool`")),
         "the class-body capability failure names the member and the bound: {ds:?}"
     );

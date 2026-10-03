@@ -747,7 +747,7 @@ impl Machine for Vm {
     }
 
     fn op_istrait(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::IsTrait { dst, obj, want } = op else {
+        let Op::IsIface { dst, obj, want } = op else {
             unreachable_op!("op_istrait: unexpected op")
         };
         let ty = match self.scalar_recv_ty(*obj) {
@@ -758,7 +758,7 @@ impl Machine for Vm {
         };
         let has = self
             .prog
-            .trait_slots
+            .iface_slots
             .iter()
             .enumerate()
             .any(|(slot, &(t, _))| {

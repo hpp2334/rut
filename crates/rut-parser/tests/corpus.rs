@@ -68,7 +68,6 @@ fn reserved_words_explain_themselves() {
     for (word, want) in [
         ("private", "pub"),
         ("void", "nil"),
-        ("interface", "trait"),
         ("in", "of"),
     ] {
         let src = format!("fn f() -> nil {{ let x = {word}; }}");
@@ -78,6 +77,26 @@ fn reserved_words_explain_themselves() {
             "`{word}` diag should name its rut replacement `{want}`: {diags:?}"
         );
     }
+}
+
+#[test]
+fn interface_is_reserved_and_trait_is_not() {
+    // `interface` moved from the lexer's hard-ban list to the parser's
+    // reserved table (it gates struct-literal/lambda reads of the
+    // word); `trait` is an ordinary identifier again — it lexes and
+    // parses clean everywhere
+    assert!(rut_parser::is_reserved_kw("interface"));
+    let src = "fn f() -> nil { let trait = 1; let y = trait; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "`trait` must lex and parse as an identifier: {diags:?}");
+    // ...and `interface` no longer hard-errors at lex — the word flows
+    // through the parser like any identifier token
+    let src = "fn f() -> nil { let x = interface; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(
+        !diags.iter().any(|d| d.msg.contains("reserved word")),
+        "`interface` must not be a lexer hard-ban anymore: {diags:?}"
+    );
 }
 
 #[test]

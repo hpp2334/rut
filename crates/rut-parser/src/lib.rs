@@ -443,7 +443,7 @@ impl Parser {
 /// contextual alias introducer — an ordinary identifier elsewhere.
 pub const RESERVED_KW: &[&str] = &[
     "let", "mut", "if", "else", "while", "for", "of", "return", "when",
-    "enum", "class", "struct", "trait", "impl", "requires", "use", "pub",
+    "enum", "class", "struct", "interface", "impl", "requires", "use", "pub",
     "static", "async", "await", "extern", "is", "host", "fn",
     "true", "false", "nil",
 ];

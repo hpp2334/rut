@@ -43,8 +43,8 @@ export interface AstModuleLet extends Base { kind: "ModuleLet"; vis: VisTag; nam
 export interface AstEnum extends Base { kind: "Enum"; vis: VisTag; name: string; members: AstMember[] }
 export interface AstDataclass extends Base { kind: "Dataclass"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
 export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
-export interface AstTrait extends Base { kind: "Trait"; vis: VisTag; name: string; generics?: string[]; requires: AstNode[]; methods: AstNode[] }
-export interface AstImpl extends Base { kind: "Impl"; trait: AstNode; target: AstNode; methods: AstNode[] }
+export interface AstInterface extends Base { kind: "Interface"; vis: VisTag; name: string; generics?: string[]; methods: AstNode[] }
+export interface AstImpl extends Base { kind: "Impl"; target: AstNode; methods: AstNode[] }
 export interface AstAlias extends Base { kind: "Alias"; vis: VisTag; name: string; target: AstNode }
 export interface AstFn extends Base { kind: "Fn"; vis: VisTag; async?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; bounds?: AstBound[]; body: AstNode }
 export interface AstSurfaceFn extends Base { kind: "SurfaceFn"; vis: VisTag; linkage: LinkageTag; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode }
@@ -104,7 +104,7 @@ export interface AstIs extends Base { kind: "Is"; expr: AstNode; ty: AstNode }
 
 export type AstNode =
   | AstModule | AstUse | AstAlias | AstModuleLet | AstEnum | AstDataclass | AstClass
-  | AstTrait | AstImpl | AstFn | AstSurfaceFn | AstSurfaceClass
+  | AstInterface | AstImpl | AstFn | AstSurfaceFn | AstSurfaceClass
   | AstFieldDecl | AstMethodDecl | AstParam | AstSelfParam | AstBlock
   | AstLetStmt | AstIf | AstWhile | AstForOf | AstForC | AstReturn | AstBreak
   | AstContinue | AstWhenStmt | AstExprStmt

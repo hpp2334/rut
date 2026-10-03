@@ -736,12 +736,12 @@ impl<'a> P<'a> {
                 }
                 self.body_of_fields_methods(fields, methods, Some(span));
             }
-            ItemKind::Trait { vis, name, generics, requires, methods } => {
+            ItemKind::Interface { vis, name, generics, methods } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
                 }
-                self.text("trait ");
+                self.text("interface ");
                 self.text(self.a.name(name));
                 if !generics.is_empty() {
                     self.text("<");
@@ -749,31 +749,15 @@ impl<'a> P<'a> {
                     self.text(&gnames);
                     self.text(">");
                 }
-                if !requires.is_empty() {
-                    self.sp();
-                    self.text("requires");
-                    self.sp();
-                    for (i, t) in requires.iter().enumerate() {
-                        if i > 0 {
-                            self.text(" | ");
-                        }
-                        self.ty(*t);
-                    }
-                }
-                self.trait_body(methods, span);
+                self.iface_body(methods, span);
             }
-            ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
+            ItemKind::Impl { generics, target, methods, .. } => {
                 self.text("impl");
                 if !generics.is_empty() {
                     self.gen_only(&generics);
                     self.sp();
                 } else {
                     self.sp();
-                }
-                if let Some(tr) = trait_ref {
-                    self.ty(tr);
-                    self.sp();
-                    self.text("for ");
                 }
                 self.ty(target);
                 self.methods_body(methods, span);
@@ -819,18 +803,18 @@ impl<'a> P<'a> {
                 self.text(if ambient { "prelude builtin class " } else { "pub builtin class " });
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
-                self.trait_body(members, span);
+                self.iface_body(members, span);
             }
             ItemKind::BuiltinPrimitive { ambient, name, members } => {
                 self.text(if ambient { "prelude builtin primitive " } else { "pub builtin primitive " });
                 self.text(self.a.name(name));
-                self.trait_body(members, span);
+                self.iface_body(members, span);
             }
             ItemKind::BuiltinImpl { vis, prim, methods } => {
                 let _ = vis;
                 self.text("prelude builtin impl ");
                 self.text(self.a.name(prim));
-                self.trait_body(methods, span);
+                self.iface_body(methods, span);
             }
         }
         self.end_el(span);
@@ -913,7 +897,7 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    fn trait_body(&mut self, methods: Vec<NodeHandle<MethodDeclNode>>, enclosing: Span) {
+    fn iface_body(&mut self, methods: Vec<NodeHandle<MethodDeclNode>>, enclosing: Span) {
         self.sp();
         self.text("{");
         self.passed = self.passed.max(enclosing.lo);

@@ -44,7 +44,7 @@ enum Kind {
     Local,
     /// a module-scope `let`
     ModuleLet,
-    /// a type decl (class/struct/trait/enum/…)
+    /// a type decl (class/struct/interface/enum/…)
     Type,
     /// a free fn or impl method
     Fn,

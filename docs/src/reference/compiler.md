@@ -23,13 +23,13 @@ publishes a signature surface, never code.
 | stage | crate | in → out | notes |
 |---|---|---|---|
 | lex + parse | `rut-lexer`, `rut-parser` | source → AST + diags | flat arena, no recursion |
-| collect | `rut-lir/check/collect` | AST → types, traits, impls | per-module symbol tables |
+| collect | `rut-lir/check/collect` | AST → types, interfaces | per-module symbol tables |
 | resolve | `rut-lir/check/resolve` | paths → symbols | imports, `Self`, visibility, use-path routing |
 | typecheck | `rut-lir/check` (`Ctx`) | expressions → `TyId`s | bidirectional inference, fused with body compilation |
 | monomorphize | `rut-lir/check/inst` | generic calls → instantiations | a work queue; HIR contains no generic code |
 | compile bodies | `rut-lir/lir` (`FnCompiler`) | instantiations → `FuncCode` | one function at a time |
 | optimize | `rut-lir/lir` (`peephole`, `sroa`, …) | `FuncCode` → `FuncCode` | fixed pipeline, no flags |
-| link + flatten | `rut-core/link` | modules → one `Program` | type-id rebase, duplicate-impl check |
+| link + flatten | `rut-core/link` | modules → one `Program` | type-id rebase, interface-table merge |
 | encode | `rut-core/binary` | `Program` → bytes | versioned, little-endian, hash-stable |
 
 The middle stages are deliberately **one crate**: the checker's
@@ -50,8 +50,8 @@ Name resolution walks the AST and binds every path to a symbol:
   [Modules and visibility](modules-and-visibility.md).
 - Struct-vs-class is decided here: literals are legal only for structs;
   classes construct through their class methods.
-- `is` expressions resolve their right-hand side to a concrete type or a
-  trait instantiation id; `is` on an erasure-typed receiver answers by the
+- `is` expressions resolve their right-hand side to a concrete type or an
+  interface instantiation id; `is` on an erasure-typed receiver answers by the
   box (see [opaque — erasure and downcast](opaque.md)).
 - `host`/`extern` surface references resolve against the declaration
   surfaces of the packages the module imports, with slot ids attached to
@@ -76,15 +76,20 @@ Laws enforced here:
 - **Union bounds** — a generic parameter's `requires T1 | T2` bound is
   checked at every site that completes the substitution
   ([Type aliases and union bounds](type-aliases.md)).
+- **Interface bounds** — a `T requires I` bound checks the interface's
+  member set once, where `T` is chosen: at a generic call's
+  instantiation and at a satisfying value's crossing. A type without
+  the members is refused there, naming the first missing member
+  ([Interfaces and dispatch](interfaces.md)).
 - **The crossing rule** — an `entry fn`'s published signature may only use
   types that cross the host boundary: primitives, `str`, `bytes`,
   `opaque`, `?T` over a crossing type (nil-flattened), and tuples of
   crossing types. A violation is a compile error, so a bad surface never
   reaches the embedder at load time ([The host boundary](../core-concepts/host-boundary.md)).
-- **The orphan rule** — `impl Trait for Type` is legal only in a package
-  that defines the trait or the type. Trait impls for foreign pairs are a
-  compile-time rejection, not a link-time surprise
-  ([Traits and dispatch](traits.md)).
+
+There is no orphan rule to enforce — nothing registers. Satisfaction
+is checked at boundaries only, so the checker's interface work is a
+per-call-site member-set match, never a program-wide search.
 
 ## Monomorphization
 
@@ -115,17 +120,18 @@ In a no-JIT VM, compile-time type knowledge is the only knowledge. The IR
 tracks a per-value lattice:
 
 ```
-exact concrete  >  I (trait-typed, satisfies I)
+exact concrete  >  I (interface-typed, satisfies I)
 ```
 
 - **Exact types** compile to direct calls and known layouts.
-- **Trait-typed values** (`d: Drawable`) are unsized: the payload lives in
+- **Interface-typed values** (`s: Drawable`) are unsized: the payload
+  lives in
   a heap cell and the slot stores the cell handle. One indirect
-  vtable call per multi-origin use; fields are inaccessible; no inlining
+  itable call per multi-origin use; fields are inaccessible; no inlining
   without evidence. The cost is per-call, never per-field — and when a
-  call's receiver is statically concrete (a sealed impl set, a monomorphic
-  body), the call devirtualizes at body-compile time and the dispatch
-  overhead is zero.
+  call's receiver is statically concrete (a single tracked origin, a
+  monomorphic body), the call devirtualizes at body-compile time and
+  the dispatch overhead is zero.
 - **Erasure sits off the lattice.** The `opaque` primitive is reached only
   through the type-call `opaque(v)`, and `opaque.downcast<T>(o)` is the
   refinement:
@@ -135,11 +141,11 @@ exact concrete  >  I (trait-typed, satisfies I)
   over one cell folds to a type-id switch. What the compiler must **not**
   assume is the type inside a box at a given program point; speculative
   devirtualization through `opaque` is JIT behavior and does not exist.
-- **The slice tier** parallels trait widening:
+- **The slice tier** parallels interface widening:
   `Array<T, N> | Vec<T> (concrete)  >  Slice<T> view (unsized)`.
   `N` is part of the type's identity; slices are never boxed or erased.
 
-The intended program shape: exact types on the hot path, trait-typed
+The intended program shape: exact types on the hot path, interface-typed
 values where polymorphism is real, `opaque` only inside heterogeneous
 storage. Lints flag `downcast` in loop bodies and erasure crossing
 non-storage function boundaries.
@@ -173,8 +179,9 @@ against the example programs and the benchmark corpus.
 `async fn` compiles to a state machine: each `await` is a checkpoint
 state in the hidden frame, resume dispatch is the existing jump-table op,
 locals become frame fields, and suspension is a plain return. The op set
-grows zero rows for this — the driven half is an ordinary trait-vtable
-call through the future's `yield` row. The full protocol lives in
+grows zero rows for this — the driven half is an ordinary itable call
+through the future's designated yield slot (the closed `Future` class's
+engine ABI). The full protocol lives in
 [Async and await](async.md) and [launched futures](launched-futures.md).
 
 ## Determinism

@@ -68,8 +68,8 @@ fn classify_item(
         ItemKind::Struct { name, .. } | ItemKind::Class { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
-        ItemKind::Trait { name, .. } => {
-            push_name(toks, span, ast.name(*name), TokenType::Trait, out, false)
+        ItemKind::Interface { name, .. } => {
+            push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
         }
         ItemKind::BuiltinTy { name, .. } | ItemKind::BuiltinPrimitive { name, .. } | ItemKind::SurfaceStruct { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)

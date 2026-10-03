@@ -5,8 +5,8 @@
 //   pub fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 //   pub fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
 //   pub fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
-//   pub trait JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
-//   pub trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+//   pub interface JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
+//   pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
 //
 // THE LAW (survey §0, verbatim):
 // - (?T, ?E) with the EXACTLY-ONE-NIL invariant: success = (value, nil),
@@ -23,11 +23,17 @@
 //   cyclic — a Depth failure is EXPECTED, data not trap.
 // - Error types: payloadless enum (kind) + fixed-field struct (details)
 //   — the language has no data-carrying enums.
-// - DEPENDENCY DIRECTION (the serde model): json owns the traits; ALL
-//   container impls live in json (the peer-gated group files beside this
-//   one); user types impl json's traits on their own types. No runtime
-//   reflection, no engine-woven traits, no
-//   containers -> json.
+// - DEPENDENCY DIRECTION (the serde model): json owns the interfaces;
+//   ALL container wrappers live in json (the peer-gated group files
+//   beside this one); user types satisfy the interfaces STRUCTURALLY —
+//   by spelling the members on their own inherent impls. No runtime
+//   reflection, no registration, no containers -> json.
+// - THE WRAPPER LAW (the structural-interfaces fork): primitives and
+//   bare containers never satisfy anything — they have no members to
+//   have. The wrapper families (`JsonI64`, `JsonF64`, `SOpt`, `JsonArr`,
+//   and the group files' `JsonVec`/`JMap*`/`JSet`) are the spelled,
+//   per-call manufacture: `encodeJson(JsonI64(64))`, never
+//   `encodeJson(64)` — nothing is auto-inserted, forever.
 //
 // DECODE MODEL (survey §2.1): DIRECT — every type's `decode(r)` reads
 // its own expectations straight off the cursor; there is NO DOM. A
@@ -1275,14 +1281,225 @@ fn round_exact_scaled(hi: u64, lo: u64, shift: i32) -> f64 {
     return v;
 }
 
-// ---- the traits (survey §0, the locked surface verbatim) ----
+// ---- the interfaces (survey §0, the locked surface verbatim) ----
 
-pub trait JsonSerialize {
+pub interface JsonSerialize {
     fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError;
 }
 
-pub trait JsonDeserialize {
+pub interface JsonDeserialize {
     fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError);
+}
+
+// ---- the wrapper families (the scalar rows) --------------------------
+// One newtype class per scalar shape, both members, one spelled
+// accessor. A primitive crosses ONLY inside its wrapper:
+// `encodeJson(JsonI64(64))` — the wrapper is the manufacture, the
+// call site spells it.
+
+pub class JsonI64(i64);
+
+impl JsonI64 {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.write_i64(self.inner);
+        return nil;
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let v = r.read_i64();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JsonI64(v), nil);
+    }
+    pub fn get(self) -> i64 { return self.inner; }
+}
+
+// f64 — shortest round-trip encode (non-finite -> NotFinite); the
+// two-tier decode (tier 1 exact, tier 2 ±1 ulp best-effort, §2.4)
+pub class JsonF64(f64);
+
+impl JsonF64 {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.write_f64(self.inner);
+        return nil;
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let v = r.read_f64();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JsonF64(v), nil);
+    }
+    pub fn get(self) -> f64 { return self.inner; }
+}
+
+// bool — `true`/`false` only; `1`/`0` are WrongType (§2.4)
+pub class JsonBool(bool);
+
+impl JsonBool {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.write_bool(self.inner);
+        return nil;
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let v = r.read_bool();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JsonBool(v), nil);
+    }
+    pub fn get(self) -> bool { return self.inner; }
+}
+
+// str — escaped per RFC 8259; any JSON string decodes
+pub class JsonStr(str);
+
+impl JsonStr {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.write_str(self.inner);
+        return nil;
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let v = r.read_str();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JsonStr(v), nil);
+    }
+    pub fn get(self) -> str { return self.inner; }
+}
+
+// u64 — DECODE ONLY (JSON integers beyond i64's reach ride the gnu64
+// fold below; the encode half never had a row — an out-of-i64-range
+// u64 has no JSON producer here). The wrapper family's one asymmetric
+// member set: satisfaction is per-interface, so JsonU64 satisfies
+// JsonDeserialize alone.
+pub class JsonU64(u64);
+
+impl JsonU64 {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let t = r.read_number_text();
+        if (r.failed()) { return (nil, r.error()); }
+        let v = gnu64(t);
+        if (v == nil) {
+            return (nil, DecodeJsonError {
+                kind: DecodeErrorKind.WrongType,
+                at: r.here() as i64,
+                got: t,
+                expected: "a u64",
+            });
+        }
+        return (JsonU64(v), nil);
+    }
+    pub fn get(self) -> u64 { return self.inner; }
+}
+
+// the u64 digit fold — pre-checks its bound (no wrapping ops)
+fn gnu64(t: str) -> ?u64 {
+    let n = t.len();
+    if (n == 0) { return nil; }
+    let mut acc: u64 = 0;
+    let mut i: i32 = 0;
+    while (i < n) {
+        let c = t.slice(i, i + 1).code() as i32;
+        if (c < 0x30 || c > 0x39) { return nil; }
+        let (m, ok1) = acc.checked_mul(10u64);
+        let d = (c - 0x30) as u64;
+        let (a, ok2) = m.checked_add(d);
+        if (!ok1 || !ok2) { return nil; }
+        acc = a;
+        i += 1;
+    }
+    return acc;
+}
+
+// SOpt<T> — the optional row (survey §2.6): nil -> null, else T; null
+// -> nil, else T. THIS wrapper is what makes every optional field one
+// `?T`. The bound is the ENCODE direction (the wrapper's T must be
+// encodable); the decode member delegates to `T.decode` per
+// instantiation, so a decode-only T (JsonU64) cannot ride SOpt — spell
+// the optional inline in that shape's own decode (the struct-decode
+// convention anyway).
+pub class SOpt<T requires JsonSerialize | JsonDeserialize>(?T);
+
+impl<T> SOpt<T> {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        if (self.inner == nil) {
+            w.write_raw("null");
+            return nil;
+        }
+        let v: T = self.inner;
+        return v.encode(w);
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        if (r.try_null()) {
+            // success with an absent value: (nil, nil) — the pair law's
+            // ?T reading (§3's matrix pins this row separately)
+            let none: ?T = nil;
+            return (SOpt(none), nil);
+        }
+        if (r.failed()) { return (nil, r.error()); }
+        let (v, e) = T.decode(r);
+        if (e != nil) { return (nil, e); }
+        let some: ?T = v;
+        return (SOpt(some), nil);
+    }
+    pub fn get(self) -> ?T { return self.inner; }
+}
+
+// JsonArr<T> — the structural array row. Encode walks forward; decode
+// counts grammatically (skip_value), rewinds, and decodes into an
+// exactly-sized column — the base is pouch-free by law, so the count
+// comes from the doc, not a growable. (The growable shape is
+// group-pouch's `JsonVec`.)
+pub class JsonArr<T requires JsonSerialize | JsonDeserialize>([T]);
+
+impl<T> JsonArr<T> {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_array();
+        for (let x of self.inner) {
+            let e = x.encode(w);
+            if (e != nil) { return e; }
+        }
+        w.end_array();
+        return nil;
+    }
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mark = r.here();
+        // pass 1: the element count, grammatically
+        r.begin_array();
+        let mut count: i32 = 0;
+        while (r.more()) {
+            r.skip_value();
+            if (r.failed()) { return (nil, r.error()); }
+            count += 1;
+        }
+        r.end_array();
+        if (r.failed()) { return (nil, r.error()); }
+        // rewind (same-module field access — the reader is json's own)
+        r.pos = mark;
+        // pass 2: the elements
+        r.begin_array();
+        let mut buf: [?T] = [nil; count];
+        let mut first: ?T = nil;
+        let mut i: i32 = 0;
+        while (r.more()) {
+            let (x, e) = T.decode(r);
+            if (e != nil) { return (nil, e); }
+            buf[i] = x;
+            if (i == 0) { first = x; }
+            i += 1;
+        }
+        r.end_array();
+        if (r.failed()) { return (nil, r.error()); }
+        if (count == 0) {
+            let empty: [T] = [];
+            return (JsonArr(empty), nil);
+        }
+        // materialize the fixed array — the first element seeds it
+        // (pouch's `as_array` construction law, generic T has no zero)
+        let seed: T = first;
+        let mut a: [T] = [seed; count];
+        let mut j: i32 = 0;
+        while (j < count) {
+            a[j] = buf[j];
+            j += 1;
+        }
+        return (JsonArr(a), nil);
+    }
+    pub fn to_arr(self) -> [T] { return self.inner; }
 }
 
 // ---- the entries (survey §0; the pair is minted ONLY here) ----
@@ -1389,163 +1606,3 @@ fn utf8_err(byte: u32, at: i32) -> ?DecodeJsonError {
     return DecodeJsonError { kind: DecodeErrorKind.InvalidUtf8, at: at as i64, got: f"0x{hs}{ls}", expected: "UTF-8" };
 }
 
-// ---- the base impl matrix (survey §2.6) ----
-
-// i64 — decimal encode; exact decode per §2.4
-impl JsonSerialize for i64 {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.write_i64(self);
-        return nil;
-    }
-}
-
-impl JsonDeserialize for i64 {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let v = r.read_i64();
-        if (r.failed()) { return (nil, r.error()); }
-        return (v, nil);
-    }
-}
-
-// f64 — shortest round-trip encode (non-finite -> NotFinite); the
-// two-tier decode (tier 1 exact, tier 2 ±1 ulp best-effort, §2.4)
-impl JsonSerialize for f64 {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.write_f64(self);
-        return nil;
-    }
-}
-
-impl JsonDeserialize for f64 {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let v = r.read_f64();
-        if (r.failed()) { return (nil, r.error()); }
-        return (v, nil);
-    }
-}
-
-// bool — `true`/`false` only; `1`/`0` are WrongType (§2.4)
-impl JsonSerialize for bool {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.write_bool(self);
-        return nil;
-    }
-}
-
-impl JsonDeserialize for bool {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let v = r.read_bool();
-        if (r.failed()) { return (nil, r.error()); }
-        return (v, nil);
-    }
-}
-
-// str — escaped per RFC 8259; any JSON string decodes
-impl JsonSerialize for str {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.write_str(self);
-        return nil;
-    }
-}
-
-impl JsonDeserialize for str {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let v = r.read_str();
-        if (r.failed()) { return (nil, r.error()); }
-        return (v, nil);
-    }
-}
-
-// ?T — the optional row (survey §2.6): nil -> null, else T; null ->
-// nil, else T. THIS row is what makes every optional field one `?T` —
-// no Option/Result revival. The nullable impl target is the sanctioned
-// checker arm (survey §1.4 item 1); the body derefs explicitly — a nil
-// check through `== nil` (the tree's law; the ?bool lane keeps
-// nmapset's disclosed checker limit) — and delegates to T below.
-impl<T> JsonSerialize for ?T {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        if (self == nil) {
-            w.write_raw("null");
-            return nil;
-        }
-        let inner: T = self;
-        return inner.encode(w);
-    }
-}
-
-impl<T> JsonDeserialize for ?T {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        if (r.try_null()) {
-            // success with an absent value: (nil, nil) — the pair law's
-            // ?T reading (§3's matrix pins this row separately)
-            return (nil, nil);
-        }
-        if (r.failed()) { return (nil, r.error()); }
-        let (v, e) = T.decode(r);
-        if (e != nil) { return (nil, e); }
-        let boxed: ?T = v;
-        return (boxed, nil);
-    }
-}
-
-// [T] — the structural array row (the TyArray target precedent). Encode
-// walks forward; decode counts grammatically (skip_value), rewinds, and
-// decodes into an exactly-sized column — the base is pouch-free by law,
-// so the count comes from the doc, not a growable.
-impl<T> JsonSerialize for [T] {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.begin_array();
-        for (let x of self) {
-            let e = x.encode(w);
-            if (e != nil) { return e; }
-        }
-        w.end_array();
-        return nil;
-    }
-}
-
-impl<T> JsonDeserialize for [T] {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mark = r.here();
-        // pass 1: the element count, grammatically
-        r.begin_array();
-        let mut count: i32 = 0;
-        while (r.more()) {
-            r.skip_value();
-            if (r.failed()) { return (nil, r.error()); }
-            count += 1;
-        }
-        r.end_array();
-        if (r.failed()) { return (nil, r.error()); }
-        // rewind (same-module field access — the reader is json's own)
-        r.pos = mark;
-        // pass 2: the elements
-        r.begin_array();
-        let mut buf: [?T] = [nil; count];
-        let mut first: ?T = nil;
-        let mut i: i32 = 0;
-        while (r.more()) {
-            let (x, e) = T.decode(r);
-            if (e != nil) { return (nil, e); }
-            buf[i] = x;
-            if (i == 0) { first = x; }
-            i += 1;
-        }
-        r.end_array();
-        if (r.failed()) { return (nil, r.error()); }
-        if (count == 0) {
-            let empty: [T] = [];
-            return (empty, nil);
-        }
-        // materialize the fixed array — the first element seeds it
-        // (pouch's `as_array` construction law, generic T has no zero)
-        let seed: T = first;
-        let mut a: [T] = [seed; count];
-        let mut j: i32 = 0;
-        while (j < count) {
-            a[j] = buf[j];
-            j += 1;
-        }
-        return (a, nil);
-    }
-}

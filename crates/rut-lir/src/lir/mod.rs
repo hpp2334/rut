@@ -194,6 +194,10 @@ pub struct FnCompiler<'a, 'b> {
     /// union-SPELLED bounds (trait bounds stay admission-only). Read by
     /// the method-call capability gate.
     union_bounds: HashMap<IdentId, NodeHandle<AnyTy>>,
+    /// interface bounds in scope: generic param ident → the interfaces
+    /// the bound spells (a union admits either; the carried-member law
+    /// picks the descriptor declaring the member)
+    iface_bounds: HashMap<IdentId, Vec<u32>>,
     /// locals bound from a union-bounded generic (param/let/field-copy
     /// provenance): local name → the bounded generic
     union_syms: HashMap<IdentId, IdentId>,
@@ -258,16 +262,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// and the vtable dispatch reads the cell's own type. The mirror is
     /// the prim-target impl method's prologue unbox (the slot ABI). A
     /// no-op for slot-typed and ref-typed values.
-    pub(crate) fn widen_to_slot(&mut self, t: TypeId, to: TypeId, sp_lo: u32) {
-        if t != to
-            && matches!(self.ctx.types.kind(to), TyKind::TraitObj { .. })
-            && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })
-            && !self.ctx.types.is_ref(t)
-        {
-            let src = self.last_reg;
-            let dst = self.new_reg(to);
-            self.emit(Op::Box { dst, val: src, ty: t }, sp_lo);
-        }
+    pub(crate) fn widen_to_slot(&mut self, _t: TypeId, to: TypeId, _sp_lo: u32) {
+        // The slot always holds a cell handle: only ref-repr values
+        // (classes/enums — the types that can carry inherent members)
+        // satisfy an interface, so no box is ever minted at an
+        // interface widening. (`Op::Box` lives on as the erasure
+        // primitive's `opaque(v)` mint, not a slot form.)
+        let _ = to;
     }
 
     /// `p.m(..)` / `p[i]` auto-deref: a nullable used as a

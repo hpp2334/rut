@@ -342,7 +342,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // a stale origin could statically bind the WRONG
                         // impl, which must be unrepresentable
                         let origins = if t != l.ty
-                            && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })
+                            && !matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. })
                         {
                             vec![t]
                         } else {

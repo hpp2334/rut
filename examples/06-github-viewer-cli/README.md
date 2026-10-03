@@ -41,7 +41,7 @@ The fetch sites await — and ONLY the fetch sites:
 
 ```rut
 let resp = await client.get(url).build().send(cx);   // resolves at HEADERS
-let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));  // list: one drain
+let (tree, e) = decode_root_bytes<Root>(await resp.body(cx));  // list: one drain
 let c = await stream.next(cx);                       // download: chunk per await
 ```
 
@@ -66,7 +66,7 @@ rate-limit note; any other non-2xx → `rgh: CDN <n>`.
 
 | piece | where | does |
 |---|---|---|
-| the brain | `rgh.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes<Root>` over the tree JSON (`impl JsonDeserialize for Entry` + `Root` over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
+| the brain | `rgh.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
 | the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient.new()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send(cx)` (headers), `body(cx)` (the drain), `byte_stream()` + `next(cx)` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
 | the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, `assemble_peers`, compile `rgh.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
@@ -109,14 +109,20 @@ Two naming disclosures, both load-bearing:
   `del`; the wire still sees the canonical `DELETE`.
 
 And one engine-side gap this example documented rather than dodged:
-the peer-gated `impl JsonSerialize for Vec<T>` monomorphizes at every
-`Vec<..>` shape in the unit — including `Vec<Entry>`, riding the
-struct field — and its element `x.encode(w)` fails load-time verify
-unless Entry's own `JsonSerialize` impl is compiled. `rgh.rut` carries
-that impl (type-local, orphan-legal), which makes the peer gate
-genuinely load-bearing: the twin dispatches the spliced `Vec<Entry>`
-row itself. 02-digest hit the same gap at `T = opaque`, where the
-orphan rule forbids the fix and the light mount is the only answer.
+json's generic-fn bodies are owner-anchored — only what json's own
+pack closure spells rides its compiled binary — so the entry spellings
+(`decodeJsonBytes<Root>`, an encode entry over a consumer type) could
+never be seeded there: this pkg's `Root`/`Entry` did not exist at
+json's pack time. `rgh.rut` answers with LOCAL generic shims whose
+`T requires JsonSerialize/JsonDeserialize` bounds check the member set
+at instantiation — Entry and Root carry those members on their own
+inherent impls, so the shims monomorphize in THIS unit and dispatch
+the members recursively. (The wrapper route over json's pouch group —
+`decodeJson<JsonVec<Entry>>`, `JsonVec(kids).encode(w)` — exists for
+the bare-container shapes; the direct loops keep the recursion in one
+spelled place.) 02-digest hits the same wall at `T = opaque`, where
+no member set can ever satisfy the bound and the direct writer route
+is the only answer.
 
 ## The offline gate — the fixture lane
 

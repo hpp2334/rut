@@ -287,13 +287,13 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::Trait { vis, name, generics, methods, .. } => {
+            ItemKind::Interface { vis, name, generics, methods, .. } => {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     toks,
                     ast.name(*name),
-                    TyForm::Trait,
+                    TyForm::Interface,
                     *vis,
                     generics_of(ast, generics),
                     Vec::new(),
@@ -317,24 +317,13 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::Impl { generics, trait_ref, target, methods, .. } => {
-                let trait_head = trait_ref
-                    .map(|tr| ty_head(ast, tr))
-                    .unwrap_or_default();
-                let gen_head = if generics.is_empty() {
-                    String::new()
-                } else {
-                    let gs = generics.iter().map(|&g| ast.name(g).to_string()).collect::<Vec<_>>().join(", ");
-                    format!("<{}>", gs)
-                };
-                let owner = if trait_ref.is_some() {
-                    format!("impl{} {} for {}", gen_head, trait_head, ty_head(ast, *target))
-                } else {
-                    format!("impl{} {}", gen_head, ty_head(ast, *target))
-                };
+            ItemKind::Impl { target, methods, .. } => {
+                // the inherent impl owns its methods — the owner string
+                // is the target type's name, so an impl method renders
+                // like the type's own surface (`impl I for T` is gone)
+                let target_head = ty_head(ast, *target);
                 idx.impls.push(ImplDef {
-                    trait_name: trait_head,
-                    target_name: ty_head(ast, *target),
+                    target_name: target_head.clone(),
                 });
                 for m in methods {
                     let d = ast.method_decl(*m);
@@ -347,7 +336,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                         ret: d.ret.map(|r| ty_src(ast, r)),
                         params: param_names(ast, &d.params),
                         doc: doc_before(src, sp.lo),
-                        owner: Some(owner.clone()),
+                        owner: Some(target_head.clone()),
                         span: sp,
                         line: line_of(src, sp.lo),
                     });

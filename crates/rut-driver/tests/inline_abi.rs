@@ -1,13 +1,13 @@
-//! P1 (mapset perf plan): boxless static trait dispatch + trait-impl/
-//! free-fn inlining. Prim-target impl methods compile in TWO ABI
-//! variants — the slot ABI (vtable rows; scalars cross boxed, prologue
-//! unboxes) and the concrete ABI (bare-receiver static calls; params
-//! cross raw). Bare concrete receivers bind the concrete variant: no
-//! `box` is minted, and a tiny body inlines at the site (no call op at
-//! all). Free fns inline under the same budget.
+//! P1's survivors, restated for the structural fork: free-fn inlining
+//! (bodies flatten into their callers under the budget), dispatch parity
+//! across every call form an interface-typed value can take (bare
+//! concrete receiver, slot-bound local, merged origins), and the
+//! cross-module member call binding the exporter's compiled fn. The
+//! prim-target dual-ABI machinery died with prim satisfaction (a
+//! primitive carries no members — capability rides wrapper classes),
+//! and method-inlining retired with it: methods stay real `CallM`s.
 
 use rut_core::ops::Op;
-use rut_core::types::TY_I32;
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
@@ -50,98 +50,6 @@ fn main_of(p: &rut_core::binary::Program) -> &rut_core::binary::FuncCode {
         .expect("main compiled")
 }
 
-const TINY: &str = "\
-trait T { fn m(self) -> i32; }\n\
-impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n";
-
-/// (a) an origin-pinned bare-prim trait call: no `box` op mints, and a
-/// tiny body inlines — no `callm` either. The dump spells it: main is
-/// just the const + the arithmetic.
-#[test]
-fn bare_prim_trait_call_is_boxless_and_inlines() {
-    let out = compile(&format!(
-        "{TINY}\
-         entry fn main() -> i32 {{\n\
-         \x20   let x = 5;\n\
-         \x20   return x.m();\n\
-         }}\n"
-    ));
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-    let p = out.program.expect("program");
-    let main = main_of(&p);
-    // op-level: no box, no dispatch op of any kind
-    assert!(
-        main.code.iter().all(|op| !matches!(
-            op,
-            Op::Box { .. } | Op::Call { .. } | Op::CallM { .. } | Op::CallI { .. }
-        )),
-        "bare-prim call must inline without a box:\n{}",
-        rut_driver::ir_dump_of(&p.funcs, &p.interner)
-    );
-    // dump-level: same answer in the text (guarded — `unbox` must not
-    // count as a box hit)
-    let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
-    let main_text = ir.split("fn #").find(|s| s.starts_with("1 main")).unwrap_or("");
-    assert!(!main_text.contains(" box "), "no box op in main:\n{ir}");
-    assert!(!main_text.contains("callm"), "no callm in main:\n{ir}");
-}
-
-/// (a2) a body over the inline budget still dispatches BOXLESS: the
-/// call binds the CONCRETE variant (param type is the prim, no unbox
-/// prologue), and the slot variant exists for the vtable row.
-#[test]
-fn fat_body_falls_back_to_the_concrete_variant_without_a_box() {
-    let mut body = String::from("        let a0 = self;\n");
-    for i in 1..=30 {
-        body.push_str(&format!("        let a{i} = a{} + 1;\n", i - 1));
-    }
-    let src = format!(
-        "trait T {{ fn m(self) -> i32; }}\n\
-         impl T for i32 {{\n\
-         \x20   fn m(self) -> i32 {{\n\
-         {body}\
-         \x20       return a30;\n\
-         \x20   }}\n\
-         }}\n\
-         entry fn main() -> i32 {{\n\
-         \x20   let x = 5;\n\
-         \x20   return x.m();\n\
-         }}\n"
-    );
-    let out = compile(&src);
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-    let p = out.program.expect("program");
-    let main = main_of(&p);
-    assert!(
-        main.code.iter().all(|op| !matches!(op, Op::Box { .. })),
-        "bare-prim fallback must not box the receiver:\n{}",
-        rut_driver::ir_dump_of(&p.funcs, &p.interner)
-    );
-    let callee = main.code.iter().find_map(|op| match op {
-        Op::CallM { func, .. } => Some(*func as usize),
-        _ => None,
-    }).expect("the fat body dispatches with callm");
-    // the callee is the CONCRETE variant: prim param, no unbox prologue
-    let f = &p.funcs[callee];
-    assert_eq!(f.params[0], TY_I32, "concrete-ABI param:\n{}", rut_driver::ir_dump_of(&p.funcs, &p.interner));
-    assert!(
-        f.code.iter().all(|op| !matches!(op, Op::Unbox { .. })),
-        "concrete-ABI variant has no unbox prologue:\n{}",
-        rut_driver::ir_dump_of(&p.funcs, &p.interner)
-    );
-    // and the slot variant exists alongside (vtable rows bind it)
-    let slot_variant = p.funcs.iter().find(|f| {
-        f.params.first()
-            .map(|&t| matches!(p.types.kind(t), rut_core::types::TyKind::TraitObj { .. }))
-            .unwrap_or(false)
-    });
-    assert!(
-        slot_variant.is_some(),
-        "the slot-ABI variant is compiled too:\n{}",
-        rut_driver::ir_dump_of(&p.funcs, &p.interner)
-    );
-}
-
 /// (b) a `mix64`-shaped free fn flattens into its caller: no `call` at
 /// the site (one frame saved per hash).
 #[test]
@@ -166,105 +74,102 @@ fn mix64_shaped_free_fn_flattens() {
     );
 }
 
-/// (c) checksum parity on a trait-heavy program: bare-prim sites
-/// (inlined), record sites, slot sites (`let hk: T = k`) and merged
-/// origins (vtable) all answer identically. Expected checksum derived
-/// from the branches: 1 + 10 + 100 + 10000 + 100000 + 1000000 +
+/// (c) checksum parity on an interface-heavy program: bare concrete
+/// sites (static bind), wrapper sites, slot sites (`let wk: K = w`) and
+/// merged origins (vtable) all answer identically. Expected checksum
+/// derived from the branches: 1 + 10 + 100 + 10000 + 100000 + 1000000 +
 /// 10000000 + 100000000 = 111110111 (the `h1 == h2` branch is
 /// deliberately false — mix(5) != mix(9)).
 #[test]
-fn trait_heavy_checksum_parity() {
+fn iface_heavy_checksum_parity() {
     let checksum = run_main(
-        "trait H {\n\
-         \x20   fn hash(self) -> u64;\n\
-         \x20   fn hash_eq(self, other: Self) -> bool;\n\
+        "interface K {\n\
+         \x20   fn key(self) -> u64;\n\
+         \x20   fn key_eq(self, other: Self) -> bool;\n\
          }\n\
          fn mix(bits: u64) -> u64 { return (bits ^ 14695981039346656037u64).wrapping_mul(1099511628211u64); }\n\
-         impl H for i32 {\n\
-         \x20   fn hash(self) -> u64 { return mix(self as u64); }\n\
-         \x20   fn hash_eq(self, other: Self) -> bool { return self == other; }\n\
+         class KI(i32);\n\
+         impl KI {\n\
+         \x20   pub fn key(self) -> u64 { return mix(self.inner as u64); }\n\
+         \x20   pub fn key_eq(self, other: KI) -> bool { return self.inner == other.inner; }\n\
          }\n\
-         impl H for u8 {\n\
-         \x20   fn hash(self) -> u64 { return mix(self as u64); }\n\
-         \x20   fn hash_eq(self, other: Self) -> bool { return self == other; }\n\
+         class KU(u8);\n\
+         impl KU {\n\
+         \x20   pub fn key(self) -> u64 { return mix(self.inner as u64); }\n\
+         \x20   pub fn key_eq(self, other: KU) -> bool { return self.inner == other.inner; }\n\
          }\n\
          struct Pt { x: i32 }\n\
-         impl H for Pt {\n\
-         \x20   fn hash(self) -> u64 { return mix(self.x as u64); }\n\
-         \x20   fn hash_eq(self, other: Self) -> bool { return self.x == other.x; }\n\
+         impl Pt {\n\
+         \x20   pub fn key(self) -> u64 { return mix(self.x as u64); }\n\
+         \x20   pub fn key_eq(self, other: Pt) -> bool { return self.x == other.x; }\n\
          }\n\
-         fn pick(k: bool) -> H {\n\
-         \x20   if (k) { return 5; }\n\
-         \x20   return 9u8;\n\
+         fn pick(k: bool) -> K {\n\
+         \x20   if (k) { return KI(5); }\n\
+         \x20   return KU(9u8);\n\
          }\n\
          entry fn main() -> i32 {\n\
          \x20   let mut acc: i32 = 0;\n\
-         \x20   let a = 5;\n\
-         \x20   if (a.hash_eq(5)) { acc += 1; }\n\
-         \x20   if (!a.hash_eq(6)) { acc += 10; }\n\
-         \x20   let h1 = a.hash();\n\
-         \x20   let b = 9u8;\n\
-         \x20   if (b.hash_eq(9u8)) { acc += 100; }\n\
-         \x20   let h2 = b.hash();\n\
+         \x20   let a = KI(5);\n\
+         \x20   if (a.key_eq(KI(5))) { acc += 1; }\n\
+         \x20   if (!a.key_eq(KI(6))) { acc += 10; }\n\
+         \x20   let h1 = a.key();\n\
+         \x20   let b = KU(9u8);\n\
+         \x20   if (b.key_eq(KU(9u8))) { acc += 100; }\n\
+         \x20   let h2 = b.key();\n\
          \x20   if (h1 == h2) { acc += 1000; }\n\
          \x20   let p = Pt { x: 3 };\n\
          \x20   let q = Pt { x: 3 };\n\
-         \x20   if (p.hash_eq(q)) { acc += 10000; }\n\
-         \x20   if (!p.hash_eq(Pt { x: 4 })) { acc += 100000; }\n\
-         \x20   let wa: H = a;\n\
-         \x20   if (wa.hash_eq(a)) { acc += 1000000; }\n\
-         \x20   if (wa.hash() == h1) { acc += 10000000; }\n\
-         \x20   let v: H = pick(true);\n\
-         \x20   if (v.hash_eq(5)) { acc += 100000000; }\n\
+         \x20   if (p.key_eq(q)) { acc += 10000; }\n\
+         \x20   if (!p.key_eq(Pt { x: 4 })) { acc += 100000; }\n\
+         \x20   let wa: K = a;\n\
+         \x20   if (wa.key_eq(a)) { acc += 1000000; }\n\
+         \x20   if (wa.key() == h1) { acc += 10000000; }\n\
+         \x20   let v: K = pick(true);\n\
+         \x20   if (v.key_eq(KI(5))) { acc += 100000000; }\n\
          \x20   return acc;\n\
          }\n",
     );
     assert_eq!(checksum, 111_110_111);
 }
 
-/// (d) the slot path (`let hk: T = k; hk.m()`) still works: the box is
-/// materialized by the widening, the call dispatches the SLOT variant
-/// (trait-object param + unbox prologue).
+/// (d) the slot path (`let hk: K = w; hk.m()`) still works: the
+/// interface-typed local holds the ref-repr wrapper, the call binds the
+/// concrete member statically (single origin) — no box is minted for a
+/// ref-repr receiver, ever.
 #[test]
-fn slot_path_still_dispatches_the_slot_variant() {
-    let src = format!(
-        "{TINY}\
-         entry fn main() -> i32 {{\n\
-         \x20   let k = 5;\n\
-         \x20   let hk: T = k;\n\
-         \x20   return hk.m();\n\
-         }}\n"
-    );
-    let out = compile(&src);
+fn slot_path_still_binds_statically() {
+    let src = "interface T { fn m(self) -> i32; }\n\
+               class WI(i32);\n\
+               impl WI { pub fn m(self) -> i32 { return self.inner + 100; } }\n\
+               entry fn main() -> i32 {\n\
+               \x20   let w = WI(5);\n\
+               \x20   let hk: T = w;\n\
+               \x20   return hk.m();\n\
+               }\n";
+    let out = compile(src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     let main = main_of(&p);
-    // the receiver crosses boxed into the slot variant
+    // a ref-repr receiver crosses as a reference — no box op
     assert!(
-        main.code.iter().any(|op| matches!(op, Op::Box { .. })),
-        "slot path widens the scalar:\n{}",
+        main.code.iter().all(|op| !matches!(op, Op::Box { .. })),
+        "ref-repr slot path never boxes:\n{}",
         rut_driver::ir_dump_of(&p.funcs, &p.interner)
     );
-    let callee = main.code.iter().find_map(|op| match op {
-        Op::CallM { func, .. } => Some(*func as usize),
-        _ => None,
-    }).expect("slot path emits callm");
-    let f = &p.funcs[callee];
-    assert_ne!(
-        f.params.first(), Some(&TY_I32),
-        "the bound variant must be the SLOT one:\n{}",
-        rut_driver::ir_dump_of(&p.funcs, &p.interner)
-    );
-    assert_eq!(run_main(&src), 105);
+    assert_eq!(run_main(src), 105);
 }
 
-/// (e) the extern twin: a bare-prim call whose impl lives in another
-/// module binds the exporter's CONCRETE-ABI id through the surface —
-/// boxless, linked, and correct.
+/// (e) the extern twin: a member call whose member lives in another
+/// module binds the exporter's compiled id through the surface — one
+/// `CallM`, linked, and correct.
 #[test]
-fn cross_module_bare_prim_call_binds_the_concrete_variant() {
+fn cross_module_member_call_binds_the_exporters_fn() {
+    let dep_src = "interface T { fn m(self) -> i32; }\n\
+                   class WI(i32);\n\
+                   impl WI { pub fn m(self) -> i32 { return self.inner + 100; } }\n\
+                   pub fn make() -> WI { return WI(5); }\n";
     let dep = rut_driver::compile_program(
-        TINY,
+        dep_src,
         Mode::Impl,
         "dep",
         1,
@@ -272,19 +177,12 @@ fn cross_module_bare_prim_call_binds_the_concrete_variant() {
     );
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
-    // the exporter compiled and published both variants
-    assert_eq!(dep.surface.impls.len(), 1, "one impl registered");
-    assert!(
-        dep.surface.impls[0].methods_concrete.iter().any(|(n, _)| dep.name_of(*n) == "m"),
-        "the concrete-ABI id is published: {:?}",
-        dep.surface.impls[0]
-    );
     let surface = dep.surface.clone();
 
     let app = rut_driver::compile_program(
-        "use dep::{T};\n\
+        "use dep::{WI, make};\n\
          entry fn main() -> i32 {\n\
-         \x20   let w = 5;\n\
+         \x20   let w = make();\n\
          \x20   return w.m();\n\
          }\n",
         Mode::Impl,
@@ -296,7 +194,7 @@ fn cross_module_bare_prim_call_binds_the_concrete_variant() {
     let app = app.program.expect("app program");
     assert!(
         main_of(&app).code.iter().all(|op| !matches!(op, Op::Box { .. })),
-        "cross-module bare-prim call is boxless:\n{}",
+        "cross-module member call is boxless:\n{}",
         rut_driver::ir_dump_of(&app.funcs, &app.interner)
     );
 
@@ -310,11 +208,8 @@ fn cross_module_bare_prim_call_binds_the_concrete_variant() {
         Op::CallM { func, .. } => Some(*func as usize),
         _ => None,
     }).expect("app main dispatches with callm");
-    assert_eq!(
-        linked.funcs[callee].params.first(), Some(&TY_I32),
-        "the linked callee is the dep's concrete variant:\n{}",
-        rut_driver::ir_dump_of(&linked.funcs, &linked.interner)
-    );
+    let fname = linked.name_of(linked.funcs[callee].name);
+    assert!(fname.contains("m"), "the linked callee is the dep's member: {fname}");
     rut_vm::verify::verify(&linked).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),

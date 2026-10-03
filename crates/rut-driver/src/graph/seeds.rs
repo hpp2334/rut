@@ -62,53 +62,12 @@ pub(super) fn build_seed_groups<'a>(
             .filter(|(_, r)| r.is_fn)
             .map(|(_, r)| (prog.interner.name(r.decl).to_string(), r.args.clone()))
             .collect();
-        let impl_methods = mine
-            .iter()
-            .filter(|(_, r)| r.is_impl)
-            .map(|(_, r)| {
-                (
-                    prog.interner.name(r.decl).to_string(),
-                    r.impl_target,
-                    prog.interner.name(r.methods[0]).to_string(),
-                )
-            })
-            .collect();
-        // the requester's own impls, fn ids scope-qualified into the
-        // requester's block. A target spelled under a THIRD scope
-        // (the owner's own block as this requester saw it, another
-        // pkg's) skips with the row drop in desc_closure: the owner
-        // re-derives its own types, and a foreign block it never
-        // bound has no locals to answer.
-        let impls: Vec<crate::SeedImpl> = prog
-            .surface
-            .impls
-            .iter()
-            .filter(|im| {
-                let s = rut_core::id::scope_of(im.target);
-                s == rut_core::id::BOOT_SCOPE || s == requester_scope
-            })
-            .map(|im| crate::SeedImpl {
-                trait_name: prog.interner.name(im.trait_name).to_string(),
-                target: im.target,
-                methods: im
-                    .methods
-                    .iter()
-                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                    .collect(),
-                methods_concrete: im
-                    .methods_concrete
-                    .iter()
-                    .map(|(n, f)| (prog.interner.name(*n).to_string(), rut_core::pack(requester_scope, *f)))
-                    .collect(),
-            })
-            .collect();
         groups.push(crate::SeedGroup {
             rows,
+            requester: requester.clone(),
             names: &prog.interner,
             insts,
             fns,
-            impl_methods,
-            impls,
         });
     }
     groups

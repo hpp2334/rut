@@ -17,11 +17,12 @@ the shapes the [value boundary](../../docs/src/reference/value-boundary.md) lets
 - **JSON** — decode to an `opaque` tree, encode back, round-trip;
   numbers are stored as verbatim lexemes so round-trips are exact.
   Since the rut-json batch the **encode half rides the std `json` pkg**
-  (`rut/json`): `impl JsonSerialize for Json` drives the pkg's
-  `JsonWriter` — the exact shape a user type spells (the orphan-legal
-  direction — the compiler's law, [traits](../../docs/src/reference/traits.md):
-  json owns the
-  trait, `Json` is this file's).
+  (`rut/json`): `Json`'s inherent `pub fn encode` drives the pkg's
+  `JsonWriter` — the exact shape a user type spells (the
+  structural-satisfaction direction — the compiler's law,
+  [interfaces](../../docs/src/reference/traits.md): json owns the
+  interface, `Json` is this file's, and having the member is the whole
+  admission).
   The decode half stays the private cursor parser until json's
   schema-less `JsonValue` lands
 
@@ -101,13 +102,16 @@ fuel used: 1014105 of Some(50000000)
 - **the FNV/djb2/sdbm trio never shifts 64-bit words** — a deliberate
   demonstration that `&*`/`&+`/`^` alone carry the classic hash keys
 - **the serde model, lived in** (the rut-json batch): a user type
-  implements another pkg's trait — `impl JsonSerialize for Json` — and
+  satisfies another pkg's interface — `Json` spells json's `encode`
+  member on its own inherent impl, and the structural member-set match
+  makes it a `JsonSerialize` — and
   the lib's writer does the byte work (the f-string accumulator, the
   IETF RFC 8259's escape policy, the 128-level depth law). The lib teaches
-  the shape every json consumer spells — and this block is the orphan
-  rule's type-local case
-  ([traits](../../docs/src/reference/traits.md)): the trait is json's, the type
-  is ours, so the pair is legal exactly here
+  the shape every json consumer spells — and this block is the
+  structural law's cross-pkg case
+  ([interfaces](../../docs/src/reference/traits.md)): the interface is
+  json's, the type
+  is ours, and having the members is admission exactly here
 
 ## Limitations (honest ones)
 

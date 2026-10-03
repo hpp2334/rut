@@ -10,7 +10,7 @@ out.
 ## The mental model
 
 Think of the VM as keeping a **type table**: one descriptor per
-instantiated type — its kind, its field list, its trait impls, and for
+instantiated type — its kind, its field list, its itable fills, and for
 composites the method tables its instances point at. Every heap cell's
 header names an entry in that table. A value never "forgets" its type,
 because its type is one field read away.
@@ -96,18 +96,19 @@ Consequences:
   boundary (see [the host boundary](host-boundary.md)).
 - A record's memory cost is its field count times 8 bytes plus the cell
   header, which is exactly what the heap budget charges.
-- Widening a value to a trait type allocates nothing: the trait-typed
+- Widening a value to an interface type allocates nothing: the interface-typed
   value *is* the same cell, reinterpreted through its vtable.
 
 ## Vtables: one per type, attached at construction
 
 A cell's vtable is filled when the value is constructed and never
-changes. It names the exact type and holds one entry per trait method
-the type implements, keyed by a global (trait instantiation, method) id
+changes. It names the exact type and holds one entry per interface member
+the type was satisfaction-boxed at, keyed by a global (interface
+instantiation, member) id
 — `Slice<Point>` and `Slice<str>` have separate slot sets, because they
-are separate trait instantiations.
+are separate interface instantiations.
 
-A call through a trait object is two loads and an indirect jump:
+A call through an interface object is two loads and an indirect jump:
 
 ```text
 d.draw(g)          ; d: Drawable, draw has global slot 3
@@ -119,7 +120,7 @@ d.draw(g)          ; d: Drawable, draw has global slot 3
 An inherent method call — `c.area()` on a concrete `c` — compiles to a
 direct call with no table involved. The dispatch rules that choose
 between the two are the subject of the next chapter,
-[traits and dispatch](traits-and-dispatch.md).
+[interfaces and dispatch](interfaces-and-dispatch.md).
 
 ## Type tests, lowered
 
@@ -128,7 +129,7 @@ Every type test is a small, pure read:
 - **Concrete test** (`d is Circle`): load the value's runtime type id,
   compare. When the receiver's static type already answers, the compiler
   folds it to a constant.
-- **Trait probe** (`x is Drawable`): load the type id, scan the
+- **Interface probe** (`x is Drawable`): load the type id, scan the
   descriptor's registered impl list. Pure in its inputs, so repeated
   probes deduplicate and invariant ones hoist.
 - **Downcast** (`opaque.downcast<T>(o)`): the same type-id compare,
@@ -143,7 +144,7 @@ the reference on [reflection](../reference/reflection.md).
 ## What this buys you
 
 - Type errors are **runtime facts, not conventions**: a host call, a
-  downcast, or a trait probe is checked against the same table the VM
+  downcast, or an interface probe is checked against the same table the VM
   dispatches through.
 - **One runtime truth per value** — the vtable that answers dispatch is
   the same one that answers `is`.

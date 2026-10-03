@@ -267,7 +267,7 @@ pub enum Op {
     /// `x is T` — exact test; sees through Opaque boxes
     IsType { dst: Reg, obj: Reg, want: TypeId },
     /// `x is I` — capability probe: descriptor impls scan
-    IsTrait { dst: Reg, obj: Reg, want: u32 },
+    IsIface { dst: Reg, obj: Reg, want: u32 },
     /// extract an Opaque box's payload as the statically known T — traps
     /// on TypeId mismatch; the compiler guards
     Unbox { dst: Reg, box_: Reg, ty: TypeId },

@@ -68,7 +68,7 @@ marks[4]=1 marks[5]=0 stopped at m=14
 `str` (yielding one-codepoint `str`s), `bytes` (yielding `u8`s), and
 any type that marks an `[iterable]` member (a user class or an enum —
 the loop calls that ONE designated member; see
-[traits](../reference/traits.md)):
+[interfaces](../reference/interfaces.md)):
 
 ```rut
 use ink::{ Logger };

@@ -1,32 +1,39 @@
-// the pouch integration group (the rut-json batch, phase 1): impl-ONLY
-// by law — it declares no new public names, so the only
-// way to reach it is trait dispatch on pouch's `Vec`. Appended to json's
-// own source by the peer gate when `pouch` is in the program's closure;
-// a consumer without pouch mounts json light and these rows simply never
-// exist (a reference then diagnoses D2).
+// the pouch integration group (the wrapper family over pouch's `Vec`):
+// appended to json's own source by the peer gate when `pouch` is in
+// the program's closure; a consumer without pouch mounts json light
+// and these names simply never exist (a reference then diagnoses D2).
 //
-// The survey §2.6 matrix rows: `Vec<T>` encodes an array, decodes an
-// array — elements through T's own impls, per instantiation (the
-// template law: this body monomorphizes per `Vec<..>` shape, so
-// `elem.encode(w)` / `T.decode(r)` bind the concrete impls — nested
-// `Vec<Vec<i64>>` closes recursively).
+// THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
+// class, and satisfaction is having the members on the type's own
+// inherent impl — json cannot grow members on another module's class,
+// and a bare container never derives. The wrapper is the spelled
+// manufacture: `encodeJson(JsonVec(rows))` at the entry,
+// `decodeJson<JsonVec<DocRow>>(doc)` at the sink, `to_vec()` unwraps.
 
 use pouch::{Vec};
 
-impl<T> JsonSerialize for Vec<T> {
-    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+// The survey §2.6 matrix rows, wrapped: `Vec<T>` encodes an array,
+// decodes an array — elements through T's own members, per
+// instantiation (the template law: this body monomorphizes per
+// `JsonVec<..>` shape, so `x.encode(w)` / `T.decode(r)` bind the
+// concrete members — nested `JsonVec<JsonVec<i64>>` closes
+// recursively). The bound is the ENCODE direction; the decode member
+// delegates to `T.decode` per instantiation (a decode-only T spells
+// its array shape through `JsonArr`, the base's pouch-free row).
+pub class JsonVec<T requires JsonSerialize | JsonDeserialize>(Vec<T>);
+
+impl<T> JsonVec<T> {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         w.begin_array();
-        for (let x of self) {
+        for (let x of self.inner) {
             let e = x.encode(w);
             if (e != nil) { return e; }
         }
         w.end_array();
         return nil;
     }
-}
 
-impl<T> JsonDeserialize for Vec<T> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
         let mut v = Vec<T>.new();
         r.begin_array();
         while (r.more()) {
@@ -36,6 +43,9 @@ impl<T> JsonDeserialize for Vec<T> {
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
-        return (v, nil);
+        return (JsonVec(v), nil);
     }
+
+    // the unwrap: the materialized Vec
+    pub fn to_vec(self) -> Vec<T> { return self.inner; }
 }

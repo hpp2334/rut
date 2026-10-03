@@ -1,6 +1,6 @@
 //! Method dispatch on a value receiver: resolution through inherent and registered trait impls, plus the missing-method diagnostic and receiver naming.
 
-use crate::check::{ImplHit, TcResult};
+use crate::check::{MemberSrc, TcResult};
 use rut_core::sym;
 use crate::lir::slice::SliceSource;
 use crate::lir::*;
@@ -46,7 +46,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // concrete type here; the trait impl on THAT type answers.
                 if segs[0].generics.is_empty() {
                     if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t) {
-                        return self.compile_trait_param_static_call(concrete, name, args, expected, sp);
+                        let ifaces = self.iface_bounds.get(&base).cloned();
+                        return self.compile_bound_param_static_call(concrete, ifaces, name, args, expected, sp);
                     }
                 }
             }
@@ -81,10 +82,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => None,
         };
         if let Some((ty, reg)) = recv_opt_raw {
-            if let Some((idx, midx)) = self.find_trait_impl_method(ty, name) {
-                return self.compile_trait_static_call(idx, midx, ty, reg, args, expected, sp, false);
             }
-        }
         let (rt, rreg) = match recv_raw {
             Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
             None => {
@@ -233,12 +231,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // concrete and slot ABIs coincide for ref targets (P1.1),
                 // so the raw register crosses as-is (`k.hash()` /
                 // `k.hash_eq(..)` in a monomorphized map body, P4)
-                if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                    return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-                }
-                if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                    return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
-                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`str` has no method `{}` — its members are `len`/`slice`/`code`/`code_at`/`scan`/`starts_with`/`encode` (`string_len({who})` is the free-fn spelling)",
@@ -271,12 +263,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // a registered trait impl on the ref target dispatches
                 // statically on the bare receiver (same law as `str`
                 // above — one ABI variant, the raw register crosses)
-                if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                    return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-                }
-                if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                    return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
-                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`bytes` has no method `{}` — its members are `len`/`decode`/`clone` (`bytes_len({who})` is the free-fn spelling)",
@@ -445,19 +431,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // builtin members: `opaque` rejects methods
-        // unless the module registered an inherent impl for it
-        // (a module-owned `builtin class` takes impls)
+        // builtin members: `opaque` rejects methods — its one member is
+        // the engine's downcast static
         match self.ctx.types.kind(rt).clone() {
             TyKind::Opaque => {
-                if let Some((idx, mname)) = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
-                    if !im.inherent || im.target != TY_OPAQUE {
-                        return None;
-                    }
-                    im.methods.iter().find(|(n, _)| *n == name).map(|(n, _)| (idx, *n))
-                }) {
-                    return self.compile_native_static_call(idx, mname, vec![], rreg, args, expected, sp);
-                }
                 self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque.downcast<T>(o)`");
                 return Err(());
             }
@@ -477,7 +454,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_cx_member(name, rreg, &args, sp);
             }
             // the receiver is either an instantiated generic (decl + args in
-            // `inst_data`) or a local non-generic record
+            // `inst_data`) or a local non-generic record. An
+            // owner-anchored body's first touch may race the seed-row
+            // dedup (the instantiation arrived as a carried row) — force
+            // the inst row so the unit's own class answers.
+            self.ctx.ensure_local_inst_row(rt);
             let target = match self.ctx.inst_data.get(&rt).cloned() {
                 Some((dname, cargs)) => Some((dname, cargs)),
                 None => self
@@ -508,18 +489,37 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
                 return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
             }
-            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                // a bare concrete receiver calls the CONCRETE-ABI variant:
-                // the receiver register stays raw and the args cross
-                // concretely — no box is minted (P1.2); a tiny body inlines
-                // at the site (P1.3)
-                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-            }
-            // another module's registration: static
-            // dispatch through the exporter's compiled fn — the gate
-            // (the trait's name was used here) is part of the lookup
-            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
+            // the carried-member law: a REQUESTER-CARRIED instantiation
+            // (an owner-anchored mirror body over a consumer's type)
+            // binds through the bound's descriptor — the mirror's
+            // ledger row names the type's HOME unit, link unifies it
+            // with the real body
+            if self.ctx.type_is_carried(rt) {
+                if let Some(ifaces) = self.subst.iter().find_map(|(n, t)| {
+                    if *t == rt { self.iface_bounds.get(n).cloned() } else { None }
+                }) {
+                    let (ptys, ret_ty, decl_iface) = self.iface_member_shape(rt, &ifaces, name, sp)?;
+                    if args.len() != ptys.len() {
+                        self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                        return Err(());
+                    }
+                    let mut aregs = Vec::new();
+                    for (i, a) in args.iter().enumerate() {
+                        let t = self.compile_expr(*a, Some(ptys[i]))?;
+                        if !self.widens(t, ptys[i]) {
+                            self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                                "argument {} is `{}`, `{}` expected",
+                                i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
+                            ));
+                        }
+                        aregs.push(self.last_reg);
+                    }
+                    let fid = self.mirror_carried(rt, decl_iface, name);
+                    let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+                    let _ = expected;
+                    { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                    return Ok(ret_ty);
+                }
             }
             self.no_method_error(rt, name, sp);
             return Err(());
@@ -527,8 +527,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // enums: inherent methods answer on the decl (same module) —
         // self methods dispatch like a record's, `Self` binds the
         // enum's own type; a used enum rides the exporter's surface
-        // rows. Trait impls are nominal TypeId equality, the same
-        // registry every other concrete receiver reads.
+        // rows.
         if let TyKind::Enum { .. } = self.ctx.types.kind(rt).clone() {
             if let Some((ename, e)) = self.ctx.enums.iter().find(|(_, e)| e.ty == rt).cloned() {
                 if let Some((_, mnode)) = e.methods.iter().find(|(mn, _)| *mn == name).cloned() {
@@ -538,97 +537,48 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
                 return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
             }
-            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-            }
-            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
-            }
             self.no_method_error(rt, name, sp);
             return Err(());
         }
-        // primitives take trait impls only (the inherent
-        // surface is core's `builtin impl`): a bare
-        // concrete receiver dispatches the impl's CONCRETE-ABI variant —
-        // the scalar crosses as an ordinary argument, no slot box (P1.2)
+        // primitives take no member surface beyond core's `builtin
+        // impl` (checked above): capability on a primitive is
+        // manufactured by spelling a wrapper class
         if matches!(self.ctx.types.kind(rt), TyKind::Prim(_)) {
-            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-            }
-            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
-            }
             self.no_method_error(rt, name, sp);
             return Err(());
         }
-        // the array type's inherent impl (`impl [T] { .. }`)
-        // — static dispatch through the native shape
-        if let TyKind::Array { elem } = self.ctx.types.kind(rt).clone() {
-            let hit = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
-                if !im.inherent {
-                    return None;
-                }
-                match &im.target_data {
-                    Some((d, params)) if d == &sym::ARRAY && params.len() == 1 => {
-                        im.methods.iter().find(|(n, _)| *n == name).map(|(n, _)| (idx, *n, params[0]))
-                    }
-                    _ => None,
-                }
-            });
-            if let Some((idx, mname, param)) = hit {
-                return self.compile_native_static_call(idx, mname, vec![(param, elem)], rreg, args, expected, sp);
-            }
-            // a registered TRAIT impl over the array shape (`impl I for
-            // [T]` — the rut-json batch phase 1): the same static bind the
-            // Data/Prim arms answer, after the inherent surface misses —
-            // the receiver stays raw, the element instantiates the template.
-            // Another module's registration (flow's `IntoFlow<T> for [T]`)
-            // routes through the same extern door the Data arm answers.
-            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
-            }
-            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
-            }
-        }
-        if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
-            // trait-typed receiver: ONLY that trait's methods.
-            // Single concrete origin ⇒ static bind; a merged/loaded/unknown
-            // origin consults the value's descriptor (vtable)
-            let tdesc = self.ctx.trait_by_id(trait_id).clone();
+        if let TyKind::IfaceObj { iface_id } = self.ctx.types.kind(rt).clone() {
+            // interface-typed receiver: ONLY that interface's methods.
+            // Single concrete origin ⇒ static bind to the origin's OWN
+            // inherent member (the slot holds that origin's cell, the
+            // register crosses raw); a merged/loaded/unknown origin
+            // consults the itable — the vtable row keyed by the value's
+            // concrete type (the fill was proved at the boxing site)
+            let tdesc = self.ctx.iface_by_id(iface_id).clone();
             if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
                 if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
                     if segs.len() == 1 {
                         let origins = self.origins_of(segs[0].name);
                         if origins.len() == 1 {
-                            // the impl may live in any module:
-                            // a local block binds here, another module's
-                            // registration binds to its compiled fn. A
-                            // parameterized trait impl mints on the miss
-                            // (the phase-2 door): the widening let's single
-                            // origin unifies against the template and the
-                            // slot-ABI variant answers
-                            match self.ctx.find_impl_ex(trait_id, origins[0]) {
-                                Some(ImplHit::Local(idx)) => {
-                                    // origin-pinned trait-object receiver: the box
-                                    // is already materialized — call the SLOT
-                                    // variant (no new boxes)
-                                    return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp, true);
-                                }
-                                Some(ImplHit::Extern(eidx)) => {
-                                    return self.compile_extern_trait_static_call(eidx, midx, origins[0], rreg, args, expected, sp, true);
-                                }
-                                None => {
-                                    if let Some(idx) = self.ctx.find_or_mint_impl(trait_id, origins[0]) {
-                                        return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp, true);
+                            let origin = origins[0];
+                            if let Some(member) = self.ctx.find_inherent_member(origin, name) {
+                                match member {
+                                    MemberSrc::Local { node, data, .. } => {
+                                        let cargs = self.ctx.inst_data.get(&origin).cloned().map(|(_, a)| a).unwrap_or_default();
+                                        return self.compile_inherent_call(data, cargs, origin, node, rreg, generics, args, expected, sp);
+                                    }
+                                    MemberSrc::Extern { .. } => {
+                                        if let Some((ih, emidx, subst, dname)) = self.find_extern_inherent(origin, name) {
+                                            return self.compile_extern_method_call(ih, emidx, &subst, dname, origin, rreg, generics, args, expected, sp);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
-                return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
+                let slot = self.ctx.iface_slot(iface_id, midx as u32).unwrap();
+                return self.finish_iface_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
             self.ctx.err(sp, format!(
                 "`{}` values reach only `{}`'s methods —`{}` is not one of them",
@@ -640,54 +590,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
-    /// The diagnostic for a missing method on a user type: when a
-    /// matching impl exists under a trait this call site cannot name,
-    /// the message says which `use` unlocks it
-    /// (the use-both gate). Both local impls and other modules'
-    /// registrations count as "exists".
+    /// The diagnostic for a missing method on a user type. With the
+    /// impl registry gone, the shape is plain: satisfaction failures
+    /// speak at their boundary (the instantiation's `admit_bounds`, the
+    /// widening site's check) — this is the residue.
     pub(crate) fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
-        let target_matches = |ctx: &Ctx, im: &crate::check::ImplDecl| {
-            im.target == rt
-                || matches!(&im.target_data, Some((d, _)) if ctx
-                    .inst_data
-                    .get(&rt)
-                    .map_or(false, |(rd, _)| rd == d))
-        };
-        let hit = self.ctx.impls.iter().find(|im| {
-            !im.inherent
-                && im.methods.iter().any(|(n, _)| *n == name)
-                && target_matches(self.ctx, im)
-        });
-        let ext_hit = hit.is_none().then(|| {
-            self.ctx
-                .extern_impls
-                .iter()
-                .position(|im| im.target == rt && im.methods.iter().any(|(n, _)| *n == name))
-        }).flatten();
-        let trait_name = hit.map(|im| im.trait_name).or_else(|| {
-            ext_hit.map(|e| self.ctx.extern_impls[e].trait_name)
-        });
-        if let Some(tname) = trait_name {
-            let callable = self.ctx.find_trait(tname).is_some()
-                || self.ctx.extern_traits.contains_key(&tname)
-                || self.ctx.extern_trait_decls.contains_key(&tname);
-            if !callable {
-                let tid = hit.map(|im| im.trait_id).unwrap_or_else(|| {
-                    self.ctx.extern_impls[ext_hit.unwrap()].trait_id
-                });
-                let spelled = self.ctx.name(self.ctx.trait_by_id(tid).name);
-                self.ctx.err(sp, format!(
-                    "`{}` has no method `{}` — use `{}` to call its methods on `{}`",
-                    self.ctx.type_name(rt),
-                    self.ctx.name(name),
-                    spelled,
-                    self.ctx.type_name(rt)
-                ));
-                return;
-            }
-        }
         self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
     }
+
 
     /// The used class whose inherent surface answers `name` on `rt`:
     /// `(row, method index, class substitution, decl name when
@@ -719,39 +629,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Some((i, midx, subst, generic.map(|g| {
                 dname.expect("generic implies decl name")
             })));
-        }
-        None
-    }
-
-    /// The registered trait impl on `rt` whose method set contains
-    /// `name` — concrete targets by id, generic targets by declaration.
-    pub(crate) fn find_trait_impl_method(&self, rt: TypeId, name: IdentId) -> Option<(usize, usize)> {
-        for (idx, im) in self.ctx.impls.iter().enumerate() {
-            if im.inherent || !im.methods.iter().any(|(n, _)| *n == name) {
-                continue;
-            }
-            let target_matches = im.target == rt
-                || matches!(&im.target_data, Some((d, _)) if self
-                    .ctx
-                    .inst_data
-                    .get(&rt)
-                    .map_or(false, |(rd, _)| rd == d))
-                // structural template targets (the rut-json batch phase 1):
-                // a nullable or array receiver binds its element-generic
-                // impl (`impl I for ?T` / `impl I for [T]`) by shape
-                || matches!(&im.target_data, Some((d, params)) if params.len() == 1
-                    && match self.ctx.types.kind(rt) {
-                        TyKind::Opt { .. } => *d == sym::OPT,
-                        TyKind::Array { .. } => *d == sym::ARRAY,
-                        _ => false,
-                    });
-            if !target_matches {
-                continue;
-            }
-            let tdesc = self.ctx.trait_by_id(im.trait_id);
-            if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
-                return Some((idx, midx));
-            }
         }
         None
     }

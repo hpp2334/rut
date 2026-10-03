@@ -11,7 +11,7 @@ split explains assignment, parameter passing, equality, and what
 
 | | immediate | cells |
 |---|---|---|
-| types | `u8..u64`, `i8..i64`, `f32`, `f64`, `bool`, `fn` values | `str`, `bytes`, `struct` and `class` records, `[T]` arrays, enums, trait objects, `opaque` boxes, `?T` boxes, closures' captured cells |
+| types | `u8..u64`, `i8..i64`, `f32`, `f64`, `bool`, `fn` values | `str`, `bytes`, `struct` and `class` records, `[T]` arrays, enums, interface objects, `opaque` boxes, `?T` boxes, closures' captured cells |
 | assignment | copies the bits | copies the handle (O(1)) |
 | mutation | n/a — write the variable | visible through every alias |
 | `==` | by value | `str`/`bytes`: by content; everything else: identity |

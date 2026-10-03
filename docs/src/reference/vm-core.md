@@ -41,8 +41,8 @@ behavior is identical, only the dispatch shape differs. Ops the threaded
 engine does not absorb *bail* to the match interpreter with the pc pinned
 at the op.
 
-- Direct calls are an index + jump; trait calls are two loads (vtable row)
-  + an indirect jump.
+- Direct calls are an index + jump; interface (itable) calls are two loads
+  (itable row) + an indirect jump.
 - Refcount retain/release are inline in the loop; a release to zero
   nulls the weak list, queues the type's `dispose` body (the
   `[disposal]` contract), and frees

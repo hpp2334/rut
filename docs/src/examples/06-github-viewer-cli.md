@@ -102,7 +102,8 @@ async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
 
 `list` is the **drain** lane: one `body()` await pulls the whole
 tree, and the JSON decode goes through the std `json` package's
-reader with `impl JsonDeserialize for Entry` in this file. Status
+reader with `decode` spelled on `Entry`'s own inherent impl in this
+file. Status
 mapping is one function: `status() == 0` is the reserved transport
 verdict, 404 names the host that was checked, 403 is the rate-limit
 note, anything else non-2xx is the bare status.

@@ -44,7 +44,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
             return Err(());
         }
-        if matches!(self.ctx.types.kind(rt), TyKind::TraitObj { .. }) {
+        if matches!(self.ctx.types.kind(rt), TyKind::IfaceObj { .. }) {
             self.ctx.err(sp, "trait objects have no fields —`d.x` on a trait-typed value is a compile error");
             return Err(());
         }

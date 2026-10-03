@@ -155,8 +155,9 @@ head=10 name=a
 explicitly. Two rules to know:
 
 - A bare `T` has **no methods** — you cannot call anything on a value
-  whose type is just `T`. Pass concrete values in, or take a
-  trait-typed parameter instead (next chapter).
+  whose type is just `T`. Pass concrete values in, spell an interface
+  bound (`T requires Labeled`), or take an interface-typed parameter
+  (next chapter).
 - In v1 a *generic class* in a parameter position does not unify —
   `fn sum(xs: Vec<i32>)` is fine, but a function generic over `T`
   taking `Vec<T>` is not yet the shape to reach for. Concrete
@@ -169,13 +170,13 @@ An inline `requires` bound gates which instantiations compile:
 ```rut
 use ink::{ Logger };
 
-trait Labeled {
+interface Labeled {
     fn label(self) -> str;
 }
 
 struct Tag { id: i32 }
 
-impl Labeled for Tag {
+impl Tag {
     fn label(self) -> str { return f"tag-{self.id}"; }
 }
 
@@ -195,8 +196,8 @@ tag-7
 ```
 
 The bound is *admission-only*: it checks at each call site that the
-concrete type satisfies the named trait (or union of traits), and it
-proves a `T`-typed value may be used as that trait type — it does not
+concrete type satisfies the named interface (or union of type names), and it
+proves a `T`-typed value may be used as that interface type — it does not
 put methods on `T` itself. Union bounds admit any member:
 
 ```rut
@@ -235,7 +236,8 @@ p.x=3 p.y=5
 ```
 
 Reach for methods when something is genuinely *the receiver's*
-behavior, and for trait impls — everything else is a plain function.
+behavior, and for the members other code observes through interfaces —
+everything else is a plain function.
 
 ## Put it together
 

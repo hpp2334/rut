@@ -1,8 +1,9 @@
 //! Completions — member completion after `recv.` and bare-position
 //! completion, over the same definition index hover uses. One rule for
 //! the member list (mirrors the compiler's): **members of `T` = T's own
-//! surface ∪ inherent `impl T { .. }` methods ∪ use-gated trait methods
-//! from impls targeting `T`**. Heuristic, like hover: a
+//! surface ∪ inherent `impl T { .. }` methods; on an interface `I` they
+//! are exactly `I`'s declared signatures, use-gated when `I` is
+//! foreign**. Heuristic, like hover: a
 //! miss is an empty list, never wrong text.
 
 use std::collections::HashSet;
@@ -10,7 +11,7 @@ use std::collections::HashSet;
 use rut_ast::ast::Ast;
 use rut_lexer::token::{Tok, Token};
 
-use crate::hover::lookup::used_traits;
+use crate::hover::lookup::used_ifaces;
 use crate::hover::types::{DefIndex, TyDef, TyForm};
 
 /// One completion item — plain data; the server maps it to LSP types.
@@ -28,7 +29,7 @@ pub struct CompletionOut {
 pub enum CompletionKind {
     Keyword,
     Type,
-    Trait,
+    Interface,
     Fn,
     Method,
     Field,
@@ -38,7 +39,7 @@ pub enum CompletionKind {
 /// typed prefix), otherwise the keyword table plus the visible decls.
 pub fn complete(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Vec<CompletionOut> {
     let Some((recv, prefix)) = recv_before(toks, pos) else {
-        let used = used_traits(ast);
+        let used = used_ifaces(ast);
         return bare_completions(idxs, &used);
     };
     // the binding pass — member completion shares hover's receiver
@@ -66,10 +67,10 @@ fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
     Some((recv, prefix))
 }
 
-/// Members of the receiver's type: fields, own methods (a trait receiver
-/// lists its declared methods — the annotation names the trait, so no
-/// gate), inherent impl-block methods, and trait methods through
-/// registered impls — the latter use-both gated.
+/// Members of the receiver's type: on an interface receiver, exactly
+/// its declared signatures (the use-both gate keeps foreign interfaces
+/// honest); on a type, fields, own methods, and inherent impl-block
+/// methods — the mirror of hover's `member_target`.
 fn member_completions(
     idxs: &[&DefIndex],
     ast: &Ast,
@@ -81,6 +82,32 @@ fn member_completions(
     let Some(ty_name) = crate::hover::lookup::recv_type(idxs, binds, pos, recv) else {
         return vec![];
     };
+    // an interface receiver: the declared signatures are the whole
+    // member list — satisfaction is structural, so no impl lookup
+    // rides along. The use-both gate: a foreign interface's members
+    // complete only when this document names the interface in a `use`;
+    // an interface declared here is in scope natively
+    if let Some((home, iface)) = crate::hover::lookup::iface_decl(idxs, &ty_name) {
+        let mut out: Vec<CompletionOut> = Vec::new();
+        if std::ptr::eq(home, idxs[0]) || used_ifaces(ast).contains(&iface.name) {
+            for m in &iface.methods {
+                push_item(
+                    &mut out,
+                    CompletionOut {
+                        label: m.name.clone(),
+                        detail: m.src.clone(),
+                        doc: m.doc.clone(),
+                        kind: CompletionKind::Method,
+                    },
+                );
+            }
+        }
+        if !prefix.is_empty() {
+            out.retain(|c| c.label.starts_with(prefix));
+        }
+        out.sort_by(|a, b| a.label.cmp(&b.label));
+        return out;
+    }
     let Some((_ti, ty)) = crate::hover::lookup::find_ty(idxs, &ty_name) else { return vec![] };
     let mut out: Vec<CompletionOut> = Vec::new();
     for f in &ty.fields {
@@ -106,46 +133,16 @@ fn member_completions(
         );
     }
     // inherent impl-block methods — where methods live since type bodies
-    // went fields-only
-    let owner = format!("impl {ty_name}");
+    // went fields-only; the owner string IS the target type's name
     for i in idxs {
         for f in &i.fns {
-            if f.owner.as_deref() == Some(owner.as_str()) {
+            if f.owner.as_deref() == Some(ty_name.as_str()) {
                 push_item(
                     &mut out,
                     CompletionOut {
                         label: f.name.clone(),
                         detail: f.src.clone(),
                         doc: f.doc.clone(),
-                        kind: CompletionKind::Method,
-                    },
-                );
-            }
-        }
-    }
-    // trait methods via impls targeting this type. The use-both gate
-    // rides the trait's HOME module, wherever the impl block lives: a
-    // trait declared in another module completes only when this document
-    // names it in a `use`
-    let used = used_traits(ast);
-    for i in idxs {
-        for im in &i.impls {
-            if im.target_name != ty_name || im.trait_name.is_empty() {
-                continue;
-            }
-            let Some((home, t)) = crate::hover::lookup::trait_decl(idxs, &im.trait_name) else {
-                continue;
-            };
-            if !std::ptr::eq(home, idxs[0]) && !used.contains(&im.trait_name) {
-                continue;
-            }
-            for m in &t.methods {
-                push_item(
-                    &mut out,
-                    CompletionOut {
-                        label: m.name.clone(),
-                        detail: m.src.clone(),
-                        doc: m.doc.clone(),
                         kind: CompletionKind::Method,
                     },
                 );
@@ -194,7 +191,7 @@ fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<Completio
                     detail: format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
                     doc: t.doc.clone(),
                     kind: match t.form {
-                        TyForm::Trait => CompletionKind::Trait,
+                        TyForm::Interface => CompletionKind::Interface,
                         _ => CompletionKind::Type,
                     },
                 },
@@ -249,8 +246,7 @@ pub fn lsp_item(c: CompletionOut) -> CompletionItem {
         kind: Some(match c.kind {
             CompletionKind::Keyword => CompletionItemKind::KEYWORD,
             CompletionKind::Type => CompletionItemKind::CLASS,
-            // the LSP protocol's closest kind for a rut trait
-            CompletionKind::Trait => CompletionItemKind::INTERFACE,
+            CompletionKind::Interface => CompletionItemKind::INTERFACE,
             CompletionKind::Fn => CompletionItemKind::FUNCTION,
             CompletionKind::Method => CompletionItemKind::METHOD,
             CompletionKind::Field => CompletionItemKind::FIELD,
@@ -307,9 +303,10 @@ return c.;
     }
 
     #[test]
-    fn member_completion_gates_foreign_trait_methods() {
-        // the foreign trait's method completes only once the doc uses it
-        let surf_src = "trait Greeter {\nfn greet(self) -> nil;\n}\n";
+    fn member_completion_gates_foreign_interface_members() {
+        // the foreign interface's members complete only once the doc
+        // uses it; the document's own interface needs no gate
+        let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
         let (stoks, _) = rut_lexer::lexer::lex(&s2);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
@@ -321,29 +318,43 @@ return c.;
             let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
             let di = crate::hover::index(&d2, &ast, &toks);
             let idxs = [&di, &surf];
-            let pos = d2.rfind("r.").unwrap() as u32 + 2;
+            let pos = d2.rfind("g.").unwrap() as u32 + 2;
             complete(&idxs, &toks, &ast, pos)
         };
 
-        let gated = "class Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r. }\n";
-        assert!(!labels(&mk(gated)).contains(&"greet"), "unused trait must not complete");
+        let gated = "fn go(g: Greeter) -> nil { g. }\n";
+        assert!(!labels(&mk(gated)).contains(&"greet"), "unused foreign interface must not complete");
 
-        let used = "use greets::{ Greeter };\nclass Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r. }\n";
-        assert!(labels(&mk(used)).contains(&"greet"), "used trait completes");
+        let used = "use greets::{ Greeter };\nfn go(g: Greeter) -> nil { g. }\n";
+        assert!(labels(&mk(used)).contains(&"greet"), "used interface completes");
+
+        // the document's own interface is in scope natively
+        let own = "interface Local {\nfn hi(self) -> nil;\n}\nfn go(l: Local) -> nil { l. }\n";
+        let d2 = rut_lexer::lexer::normalize(own);
+        let (toks, _) = rut_lexer::lexer::lex(&d2);
+        let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
+        let di = crate::hover::index(&d2, &ast, &toks);
+        let idxs = [&di];
+        let pos = d2.rfind("l.").unwrap() as u32 + 2;
+        assert!(labels(&complete(&idxs, &toks, &ast, pos)).contains(&"hi"), "own interface completes");
     }
 
     #[test]
     fn bare_completion_has_the_keyword_table_and_decls() {
-        let src = "trait Shape {\nfn area(self) -> f64;\n}\nentry fn main() -> nil { }\n";
+        let src = "interface Shape {\nfn area(self) -> f64;\n}\nentry fn main() -> nil { }\n";
         let items = complete_after(src, "entry fn main() -> nil { }");
         let ls = labels(&items);
         // the final keyword table — the current spellings, no retired ones
-        for kw in ["trait", "async", "use", "impl", "let", "fn"] {
+        for kw in ["interface", "async", "use", "impl", "let", "fn"] {
             assert!(ls.contains(&kw), "keyword `{kw}` completes: {ls:?}");
         }
-        assert!(!ls.iter().any(|l| matches!(*l, "interface" | "import" | "suspend" | "from" | "dyn")));
-        // decls: the document's trait and fn
-        assert!(ls.contains(&"Shape"), "{ls:?}");
+        // `trait` retired to an ordinary identifier — the keyword table
+        // must not offer it
+        assert!(!ls.contains(&"trait"), "the retired spelling must not complete: {ls:?}");
+        assert!(!ls.iter().any(|l| matches!(*l, "import" | "suspend" | "from" | "dyn")));
+        // decls: the document's interface (as an interface) and fn
+        let shape = items.iter().find(|c| c.label == "Shape").expect("the decl completes");
+        assert!(matches!(shape.kind, CompletionKind::Interface), "{:?}", shape.kind);
         assert!(ls.contains(&"main"), "{ls:?}");
         // methods are reached through a receiver, not named bare
         assert!(!ls.contains(&"area"), "{ls:?}");
@@ -351,14 +362,13 @@ return c.;
 
     #[test]
     fn bare_completion_gates_pub_builtin_core_names() {
-        // the `pub builtin` rows (the disposal pair, the weak reference
-        // and, since the trio flipped, every builtin trait) complete
-        // only when the doc's `use` names them — the compiler's ambient
-        // split, mirrored so a completion never offers a name the
-        // compile rejects. Ambient core rows (`prelude builtin`) stay
-        // ungated.
-        let core_src = "pub builtin trait Iterable<E> {\nfn next(mut self) -> ?E;\n}\n\
-                        pub builtin trait Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
+        // the `pub builtin` rows (the disposal pair and the weak
+        // reference) complete only when the doc's `use` names them —
+        // the compiler's ambient split, mirrored so a completion never
+        // offers a name the compile rejects. Ambient core rows
+        // (`prelude builtin`) stay ungated.
+        let core_src = "pub builtin class Iterable<E> {\nfn next(mut self) -> ?E;\n}\n\
+                        pub builtin class Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
                         pub builtin class DisposalContext { }\n\
                         pub builtin class Weak { }\n\
                         prelude builtin class StackTrace { }\n";
@@ -382,16 +392,16 @@ return c.;
         let ls = labels(&items);
         assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");
         assert!(!ls.contains(&"DisposalContext"), "unused `pub builtin` must not complete: {ls:?}");
-        assert!(!ls.contains(&"Iterable"), "the gated builtin trait must not complete: {ls:?}");
+        assert!(!ls.contains(&"Iterable"), "the gated builtin name must not complete: {ls:?}");
         assert!(!ls.contains(&"Weak"), "the gated weak reference must not complete: {ls:?}");
         assert!(ls.contains(&"StackTrace"), "the ambient row still completes: {ls:?}");
 
         let imported = "use core::{ Disposal, DisposalContext, Iterable, Weak };\nfn main() -> nil { }\n";
         let items = mk(imported);
         let ls = labels(&items);
-        assert!(ls.contains(&"Disposal"), "the imported trait completes: {ls:?}");
+        assert!(ls.contains(&"Disposal"), "the imported builtin class completes: {ls:?}");
         assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
-        assert!(ls.contains(&"Iterable"), "the imported builtin trait completes: {ls:?}");
+        assert!(ls.contains(&"Iterable"), "the imported generic builtin class completes: {ls:?}");
         assert!(ls.contains(&"Weak"), "the imported weak reference completes: {ls:?}");
     }
 

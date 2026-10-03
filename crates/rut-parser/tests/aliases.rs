@@ -65,7 +65,7 @@ type Row = [?i32];
 #[test]
 fn inline_requires_on_fn_parses() {
     // one bound, single member
-    let src = "trait Show { fn show(self) -> str; }\nfn tagged<T requires Show>(x: T) -> str { return \"\"; }\n";
+    let src = "interface Show { fn show(self) -> str; }\nfn tagged<T requires Show>(x: T) -> str { return \"\"; }\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
@@ -101,7 +101,7 @@ fn inline_union_bound_and_multiple_params_parse() {
 #[test]
 fn inline_requires_on_method_parses() {
     let src = "\
-trait Enc { fn enc(self) -> bytes; }
+interface Enc { fn enc(self) -> bytes; }
 impl Widget {
     fn wrap<T requires Enc>(self, x: T) -> bytes { return x.enc(); }
 }
@@ -120,14 +120,14 @@ impl Widget {
 #[test]
 fn stray_where_diagnoses_with_inline_replacement() {
     // after the return type
-    let src = "trait D { fn d(self) -> u64; }\nfn load<T>(v: str) -> T where T requires D { panic(\"x\"); }\n";
+    let src = "interface D { fn d(self) -> u64; }\nfn load<T>(v: str) -> T where T requires D { panic(\"x\"); }\n";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`where` clauses are removed") && d.msg.contains("<T requires")),
         "stray where must diagnose with the replacement: {diags:?}"
     );
     // bodiless position too
-    let src2 = "trait D { fn d(self) -> u64; }\ntrait Tr { fn m<T>(self) -> i32 where T requires D; }\n";
+    let src2 = "interface D { fn d(self) -> u64; }\ninterface Tr { fn m<T>(self) -> i32 where T requires D; }\n";
     let (_, diags2) = parse(src2, Mode::Impl);
     assert!(
         diags2.iter().any(|d| d.msg.contains("`where` clauses are removed")),
@@ -137,17 +137,17 @@ fn stray_where_diagnoses_with_inline_replacement() {
 
 #[test]
 fn misplaced_bounds_are_rejected() {
-    // struct / trait / builtin generics reject `requires` — class
+    // struct / interface / builtin generics reject `requires` — class
     // generics TAKE them (the admission bounds)
     let cases = [
         ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds", Mode::Impl),
-        ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds", Mode::Impl),
+        ("interface Tr<T requires D> { }", "`interface` generic parameters take no `requires` bounds", Mode::Impl),
         // the engine surface's own gate (v20: the `builtin trait` row
         // kind is gone — the builtin CLASS carries the check)
-        ("trait D { fn d(self) -> u64; }\nprelude builtin class Bt<T requires D> { }", "`builtin class` generic parameters take no `requires` bounds", Mode::Decl),
+        ("interface D { fn d(self) -> u64; }\nprelude builtin class Bt<T requires D> { }", "`builtin class` generic parameters take no `requires` bounds", Mode::Decl),
     ];
     for (src, want, mode) in cases {
-        let full = format!("trait D {{ fn d(self) -> u64; }}\n{src}\n");
+        let full = format!("interface D {{ fn d(self) -> u64; }}\n{src}\n");
         let (_, diags) = parse(&full, mode);
         assert!(
             diags.iter().any(|d| d.msg.contains(want)),
@@ -161,7 +161,7 @@ fn class_requires_parses_into_the_class_frame() {
     // the bounded-gparam grammar extends to classes —
     // bounds land on the class frame, the body still parses
     let src = "\
-trait D { fn d(self) -> u64; }
+interface D { fn d(self) -> u64; }
 class Box<K requires D, V> {
     k: K;
     v: V;
@@ -203,7 +203,7 @@ fn class_union_bound_and_unbounded_params_parse() {
 
 #[test]
 fn dumper_renders_class_requires() {
-    let src = "trait D { fn d(self) -> u64; }\nclass Box<K requires D, V> { k: K; v: V; }\n";
+    let src = "interface D { fn d(self) -> u64; }\nclass Box<K requires D, V> { k: K; v: V; }\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let text = dump::render_text(&dump::to_dump_tree(&ast), src);

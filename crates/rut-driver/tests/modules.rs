@@ -136,13 +136,12 @@ fn uses_and_links_a_type() {
 fn binary_round_trips_the_whole_surface() {
     // v16: the exported surface rides the wire row-for-row — a
     // compiled module's fns, type descriptors + scope blocks + type
-    // exports, trait decls, and impl registrations (both ABI lists)
+    // exports, interface decls, and the inherent method rows
     // survive decode(encode(p)) exactly, so a consumer reads the same
     // surface the exporter compiled
     let dep = rut_driver::compile_program(
-        "pub trait Shape { fn area(self) -> i32; }\n\
-         pub struct Point { x: i32; y: i32; }\n\
-         impl Shape for Point { fn area(self) -> i32 { return self.x * self.y; } }\n\
+        "pub struct Point { x: i32; y: i32; }\n\
+         impl Point { pub fn area(self) -> i32 { return self.x * self.y; } }\n\
          pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
          entry fn main() -> i32 { return 0; }\n",
         Mode::Impl,
@@ -153,7 +152,9 @@ fn binary_round_trips_the_whole_surface() {
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
     assert!(!dep.surface.type_exports.is_empty(), "the surface exports Point");
-    assert!(!dep.surface.impls.is_empty(), "the surface registers (Shape, Point)");
+    // the inherent method surface is the satisfaction mechanism now —
+    // nothing registers
+    assert!(!dep.surface.inherents.is_empty(), "the surface carries Point's inherent rows");
     let back =
         rut_core::binary::decode(&rut_core::binary::encode(&dep)).expect("decode");
     assert_eq!(back.surface, dep.surface);

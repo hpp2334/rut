@@ -8,8 +8,8 @@ types exist at runtime, drive bytecode specialization, and make the host
 boundary fully checked.
 
 Syntax feels like TypeScript (simple `enum`, the `class` shape, anonymous
-functions), with a Rust-flavored trait surface (`trait` + nominal
-satisfaction through `impl I for T` blocks) and Kotlin-style structured
+functions), with Go-flavored structural interfaces (`interface` +
+satisfaction by having the members) and Kotlin-style structured
 concurrency (`async`/`await` over poll-based futures). The runtime is a
 bytecode VM with **no JIT** — deterministic, fuel-metered, and small
 enough to embed everywhere a wasm binary fits.

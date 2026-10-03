@@ -11,7 +11,7 @@ hiding it behind a collector.
 ## Everything is a cell
 
 Every non-primitive value — strings, byte buffers, arrays, records,
-enums, trait objects, erasure boxes, nullable boxes, coroutine frames —
+enums, interface objects, erasure boxes, nullable boxes, coroutine frames —
 is a heap cell. Each cell starts with a header: a refcount, a type id,
 and a few flags. The counts are plain integers: a VM runs on one thread
 with one heap, workers are separate VMs, and nothing is ever shared

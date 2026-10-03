@@ -10,8 +10,8 @@
 //!
 //! **Trait ids are global, not offset**: a trait bound as an
 //! extern in one module and declared in another is ONE trait — the merged
-//! table dedups by (mapped) name, so every module's `TraitObj` ids,
-//! `IsTrait` probes and trait-method slots land on the same global trait.
+//! table dedups by (mapped) name, so every module's `IfaceObj` ids,
+//! `IsIface` probes and trait-method slots land on the same global trait.
 //! Trait-method slots re-lay through the merged table's enumeration.
 //!
 //! Impl registrations (`surface.impls`) merge here too: a duplicate
@@ -23,7 +23,7 @@
 //! This pass is pure data — nothing runs — and is the compile/link half;
 //! cyclic uses stay the loader's concern.
 
-use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, TraitDesc, TraitMethod};
+use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, IfaceDesc, IfaceMethod};
 use crate::ops::Op;
 use crate::sym::IdentId;
 use crate::types::{RutType, TyKind, TypeId, TypeTable};
@@ -93,7 +93,7 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             | TyKind::Trace
             | TyKind::DisposalContext
             | TyKind::Enum { .. }
-            | TyKind::TraitObj { .. } => {}
+            | TyKind::IfaceObj { .. } => {}
             TyKind::Array { elem } | TyKind::Weak { elem } | TyKind::Opt { elem } | TyKind::Future { elem } => f(*elem),
             TyKind::Data { fields } => for fl in fields {
                 f(fl.ty);
@@ -128,7 +128,7 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     for t in &prog.types.types {
         kind(&t.kind, &mut id);
     }
-    for tr in &prog.traits {
+    for tr in &prog.ifaces {
         for m in &tr.methods {
             for &p in &m.params {
                 id(p);
@@ -166,9 +166,6 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     for t in &s.types {
         kind(&t.kind, &mut id);
     }
-    for im in &s.impls {
-        id(im.target);
-    }
     for ih in &s.inherents {
         id(ih.target);
         for m in &ih.methods {
@@ -178,7 +175,7 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             id(m.ret);
         }
     }
-    for t in &s.traits {
+    for t in &s.ifaces {
         for m in &t.methods {
             for &p in &m.params {
                 id(p);
@@ -204,14 +201,6 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
     for r in &prog.inst_fns {
         match &r.kind {
             InstFnKind::Free { subst, origins, .. } | InstFnKind::Method { subst, origins, .. } => {
-                for v in [subst, origins] {
-                    for &t in v {
-                        id(t);
-                    }
-                }
-            }
-            InstFnKind::ImplMethod { target, subst, origins, .. } => {
-                id(*target);
                 for v in [subst, origins] {
                     for &t in v {
                         id(t);
@@ -313,7 +302,7 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
     for t in prog.types.types.iter_mut() {
         t.kind = remap_kind(&t.kind, &rb_t, &nm, &tm);
     }
-    for tr in prog.traits.iter_mut() {
+    for tr in prog.ifaces.iter_mut() {
         for m in tr.methods.iter_mut() {
             m.params = m.params.iter().map(|&p| rb_t(p)).collect();
             m.ret = rb_t(m.ret);
@@ -366,10 +355,7 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
         })
         .collect();
     s.scope_blocks = remapped;
-    for im in s.impls.iter_mut() {
-        im.target = rb_t(im.target);
-    }
-    // the inherent rows rebase like the impl rows: targets and method
+    // the inherent rows rebase like every surface row: targets and method
     // signatures are scope-qualified ids — a decoded program's carried
     // rows spell their PACK-time scopes, and an un-remapped target
     // would densify against whatever program happens to own that
@@ -381,10 +367,10 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
             m.ret = rb_t(m.ret);
         }
     }
-    // trait decls and exported generic fns: same law — their carried
+    // interface decls and exported generic fns: same law — their carried
     // signatures are scope-qualified ids the consumer's table must
     // densify through THIS program's load-time scopes
-    for t in s.traits.iter_mut() {
+    for t in s.ifaces.iter_mut() {
         for m in t.methods.iter_mut() {
             m.params = m.params.iter().map(|&p| rb_t(p)).collect();
             m.ret = rb_t(m.ret);
@@ -407,14 +393,6 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
     for r in prog.inst_fns.iter_mut() {
         match &mut r.kind {
             InstFnKind::Free { subst, origins, .. } | InstFnKind::Method { subst, origins, .. } => {
-                for v in [subst, origins] {
-                    for t in v.iter_mut() {
-                        *t = rb_t(*t);
-                    }
-                }
-            }
-            InstFnKind::ImplMethod { target, subst, origins, .. } => {
-                *target = rb_t(*target);
                 for v in [subst, origins] {
                     for t in v.iter_mut() {
                         *t = rb_t(*t);
@@ -569,6 +547,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         }
     }
     let mut plans: Vec<ModulePlan> = Vec::with_capacity(modules.len());
+    let mut deferred_all: Vec<Vec<(String, u32)>> = Vec::with_capacity(modules.len());
     for m in modules.iter() {
         let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
         let packed = m.types.packed;
@@ -635,6 +614,13 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let text = |id: IdentId| out.interner.name(nm(id)).to_string();
         let mut plan = ModulePlan::default();
         let mut won_claims: Vec<(String, u32)> = Vec::new();
+        let mut deferred_claims: Vec<(String, u32)> = Vec::new();
+        deferred_all.push(Vec::new());
+        // the deferred claims: BODYLESS mirror stubs (the carried-member
+        // law's request rows — an empty code word, where every compiled
+        // body carries at least its implicit `Ret`) never steal a key
+        // from a unit with the real body; a stub claims only what
+        // NOTHING else claimed (checked after the walk)
         for r in &m.inst_types {
             let key = format!("{}#{}<{}>", text(r.owner), text(r.decl), canonv(&r.args));
             plan.inst_key_by_ty.insert(r.ty, key.clone());
@@ -665,38 +651,23 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     canonv(subst),
                     canonv(origins)
                 ),
-                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
-                    // the target half spells the instantiation's canonical
-                    // key when the target is an owner-anchored
-                    // instantiation row (`Vec<i64>`'s mirror lives at a
-                    // different id in every unit — the key must not): the
-                    // SAME impl method compiled in the owner and mirrored
-                    // by a consumer therefore claims once. A non-
-                    // instantiation target (a prim, a plain class) keeps
-                    // the type spelling.
-                    let tkey = match plan.inst_key_by_ty.get(target) {
-                        Some(k) => format!("inst:{k}"),
-                        None => format!("ty:{}", canon_type(&out.types, map(*target))),
-                    };
-                    format!(
-                        "{}#i#{}@{}#${}@{}#({})#({})",
-                        text(r.owner),
-                        text(*trait_name),
-                        if *slot_abi { "s" } else { "c" },
-                        text(*name),
-                        tkey,
-                        canonv(subst),
-                        canonv(origins)
-                    )
-                }
                 InstFnKind::HostThunk { name } => {
                     format!("{}#h#{}", text(r.owner), text(*name))
                 }
             };
+            let bodyless = m.funcs.get(r.fid as usize).map(|f| f.code.is_empty()).unwrap_or(false);
             match claim_fn.get(&key) {
                 Some(&g) => {
                     plan.fn_redirect.insert(r.fid, g);
                     plan.skip_fns.insert(r.fid);
+                }
+                None if bodyless => {
+                    // the stub cannot win — the real body may claim in a
+                    // LATER unit (the carried-member law's direction: the
+                    // body lives in the requester, which mounts after its
+                    // deps). The stub stays in the table; if a later unit
+                    // claims the key, emission redirects to it.
+                    deferred_claims.push((key, r.fid));
                 }
                 None => {
                     // the winner re-claims AFTER this module's renumber
@@ -733,12 +704,25 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     + crate::id::local_of(f)
             }
         };
+        deferred_all.last_mut().expect("pushed").extend(deferred_claims);
         plan.appended = m.funcs.len() - plan.skip_fns.len();
         func_off_plan += plan.appended as u32;
         // a host-synth module carries an empty (non-packed) table — the
         // emission loop's `skip(own_base)` appends nothing there
         type_cursor += m.types.types.len().saturating_sub(own_base as usize) as u32;
         plans.push(plan);
+    }
+
+    // the deferred stubs resolve now: a key a later unit claimed
+    // redirects the stub's callers onto the real body; a key NOTHING
+    // claimed keeps the stub (the empty fn — the loud trap naming the
+    // missing body)
+    for (mi, plan) in plans.iter_mut().enumerate() {
+        for (key, fid) in &deferred_all[mi] {
+            if let Some(&g) = claim_fn.get(key) {
+                plan.fn_redirect.insert(*fid, g);
+            }
+        }
     }
 
     // Every scope's final linked FUNCTION base, from the settled plans
@@ -772,7 +756,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
     // the global trait table: mapped trait name -> global trait id. A
     // trait bound as an extern and declared in its owner are ONE trait —
-    // dedup by name keeps every module's `TraitObj` ids, `IsTrait` wants
+    // dedup by name keeps every module's `IfaceObj` ids, `IsIface` wants
     // and slots pointing at the same global trait.
     let mut global_trait: std::collections::HashMap<IdentId, u32> =
         std::collections::HashMap::new();
@@ -895,11 +879,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             }
         };
 
-        // traits: the GLOBAL table dedups by mapped name (see the module
+        // ifaces: the GLOBAL table dedups by mapped name (see the module
         // comment) — every trait id this module carries remaps through
         // `tmap`, and its slots re-lay through the merged enumeration
-        let mut tmap: Vec<u32> = Vec::with_capacity(m.traits.len());
-        for tr in m.traits.iter() {
+        let mut tmap: Vec<u32> = Vec::with_capacity(m.ifaces.len());
+        for tr in m.ifaces.iter() {
             let key = nm(tr.name);
             let gid = match global_trait.get(&key) {
                 Some(&g) => {
@@ -908,7 +892,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     // SIGNATURES may differ in packed-id spelling (a
                     // consumer's copy normalizes trait-object types), so
                     // the check is count + names.
-                    let prev = &out.traits[g as usize];
+                    let prev = &out.ifaces[g as usize];
                     let same = prev.methods.len() == tr.methods.len()
                         && prev
                             .methods
@@ -924,21 +908,21 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     g
                 }
                 None => {
-                    let g = out.traits.len() as u32;
-                    let methods: Vec<TraitMethod> = tr
+                    let g = out.ifaces.len() as u32;
+                    let methods: Vec<IfaceMethod> = tr
                         .methods
                         .iter()
-                        .map(|tm| TraitMethod {
+                        .map(|tm| IfaceMethod {
                             name: nm(tm.name),
                             params: tm.params.iter().map(|&p| map(p)).collect(),
                             ret: map(tm.ret),
                         })
                         .collect();
                     for meth in 0..methods.len() as u32 {
-                        global_slot.insert((g, meth), out.trait_slots.len() as u32);
-                        out.trait_slots.push((g, meth));
+                        global_slot.insert((g, meth), out.iface_slots.len() as u32);
+                        out.iface_slots.push((g, meth));
                     }
-                    out.traits.push(TraitDesc { name: key, methods });
+                    out.ifaces.push(IfaceDesc { name: key, methods });
                     global_trait.insert(key, g);
                     g
                 }
@@ -950,8 +934,8 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // trait-method slots: re-laid through the global enumeration — a
         // module's slot `s` names `(trait, method)` in ITS table, which
         // maps to the global trait and the global slot
-        let mut slot_map: Vec<u32> = Vec::with_capacity(m.trait_slots.len());
-        for (t, meth) in m.trait_slots.iter() {
+        let mut slot_map: Vec<u32> = Vec::with_capacity(m.iface_slots.len());
+        for (t, meth) in m.iface_slots.iter() {
             let g = tmap.get(*t as usize).copied().unwrap_or(*t);
             match global_slot.get(&(g, *meth)) {
                 Some(&s) => slot_map.push(s),
@@ -968,45 +952,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let sm = |slot: u32| -> u32 {
             slot_map.get(slot as usize).copied().unwrap_or(slot)
         };
-
-        // impl registrations: duplicate (trait, type) pairs are a LINK
-        // error. Generic-target impls stay per-module (the target is a
-        // template) and are not exported. A target that is an
-        // owner-anchored instantiation row dedups by the instantiation's
-        // canonical key — mirrors of one instantiation register the same
-        // pair from every consuming unit of a spliced closure, and those
-        // are ONE registration.
-        for im in m.surface.impls.iter() {
-            let Some(&tg) = global_trait.get(&nm(im.trait_name)) else {
-                continue; // the trait table above covers every declared trait
-            };
-            let target_key = plan
-                .inst_key_by_ty
-                .get(&im.target)
-                .map(|k| format!("inst:{k}"))
-                .unwrap_or_else(|| format!("ty:{}", map(im.target)));
-            let key = (tg, target_key);
-            match impl_owner.get(&key) {
-                Some(owner) => {
-                    let tname = out
-                        .traits
-                        .get(tg as usize)
-                        .map(|t| out.interner.name(t.name).to_string())
-                        .unwrap_or_else(|| "?".to_string());
-                    let gtarget = map(im.target);
-                    let target = out.types.types.get(gtarget as usize)
-                        .map(|t| out.interner.name(t.name).to_string())
-                        .unwrap_or_else(|| "?".to_string());
-                    return Err(LinkError(format!(
-                        "link: duplicate impl `({}, {})` — `{}` and `{}` both register it (one impl per (trait, type) pair per program)",
-                        tname, target, owner, m.name
-                    )));
-                }
-                None => {
-                    impl_owner.insert(key, m.name.clone());
-                }
-            }
-        }
 
         for (di, t) in m.types.types.iter().enumerate().skip(own_base as usize) {
             if let TyKind::Opt { elem } = &t.kind {
@@ -1076,8 +1021,8 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 out.vtables.resize(gi + 1, Vec::new());
             }
             let row = &mut out.vtables[gi];
-            if row.len() < out.trait_slots.len() {
-                row.resize(out.trait_slots.len(), None);
+            if row.len() < out.iface_slots.len() {
+                row.resize(out.iface_slots.len(), None);
             }
             for (si, f) in vt.into_iter().enumerate() {
                 if let Some(fid) = f {
@@ -1180,16 +1125,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     subst: subst.iter().map(|&t| map(t)).collect(),
                     origins: origins.iter().map(|&t| map(t)).collect(),
                 },
-                InstFnKind::ImplMethod { trait_name, target, name, slot_abi, subst, origins } => {
-                    InstFnKind::ImplMethod {
-                        trait_name: nm(trait_name),
-                        target: map(target),
-                        name: nm(name),
-                        slot_abi,
-                        subst: subst.iter().map(|&t| map(t)).collect(),
-                        origins: origins.iter().map(|&t| map(t)).collect(),
-                    }
-                }
                 InstFnKind::HostThunk { name } => InstFnKind::HostThunk { name: nm(name) },
             };
             out_fns_ledger.push(InstFn { owner: nm(r.owner), kind, fid: map_func(r.fid) });
@@ -1240,7 +1175,7 @@ fn boot_len() -> usize {
 }
 
 /// Remap the `TypeId`s and names inside a type descriptor. `tm` maps a
-/// module-local trait id to the global one (`TyKind::TraitObj` carries a
+/// module-local trait id to the global one (`TyKind::IfaceObj` carries a
 /// trait id, not a `TypeId`).
 fn remap_kind(
     kind: &TyKind,
@@ -1272,7 +1207,7 @@ fn remap_kind(
                 })
                 .collect(),
         },
-        TyKind::TraitObj { trait_id } => TyKind::TraitObj { trait_id: tm(*trait_id) },
+        TyKind::IfaceObj { iface_id } => TyKind::IfaceObj { iface_id: tm(*iface_id) },
         TyKind::Fn { params, ret } => TyKind::Fn {
             params: params.iter().map(|&p| map(p)).collect(),
             ret: map(*ret),
@@ -1287,7 +1222,7 @@ fn remap_kind(
 
 /// Remap every id-bearing operand of an op. Ops without ids fall through.
 /// `sm` re-lays trait-method slots through the global enumeration; `tm`
-/// maps trait ids (`IsTrait` wants) to the global table.
+/// maps trait ids (`IsIface` wants) to the global table.
 fn remap_op(
     op: Op,
     map: &impl Fn(TypeId) -> TypeId,
@@ -1323,7 +1258,7 @@ fn remap_op(
             argv_off,
             argc,
         },
-        Op::IsTrait { dst, obj, want } => Op::IsTrait { dst, obj, want: tm(want) },
+        Op::IsIface { dst, obj, want } => Op::IsIface { dst, obj, want: tm(want) },
         other => other,
     }
 }
@@ -1416,11 +1351,11 @@ mod tests {
         p.types = TypeTable::boot();
         let shape = p.interner.intern("Shape");
         let area = p.interner.intern("area");
-        p.traits.push(TraitDesc {
+        p.ifaces.push(IfaceDesc {
             name: shape,
-            methods: vec![TraitMethod { name: area, params: vec![], ret: TY_I32 }],
+            methods: vec![IfaceMethod { name: area, params: vec![], ret: TY_I32 }],
         });
-        p.trait_slots.push((0, 0));
+        p.iface_slots.push((0, 0));
         let main = p.interner.intern("main");
         p.funcs.push(FuncCode {
             name: main,
@@ -1433,7 +1368,7 @@ mod tests {
             labels: vec![],
             code: vec![
                 Op::CallI { slot: 0, argv_off: 0, argc: 0, dst: 0 },
-                Op::IsTrait { dst: 0, obj: 0, want: 0 },
+                Op::IsIface { dst: 0, obj: 0, want: 0 },
                 Op::Ret { val: Some(0) },
             ],
             spans: vec![],
@@ -1445,26 +1380,19 @@ mod tests {
     }
 
     #[test]
-    fn same_trait_across_modules_merges_into_one_global_trait() {
-        // a: declares the trait; b: binds it as an extern (its own copy of
-        // the descriptor) and calls through a slot + probe
-        let mut a = trait_module("a");
-        a.surface.impls.push(crate::binary::SurfaceImpl {
-            trait_name: a.interner.intern("Shape"),
-            target: 0, // irrelevant here
-            methods: vec![],
-            methods_concrete: vec![],
-            trait_args: vec![],
-        });
+    fn same_iface_across_modules_merges_into_one_global_iface() {
+        // a: declares the interface; b: binds it as an extern (its own
+        // copy of the descriptor) and calls through a slot + probe
+        let a = trait_module("a");
         let b = trait_module("b");
         let out = link(vec![a, b]).expect("link");
-        assert_eq!(out.traits.len(), 1, "one global Shape");
-        assert_eq!(out.trait_slots, vec![(0, 0)], "one global slot");
+        assert_eq!(out.ifaces.len(), 1, "one global Shape");
+        assert_eq!(out.iface_slots, vec![(0, 0)], "one global slot");
         for f in &out.funcs {
             assert!(
                 f.code.iter().all(|op| match op {
                     Op::CallI { slot, .. } => *slot == 0,
-                    Op::IsTrait { want, .. } => *want == 0,
+                    Op::IsIface { want, .. } => *want == 0,
                     _ => true,
                 }),
                 "slots and trait ids land on the global trait: {f:?}"
@@ -1472,40 +1400,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn duplicate_impl_pair_is_a_link_error() {
-        // module `a` (scope 1) declares Point and registers (Shape, Point);
-        // module `b` (scope 2) binds a's Point and registers the same pair.
-        // Per-module compiles cannot see each other, so the collision is
-        // detectable only here.
-        let boot = TypeTable::boot().types.len() as u32;
-        let mut mk = |name: &str, scope: crate::id::ScopeId, target: TypeId| {
-            let mut p = trait_module(name);
-            p.scope = scope;
-            let point = p.interner.intern("Point");
-            // packed table carrying `a`'s block + own block (a real
-            // module's layout: boot, used blocks, own types)
-            p.types = TypeTable::boot_scoped(scope);
-            p.types.types.push(RutType { name: point, kind: TyKind::Data { fields: vec![] } });
-            p.types.scope_base.resize(3, 0);
-            p.types.scope_base[1] = boot;
-            p.types.scope_base[2] = boot;
-            p.surface.impls.push(crate::binary::SurfaceImpl {
-                trait_name: p.interner.intern("Shape"),
-                target,
-                methods: vec![],
-                methods_concrete: vec![],
-            trait_args: vec![],
-            });
-            p
-        };
-        let a = mk("a", 1, crate::id::pack(1, 0));
-        let b = mk("b", 2, crate::id::pack(1, 0));
-        let err = link(vec![a, b]).unwrap_err();
-        assert!(
-            err.to_string().contains("duplicate impl `(Shape, Point)`"),
-            "{err}"
-        );
-        assert!(err.to_string().contains("`a` and `b`"), "{err}");
-    }
 }
+// (the duplicate-(trait, type)-impl link error died with the impl
+// registrations — satisfaction is structural, nothing registers)

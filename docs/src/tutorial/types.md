@@ -45,8 +45,8 @@ the rest continue from there.
 `when` over an enum must be exhaustive — every member, or an `else`
 arm (see [control flow and when](control-flow.md)). Enums render as
 their member name in format strings. Enums take `impl` blocks —
-non-self methods on the name, `self` methods on a value, and trait
-impls (a marked `[iterable] fn` makes `for (let v of l)` walk) —
+non-self methods on the name, `self` methods on a value (a marked
+`[iterable] fn` makes `for (let v of l)` walk) —
 see [enums](../reference/enums.md).
 
 ## Structs — open records
@@ -257,7 +257,7 @@ impl Version {
 
 **No inheritance.** There is no `extends`, no `super`, no overriding.
 Code sharing is composition (hold a helper in a field) or free
-functions; polymorphism is traits — the next chapter.
+functions; polymorphism is structural interfaces — the next chapter.
 
 ## Visibility recap
 
@@ -331,4 +331,4 @@ entry fn main() {
 count=2 area=12 square=4
 ```
 
-Next: [traits and impl blocks](traits.md).
+Next: [interfaces and impl blocks](interfaces.md).

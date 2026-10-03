@@ -1,9 +1,9 @@
 # Enums
 
 `enum` — simple named integer sets. This is the entire feature: rut has
-**no data-carrying enums**. Heterogeneous data goes through traits (see
-[Traits and dispatch](traits.md)); absence goes through `?T` (see
-[Builtin generic types](builtin-generic-types.md)).
+**no data-carrying enums**. Heterogeneous data goes through interfaces
+(see [Interfaces and dispatch](interfaces.md)); absence goes through
+`?T` (see [Builtin generic types](builtin-generic-types.md)).
 
 ## Syntax
 
@@ -90,9 +90,10 @@ brake
 
 ## Impl blocks
 
-Enums take `impl` blocks — the same three forms a struct or class
-takes: non-self methods (called on the enum's name), `self` methods
-(called on a value), and trait impls.
+Enums take `impl` blocks — the same two forms a struct or class
+takes: non-self methods (called on the enum's name) and `self` methods
+(called on a value). A marked `[iterable]` member makes the enum a
+`for..of` target.
 
 ```rut
 use ink::{ Logger };
@@ -133,7 +134,8 @@ high
   [Modules and visibility](modules-and-visibility.md)).
 
 A marked member makes enum values iterable — `for (let v of c)` rides
-the same desugar as a class's (see [The iteration protocol](traits.md)):
+the same desugar as a class's (see
+[The iteration protocol](interfaces.md)):
 
 ```rut
 use ink::{ Logger };
@@ -175,8 +177,8 @@ engine disposes a record's cell, and an enum member is immortal.
 
 - Where another language would use a union of literals
   (`"left" | "right"`), rut uses an enum; where it would use a union of
-  *shapes*, rut uses a trait-typed value (see
-  [Traits and dispatch](traits.md)).
+  *shapes*, rut uses an interface-typed value (see
+  [Interfaces and dispatch](interfaces.md)).
 - The `|` spelling exists only for bound-only union aliases and
   `requires` bounds (see [Type aliases and union bounds](type-aliases.md))
   — a compile-time admission gate, never a runtime union value.

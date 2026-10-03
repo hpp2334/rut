@@ -30,7 +30,7 @@ mod util;
 pub use completer::{Completer, FAILED, PENDING, READY};
 pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 use host::HostSlot;
-pub use boundary::{CallArg, CallArgs, Ret};
+pub use boundary::{CallArg, CallArgs, Ret, rut_box_payload};
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -331,10 +331,10 @@ impl Vm {
         let mut future_yield_slots: Vec<u32> = Vec::new();
         let mut cx_ty: Option<TypeId> = None;
         let cx_name = prog.interner.lookup(rut_core::async_frame::RUN_CONTEXT_TYPE);
-        for (tid, t) in prog.traits.iter().enumerate() {
+        for (tid, t) in prog.ifaces.iter().enumerate() {
             if prog.interner.name(t.name).starts_with("Future<") {
                 if let Some(slot) = prog
-                    .trait_slots
+                    .iface_slots
                     .iter()
                     .position(|&(tr, m)| tr == tid as u32 && m == 0)
                 {
@@ -1396,8 +1396,8 @@ mod tests {
             interner: Default::default(),
             surface: Default::default(),
             types: TypeTable::boot(),
-            traits: Vec::new(),
-            trait_slots: Vec::new(),
+            ifaces: Vec::new(),
+            iface_slots: Vec::new(),
             vtables: Vec::new(),
             disposal_impls: Vec::new(),
             consts: Vec::new(),
