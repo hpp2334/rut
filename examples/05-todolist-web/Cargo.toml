@@ -13,7 +13,11 @@ crate-type = ["cdylib", "rlib"]
 rut-core = { path = "../../crates/rut-core" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
-rut-native = { path = "../../crates/rut-native" }
+# no `http` feature: the page never wires — its walks ride
+# `HttpRemote::offline` over the build-time cache (primed via
+# `DepRemote::write`), so the wasm32 graph carries neither reqwest
+# nor tokio (whose rt-multi-thread does not exist on wasm).
+rut-native = { path = "../../crates/rut-native", default-features = false }
 rut-vm = { path = "../../crates/rut-vm" }
 # nmap_host's bodies — the app's listener table rides the val-column
 # row `HashMap<str, i64>` (nmapset), so the page boot binds the native
