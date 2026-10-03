@@ -16,28 +16,57 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
-
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
-/// Mount the `nmapset` pkg (it pulls `nmap_host` through its `[deps]`) and
-/// register `app_src` as the root.
-fn session_with(app_src: &str) -> Session {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
-        .expect("mount pkg");
-    session
-        .register_module(
-            "app_main",
-            Module { spec: "app_main".into(), body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
-    session
+
+
+/// Offer the `nmapset` pkg (it pulls `nmap_host` through its `[deps]`)
+/// and `app_src` as the root.
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
+fn world_with(app_src: &str) -> rut_driver::Loaded {
+    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(NMAPSET_DIR)).expect("mount pkg");
+    loaded.pkgs.push(rut_driver::Pkg::source("app_main", app_src));
+    loaded
 }
 
 fn compile_pkg_app(app_src: &str) -> rut_driver::GraphOutput {
-    rut_driver::compile_graph(&session_with(app_src), "app_main")
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&world_with(app_src))
+            .entrypoint("app_main")
+            .compile(),
+    )
 }
 
 fn diags_of(app_src: &str) -> Vec<String> {
@@ -52,8 +81,8 @@ fn diags_of(app_src: &str) -> Vec<String> {
 /// declares — `rut_std::nmap::pkg()`, checked against the mounted
 /// `rut/nmap` surface (the contract).
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
-    let session = session_with(app_src);
-    let ctx = session.host_pkg_context();
+    let world = world_with(app_src);
+    let ctx = rut_driver::host_pkg_ctx(&world.pkgs);
     for f in ["map_new", "map_len",
               "map_hput", "map_hfind", "map_hremove",
               "map_hvput", "map_hvget", "map_hvremove"]
@@ -63,13 +92,17 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
             "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
         );
     }
-    let out = rut_driver::compile_graph(&session, "app_main");
+    let out = rut_driver::RutRun::new()
+        .pkgs(&world)
+        .entrypoint("app_main")
+        .compile()
+        .unwrap();
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = out.program.expect("linked program");
+    let prog = out.graph.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(20_000_000),
@@ -79,7 +112,7 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten()); // rut/nmap_host/nmap.d.rut ↔ the bodies
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .expect("vm")
 }
 

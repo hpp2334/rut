@@ -217,7 +217,7 @@ fn muted_user_cannot_rejoin() {
 #[test]
 fn sessions_are_independent() {
     let mut a = load_dir();
-    let mut b = load_dir();
+    let b = load_dir();
     a.join("ada").unwrap();
     assert!(b.transcript().is_empty());
     assert_eq!(a.transcript().len(), 1);

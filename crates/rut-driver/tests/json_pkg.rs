@@ -16,37 +16,74 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, HostRegistry, Vm};
+use rut_vm::interp::{HostHooks, Vm};
 
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonpkg");
 const LIGHT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonlight");
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn vm_at(dir: &str) -> Vm {
-    let (mut session, root) = rut_driver::load_dir_session(Path::new(dir), &rut_driver::bundle::FsSource).expect("mount");
-    rut_driver::mount_std(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
+    let loaded = rut_driver::load_dir(Path::new(dir), &rut_driver::bundle::FsSource).expect("mount");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        // the nmapset group drags nmap_host's declared surface — the
+        // bodies install against the rows snapshot (declared host fns
+        // run only through the registry)
+        // json's writer rides the strbuild pkg — its `strbuild_host` rows
+        // are in this closure's declared set, so the bodies install
+        // through the same chain
+        .host_pkg(rut_std::nmap::pkg())
+        .host_pkg(rut_std::strbuild::pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        g.diags.is_empty(),
+        compiled.graph.diags.is_empty(),
         "diags: {}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+    let flat = rut_core::link::flatten(compiled.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(400_000_000),
         heap_limit_bytes: Some(256 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the nmapset group drags nmap_host's declared surface — install the
-    // bodies (declared host fns run only through the registry)
-    // json's writer rides the strbuild pkg — its `strbuild_host` rows are
-    // in this closure's declared set, so the bodies install through the
-    // same registry
-    let ctx = session.host_pkg_context();
-    let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    rut_vm::interp::Vm::new(Rc::new(flat), &limits, HostHooks::default(), hosts).expect("vm")
+    rut_vm::interp:: Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(compiled.hosts).build().expect("vm")
 }
 
 fn dec(entry: &str, doc: &str) -> String {
@@ -599,23 +636,28 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
     let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>.new();\n    v.push(1);\n}\n";
-    let (mut light, _) = rut_driver::load_dir_session(Path::new(LIGHT), &rut_driver::bundle::FsSource).expect("mount light");
-    rut_driver::mount_std(&mut light);
-    let out = rut_driver::compile_module_in(&mut light, src, rut_parser::Mode::Impl, "d2probe");
-    assert!(
-        !out.diags.is_empty(),
-        "a Vec reference in the light world must diagnose"
-    );
-    let msg = out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
-    assert!(msg.contains("pouch"), "the D2 miss names the peer: {msg}");
+    let light = rut_driver::load_dir(Path::new(LIGHT), &rut_driver::bundle::FsSource).expect("mount light");
+    let err = rut_driver::RutRun::new()
+        .pkgs(&light)
+        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_driver::Pkg::source("d2probe", src))
+        .entrypoint("d2probe")
+        .compile()
+        .unwrap_err();
+    assert!(err.to_string().contains("pouch"), "the D2 miss names the peer: {err}");
 
-    let (mut full, _) = rut_driver::load_dir_session(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount full");
-    rut_driver::mount_std(&mut full);
-    let out = rut_driver::compile_module_in(&mut full, src, rut_parser::Mode::Impl, "d2probe");
+    let full = rut_driver::load_dir(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount full");
+    let out = rut_driver::RutRun::new()
+        .pkgs(&full)
+        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_driver::Pkg::source("d2probe", src))
+        .entrypoint("d2probe")
+        .compile()
+        .unwrap();
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "the same source compiles clean with the peers: {:?}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
     );
 }
 

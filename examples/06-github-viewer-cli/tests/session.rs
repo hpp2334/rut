@@ -95,6 +95,58 @@ impl Sinks {
 
 // -------------------------------------------------------------- boot ---
 
+/// The world the brain needs, as walked pkgs: the tree pkgs (pouch,
+/// nmapset, json, the http pair) + rgh_host + the async pair. Offer
+/// with `.pkg(..)`, first-pkg-wins.
+fn world_pkgs() -> Vec<rut_driver::Pkg> {
+    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
+    let mut pkgs = Vec::new();
+    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
+        pkgs.extend(rut_driver::dir_pkgs(&tree.join(d)).expect("mount tree pkg").pkgs);
+    }
+    pkgs.extend(
+        rut_driver::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
+            .expect("mount rgh_host")
+            .pkgs,
+    );
+    pkgs.extend(rut_driver::std_async_pkgs().expect("the async pair walks"));
+    pkgs
+}
+
+/// Compile `src` as the brain over the world: calc offered, the core
+/// prelude riding auto, the body installs riding the chain, one
+/// `.compile()` (the gate ran inside).
+fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Compiled {
+    let mut chain = rut_driver::RutRun::new();
+    for p in world_pkgs() {
+        chain = chain.pkg(p);
+    }
+    for hp in extra_hosts {
+        chain = chain.host_pkg(hp);
+    }
+    let compiled = chain
+        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_driver::Pkg::source("rgh", src))
+        .entrypoint("rgh")
+        .compile()
+        .expect("compile the brain");
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{}",
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    compiled
+}
+
+/// The declared rows of the brain's world (calc + the tree pkgs' host
+/// surfaces included) — the raw rows' contract check reads it.
+fn world_expected() -> rut_vm::interp::ExpectedHostFns {
+    let mut world = world_pkgs();
+    world.push(rut_driver::calc_pkg());
+    rut_driver::declared_host_fns(&world)
+}
+
+
 /// Boot the brain over the fixture lane. Mounts what the embedder
 /// mounts (std + the brain's libs + the example's own host pkg), runs
 /// the peer gate, compiles `rgh.rut` in Impl mode, verifies, binds
@@ -102,44 +154,33 @@ impl Sinks {
 /// rgh_host rows over the sinks (exit RECORDS — the one-way door is
 /// the embedder's), and checks the decl ↔ bodies contract pre-boot
 fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static) -> (Vm, Sinks, HttpFixture) {
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    // the async pair (the launcher set `boot` drives — the embedder's
-    // own mount list carries it too)
-    rut_driver::mount_std_async(&mut s);
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
-    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
-    }
-    rut_driver::mount_dir(&mut s, &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
-        .expect("mount rgh_host");
-    rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
-
-    let out = rut_driver::compile_module_in(&mut s, SRC, rut_parser::Mode::Impl, "rgh");
-    assert!(
-        out.diags.is_empty(),
-        "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    // the brain compiles over the walked world (calc offered; the core
+    // prelude auto-rides) with the body installs riding the chain
+    let sinks = Sinks::default();
+    let (http_pkg, fx) = rut_std::http::pkg_with(fix);
+    let mut compiled = compile_brain(
+        SRC,
+        vec![
+            rut_std::math::pkg(),
+            rut_std::nmap::pkg(),
+            rut_std::async_host::pkg(),
+            // json's writer rides the strbuild pkg — the `strbuild_host`
+            // rows are in this closure's declared set, so the bodies
+            // install here too
+            rut_std::strbuild::pkg(),
+            http_pkg,
+        ],
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
-    rut_vm::verify::verify(&prog).unwrap();
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
+    let expected = world_expected();
 
     let limits = rut_vm::interp::Limits {
         fuel: Some(250_000_000),
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let sinks = Sinks::default();
-    let ctx = s.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    // json's writer rides the strbuild pkg — the `strbuild_host` rows are
-    // in this closure's declared set, so the bodies install here too
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let (http_pkg, fx) = rut_std::http::pkg_with(fix);
-    hosts.install_host_pkg(&ctx, http_pkg);
+    // the raw rgh_host rows join the compiled registry
+    let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -188,8 +229,13 @@ fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 
             *exited_sink.borrow_mut() = true;
             Ok(()) // the recording lane: the brain retires, the loop idles
         });
-    hosts.verify_against(&ctx.flatten()); // the decl ↔ the bodies
-    let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    // the decl ↔ the bodies
+    hosts.verify_against(&expected);
+    let vm = Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .build()
         .unwrap();
     (vm, sinks, fx)
 }
@@ -622,42 +668,32 @@ entry fn boot_oneshot(url: str) -> nil {
 
 #[test]
 fn the_one_shot_law_degrades_second_takers() {
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    rut_driver::mount_std_async(&mut s);
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
-    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
-    }
-    rut_driver::mount_dir(&mut s, &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
-        .expect("mount rgh_host");
-    rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
-    let out = rut_driver::compile_module_in(&mut s, ONESHOT_SRC, rut_parser::Mode::Impl, "rgh");
-    assert!(
-        out.diags.is_empty(),
-        "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    let sinks = Sinks::default();
+    let (http_pkg, fx) = rut_std::http::pkg_with(|_m, _u, _h, _b| {
+        Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
+    });
+    let mut compiled = compile_brain(
+        ONESHOT_SRC,
+        vec![
+            rut_std::math::pkg(),
+            rut_std::nmap::pkg(),
+            rut_std::async_host::pkg(),
+            // json's writer rides the strbuild pkg — the `strbuild_host`
+            // rows are in this closure's declared set, so the bodies
+            // install here too
+            rut_std::strbuild::pkg(),
+            http_pkg,
+        ],
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
-    rut_vm::verify::verify(&prog).unwrap();
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
+    let expected = world_expected();
     let limits = rut_vm::interp::Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let sinks = Sinks::default();
-    let ctx = s.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    // json's writer rides the strbuild pkg — the `strbuild_host` rows are
-    // in this closure's declared set, so the bodies install here too
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let (http_pkg, fx) = rut_std::http::pkg_with(|_m, _u, _h, _b| {
-        Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
-    });
-    hosts.install_host_pkg(&ctx, http_pkg);
+    // the raw rgh_host rows join the compiled registry
+    let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -690,9 +726,14 @@ fn the_one_shot_law_degrades_second_takers() {
             *code_sink.borrow_mut() = Some(code);
             Ok(())
         });
-    hosts.verify_against(&ctx.flatten());
-    let mut vm =
-        rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    // the decl ↔ the bodies
+    hosts.verify_against(&expected);
+    let mut vm = Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .build()
+        .unwrap();
     vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",)).unwrap();
     for _ in 0..500 {
         vm.run_ready().unwrap();
@@ -754,32 +795,25 @@ fn live_smoke_over_the_real_cdn() {
     // the embedder's own boot, but the observations ride the sinks and
     // `exit` records: reqwest lane (http::pkg()), the real DNS,
     // the real CDN, the wall-clock pump
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    rut_driver::mount_std_async(&mut s);
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
-    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
-    }
-    rut_driver::mount_dir(&mut s, &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
-        .expect("mount rgh_host");
-    rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
-    let out = rut_driver::compile_module_in(&mut s, SRC, rut_parser::Mode::Impl, "rgh");
-    assert!(out.diags.is_empty());
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
-    rut_vm::verify::verify(&prog).unwrap();
+    let sinks = Sinks::default();
+    let mut compiled = compile_brain(
+        SRC,
+        vec![
+            rut_std::math::pkg(),
+            rut_std::nmap::pkg(),
+            rut_std::async_host::pkg(),
+            rut_std::http::pkg(), // the reqwest lane
+        ],
+    );
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
+    let expected = world_expected();
     let limits = rut_vm::interp::Limits {
         fuel: Some(250_000_000),
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let sinks = Sinks::default();
-    let ctx = s.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::http::pkg()); // the reqwest lane
+    // the raw rgh_host rows join the compiled registry
+    let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -812,9 +846,14 @@ fn live_smoke_over_the_real_cdn() {
             *code_sink.borrow_mut() = Some(code);
             Ok(())
         });
-    hosts.verify_against(&ctx.flatten());
-    let mut vm =
-        rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    // the decl ↔ the bodies
+    hosts.verify_against(&expected);
+    let mut vm = Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .build()
+        .unwrap();
     vm.call::<_, ()>("boot", ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),)).unwrap();
     // the wall-clock pump: real workers settle the completers
     let mut ok = false;

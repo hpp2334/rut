@@ -12,6 +12,38 @@ use std::rc::Rc;
 use rut_parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // core bound as the one use: these tests exercise construction
     // and widening, not use discipline
@@ -41,12 +73,7 @@ fn run_returns(src: &str) -> Result<i64, String> {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        HostRegistry::new(),
-    )
+    let mut vm = Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(HostRegistry::new()).build()
     .map_err(|e| format!("{e:?}"))?;
     vm.call::<_, i32>("main", ()).map(|v| v as i64).map_err(|e| format!("{e:?}"))
 }

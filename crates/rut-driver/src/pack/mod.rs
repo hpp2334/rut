@@ -46,13 +46,11 @@ use strip::strip_arm;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::bundle::{bundle_key, collect_source_group, parse_manifest, read_entry, write_bundle, FsSource};
+use crate::bundle::{bundle_key, collect_source_group, parse_manifest, write_bundle, FsSource};
 
 use crate::graph::compile_units;
-use crate::loader::{
-    load_dir_session_fetched, mount_dev_table_fetched, run_peer_gate, Archive, PkgSource,
-};
-use crate::session::ModuleBody;
+use crate::loader::{mount_dev_table_fetched, run_peer_gate, walk_dir_fetched, PkgSource};
+use crate::session::PkgBody;
 
 /// The v9 bundle layout version — a **compiled** root (a lib pkg).
 /// The bump from 7 rides the manifest's own name change (`rut.json` →
@@ -205,9 +203,9 @@ pub fn pack_dir_opts_fetched(
     // the closure's session: the [deps] walk + the dev pass + the peer
     // gate, then the engine mounts the closure's code needs (the
     // prelude always; `calc` when a program reaches `Math`)
-    let loaded = load_dir_session_fetched(dir, &FsSource, map)?;
+    let loaded = walk_dir_fetched(dir, &FsSource, map)?;
     let (mut session, root, archives) = (loaded.session, loaded.root, loaded.archives);
-    crate::mount_std(&mut session);
+    crate::compile::std::mount_std_pkgs(&mut session);
     if root != name {
         return Err(PackError::law(format!(
             "{} names itself `{root}` — expected `{name}`",
@@ -257,7 +255,7 @@ pub fn pack_dir_opts_fetched(
                 let dm = group_manifest(source, &archives).map_err(PackError::law)?;
                 let rides_source = matches!(
                     session.resolve(spec).map(|m| &m.body),
-                    Ok(ModuleBody::Source { .. })
+                    Ok(PkgBody::Source { .. })
                 );
                 if rides_source && !dm.dev_deps.is_empty() {
                     return Err(PackError::law(format!(
@@ -270,15 +268,7 @@ pub fn pack_dir_opts_fetched(
     // re-run the ONE peer gate over the grown closure (the dev mounts
     // may have supplied peers) — archive group reads dispatch on the
     // recorded locations, through the archives the load opened
-    let mut sources_all = sources.clone();
-    sources_all.insert(root.clone(), PkgSource::Dir(dir.to_path_buf()));
-    for (pkg, (slot, prefix)) in session.archive_mounts() {
-        sources_all.entry(pkg.clone()).or_insert(PkgSource::Archive {
-            slot: *slot,
-            prefix: prefix.clone(),
-        });
-    }
-    run_peer_gate(&mut session, &root, &sources_all, &archives)?;
+    run_peer_gate(&mut session, &root, &archives)?;
     let mut units = compile_units(&session, &root);
     if !units.diags.is_empty() || !units.ok {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
@@ -291,7 +281,7 @@ pub fn pack_dir_opts_fetched(
         if let PkgSource::Archive { slot, .. } = source {
             if matches!(
                 session.resolve(spec).map(|m| &m.body),
-                Ok(ModuleBody::Compiled(_))
+                Ok(PkgBody::Compiled(_))
             ) && !units.linked.contains_key(spec)
             {
                 return Err(PackError::law(format!(
@@ -316,7 +306,7 @@ pub fn pack_dir_opts_fetched(
     let root_linked = units.linked.get(&root);
     let root_ok = matches!(
         (&session.resolve(&root).unwrap().body, root_linked),
-        (ModuleBody::Source { .. }, Some(&_))
+        (PkgBody::Source { .. }, Some(&_))
     );
     if !root_ok {
         return Err(PackError::law(format!(
@@ -542,7 +532,12 @@ fn collect_group_sources(
         if desc.contains_key("url") {
             // the archive root's location, then every group the same
             // archive contributed (first-mount-wins decided which)
-            let Some((slot, _)) = session.archive_mount(spec) else {
+            let Some(m) = session.resolve(spec).ok() else {
+                return Err(PackError::law(format!(
+                    "dep `{spec}` is declared by url but was not mounted from an archive"
+                )));
+            };
+            let Some((slot, _)) = m.archive else {
                 return Err(PackError::law(format!(
                     "dep `{spec}` is declared by url but was not mounted from an archive"
                 )));
@@ -551,15 +546,17 @@ fn collect_group_sources(
                 spec.clone(),
                 PkgSource::Archive { slot, prefix: String::new() },
             );
-            for (group, (gslot, gprefix)) in session.archive_mounts() {
-                if *gslot == slot {
-                    out.insert(
-                        group.clone(),
-                        PkgSource::Archive {
-                            slot,
-                            prefix: gprefix.clone(),
-                        },
-                    );
+            for (group, g) in session.modules() {
+                if let Some((gslot, gprefix)) = &g.archive {
+                    if gslot == &slot {
+                        out.insert(
+                            group.clone(),
+                            PkgSource::Archive {
+                                slot,
+                                prefix: gprefix.clone(),
+                            },
+                        );
+                    }
                 }
             }
             continue; // closed — the archive brought its whole closure

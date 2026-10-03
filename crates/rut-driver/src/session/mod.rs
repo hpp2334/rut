@@ -1,5 +1,6 @@
-//! Module mounts & resolution — the compile-time half
-//! (loading model: `docs/src/reference/loading.md`).
+//! The compile-time mount table — crate-internal since the run chain
+//! landed (`RutRun::new()..compile()` is the only public door). The
+//! loading model is documented at `docs/src/reference/loading.md`.
 //!
 //! **One directory is one module.** Its `rut.jsonc` names the exact
 //! package it answers to and how to reach its surface and body; the
@@ -14,7 +15,7 @@
 //! ```
 //!
 //! Resolution is exact and single-step: a use path resolves only if a
-//! module with that `name` is mounted — nothing is derived. Package
+//! pkg with that `name` is mounted — nothing is derived. Package
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
 //! consumer manifest (`[deps]`).
 //!
@@ -33,35 +34,20 @@
 mod error;
 mod module;
 
-pub use error::ResolveError;
-pub use module::{GenSource, Module, ModuleBody, PeerDecl};
+pub(crate) use error::ResolveError;
+pub use module::{GenSource, HostRow, Pkg, PkgBody, PeerDecl};
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use crate::bundle::{parse_manifest, valid_spec, ManifestError};
 
 /// The business-owned mount table. The host decides what exists; the
-/// resolver maps exact specifiers. Mirrors the runtime
-/// `vm.register_module`.
+/// resolver maps exact specifiers. Crate-internal: the run chain
+/// (`RutRun`) is the public face — this is where `.compile()` mounts
+/// the offered pkgs and walks the graph.
 #[derive(Clone, Debug, Default)]
-pub struct Session {
-    modules: BTreeMap<String, Module>,
-    deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// The `[peer-deps]` declarations the loader recorded:
-    /// declaring pkg → peer spec → declaration. The loader's peer gate
-    /// reads it post-closure; the reference-site missing-peer
-    /// diagnostic (the D2 upgrade) resolves against it.
-    peers: BTreeMap<String, BTreeMap<String, PeerDecl>>,
-    /// The directory each mounted pkg came from (programmatic mounts —
-    /// `mount_dir` and the dep walks). The loader's `assemble_peers`
-    /// reads it to run the peer gate's append pass over a session built
-    /// mount-by-mount, where no single walk owns the pkg→dir map.
-    peer_dirs: BTreeMap<String, std::path::PathBuf>,
-    /// Pkgs whose peer groups the gate already mounted — a second gate
-    /// pass over the same session (the graph load ran one, an
-    /// `assemble_peers` call adds another) never double-appends.
-    groups_mounted: std::collections::BTreeSet<String>,
+pub(crate) struct Session {
+    modules: BTreeMap<String, Pkg>,
     /// A mounted v7 compiled bundle's pack-time scope ledger (scope →
     /// the spec that owned it when the closure was packed, engine
     /// mounts included). A decoded program's foreign ids spell these
@@ -69,43 +55,31 @@ pub struct Session {
     /// through this table to the module to ensure — a reference with no
     /// row is a load error (refuse, never guess).
     bundle_scopes: BTreeMap<rut_core::id::ScopeId, String>,
-    /// Where archive-mounted pkgs' files live: pkg → (slot, in-archive
-    /// prefix), slot indexing the CALLER's archive list. The session
-    /// stays I/O-free — it remembers locations, never bytes; the peer
-    /// gate's archive group reads and the packer's rode-along copies
-    /// dispatch on it. First mount wins per pkg.
-    archive_mounts: BTreeMap<String, (usize, String)>,
-    /// Presence-gated peer-integration groups: declaring
-    /// pkg → the group texts whose optional peers are in the program's
-    /// closure, in the declarer's peer-table order. The graph compiles
-    /// them INTO the declarer's unit (after its own source) — the
-    /// module's mounted body stays pristine, no source is ever
-    /// appended into a mounted pkg.
-    peer_groups: BTreeMap<String, Vec<String>>,
 }
 
 impl Session {
-    pub fn new() -> Session {
+    pub(crate) fn new() -> Session {
         Session::default()
     }
 
-    /// Mount a module. Its `spec` must be a bare package name.
-    pub fn mount(&mut self, module: Module) -> Result<(), ManifestError> {
-        if !valid_spec(&module.spec) {
+    /// Mount a pkg. Its `spec` must be a bare package name.
+    pub(crate) fn mount(&mut self, pkg: Pkg) -> Result<(), ManifestError> {
+        if !valid_spec(&pkg.spec) {
             return Err(ManifestError(format!(
                 "`{}` is not a package name — expected `[a-zA-Z0-9_]+`",
-                module.spec
+                pkg.spec
             )));
         }
-        self.modules.insert(module.spec.clone(), module);
+        self.modules.insert(pkg.spec.clone(), pkg);
         Ok(())
     }
 
-    /// Programmatic single-module mount (wasm/tests/plugins) — no file.
-    pub fn register_module(&mut self, spec: &str, module: Module) -> Result<(), ManifestError> {
-        let mut module = module;
-        module.spec = spec.to_string();
-        self.mount(module)
+    /// Programmatic single-pkg mount (tests/plugins) — no file. First
+    /// mount wins is the CALLER's law; this table keeps the last.
+    pub(crate) fn register_module(&mut self, spec: &str, pkg: Pkg) -> Result<(), ManifestError> {
+        let mut pkg = pkg;
+        pkg.spec = spec.to_string();
+        self.mount(pkg)
     }
 
     /// Exact resolution: the package name must be mounted as-is. A miss
@@ -114,7 +88,7 @@ impl Session {
     /// path every reference-site miss flows through, so the dedicated
     /// diagnostic holds by construction (item-level misses can never be
     /// peer-gated: groups are impl-only).
-    pub fn resolve(&self, spec: &str) -> Result<&Module, ResolveError> {
+    pub(crate) fn resolve(&self, spec: &str) -> Result<&Pkg, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
@@ -125,10 +99,10 @@ impl Session {
     }
 
     /// Mutable exact resolution — the symbol-table apply lane's
-    /// take/replace access to a mounted module's body (a stripped
+    /// take/replace access to a mounted pkg's body (a stripped
     /// bundle's sidecar restores names + positions in place, before the
     /// graph compiles). Same miss diagnostics as [`Session::resolve`].
-    pub fn resolve_mut(&mut self, spec: &str) -> Result<&mut Module, ResolveError> {
+    pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Pkg, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
@@ -147,31 +121,12 @@ impl Session {
     /// loader (the peer gate's D1 fires at mount); without the gate it
     /// stays the bare miss — D1's business, not D2's.
     fn peer_miss(&self, spec: &str) -> ResolveError {
-        for (pkg, peers) in &self.peers {
-            if peers.get(spec).is_some_and(|d| d.optional) {
-                return ResolveError::PeerMissing { spec: spec.to_string(), pkg: pkg.clone() };
+        for (_, m) in &self.modules {
+            if m.peers.get(spec).is_some_and(|d| d.optional) {
+                return ResolveError::PeerMissing { spec: spec.to_string(), pkg: m.spec.clone() };
             }
         }
         ResolveError::NoModule { spec: spec.to_string() }
-    }
-
-    /// The host-fn table the mounted host pkgs declare:
-    /// `<scope>::<name>` → signature. The scope IS the package name —
-    /// the registration naming has no override (`host_scope` is
-    /// retired). The table feeds `Vm::verify_host_fns` — the
-    /// load-time half of the `.d.rut` ↔ host-impl contract (a mismatch
-    /// panics before any rut code runs).
-    ///
-    /// An `async` host row expands into its row family: the decl spells
-    /// one name but the embedder registers five bodies (the base name —
-    /// a trap, the weave never dispatches it — plus
-    /// `__start`/`__yield`/`__take`/`__cancel`), so the
-    /// "bound but undeclared" direction stays total for
-    /// `register_async!` registrations.
-    pub fn expected_host_fns(
-        &self,
-    ) -> std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
-        self.host_pkg_context().flatten()
     }
 
     /// The mounted host pkgs' declared rows, partitioned by
@@ -184,11 +139,11 @@ impl Session {
     /// `__take` opaque→ret, `__cancel` opaque→nil) exactly as
     /// `register_async!`'s emitter spells them. Snapshot semantics:
     /// build once per boot lane; rebuild if mounts change after.
-    pub fn host_pkg_context(&self) -> rut_vm::interp::HostPkgContext {
+    pub(crate) fn host_pkg_context(&self) -> rut_vm::interp::HostPkgContext {
         use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE};
         let mut ctx = rut_vm::interp::HostPkgContext::default();
         for (spec, m) in &self.modules {
-            let ModuleBody::Host { host_funcs, .. } = &m.body else {
+            let PkgBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
             for (name, params, ret, is_async) in host_funcs {
@@ -210,51 +165,14 @@ impl Session {
         ctx
     }
 
-    /// Record a `[peer-deps]` declaration for `pkg`. The
-    /// loader calls this while walking — it reads every mounted pkg's
-    /// manifest anyway, so the registry costs no extra I/O.
-    pub fn record_peer(&mut self, pkg: &str, peer: &str, decl: PeerDecl) {
-        self.peers.entry(pkg.to_string()).or_default().insert(peer.to_string(), decl);
-    }
-
-    /// The peer declarations the loader recorded: declaring pkg →
-    /// (peer spec → declaration). Phase 1's peer gate reads it
-    /// post-closure; phase 2's D2 upgrade reads it at resolve time.
-    pub fn peer_decls(&self) -> &BTreeMap<String, BTreeMap<String, PeerDecl>> {
-        &self.peers
-    }
-
-    /// Record the directory a pkg was mounted from (programmatic
-    /// mounts). `assemble_peers` reads the map to run the gate's group
-    /// reads over a session built mount-by-mount.
-    pub fn record_peer_dir(&mut self, pkg: &str, dir: &Path) {
-        self.peer_dirs.entry(pkg.to_string()).or_insert_with(|| dir.to_path_buf());
-    }
-
-    /// The mounted pkgs' directories, first mount wins.
-    pub fn peer_dirs(&self) -> &BTreeMap<String, std::path::PathBuf> {
-        &self.peer_dirs
-    }
-
-    /// Mark `pkg`'s peer groups as already mounted — a second gate pass
-    /// over the same session skips them (no double-append).
-    pub fn mark_groups_mounted(&mut self, pkg: &str) {
-        self.groups_mounted.insert(pkg.to_string());
-    }
-
-    /// Was `pkg`'s peer group already appended by an earlier gate pass?
-    pub fn groups_mounted(&self, pkg: &str) -> bool {
-        self.groups_mounted.contains(pkg)
-    }
-
     /// Record one row of a v7 bundle's pack-time scope ledger (the
     /// loader reads every row of `rut.scopes` at mount).
-    pub fn record_bundle_scope(&mut self, scope: rut_core::id::ScopeId, spec: &str) {
+    pub(crate) fn record_bundle_scope(&mut self, scope: rut_core::id::ScopeId, spec: &str) {
         self.bundle_scopes.insert(scope, spec.to_string());
     }
 
     /// The spec a pack-time scope belonged to, per the mounted ledger.
-    pub fn bundle_scope(&self, scope: rut_core::id::ScopeId) -> Option<&str> {
+    pub(crate) fn bundle_scope(&self, scope: rut_core::id::ScopeId) -> Option<&str> {
         self.bundle_scopes.get(&scope).map(String::as_str)
     }
 
@@ -264,7 +182,7 @@ impl Session {
     /// every map; each archive's rows shift above everything recorded
     /// so far, so two independently packed bundles can share one
     /// session without their pack-time numberings ever arguing.
-    pub fn bundle_scope_next_base(&self) -> Option<rut_core::id::ScopeId> {
+    pub(crate) fn bundle_scope_next_base(&self) -> Option<rut_core::id::ScopeId> {
         let max = self
             .bundle_scopes
             .keys()
@@ -279,75 +197,37 @@ impl Session {
         }
     }
 
-    /// Record where one archive's mounted pkgs live: every
-    /// `spec → prefix` row under `slot` (first mount wins per pkg).
-    /// `slot` indexes the CALLER's archive list — the session records
-    /// locations only, never bytes (I/O-free, and wasm hosts pass
-    /// in-memory entries the same way).
-    pub fn record_archive_mounts(&mut self, prefixes: &BTreeMap<String, String>, slot: usize) {
-        for (pkg, prefix) in prefixes {
-            self.archive_mounts
-                .entry(pkg.clone())
-                .or_insert_with(|| (slot, prefix.clone()));
-        }
-    }
-
-    /// Where `pkg`'s archive-mounted files live: `(slot, prefix)`.
-    pub(crate) fn archive_mount(&self, pkg: &str) -> Option<(usize, &str)> {
-        self.archive_mounts.get(pkg).map(|(s, p)| (*s, p.as_str()))
-    }
-
-    /// Every archive mount recorded, pkg → (slot, prefix).
-    pub(crate) fn archive_mounts(&self) -> &BTreeMap<String, (usize, String)> {
-        &self.archive_mounts
-    }
-
-    /// Record one presence-gated peer-integration group for `pkg`
-    ///: the gate read the descriptor's `lib` file because
-    /// the peer is in the closure. The graph compiles recorded groups
-    /// into the declarer's own unit, after its source — a mounted
-    /// module's body is never mutated.
-    pub fn record_peer_group(&mut self, pkg: &str, text: &str) {
-        self.peer_groups.entry(pkg.to_string()).or_default().push(text.to_string());
-    }
-
-    /// The peer groups recorded for `pkg`, in gate order.
-    pub fn peer_groups_of(&self, pkg: &str) -> Vec<String> {
-        self.peer_groups.get(pkg).cloned().unwrap_or_default()
-    }
-
-    /// Parse and mount a module manifest; a consumer manifest's `[deps]`
-    /// are recorded for the host. Use [`parse_manifest`] directly when the
-    /// parsed `Manifest` itself is needed.
-    pub fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
-        let manifest = parse_manifest(text)?;
-        if let Some(name) = &manifest.name {
-            self.mount(Module {
-                spec: name.clone(),
-                entry: manifest.entry.clone(),
-                ..Default::default()
-            })?;
-            for (peer, desc) in &manifest.peer_deps {
-                self.record_peer(name, peer, PeerDecl::of(desc));
-            }
-        }
-        for (spec, dep) in &manifest.deps {
-            if !valid_spec(spec) {
-                return Err(ManifestError(format!(
-                    "dep `{spec}` is not a package name — expected `[a-zA-Z0-9_]+`"
-                )));
-            }
-            self.deps.insert(spec.clone(), dep.clone());
-        }
-        Ok(())
-    }
-
-    pub fn modules(&self) -> impl Iterator<Item = (&String, &Module)> {
+    /// The mounted pkgs, spec order.
+    pub(crate) fn modules(&self) -> impl Iterator<Item = (&String, &Pkg)> {
         self.modules.iter()
     }
 
-    pub fn deps(&self) -> impl Iterator<Item = (&String, &BTreeMap<String, String>)> {
-        self.deps.iter()
+    /// Take every mounted pkg out — the walk collectors' yield
+    /// (`Loaded`): the session dies, the pkgs travel.
+    pub(crate) fn drain_pkgs(&mut self) -> Vec<Pkg> {
+        self.modules.values().cloned().collect()
+    }
+
+    /// Parse and mount a pkg manifest; a consumer manifest's `[deps]`
+    /// are folded into the mounted pkg's own table. Crate-internal
+    /// today (the wasm wall it served is a chain now) — the manifest
+    /// grammar's tests pin through it. Dies with the walk in Phase B.
+    #[allow(dead_code)]
+    pub(crate) fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
+        let manifest = parse_manifest(text)?;
+        if let Some(name) = &manifest.name {
+            self.mount(Pkg {
+                spec: name.clone(),
+                entry: manifest.entry.clone(),
+                peers: manifest
+                    .peer_deps
+                    .iter()
+                    .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
+                    .collect(),
+                ..Default::default()
+            })?;
+        }
+        Ok(())
     }
 }
 
@@ -434,20 +314,16 @@ mod tests {
     #[test]
     fn programmatic_mount_sets_spec() {
         let mut s = Session::new();
-        s.register_module(
-            "my_map",
-            Module { body: ModuleBody::Source { text: "...".into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
+        s.register_module("my_map", Pkg::source("my_map", "...")).unwrap();
         let m = s.resolve("my_map").unwrap();
-        assert!(matches!(&m.body, ModuleBody::Source { text, .. } if text == "..."));
+        assert!(matches!(&m.body, PkgBody::Source { text, .. } if text == "..."));
     }
 
     #[test]
     fn session_records_peer_declarations() {
         let mut s = Session::new();
         s.load_manifest(JSON).unwrap();
-        let decl = s.peer_decls().get("json").and_then(|p| p.get("pouch")).unwrap();
+        let decl = s.resolve("json").unwrap().peers.get("pouch").unwrap();
         assert_eq!(
             *decl,
             PeerDecl {
@@ -456,39 +332,20 @@ mod tests {
                 path: "../pouch".into()
             }
         );
-        // a recorded peer group rides the session, never the module body
+        // a recorded peer group rides the pkg, never the body
         let mut s = Session::new();
-        s.register_module(
-            "m",
-            Module { body: ModuleBody::Source { text: "fn a() {}".into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
-        s.record_peer_group("m", "fn b() {}");
+        s.register_module("m", Pkg::source("m", "fn a() {}")).unwrap();
+        s.resolve_mut("m").unwrap().peer_groups.push("fn b() {}".to_string());
         let m = s.resolve("m").unwrap();
         assert!(
-            matches!(&m.body, ModuleBody::Source { text, .. } if text == "fn a() {}"),
+            matches!(&m.body, PkgBody::Source { text, .. } if text == "fn a() {}"),
             "{:?}",
             m.body
         );
-        assert_eq!(s.peer_groups_of("m"), vec!["fn b() {}".to_string()]);
-        assert!(s.peer_groups_of("other").is_empty());
+        assert_eq!(m.peer_groups, vec!["fn b() {}".to_string()]);
         // a host body (no rut source) carries no group text either —
         // groups compile into SOURCE units only
-        s.register_module(
-            "d",
-            Module {
-                body: ModuleBody::Host {
-                    host_funcs: vec![],
-                    consts: vec![],
-                    native_types: vec![],
-                    native_fns: vec![],
-                    native_impls: vec![],
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        assert!(s.peer_groups_of("d").is_empty());
+        s.register_module("d", Pkg::host("d", vec![])).unwrap();
+        assert!(s.resolve("d").unwrap().peer_groups.is_empty());
     }
 }
-

@@ -1,17 +1,24 @@
-//! The mounted module: its body kinds, the generic-source rider,
-//! and the peer declarations a manifest recorded.
+//! The package value: its body kinds, the generic-source rider, and
+//! the peer declarations a manifest recorded.
+//!
+//! A `Pkg` is pure data — a named package. The walk (the loaders)
+//! yields them; [`crate::run::RutRun`] offers them; the compile-time
+//! mount table (the crate-internal `Session`) holds them. Walker-found
+//! metadata (the deps table, the peer declarations) is pub data on it;
+//! the walk's own bookkeeping (where the pkg's files live) is
+//! crate-internal and dies with the walk in rut-native.
 
 use std::collections::BTreeMap;
 
 use crate::bundle::Entry;
 
-/// What a mounted module's body IS. The graph dispatches on this:
+/// What a mounted pkg's body IS. The graph dispatches on this:
 /// a source body compiles (and may splice), a compiled body pushes as
 /// decoded, a host body synthesizes its placeholder program.
 #[derive(Clone, Debug)]
-pub enum ModuleBody {
+pub enum PkgBody {
     /// a `.rut` body — compile it. `is_decl` marks a declaration-mode
-    /// module (a `.d.rut` surface parsed as its own unit):
+    /// pkg (a `.d.rut` surface parsed as its own unit):
     /// nothing to compile or run, but `rut dump` shows the AST.
     Source { text: String, is_decl: bool },
     /// a decoded `.rutc` program (a v7 compiled bundle's payload): the
@@ -26,7 +33,7 @@ pub enum ModuleBody {
     Host {
         /// `(name, params, ret, is_async)` — `is_async` marks a
         /// `host async fn` (the host future lane)
-        host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool)>,
+        host_funcs: Vec<HostRow>,
         /// exported constants: `(name, type, raw bits)` — `calc::PI`
         consts: Vec<(String, rut_core::types::TypeId, u64)>,
         /// Builtin containers published by name (`core` only), each
@@ -35,7 +42,7 @@ pub enum ModuleBody {
         /// only through `use`
         native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
         /// Builtin traits published by name (`core` only), same
-        /// ambient-bit law as [`ModuleBody::Host`]'s `native_types`
+        /// ambient-bit law as [`PkgBody::Host`]'s `native_types`
         /// Compiler-lowered builtin function names (`core` only) — no
         /// bodies; rut-lir lowers them. Each row carries its ambient
         /// bit (same law)
@@ -48,11 +55,15 @@ pub enum ModuleBody {
     },
 }
 
-impl Default for ModuleBody {
-    /// An empty source body — the manifest-only mount (a module whose
+/// One declared host row: `(name, params, ret, is_async)`. `is_async`
+/// marks a `host async fn` (the row family expands at the mount).
+pub type HostRow = (String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool);
+
+impl Default for PkgBody {
+    /// An empty source body — the manifest-only pkg (a pkg whose
     /// entries ride on other fields) parses to an empty unit.
-    fn default() -> ModuleBody {
-        ModuleBody::Source { text: String::new(), is_decl: false }
+    fn default() -> PkgBody {
+        PkgBody::Source { text: String::new(), is_decl: false }
     }
 }
 
@@ -77,18 +88,19 @@ pub struct GenSource {
     pub peers: Vec<(String, String)>,
 }
 
-/// One mounted module: the bare package name it answers to, its entry
-/// files, and its body ([`ModuleBody`]).
+/// One package: the bare name it answers to, its entry files, its body
+/// ([`PkgBody`]), and the walker-found metadata. Pure data — offer it
+/// to a run with [`crate::run::RutRun::pkg`].
 #[derive(Clone, Debug, Default)]
-pub struct Module {
+pub struct Pkg {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
     /// The namespace head for qualified member access (`Math.sqrt`) —
-    /// `None` when the module has no namespace form.
+    /// `None` when the pkg has no namespace form.
     pub namespace: Option<String>,
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
-    pub body: ModuleBody,
+    pub body: PkgBody,
     /// the generic-bearing source a compiled bundle unit rides beside
     /// its binary ([`GenSource`]) — the on-demand recompile's input
     pub gen_source: Option<GenSource>,
@@ -99,6 +111,100 @@ pub struct Module {
     /// source), so the binary's foreign scan sees none of these. Empty
     /// for source, host, and decl-root mounts.
     pub bundle_scopes: Vec<(rut_core::id::ScopeId, String)>,
+    /// The pkg's own `[deps]` table as the walk found it — the parsed
+    /// manifest's dep rows (spec → descriptor). Pub data: an embedder
+    /// can inspect what the closure declares.
+    pub deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// The pkg's own `[peer-deps]` declarations — declaring name →
+    /// declaration. Pub data: the peer gate reads it post-closure; the
+    /// reference-site missing-peer diagnostic resolves against it.
+    pub peers: BTreeMap<String, PeerDecl>,
+    /// Where the walk found this pkg's files — the peer gate's group
+    /// reads dispatch on it. Crate-internal: dies with the walk when it
+    /// moves to rut-native.
+    pub(crate) dir: Option<std::path::PathBuf>,
+    /// Where this pkg's archive-mounted files live: `(slot, in-archive
+    /// prefix)`, slot indexing the WALK's archive list. Crate-internal.
+    pub(crate) archive: Option<(usize, String)>,
+    /// Which walk produced this pkg — the archive slots' namespace: two
+    /// walks' slot 0 are different archives. Crate-internal.
+    pub(crate) walk: u64,
+    /// Presence-gated peer-integration groups recorded for this pkg: the
+    /// gate read the descriptor's `lib` file because the peer is in the
+    /// program's closure. The graph compiles them INTO this pkg's unit
+    /// (after its own source) — a mounted pkg's body is never mutated.
+    /// A host whose world has no filesystem (wasm) appends the same
+    /// texts by hand — the pkg is pure data, the graph only reads.
+    pub peer_groups: Vec<String>,
+    /// Have this pkg's peer groups already been appended by an earlier
+    /// gate pass (or by the offering host)? A second pass never
+    /// double-appends.
+    pub groups_mounted: bool,
+}
+
+impl Pkg {
+    /// The same pkg under another name — `lower_decl_module`'s surface
+    /// with the registration scope spelled at the offer.
+    pub fn named(mut self, spec: &str) -> Pkg {
+        self.spec = spec.to_string();
+        self
+    }
+
+    /// A source pkg — the ordinary `.rut` body. `Pkg::source("app", src)`.
+    pub fn source(name: &str, text: impl Into<String>) -> Pkg {
+        Pkg {
+            spec: name.to_string(),
+            body: PkgBody::Source { text: text.into(), is_decl: false },
+            ..Default::default()
+        }
+    }
+
+    /// A declaration-mode pkg — a `.d.rut` surface parsed as its own
+    /// unit (the surface-only dev state).
+    pub fn decl(name: &str, text: impl Into<String>) -> Pkg {
+        Pkg {
+            spec: name.to_string(),
+            body: PkgBody::Source { text: text.into(), is_decl: true },
+            ..Default::default()
+        }
+    }
+
+    /// A host-ABI pkg: declared rows, no rut body — the embedding Rust
+    /// binds them at run time. Async rows carry `is_async = true` and
+    /// expand into their five-row family at the mount.
+    pub fn host(name: &str, rows: Vec<HostRow>) -> Pkg {
+        Pkg {
+            spec: name.to_string(),
+            body: PkgBody::Host {
+                host_funcs: rows,
+                consts: vec![],
+                native_types: vec![],
+                native_fns: vec![],
+                native_impls: vec![],
+            },
+            ..Default::default()
+        }
+    }
+
+    /// A decoded `.rutc` program as a pkg's body (a compiled bundle's
+    /// payload, already gated).
+    pub fn compiled(name: &str, program: rut_core::binary::Program) -> Pkg {
+        Pkg {
+            spec: name.to_string(),
+            body: PkgBody::Compiled(program),
+            ..Default::default()
+        }
+    }
+
+    /// The pure container parse: a packed `.rutbundle`'s bytes → the
+    /// walked yield ([`crate::run::Loaded`]) — gates, groups, the scope
+    /// ledger, and the ONE peer gate over the archive's own pkgs. No
+    /// filesystem, no network: the same contract a url dep rides.
+    pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Loaded, crate::run::RunError> {
+        crate::loader::bundle_walk_bytes(bytes)
+            .map(crate::loader::WalkOutput::into_loaded)
+            .map_err(crate::run::RunError::from)
+    }
 }
 
 /// One recorded `[peer-deps]` declaration: the declaring
@@ -118,7 +224,7 @@ pub struct PeerDecl {
 
 impl PeerDecl {
     /// The declaration a descriptor table describes — the loader and
-    /// [`Session::load_manifest`] share the reading.
+    /// the manifest lanes share the reading.
     pub(crate) fn of(desc: &BTreeMap<String, String>) -> PeerDecl {
         PeerDecl {
             optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
@@ -127,4 +233,3 @@ impl PeerDecl {
         }
     }
 }
-

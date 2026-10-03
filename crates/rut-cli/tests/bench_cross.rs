@@ -13,7 +13,7 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
+
 use rut_vm::interp::Vm;
 
 const FIXTURE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/bench-cross");
@@ -56,24 +56,22 @@ entry fn twins_agree(n: i64) -> i64 {
 /// bodies, boot the Vm. Bindings before the Vm, contract
 /// checked by `verify_against` at boot.
 fn vm_with_surface(pkg_dir: &str) -> Vm {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(pkg_dir))
-        .expect("mount bench_cross");
-    let ctx = session.host_pkg_context();
-    session
-        .register_module(
-            "app",
-            Module { spec: "app".into(), body: ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
-        )
+    let mut world = rut_driver::dir_pkgs(std::path::Path::new(pkg_dir))
+        .expect("mount bench_cross")
+        .pkgs;
+    world.push(rut_driver::Pkg::source("app", SRC));
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app")
+        .compile()
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app");
     assert!(
-        g.diags.is_empty(),
+        compiled.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = g.program.expect("compile");
+    let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(20_000_000),
@@ -83,7 +81,7 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
     hosts.verify_against(&ctx.flatten()); // the surface ↔ the bodies
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap()
 }
 
@@ -92,14 +90,10 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
 /// surfaces is a boot panic or this assert, never a silent skew.
 #[test]
 fn both_surfaces_declare_the_same_contract() {
-    let mut a = Session::new();
-    rut_driver::mount_std_core(&mut a);
-    rut_driver::mount_dir(&mut a, std::path::Path::new(FIXTURE_DIR)).unwrap();
-    let mut b = Session::new();
-    rut_driver::mount_std_core(&mut b);
-    rut_driver::mount_dir(&mut b, std::path::Path::new(COMMITTED_DIR)).unwrap();
-    let ctx_a = a.host_pkg_context();
-    let ctx_b = b.host_pkg_context();
+    let world_a = rut_driver::dir_pkgs(std::path::Path::new(FIXTURE_DIR)).unwrap().pkgs;
+    let world_b = rut_driver::dir_pkgs(std::path::Path::new(COMMITTED_DIR)).unwrap().pkgs;
+    let ctx_a = rut_driver::host_pkg_ctx(&world_a);
+    let ctx_b = rut_driver::host_pkg_ctx(&world_b);
     assert_eq!(ctx_a.flatten(), ctx_b.flatten());
     // and the binding set satisfies the contract exactly
     let mut hosts = rut_vm::interp::HostRegistry::new();

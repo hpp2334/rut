@@ -14,18 +14,56 @@
 
 use std::path::Path;
 
-use rut_driver::Session;
 
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
-fn load(rel: &str) -> Result<(Session, String), String> {
-    rut_driver::load_dir_session(Path::new(&format!("{DATA}/{rel}")), &rut_driver::bundle::FsSource)
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
+fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
+    rut_driver::load_dir(Path::new(&format!("{DATA}/{rel}")), &rut_driver::bundle::FsSource)
         .map_err(|e| e.to_string())
 }
 
 fn compile(rel: &str) -> Result<rut_driver::GraphOutput, String> {
-    let (session, root) = load(rel)?;
-    Ok(rut_driver::compile_graph(&session, &root))
+    let loaded = load(rel)?;
+    Ok(graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&loaded)
+            .entrypoint(&loaded.root)
+            .compile(),
+    ))
 }
 
 /// Mount + compile green: no mount error, no diags.
@@ -49,9 +87,9 @@ fn green(rel: &str) {
 // the old observable — are gone; satisfaction is structural, nothing
 // registers.)
 
-fn source_of(s: &Session, spec: &str) -> String {
-    match &s.resolve(spec).expect(spec).body {
-        rut_driver::ModuleBody::Source { text, .. } => text.clone(),
+fn source_of(s: &rut_driver::Loaded, spec: &str) -> String {
+    match &s.pkg(spec).expect(spec).body {
+        rut_driver::PkgBody::Source { text, .. } => text.clone(),
         other => panic!("{spec}: no source body: {other:?}"),
     }
 }
@@ -64,11 +102,11 @@ fn t1_optional_peers_absent_is_silent() {
     // matrix row 2: optional peers absent, integration never touched —
     // NOTHING happens. Silent success IS the feature (json mounts
     // light); no transitive pull of pouch/nmapset.
-    let (s, root) = load("cons_light").expect("mount must succeed");
-    assert_eq!(root, "cons_light");
-    assert!(s.resolve("json").is_ok());
-    assert!(s.resolve("pouch").is_err(), "pouch must not be pulled transitively");
-    assert!(s.resolve("nmapset").is_err(), "nmapset must not be pulled transitively");
+    let s = load("cons_light").expect("mount must succeed");
+    assert_eq!(s.root, "cons_light");
+    assert!(s.pkg("json").is_some());
+    assert!(s.pkg("pouch").is_none(), "pouch must not be pulled transitively");
+    assert!(s.pkg("nmapset").is_none(), "nmapset must not be pulled transitively");
     assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no group may mount");
     assert!(!source_of(&s, "json").contains(NMAPSET_GROUP), "no group may mount");
     green("cons_light");
@@ -80,11 +118,11 @@ fn t2_peer_present_group_mounts_and_dispatches() {
     // reason) → the integration group mounts automatically
     // (presence-based resolution); the group's wrapper dispatches;
     // placement green.
-    let (s, _) = load("cons_pouch").expect("mount");
+    let s = load("cons_pouch").expect("mount");
     // the mounted source stays pristine — the groups ride the compile
     assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
     assert!(
-        s.resolve("nmapset").is_err(),
+        s.pkg("nmapset").is_none(),
         "nmapset is absent — inert: the group's peer never mounted"
     );
     // green IS the positive: cons.rut names the group's JVec and
@@ -99,7 +137,7 @@ fn t3_both_peers_mount_in_name_order() {
     // both wrappers dispatch. (The old observable for the ORDER half —
     // the impl rows' compile order — died with the registry; the mount
     // walk's BTreeMap order is the loader's own iteration law.)
-    let (s, _) = load("cons_both").expect("mount");
+    let s = load("cons_both").expect("mount");
     assert!(!source_of(&s, "json").contains(POUCH_GROUP), "no source append");
     // green IS the positive: cons.rut names BOTH groups' wrappers
     // (JVec and JMap) and dispatches both
@@ -114,15 +152,21 @@ fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
     // pkg + peer + the integration it unlocks + the fix — never the
     // bare NoModule text. (Phase 1 pinned the bare baseline here; the
     // baseline flipped when phase 2's D2 upgrade landed.)
-    let (s, _) = load("cons_ref").expect("the mount itself is silent (optional peer)");
+    let s = load("cons_ref").expect("the mount itself is silent (optional peer)");
     let decl = s
-        .peer_decls()
-        .get("json")
-        .and_then(|p| p.get("pouch"))
+        .pkg("json")
+        .unwrap()
+        .peers
+        .get("pouch")
         .expect("json's pouch declaration is recorded");
     assert!(decl.optional);
     assert_eq!(decl.lib.as_deref(), Some("./serde_pouch.rut"));
-    let err = s.resolve("pouch").unwrap_err();
+    // the closure miss IS the run chain's Err: the resolver's own text
+    let err = rut_driver::RutRun::new()
+        .pkgs(&s)
+        .entrypoint(&s.root)
+        .compile()
+        .unwrap_err();
     assert_eq!(
         err.to_string(),
         "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.jsonc` `deps`",
@@ -173,12 +217,17 @@ fn t6_self_build_dev_deps_guarantee_presence() {
     // matrix row 5: self-build/dev mode — the dev pass mounts the
     // peers (transitively: pouch rides base), the gate sees presence,
     // the groups mount; "no missing case exists".
-    let (s, root) = load("json").expect("self-build mounts");
-    assert_eq!(root, "json");
-    assert!(s.resolve("pouch").is_ok(), "the dev pass mounted pouch");
-    assert!(s.resolve("nmapset").is_ok(), "the dev pass mounted nmapset");
-    assert!(s.resolve("base").is_ok(), "the dev walk is transitive");
-    let g = rut_driver::compile_graph(&s, &root);
+    let s = load("json").expect("self-build mounts");
+    assert_eq!(s.root, "json");
+    assert!(s.pkg("pouch").is_some(), "the dev pass mounted pouch");
+    assert!(s.pkg("nmapset").is_some(), "the dev pass mounted nmapset");
+    assert!(s.pkg("base").is_some(), "the dev walk is transitive");
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&s)
+            .entrypoint(&s.root)
+            .compile(),
+    );
     assert!(
         g.diags.is_empty(),
         "{}",
@@ -208,9 +257,9 @@ fn t7b_broken_peer_path_is_inert_for_consumers() {
     // matrix row 6, consumer half: consumer-mode peer paths are never
     // read — the optional peer is absent (inert), the group never
     // mounts, no error.
-    let (s, _) = load("cons_broken").expect("the broken path must be inert for a consumer");
+    let s = load("cons_broken").expect("the broken path must be inert for a consumer");
     assert!(
-        s.resolve("pouch").is_err(),
+        s.pkg("pouch").is_none(),
         "the group's peer must not mount (consumer paths are never read)"
     );
     green("cons_broken");
@@ -221,7 +270,7 @@ fn t7c_presence_is_by_name_the_path_is_never_read() {
     // §2.2: presence is by NAME — the consumer supplies pouch by its
     // OWN path, so the group mounts even though json_broken's peer
     // path is broken (first-mount-wins: the consumer's path won).
-    let (s, _) = load("cons_broken_supply").expect("mount");
+    let _s = load("cons_broken_supply").expect("mount");
     // green IS the positive: cons.rut names json_broken's group wrapper
     // (JVec) and dispatches it
     green("cons_broken_supply");
@@ -232,8 +281,8 @@ fn t8_peer_gate_is_one_post_closure_pass() {
     // peer-of-peer: consumer → json + pouch → base. The gate runs
     // after the WHOLE closure exists (base included); groups add no
     // new pkg names, so no fixpoint is needed.
-    let (s, _) = load("cons_chain").expect("mount");
-    assert!(s.resolve("base").is_ok(), "pouch's own dep walked");
+    let s = load("cons_chain").expect("mount");
+    assert!(s.pkg("base").is_some(), "pouch's own dep walked");
     // green IS the positive: the group's wrapper dispatches with the
     // full closure in the session
     green("cons_chain");
@@ -244,15 +293,21 @@ fn t9_both_kinds_pairing_end_to_end() {
     // the sanctioned pairing: pouch is json's OPTIONAL peer and its DEV
     // dep at once — parses; the dev pass mounts, the gate sees
     // presence, the group mounts — the ruling's json shape end-to-end.
-    let (s, root) = load("json").expect("self-build");
+    let s = load("json").expect("self-build");
     let decl = s
-        .peer_decls()
-        .get("json")
-        .and_then(|p| p.get("pouch"))
+        .pkg("json")
+        .unwrap()
+        .peers
+        .get("pouch")
         .expect("the pairing parses");
     assert!(decl.optional, "the peer half is optional");
-    assert!(s.resolve("pouch").is_ok(), "the dev half mounted");
-    let g = rut_driver::compile_graph(&s, &root);
+    assert!(s.pkg("pouch").is_some(), "the dev half mounted");
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&s)
+            .entrypoint(&s.root)
+            .compile(),
+    );
     assert!(
         g.diags.is_empty(),
         "{}",
@@ -277,14 +332,14 @@ fn mount_dir_mounts_no_dev_deps_and_runs_no_gate() {
     // it is not "building the pkg itself", so the dev pass and the
     // peer gate are not its business (the peer DECLARATIONS are still
     // recorded for the registry).
-    let mut s = Session::new();
-    let name = rut_driver::mount_dir(&mut s, Path::new(&format!("{DATA}/json"))).expect("mount");
-    assert_eq!(name, "json");
-    assert!(s.resolve("json").is_ok());
-    assert!(s.resolve("pouch").is_err(), "dev-deps must not ride the embedder path");
-    assert!(s.resolve("nmapset").is_err());
+    let s = rut_driver::dir_pkgs(Path::new(&format!("{DATA}/json"))).expect("mount");
+    assert_eq!(s.root, "json");
+    assert!(s.pkg("json").is_some());
+    assert!(s.pkg("pouch").is_none(), "dev-deps must not ride the embedder path");
+    assert!(s.pkg("nmapset").is_none());
     assert!(
-        s.peer_decls().get("json").is_some(),
-        "the peer declarations are recorded for the registry"
+        s.pkg("json").unwrap().peers.get("pouch").is_some()
+            || s.pkg("json").unwrap().peers.get("nmapset").is_some(),
+        "the peer declarations are recorded on the pkg"
     );
 }

@@ -20,7 +20,7 @@ use rut_core::types::{
 };
 use rut_parser::{parse, Mode};
 
-use crate::session::{Module, ModuleBody};
+use crate::session::{Pkg, PkgBody};
 
 /// A crossing-set type name → its boot `TypeId`: the
 /// primitives, `str`/`bytes`, and `opaque`. Everything else a host
@@ -80,12 +80,12 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     }
 }
 
-/// Lower a `.d.rut` surface into a host-body [`Module`]: every
+/// Lower a `.d.rut` surface into a host-body [`Pkg`]: every
 /// `host fn` becomes a bodyless host entry `(name, params, ret)` — the
 /// embedding Rust binds the bodies at run time. Non-`host` items are
 /// surface the compiler consumes elsewhere; parse failures and
 /// non-crossing signatures are load errors.
-pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
+pub fn lower_decl_module(src: &str, origin: &str) -> Result<Pkg, String> {
     let (ast, diags) = parse(src, Mode::Decl);
     if !diags.is_empty() {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
@@ -131,8 +131,8 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
         };
         host_funcs.push((fname, ptys, rty, *is_async));
     }
-    Ok(Module {
-        body: ModuleBody::Host { host_funcs, consts: vec![], native_types: vec![], native_fns: vec![], native_impls: vec![] },
+    Ok(Pkg {
+        body: PkgBody::Host { host_funcs, consts: vec![], native_types: vec![], native_fns: vec![], native_impls: vec![] },
         ..Default::default()
     })
 }

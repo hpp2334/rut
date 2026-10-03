@@ -28,6 +28,40 @@ use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/strbuildpkg");
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn vm() -> Vm {
     vm_with_heap(64 * 1024 * 1024)
 }
@@ -35,15 +69,19 @@ fn vm() -> Vm {
 /// A VM over the fixture with a caller-chosen heap budget — the
 /// charge-hook test grows the builder past a SMALL budget on purpose.
 fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
-    let (mut session, root) = rut_driver::load_dir_session(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount");
-    rut_driver::mount_std(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
+    let loaded = rut_driver::load_dir(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount");
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "diags: {}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = Limits {
         fuel: Some(50_000_000),
@@ -52,15 +90,10 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     };
     // the builder's bodies (the host strbuild pkg): the fixture's
     // closure declares the `strbuild_host` rows through the pkg's own dep
-    let ctx = session.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&loaded.pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let mut vm = Vm::new(
-        Rc::new(flat),
-        &limits,
-        HostHooks::default(),
-        hosts,
-    )
+    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build()
     .expect("vm");
     vm
 }

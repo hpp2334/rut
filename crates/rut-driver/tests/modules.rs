@@ -2,7 +2,41 @@
 //!.
 
 use rut_parser::Mode;
-use rut_driver::{Module, ModuleBody, Session};
+
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 #[test]
 fn uses_and_links_a_function() {
@@ -162,35 +196,21 @@ fn binary_round_trips_the_whole_surface() {
 
 #[test]
 fn graph_compiles_and_links_uses_in_order() {
-    let mut s = Session::new();
-    s.register_module(
-        "math",
-        Module {
-            body: ModuleBody::Source {
-                text: "pub fn seven() -> i32 { return 7; }\n\
-                 entry fn main() -> i32 { return seven(); }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    s.register_module(
-        "app_main",
-        Module {
-            body: ModuleBody::Source {
-                text: "use math::{ seven };\n\
-                 entry fn main() -> i32 { return seven(); }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(
+                "math",
+                "pub fn seven() -> i32 { return 7; }\n\
+                 entry fn main() -> i32 { return seven(); }\n",
+            ))
+            .pkg(rut_driver::Pkg::source(
+                "app_main",
+                "use math::{ seven };\n\
+                 entry fn main() -> i32 { return seven(); }\n",
+            ))
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
     // math: main(0), seven(1); app_main: main(2)
@@ -210,51 +230,29 @@ fn graph_compiles_and_links_uses_in_order() {
 
 #[test]
 fn graph_threads_a_type_through_a_chain() {
-    let mut s = Session::new();
-    s.register_module(
-        "geo_base",
-        Module {
-            body: ModuleBody::Source {
-                text: "struct Point { x: i32; y: i32; }\n\
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(
+                "geo_base",
+                "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
-                 entry fn main() -> i32 { return 0; }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    s.register_module(
-        "geo_mid",
-        Module {
-            body: ModuleBody::Source {
-                text: "use geo_base::{Point, origin};\n\
+                 entry fn main() -> i32 { return 0; }\n",
+            ))
+            .pkg(rut_driver::Pkg::source(
+                "geo_mid",
+                "use geo_base::{Point, origin};\n\
                  pub fn shifted() -> Point { return origin(); }\n\
-                 entry fn main() -> i32 { return 0; }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    s.register_module(
-        "app_main",
-        Module {
-            body: ModuleBody::Source {
-                text: "use geo_base::{Point};\n\
+                 entry fn main() -> i32 { return 0; }\n",
+            ))
+            .pkg(rut_driver::Pkg::source(
+                "app_main",
+                "use geo_base::{Point};\n\
                  use geo_mid::{shifted};\n\
-                 entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let out = rut_driver::compile_graph(&s, "app_main");
+                 entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n",
+            ))
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
     let points = (0..p.types.types.len() as u32)
@@ -317,9 +315,14 @@ fn loads_a_directory_graph() {
     .unwrap();
     std::fs::write(lib.join("lib.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
 
-    let out = rut_driver::compile_dir(&app).expect("compile_dir");
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-    let p = out.program.expect("linked program");
+    let loaded = rut_driver::load_dir(&app, &rut_driver::bundle::FsSource).expect("load_dir");
+    let out = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile_dir");
+    assert!(out.graph.diags.is_empty(), "{:?}", out.graph.diags);
+    let p = out.graph.program.expect("linked program");
     // math::seven called from app_main
     let call = p
         .funcs
@@ -342,34 +345,23 @@ fn consumer_uses_pouch_vec() {
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");
     let coll_src = rut_driver::load_module_source(&pouch).expect("read");
-    let mut s = Session::new();
-    // core first: the pouch source uses its prelude names
-    rut_driver::mount_std_core(&mut s);
-    s.register_module(
-        "pouch",
-        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, ..Default::default() },
-    )
-    .unwrap();
-    s.register_module(
-        "app_main",
-        Module {
-            body: ModuleBody::Source {
-                text: "use pouch::{ Vec };\n\
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            // core first: the pouch source uses its prelude names
+            .pkg(rut_driver::Pkg::source("pouch", coll_src))
+            .pkg(rut_driver::Pkg::source(
+                "app_main",
+                "use pouch::{ Vec };\n\
                  entry fn main() -> i32 {\n\
                      let mut v: Vec<i32> = Vec.new();\n\
                      v.push(1);\n\
                      v.push(2);\n\
                      return v.len();\n\
-                 }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let out = rut_driver::compile_graph(&s, "app_main");
+                 }\n",
+            ))
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     assert_eq!(p.funcs.iter().filter(|f| p.name_of(f.name) == "main").count(), 1);
@@ -389,21 +381,8 @@ fn consumer_uses_pouch_vec() {
 
 #[test]
 fn graph_reports_a_missing_dependency() {
-    let mut s = Session::new();
-    s.register_module(
-        "app_main",
-        Module {
-            body: ModuleBody::Source {
-                text: "use missing::{nope};\n\
-                 entry fn main() -> i32 { return 0; }\n"
-                    .into(),
-                    is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", "use missing::{nope};\n\
+                 entry fn main() -> i32 { return 0; }\n");
     assert!(out.program.is_none());
     assert!(
         out.diags.iter().any(|d| d.msg.contains("`rut.jsonc` `deps`")),

@@ -44,30 +44,34 @@ fn classics_run_clean() {
         // third-party pkgs mounted from the tree (the driver doesn't
         // know them); `nmapset` is the map lane (survey D6: it pulls
         // `nmap_host` through its `[deps]`)
-        let mut s = rut_driver::Session::new();
-        rut_driver::mount_std(&mut s);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        rut_driver::mount_dir(&mut s, &tree.join("rut/ink")).expect("mount ink (+ink_host)");
-        rut_driver::mount_dir(&mut s, &tree.join("rut/pouch")).expect("mount pouch");
-        rut_driver::mount_dir(&mut s, &tree.join("rut/nmapset")).expect("mount nmapset (+nmap_host)");
-        let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "main");
-        if !out.diags.is_empty() {
+        // the classics use the toolchain libs offered from the tree;
+        // calc rides beside; the core prelude auto-offers
+        let mut chain = rut_driver::RutRun::new()
+            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_driver::Pkg::source("main", &src));
+        for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
+            let pkgs = rut_driver::dir_pkgs(&tree.join(d))
+                .unwrap_or_else(|e| panic!("mount {d}: {e}"));
+            chain = chain.pkgs(&pkgs);
+        }
+        let out = match chain.entrypoint("main").compile() {
+            Ok(c) => c,
+            Err(e) => {
+                failures.push(format!("{name}: {e}"));
+                continue;
+            }
+        };
+        if !out.graph.diags.is_empty() {
             failures.push(format!(
                 "{name}: diags:\n{}",
-                rut_lexer::diag::render_diags(&src, &out.diags)
+                rut_lexer::diag::render_diags(&src, &out.graph.diags)
             ));
             continue;
         }
-        let Some(binary) = out.binary else {
+        let Some(prog) = out.graph.program else {
             failures.push(format!("{name}: no binary emitted"));
             continue;
-        };
-        let prog = match rut_core::binary::decode(&binary) {
-            Ok(p) => p,
-            Err(e) => {
-                failures.push(format!("{name}: decode: {e}"));
-                continue;
-            }
         };
         if let Err(e) = rut_vm::verify::verify(&prog) {
             failures.push(format!("{name}: verify: {e}"));
@@ -84,17 +88,22 @@ fn classics_run_clean() {
         // by a program that declares the nmap lane. The log sink
         // discards: the run's truth here is the trap channel, not the
         // bytes.
-        let ctx = s.host_pkg_context();
+        // the installs against the offered world's rows snapshot
+        let mut world = Vec::new();
+        for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
+        }
+        world.push(rut_driver::calc_pkg());
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
         hosts.install_host_pkg(&ctx, rut_std::math::pkg());
         hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-        let mut vm = match rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        ) {
+        let mut vm = match rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
             Ok(vm) => vm,
             Err(t) => {
                 failures.push(format!("{name}: boot: {}", t.msg));

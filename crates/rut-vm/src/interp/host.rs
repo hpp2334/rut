@@ -161,7 +161,15 @@ impl HostRegistry {
             installed_scopes: std::collections::HashSet::new(),
         }
     }
+}
 
+impl Default for HostRegistry {
+    fn default() -> HostRegistry {
+        HostRegistry::new()
+    }
+}
+
+impl HostRegistry {
     /// The magic: the callable's Rust shape IS the `.d.rut` row —
     /// `hosts.register("calc::abs", |_vm, x: f64| x.abs())`. The
     /// signature is DERIVED (`F::SIG`, a fixed array, no heap); the

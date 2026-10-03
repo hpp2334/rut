@@ -8,8 +8,36 @@
 //! original's storage is rewritten engine-side — lives beside the
 //! native in rut-vm's `interp::tests`.
 
-use rut_driver::{Module, ModuleBody, Session};
 use rut_parser::Mode;
+
+
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 /// Compile-only harness: keeps the IR dump for the lowering assertions.
 fn compile_program(src: &str) -> rut_driver::ProgramOutput {
@@ -25,10 +53,7 @@ fn compile_program(src: &str) -> rut_driver::ProgramOutput {
 
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(app_src: &str) -> i32 {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", app_src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -38,12 +63,7 @@ fn run_main(app_src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }

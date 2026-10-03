@@ -14,21 +14,30 @@ fn run(src: &str) -> Result<Vec<String>, String> {
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink_lines = Rc::clone(&lines);
 
-    let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session);
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).map_err(|e| e.to_string())?;
-    rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).map_err(|e| e.to_string())?;
-    rut_driver::assemble_peers(&mut session).map_err(|e| e.to_string())?;
-    let out = rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "probe");
-    if !out.diags.is_empty() {
-        return Err(format!("compile: {}", out.diags[0].msg));
+    let mut world = Vec::new();
+    for d in ["rut/ink", "rut/pouch"] {
+        world.extend(
+            rut_driver::dir_pkgs(&tree.join(d))
+                .map_err(|e| e.to_string())?
+                .pkgs,
+        );
     }
-    let binary = out.binary.ok_or("no binary emitted")?;
-    let prog = rut_core::binary::decode(&binary).map_err(|e| format!("decode: {e}"))?;
-    rut_vm::verify::verify(&prog).map_err(|e| format!("verify: {e}"))?;
+    world.push(rut_driver::calc_pkg());
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+        .pkg(rut_driver::Pkg::source("probe", src))
+        .entrypoint("probe")
+        .compile()
+        .map_err(|e| format!("compile: {e}"))?;
+    if !compiled.graph.diags.is_empty() {
+        return Err(format!("compile: {}", compiled.graph.diags[0].msg));
+    }
+    let prog = compiled.graph.program.as_ref().ok_or("no binary emitted")?;
+    rut_vm::verify::verify(prog).map_err(|e| format!("verify: {e}"))?;
+    let prog = prog.clone();
 
-    let ctx = session.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg: &str| {
         sink_lines.borrow_mut().push(msg.to_string());
@@ -40,7 +49,7 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         heap_limit_bytes: Some(8 << 20),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::new(Rc::new(prog), &limits, HostHooks::default(), hosts)
+    let mut vm = Vm::builder().program(Rc::new(prog)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build()
         .map_err(|t| format!("boot: {}", t.msg))?;
     let result = vm.call::<_, ()>("main", ()).map_err(|t| format!("run: {}", t.msg));
     let out = lines.borrow().clone();

@@ -1,8 +1,8 @@
 //! The compile pipeline over one module and the engine package
-//! mounts: [`compile_module`] (fresh session) /
-//! [`compile_module_in`] (a caller-built session), the program
-//! compiler ([`program`]), the seed types ([`seeds`]), the engine
-//! mounts ([`std`]), and the IR dump renderer ([`dump`]).
+//! constructors: [`compile_module`] (the single-source lane — auto
+//! core + `calc`), the program compiler ([`program`]), the seed types
+//! ([`seeds`]), the engine pkg constructors ([`std`]), and the IR
+//! dump renderer ([`dump`]).
 
 pub mod dump;
 pub mod program;
@@ -12,14 +12,15 @@ pub mod std;
 pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
-pub use std::{mount_calc, mount_std, mount_std_async, mount_std_core};
+pub use std::{calc_pkg, core_pkg, std_async_pkgs};
 
 use rut_lexer::diag::Diag;
+use rut_lexer::span::Span;
 use rut_ast::dump as ast_dump;
 use rut_parser::{parse, Mode};
 
-use crate::graph::compile_graph;
-use crate::session::{Module, ModuleBody, Session};
+use crate::run::{Compiled, RutRun, RunError};
+pub use crate::session::Pkg;
 use rut_core::binary::encode;
 
 pub struct CompileOutput {
@@ -31,45 +32,47 @@ pub struct CompileOutput {
     pub binary: Option<Vec<u8>>,
 }
 
-/// Full pipeline over one module: resolve its `use` statements against a
-/// session with the engine's packages mounted (`core`, `calc`), then
-/// link, flatten, encode.
+/// Full pipeline over one module: the engine's packages ride the run
+/// chain (auto core, explicit `calc`), the source offers as the root
+/// pkg under `module_name`, and one `.compile()` runs the whole law.
+/// The embedder-facing single-source lane (the wasm demo, `rut dump`).
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
-    let mut session = Session::new();
-    mount_std(&mut session);
-    compile_module_in(&mut session, src, mode, module_name)
-}
-
-/// [`compile_module`] against a caller-built session — hosts and tests
-/// that mount their own libraries (the third-party pkgs are NOT in
-/// [`mount_std`]; mount them with [`crate::mount_dir`]).
-pub fn compile_module_in(
-    session: &mut Session,
-    src: &str,
-    mode: Mode,
-    module_name: &str,
-) -> CompileOutput {
-    let (ast, mut diags) = parse(src, mode);
+    let (ast, diags) = parse(src, mode);
     let tree = ast_dump::to_dump_tree(&ast);
     let ast_dump = ast_dump::render_text(&tree, src);
     let ast_json = ast_dump::render_json(&tree);
     if !diags.is_empty() {
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
-    let spec = module_name.to_string();
-    if let Err(e) = session.register_module(
-        &spec,
-        Module {
-            body: ModuleBody::Source { text: src.to_string(), is_decl: mode == Mode::Decl },
-            ..Default::default()
-        },
-    ) {
-        diags.push(Diag::new(rut_lexer::span::Span::new(0, 0), e.to_string()));
-        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
-    }
-    let g = compile_graph(session, &spec);
-    let ir_dump = g.program.as_ref().map(|p| ir_dump_of(&p.funcs, &p.interner)).unwrap_or_default();
-    let binary = g.program.map(|p| encode(&p));
-    CompileOutput { diags: g.diags, ast_dump, ast_json, ir_dump, binary }
+    let compiled: Result<Compiled, RunError> = RutRun::new()
+        .pkg(Pkg::source(module_name, src))
+        .pkg(calc_pkg())
+        .entrypoint(module_name)
+        .compile();
+    render(compiled, ast_dump, ast_json)
 }
 
+/// The chain product → the demo envelope: compile diags ride the
+/// graph; shape/closure refusals come back as one span-0 diagnostic
+/// (the envelope has no other channel).
+fn render(compiled: Result<Compiled, RunError>, ast_dump: String, ast_json: String) -> CompileOutput {
+    match compiled {
+        Ok(c) => {
+            let ir_dump = c
+                .graph
+                .program
+                .as_ref()
+                .map(|p| ir_dump_of(&p.funcs, &p.interner))
+                .unwrap_or_default();
+            let binary = c.graph.program.map(|p| encode(&p));
+            CompileOutput { diags: c.graph.diags, ast_dump, ast_json, ir_dump, binary }
+        }
+        Err(e) => CompileOutput {
+            diags: vec![Diag::new(Span::new(0, 0), e.msg)],
+            ast_dump,
+            ast_json,
+            ir_dump: String::new(),
+            binary: None,
+        },
+    }
+}

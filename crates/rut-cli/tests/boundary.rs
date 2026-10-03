@@ -2,53 +2,65 @@
 //! types — `Value`/`Slot` never leave the crate. Mirrors e2e's
 //! entry-driven shape but through the typed API.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 /// The toolchain libs a single-file case declares by use (`ink`,
-/// `pouch`) — mounted from the tree as real packages.
-fn mount_case_libs(s: &mut rut_driver::Session) {
+/// `pouch`) — walked from the tree as real packages.
+fn case_world() -> Vec<rut_driver::Pkg> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."); // repo root
-    rut_driver::mount_dir(s, &root.join("rut/ink")).expect("mount ink (+rt)");
-    rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
+    let mut world = Vec::new();
+    for d in ["rut/ink", "rut/pouch"] {
+        world.extend(
+            rut_driver::dir_pkgs(&root.join(d))
+                .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                .pkgs,
+        );
+    }
+    world.push(rut_driver::calc_pkg());
+    world
 }
 
-fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
+fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s);
-    rut_driver::compile_module_in(&mut s, &combined, rut_parser::Mode::Impl, module)
+    match rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: case_world(), root: String::new() })
+        .pkg(rut_driver::Pkg::source(module, &combined))
+        .host_pkg(rut_std::logger::pkg(|_msg| {}))
+        .host_pkg(rut_std::math::pkg())
+        .entrypoint(module)
+        .compile()
+    {
+        Ok(c) => c,
+        Err(e) => rut_driver::Compiled {
+            graph: rut_driver::GraphOutput {
+                diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+                program: None,
+            },
+            hosts: rut_vm::interp::HostRegistry::new(),
+        },
+    }
 }
 
 fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     let out = compile(src, "m");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(&format!("{src}\nuse ink::{{Logger}};\n"), &out.diags)
+        rut_lexer::diag::render_diags(&format!("{src}\nuse ink::{{Logger}};\n"), &out.graph.diags)
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().expect("binary")).expect("decode");
-    rut_vm::verify::verify(&prog).expect("verify");
+    rut_vm::verify::verify(out.graph.program.as_ref().expect("program")).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the bindings, BEFORE the Vm — mount = declare = install
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    let ctx = s.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    rut_vm::interp::Vm::new(
-        Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    )
-    .expect("vm")
+    // the bindings, BEFORE the Vm — offer = declare, the install rides
+    // the chain's registry
+    let vm = rut_vm::interp::Vm::builder()
+        .compiled(out)
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .build()
+        .expect("vm");
+    vm
 }
 
 const SRC: &str = r#"
@@ -178,9 +190,9 @@ fn a_non_crossable_nullable_still_rejects() {
     let src = "class Bag { f: fn(i64) -> i64; }\nentry fn bad() -> (?Bag, str) { return (nil, \"x\"); }\n";
     let out = compile(src, "m");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("only primitives")),
+        out.graph.diags.iter().any(|d| d.msg.contains("only primitives")),
         "expected the crossing diagnostic, got {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
 }
 

@@ -25,7 +25,6 @@
 
 use std::future::Future;
 use std::io::Write as _;
-use std::rc::Rc;
 use std::task::{Context, Poll};
 
 use rut_vm::interp::Vm;
@@ -45,59 +44,71 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-/// The manifest lane's mount: load the project root through the
-/// Loader door with the project-local remote named (the manifest is
+/// The manifest lane's walk: the project root through the walk door
+/// with the project-local remote named (the manifest is
 /// the ONLY url carrier — a cold start networks on its one miss, the
 /// pinned `http` bundle; a warm start is pure cache), then the
-/// embedder half every lane owns (rgh_host's rows).
-fn load_rgh_session() -> Result<(rut_driver::Session, String), String> {
+/// embedder half every lane owns (rgh_host's rows, offered beside the
+/// closure).
+fn load_rgh() -> Result<(rut_driver::Loaded, rut_driver::Loaded), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let app = rut_driver::Loader::new(base)
-        .dep_remote(rut_driver::HttpRemote::project_local(base))
-        .build();
-    let (mut session, root) = block_on(app.load()).map_err(|e| e.to_string())?;
-    // the example's own CLI-I/O rows (nothing fetches — the embedder
+    let remote = rut_driver::HttpRemote::project_local(base);
+    let loaded = block_on(rut_driver::load_path_session_with(base, &remote))
+        .map_err(|e| e.to_string())?;
+    // the example's own CLI-I/O pkg (nothing fetches — the embedder
     // binds the bodies)
-    rut_driver::mount_dir(
-        &mut session,
-        &base.join("rgh_host"),
-    )
-    .map_err(|e| e.to_string())?;
-    Ok((session, root))
+    let rgh_host = rut_driver::dir_pkgs(&base.join("rgh_host")).map_err(|e| e.to_string())?;
+    Ok((loaded, rgh_host))
 }
 
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>().join("\n");
 
-    // the std closure mounts through the manifest lane (rut.jsonc is
-    // the url carrier; the committed artifact seeds the fetcher), and
-    // the brain's module registers with it — the four passes run for
-    // real, peer gate included
-    let (mut session, root) = match load_rgh_session() {
+    // the std closure walks through the manifest lane (rut.jsonc is
+    // the url carrier; the committed artifact seeds the fetcher), the
+    // brain's source is the root, and the async pair + calc offer
+    // beside it — the passes run for real, peer gate included
+    let (loaded, rgh_host) = match load_rgh() {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(2);
         }
     };
-    rut_driver::mount_std(&mut session);
-    // the async pair (the launcher set `boot` drives)
-    rut_driver::mount_std_async(&mut session);
-    rut_driver::assemble_peers(&mut session).expect("assemble peer groups");
+    let root = loaded.root.clone();
+    let async_pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
 
     let src =
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh.rut"))
             .expect("read rgh.rut");
-    let g = rut_driver::compile_graph(&session, &root);
-    if !g.diags.is_empty() {
-        eprint!("{}", rut_lexer::diag::render_diags(&src, &g.diags));
+    let mut chain = rut_driver::RutRun::new().pkgs(&loaded);
+    // the async pair (the launcher set `boot` drives)
+    for p in async_pkgs {
+        chain = chain.pkg(p);
+    }
+    let chain = chain
+        .pkg(rut_driver::calc_pkg())
+        .pkgs(&rgh_host)
+        .host_pkg(rut_std::math::pkg())
+        .host_pkg(rut_std::nmap::pkg())
+        .host_pkg(rut_std::async_host::pkg())
+        .host_pkg(rut_std::http::pkg());
+    let compiled = match chain.entrypoint(&root).compile() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("rgh: {e}");
+            std::process::exit(1);
+        }
+    };
+    if !compiled.graph.diags.is_empty() {
+        eprint!("{}", rut_lexer::diag::render_diags(&src, &compiled.graph.diags));
         std::process::exit(1);
     }
-    let Some(prog) = g.program else {
+    let Some(ref prog) = compiled.graph.program else {
         eprintln!("rgh: no binary emitted");
         std::process::exit(1);
     };
-    if let Err(e) = rut_vm::verify::verify(&prog) {
+    if let Err(e) = rut_vm::verify::verify(prog) {
         eprintln!("rgh: verify: {e}");
         std::process::exit(1);
     }
@@ -111,21 +122,19 @@ fn main() {
         interrupt_every: 1024,
     };
 
-    // the mount snapshot the installs answer to (owned; the session
-    // dies when main's boot half ends)
-    let ctx = session.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    // calc's rows (mount_std mounts the Math surface) and the nmap
-    // table's rows (nmapset rides the plan's mount list — a mounted
-    // decl pkg's rows demand bodies)
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    // the async engine's rows (the launcher set boot drives)
-    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    // the std HTTP lane — the reqwest side (UA + redirects live in
-    // rut-std); the fixture lane is the tests', never this file's
-    hosts.install_host_pkg(&ctx, rut_std::http::pkg());
-    // the example's own CLI-I/O rows
+    // the installs rode the chain (calc's Math surface, the nmap
+    // table's rows, the async engine's launcher set, the std HTTP
+    // lane — the reqwest side, UA + redirects live in rut-std); the
+    // compiled registry takes the example's own raw CLI-I/O rows
+    // (registered under their full `rgh_host::` names — this host's
+    // own pkg, bound by hand)
+    // the decl ↔ the bodies, loudly: every mounted pkg's host rows
+    // must have a binding with the declared signature
+    let mut world: Vec<rut_driver::Pkg> = loaded.pkgs.clone();
+    world.extend(rgh_host.pkgs.iter().cloned());
+    let expected = rut_driver::declared_host_fns(&world);
+    let mut compiled2 = compiled;
+    let hosts = &mut compiled2.hosts;
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
             let mut o = std::io::stdout().lock();
@@ -169,12 +178,17 @@ fn main() {
         });
     // the decl ↔ the bodies, loudly: every mounted pkg's
     // host rows must have a binding with the declared signature
-    hosts.verify_against(&ctx.flatten());
+    compiled2.hosts.verify_against(&expected);
 
-    let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts) {
+    let mut vm = match rut_vm::interp::Vm::builder()
+        .compiled(compiled2)
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .build()
+    {
         Ok(vm) => vm,
-        Err(t) => {
-            eprintln!("rgh: boot: {}", t.msg);
+        Err(e) => {
+            eprintln!("rgh: boot: {}", e.msg);
             std::process::exit(1);
         }
     };

@@ -3,15 +3,51 @@
 // no-launcher mode proves ruling 8 (users may write their own
 // launchers — the engine knows none of these names).
 
-use rut_driver::{Module, ModuleBody, Session, compile_graph, mount_std_async, mount_std_core};
+
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn diags_of(src: &str) -> Vec<String> {
-    let mut s = Session::new();
-    mount_std_core(&mut s);
-    mount_std_async(&mut s);
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    compile_graph(&s, "app").diags.iter().map(|d| d.msg.clone()).collect()
+    let async_pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: async_pkgs, root: String::new() })
+        .pkg(rut_driver::Pkg::source("app", src))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    compiled.graph.diags.iter().map(|d| d.msg.clone()).collect()
 }
 
 fn one_diag(src: &str) -> String {
@@ -161,14 +197,12 @@ fn a_user_launcher_over_the_same_future_surface() {
     // a minimal private launcher, typed by the SAME core surface: the
     // engine's standard set is untouched, the receipt is a user class,
     // and the driving API is the engine half the user's row binds to
-    let mut s = Session::new();
-    mount_std_core(&mut s);
     let engine = rut_driver::lower_decl_module(
         include_str!("../../../rut/async_host/engine.d.rut"),
         "engine.d.rut",
     )
-    .expect("engine surface");
-    s.register_module("my_engine", engine).expect("mount");
+    .expect("engine surface")
+    .named("my_engine");
     let src = r#"
 use core::{ Future };
 use my_engine::{ __launch };
@@ -188,8 +222,15 @@ entry fn main() -> nil {
     launch(tick());
 }
 "#;
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    let out = compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
+    let compiled = rut_driver::RutRun::new()
+        .pkg(engine)
+        .pkg(rut_driver::Pkg::source("app", src))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
 }

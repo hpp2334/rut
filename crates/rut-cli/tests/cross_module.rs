@@ -8,21 +8,18 @@
 //! satisfaction of a foreign interface (the consumer's own type), and
 //! foreign generic interfaces in type position.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 /// Compile a module graph and run its `main`, returning the exit code.
 fn run_graph(modules: &[(&str, &str)]) -> i32 {
-    let mut session = rut_driver::Session::new();
+    let mut chain = rut_driver::RutRun::new();
     for (spec, src) in modules {
-        session
-            .register_module(spec, rut_driver::Module { body: rut_driver::ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() })
-            .expect("mount");
+        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
     }
     let (root, _) = modules.last().expect("root");
-    let g = rut_driver::compile_graph(&session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let binary = rut_core::binary::encode(g.program.as_ref().expect("program"));
+    let g = chain.entrypoint(root).compile().expect("compile the graph");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let binary = rut_core::binary::encode(g.graph.program.as_ref().expect("program"));
     let prog = rut_core::binary::decode(&binary).expect("decode");
     rut_vm::verify::verify(&prog).expect("verify");
     let limits = rut_vm::interp::Limits {
@@ -30,7 +27,7 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new())
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
         .expect("vm");
     let n: i32 = vm.call("main", ()).expect("main runs");
     n

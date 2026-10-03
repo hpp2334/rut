@@ -9,6 +9,38 @@
 
 use rut_parser::Mode;
 
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // core + pouch bound as the uses; these
     // tests exercise impl semantics, not use discipline
@@ -347,12 +379,7 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
@@ -528,12 +555,7 @@ fn class_vtable_fill_survives_the_link() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(linked),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(linked)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 105);
 }
@@ -638,12 +660,7 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
 fn run_main_src(p: rut_core::binary::Program) -> i32 {
     let prog = rut_core::link::flatten(p);
     rut_vm::verify::verify(&prog).expect("verify");
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &rut_vm::interp::Limits::default(),
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(rut_vm::interp::Limits::default()).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }

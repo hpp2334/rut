@@ -10,20 +10,41 @@ use rut_core::ops::{Nat, Op};
 /// The toolchain libs a single-file case declares by use (`ink`,
 /// `pouch`) — mounted from the tree as real packages (the driver does
 /// not know their names): mounting `ink` pulls its `ink_host` dep along.
-fn mount_case_libs(s: &mut rut_driver::Session) {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."); // repo root
-    rut_driver::mount_dir(s, &root.join("rut/ink")).expect("mount ink (+ink_host)");
-    rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
-}
 
 /// The mount snapshot for a case session (core+calc+libs) — what the
 /// installs answer to (`install_host_pkg`'s declared-side check) and
 /// what `verify_against` re-checks at boot.
+/// The case world: the toolchain libs a case declares by use (`ink`
+/// + `ink_host`, `pouch`) — walked from the tree as real packages —
+/// plus calc.
+fn case_world() -> Vec<rut_driver::Pkg> {
+    let mut world = Vec::new();
+    for d in ["rut/ink", "rut/pouch"] {
+        world.extend(
+            rut_driver::dir_pkgs(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+            )
+            .expect("mount case libs")
+            .pkgs,
+        );
+    }
+    world.push(rut_driver::calc_pkg());
+    world
+}
+
 fn case_ctx() -> rut_vm::interp::HostPkgContext {
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s);
-    s.host_pkg_context()
+    let mut world = Vec::new();
+    for d in ["rut/ink", "rut/pouch"] {
+        world.extend(
+            rut_driver::dir_pkgs(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+            )
+            .expect("mount case libs")
+            .pkgs,
+        );
+    }
+    world.push(rut_driver::calc_pkg());
+    rut_driver::host_pkg_ctx(&world)
 }
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
@@ -43,12 +64,11 @@ fn run_case_keep_vm(
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let out = compile(&combined, "main");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(&combined, &out.diags)
+        rut_lexer::diag::render_diags(&combined, &out.graph.diags)
     );
-    let binary = out.binary.expect("binary");
-    let prog = rut_core::binary::decode(&binary).expect("decode");
+    let prog = out.graph.program.expect("program");
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
@@ -70,7 +90,7 @@ fn run_case_keep_vm(
     }));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
     let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -78,14 +98,59 @@ fn run_case_keep_vm(
     (lines, trap, vm)
 }
 
+/// The demo-envelope lane over the case world: the same compile, plus
+/// the AST dumps + IR render a `CompileOutput` carries (the dump tests).
+fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
+    use rut_ast::dump as ast_dump;
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let (ast, diags) = rut_parser::parse(&combined, rut_parser::Mode::Impl);
+    let tree = ast_dump::to_dump_tree(&ast);
+    let ast_dump = ast_dump::render_text(&tree, &combined);
+    let ast_json = ast_dump::render_json(&tree);
+    if !diags.is_empty() {
+        return rut_driver::CompileOutput {
+            diags,
+            ast_dump,
+            ast_json,
+            ir_dump: String::new(),
+            binary: None,
+        };
+    }
+    let compiled = compile(src, module);
+    let ir_dump = compiled
+        .graph
+        .program
+        .as_ref()
+        .map(|p| rut_driver::ir_dump_of(&p.funcs, &p.interner))
+        .unwrap_or_default();
+    let binary = compiled.graph.program.as_ref().map(|p| rut_core::binary::encode(p));
+    rut_driver::CompileOutput {
+        diags: compiled.graph.diags,
+        ast_dump,
+        ast_json,
+        ir_dump,
+        binary,
+    }
+}
+
 /// Compile a snippet with the logger use appended (the original spans of
 /// `src` are preserved).
-fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
+fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s);
-    rut_driver::compile_module_in(&mut s, &combined, rut_parser::Mode::Impl, module)
+    let mut chain = rut_driver::RutRun::new()
+        .pkg(rut_driver::Pkg::source(module, &combined));
+    for d in ["rut/ink", "rut/pouch"] {
+        let pkgs = rut_driver::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+        )
+        .expect("mount case libs");
+        chain = chain.pkgs(&pkgs);
+    }
+    chain
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(module)
+        .compile()
+        .expect("compile the case")
 }
 
 #[test]
@@ -546,13 +611,13 @@ entry fn main() -> nil {
     // everywhere else, explicit generics on a static head stay a clear error
     // (the prelude use is present, so the static route engages)
     let bad = "use core::{ Option };\nentry fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
-    let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
+    let out = compile_out(bad, "main");
     // no backward compat: a removed head is an unknown name, full stop
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
     // and the plain (non-generic) spelling is the same ordinary miss —
     // every retired spelling falls to the normal resolution path
     let unused = "entry fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
-    let out = rut_driver::compile_module(unused, rut_parser::Mode::Impl, "main");
+    let out = compile_out(unused, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
 }
 
@@ -584,11 +649,11 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("let mut")),
+        out.graph.diags.iter().any(|d| d.msg.contains("let mut")),
         "want the mut-binding law diag: {:?}",
-        out.diags
+        out.graph.diags
     );
-    assert!(out.binary.is_none());
+    assert!(out.graph.program.is_none());
 }
 
 #[test]
@@ -601,9 +666,9 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("exhaustive")),
+        out.graph.diags.iter().any(|d| d.msg.contains("exhaustive")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -617,9 +682,9 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("Option")),
+        out.graph.diags.iter().any(|d| d.msg.contains("Option")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -631,7 +696,8 @@ fn dump_is_labeled_and_spanned() {
     let src = r#"enum Flavor { Sweet, Sour = 5 }
 entry fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
 "#;
-    let out = compile(src, "main");
+    // the AST dumps ride CompileOutput (the demo envelope lane)
+    let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
     assert!(text.contains("@0 Enum Flavor [0,37)"), "header: {text}");
@@ -819,11 +885,11 @@ entry fn main() -> nil {
 fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     let out = compile(src, "m");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(src, &out.diags)
+        rut_lexer::diag::render_diags(src, &out.graph.diags)
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().expect("binary")).expect("decode");
+    let prog = out.graph.program.as_ref().expect("program").clone();
     rut_vm::verify::verify(&prog).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -836,7 +902,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm")
+    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm")
 }
 
 #[test]
@@ -900,9 +966,9 @@ entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
+        out.graph.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 
     // a prim-field struct return rejects: the field types would cross
@@ -914,6 +980,7 @@ entry fn get_point() -> Point { return Point { x: 1, y: 2 }; }
     let out = compile(src, "m");
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let d = out
+        .graph
         .diags
         .iter()
         .find(|d| d.msg.contains("returns `Point`"))
@@ -931,6 +998,7 @@ entry fn put_point(p: Point) -> nil { }
     let out = compile(src, "m");
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let d = out
+        .graph
         .diags
         .iter()
         .find(|d| d.msg.contains("parameter `p` is `Point`"))
@@ -946,9 +1014,9 @@ entry fn pair() -> (Row, i32) { return (Row { id: 1 }, 2); }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("returns `(Row, i32)`")),
+        out.graph.diags.iter().any(|d| d.msg.contains("returns `(Row, i32)`")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 
     // `Vec<u8>` is a mutable builder, not the binary type: it no longer
@@ -959,9 +1027,9 @@ entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
+        out.graph.diags.iter().any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 
     let src = r#"
@@ -969,9 +1037,9 @@ entry fn generic<T>(v: T) -> T { return v; }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("cannot be generic")),
+        out.graph.diags.iter().any(|d| d.msg.contains("cannot be generic")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -993,11 +1061,11 @@ fn anonymous_tuples_still_cross_the_digest_shape() {
     for src in cases {
         let out = compile(src, "m");
         assert!(
-            out.diags.is_empty(),
+            out.graph.diags.is_empty(),
             "`{src}` must keep crossing:\n{:?}",
-            out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+            out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
         );
-        assert!(out.binary.is_some(), "`{src}` produces a binary");
+        assert!(out.graph.program.is_some(), "`{src}` produces a binary");
     }
 }
 
@@ -1130,9 +1198,10 @@ entry fn main() -> nil {
     Logger.new("app").info(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
 }
 "#;
-    let out = compile(src, "main");
+    // the dump labels member visibility (annotated members only) —
+    // the AST dumps ride CompileOutput (the demo envelope lane)
+    let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
-    // the dump labels member visibility (annotated members only)
     assert!(out.ast_dump.contains("vis: pub(mod)"), "member vis label: {}", out.ast_dump);
     assert!(!out.ast_dump.contains("vis: pub\n      name: n"), "unannotated stays quiet: {}", out.ast_dump);
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1310,14 +1379,10 @@ fn pouch_vec_via_module_loader_runs() {
     // then linked and executed — ink rides the same mount (with its ink_host).
     // mount_std (not just core): the run installs calc's bodies too, and
     // the load-time contract requires mount ↔ bindings to agree
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s); // ink (+ink_host) and pouch, from the tree
-    s.register_module(
+    let mut world = case_world(); // ink (+ink_host), pouch, calc — from the tree
+    world.push(rut_driver::Pkg::source(
         "app_main",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source {
-                text: r#"
+        r#"
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
@@ -1328,22 +1393,20 @@ entry fn main() -> nil {
     let top = v.pop();
     Logger.new("app").info(f"{v.len()} {top}");
 }
-"#
-                .into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let out = rut_driver::compile_graph(&s, "app_main");
+"#,
+    ));
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let out = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app_main")
+        .compile()
+        .expect("compile the walk");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "diags: {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
-    let prog = out.program.expect("program");
+    let prog = out.graph.program.expect("program");
     rut_vm::verify::verify(&prog).expect("verify");
 
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
@@ -1353,12 +1416,11 @@ entry fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten()); // the load-time contract
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1369,14 +1431,10 @@ fn std_collection_via_module_loader_runs() {
     // the real rut/pouch source, mounted and used by a
     // consumer: `Vec<T>` is rut source over the engine's `[T]` cell,
     // so this exercises the rut-source module loader end to end
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    mount_case_libs(&mut s); // pouch + ink (+ink_host), from the tree
-    s.register_module(
+    let mut world = case_world(); // pouch + ink (+ink_host), calc — from the tree
+    world.push(rut_driver::Pkg::source(
         "app_main",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source {
-                text: r#"
+        r#"
 use core::{ string_join };
 use pouch::{ Vec };
 use ink::{ Logger };
@@ -1388,22 +1446,20 @@ entry fn main() -> nil {
     let s = string_join(v.as_array());
     Logger.new("app").info(f"{s.len()} {s}");
 }
-"#
-                .into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let out = rut_driver::compile_graph(&s, "app_main");
+"#,
+    ));
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let out = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app_main")
+        .compile()
+        .expect("compile the walk");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "diags: {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
-    let prog = out.program.expect("program");
+    let prog = out.graph.program.expect("program");
     rut_vm::verify::verify(&prog).expect("verify");
 
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
@@ -1413,12 +1469,11 @@ entry fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let ctx = s.host_pkg_context();
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten()); // the load-time contract
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);
@@ -1518,11 +1573,11 @@ entry fn main() -> nil {
     let out = compile(src, "main");
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(&combined, &out.diags)
+        rut_lexer::diag::render_diags(&combined, &out.graph.diags)
     );
-    let prog = rut_core::binary::decode(&out.binary.expect("binary")).expect("decode");
+    let prog = out.graph.program.as_ref().expect("program").clone();
     let (_, main_fid) = prog
         .exports
         .iter()
@@ -1955,6 +2010,7 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     let msg = out
+        .graph
         .diags
         .iter()
         .map(|d| d.msg.clone())
@@ -2190,11 +2246,11 @@ entry fn main() -> nil { }
         "main",
     );
     assert!(
-        out.diags
+        out.graph.diags
             .iter()
             .any(|d| d.msg.contains("`[disposal]` member takes `mut self` first")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -2211,11 +2267,11 @@ entry fn main() -> nil { }
         "main",
     );
     assert!(
-        out.diags
+        out.graph.diags
             .iter()
             .any(|d| d.msg.contains("cannot carry `[disposal]` through a generic target")),
         "{:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -2331,23 +2387,27 @@ entry fn main() -> nil {
 #[test]
 fn dbg_digest() {
     let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").expect("digest.rut");
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
-    rut_driver::mount_dir(
-        &mut s,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
-    )
-    .expect("mount pouch");
+    let mut world = Vec::new();
     // json mounted light (the base only — the encode half's traits and
     // writer; no peer group needed)
-    rut_driver::mount_dir(
-        &mut s,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/json"),
-    )
-    .expect("mount json");
-    let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "digests");
-    assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
-    println!("{}", out.ir_dump);
+    for d in ["rut/pouch", "rut/json"] {
+        world.extend(
+            rut_driver::dir_pkgs(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+            )
+            .expect("mount pkg")
+            .pkgs,
+        );
+    }
+    world.push(rut_driver::calc_pkg());
+    let out = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .pkg(rut_driver::Pkg::source("digests", &src))
+        .entrypoint("digests")
+        .compile()
+        .expect("compile digests");
+    assert!(out.graph.diags.is_empty(), "{:?}", out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
+    println!("{}", rut_driver::ir_dump_of(&out.graph.program.as_ref().unwrap().funcs, &out.graph.program.as_ref().unwrap().interner));
 }
 
 #[test]
@@ -2364,14 +2424,13 @@ entry fn put(c: opaque) -> u32 {
 }
 "#;
     let out = compile(src, "m");
-    let binary = out.binary.expect("binary");
-    let prog = rut_core::binary::decode(&binary).expect("decode");
+    let prog = out.graph.program.as_ref().expect("program").clone();
     let limits = rut_vm::interp::Limits { fuel: Some(1_000_000), heap_limit_bytes: Some(8*1024*1024), interrupt_every: 1024 };
     let ctx = case_ctx();
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
     hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
-    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog.clone())).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts0).build().unwrap();
     let c: rut_vm::OpaqueRef = vm.call("make", ()).unwrap();
     for _ in 0..2 {
         for f in prog.funcs.iter() {
@@ -2402,7 +2461,8 @@ entry fn main() -> nil {
 }
 "#;
     let out = compile(src, "main");
-    println!("IR:\n{}", out.ir_dump);
+    let prog = out.graph.program.as_ref().expect("program");
+    println!("IR:\n{}", rut_driver::ir_dump_of(&prog.funcs, &prog.interner));
     let (lines, trap, _) = run_case(src, 100_000);
     println!("LINES {lines:?} TRAP {trap:?}");
 }
@@ -2466,8 +2526,8 @@ entry fn f(s: str) -> (bytes, str) {
 }
 "#;
     let out = compile(src, "m");
-    println!("IR:\n{}", out.ir_dump);
-    println!("DIAGS: {:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
+    println!("IR:\n{}", out.graph.diags.len()); // (debug lane: diags only)
+    println!("DIAGS: {:?}", out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
 }
 
 #[test]
@@ -2869,12 +2929,11 @@ pub fn main() -> Point {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "`pub fn main` is an ordinary pub fn — it still compiles: {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
-    let binary = out.binary.expect("binary");
-    let prog = rut_core::binary::decode(&binary).expect("decode");
+    let prog = out.graph.program.as_ref().expect("program").clone();
     assert!(
         prog.export("main").is_none(),
         "`pub fn main` is no export — the host cannot call it"
@@ -2899,9 +2958,9 @@ entry fn main() -> Point {
 "#;
     let out = compile(record, "main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("returns `Point`")),
+        out.graph.diags.iter().any(|d| d.msg.contains("returns `Point`")),
         "a named-record return rejects at the declaration: {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
 
     let good = r#"
@@ -2911,10 +2970,10 @@ entry fn main() -> (i32, i32) {
 "#;
     let out = compile(good, "main");
     assert!(
-        out.diags.is_empty(),
+        out.graph.diags.is_empty(),
         "the crossable twin compiles: {:?}",
-        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
-    let prog = rut_core::binary::decode(&out.binary.expect("binary")).expect("decode");
+    let prog = out.graph.program.as_ref().expect("program").clone();
     assert!(prog.export("main").is_some(), "`entry fn main` is the export");
 }

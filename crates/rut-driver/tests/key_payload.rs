@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
+
 use rut_vm::OpaqueRef;
 use rut_vm::interp::{KeyPayload, Vm};
 
@@ -44,24 +44,55 @@ const STR: i64 = 2;
 const BYTES: i64 = 3;
 const UNSUPPORTED: i64 = 4;
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn vm_with_host() -> Vm {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(PKG_DIR)).expect("mount keypayload");
-    let expected = session.expected_host_fns();
-    session
-        .register_module(
-            "app",
-            Module { spec: "app".into(), body: ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
-        )
+    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(PKG_DIR)).expect("mount keypayload");
+    let expected = rut_driver::declared_host_fns(&loaded.pkgs);
+    loaded.pkgs.push(rut_driver::Pkg::source("app", SRC));
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint("app")
+        .compile()
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = rut_core::link::flatten(g.program.expect("compile"));
+    let prog = rut_core::link::flatten(g.graph.program.expect("compile"));
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -81,7 +112,7 @@ fn vm_with_host() -> Vm {
         })
     });
     hosts.verify_against(&expected); // keypayload.d.rut ↔ the body
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap()
 }
 

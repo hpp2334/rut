@@ -16,11 +16,11 @@
 
 #![allow(static_mut_refs)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 // the positional driver decode (`Ret for Value`) — the run envelope's
 // entry-err reader; aliased so the host's own JSON never collides
+use rut_driver::CompileOutput;
 use rut_vm::Value as RutValue;
 
 // ---- bump allocator over linear memory ----
@@ -100,7 +100,7 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 
 // ---- compile ----
 
-/// The playground's library mounts (§0.9 of the host-pkgs plan): wasm
+/// The playground's library offers (§0.9 of the host-pkgs plan): wasm
 /// has no filesystem, so the toolchain libs this host ships are
 /// EMBEDDED — `ink_host`'s and `nmap_host`'s host surfaces lowered from
 /// their `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source.
@@ -108,152 +108,151 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 /// names. (`nmap_host` + `nmapset` are the survey D6 amendment — the
 /// demo's map lane; `rut_std::nmap::pkg()` binds the crossings in `rut_run`.)
 fn compile_playground(src: &str) -> rut_driver::CompileOutput {
-    let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session); // core + calc
-    let ink_host = rut_driver::lower_decl_module(
-        include_str!("../../../rut/ink_host/ink_host.d.rut"),
-        "ink_host.d.rut",
-    )
-    .expect("the ink_host surface is valid");
-    session
-        .register_module("ink_host", ink_host)
-        .expect("mount ink_host");
+    // the string lane's own render: the tree UI's structured AST rides
+    // every envelope, diags or not
+    let (ast, parse_diags) = rut_parser::parse(src, rut_parser::Mode::Impl);
+    let tree = rut_ast::dump::to_dump_tree(&ast);
+    let ast_json = rut_ast::dump::render_json(&tree);
+    if !parse_diags.is_empty() {
+        return CompileOutput {
+            diags: parse_diags,
+            ast_json,
+            ast_dump: String::new(),
+            ir_dump: String::new(),
+            binary: None,
+        };
+    }
+    let named = |spec: &str, pkg: rut_driver::Pkg| -> rut_driver::Pkg {
+        pkg.named(spec)
+    };
+    // the `.compile()` product's host registry is the run-side install
+    // snapshot: `rut_run` takes it (the one registry per compile) and
+    // boots with it — the ctx ceremony is gone, the registry travels
+    let ink_host = named(
+        "ink_host",
+        rut_driver::lower_decl_module(
+            include_str!("../../../rut/ink_host/ink_host.d.rut"),
+            "ink_host.d.rut",
+        )
+        .expect("the ink_host surface is valid"),
+    );
     // the nmap lane (survey D6): the host surface lowers exactly like
-    // `ink_host` — its registration scope is the default (the module
+    // `ink_host` — its registration scope is the default (the pkg
     // spec `nmap_host`), the scope `rut_std::nmap::pkg()` installs under
-    let nmap_host = rut_driver::lower_decl_module(
-        include_str!("../../../rut/nmap_host/nmap.d.rut"),
-        "nmap.d.rut",
-    )
-    .expect("the nmap_host surface is valid");
-    session
-        .register_module("nmap_host", nmap_host)
-        .expect("mount nmap_host");
-    session
-        .register_module(
-            "ink",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/ink/ink.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
+    let nmap_host = named(
+        "nmap_host",
+        rut_driver::lower_decl_module(
+            include_str!("../../../rut/nmap_host/nmap.d.rut"),
+            "nmap.d.rut",
         )
-        .expect("mount ink");
-    session
-        .register_module(
-            "pouch",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/pouch/pouch.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .expect("mount pouch");
-    // `nmapset` links like `ink` (its generic classes' methods cross on
-    // the surface's inherent rows; a consumer requests the
-    // instantiations); its `use nmap_host::` resolves
-    // against the mounted surface above
-    session
-        .register_module(
-            "nmapset",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/nmapset/nmapset.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .expect("mount nmapset");
-    // `flow` mounts AFTER its deps (its generic class + traits ride the
+        .expect("the nmap_host surface is valid"),
+    );
+    // `flow` offers AFTER its deps (its generic class + traits ride the
     // source). The browser keeps no filesystem, so the peer-gate's
     // directory walk can't run here: the manifest's peer-deps record
-    // directly, and each integration group whose optional peer this
-    // session holds rides its include_str! text — the same append the
-    // gate pass performs from disk (`Vec.from_flow` resolves through
-    // the group rows; the book gate's lane proves the law).
-    session
-        .load_manifest(include_str!("../../../rut/flow/rut.jsonc"))
+    // onto the pkg, and each integration group whose optional peer this
+    // world holds rides its include_str! text — the same append the
+    // gate pass performs from disk, with the gate flag set so the
+    // close-of-world pass never double-appends (`Vec.from_flow`
+    // resolves through the group rows; the book gate's lane proves
+    // the law).
+    let flow_manifest = rut_driver::parse_manifest(include_str!("../../../rut/flow/rut.jsonc"))
         .expect("the flow manifest is valid");
-    session
-        .register_module(
-            "flow",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/flow/flow.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .expect("mount flow");
-    if session.resolve("pouch").is_ok() {
-        session.record_peer_group(
-            "flow",
-            include_str!("../../../rut/flow/group-pouch.rut"),
-        );
+    let mut flow = rut_driver::Pkg::source("flow", include_str!("../../../rut/flow/flow.rut"));
+    flow.entry = flow_manifest.entry.clone();
+    for (peer, desc) in &flow_manifest.peer_deps {
+        flow.peers.insert(peer.clone(), rut_driver::PeerDecl {
+            optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
+            lib: desc.get("lib").cloned(),
+            path: desc.get("path").cloned().unwrap_or_default(),
+        });
     }
-    if session.resolve("nmapset").is_ok() {
-        session.record_peer_group(
-            "flow",
-            include_str!("../../../rut/flow/group-nmapset.rut"),
-        );
-    }
-    session.mark_groups_mounted("flow");
-    rut_driver::assemble_peers(&mut session)
-        .expect("assemble peers");
+    flow.peer_groups.push(include_str!("../../../rut/flow/group-pouch.rut").to_string());
+    flow.peer_groups.push(include_str!("../../../rut/flow/group-nmapset.rut").to_string());
+    flow.groups_mounted = true;
     // the async set: the engine rows lower from their decl,
-    // the typed launcher surface mounts as a linked source module —
+    // the typed launcher surface offers as a linked source pkg —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
-    let async_host = rut_driver::lower_decl_module(
-        include_str!("../../../rut/async_host/engine.d.rut"),
-        "engine.d.rut",
-    )
-    .expect("the async_host surface is valid");
-    session
-        .register_module("async_host", async_host)
-        .expect("mount async_host");
-    session
-        .register_module(
-            "futures",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/futures/futures.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
+    let async_host = named(
+        "async_host",
+        rut_driver::lower_decl_module(
+            include_str!("../../../rut/async_host/engine.d.rut"),
+            "engine.d.rut",
         )
-        .expect("mount futures");
+        .expect("the async_host surface is valid"),
+    );
     // the book lane (the run buttons in docs/): `json` and `strbuild`
     // complete the CLI's loose-file host set — a book block that
     // `use json::` / `use strbuild::` gets the same packages `rut run`
-    // mounts, so the book's buttons answer exactly like the CLI. The
+    // offers, so the book's buttons answer exactly like the CLI. The
     // HTTP pair stays CLI-only by law: reqwest does not build on
     // wasm32-unknown-unknown (this crate's own dependency note), so a
     // `use http::` block fails to resolve here — loud, never silent.
     // strbuild's rows ride the `strbuild_host` decl surface (the
     // ink/ink_host pattern), lowered here exactly like `ink_host`
     // above; the bodies bind in `rut_run` (`rut_std::strbuild::pkg()`)
-    let strbuild_host = rut_driver::lower_decl_module(
-        include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
-        "strbuild_host.d.rut",
-    )
-    .expect("the strbuild_host surface is valid");
-    session
-        .register_module("strbuild_host", strbuild_host)
-        .expect("mount strbuild_host");
-    session
-        .register_module(
-            "strbuild",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/strbuild/strbuild.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
+    let strbuild_host = named(
+        "strbuild_host",
+        rut_driver::lower_decl_module(
+            include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
+            "strbuild_host.d.rut",
         )
-        .expect("mount strbuild");
-    session
-        .register_module(
-            "json",
-            rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/json/json.rut").to_string(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .expect("mount json");
-    // the compile lane's mount snapshot: `rut_run`'s installs answer to
-    // it (the session dies here; the ctx is owned)
-    *CTX.lock().unwrap() = Some(session.host_pkg_context());
-    rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
+        .expect("the strbuild_host surface is valid"),
+    );
+    // the library world (everything but the program's own source): the
+    // run-side install snapshot reads its declared rows
+    let lib_pkgs = vec![
+        ink_host,
+        nmap_host,
+        rut_driver::Pkg::source("ink", include_str!("../../../rut/ink/ink.rut")),
+        rut_driver::Pkg::source("pouch", include_str!("../../../rut/pouch/pouch.rut")),
+        // `nmapset` links like `ink` (its generic classes' methods cross on
+        // the surface's inherent rows; a consumer requests the
+        // instantiations); its `use nmap_host::` resolves
+        // against the offered surface above
+        rut_driver::Pkg::source("nmapset", include_str!("../../../rut/nmapset/nmapset.rut")),
+        flow,
+        async_host,
+        rut_driver::Pkg::source("futures", include_str!("../../../rut/futures/futures.rut")),
+        strbuild_host,
+        rut_driver::Pkg::source("strbuild", include_str!("../../../rut/strbuild/strbuild.rut")),
+        rut_driver::Pkg::source("json", include_str!("../../../rut/json/json.rut")),
+        // calc rides explicitly (the core prelude auto-offers in
+        // `.compile()`)
+        rut_driver::calc_pkg(),
+    ];
+    // the rows snapshot `rut_run`'s installs answer to (owned; the
+    // compile-time world dies here, the table travels)
+    *CTX.lock().unwrap() = Some(rut_driver::host_pkg_ctx(&lib_pkgs));
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: lib_pkgs, root: String::new() })
+        .pkg(rut_driver::Pkg::source("main", src))
+        .entrypoint("main")
+        .compile();
+    match compiled {
+        Ok(c) => {
+            let ir_dump = c
+                .graph
+                .program
+                .as_ref()
+                .map(|p| rut_driver::ir_dump_of(&p.funcs, &p.interner))
+                .unwrap_or_default();
+            CompileOutput {
+                diags: c.graph.diags,
+                ast_json,
+                ast_dump: String::new(),
+                ir_dump,
+                binary: c.graph.program.map(|p| rut_core::binary::encode(&p)),
+            }
+        }
+        Err(e) => CompileOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            ast_json,
+            ast_dump: String::new(),
+            ir_dump: String::new(),
+            binary: None,
+        },
+    }
 }
 
 #[no_mangle]
@@ -292,8 +291,9 @@ pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
 static OUTPUT: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
 
 /// The mount snapshot the compile lane built — the installs in
-/// `rut_run` answer to it (the ctx is OWNED: the compile-time session
-/// is long gone by the time the page presses Run).
+/// `rut_run` answer to it (the ctx is OWNED: the compile-time world is
+/// long gone by the time the page presses Run, and every run installs
+/// a fresh registry against it).
 static CTX: std::sync::Mutex<Option<rut_vm::interp::HostPkgContext>> =
     std::sync::Mutex::new(None);
 
@@ -412,13 +412,12 @@ pub extern "C" fn rut_run(
         heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
         interrupt_every: 1024,
     };
-    // the playground host's bindings, BEFORE the Vm: the
-    // logger routes into the OUTPUT cell; calc's float fns ride rut-std.
-    // The installs answer to the COMPILE-time mount snapshot (the ctx
-    // is owned; the session died with the compile call) — the
-    // blanket-install lane: this host ships no `http` (reqwest) and no
-    // `bench_cross`, the rest merge inert unless the program mounts
-    // their pkg
+    // the playground host's bindings, BEFORE the Vm: the logger routes
+    // into the OUTPUT cell; calc's float fns ride rut-std. The installs
+    // answer to the COMPILE-time mount snapshot (the ctx is owned; the
+    // session died with the compile call) — the blanket-install lane:
+    // this host ships no `http` (reqwest) and no `bench_cross`, the
+    // rest merge inert unless the program mounts their pkg
     let ctx = CTX.lock().unwrap().clone().unwrap_or_default();
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| {
@@ -434,20 +433,21 @@ pub extern "C" fn rut_run(
     // that does (`nmapset`); the CLI mounts it the same way
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     // the async host set: launch/abort/sleep bodies for the
-    // `async_host` rows the playground mounts in `compile_playground`
+    // `async_host` rows the playground offers in `compile_playground`
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the string builder's bodies (the host strbuild pkg): a program
     // only reaches them when it declares `use strbuild::` (or `use
     // json::` — json's writer rides the builder)
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let mut vm = match rut_vm::interp::Vm::new(
-        Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    ) {
+    let mut vm = match rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+    {
         Ok(vm) => vm,
-        Err(t) => return run_envelope(&[], Some(&t.name()), None, 0, 0, false),
+        Err(e) => return run_envelope(&[], Some(&e.msg), None, 0, 0, false),
     };
     // the positional decode (RutValue): a `(?T, err)` main surfaces its
     // err here; every other shape (nil mains included) has none. A trap

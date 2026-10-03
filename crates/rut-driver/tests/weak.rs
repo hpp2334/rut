@@ -36,17 +36,42 @@
 //! VERSION 13: the weak batch (TyKind::Weak + the two Weak ops — new
 //! encoded vocabulary, the bump law).
 
-use rut_driver::{Module, ModuleBody, Session};
 use rut_vm::OpaqueRef;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(src: &str) -> i32 {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -56,22 +81,14 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
 /// Run `main`, answering the trap name (None = clean run).
 fn run_trap(src: &str) -> Option<String> {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -81,12 +98,7 @@ fn run_trap(src: &str) -> Option<String> {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     match vm.call::<_, i32>("main", ()) {
         Ok(_) => None,
@@ -96,10 +108,7 @@ fn run_trap(src: &str) -> Option<String> {
 
 /// Compile only — the rendered diagnostics (negative pins).
 fn compile_diags(src: &str) -> Vec<String> {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", src);
     out.diags
         .iter()
         .map(|d| format!("{d:?}"))
@@ -111,12 +120,15 @@ fn compile_diags(src: &str) -> Vec<String> {
 /// root call's drain (or a drive's, on the async lanes).
 fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    let mut s = Session::new();
-    rut_driver::mount_std(&mut s);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    rut_driver::mount_dir(&mut s, &root.join("rut/ink")).expect("mount ink (+rt)");
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: combined.clone().into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let ink = rut_driver::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&ink)
+            .pkg(rut_driver::Pkg::source("app_main", &combined))
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
@@ -126,7 +138,9 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
-    let ctx = s.host_pkg_context();
+    let mut world = ink.pkgs.clone();
+    world.push(rut_driver::calc_pkg());
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
         sink.borrow_mut().push(msg.to_string());
@@ -138,7 +152,7 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
     let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -359,12 +373,11 @@ fn weak_over_host_box_dies_with_the_entry() {
     // referenced from script — the entry arm is shape-blind (Host and
     // Rut entries route through the same release).
     use rut_vm::interp::{HostHooks, HostRegistry};
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     // the test's own host pkg (the host_boxes pattern): the decl surface
     // here, the body bound below
-    rut_driver::mount_dir(&mut s, &root.join("crates/rut-driver/tests/data/weak_host")).expect("mount weak_host");
+    let weak_host = rut_driver::dir_pkgs(&root.join("crates/rut-driver/tests/data/weak_host"))
+        .expect("mount weak_host");
     let src = r#"
 use core::{ Weak };
 use weak_host::{ make_box };
@@ -380,12 +393,15 @@ entry fn main() -> i32 {
     return probe_o(w);
 }
 "#;
-    s.register_module("app_main", Module { spec: "app_main".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let mut chain = rut_driver::RutRun::new().pkgs(&weak_host);
+    let ctx = rut_driver::host_pkg_ctx(&weak_host.pkgs);
+    chain = chain
+        .pkg(rut_driver::Pkg::source("app_main", src))
+        .entrypoint("app_main");
+    let out = graph_of(chain.compile());
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
-    let ctx = s.host_pkg_context();
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -398,7 +414,7 @@ entry fn main() -> i32 {
         Ok(b.handle().clone())
     });
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, HostHooks::default(), hosts).expect("vm");
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
     let r = vm.call::<_, i32>("main", ()).expect("run");
     assert_eq!(r, 42);
 }
@@ -687,8 +703,6 @@ entry fn main() -> i32 { return f(nil); }
 
 #[test]
 fn heap_usage_returns_to_baseline_after_a_weak_churn() {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
 use core::{{ Weak }};
@@ -706,8 +720,7 @@ entry fn main() -> i32 {{
 }}
 "#
     );
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", &src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -717,12 +730,7 @@ entry fn main() -> i32 {{
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 50);
     // every cell, box and opt box released; the weak lists are empty;
@@ -732,8 +740,6 @@ entry fn main() -> i32 {{
 
 #[test]
 fn oom_at_the_weak_mint_traps_before_registration() {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
     let src = format!(
         r#"{TILE}
 use core::{{ Weak }};
@@ -744,8 +750,7 @@ entry fn main() -> i32 {{
 }}
 "#
     );
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", &src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -756,12 +761,7 @@ entry fn main() -> i32 {{
         heap_limit_bytes: Some(1),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     let err = vm.call::<_, i32>("main", ()).expect_err("budget trip");
     assert_eq!(err.name(), "OutOfMemory", "{err:?}");

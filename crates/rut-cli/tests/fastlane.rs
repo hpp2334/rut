@@ -17,7 +17,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
+
 use rut_vm::OpaqueRef;
 use rut_vm::interp::Vm;
 
@@ -71,24 +71,22 @@ fn install_fastlane(hosts: &mut rut_vm::interp::HostRegistry, kept_str: Rc<RefCe
     });}
 
 fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(FIXTURE_DIR))
-        .expect("mount fastlane");
-    let expected = session.expected_host_fns();
-    session
-        .register_module(
-            "app",
-            Module { spec: "app".into(), body: ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
-        )
+    let mut world = rut_driver::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
+        .expect("mount fastlane")
+        .pkgs;
+    world.push(rut_driver::Pkg::source("app", SRC));
+    let expected = rut_driver::declared_host_fns(&world);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app")
+        .compile()
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app");
     assert!(
-        g.diags.is_empty(),
+        compiled.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = g.program.expect("compile");
+    let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(20_000_000),
@@ -98,7 +96,7 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install_fastlane(&mut hosts, kept_str);
     hosts.verify_against(&expected); // the surface ↔ the bodies, pre-boot
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap()
 }
 

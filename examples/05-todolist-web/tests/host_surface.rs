@@ -9,7 +9,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::Session;
 use rut_vm::interp::{HostHooks, HostRegistry, Vm};
 use rut_vm::{OpaqueRef, Trap};
 
@@ -23,20 +22,24 @@ use todolist_web::{hosts, mount, state, WebState};
 /// (the happy-path check), `Vm::new`, seed the static page,
 /// run the `main` turn. Every test's setup IS the boot contract.
 fn make_host() -> WebHost<FakeDom> {
-    let (session, root) = mount::load_probe_session("harness").expect("the harness probe mounts");
-    let expected = session.expected_host_fns();
-    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
+    let loaded = mount::probe("harness").expect("the harness probe mounts");
+    let expected = mount::expected_host_fns(&loaded);
+    let mut compiled = mount::compile_walk(&loaded).expect("the harness compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
     state::bind_weak_sink(&slot, &shared);
     shared.borrow_mut().dom.seed_page("div", "app"); // the twin's index.html
 
-    let mut hosts = HostRegistry::new();
-    hosts::install_web_hosts(&mut hosts, &shared);
-    hosts.verify_against(&expected);
+    // the raw `web` rows join the compiled registry
+    hosts::install_web_hosts(&mut compiled.hosts, &shared);
+    compiled.hosts.verify_against(&expected);
 
-    let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
+    let vm = Vm::builder()
+        .compiled(compiled)
+        .limits(mount::limits())
+        .hooks(HostHooks::default())
+        .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
     host.boot().expect("the boot turn runs");
@@ -244,39 +247,38 @@ fn guard_stale_listener_ids_are_host_drift() {
 
 // ---- the boot contract, both ways ----
 
-fn mounted_session() -> Session {
-    mount::load_probe_session("harness")
-        .expect("the harness probe mounts")
-        .0
+fn mounted_probe() -> rut_driver::Loaded {
+    mount::probe("harness").expect("the harness probe mounts")
 }
 
 #[test]
 fn the_app_compiles() {
     // the app package (rut/biz — the project root `app`) is this
     // example's page program — its MIRROR-LANE compile gate rides the
-    // mirror session (the manifest lane's gate is tests/mount_lane.rs;
+    // mirror chain (the manifest lane's gate is tests/mount_lane.rs;
     // loader.js fetches the same file this includes)
-    let mut session = Session::new();
-    mount::mount_app_session(&mut session).expect("the mirror mounts");
-    mount::compile_app(&mut session, &mount::biz_source())
-        .expect("the app compiles");
+    let run = mount::mirror_run().expect("the mirror mounts");
+    mount::compile_app(run, &mount::biz_source()).expect("the app compiles");
 }
 
 #[test]
 #[should_panic(expected = "declared by a mounted package but never bound")]
 fn rfc0025_declared_but_unbound_panics_at_verify() {
-    let session = mounted_session();
-    let expected = session.expected_host_fns();
+    let expected = mount::expected_host_fns(&mounted_probe());
     let hosts = HostRegistry::new(); // not a single row bound
     hosts.verify_against(&expected);
 }
 
 #[test]
 fn rfc0025_declared_but_unbound_is_a_vm_construction_error() {
-    let (session, root) =
-        mount::load_probe_session("harness").expect("the harness probe mounts");
-    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
-    let err = match Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), HostRegistry::new())
+    let loaded = mounted_probe();
+    let compiled = mount::compile_walk(&loaded).expect("the harness compiles");
+    let err = match Vm::builder()
+        .compiled(compiled)
+        .limits(mount::limits())
+        .hooks(HostHooks::default())
+        .hosts(HostRegistry::new())
+        .build()
     {
         Ok(_) => panic!("the unbound registry must not boot"),
         Err(e) => e,
@@ -291,11 +293,9 @@ fn rfc0025_declared_but_unbound_is_a_vm_construction_error() {
 #[test]
 #[should_panic(expected = "bound but declared by no mounted package")]
 fn rfc0025_bound_but_undeclared_panics_at_verify() {
-    // NO `web` module mounted — core only. The binding's shape is the
-    // correct one; the SURFACE is what's missing.
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    let expected = session.expected_host_fns();
+    // NO `web` pkg offered — core only (the auto-ride). The binding's
+    // shape is the correct one; the SURFACE is what's missing.
+    let expected = rut_driver::declared_host_fns(&[]);
     let mut hosts = HostRegistry::new();
     hosts.register::<_, (&str,), OpaqueRef, _>("web::ui_get", {
         move |_vm: &mut Vm, _id: &str| -> Result<OpaqueRef, Trap> {
@@ -308,8 +308,7 @@ fn rfc0025_bound_but_undeclared_panics_at_verify() {
 #[test]
 #[should_panic(expected = "signature drift")]
 fn rfc0025_signature_drift_panics_at_verify() {
-    let session = mounted_session();
-    let expected = session.expected_host_fns();
+    let expected = mount::expected_host_fns(&mounted_probe());
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
     state::bind_weak_sink(&slot, &shared);

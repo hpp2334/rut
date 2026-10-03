@@ -10,9 +10,42 @@ use std::path::{Path, PathBuf};
 
 use rut_driver::bundle::FsSource;
 use rut_driver::{
-    compile_graph, load_bundle_bytes, load_dir_session, mount_std, pack_dir, ModuleBody, Module,
-    Session,
+    pack_dir,
 };
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-owner-{tag}-{}", std::process::id()));
@@ -38,27 +71,25 @@ fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
     format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
-/// One session, one in-memory module set (no filesystem): the specs'
-/// sources registered by hand. Every module links (the `bool` arg is
+/// One world, one in-memory pkg set (no filesystem): the specs'
+/// sources offered by hand. Every pkg links (the `bool` arg is
 /// the retired `inline` flag's seat, kept for the callers' shape).
-fn session_of(modules: &[(&str, &str, bool)]) -> Session {
-    let mut s = Session::new();
-    mount_std(&mut s);
+fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Loaded {
+    let mut pkgs: Vec<rut_driver::Pkg> = Vec::new();
     for (spec, src, _inline_retired) in modules {
-        s.register_module(
-            spec,
-            Module {
-                body: ModuleBody::Source { text: src.to_string(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        pkgs.push(rut_driver::Pkg::source(spec, *src));
     }
-    s
+    rut_driver::Loaded { pkgs, root: String::new() }
 }
 
-fn run_entry<R: rut_vm::interp::Ret>(session: &Session, root: &str, entry: &str) -> R {
-    let g = compile_graph(session, root);
+fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Loaded, root: &str, entry: &str) -> R {
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(world)
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(root)
+            .compile(),
+    );
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let flat = rut_core::link::flatten(g.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -67,12 +98,7 @@ fn run_entry<R: rut_vm::interp::Ret>(session: &Session, root: &str, entry: &str)
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
@@ -142,7 +168,13 @@ entry fn go2() -> i64 {
         ("app", CONSUMER_SRC, false),
         ("app2", consumer2, false),
     ]);
-    let g = compile_graph(&s, "app");
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&s)
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint("app")
+            .compile(),
+    );
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let p = g.program.expect("linked");
     // ONE mirror row per (owner, decl, args): the merged ledger carries
@@ -332,56 +364,42 @@ fn packaged_generic_owner_serves_consumer_requests() {
 
     // a consumer session over the bundle: its request resolves against
     // the ledger — assignment and `is` hold across the package boundary
-    let (mut session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    mount_std(&mut session);
-    session
-        .register_module(
-            "consumer",
-            Module {
-                body: ModuleBody::Source {
-                    text: "use pairz::{ Pair };\nuse app::{ make };\n\n\
-                           entry fn go2() -> i64 {\n\
-                           \x20   let mine: Pair<i64, str> = make();\n\
-                           \x20   if (mine is Pair<i64, str>) {\n\
-                           \x20       return mine.fst + 1;\n\
-                           \x20   }\n\
-                           \x20   return -1;\n\
-                           }\n"
-                        .into(),
-                    is_decl: false,
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    let mut session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    session.pkgs.push(rut_driver::Pkg::source(
+        "consumer",
+        "use pairz::{ Pair };\nuse app::{ make };\n\n\
+         entry fn go2() -> i64 {\n\
+         \x20   let mine: Pair<i64, str> = make();\n\
+         \x20   if (mine is Pair<i64, str>) {\n\
+         \x20       return mine.fst + 1;\n\
+         \x20   }\n\
+         \x20   return -1;\n\
+         }\n",
+    ));
     let got: i64 = run_entry(&session, "consumer", "go2");
     assert_eq!(got, 6, "the packaged instantiation served the consumer");
-    let _ = app_root;
 
     // a request the binary does not carry used to refuse — now the
     // generic-source riding law answers it: the lib packed ALONE rides
     // its source, so the consumer-spelled shape compiles at the link
     // and runs
     let standalone = pack_dir(&pairz).expect("the lib packs alone");
-    let (mut lone, _pairz_root) = load_bundle_bytes(&standalone, Path::new("lone")).expect("load");
-    mount_std(&mut lone);
-    lone.register_module(
+    let mut lone = rut_driver::Pkg::from_bundle(&standalone).expect("load");
+    lone.pkgs.push(rut_driver::Pkg::source(
         "late",
-        Module {
-            body: ModuleBody::Source {
-                text: "use pairz::{ Pair };\n\n\
-                       entry fn go3() -> i64 {\n\
-                       \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
-                       \x20   return p.fst;\n\
-                       }\n"
-                    .into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let g = compile_graph(&lone, "late");
+        "use pairz::{ Pair };\n\n\
+         entry fn go3() -> i64 {\n\
+         \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
+         \x20   return p.fst;\n\
+         }\n",
+    ));
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&lone)
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint("late")
+            .compile(),
+    );
     assert!(
         g.diags.is_empty(),
         "the consumer-spelled shape compiles from the ridden source: {:?}",
@@ -458,15 +476,27 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
          \x20   return p.fst * 2;\n\
          }\n",
     );
-    let (dir_session, dir_root) = load_dir_session(&app, &FsSource).expect("dir load");
+    let dir_loaded = rut_driver::load_dir(&app, &FsSource).expect("dir load");
     let from_dir = {
-        let g = compile_graph(&dir_session, &dir_root);
+        let g = graph_of(
+            rut_driver::RutRun::new()
+                .pkgs(&dir_loaded)
+                .pkg(rut_driver::calc_pkg())
+                .entrypoint(&dir_loaded.root)
+                .compile(),
+        );
         assert!(g.diags.is_empty(), "{:?}", g.diags);
         rut_core::binary::encode(&g.program.expect("linked"))
     };
     let bytes = pack_dir(&app).expect("pack");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    let g = compile_graph(&session, &app_root);
+    let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&session)
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(&session.root)
+            .compile(),
+    );
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let from_bundle = rut_core::binary::encode(&g.program.expect("linked"));
     assert_eq!(from_dir, from_bundle, "dir and bundle compile identically");

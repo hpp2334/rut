@@ -29,7 +29,7 @@
 //! The spellings below are the target surface; when the two land, the
 //! suite goes green without further edits.
 
-use rut_driver::{Module, ModuleBody, Session, compile_graph, mount_bundle_bytes, mount_std};
+
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 use std::path::PathBuf;
 
@@ -40,25 +40,27 @@ fn root() -> PathBuf {
 /// The consumer world: core + calc mounted, the flow closure's bundles
 /// from `dist/std` (the committed artifacts), ink for the logger.
 fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
-    let mut s = Session::new();
-    mount_std(&mut s);
     let base = root();
-    rut_driver::mount_dir(&mut s, &base.join("rut/ink")).expect("mount ink");
+    let mut world = rut_driver::dir_pkgs(&base.join("rut/ink")).expect("mount ink").pkgs;
     for b in ["pouch", "nmapset", "flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
-        mount_bundle_bytes(&mut s, &bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}"));
+        world.extend(rut_driver::Pkg::from_bundle(&bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}")).pkgs);
     }
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    let out = compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "diags:\n{}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
-    let prog = out.program.expect("linked program");
+    world.push(rut_driver::calc_pkg());
+    world.push(rut_driver::Pkg::source("app", src));
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags:\n{}", compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
     let sink = lines.clone();
-    let ctx = s.host_pkg_context();
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink.borrow_mut().push(m.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
@@ -69,7 +71,7 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::new(std::rc::Rc::new(flat), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let vm = Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
     (vm, lines)
 }
 
@@ -440,15 +442,16 @@ entry fn main() -> nil {
 fn unannotated_lambda_diagnoses_with_the_fix() {
     // the inference ladder's last rung is the diagnostic: an
     // unannotated lambda cannot drive the method's inference
-    let mut s = Session::new();
-    mount_std(&mut s);
     let base = root();
-    rut_driver::mount_dir(&mut s, &base.join("rut/ink")).expect("ink");
+    let mut world = rut_driver::dir_pkgs(&base.join("rut/ink")).expect("ink").pkgs;
     for b in ["pouch", "nmapset", "flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle"))).expect(b);
-        mount_bundle_bytes(&mut s, &bytes).expect("mount bundle");
+        world.extend(rut_driver::Pkg::from_bundle(&bytes).expect("mount bundle").pkgs);
     }
-    s.register_module("app", Module { body: ModuleBody::Source { text: r#"
+    world.push(rut_driver::calc_pkg());
+    world.push(rut_driver::Pkg::source(
+        "app",
+        r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, FromFlow, IntoFlow };
 
@@ -456,14 +459,19 @@ entry fn main() -> nil {
     let nums: Vec<i32> = Vec.new();
     let out: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map(fn(x) { return x * 2; })).collected();
 }
-"#.into(), is_decl: false }, ..Default::default() }).expect("app");
-    let out = compile_graph(&s, "app");
+"#,
+    ));
+    let out = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
     assert!(
-        out.diags.iter().any(|d| {
+        out.graph.diags.iter().any(|d| {
             d.msg.contains("cannot infer `R` of `Flow.map` from an unannotated lambda")
                 && d.msg.contains("annotate its parameters")
         }),
         "{:?}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
+        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
     );
 }

@@ -73,40 +73,34 @@ struct Widget {
     n: i64,
 }
 
-type ExpectedHostFns = std::collections::BTreeMap<
-    String,
-    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
->;
-
 fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm {
-    let mut session = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut session);
-    // the source uses `pouch` — a third-party pkg, mounted from the tree
-    rut_driver::mount_dir(
-        &mut session,
+    // the source uses `pouch` — a third-party pkg, walked from the tree
+    let mut world = rut_driver::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
-    .expect("mount pouch");
+    .expect("mount pouch")
+    .pkgs;
     // `re` — this test's own host pkg, declared in tests/data/re
-    rut_driver::mount_dir(
-        &mut session,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/re"),
-    )
-    .expect("mount re");
-    let expected = session.expected_host_fns();
-    session
-        .register_module(
-            "app_re",
-            rut_driver::Module { spec: "app_re".into(), body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
+    world.extend(
+        rut_driver::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/re"),
         )
-        .unwrap();
-    let g = rut_driver::compile_graph(&session, "app_re");
-    assert!(
-        g.diags.is_empty(),
-        "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        .expect("mount re")
+        .pkgs,
     );
-    let prog = g.program.expect("compile");
+    let expected = rut_driver::declared_host_fns(&world);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .pkg(rut_driver::Pkg::source("app_re", SRC))
+        .entrypoint("app_re")
+        .compile()
+        .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{}",
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel,
@@ -117,7 +111,7 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, &invocations);
     hosts.verify_against(&expected); // tests/data/re/re.d.rut ↔ the bodies
-    let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    let vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().unwrap();
     vm
 }
 

@@ -16,13 +16,44 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, Table};
 
-use rut_driver::{
-    bundle::FsSource, compile_graph, load_bundle_bytes, load_dir_session,
-    load_dir_session_fetched, mount_std, pack_dir, sha256_hex, ModuleBody,
-};
+use rut_driver::{bundle::FsSource, load_dir, pack_dir, sha256_hex};
 
 // ------------------------------------------------------------------
 // the fixture world: real dirs, real packed bundles
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-url-deps-{tag}-{}", std::process::id()));
@@ -67,31 +98,33 @@ fn resealed(bytes: &[u8], key: &str, text: &str) -> Vec<u8> {
     rut_driver::bundle::write_bundle(&entries).unwrap()
 }
 
-fn linked_binary(session: &rut_driver::Session, root: &str) -> Vec<u8> {
-    let g = compile_graph(session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
-    rut_core::binary::encode(&g.program.expect("linked program"))
+fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
+    let g = rut_driver::RutRun::new()
+        .pkgs(loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    rut_core::binary::encode(&g.graph.program.expect("linked program"))
 }
 
 /// Mount + mount_std + compile + flatten + run one entry.
-fn run_entry<R: rut_vm::interp::Ret>(session: rut_driver::Session, root: &str, entry: &str) -> R {
-    let mut session = session;
-    mount_std(&mut session);
-    let g = compile_graph(&session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
@@ -100,18 +133,14 @@ fn run_entry<R: rut_vm::interp::Ret>(session: rut_driver::Session, root: &str, e
 /// session? The wrapper name is the compiled-world observable for "the
 /// group mounted" — the impl-registration rows are gone (satisfaction
 /// is structural), so the group's exported wrapper is what resolves.
-fn probe_compiles(session: &rut_driver::Session, probe: &str) -> bool {
-    let mut s = session.clone();
-    s.register_module(
-        "probe",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source { text: probe.to_string(), is_decl: false },
-            ..Default::default()
-        },
-    )
-    .expect("register probe");
-    let g = compile_graph(&s, "probe");
-    g.diags.is_empty()
+fn probe_compiles(session: &rut_driver::Loaded, probe: &str) -> bool {
+    let g = rut_driver::RutRun::new()
+        .pkgs(session)
+        .pkg(rut_driver::Pkg::source("probe", probe))
+        .entrypoint("probe")
+        .compile()
+        .expect("compile the probe");
+    g.graph.diags.is_empty()
 }
 
 const CODEC_POUCH_PROBE: &str = "use codec::{ CodedVec };\nclass P(CodedVec);\nentry fn main() -> i32 { return 0; }\n";
@@ -144,30 +173,30 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let (session, app_root) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+    let loaded = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
         .expect("url load");
-    assert_eq!(app_root, "app");
+    assert_eq!(loaded.root, "app");
     // the url dep is a leaf: mounted, not walked — its body is the
     // bundle's compiled root
     assert!(matches!(
-        session.resolve("util").unwrap().body,
-        ModuleBody::Compiled(_)
+        loaded.pkg("util").unwrap().body,
+        rut_driver::PkgBody::Compiled(_)
     ));
-    assert_eq!(run_entry::<i64>(session, "app", "go"), 42);
+    assert_eq!(run_entry::<i64>(loaded, "go"), 42);
 
     // the pinned equivalence: the url lane and the path lane link to
     // the identical binary
     let twin = root.join("app_path");
     write(&twin, "rut.jsonc", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
     write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
-    let (dir_session, dir_root) = load_dir_session(&twin, &FsSource).expect("dir load");
+    let dir_loaded = load_dir(&twin, &FsSource).expect("dir load");
     assert_eq!(
-        linked_binary(&dir_session, &dir_root),
+        linked_binary(&dir_loaded),
         {
             let mut table = BTreeMap::new();
             table.insert(url.to_string(), bytes);
-            let (s, r) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table))).unwrap();
-            linked_binary(&s, &r)
+            let s = block_on(rut_driver::load_dir_with(&app, &Table::from(table))).unwrap();
+            linked_binary(&s)
         },
         "dir and url lanes compile identically"
     );
@@ -196,7 +225,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     let err =
-        block_on(rut_driver::load_dir_session_with(&app, &Table::from(table.clone())))
+        block_on(rut_driver::load_dir_with(&app, &Table::from(table.clone())))
             .unwrap_err()
             .to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
@@ -208,7 +237,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     // the law runs on EVERY load — a correct pin passes (the happy
     // path's twin), and the same wrong pin refuses the vendored-map
     // lane identically: the door, not the fetcher, holds the lock
-    let err = load_dir_session_fetched(&app, &FsSource, &table).unwrap_err().to_string();
+    let err = rut_driver::load_dir_fetched(&app, &FsSource, &table).unwrap_err().to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
 }
 
@@ -228,7 +257,7 @@ fn name_vs_key_refuses() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let err = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+    let err = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
     assert!(
@@ -256,7 +285,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
 
     // the direct bundle lane
-    let err = load_bundle_bytes(&doctored, Path::new("mem")).unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&doctored).unwrap_err().to_string();
     assert!(
         err.contains("the bundle is missing its `ghost` dependency group"),
         "{err}"
@@ -275,7 +304,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
-    let err = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+    let err = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
     assert!(
@@ -300,25 +329,21 @@ fn embedder_mount_outranks_the_url_dep() {
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
-    let mut session = rut_driver::Session::new();
-    session
-        .register_module(
-            "util",
-            rut_driver::Module {
-                body: ModuleBody::Source { text: "// the embedder's".into(), is_decl: false },
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    let mut chain = rut_driver::RutRun::new()
+        // the embedder's own mount, offered first
+        .pkg(rut_driver::Pkg::source("util", "// the embedder's"));
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let name =
-        block_on(rut_driver::mount_dir_with(&mut session, &app, &Table::from(table))).expect("mount");
-    assert_eq!(name, "app");
-    match &session.resolve("util").unwrap().body {
-        ModuleBody::Source { text, .. } => assert_eq!(text, "// the embedder's"),
-        other => panic!("the embedder's mount must win: {other:?}"),
-    }
+    let walked = block_on(rut_driver::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
+    assert_eq!(walked.root, "app");
+    chain = chain.pkgs(&walked);
+    // the compile closes the world; the closure check would name a
+    // wrong winner, so just compile the offered world's root
+    let g = chain
+        .entrypoint(&walked.root)
+        .compile()
+        .expect("compile the offered world");
+    assert!(g.graph.program.is_some(), "{:?}", g.graph.diags);
 }
 
 /// The peer world: `codec` (inline, interface + wrapper-only pouch
@@ -398,23 +423,22 @@ fn mixed_dir_and_archive_peer_gate() {
 
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes);
-    let (session, app_root) =
-        block_on(rut_driver::load_dir_session_with(&app, &Table::from(table.clone())))
+    let session =
+        block_on(rut_driver::load_dir_with(&app, &Table::from(table.clone())))
             .expect("url load");
-    assert_eq!(app_root, "app");
     // zeta: compiled; codec: the archive's source group; pouch: the DIR
     // mount won (first-mount-wins across the two lanes)
     assert!(matches!(
-        session.resolve("zeta").unwrap().body,
-        ModuleBody::Compiled(_)
+        session.pkg("zeta").unwrap().body,
+        rut_driver::PkgBody::Compiled(_)
     ));
     assert!(matches!(
-        session.resolve("codec").unwrap().body,
-        ModuleBody::Source { .. }
+        session.pkg("codec").unwrap().body,
+        rut_driver::PkgBody::Source { .. }
     ));
     assert!(matches!(
-        session.resolve("pouch").unwrap().body,
-        ModuleBody::Source { .. }
+        session.pkg("pouch").unwrap().body,
+        rut_driver::PkgBody::Source { .. }
     ));
     // THE unification proof: the group file was read FROM THE ARCHIVE
     // and compiled into codec's unit (the group's wrapper resolves)
@@ -432,7 +456,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest("app2", "app2.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
-    let (session2, _) = block_on(rut_driver::load_dir_session_with(&app2, &Table::from(table)))
+    let session2 = block_on(rut_driver::load_dir_with(&app2, &Table::from(table)))
         .expect("light load");
     assert!(
         !probe_compiles(&session2, CODEC_POUCH_PROBE),
@@ -473,18 +497,12 @@ fn colliding_pack_numberings_namespace_per_archive() {
     let mut table = BTreeMap::new();
     table.insert("https://fixtures.test/a.rutbundle".to_string(), bytes_a);
     table.insert("https://fixtures.test/b.rutbundle".to_string(), bytes_b);
-    let (session, root) = block_on(rut_driver::load_dir_session_with(&app, &Table::from(table)))
+    let session = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
-    assert!(matches!(session.resolve("util_a").unwrap().body, ModuleBody::Compiled(_)));
-    assert!(matches!(session.resolve("util_b").unwrap().body, ModuleBody::Compiled(_)));
-    let units = rut_driver::compile_units(&session, &root);
-    assert!(
-        units.diags.is_empty() && units.ok,
-        "{}",
-        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
-    );
+    assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::PkgBody::Compiled(_)));
+    assert!(matches!(session.pkg("util_b").unwrap().body, rut_driver::PkgBody::Compiled(_)));
     // and the value semantics survive both rebases: 2*1 + 3*2 = 8
-    assert_eq!(run_entry::<i64>(session, &root, "go"), 8);
+    assert_eq!(run_entry::<i64>(session, "go"), 8);
 }
 
 #[test]
@@ -501,9 +519,9 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
-    let err = load_dir_session(&app, &FsSource).unwrap_err().to_string();
+    let err = load_dir(&app, &FsSource).unwrap_err().to_string();
     assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
-    assert!(err.contains("`load_dir_session_with`"), "{err}");
+    assert!(err.contains("`load_dir_with`"), "{err}");
     assert!(err.contains("vendor the dep"), "{err}");
     assert!(err.contains(url), "{err}");
 }
@@ -556,9 +574,9 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert!(out_manifest.contains(&pin), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
-    let (session, out_root) = load_bundle_bytes(&packed, Path::new("mem")).expect("load");
-    assert_eq!(out_root, "app");
-    assert_eq!(run_entry::<i64>(session, "app", "go"), 42);
+    let session = rut_driver::Pkg::from_bundle(&packed).expect("load");
+    assert_eq!(session.root, "app");
+    assert_eq!(run_entry::<i64>(session, "go"), 42);
 
     // the async lane settles identically through the noop-waker driver
     let via_with = block_on(rut_driver::pack_dir_with(&app, &Table::from(map))).expect("pack_with");

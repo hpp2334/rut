@@ -8,20 +8,17 @@
 
 use std::future::Future;
 use std::path::Path;
-use std::rc::Rc;
 use std::task::{Context, Poll};
 
-/// The embedder's ENTIRE load half — the Loader door. The project is
+/// The embedder's ENTIRE load half — the walk door. The project is
 /// this directory; the remote policy is the project-local cache. A
 /// cold start networks on its misses (the CDN, pinned by the
-/// manifest); a warm start is pure cache hits — `.dep_remote` is the
+/// manifest); a warm start is pure cache hits — the remote is the
 /// only thing an embedder names, and only when the manifest declares
 /// url rows (this one does).
-fn load(base: &Path) -> Result<(rut_driver::Session, String), rut_driver::LoadError> {
-    let app = rut_driver::Loader::new(base)
-        .dep_remote(rut_driver::HttpRemote::project_local(base))
-        .build();
-    block_on(app.load())
+fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+    let remote = rut_driver::HttpRemote::project_local(base);
+    block_on(rut_driver::load_path_session_with(base, &remote))
 }
 
 /// The std-only driver for the Loader's future: the remote's fetch
@@ -40,24 +37,29 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 
 fn main() {
     // the manifest lane: this dir's `rut.jsonc` carries the deps, the
-    // load mounts the closure and runs the mount passes — then the same
-    // embedder half as before (mount, compile, verify, drive)
-    let (mut session, root) = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-        .expect("load the module dir");
-    // the engine prelude (`core`) mounts here; `pouch` rode the
+    // walk runs its passes and yields the pkgs — then the chain (the
+    // core prelude auto-offers at `.compile()`; `pouch` rode the
     // manifest — a third-party pkg the app declares, which the driver
-    // does not know by name
-    rut_driver::mount_std_core(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
-    assert!(g.diags.is_empty(), "{}", g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
-    let prog = g.program.expect("no binary emitted");
-    rut_vm::verify::verify(&prog).unwrap();
+    // does not know by name), verify, drive
+    let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+        .expect("load the module dir");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the module dir");
+    assert!(compiled.graph.diags.is_empty(), "{}", compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .build()
+        .unwrap();
 
     // the session: container in, handles out, values back — typed
     let c: rut_vm::OpaqueRef = vm.call("createContainer", ()).unwrap();
@@ -88,5 +90,5 @@ fn main() {
     let n: i32 = vm.call("len", (c.clone(), other)).unwrap();
     println!("second list #{other}: {n} todos");
 
-    println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
+    println!("fuel used: {} of {:?}", vm.fuel_used, Some(1_000_000u64));
 }

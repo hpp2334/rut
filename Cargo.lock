@@ -1065,6 +1065,7 @@ dependencies = [
 name = "rut-cli"
 version = "0.1.0"
 dependencies = [
+ "rut-ast",
  "rut-core",
  "rut-driver",
  "rut-fmt",
@@ -1190,8 +1191,10 @@ dependencies = [
 name = "rut-wasm"
 version = "0.1.0"
 dependencies = [
+ "rut-ast",
  "rut-core",
  "rut-driver",
+ "rut-lexer",
  "rut-parser",
  "rut-std",
  "rut-vm",

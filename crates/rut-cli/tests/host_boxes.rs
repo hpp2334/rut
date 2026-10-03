@@ -71,40 +71,34 @@ struct Widget {
     _x: i64,
 }
 
-type ExpectedHostFns = std::collections::BTreeMap<
-    String,
-    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
->;
-
 fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
-    let mut session = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut session);
-    // the sources use `pouch` — a third-party pkg, mounted from the tree
-    rut_driver::mount_dir(
-        &mut session,
+    // the sources use `pouch` — a third-party pkg, walked from the tree
+    let mut world = rut_driver::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
-    .expect("mount pouch");
+    .expect("mount pouch")
+    .pkgs;
     // `boxes` — this test's own host pkg, declared in tests/data/boxes
-    rut_driver::mount_dir(
-        &mut session,
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/boxes"),
-    )
-    .expect("mount boxes");
-    let expected = session.expected_host_fns();
-    session
-        .register_module(
-            "app_boxes",
-            rut_driver::Module { spec: "app_boxes".into(), body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
+    world.extend(
+        rut_driver::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/boxes"),
         )
-        .unwrap();
-    let g = rut_driver::compile_graph(&session, "app_boxes");
-    assert!(
-        g.diags.is_empty(),
-        "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        .expect("mount boxes")
+        .pkgs,
     );
-    let prog = g.program.expect("compile");
+    let expected = rut_driver::declared_host_fns(&world);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .pkg(rut_driver::Pkg::source("app_boxes", SRC))
+        .entrypoint("app_boxes")
+        .compile()
+        .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{}",
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -115,7 +109,7 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, dropped);
     hosts.verify_against(&expected); // tests/data/boxes/boxes.d.rut ↔ the bodies
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap()
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().unwrap()
 }
 
 /// Bind the `boxes` bodies over a real `HashMap` payload. Typed per
@@ -240,32 +234,36 @@ entry fn churn(n: i64) -> nil {
     }
 }
 "#;
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut s);
-    rut_driver::mount_dir(
-        &mut s,
+    let mut world = rut_driver::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
-    .expect("mount pouch");
-    let out = rut_driver::compile_module_in(&mut s, src, rut_parser::Mode::Impl, "churn");
+    .expect("mount pouch")
+    .pkgs;
+    world.push(rut_driver::calc_pkg());
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+        .pkg(rut_driver::Pkg::source("churn", src))
+        .entrypoint("churn")
+        .compile()
+        .unwrap();
     assert!(
-        out.diags.is_empty(),
+        compiled.graph.diags.is_empty(),
         "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    let prog = compiled.graph.program.unwrap();
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(10_000_000),
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let ctx = s.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
     hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
     let mut vm =
-        rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
+        rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts0).build().unwrap();
 
     vm.call::<_, ()>("churn", (1i64,)).unwrap();
     let base = vm.heap_usage();

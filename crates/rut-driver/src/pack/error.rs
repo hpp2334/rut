@@ -23,7 +23,7 @@ pub enum PackError {
     Manifest(#[from] ManifestError),
     /// the load half refused (the pack walks the same mount passes)
     #[error(transparent)]
-    Load(#[from] crate::LoadError),
+    Load(#[from] crate::loader::LoadError),
     /// the long tail: today's refusal text, verbatim
     #[error("{0}")]
     Law(String),

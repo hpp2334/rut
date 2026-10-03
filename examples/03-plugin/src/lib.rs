@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::rc::Rc;
 
 use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
 use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
@@ -49,15 +48,13 @@ impl Plugin {
     /// at pack time). `init` registers the callback names; the table
     /// is frozen from then on.
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
-        let (mut session, root) = {
-            let app = rut_driver::Loader::new(path)
-                .dep_remote(rut_driver::HttpRemote::project_local(path))
-                .build();
-            // the std-only driver for the Loader's future: the remote's
+        let loaded = {
+            let remote = rut_driver::HttpRemote::project_local(path);
+            // the std-only driver for the walk's future: the remote's
             // fetch futures come back READY, so one noop-waker poll
             // settles them
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-            let mut pinned = std::pin::pin!(app.load());
+            let mut pinned = std::pin::pin!(rut_driver::load_path_session_with(path, &remote));
             loop {
                 match pinned.as_mut().poll(&mut cx) {
                     std::task::Poll::Ready(v) => break v,
@@ -66,31 +63,35 @@ impl Plugin {
             }
         }
         .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
-        // the embedder mounts what the plugin uses: `core` only —
+        // the embedder offers what the plugin uses: the walk's closure —
         // `server` and `pouch` resolved from the plugin manifest's
         // `[deps]` (the server surface is server/server.d.rut, no
-        // hand-written Rust surface). Mounting `calc` would DECLARE its
-        // host fns, and the load-time contract (below) would rightly
-        // demand their bodies.
-        rut_driver::mount_std_core(&mut session);
-        let g = rut_driver::compile_graph(&session, &root);
-        if !g.diags.is_empty() {
+        // hand-written Rust surface). The core prelude auto-rides.
+        // Offering `calc` would DECLARE its host fns, and the
+        // install-time contract (below) would rightly demand their
+        // bodies.
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&loaded)
+            .host_pkg(install())
+            .entrypoint(&loaded.root)
+            .compile()
+            .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
+        if !compiled.graph.diags.is_empty() {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"),
+                compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"),
             ));
         }
-        let prog = g
-            .program
-            .ok_or_else(|| Trap::new(TrapKind::Invalid, "compile produced no program"))?;
-        rut_vm::verify::verify(&prog).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
-        // bindings BEFORE the Vm: the .d.rut surface and the
-        // bound bodies must agree — a mismatch panics HERE, never mid-run
-        let ctx = session.host_pkg_context();
-        let mut hosts = rut_vm::interp::HostRegistry::new();
-        hosts.install_host_pkg(&ctx, install());
-        hosts.verify_against(&ctx.flatten());
-        let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default(), hosts)?;
+        rut_vm::verify::verify(compiled.graph.program.as_ref().expect("checked above"))
+            .map_err(|m| Trap::new(TrapKind::Invalid, m))?;
+        // the .d.rut surface and the bound bodies agreed at the install
+        // (a mismatch panics THERE, never mid-run)
+        let mut vm = Vm::builder()
+            .compiled(compiled)
+            .limits(limits.clone())
+            .hooks(HostHooks::default())
+            .build()
+            .map_err(|e| Trap::new(TrapKind::Invalid, e.msg))?;
 
         // the handshake: bus in, state out
         let bus = Opaque::alloc(

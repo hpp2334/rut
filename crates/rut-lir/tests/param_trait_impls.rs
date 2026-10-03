@@ -13,48 +13,34 @@
 //! generic-instance emission (two compiles, byte-identical binaries).
 
 use rut_parser::Mode;
-use rut_driver::{Module, ModuleBody, Session};
+
 
 /// A compile-and-run harness: core + the std surfaces mounted, the test
 /// source compiled as the root module, encoded + decoded —
 /// the same loop the example suites run.
 fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    let out = compile(src);
-    if !out.diags.is_empty() {
-        return Err(out
-            .diags
-            .iter()
-            .map(|d| d.msg.clone())
-            .collect::<Vec<_>>()
-            .join("; "));
-    }
-    session
-        .register_module("test", Module { body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() })
-        .map_err(|e| format!("{e:?}"))?;
-    let compiled = rut_driver::compile_module_in(&mut session, src, Mode::Impl, "testroot");
-    if !compiled.diags.is_empty() {
+    let compiled = rut_driver::RutRun::new()
+        .pkg(rut_driver::Pkg::source("testroot", src))
+        .entrypoint("testroot")
+        .compile()
+        .map_err(|e| e.to_string())?;
+    if !compiled.graph.diags.is_empty() {
         return Err(compiled
+            .graph
             .diags
             .iter()
             .map(|d| d.msg.clone())
             .collect::<Vec<_>>()
             .join("; "));
     }
-    let bin = compiled.binary.expect("no binary");
+    let bin = rut_core::binary::encode(compiled.graph.program.as_ref().expect("no binary"));
     let prog = rut_core::binary::decode(&bin).expect("decode");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .map_err(|e| format!("{e:?}"))
 }
 

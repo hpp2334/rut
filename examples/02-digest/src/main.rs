@@ -14,7 +14,6 @@
 //! crates; only the host compares.
 
 use std::future::Future;
-use std::rc::Rc;
 use std::task::{Context, Poll};
 
 use base64::Engine as _;
@@ -103,11 +102,9 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 /// this directory; the remote policy is the project-local cache. A
 /// cold start networks on its misses (the CDN, pinned by the
 /// manifest); a warm start is pure cache hits.
-fn load(base: &std::path::Path) -> Result<(rut_driver::Session, String), rut_driver::LoadError> {
-    let app = rut_driver::Loader::new(base)
-        .dep_remote(rut_driver::HttpRemote::project_local(base))
-        .build();
-    block_on(app.load())
+fn load(base: &std::path::Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+    let remote = rut_driver::HttpRemote::project_local(base);
+    block_on(rut_driver::load_path_session_with(base, &remote))
 }
 
 /// The std-only driver for the Loader's future: the remote's fetch
@@ -127,34 +124,35 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 fn main() {
     // the manifest lane: this dir's `rut.jsonc` carries the deps
     // (`pouch` + `json` as CDN bundles — the LIGHT consumer world; the
-    // manifest header owns that story), the load mounts the closure
-    // and runs the mount passes — then the same embedder half as
-    // before (mount, compile, verify, drive)
-    let (mut session, root) =
-        load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
-    // the app's libs: core+calc (engine) — `pouch` + `json` rode the
-    // manifest, walk order owning the std order
-    rut_driver::mount_std(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
-    assert!(g.diags.is_empty());
-    let prog = g.program.expect("no binary emitted");
-    rut_vm::verify::verify(&prog).unwrap();
+    // manifest header owns that story), the walk runs its passes and
+    // yields the pkgs — then the chain (calc offered; the core prelude
+    // auto-rides), verify, drive
+    let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        // json's writer rides the strbuild pkg — its `strbuild_host` rows
+        // are in this closure's declared set, so the bodies install here
+        .host_pkg(rut_std::strbuild::pkg())
+        // nmapset's bundle carries `nmap_host` — its bodies bind beside
+        // the writer's (the ledger law brought the group in)
+        .host_pkg(rut_std::nmap::pkg())
+        .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the module dir");
+    assert!(compiled.graph.diags.is_empty());
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(50_000_000),
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let ctx = session.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    // json's writer rides the strbuild pkg — its `strbuild_host` rows are
-    // in this closure's declared set, so the bodies install here too
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    // nmapset's bundle carries `nmap_host` — its bodies bind beside
-    // the writer's (the ledger law brought the group in)
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .build()
+        .unwrap();
 
     // ---- hex + base64 read-back -------------------------------------
     let msg = b"rut!";
@@ -238,7 +236,7 @@ fn main() {
     assert!(o.is_some() && err.is_empty(), "a good json_dec is (Some, \"\") — exactly-one-non-nil");
     println!("json_dec(\"{{\\\"a\\\":1}}\") = ok ({})", err.is_empty());
 
-    println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
+    println!("fuel used: {} of {:?}", vm.fuel_used, Some(50_000_000u64));
 }
 
 fn verdict(ok: bool) -> &'static str {

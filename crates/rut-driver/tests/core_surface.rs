@@ -13,12 +13,46 @@ use rut_parser::{parse, Mode};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
+
+
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
 /// traits, plain traits) + the `builtin impl` method table
 /// (prim → method names). The fn/type/trait name lists carry each
 /// decl's ambient bit (`true` — `prelude builtin`, `false` —
 /// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
 /// against `Surface::core`'s rows.
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn declared_names() -> (
     Vec<(String, bool)>,
     Vec<(String, bool)>,
@@ -168,42 +202,16 @@ fn retired_names_are_ordinary_unknown_names() {
     // the plain unknown-name diagnostic, exactly like a never-existing
     // name. (The LIVE builtin names are ambient now —
     // builtin-surface — see tests/ambient.rs.)
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module(
-        "app_main",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source {
-                text: "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into());
     assert!(
         out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
         "diags: {:?}",
         out.diags
     );
 
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module(
-        "app_main",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source {
-                text: "use core::{ Option };\n\
+    let out = compiled("app_main", "use core::{ Option };\n\
                  entry fn main() -> i32 { let x = Option.some(1); return 0; }\n"
-                    .into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+                    .into());
     assert!(
         out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
         "diags: {:?}",
@@ -218,17 +226,7 @@ fn retired_names_are_ordinary_unknown_names() {
 /// message through the user fn's `panic`), while the bare unresolved
 /// spelling is an ordinary unknown function.
 fn compile_with_core(src: &str) -> rut_driver::GraphOutput {
-    let mut s = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module(
-        "app_main",
-        rut_driver::Module {
-            body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    rut_driver::compile_graph(&s, "app_main")
+    compiled("app_main", src)
 }
 
 fn vm_for(src: &str) -> rut_vm::interp::Vm {
@@ -241,12 +239,7 @@ fn vm_for(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm")
 }
 
@@ -323,12 +316,7 @@ fn own_strbuf_named_type_still_resolves() {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 4);
 }

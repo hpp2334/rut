@@ -7,23 +7,56 @@
 use std::path::Path;
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
-use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module, mount_std_core};
+use rut_driver::{load_path_session, lower_decl_module};
 use rut_vm::OpaqueRef;
 
 const INK_HOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/ink_host");
 const SERVER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/03-plugin/server");
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 #[test]
 fn ink_host_loads_from_disk_with_its_name_scope() {
-    let (session, root) =
-        load_path_session(std::path::Path::new(INK_HOST_DIR)).expect("rut/ink_host loads");
-    assert_eq!(root, "ink_host");
-    let m = session.resolve("ink_host").expect("ink_host mounted");
+    let loaded = load_path_session(std::path::Path::new(INK_HOST_DIR)).expect("rut/ink_host loads");
+    assert_eq!(loaded.root, "ink_host");
+    let m = loaded.pkg("ink_host").expect("ink_host mounted");
     assert!(
-        matches!(m.body, ModuleBody::Host { .. }),
+        matches!(m.body, rut_driver::PkgBody::Host { .. }),
         "a host pkg is a host body — no rut source"
     );
-    let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,
         vec![
@@ -35,11 +68,10 @@ fn ink_host_loads_from_disk_with_its_name_scope() {
 
 #[test]
 fn server_loads_from_disk() {
-    let (session, root) =
-        load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
-    assert_eq!(root, "server");
-    let m = session.resolve("server").expect("server mounted");
-    let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let loaded = load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
+    assert_eq!(loaded.root, "server");
+    let m = loaded.pkg("server").expect("server mounted");
+    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,
         vec![
@@ -51,54 +83,39 @@ fn server_loads_from_disk() {
 
 #[test]
 fn a_consumer_compiles_against_a_loaded_host_pkg() {
-    let (mut session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    rut_driver::mount_std_core(&mut session);
-    session
-        .register_module(
-            "app",
-            rut_driver::Module {
-                body: ModuleBody::Source {
-                    text: "\n\
-                     use server::{ subscribe, emit };\n\
-                     entry fn main() -> nil {\n\
-                     \x20   let bus: opaque = opaque(0);\n\
-                     \x20   subscribe(bus, \"join\", \"on_join\");\n\
-                     \x20   emit(bus, \"join\", \"ada\");\n\
-                     }\n"
-                        .into(),
-                    is_decl: false,
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    let out = rut_driver::compile_graph(&session, "app");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    assert!(out.program.is_some());
+    let server = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    let compile_app = |src: &str| {
+        rut_driver::RutRun::new()
+            .pkgs(&server)
+            .pkg(rut_driver::Pkg::source("app", src))
+            .entrypoint("app")
+            .compile()
+            .unwrap()
+    };
+    let out = compile_app(
+        "\n\
+         use server::{ subscribe, emit };\n\
+         entry fn main() -> nil {\n\
+         \x20   let bus: opaque = opaque(0);\n\
+         \x20   subscribe(bus, \"join\", \"on_join\");\n\
+         \x20   emit(bus, \"join\", \"ada\");\n\
+         }\n",
+    );
+    assert!(out.graph.diags.is_empty(), "diags: {:?}", out.graph.diags);
+    assert!(out.graph.program.is_some());
 
     // a mistyped call is a compile diagnostic, not a call-time surprise
-    session
-        .register_module(
-            "app",
-            rut_driver::Module {
-                body: ModuleBody::Source {
-                    text: "\n\
-                     use server::{ subscribe };\n\
-                     entry fn main() -> nil {\n\
-                     \x20   subscribe(\"not a bus\", \"join\", \"on_join\");\n\
-                     }\n"
-                        .into(),
-                    is_decl: false,
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    let out = rut_driver::compile_graph(&session, "app");
+    let out = compile_app(
+        "\n\
+         use server::{ subscribe };\n\
+         entry fn main() -> nil {\n\
+         \x20   subscribe(\"not a bus\", \"join\", \"on_join\");\n\
+         }\n",
+    );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`opaque`") || d.msg.contains("argument")),
+        out.graph.diags.iter().any(|d| d.msg.contains("`opaque`") || d.msg.contains("argument")),
         "the mistyped call must be diagnosed: {:?}",
-        out.diags
+        out.graph.diags
     );
 }
 
@@ -143,11 +160,11 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
             ("s.d.rut", "this is not rut source at all <<<\n"),
         ],
     );
-    let (session, root) = load_path_session(&dir).unwrap();
-    assert_eq!(root, "s");
+    let loaded = load_path_session(&dir).unwrap();
+    assert_eq!(loaded.root, "s");
     assert!(matches!(
-        session.resolve("s").unwrap().body,
-        ModuleBody::Source { is_decl: true, .. }
+        loaded.pkg("s").unwrap().body,
+        rut_driver::PkgBody::Source { is_decl: true, .. }
     ));
 
     let _ = std::fs::remove_dir_all(&base);
@@ -167,34 +184,29 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
             ("s.d.rut", "/// documented surface, no body yet.\n"),
         ],
     );
-    let (session, root) = load_path_session(&dir).unwrap();
-    assert_eq!(root, "s");
-    let m = session.resolve("s").unwrap();
+    let loaded = load_path_session(&dir).unwrap();
+    assert_eq!(loaded.root, "s");
+    let m = loaded.pkg("s").unwrap();
     assert!(
-        matches!(&m.body, ModuleBody::Source { is_decl: true, .. }),
+        matches!(&m.body, rut_driver::PkgBody::Source { is_decl: true, .. }),
         "the dev state is a decl unit, not a host body: {:?}",
         m.body
     );
     // a consumer's use of it resolve-misses — the loud, correct answer
-    let (mut session, _) = load_path_session(&dir).unwrap();
-    rut_driver::mount_std_core(&mut session);
-    session
-        .register_module(
-            "app",
-            rut_driver::Module {
-                body: ModuleBody::Source {
-                    text: "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n".into(),
-                    is_decl: false,
-                },
-                ..Default::default()
-            },
-        )
+    // (the pkg resolves; the ITEM misses as the ordinary unknown name)
+    let out = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::Pkg::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n"))
+        .entrypoint("app")
+        .compile()
         .unwrap();
-    let out = rut_driver::compile_graph(&session, "app");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("cannot resolve") || d.msg.contains("unknown")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("cannot resolve") || d.msg.contains("unknown")),
         "the use site must resolve-miss: {:?}",
-        out.diags
+        out.graph.diags
     );
 
     let _ = std::fs::remove_dir_all(&base);
@@ -266,8 +278,8 @@ fn server_registry(emit_second: Option<rut_core::types::TypeId>) -> rut_vm::inte
 }
 
 fn server_expected() -> rut_vm::interp::ExpectedHostFns {
-    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    session.expected_host_fns()
+    let loaded = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    rut_driver::declared_host_fns(&loaded.pkgs)
 }
 
 #[test]
@@ -343,12 +355,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
         host_id: Some(host_key),
     });
     let limits = rut_vm::interp::Limits::default();
-    let err = match rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog.clone()),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    ) {
+    let err = match rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog.clone())).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build() {
         Err(t) => t,
         Ok(_) => panic!("an empty registry must not boot a program with host thunks"),
     };
@@ -360,12 +367,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     // with the body registered, the same program boots
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_vm::register!(hosts, "server::probe", (&str,) -> (), |_vm: &mut rut_vm::interp::Vm, _s: &str| ());
-    assert!(rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts
-    )
+    assert!(rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .is_ok());
 }
 
@@ -378,29 +380,25 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
     // rows into their family
     use rut_core::types::{TY_BOOL, TY_STR};
 
-    let mut s = Session::new();
     let ink_host = lower_decl_module(
         include_str!("../../../rut/ink_host/ink_host.d.rut"),
         "ink_host.d.rut",
     )
-    .expect("ink_host surface");
-    s.register_module("ink_host", ink_host).unwrap();
-    s.register_module(
+    .expect("ink_host surface")
+    .named("ink_host");
+    let mut engine = rut_driver::Pkg::host(
         "engine",
-        rut_driver::Module {
-            body: ModuleBody::Host {
-                host_funcs: vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
-                consts: vec![],
-                native_types: vec![],
-                native_fns: vec![],
-                native_impls: vec![],
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let ctx = s.host_pkg_context();
+        vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
+    );
+    engine.body = rut_driver::PkgBody::Host {
+        host_funcs: vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
+        consts: vec![],
+        native_types: vec![],
+        native_fns: vec![],
+        native_impls: vec![],
+    };
+    let world = vec![ink_host, engine];
+    let ctx = rut_driver::host_pkg_ctx(&world);
     // the partition: per-scope rows, scoped from the spec
     let ink = ctx.rows_of("ink_host").expect("ink_host partitioned");
     assert!(ink.contains_key("create_logger"));
@@ -419,8 +417,8 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
         "the scopes iterate in name order"
     );
 
-    // the raw-lane compatibility: expected_host_fns IS the flatten
-    assert_eq!(s.expected_host_fns(), ctx.flatten());
+    // the raw-lane compatibility: declared_host_fns IS the flatten
+    assert_eq!(rut_driver::declared_host_fns(&world), ctx.flatten());
 
     // the pkg contract pins re-run per-pkg: the ink_host pkg satisfies
     // its scope's rows exactly
@@ -448,42 +446,41 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     // session that mounts a subset boots clean (the inert-merge law)
     use rut_vm::interp::{HostRegistry, Limits, Vm};
 
-    let mut s = Session::new();
-    mount_std_core(&mut s);
     let ink_host = lower_decl_module(
         include_str!("../../../rut/ink_host/ink_host.d.rut"),
         "ink_host.d.rut",
     )
-    .expect("ink_host surface");
-    s.register_module("ink_host", ink_host).unwrap();
+    .expect("ink_host surface")
+    .named("ink_host");
     let server = lower_decl_module(
         "pub host fn subscribe(bus: opaque, topic: str, handler: str) -> nil;\n",
         "server.d.rut",
     )
-    .expect("server surface");
-    s.register_module("server", server).unwrap();
-    s.register_module(
-        "app",
-        rut_driver::Module {
-            body: ModuleBody::Source {
-                text: "use ink_host::{ create_logger };\nuse server::{ subscribe };\nentry fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n".into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let out = rut_driver::compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "{:?}", out.diags);
-    let prog = std::rc::Rc::new(rut_core::link::flatten(out.program.expect("linked")));
+    .expect("server surface")
+    .named("server");
+    let world = vec![
+        ink_host,
+        server,
+        rut_driver::Pkg::source(
+            "app",
+            "use ink_host::{ create_logger };\nuse server::{ subscribe };\nentry fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n",
+        ),
+    ];
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    let prog = std::rc::Rc::new(rut_core::link::flatten(compiled.graph.program.expect("linked")));
     let limits = Limits::default();
 
     // ONE installer (ink_host's) ran; server's never did — the boot
     // refuses naming the missing pkg's row (the net: today's join)
-    let ctx = s.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
-    let err = match Vm::new(prog.clone(), &limits, rut_vm::interp::HostHooks::default(), hosts) {
+    let err = match Vm::builder().program(prog.clone()).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
         Err(t) => t,
         Ok(_) => panic!("a missing installer must not boot the program"),
     };
@@ -500,7 +497,7 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
         (OpaqueRef, &str, &str) -> (),
         |_vm: &mut rut_vm::interp::Vm, _b: OpaqueRef, _t: &str, _h: &str| ()
     );
-    let mut vm = Vm::new(prog, &limits, rut_vm::interp::HostHooks::default(), hosts)
+    let mut vm = Vm::builder().program(prog).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .expect("the blanket install boots");
     let _: OpaqueRef = vm.call("main", ()).expect("main");
 }

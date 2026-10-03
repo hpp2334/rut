@@ -52,7 +52,7 @@ fn backend_op2<T, El: 'static>(
     }
 }
 
-/// Install `web`'s bodies. Registration is BEFORE `Vm::new` (the eager
+/// Install `web`'s bodies. Registration is BEFORE the boot (the eager
 /// join); `verify_against` against the mounting session's
 /// `expected_host_fns` checks the contract both ways before any rut code
 /// runs.

@@ -215,34 +215,28 @@ fn page_state() -> Result<StateRc, String> {
     Ok(state)
 }
 
-/// Mount (std core + pouch inline + the `web` surface), compile, bind,
-/// `verify_against`, boot `Vm::new` + the `main` turn. After this the
+/// Offer (the mirror: pouch inline + the `web` surface + the core
+/// prelude riding auto), compile, bind the raw `web` rows, boot
+/// `Vm::builder` + the `main` turn. After this the
 /// page is purely event-driven — the host owns the loop.
 fn boot_page(src: &str) -> Result<(), String> {
-    let mut session = rut_driver::Session::new();
-    // THE MIRROR (rut/rut.jsonc by hand — the Session is I/O-free):
+    // THE MIRROR (rut/rut.jsonc by hand — wasm has no filesystem):
     // every package the manifest names; the loader hands over the biz
     // module's spliced source (base + entry.libs)
-    crate::mount::mount_app_session(&mut session)?;
-    let prog = crate::mount::compile_app(&mut session, src)?;
-    let ctx = session.host_pkg_context();
+    let run = crate::mount::mirror_run()?;
+    let mut compiled = crate::mount::compile_app(run, src)?;
 
     let state = page_state()?;
-    let mut hosts = HostRegistry::new();
-    crate::hosts::install_web_hosts(&mut hosts, &state);
-    // the app session mounts `nmap_host` (the listener table rides
-    // the val-column row `HashMap<str, i64>`) — its bodies install
-    // here, same join, before verify
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&ctx.flatten());
+    // the raw `web` rows join the compiled registry (the crossing is
+    // the mirror's own offer; the nmap bodies rode the chain)
+    crate::hosts::install_web_hosts(&mut compiled.hosts, &state);
 
-    let mut vm = Vm::new(
-        Rc::new(prog),
-        &crate::mount::limits(),
-        HostHooks::default(),
-        hosts,
-    )
-    .map_err(|t| format!("vm boot: {}", t.msg))?;
+    let mut vm = rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(crate::mount::limits())
+        .hooks(HostHooks::default())
+        .build()
+        .map_err(|e| format!("vm boot: {}", e.msg))?;
     // the boot turn returns the app container; the pump re-passes it on
     // every event turn (no mutable module state)
     let app: OpaqueRef = vm

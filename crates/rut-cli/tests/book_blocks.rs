@@ -114,10 +114,9 @@ fn book_blocks_compile_and_run() {
                 continue;
             }
 
-            // the book's host lane: mount what the block names
-            let mut s = rut_driver::Session::new();
-            rut_driver::mount_std(&mut s);
+            // the book's host lane: offer what the block names
             let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+            let mut world = Vec::new();
             for (name, dir) in [
                 ("ink_host", "rut/ink_host"),
                 ("ink", "rut/ink"),
@@ -132,34 +131,39 @@ fn book_blocks_compile_and_run() {
                 ("http", "rut/http"),
             ] {
                 if body.contains(&format!("use {name}::")) {
-                    rut_driver::mount_dir(&mut s, &tree.join(dir))
-                        .unwrap_or_else(|e| panic!("{rel}#{n}: mount {name}: {e}"));
+                    world.extend(
+                        rut_driver::dir_pkgs(&tree.join(dir))
+                            .unwrap_or_else(|e| panic!("{rel}#{n}: mount {name}: {e}"))
+                            .pkgs,
+                    );
                 }
             }
-            rut_driver::assemble_peers(&mut s)
-                .unwrap_or_else(|e| panic!("{rel}#{n}: assemble peers: {e}"));
-            // the mount snapshot the installs answer to (owned; `s`
-            // dies at the end of this block's iteration)
-            let ctx = s.host_pkg_context();
+            world.push(rut_driver::calc_pkg());
+            // the rows snapshot the installs answer to
+            let ctx = rut_driver::host_pkg_ctx(&world);
 
-            let out = rut_driver::compile_module_in(&mut s, &body, rut_parser::Mode::Impl, "main");
-            if !out.diags.is_empty() {
+            let compiled = match rut_driver::RutRun::new()
+                .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+                .pkg(rut_driver::Pkg::source("main", &body))
+                .entrypoint("main")
+                .compile()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    failures.push(format!("{rel}#{n}: {e}"));
+                    continue;
+                }
+            };
+            if !compiled.graph.diags.is_empty() {
                 failures.push(format!(
                     "{rel}#{n}: diags:\n{}",
-                    rut_lexer::diag::render_diags(&body, &out.diags)
+                    rut_lexer::diag::render_diags(&body, &compiled.graph.diags)
                 ));
                 continue;
             }
-            let Some(binary) = out.binary else {
+            let Some(prog) = compiled.graph.program else {
                 failures.push(format!("{rel}#{n}: no binary emitted"));
                 continue;
-            };
-            let prog = match rut_core::binary::decode(&binary) {
-                Ok(p) => p,
-                Err(e) => {
-                    failures.push(format!("{rel}#{n}: decode: {e}"));
-                    continue;
-                }
             };
             if let Err(e) = rut_vm::verify::verify(&prog) {
                 failures.push(format!("{rel}#{n}: verify: {e}"));
@@ -184,12 +188,7 @@ fn book_blocks_compile_and_run() {
             hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
             hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
             hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-            let mut vm = match rut_vm::interp::Vm::new(
-                Rc::new(prog),
-                &limits,
-                rut_vm::interp::HostHooks::default(),
-                hosts,
-            ) {
+            let mut vm = match rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
                 Ok(vm) => vm,
                 Err(t) => {
                     failures.push(format!("{rel}#{n}: boot: {}", t.msg));

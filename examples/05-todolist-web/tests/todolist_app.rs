@@ -32,7 +32,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, HostRegistry, Vm};
+use rut_vm::interp::{HostHooks, Vm};
 use rut_vm::OpaqueRef;
 
 use todolist_web::fake_dom::{FakeDom, Snapshot};
@@ -46,21 +46,25 @@ use todolist_web::{hosts, mount, state, DomBackend, WebState};
 /// run the boot turn — which mounts the framework, paints the first
 /// tree, and returns the app container the pump re-passes every turn.
 fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
-    let (session, root) = mount::load_project_session().expect("the rut/ project mounts");
-    let ctx = session.host_pkg_context();
-    let prog = mount::compile_manifest(&session, &root).expect("the app compiles");
+    let loaded = mount::project().expect("the rut/ project mounts");
+    let expected = mount::expected_host_fns(&loaded);
+    let mut compiled = mount::compile_walk(&loaded).expect("the app compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
     state::bind_weak_sink(&slot, &shared);
     shared.borrow_mut().dom.seed_page("div", "app"); // the twin's index.html
 
-    let mut hosts = HostRegistry::new();
-    hosts::install_web_hosts(&mut hosts, &shared);
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&ctx.flatten());
+    // the raw `web` rows join the compiled registry (the nmap bodies
+    // rode the chain)
+    hosts::install_web_hosts(&mut compiled.hosts, &shared);
+    compiled.hosts.verify_against(&expected);
 
-    let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
+    let vm = Vm::builder()
+        .compiled(compiled)
+        .limits(mount::limits())
+        .hooks(HostHooks::default())
+        .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
     let app = host.boot().expect("the boot turn runs");
@@ -440,21 +444,26 @@ fn an_event_without_a_door_traps_loud() {
 /// module dir, `core` the only mount: no web surface, no nmap, no
 /// widgets (no crossings declared or used is the fixture's point).
 fn make_fixture() -> WebHost<FakeDom> {
-    let (mut session, root) =
-        rut_driver::load_dir_session(&mount::probe_dir("softfail"), &rut_driver::bundle::FsSource)
-            .expect("the fixture mounts");
-    rut_driver::mount_std_core(&mut session);
-    let ctx = session.host_pkg_context();
-    let prog = mount::compile_manifest(&session, &root).expect("the fixture compiles");
+    let loaded = rut_driver::load_dir(&mount::probe_dir("softfail"), &rut_driver::bundle::FsSource)
+        .expect("the fixture mounts");
+    // no web surface, no nmap, no widgets (no crossings declared or
+    // used is the fixture's point) — the bare walk, core riding auto
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("the fixture compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
     state::bind_weak_sink(&slot, &shared);
     shared.borrow_mut().dom.seed_page("div", "app");
 
-    let mut hosts = HostRegistry::new();
-    hosts.verify_against(&ctx.flatten());
-    let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
+    let vm = Vm::builder()
+        .compiled(compiled)
+        .limits(mount::limits())
+        .hooks(HostHooks::default())
+        .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
     host.boot().expect("the boot turn runs");

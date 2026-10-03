@@ -1,4 +1,4 @@
-//! Module-graph compilation — the driver half.
+//! Pkg-graph compilation — the driver half.
 //!
 //! Walks a root module's `use` statements through a [`Session`]. Every
 //! module compiles under its own scope and LINKS: its `Surface` binds
@@ -8,7 +8,7 @@
 //! (owner-anchored generics). No source crosses a boundary — there is
 //! no splice, no second compilation model.
 //!
-//! The dispatch is on the mounted [`ModuleBody`]: a source body takes
+//! The dispatch is on the mounted [`PkgBody`]: a source body takes
 //! the compile path (its peer-integration groups, presence-gated, ride
 //! the same unit), a host body synthesizes its placeholder program,
 //! and a compiled body (a v5 bundle's decoded `.rutc`) is pushed after
@@ -21,20 +21,18 @@
 mod compiler;
 mod seeds;
 
+pub(crate) use compiler::uses_of;
+
 use compiler::{GraphCompiler};
 use seeds::build_seed_groups;
 
 use std::collections::{HashMap, HashSet};
 
-use rut_ast::ast::{Ast, ItemKind};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 use rut_core::binary::Program;
-use rut_parser::{parse, Mode};
 
-use crate::session::{ModuleBody, Session};
-use crate::compile_program_resolved;
-use crate::Seeds;
+use crate::session::Session;
 
 /// A linked module graph.
 pub struct GraphOutput {
@@ -44,7 +42,7 @@ pub struct GraphOutput {
 }
 
 /// Compile `root_spec` and its transitive uses from `session`.
-pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
+pub(crate) fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     let units = compile_units(session, root_spec);
     if !units.ok {
         return GraphOutput { diags: units.diags, program: None };
@@ -62,7 +60,7 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
 /// Per-package compile results — [`compile_graph`]'s walk, exposed for
 /// the packer: the pushed programs in post-order, and each linked
 /// module's own program and scope.
-pub struct Units {
+pub(crate) struct Units {
     pub diags: Vec<Diag>,
     /// every pushed program, post-order (compile_graph links these)
     pub programs: Vec<Program>,
@@ -74,7 +72,7 @@ pub struct Units {
 
 /// Compile (or mount) every module in `root_spec`'s use closure — the
 /// packer's view of [`compile_graph`].
-pub fn compile_units(session: &Session, root_spec: &str) -> Units {
+pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
     let mut c = GraphCompiler {
         session,
         next_scope: 1,

@@ -16,8 +16,42 @@
 //!   the files; the packed form compiles identically to the directory
 
 use rut_driver::bundle::FsSource;
-use rut_driver::{load_bundle_bytes, load_dir_session, pack_dir};
+use rut_driver::pack_dir;
 use std::path::{Path, PathBuf};
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-multilib-{tag}-{}", std::process::id()));
@@ -74,22 +108,21 @@ fn world(tag: &str, libs: Option<&str>, version: Option<u64>) -> PathBuf {
     root
 }
 
-fn run_main(session: rut_driver::Session, root: &str) -> i64 {
-    let g = rut_driver::compile_graph(&session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+fn run_main(loaded: rut_driver::Loaded) -> i64 {
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run main").into()
 }
@@ -99,9 +132,9 @@ fn multi_lib_is_one_module_in_manifest_order() {
     // c before b in the array: the splice order is the LIST's, never
     // alphabetical, never a directory listing
     let root = world("order", Some("\"./part_c.rut\", \"./part_b.rut\""), None);
-    let (session, app_root) = load_dir_session(&root.join("app"), &FsSource).expect("load");
-    let kid = session.resolve("kid").expect("kid mounted");
-    let rut_driver::ModuleBody::Source { text: src, .. } = &kid.body else {
+    let loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("load");
+    let kid = loaded.pkg("kid").expect("kid mounted");
+    let rut_driver::PkgBody::Source { text: src, .. } = &kid.body else {
         panic!("kid has a source body");
     };
     assert_eq!(
@@ -110,7 +143,7 @@ fn multi_lib_is_one_module_in_manifest_order() {
         "the splice is base, then libs in manifest order, '\\n'-joined"
     );
     // one namespace + the consumer's import of a LIB-declared pub fn
-    assert_eq!(run_main(session, &app_root), 23);
+    assert_eq!(run_main(loaded), 23);
 }
 
 #[test]
@@ -120,22 +153,22 @@ fn manifest_libs_laws_are_loud() {
     let kid = root.join("kid");
     let text = std::fs::read_to_string(kid.join("rut.jsonc")).unwrap();
     std::fs::write(&kid.join("rut.jsonc"), text.replacen(r#""lib": "./kid.rut", "#, "", 1)).unwrap();
-    let err = load_dir_session(&kid, &FsSource).unwrap_err().to_string();
+    let err = rut_driver::load_dir(&kid, &FsSource).unwrap_err().to_string();
     assert!(err.contains("needs `entry.lib`"), "{err}");
 
     // a `.d.rut` element — a decl surface is not a body
     let root = world("declrut", Some("\"./part_b.rut\", \"./x.d.rut\""), None);
-    let err = load_dir_session(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
     assert!(err.contains("`.d.rut`"), "{err}");
 
     // the base named again in the tail — the splice would duplicate it
     let root = world("dup", Some("\"./part_b.rut\", \"./kid.rut\""), None);
-    let err = load_dir_session(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
     assert!(err.contains("twice"), "{err}");
 
     // a missing file — the exact path, never a silent skip
     let root = world("gone", Some("\"./gone.rut\""), None);
-    let err = load_dir_session(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
     assert!(err.contains("gone.rut"), "{err}");
 }
 
@@ -153,15 +186,19 @@ fn multi_lib_packs_compiled_and_loads_identically() {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
     assert!(!names.iter().any(|n| n.ends_with(".rut")), "no source rides a linkable pkg: {names:?}");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    assert_eq!(run_main(session.clone(), &app_root), 23);
+    let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    assert_eq!(run_main(session.clone()), 23);
 
     // the packed form compiles to the SAME linked binary as the directory
-    let (dir_session, dir_root) = load_dir_session(&root.join("app"), &FsSource).expect("dir load");
-    let linked = |s: &rut_driver::Session, r: &str| {
-        let g = rut_driver::compile_graph(s, r);
-        assert!(g.diags.is_empty(), "{:?}", g.diags);
-        rut_core::binary::encode(&g.program.expect("linked"))
+    let dir_loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("dir load");
+    let linked = |l: &rut_driver::Loaded| {
+        let g = rut_driver::RutRun::new()
+            .pkgs(l)
+            .entrypoint(&l.root)
+            .compile()
+            .expect("compile the walk");
+        assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+        rut_core::binary::encode(&g.graph.program.expect("linked"))
     };
-    assert_eq!(linked(&dir_session, &dir_root), linked(&session, &app_root));
+    assert_eq!(linked(&dir_loaded), linked(&session));
 }

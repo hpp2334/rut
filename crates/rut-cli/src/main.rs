@@ -160,7 +160,7 @@ fn evict_poisoned_cache(project: &std::path::Path, err: &str) {
 
 /// The fetched load lane for `run`/`fetch`: a module dir or a
 /// `.rutbundle`, with url deps served by the cache-first remote.
-fn load_with_cache(path: &std::path::Path) -> Result<(rut_driver::Session, String), String> {
+fn load_with_cache(path: &std::path::Path) -> Result<rut_driver::Loaded, String> {
     let remote = remote_for(path);
     block_on(rut_driver::load_path_session_with(path, &remote)).map_err(|e| e.to_string())
 }
@@ -216,12 +216,11 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
         );
         std::process::exit(2);
     }
-    // the program plus the mount snapshot the host installs against —
-    // the ctx is OWNED (the session may die here; the installs below
-    // answer to the snapshot). A module directory (`rut.jsonc`) or a
-    // `.rutbundle` — load the graph (url deps ride the cache-first
-    // fetcher), mount std, compile, link
-    let (mut session, root) = match load_with_cache(p) {
+    // the program plus the host rows snapshot the installs answer to —
+    // a module directory (`rut.jsonc`) or a `.rutbundle` — walk the
+    // graph (url deps ride the cache-first fetcher), offer every pkg,
+    // compile through the chain
+    let loaded = match load_with_cache(p) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
@@ -229,19 +228,21 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
             std::process::exit(2);
         }
     };
-    // a v6 host bundle: nothing to run — its root is a declaration
+    let root = loaded.root.clone();
+    // a decl host bundle: nothing to run — its root is a declaration
     // surface the embedding Rust binds, never a program
     if matches!(
-        session.resolve(&root).map(|m| &m.body),
-        Ok(rut_driver::ModuleBody::Host { .. })
+        loaded.pkg(&root).map(|m| &m.body),
+        Some(rut_driver::PkgBody::Host { .. })
     ) {
         eprintln!(
             "run: {path} packs the host pkg `{root}` — a host bundle carries a \
              declaration surface, nothing to run; bind its rows from the embedder \
-             (`install_host_pkg` over the mounted rows)"
+             (`.host_pkg(..)` over the mounted rows)"
         );
         std::process::exit(2);
     }
+    let mut chain = rut_driver::RutRun::new().pkgs(&loaded);
     // the symbol table restores BEFORE the graph compiles, so
     // linking and the VM both see the real names and positions
     if let Some(sym) = &symbols {
@@ -259,20 +260,59 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
                 std::process::exit(1);
             }
         };
-        for spec in rut_driver::apply_symbols_to_session(&mut session, &map) {
-            eprintln!("run: warning — the symbol table names `{spec}`, which this bundle does not carry");
+        for section in &map.sections {
+            if loaded.pkg(&section.spec).is_none() {
+                eprintln!("run: warning — the symbol table names `{}`, which this bundle does not carry", section.spec);
+            }
         }
+        chain = chain.symbols(&map);
     }
-    rut_driver::mount_std(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
-    if !g.diags.is_empty() {
-        for d in &g.diags {
+    // the CLI is a host: it offers calc (the `Math` surface; the core
+    // prelude auto-rides in .compile()) and installs the matching pkgs —
+    // the blanket-install lane (the asymmetry makes it legal): math
+    // always, the logger to stdout when a program uses ink, the rest
+    // merging inert unless the program mounts their pkg
+    let compiled = match chain
+        .pkg(rut_driver::calc_pkg())
+        .host_pkg(rut_std::math::pkg())
+        // the nmap experiment's native key table (the mapset-host plan) — a
+        // program only reaches it when it declares `use nmap_host::{...}` or a
+        // pkg that does (`nmapset`)
+        .host_pkg(rut_std::nmap::pkg())
+        // the crossing-tax benchmark's nops (the crossing-fastpath plan,
+        // phase 0) — reached only by a program that declares
+        // `use bench_cross::{...}` (the bench row)
+        .host_pkg(rut_std::bench_cross::pkg())
+        // the async host set: launch/abort/sleep bodies for the
+        // `async_host` rows — reached only by a program that mounts the
+        // async packages (a `use futures::` pulls the tree pkg)
+        .host_pkg(rut_std::async_host::pkg())
+        // the string builder's bodies (the host strbuild pkg): reached only
+        // by a program that mounts the strbuild pkg (a `use strbuild::` /
+        // `use json::` pulls it — json's writer rides the builder)
+        .host_pkg(rut_std::strbuild::pkg())
+        // the std HTTP lane (the rut/http plan): get + the Response
+        // readbacks — reached only by a program that mounts the http
+        // packages (a `use http::` / `use http_host::` pulls the tree
+        // pkgs; reqwest is the CLI's, native-only)
+        .host_pkg(rut_std::http::pkg())
+        .host_pkg(rut_std::logger::pkg(|s| println!("{s}")))
+        .entrypoint(&root)
+        .compile()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+    if !compiled.graph.diags.is_empty() {
+        for d in &compiled.graph.diags {
             eprintln!("{}", d.msg);
         }
         std::process::exit(1);
     }
-    let ctx = session.host_pkg_context();
-    let prog = match g.program {
+    let prog = match compiled.graph.program.clone() {
         Some(p) => p,
         None => {
             eprintln!("no program emitted");
@@ -325,42 +365,22 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the CLI is a host: it mounts core+calc (mount_std) and installs
-    // the matching pkgs — the blanket-install lane (the asymmetry makes
-    // it legal): math always, the logger to stdout when a program uses
-    // ink, the rest merging inert unless the program mounts their pkg
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| println!("{s}")));
-    // the nmap experiment's native key table (the mapset-host plan) — a
-    // program only reaches it when it declares `use nmap_host::{...}` or a
-    // pkg that does (`nmapset`)
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    // the crossing-tax benchmark's nops (the crossing-fastpath plan,
-    // phase 0) — reached only by a program that declares
-    // `use bench_cross::{...}` (the bench row)
-    hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
-    // the async host set: launch/abort/sleep bodies for the
-    // `async_host` rows — reached only by a program that mounts the
-    // async packages (a `use futures::` pulls the tree pkg)
-    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    // the string builder's bodies (the host strbuild pkg): reached only
-    // by a program that mounts the strbuild pkg (a `use strbuild::` /
-    // `use json::` pulls it — json's writer rides the builder)
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    // the std HTTP lane (the rut/http plan): get + the Response
-    // readbacks — reached only by a program that mounts the http
-    // packages (a `use http::` / `use http_host::` pulls the tree
-    // pkgs; reqwest is the CLI's, native-only)
-    hosts.install_host_pkg(&ctx, rut_std::http::pkg());
-    let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
+    // the installs rode the chain (`.host_pkg(..)`); the compiled run
+    // carries the joined registry — the builder door takes it whole
+    let mut vm = match rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .hooks(hooks)
+        .build()
+    {
         Ok(vm) => vm,
-        Err(t) => {
-            eprintln!("boot: {}", t.msg);
+        Err(e) => {
+            eprintln!("boot: {}", e.msg);
             std::process::exit(1);
         }
     };
-    // (bindings were installed into the registry before `Vm::new` above)
+    // (the host bindings were installed against the rows snapshot at
+    // `.compile()`; the registry came back on `Compiled`)
     match vm.call::<_, ()>(&entry, ()) {
         Ok(_) => {}
         Err(t) => {
@@ -442,7 +462,7 @@ fn fetch_cmd(dir: &str) {
         std::process::exit(2);
     }
     match load_with_cache(p) {
-        Ok((_, root)) => println!("fetch: {dir} — all url deps are cached (root `{root}`)"),
+        Ok(loaded) => println!("fetch: {dir} — all url deps are cached (root `{}`)", loaded.root),
         Err(e) => {
             eprintln!("{e}");
             evict_poisoned_cache(p, &e);

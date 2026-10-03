@@ -23,30 +23,59 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
 use rut_vm::interp::Vm;
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn vm_nmapset(src: &str) -> Vm {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
-        .expect("mount pkg");
-    let ctx = session.host_pkg_context();
-    session
-        .register_module(
-            "app",
-            Module { spec: "app".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
-        )
+    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(NMAPSET_DIR)).expect("mount pkg");
+    loaded.pkgs.push(rut_driver::Pkg::source("app", src));
+    let ctx = rut_driver::host_pkg_ctx(&loaded.pkgs);
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint("app")
+        .compile()
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let prog = g.program.expect("compile");
+    let prog = g.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(200_000_000),
@@ -56,12 +85,7 @@ fn vm_nmapset(src: &str) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten()); // the mounted .d.rut ↔ the bodies
-    rut_vm::interp::Vm::new(
-        Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    )
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .unwrap()
 }
 
@@ -70,17 +94,14 @@ fn run_main(src: &str) -> i64 {
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
-        .expect("mount pkg");
-    session
-        .register_module(
-            "app",
-            Module { spec: "app".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
-    rut_driver::compile_graph(&session, "app")
+    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(NMAPSET_DIR)).expect("mount pkg");
+    loaded.pkgs.push(rut_driver::Pkg::source("app", src));
+    rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint("app")
+        .compile()
+        .unwrap()
+        .graph
         .diags
         .iter()
         .map(|d| d.msg.clone())

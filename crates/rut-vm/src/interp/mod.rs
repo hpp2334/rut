@@ -17,6 +17,7 @@ use rut_core::types::{
 use std::rc::Rc;
 
 mod boundary;
+pub mod builder;
 mod completer;
 mod host;
 mod native;
@@ -27,6 +28,7 @@ mod step;
 mod threaded;
 mod util;
 
+pub use builder::{IntoVmParts, VmBuilder, VmError, VmParts};
 pub use completer::{Completer, FAILED, PENDING, READY};
 pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 use host::HostSlot;
@@ -51,6 +53,7 @@ fn const_to_slot(c: &ConstVal, heap: &Heap) -> Result<Slot, String> {
     })
 }
 
+#[derive(Clone, Debug)]
 pub struct Limits {
     pub fuel: Option<u64>,
     pub heap_limit_bytes: Option<u64>,
@@ -215,6 +218,13 @@ const FOP_MOD: i32 = 4;
 const TY_ANY: TypeId = u32::MAX;
 
 impl Vm {
+    /// The construction door — `Vm::builder().program(..)/.compiled(..)..build()`.
+    /// `Vm::new` is crate-internal; every embedder boots through the
+    /// builder ([`builder`](super::builder)).
+    pub fn builder() -> crate::interp::VmBuilder {
+        crate::interp::VmBuilder::default()
+    }
+
     /// Boot the machine. `registry` is the embedder's host-fn binding
     /// table — built BEFORE the Vm (an embedder depends
     /// on nothing else) and consumed here: every host thunk the program
@@ -222,7 +232,10 @@ impl Vm {
     /// a construction error, never a mid-run trap. Call
     /// `HostRegistry::verify_against` first for the full
     /// contract (it also checks the bound-but-undeclared direction).
-    pub fn new(
+    ///
+    /// Crate-internal — the only construction door is
+    /// [`Vm::builder`](super::builder::VmBuilder).
+    pub(crate) fn new(
         prog: Rc<Program>,
         limits: &Limits,
         hooks: HostHooks,

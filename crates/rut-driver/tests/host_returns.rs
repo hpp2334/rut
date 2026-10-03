@@ -5,7 +5,9 @@
 //! the minted boxes, and the exact heap balance.
 
 use rut_core::types::{TY_BYTES, TY_I64, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR};
-use rut_driver::{Module, ModuleBody, Session, lower_decl_module};
+use rut_driver::lower_decl_module;
+
+
 
 /// The host-decl surface under test: one row per new answer lane.
 const DECL: &str = "\
@@ -15,12 +17,44 @@ pub host fn qopaque_pick() -> ?opaque;
 pub host fn bytes_give() -> bytes;
 ";
 
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 #[test]
 fn the_answer_lanes_spell_in_the_decl_grammar() {
     // `-> ?T` renders through ty_text's `?` shape and maps to its fixed
     // boot `Opt` row; plain `bytes` keeps its own boot id
     let m = lower_decl_module(DECL, "rets.d.rut").expect("the answer rows lower");
-    let ModuleBody::Host { ref host_funcs, .. } = m.body else {
+    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else {
         panic!("a lowered decl is a host body");
     };
     assert_eq!(
@@ -65,10 +99,8 @@ fn nesting_beyond_the_answer_optionals_still_refuses() {
 fn verify_against_names_the_q_rows_on_drift() {
     // the boot join is by boot-id identity: a `-> ?str` row against
     // a `-> f64` binding panics naming BOTH shapes, the `?` spelled
-    let mut s = Session::new();
-    let module = lower_decl_module("pub host fn pick() -> ?str;", "rets.d.rut").unwrap();
-    s.register_module("rets", module).unwrap();
-    let expected = s.expected_host_fns();
+    let module = lower_decl_module("pub host fn pick() -> ?str;", "rets.d.rut").unwrap().named("rets");
+    let expected = rut_driver::declared_host_fns(&[module]);
     assert_eq!(
         expected.get("rets::pick"),
         Some(&(vec![], TY_OPT_STR)),
@@ -126,18 +158,21 @@ fn registry(some: std::rc::Rc<std::cell::Cell<bool>>) -> rut_vm::interp::HostReg
 /// Mount the host pkg + its consumer, run `main`, answer the result and
 /// the heap balance (the answers must release exactly with the frame).
 fn run_app(src: &str, some: bool) -> (i64, u64) {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    let module = lower_decl_module(DECL, "rets.d.rut").expect("the answer rows lower");
-    s.register_module("rets", module).unwrap();
-    s.register_module(
-        "app",
-        Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
-    )
-    .unwrap();
-    let out = rut_driver::compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "the answer-lane consumer compiles: {:?}", out.diags);
-    let prog = out.program.expect("linked program");
+    let rets = lower_decl_module(DECL, "rets.d.rut")
+        .expect("the answer rows lower")
+        .named("rets");
+    let compiled = rut_driver::RutRun::new()
+        .pkg(rets)
+        .pkg(rut_driver::Pkg::source("app", src))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "the answer-lane consumer compiles: {:?}",
+        compiled.graph.diags
+    );
+    let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
@@ -146,14 +181,12 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
         interrupt_every: 1024,
     };
     let hosts = registry(std::rc::Rc::new(std::cell::Cell::new(some)));
-    // the load-time contract: the lanes verify by identity
-    hosts.verify_against(&s.expected_host_fns());
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    )
+    // the load-time contract: the lanes verify by identity (the rets
+    // rows are declared by the offered pkg)
+    hosts.verify_against(&rut_driver::declared_host_fns(&[
+        lower_decl_module(DECL, "rets.d.rut").expect("rows").named("rets"),
+    ]));
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .expect("vm");
     let base = vm.heap_usage();
     let answer: i64 = vm.call("main", ()).expect("run");

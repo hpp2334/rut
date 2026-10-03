@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::bundle::{bundle_key, parse_manifest, read_entry, FsSource};
-use crate::session::ModuleBody;
+use crate::session::PkgBody;
 use crate::loader::{Archive, PkgSource};
 
 /// Emit a generic-owning compiled pkg's riding source under `prefix`
@@ -96,8 +96,8 @@ pub(super) fn rides_compiled(
     units: &crate::graph::Units,
 ) -> bool {
     match session.resolve(spec).map(|m| &m.body) {
-        Ok(ModuleBody::Source { .. }) => units.linked.contains_key(spec),
-        Ok(ModuleBody::Compiled(_)) => true,
+        Ok(PkgBody::Source { .. }) => units.linked.contains_key(spec),
+        Ok(PkgBody::Compiled(_)) => true,
         _ => false,
     }
 }

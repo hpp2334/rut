@@ -709,32 +709,26 @@ entry fn boot_stream(url: str) -> nil {
     fn boot(
         fixture: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
     ) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, HttpFixture) {
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        rut_driver::mount_std_async(&mut session);
-        rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("ink_host"))
-            .expect("mount ink_host");
-        rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("http_host"))
-            .expect("mount http_host");
-        rut_driver::mount_dir(&mut session, &std::path::Path::new(PKG_DIR).join("http"))
-            .expect("mount http");
-        session
-            .register_module(
-                "app",
-                rut_driver::Module {
-                    spec: "app".into(),
-                    body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false },
-                    ..Default::default()
-                },
-            )
-            .expect("register the probe");
-        let g = rut_driver::compile_graph(&session, "app");
+        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        for d in ["ink_host", "http_host", "http"] {
+            world.extend(
+                rut_driver::dir_pkgs(&std::path::Path::new(PKG_DIR).join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
+        }
+        world.push(rut_driver::Pkg::source("app", SRC));
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+            .entrypoint("app")
+            .compile()
+            .unwrap();
         assert!(
-            g.diags.is_empty(),
+            compiled.graph.diags.is_empty(),
             "{}",
-            g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+            compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
         );
-        let prog = g.program.expect("compile");
+        let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let limits = rut_vm::interp::Limits {
             fuel: Some(4_000_000),
@@ -742,7 +736,7 @@ entry fn boot_stream(url: str) -> nil {
             interrupt_every: 1024,
         };
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let ctx = session.host_pkg_context();
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
         hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
@@ -754,12 +748,7 @@ entry fn boot_stream(url: str) -> nil {
         let (http_pkg, fx) = pkg_with(fixture);
         hosts.install_host_pkg(&ctx, http_pkg);
         hosts.verify_against(&ctx.flatten()); // the decl ↔ the bodies
-        let vm = rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        )
+        let vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap();
         (vm, sink, fx)
     }
@@ -899,22 +888,26 @@ entry fn boot(url: str) -> nil {
 }
 "#;
         // splice the probe source over the default one and re-boot by hand
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        rut_driver::mount_std_async(&mut session);
+        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
         }
-        session
-            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-            .expect("register");
-        let g = rut_driver::compile_graph(&session, "app");
-        assert!(g.diags.is_empty(), "{:?}", g.diags);
-        let prog = g.program.expect("compile");
+        world.push(rut_driver::Pkg::source("app", src));
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+            .entrypoint("app")
+            .compile()
+            .unwrap();
+        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let ctx = session.host_pkg_context();
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
         hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
@@ -933,12 +926,7 @@ entry fn boot(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        )
+        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap();
         vm.call::<_, ()>("boot", ("fixture://short",)).unwrap();
         run_loop(&mut vm, &fx, 100);
@@ -1002,22 +990,26 @@ entry fn boot(url: str) -> nil {
     launch_future(probe2(log, url));
 }
 "#;
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        rut_driver::mount_std_async(&mut session);
+        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
         }
-        session
-            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-            .expect("register");
-        let g = rut_driver::compile_graph(&session, "app");
-        assert!(g.diags.is_empty(), "{:?}", g.diags);
-        let prog = g.program.expect("compile");
+        world.push(rut_driver::Pkg::source("app", src));
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+            .entrypoint("app")
+            .compile()
+            .unwrap();
+        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let ctx = session.host_pkg_context();
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
         hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
@@ -1036,12 +1028,7 @@ entry fn boot(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        )
+        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap();
         vm.call::<_, ()>("boot", ("fixture://oneshot",)).unwrap();
         run_loop(&mut vm, &fx, 200);
@@ -1092,22 +1079,26 @@ entry fn boot() -> nil {
     launch_future(probe(log));
 }
 "#;
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        rut_driver::mount_std_async(&mut session);
+        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
         }
-        session
-            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-            .expect("register");
-        let g = rut_driver::compile_graph(&session, "app");
-        assert!(g.diags.is_empty(), "{:?}", g.diags);
-        let prog = g.program.expect("compile");
+        world.push(rut_driver::Pkg::source("app", src));
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+            .entrypoint("app")
+            .compile()
+            .unwrap();
+        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let ctx = session.host_pkg_context();
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
         hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
@@ -1132,12 +1123,7 @@ entry fn boot() -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        )
+        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap();
         vm.call::<_, ()>("boot", ()).unwrap();
         run_loop(&mut vm, &fx, 400);
@@ -1158,11 +1144,10 @@ entry fn boot() -> nil {
 
     #[test]
     fn the_decl_rows_join_both_lanes() {
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        let tree = std::path::Path::new(PKG_DIR);
-        rut_driver::mount_dir(&mut session, &tree.join("http_host")).expect("mount http_host");
-        let ctx = session.host_pkg_context();
+        let world = rut_driver::dir_pkgs(&std::path::Path::new(PKG_DIR).join("http_host"))
+            .expect("mount http_host")
+            .pkgs;
+        let ctx = rut_driver::host_pkg_ctx(&world);
         // the fixture lane installs the whole family over the virtual clock
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let (http_pkg, _fx) = pkg_with(|_m, _u, _h, _b| Ok(FixtureReply::ok(200, b"")));
@@ -1192,12 +1177,14 @@ entry fn boot() -> nil {
         });
         let url = format!("http://{addr}/stream");
         // reuse the standard boot with the REAL lane bolted on
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std_core(&mut session);
-        rut_driver::mount_std_async(&mut session);
+        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
-            rut_driver::mount_dir(&mut session, &tree.join(d)).expect("mount pkg");
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join(d))
+                    .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                    .pkgs,
+            );
         }
         let stream_src = r#"
 use http::HttpClient;
@@ -1230,15 +1217,17 @@ entry fn boot_stream(url: str) -> nil {
     launch_future(streamed(log, url));
 }
 "#;
-        session
-            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: stream_src.into(), is_decl: false }, ..Default::default() })
-            .expect("register");
-        let g = rut_driver::compile_graph(&session, "app");
-        assert!(g.diags.is_empty(), "{:?}", g.diags);
-        let prog = g.program.expect("compile");
+        world.push(rut_driver::Pkg::source("app", stream_src));
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+            .entrypoint("app")
+            .compile()
+            .unwrap();
+        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let ctx = session.host_pkg_context();
+        let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
         hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
@@ -1254,12 +1243,7 @@ entry fn boot_stream(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp::Vm::new(
-            Rc::new(prog),
-            &limits,
-            rut_vm::interp::HostHooks::default(),
-            hosts,
-        )
+        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .unwrap();
         vm.call::<_, ()>("boot_stream", (url,)).unwrap();
         // wall-clock pump: the worker thread settles the completers

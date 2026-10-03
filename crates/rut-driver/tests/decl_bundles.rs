@@ -16,12 +16,45 @@ mod common;
 use common::block_on;
 
 use rut_driver::{
-    compile_graph, load_bundle_bytes, load_dir_session_with, mount_std, pack_dir, pack_dir_opts,
-    sha256_hex, DepRemote, ModuleBody, PackOpts, RemoteError,
+    load_dir_with, pack_dir, pack_dir_opts, sha256_hex, DepRemote, PkgBody, PackOpts, RemoteError,
 };
 
 // ------------------------------------------------------------------
 // the fixture world: a host pkg + a consumer, in scratch dirs
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-decl-bundles-{tag}-{}", std::process::id()));
@@ -116,10 +149,10 @@ fn host_root_packs_v6_and_loads_back() {
     assert_eq!(m.format_version, Some(10), "a decl root declares 10");
 
     // load: the root mounts as the pkg's host rows
-    let (session, root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    assert_eq!(root, "logger_host");
-    match &session.resolve("logger_host").unwrap().body {
-        ModuleBody::Host { host_funcs, .. } => {
+    let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    assert_eq!(session.root, "logger_host");
+    match &session.pkg("logger_host").unwrap().body {
+        PkgBody::Host { host_funcs, .. } => {
             let names: Vec<&str> = host_funcs.iter().map(|(n, ..)| n.as_str()).collect();
             assert_eq!(names, vec!["make_logger", "log"], "{names:?}");
         }
@@ -158,19 +191,23 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let (session, root) = block_on(load_dir_session_with(&app, &common::Table::from(table))).expect("url load");
-    assert_eq!(root, "app");
+    let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("url load");
+    assert_eq!(session.root, "app");
     assert!(matches!(
-        session.resolve("logger_host").unwrap().body,
-        ModuleBody::Host { .. }
+        session.pkg("logger_host").unwrap().body,
+        PkgBody::Host { .. }
     ));
-    let units = compile_graph(&session, &root);
+    let units = rut_driver::RutRun::new()
+        .pkgs(&session)
+        .entrypoint(&session.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        units.diags.is_empty(),
+        units.graph.diags.is_empty(),
         "{}",
-        units.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        units.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
     );
-    assert!(units.program.is_some(), "the consumer links");
+    assert!(units.graph.program.is_some(), "the consumer links");
 }
 
 /// The real tree host pkgs, shim-packed: the std manifests already
@@ -205,10 +242,10 @@ fn the_real_tree_host_pkgs_pack_and_load() {
             vec!["rut.jsonc".to_string(), surface.to_string()],
             "rut/{name}: {names:?}"
         );
-        let (session, root) = load_bundle_bytes(&bytes, Path::new("mem"))
+        let session = rut_driver::Pkg::from_bundle(&bytes)
             .unwrap_or_else(|e| panic!("load rut/{name}: {e}"));
-        assert_eq!(root, name);
-        assert!(matches!(session.resolve(name).unwrap().body, ModuleBody::Host { .. }));
+        assert_eq!(session.root, name);
+        assert!(matches!(session.pkg(name).unwrap().body, PkgBody::Host { .. }));
     }
 }
 
@@ -265,7 +302,7 @@ fn the_v9_v10_pairing_is_total() {
     let v5_manifest = format!(
         r#"{{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
     );
-    let err = load_bundle_bytes(&resealed(&bytes, "rut.jsonc", &v5_manifest), Path::new("mem"))
+    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", &v5_manifest))
         .unwrap_err()
         .to_string();
     assert!(err.contains("packs at format_version 10"), "{err}");
@@ -273,7 +310,7 @@ fn the_v9_v10_pairing_is_total() {
 
     // v10 + lib manifest: the other broken half — lib roots stay v9
     let v10_lib = r#"{"format": "rutbundle", "format_version": 10, "name": "h", "entry": {"lib": "./h.rut"}}"#;
-    let err = load_bundle_bytes(&resealed(&bytes, "rut.jsonc", v10_lib), Path::new("mem"))
+    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", v10_lib))
         .unwrap_err()
         .to_string();
     assert!(err.contains("decl-root layout"), "{err}");
@@ -288,13 +325,13 @@ fn v6_refuses_compiled_shaped_entries() {
     // a root `.rutc` in a v6 host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "h.rutc", b"not a real program");
-    let err = load_bundle_bytes(&with_rutc, Path::new("mem")).unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&with_rutc).unwrap_err().to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
     assert!(err.contains("h.rutc"), "{err}");
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
-    let err = load_bundle_bytes(&with_ledger, Path::new("mem")).unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&with_ledger).unwrap_err().to_string();
     assert!(err.contains("no programs"), "{err}");
 
     // a dep group: single-package law
@@ -308,7 +345,7 @@ fn v6_refuses_compiled_shaped_entries() {
             rut_driver::bundle::parse_bundle(&group_manifest).unwrap(),
         ).collect();
     let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = load_bundle_bytes(&with_group, Path::new("mem")).unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&with_group).unwrap_err().to_string();
     assert!(err.contains("single-package"), "{err}");
 
     // a missing surface: the root IS the surface — no entry, no bundle
@@ -318,7 +355,7 @@ fn v6_refuses_compiled_shaped_entries() {
         .filter(|(n, _)| n != "h.d.rut")
         .collect();
     let err =
-        load_bundle_bytes(&rut_driver::bundle::write_bundle(&stripped).unwrap(), Path::new("mem"))
+        rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
             .unwrap_err()
             .to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
@@ -344,7 +381,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
     write(&app, "app.rut", "entry fn main() -> nil {}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let err = block_on(load_dir_session_with(&app, &common::Table::from(table.clone())))
+    let err = block_on(load_dir_with(&app, &common::Table::from(table.clone())))
         .unwrap_err()
         .to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
@@ -359,7 +396,7 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         ),
     );
     write(&app2, "app2.rut", "entry fn main() -> nil {}\n");
-    let err = block_on(load_dir_session_with(&app2, &common::Table::from(table)))
+    let err = block_on(load_dir_with(&app2, &common::Table::from(table)))
         .unwrap_err()
         .to_string();
     assert!(err.contains("the bundle names itself `logger_host`"), "{err}");
@@ -407,15 +444,15 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     }
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let (session, _) =
-        block_on(load_dir_session_with(&app, &Counting(table))).expect("load");
+    let session =
+        block_on(load_dir_with(&app, &Counting(table))).expect("load");
     assert!(matches!(
-        session.resolve("logger_host").unwrap().body,
-        ModuleBody::Host { .. }
+        session.pkg("logger_host").unwrap().body,
+        PkgBody::Host { .. }
     ));
     // the leaf mounted; the dir dep mounted beside it — one fetch shape,
     // zero walking
-    assert!(session.resolve("pouch").is_ok());
+    assert!(session.pkg("pouch").is_some());
 }
 
 #[test]
@@ -446,13 +483,17 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     );
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let (mut session, root) = block_on(load_dir_session_with(&app, &common::Table::from(table))).expect("load");
-    mount_std(&mut session);
-    let g = compile_graph(&session, &root);
+    let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("load");
+    let g = rut_driver::RutRun::new()
+        .pkgs(&session)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&session.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
     );
-    assert!(g.program.is_some());
+    assert!(g.graph.program.is_some());
 }

@@ -29,7 +29,41 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, Table};
 
-use rut_driver::{compile_graph, load_dir_session_with, mount_std, sha256_hex, ModuleBody};
+use rut_driver::{load_dir_with, sha256_hex};
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn dist_std() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"))
@@ -77,11 +111,14 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
-    let (mut session, root) =
-        block_on(load_dir_session_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
-    mount_std(&mut session);
-    let g = compile_graph(&session, &root);
-    Ok(g.diags.iter().map(|d| d.msg.clone()).collect())
+    let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .map_err(|e| e.to_string())?;
+    Ok(g.graph.diags.iter().map(|d| d.msg.clone()).collect())
 }
 
 #[test]
@@ -213,7 +250,7 @@ fn load_compile_run(
     rows: &str,
     table: BTreeMap<String, Vec<u8>>,
     src: &str,
-) -> Result<(Vec<String>, Option<rut_core::binary::Program>, rut_driver::Session), String> {
+) -> Result<(Vec<String>, Option<rut_core::binary::Program>, rut_driver::Loaded), String> {
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
@@ -222,12 +259,15 @@ fn load_compile_run(
     )
     .unwrap();
     std::fs::write(app.join("app.rut"), src).unwrap();
-    let (mut session, root) =
-        block_on(load_dir_session_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
-    mount_std(&mut session);
-    let g = compile_graph(&session, &root);
-    let diags: Vec<String> = g.diags.iter().map(|d| d.msg.clone()).collect();
-    Ok((diags, g.program, session))
+    let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .map_err(|e| e.to_string())?;
+    let diags: Vec<String> = g.graph.diags.iter().map(|d| d.msg.clone()).collect();
+    Ok((diags, g.graph.program, loaded))
 }
 
 #[test]
@@ -260,12 +300,7 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     let out: i32 = vm.call("main", ()).expect("run");
     assert_eq!(out, 2, "the load-time-compiled body runs");
@@ -359,19 +394,18 @@ entry fn main() -> i32 {
         interrupt_every: 1024,
     };
     // the writer's accumulator rides strbuild_host (json's closure
-    // carries it) — the embedder half binds its bodies
-    let ctx = session.host_pkg_context();
+    // carries it) — the embedder half binds its bodies against the
+    // offered pkgs' rows snapshot (calc offered beside: the math bodies'
+    // scope is declared like any pkg's)
+    let mut world = session.pkgs.clone();
+    world.push(rut_driver::calc_pkg());
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&session.expected_host_fns());
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    )
+    hosts.verify_against(&ctx.flatten());
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .expect("vm");
     let out: i32 = vm.call("main", ()).expect("run");
     assert_eq!(out, 2, "the consumer type round-trips through json's container rows");
@@ -409,7 +443,7 @@ fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
     // the ARCHIVE group won (json mounts before the strbuild row) —
     // the mounted body is the decoded binary, not the dir source
     assert!(
-        matches!(session.resolve("strbuild").unwrap().body, ModuleBody::Compiled(_)),
+        matches!(session.pkg("strbuild").unwrap().body, rut_driver::PkgBody::Compiled(_)),
         "first-mount-wins keeps the archive's compiled group"
     );
     let prog = rut_core::link::flatten(program.expect("linked"));
@@ -475,37 +509,43 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder.new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();
-    let (mut session, root) =
-        block_on(load_dir_session_with(&app, &Table::from(table))).expect("strbuild bundle loads");
-    mount_std(&mut session);
+    let session =
+        block_on(load_dir_with(&app, &Table::from(table))).expect("strbuild bundle loads");
     // the builder's host rows demand bodies — the embedder half
-    // (math too: mount_std mounted calc's surface)
-    let ctx = session.host_pkg_context();
+    // (calc offered beside; the core prelude auto-rides)
+    let mut world = session.pkgs.clone();
+    world.push(rut_driver::calc_pkg());
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    hosts.verify_against(&session.expected_host_fns());
-    let g = compile_graph(&session, &root);
+    hosts.verify_against(&ctx.flatten());
+    let g = rut_driver::RutRun::new()
+        .pkgs(&session)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&session.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
     );
-    let prog = g.program.expect("linked");
+    let prog = g.graph.program.expect("linked");
     rut_vm::verify::verify(&rut_core::link::flatten(prog.clone())).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .expect("vm");
     let out: String = vm.call("main", ()).expect("run");
     assert_eq!(out, "hello, cdn");
     // and strbuild_host rode the archive as the decl-surface group
     assert!(matches!(
-        session.resolve("strbuild_host").unwrap().body,
-        ModuleBody::Host { .. }
+        session.pkg("strbuild_host").unwrap().body,
+        rut_driver::PkgBody::Host { .. }
     ));
     let _ = std::fs::remove_dir_all(&base);
 }

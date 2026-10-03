@@ -3,7 +3,6 @@
 
 use std::future::Future;
 use std::path::Path;
-use std::rc::Rc;
 use std::task::{Context, Poll};
 use rut_vm::OpaqueRef;
 
@@ -46,28 +45,34 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-fn load_session() -> (rut_driver::Session, String) {
+fn load() -> rut_driver::Loaded {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let app = rut_driver::Loader::new(base).dep_remote(warm(base)).build();
-    block_on(app.load()).expect("load the module dir")
+    let remote = warm(base);
+    block_on(rut_driver::load_path_session_with(base, &remote)).expect("load the module dir")
 }
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     // the manifest lane: `rut.jsonc` carries the deps (pouch rides its
-    // CDN bundle, pinned), the load mounts the closure — then the same
-    // embedder half as before
-    let (mut s, root) = load_session();
-    rut_driver::mount_std_core(&mut s);
-    let g = rut_driver::compile_graph(&s, &root);
-    assert!(g.diags.is_empty());
-    let prog = g.program.expect("no binary emitted");
-    rut_vm::verify::verify(&prog).unwrap();
+    // CDN bundle, pinned), the walk yields the pkgs — then the chain
+    // (the core prelude auto-offers at `.compile()`)
+    let loaded = load();
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the module dir");
+    assert!(compiled.graph.diags.is_empty());
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .build()
+        .unwrap();
     let c: OpaqueRef = vm.call("createContainer", ()).unwrap();
     (vm, c)
 }

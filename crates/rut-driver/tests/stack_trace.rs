@@ -22,15 +22,40 @@
 //! 24-statement budget where REAL frames are wanted (`pad`), so the pins
 //! are against genuinely separate FuncCodes.
 
-use rut_driver::{Module, ModuleBody, Session};
 use rut_parser::Mode;
+
+
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(src: &str) -> i32 {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", &src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -40,22 +65,14 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
 /// Compile for inspection: returns the flattened program + a ready Vm.
 fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", &src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let flat = rut_core::link::flatten(out.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -64,12 +81,7 @@ fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat.clone()),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat.clone())).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     (flat, vm)
 }
@@ -315,10 +327,7 @@ fn render_degrades_when_stripped() {
     // a stripped build carries no position table: line/col read 0 and
     // render degrades to the pc-only shape
     let src = chain_src();
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", &src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let mut prog = out.program.expect("linked program");
     for f in prog.funcs.iter_mut() {
@@ -327,12 +336,7 @@ fn render_degrades_when_stripped() {
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits::default();
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     let r: String = vm.call::<_, String>("main", ()).expect("run");
     let lines: Vec<&str> = r.lines().collect();
@@ -384,10 +388,7 @@ fn version_nine_rejects_stale_artifacts() {
     // builder's engine-surface withdrawal, v20 the bracket markers +
     // the closed async classes, v21 the structural interfaces — the
     // trait tables left the wire)
-    let mut s = Session::new();
-    rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: "entry fn main() -> i32 { return 4; }".into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
+    let out = compiled("app_main", "entry fn main() -> i32 { return 4; }");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
     assert_eq!(&bytes[4..8], &21u32.to_le_bytes(), "the header carries v21");

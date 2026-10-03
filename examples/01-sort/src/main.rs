@@ -9,18 +9,15 @@
 
 use std::future::Future;
 use std::path::Path;
-use std::rc::Rc;
 use std::task::{Context, Poll};
 
 /// The embedder's ENTIRE load half — the Loader door. The project is
 /// this directory; the remote policy is the project-local cache. A
 /// cold start networks on its misses (the CDN, pinned by the
 /// manifest); a warm start is pure cache hits.
-fn load(base: &Path) -> Result<(rut_driver::Session, String), rut_driver::LoadError> {
-    let app = rut_driver::Loader::new(base)
-        .dep_remote(rut_driver::HttpRemote::project_local(base))
-        .build();
-    block_on(app.load())
+fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+    let remote = rut_driver::HttpRemote::project_local(base);
+    block_on(rut_driver::load_path_session_with(base, &remote))
 }
 
 /// The std-only driver for the `_with` lane: the fetched futures are
@@ -38,27 +35,28 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 
 fn main() {
     // the manifest lane: this dir's `rut.jsonc` carries the deps, the
-    // load mounts the closure and runs the mount passes — then the same
-    // embedder half as before (mount, compile, verify, drive)
-    let (mut session, root) =
-        load(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
-    // the app's libs: core+calc (engine) — `calc` is ambient, and
-    // `pouch` rode the manifest
-    rut_driver::mount_std(&mut session);
-    let g = rut_driver::compile_graph(&session, &root);
-    assert!(g.diags.is_empty());
-    let prog = g.program.expect("no binary emitted");
-    rut_vm::verify::verify(&prog).unwrap();
+    // walk runs its passes and yields the pkgs — then the chain
+    // (calc offered; the core prelude auto-rides), verify, drive
+    let loaded = load(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the module dir");
+    assert!(compiled.graph.diags.is_empty());
+    rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(5_000_000),
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let ctx = session.host_pkg_context();
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.verify_against(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .compiled(compiled)
+        .limits(limits)
+        .build()
+        .unwrap();
 
 
     // the session: one bank, exact values in, JSON out — typed
@@ -89,5 +87,5 @@ fn main() {
     // unknown names are values, not traps
     println!("sort(bogus) = {:?}", vm.call::<_, String>("sort", (c.clone(), "bogus")).unwrap());
 
-    println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
+    println!("fuel used: {} of {:?}", vm.fuel_used, Some(5_000_000u64));
 }

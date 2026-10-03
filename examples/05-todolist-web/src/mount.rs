@@ -1,35 +1,33 @@
-//! The session mount — TWO LANES over ONE closure (survey §2.4).
+//! The run chain — TWO LANES over ONE closure (survey §2.4), both
+//! spelled as offers:
 //!
 //! THE MANIFEST (the native lane's truth): `rut/biz/` is the project
 //! root — the TWO-PACKAGE law's biz side — and every package it names
-//! (ui, and through ui pouch/nmapset/nmap_host) is mounted by
-//! [`crate::mount::project_dir`] through the Loader — the manifest's
-//! ui row is a local `path`, the std closure rides pinned jsDelivr url
-//! rows served by the PRIMED OFFLINE REMOTE ([`crate::mount::std_remote`];
+//! (ui, and through ui pouch/nmapset/nmap_host) is walked by
+//! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
 //! dist/std plays the wire, no gate networks). The four passes run FOR
-//! REAL. The manifest, not a Rust fn,
-//! is the module list.
+//! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
+//! walks a test probe the same way.
 //!
-//! THE MIRROR (the wasm lane): the Session is I/O-free by law (wasm
-//! hosts mount in memory), so `mount_app_session` registers the same
-//! closure by hand — one `register_module` per package, the same
-//! mount properties the manifests state, everything
-//! `include_str!` (the rut-wasm ink/ink_host precedent). Nothing here knows
-//! the app's SOURCE: the root's body crosses the ABI (loader.js hands
-//! over `rut/biz/biz.rut`) and [`compile_app`] compiles it as the
-//! root.
+//! THE MIRROR (the wasm lane): wasm has no filesystem, so
+//! [`mirror_pkgs`] offers the same closure by hand — one `Pkg` per
+//! package, the same mount properties the manifests state, everything
+//! `include_str!`/`include_bytes!` (the rut-wasm ink/ink_host
+//! precedent). Nothing here knows the app's SOURCE: the root's body
+//! crosses the ABI (loader.js hands over `rut/biz/biz.rut`) and
+//! [`compile_app`] compiles it as the root.
 //!
-//! [`crate::mount::mount_app_session`] is the mirror of
-//! `rut/biz/rut.jsonc` and nothing more — `tests/mount_lane.rs` (the P3
-//! proof) pins the two lanes to the same mounted-name set, the same
-//! host surface, and the same compiled binary. The `limits()`/
-//! `compile_app` halves below are shared by both lanes.
+//! `tests/mount_lane.rs` (the P3 proof) pins the two lanes to the same
+//! mounted-name set, the same host surface, and the same compiled
+//! binary. The `limits()`/compile halves below are shared by both
+//! lanes.
 //!
 //! THE HOST DECL SURFACE: `web.d.rut` lives in `web/` as a proper host
 //! pkg (the shape law folded it in; it still rides NO deps row — the
 //! two-package law's count is unchanged, and the host crossing is not
-//! a mounted package). BOTH lanes register it by hand: the embedder
-//! mounts what the closure uses (the `mount_std_core` precedent).
+//! a mounted package). BOTH lanes offer it by hand: the embedder
+//! offers what the closure uses — [`web_pkg`], already part of every
+//! `*_run` chain here.
 //!
 //! What died here before this file's current shape: the old
 //! concatenation module (ONE module fabricated from the store
@@ -43,7 +41,7 @@
 //! in one file.
 
 use rut_core::binary::Program;
-use rut_driver::{Module, ModuleBody};
+use rut_driver::{Compiled, Loaded, Pkg, RutRun};
 
 // ---- the packages, embedded verbatim --------------------------------
 // The mirror reads the SAME files the manifest names. wasm32 has no
@@ -57,8 +55,8 @@ const POUCH_RUT: &str = include_str!("../../../rut/pouch/pouch.rut");
 // the nmap host surface, from the COMMITTED CDN artifact (the v6 decl
 // bundle — `dist/std/nmap_host.rutbundle`, sha256-pinned by the pins
 // gate). THE BUNDLE LAW: a compiled decl surface binds like the
-// hand-lowered one — the mirror's `register_module` becomes a
-// `mount_bundle_bytes`, the wasm lane's url-dep mount. pouch and
+// hand-lowered one — the mirror's offer becomes a
+// `Pkg::from_bundle`, the wasm lane's url-dep mount. pouch and
 // nmapset stay verbatim sources: they are GENERIC owners, and a
 // compiled bundle serves only the instantiations its own pack closure
 // spelled (consumer shapes like this page's `Vec<Node>` are the
@@ -77,7 +75,7 @@ const UI_DIFF_RUT: &str = include_str!("../rut/ui/diff.rut");
 const UI_COMPONENTS_RUT: &str = include_str!("../rut/ui/components.rut");
 
 /// ui's source, spliced the manifest's way: base first,
-/// then `entry.libs` in array order, '\n'-joined — ONE module.
+/// then `entry.libs` in array order, '\n'-joined — ONE pkg.
 pub fn ui_source() -> String {
     let mut src = String::from(UI_RUT);
     for part in [UI_STORE_RUT, UI_WIDGET_RUT, UI_LOWERING_RUT, UI_DIFF_RUT, UI_COMPONENTS_RUT] {
@@ -103,26 +101,11 @@ const DOMAIN_RUT: &str = include_str!("../rut/biz/domain.rut");
 const WORLD_RUT: &str = include_str!("../rut/biz/world.rut");
 const APP_RUT: &str = include_str!("../rut/biz/app.rut");
 
-/// The rut/ project root — the manifest lane's mount point. Native
+/// The rut/ project root — the manifest lane's walk point. Native
 /// only: the wasm lane has no filesystem and uses the mirror.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn project_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rut").join("biz")
-}
-
-/// The MANIFEST LANE's mount (native only): the rut/biz project root
-/// through the Loader — the four passes for real, the url rows served
-/// by the primed offline remote ([`std_remote`]) — plus
-/// the embedder half every lane owns: the `core` prelude AND the `web`
-/// host surface (the crossing is no package's dep; both lanes register
-/// it by hand — the registration scope IS the pkg name (`web::*`).
-/// `tests/mount_lane.rs` pins the two lanes together.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn load_project_session() -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = load_dir_with_std(&project_dir())?;
-    rut_driver::mount_std_core(&mut session);
-    register_web_surface(&mut session)?;
-    Ok((session, root))
 }
 
 /// A probe's module dir — `tests/<probe>/`. Each probe under tests/ is
@@ -133,46 +116,45 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(probe)
 }
 
-/// The PROBE lanes' mount (native only): the Loader over
-/// `tests/<probe>/` — the probe's own manifest names its deps (the
-/// sibling ui row stays a local `path`; the std rows are pinned
-/// jsDelivr urls; `web` rides no row) — plus the embedder half every lane owns:
-/// the `core` prelude AND the `web` host surface. The softfail fixture
-/// is the deliberate exception: no crossings is its point, so it loads
-/// its dir bare + `mount_std_core` (its test spells that shape).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn load_probe_session(probe: &str) -> Result<(rut_driver::Session, String), String> {
-    let (mut session, root) = load_dir_with_std(&probe_dir(probe))?;
-    rut_driver::mount_std_core(&mut session);
-    register_web_surface(&mut session)?;
-    Ok((session, root))
+/// The `web` host surface as a pkg — the embedder half both lanes
+/// offer (the registration scope IS the package name: `web::*`, the
+/// prefix every crossing's host id carries).
+pub fn web_pkg() -> Result<Pkg, String> {
+    Ok(rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?.named("web"))
 }
 
-/// The manifest lane's directory load: the Loader (its default source
-/// IS the filesystem) over [`std_remote`] — the same embedder shape
-/// src/main.rs of the other examples spells, with the offline flavor
-/// swapped in. One noop-waker poll settles the READY futures: every
-/// url row is a primed cache hit, so nothing ever awaits the wire.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_dir_with_std(
-    dir: &std::path::Path,
-) -> Result<(rut_driver::Session, String), String> {
-    use std::future::Future;
-    let fut = rut_driver::Loader::new(dir).dep_remote(std_remote()).build().load();
-    let mut fut = std::pin::pin!(fut);
-    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-    loop {
-        match fut.as_mut().poll(&mut cx) {
-            std::task::Poll::Ready(v) => return v.map_err(|e| e.to_string()),
-            std::task::Poll::Pending => std::thread::yield_now(),
-        }
+/// THE MIRROR — every package `rut/biz/rut.jsonc` names, offered by
+/// hand (the wasm lane; also mount_lane's comparison world): `web`
+/// (the crossing surface) + `pouch` + `nmap_host` (the committed CDN
+// artifact — the url-dep mount's in-memory twin) + `nmapset` + `ui`.
+/// The ROOT is deliberately absent: the app's SOURCE crosses the ABI
+/// ([`compile_app`] offers and compiles it).
+pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
+    let nmap_host = rut_driver::Pkg::from_bundle(NMAP_HOST_BUNDLE)
+        .map_err(|e| e.to_string())?
+        .pkgs;
+    let mut pkgs = vec![web_pkg()?, Pkg::source("pouch", POUCH_RUT)];
+    pkgs.extend(nmap_host);
+    pkgs.push(Pkg::source("nmapset", NMAPSET_RUT));
+    pkgs.push(Pkg::source("ui", ui_source()));
+    Ok(pkgs)
+}
+
+/// The mirror as a run: the mirror pkgs + nmap's bodies (the listener
+/// table rides the val-column row `HashMap<str, i64>` — a mounted decl
+/// pkg's rows demand bodies).
+pub fn mirror_run() -> Result<RutRun, String> {
+    let mut run = RutRun::new();
+    for p in mirror_pkgs()? {
+        run = run.pkg(p);
     }
+    Ok(run.host_pkg(rut_std::nmap::pkg()))
 }
 
 /// dist/std plays the wire: the committed artifacts prime ONE offline
 /// cache per process (`DepRemote::write` is the stand-in for the GET —
 /// the ONCE-gated priming is the 03-plugin precedent), and every
-/// manifest-lane load rides an `HttpRemote::offline` over it — a miss
+/// manifest-lane walk rides an `HttpRemote::offline` over it — a miss
 /// NEVER touches the network, so the gate cannot network by
 /// construction. The pin's bytes are the committed bytes
 /// (`pack-std --check` green); the CDN is only the human lane. The
@@ -218,72 +200,120 @@ fn std_remote() -> rut_driver::HttpRemote {
     }))
 }
 
-/// Register the `web` DECL surface — the embedder half both lanes run.
-/// The registration scope IS the package name (`web::*`: the prefix
-/// every crossing's host id carries).
-pub fn register_web_surface(session: &mut rut_driver::Session) -> Result<(), String> {
-    let web = rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?;
-    session.register_module("web", web).map_err(|e| e.to_string())
-}
-
-/// Mount `core` + `pouch` + the `web` host surface. `core` is mounted
-/// unconditionally by the engine anyway; `calc` is NOT mounted — the
-/// crossings need no float surface.
-pub fn mount_host_session(session: &mut rut_driver::Session) -> Result<(), String> {
-    rut_driver::mount_std_core(session);
-    session
-        .register_module(
-            "pouch",
-            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
-        )
-        .map_err(|e| e.to_string())?;
-    register_web_surface(session)?;
-    Ok(())
-}
-
-/// Compile a handed-in root source against a mounted session under an
-/// explicit spec, and hand back the verified binary program — the
-/// mirror lane's compile half for hand-over sources.
-pub fn compile_root(
-    session: &mut rut_driver::Session,
-    src: &str,
-    spec: &str,
-) -> Result<Program, String> {
-    let out = rut_driver::compile_module_in(session, src, rut_parser::Mode::Impl, spec);
-    verified(out.diags.iter().map(|d| d.msg.clone()).collect(), out.binary)
-}
-
-pub fn compile_app(
-    session: &mut rut_driver::Session,
-    src: &str,
-) -> Result<Program, String> {
-    compile_root(session, src, "app")
-}
-
-/// Compile a session's already-mounted graph from its root spec — THE
-/// MANIFEST LANE's compile half.
+/// The manifest lane's directory walk: [`rut_driver::load_dir_with`]
+/// over [`std_remote`] — the same embedder shape the other examples
+/// spell, with the offline flavor swapped in. One noop-waker poll
+/// settles the READY futures: every url row is a primed cache hit, so
+/// nothing ever awaits the wire.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn compile_manifest(session: &rut_driver::Session, root: &str) -> Result<Program, String> {
-    let out = rut_driver::compile_graph(session, root);
-    match out.program {
-        Some(p) => verified(
-            out.diags.iter().map(|d| d.msg.clone()).collect(),
-            Some(rut_core::binary::encode(&p)),
-        ),
-        None => verified(
-            out.diags.iter().map(|d| d.msg.clone()).collect(),
-            None,
-        ),
+pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
+    use std::future::Future as _;
+    let remote = std_remote();
+    let fut = rut_driver::load_dir_with(dir, &remote);
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(v) => return v.map_err(|e| e.to_string()),
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
     }
+}
+
+/// THE MANIFEST LANE — the rut/biz project root walked for real (the
+/// four passes), answered as the yield plus its root name. Offer with
+/// [`offer`], compile with [`compile_walk`].
+#[cfg(not(target_arch = "wasm32"))]
+pub fn project() -> Result<Loaded, String> {
+    walk_dir(&project_dir())
+}
+
+/// A probe's manifest lane — `tests/<probe>/` walked for real, the
+/// probe's own manifest naming its deps (the sibling ui row stays a
+/// local `path`; the std rows are pinned jsDelivr urls; `web` rides no
+/// row). The softfail fixture is the deliberate exception: no crossings
+/// is its point, so its test loads bare.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn probe(probe: &str) -> Result<Loaded, String> {
+    walk_dir(&probe_dir(probe))
+}
+
+/// The embedder half every lane owns, as chain steps: the walk's pkgs
+/// + the `web` surface + nmap's bodies WHEN the closure declares the
+/// `nmap_host` scope (the listener table rides the val-column row
+/// `HashMap<str, i64>` — a mounted decl pkg's rows demand bodies;
+/// probes without the scope skip the install, the blanket law's gate).
+/// The core prelude auto-offers at `.compile()`.
+pub fn offer(mut run: RutRun, loaded: &Loaded) -> RutRun {
+    run = run.pkgs(loaded);
+    run = match web_pkg() {
+        Ok(w) => run.pkg(w),
+        Err(_) => run, // unreachable: the surface is include_str!'d
+    };
+    if loaded.pkgs.iter().any(|p| p.spec == "nmap_host") {
+        run = run.host_pkg(rut_std::nmap::pkg());
+    }
+    run
+}
+
+/// The declared host rows of a walked world + the `web` surface — the
+/// `.d.rut` ↔ binding contract's expected table (`verify_against`).
+pub fn expected_host_fns(loaded: &Loaded) -> rut_vm::interp::ExpectedHostFns {
+    let mut pkgs: Vec<Pkg> = loaded.pkgs.clone();
+    if let Ok(w) = web_pkg() {
+        pkgs.push(w);
+    }
+    rut_driver::declared_host_fns(&pkgs)
+}
+
+/// Compile a run with a handed-in root source under an explicit spec —
+/// the mirror lane's compile half for ABI sources. Diags are the error
+/// text; the compiled run comes back (its registry carries every
+/// `.host_pkg` install).
+pub fn compile_root(run: RutRun, src: &str, spec: &str) -> Result<Compiled, String> {
+    let compiled = run
+        .pkg(Pkg::source(spec, src))
+        .entrypoint(spec)
+        .compile()
+        .map_err(|e| format!("the app does not compile: {e}"))?;
+    checked(compiled)
+}
+
+/// [`compile_root`] under the app spec.
+pub fn compile_app(run: RutRun, src: &str) -> Result<Compiled, String> {
+    compile_root(run, src, "app")
+}
+
+/// Compile a walked world from its root pkg — THE MANIFEST LANE's
+/// compile half ([`offer`] runs inside).
+pub fn compile_walk(loaded: &Loaded) -> Result<Compiled, String> {
+    let compiled = offer(RutRun::new(), loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .map_err(|e| format!("the app does not compile: {e}"))?;
+    checked(compiled)
 }
 
 /// The shared tail of both compile halves: diags are the error text,
-/// the binary decodes and verifies before it is a program.
-fn verified(msgs: Vec<String>, binary: Option<Vec<u8>>) -> Result<Program, String> {
-    if !msgs.is_empty() {
-        return Err(format!("the app does not compile: {}", msgs.join("; ")));
+/// and the binary must decode and verify before it is a program.
+fn checked(compiled: Compiled) -> Result<Compiled, String> {
+    if !compiled.graph.diags.is_empty() {
+        return Err(format!(
+            "the app does not compile: {}",
+            compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        ));
     }
-    let bin = binary.ok_or("the app compiled to no binary")?;
+    if compiled.graph.program.is_none() {
+        return Err("the app compiled to no binary".to_string());
+    }
+    Ok(compiled)
+}
+
+/// The binary half of a compiled run: encode → decode → verify — the
+/// same bytes a run lane would cross.
+pub fn verified(compiled: &Compiled) -> Result<Program, String> {
+    let prog = compiled.graph.program.as_ref().expect("checked() ran");
+    let bin = rut_core::binary::encode(prog);
     let prog = rut_core::binary::decode(&bin).map_err(|e| format!("binary decode: {e}"))?;
     rut_vm::verify::verify(&prog).map_err(|e| format!("verify: {e}"))?;
     Ok(prog)
@@ -304,42 +334,4 @@ pub fn limits() -> rut_vm::interp::Limits {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     }
-}
-
-/// The app session — THE MIRROR of `rut/biz/rut.jsonc` (survey §2.4):
-/// every package the manifest names, registered with the manifest's
-/// own mount properties. The ROOT is deliberately absent: the app's
-/// SOURCE crosses the ABI ([`compile_app`] registers and compiles it),
-/// which is the one thing the I/O-free Session cannot fetch.
-///
-/// Install `nmap_host`'s bodies with `rut_std::nmap::pkg()` next to
-/// [`crate::hosts::install_web_hosts`].
-pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String> {
-    mount_host_session(session)?;
-
-    // the nmap host surface, from the CDN artifact (the v6 decl bundle)
-    // — the wasm lane's url-dep mount; the registration scope IS the
-    // package name the bundle answers to
-    let mounted = rut_driver::mount_bundle_bytes(session, NMAP_HOST_BUNDLE).map_err(|e| e.to_string())?;
-    debug_assert_eq!(mounted, "nmap_host");
-    session
-        .register_module(
-            "nmapset",
-            Module { body: ModuleBody::Source { text: NMAPSET_RUT.to_string(), is_decl: false }, ..Default::default() },
-        )
-        .map_err(|e| e.to_string())?;
-
-    // THE UI PACKAGE — the framework: the atom store machinery, the
-    // widget type, the lowering table, the keyed diff, the component
-    // vocabulary — ONE module (the two-package law). The
-    // multi-lib files ride through ui_source() — the manifest's
-    // `entry.libs`, spliced base-first in array order.
-    session
-        .register_module(
-            "ui",
-            Module { body: ModuleBody::Source { text: ui_source(), is_decl: false }, ..Default::default() },
-        )
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
 }

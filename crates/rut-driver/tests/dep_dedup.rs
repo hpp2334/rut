@@ -17,37 +17,70 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use rut_driver::{Module, ModuleBody, Seeds, Session};
+use rut_driver::Seeds;
 use rut_parser::Mode;
 
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
-fn load(rel: &str) -> Result<(Session, String), String> {
-    rut_driver::load_dir_session(Path::new(&format!("{PEERS}/{rel}")), &rut_driver::bundle::FsSource)
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
+fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
+    rut_driver::load_dir(Path::new(&format!("{PEERS}/{rel}")), &rut_driver::bundle::FsSource)
     .map_err(|e| e.to_string())
 }
 
 /// Compile, flatten, verify, and run `main` — the i64 result.
-fn run_main(session: Session, root: &str) -> i64 {
-    let g = rut_driver::compile_graph(&session, root);
+fn run_main(loaded: rut_driver::Loaded) -> i64 {
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
     assert!(
-        g.diags.is_empty(),
+        g.graph.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
     );
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, i64>("main", ()).expect("run")
 }
@@ -60,9 +93,9 @@ fn t10_sibling_imports_of_a_shared_inline_pkg_compile() {
     // defined once, and the consumer compiles green and runs — the
     // `appkit` workaround retires as a NECESSITY (it stays legal; the
     // example is another lane's property and is not touched).
-    let (session, root) = load("cons_sibs").expect("mount");
-    assert_eq!(root, "cons_sibs");
-    assert_eq!(run_main(session, &root), 16, "Slot.first() + Crate.rest() = 7 + 9");
+    let loaded = load("cons_sibs").expect("mount");
+    assert_eq!(loaded.root, "cons_sibs");
+    assert_eq!(run_main(loaded), 16, "Slot.first() + Crate.rest() = 7 + 9");
 }
 
 #[test]
@@ -135,19 +168,13 @@ entry fn main() -> i64 {
 ";
 
     // the chain world: app -> wrap (inline) -> cell (generic export)
-    let mut s = Session::new();
     // `inline` marks the splice law's input explicitly now: the generic
     // export alone no longer forces it (owner-anchored instantiation)
-    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
-        .unwrap();
-    s.register_module(
-        "wrap",
-        Module { body: ModuleBody::Source { text: wrap_src.into(), is_decl: false }, ..Default::default() },
-    )
-    .unwrap();
-    s.register_module("app", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() })
-        .unwrap();
-    let g = rut_driver::compile_graph(&s, "app");
+    let chain = rut_driver::RutRun::new()
+        .pkg(rut_driver::Pkg::source("cell", cell_src))
+        .pkg(rut_driver::Pkg::source("wrap", wrap_src))
+        .pkg(rut_driver::Pkg::source("app", app_src));
+    let g = graph_of(chain.entrypoint("app").compile());
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let chain = g.program.expect("linked program");
 
@@ -256,26 +283,18 @@ entry fn main() -> i64 {
     return w.get() + h.get();
 }
 ";
-    let mut s = Session::new();
     // `inline` marks the splice law's input explicitly now: the generic
     // export alone no longer forces it (owner-anchored instantiation)
-    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
-        .unwrap();
-    s.register_module(
-        "wrap",
-        Module { body: ModuleBody::Source { text: wrap_src.into(), is_decl: false }, ..Default::default() },
-    )
-    .unwrap();
-    s.register_module("boxx", Module { body: ModuleBody::Source { text: box_src.into(), is_decl: false }, ..Default::default() })
-        .unwrap();
-    s.register_module(
-        "held",
-        Module { body: ModuleBody::Source { text: held_src.into(), is_decl: false }, ..Default::default() },
-    )
-    .unwrap();
-    s.register_module("app", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() })
-        .unwrap();
-    let g = rut_driver::compile_graph(&s, "app");
+    let g = graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source("cell", cell_src))
+            .pkg(rut_driver::Pkg::source("wrap", wrap_src))
+            .pkg(rut_driver::Pkg::source("boxx", box_src))
+            .pkg(rut_driver::Pkg::source("held", held_src))
+            .pkg(rut_driver::Pkg::source("app", app_src))
+            .entrypoint("app")
+            .compile(),
+    );
     assert!(
         g.diags.is_empty(),
         "{}",

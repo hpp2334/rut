@@ -12,8 +12,8 @@ use rut_parser::{parse, Mode};
 use rut_ast::ast::{Ast, ItemKind};
 
 use super::build_seed_groups;
-use crate::session::{ModuleBody, Session};
-use crate::compile_program_resolved;
+use crate::session::{PkgBody, Session};
+use crate::compile::compile_program_resolved;
 use crate::Seeds;
 
 /// A resolved module: the claim ticket into the walk's tables — the
@@ -113,7 +113,7 @@ impl<'a> GraphCompiler<'a> {
             // scope ledger names them), assign a fresh scope, rebase
             // the packed ids, push. `inline` is a source-shape flag and
             // does not reach here: a compiled module already linked.
-            ModuleBody::Compiled(prog) => {
+            PkgBody::Compiled(prog) => {
                 self.body_kind.insert(spec.to_string(), 1);
                 // the unit's scope is assigned BEFORE its deps ensure,
                 // same law as the source arm: a dep's carried seed rows
@@ -128,11 +128,11 @@ impl<'a> GraphCompiler<'a> {
                 self.in_flight.remove(spec);
                 out
             }
-            ModuleBody::Host { .. } => {
+            PkgBody::Host { .. } => {
                 self.body_kind.insert(spec.to_string(), 2);
                 self.ensure_host(spec)
             }
-            ModuleBody::Source { text, is_decl } => {
+            PkgBody::Source { text, is_decl } => {
                 self.body_kind.insert(spec.to_string(), 0);
                 // the unit's scope is assigned BEFORE its deps ensure: a
                 // compiled dep's binary may carry this unit's packed rows
@@ -155,7 +155,7 @@ impl<'a> GraphCompiler<'a> {
     /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
-        let ModuleBody::Host { host_funcs, consts, native_types, native_fns, native_impls } =
+        let PkgBody::Host { host_funcs, consts, native_types, native_fns, native_impls } =
             &module.body
         else {
             return None;
@@ -360,7 +360,7 @@ impl<'a> GraphCompiler<'a> {
     fn ensure_source(
         &mut self,
         spec: &str,
-        module: &crate::session::Module,
+        module: &crate::session::Pkg,
         src: &str,
         is_decl: bool,
         scope: rut_core::ScopeId,
@@ -371,7 +371,7 @@ impl<'a> GraphCompiler<'a> {
         // statements join the unit's use list through the ordinary scan.
         let mut combined = src.to_string();
         if !is_decl {
-            for group in self.session.peer_groups_of(spec) {
+            for group in self.session.resolve(spec).map(|m| m.peer_groups.as_slice()).unwrap_or_default() {
                 combined.push('\n');
                 combined.push_str(&group);
             }
@@ -775,7 +775,7 @@ impl<'a> GraphCompiler<'a> {
 
 
 /// The exact package names a module uses, in source order, deduped.
-pub(super) fn uses_of(ast: &Ast) -> Vec<String> {
+pub(crate) fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         if let ItemKind::Use { pkg, .. } = ast.item(it) {

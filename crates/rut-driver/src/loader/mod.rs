@@ -16,22 +16,44 @@
 //! embedder's [`Source`] (the default: the real filesystem).
 
 mod error;
-mod loader;
 mod remote;
 
-pub use error::{LoadError, RemoteError};
-pub use loader::{Loaded, Loader};
+pub(crate) use error::LoadError;
+pub use error::RemoteError;
 pub use remote::{DepRemote, HttpRemote};
 
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::Path;
 
 use crate::bundle::{
     bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, GroupKind, Layout,
     Manifest, PkgType, Source,
 };
-use crate::session::{Module, ModuleBody, Session};
+use crate::run::{Loaded, RunError};
+use crate::session::{Pkg, PkgBody, PeerDecl, Session};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// The walk sequence: one id per walk — archive slots are walk-local,
+/// so the chain's per-archive namespacing groups by (walk, slot).
+static WALK_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn next_walk_id() -> u64 {
+    WALK_SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Stamp every pkg of the session with the walk's id (the archive
+/// group identity).
+fn stamp(session: &mut Session, walk: u64) {
+    for (_, m) in session.modules() {
+        let _ = m;
+    }
+    let specs: Vec<String> = session.modules().map(|(s, _)| s.clone()).collect();
+    for spec in specs {
+        if let Ok(m) = session.resolve_mut(&spec) {
+            m.walk = walk;
+        }
+    }
+}
 
 /// Read a directory's `rut.jsonc` — the real-filesystem lane of
 /// [`crate::bundle::read_manifest`] (the module itself never touches the
@@ -70,19 +92,16 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// One url dep row collected by the phase-1 walk: the declaring key,
-/// the url, and the pin (normalized lowercase by the grammar, `None`
-/// when unpinned).
+/// One url dep row collected by the phase-1 walk: the url (the pin is
+/// re-read from the manifest row at the mount door).
 struct UrlDep {
-    spec: String,
     url: String,
-    pin: Option<String>,
 }
 
 /// One fetched archive's decoded entries, kept by the CALLER (the
 /// session stays I/O-free — it records only where files live: slot +
 /// prefix). `origin` is the url, for error messages.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Archive {
     pub origin: String,
     pub entries: Vec<(String, Vec<u8>)>,
@@ -148,11 +167,8 @@ fn collect_url_deps_walk(
     for table in [&manifest.deps, &manifest.dev_deps] {
         for (spec, desc) in table {
             if let Some(url) = desc.get("url") {
-                out.push(UrlDep {
-                    spec: spec.clone(),
-                    url: url.clone(),
-                    pin: desc.get("sha256").cloned(),
-                });
+                out.push(UrlDep { url: url.clone() });
+                let _ = spec; // the mount door re-keys off the manifest row
             } else if let Some(rel) = desc.get("path") {
                 let dep_dir = dir.join(rel);
                 collect_url_deps_walk(&dep_dir, src, visiting, out)?;
@@ -184,66 +200,32 @@ pub(crate) async fn prefetch_urls(
     Ok(map)
 }
 
-/// The [`Loader`]'s prefetch: the remote is OPTIONAL, and the check is
-/// LAZY — walking to a url row with no remote set is the fetch point,
-/// and the panic fires there (url-free projects never reach it; the
-/// recipe names the fix). The `*_with` lanes take a REQUIRED remote —
-/// this lazy flavor is the Loader's alone.
-pub(crate) async fn prefetch_urls_lazy(
-    dir: &Path,
-    src: &dyn Source,
-    remote: Option<&dyn DepRemote>,
-) -> Result<BTreeMap<String, Vec<u8>>, LoadError> {
-    let rows = collect_url_deps(dir, src)?;
-    let Some(remote) = remote else {
-        if let Some(row) = rows.first() {
-            panic!(
-                "dep `{spec}` needs `{url}` but this Loader has no dep_remote — call \
-                 .dep_remote(HttpRemote::project_local({project})) (or your own DepRemote)",
-                spec = row.spec,
-                url = row.url,
-                project = dir.display(),
-            );
-        }
-        return Ok(BTreeMap::new());
-    };
-    let mut map = BTreeMap::new();
-    for row in &rows {
-        if map.contains_key(&row.url) {
-            continue;
-        }
-        let bytes = remote.fetch(&row.url).await?;
-        map.insert(row.url.clone(), bytes);
-    }
-    Ok(map)
-}
 
 /// The no-fetcher law: a url row in a loader that has no bytes for it.
 /// Names the FIX, matching the D-style diagnostics.
 fn no_fetcher(spec: &str, url: &str) -> LoadError {
     LoadError::law(format!(
         "dep `{spec}` is declared by url (`{url}`) — this loader has no `dep_fetch`: call \
-         `load_dir_session_with` / `pack_dir_with` (the CLI does), or vendor the dep"
+         `load_dir_with` / `pack_dir_with` (the CLI does), or vendor the dep"
     ))
 }
 
-/// The pkg → source map the peer gate walks: the directory walk's own
-/// map, plus every archive mount the session recorded (first mount
-/// wins — an archive group shadowed by an earlier dir mount keeps the
-/// dir as its source).
-fn sources_of(
-    session: &Session,
-    dirs: &BTreeMap<String, std::path::PathBuf>,
-) -> BTreeMap<String, PkgSource> {
-    let mut sources: BTreeMap<String, PkgSource> = dirs
-        .iter()
-        .map(|(k, v)| (k.clone(), PkgSource::Dir(v.clone())))
-        .collect();
-    for (pkg, (slot, prefix)) in session.archive_mounts() {
-        sources.entry(pkg.clone()).or_insert(PkgSource::Archive {
-            slot: *slot,
-            prefix: prefix.clone(),
-        });
+/// The pkg → source map the peer gate walks, read off the mounted
+/// pkgs' own bookkeeping: a walked dir pkg carries its directory, a
+/// url-mounted pkg its archive location (first mount wins — an
+/// archive group shadowed by an earlier dir mount keeps the dir as
+/// its source).
+fn sources_of(session: &Session) -> BTreeMap<String, PkgSource> {
+    let mut sources: BTreeMap<String, PkgSource> = BTreeMap::new();
+    for (spec, m) in session.modules() {
+        if let Some(dir) = &m.dir {
+            sources.insert(spec.clone(), PkgSource::Dir(dir.clone()));
+        } else if let Some((slot, prefix)) = &m.archive {
+            sources.insert(
+                spec.clone(),
+                PkgSource::Archive { slot: *slot, prefix: prefix.clone() },
+            );
+        }
     }
     sources
 }
@@ -256,44 +238,60 @@ pub fn load_module_source(path: &Path) -> Result<String, LoadError> {
     std::fs::read_to_string(path).map_err(|e| LoadError::io(path.display(), e))
 }
 
-/// Mount a directory's consumer manifest: its own module (if named) and
-/// every `[deps]` module, reading each dep's `rut.jsonc` and entry source,
-/// then the mount passes over the finished closure. Returns the
-/// session and the root spec (the directory's own `name`).
-///
-/// The mount order is the law:
+/// The temporary dir collector — the walk yields its pkgs and its
+/// root name ([`Loaded`]): offer them to a run with
+/// `RutRun::new().pkg(..)`. The mount order is the law:
 /// 1. the `[deps]` walk — unchanged;
 /// 2. the dev pass — the ROOT's `[dev-deps]` mount exactly like `[deps]`
 ///    (a dep's dev table is never walked, so a consumer's world never
 ///    contains it);
 /// 3. the peer gate — ONE post-closure pass (a peer may mount after its
 ///    declarer alphabetically, so it cannot run during the walk);
-/// 4. compile — unchanged; `compile_graph` sees ordinary sources.
-pub fn load_dir_session(dir: &Path, src: &dyn Source) -> Result<(Session, String), LoadError> {
+/// 4. compile — unchanged; the graph sees ordinary sources.
+pub fn load_dir(dir: &Path, src: &dyn Source) -> Result<Loaded, RunError> {
     // the back-compat lane: no fetcher, empty map — a url dep here is
     // the loud no-fetcher error, never a network call
-    load_dir_session_fetched(dir, src, &BTreeMap::new()).map(|loaded| (loaded.session, loaded.root))
+    walk_dir_fetched(dir, src, &BTreeMap::new()).map(|w| w.into_loaded()).map_err(RunError::from)
 }
 
-/// The result of the fetched dir core: the session, its root spec, and
+/// A walk's internal yield: the mounted table, its root spec, and
 /// the archives the url deps opened (slot-ordered) — pass 3's archive
 /// group reads and the packer's rode-along copies index into the list.
-#[derive(Debug)]
-pub struct LoadedDir {
+/// The collectors drain the pkgs out ([`Loaded`]); the packer keeps
+/// the session form.
+pub(crate) struct WalkOutput {
     pub session: Session,
     pub root: String,
     pub archives: Vec<Archive>,
 }
 
-/// [`load_dir_session`] over PRE-FETCHED url bytes — the pub sync core
+impl WalkOutput {
+    /// The collector's shape: the pkgs travel, the table dies.
+    pub(crate) fn into_loaded(self) -> Loaded {
+        let mut session = self.session;
+        Loaded { pkgs: session.drain_pkgs(), root: self.root }
+    }
+}
+
+/// [`load_dir`] over PRE-FETCHED url bytes — the pub sync core
 /// the `*_with` lanes call after `prefetch_urls`, and the fixture lane
 /// tests use directly. Every url row's `sha256` pin is verified HERE,
 /// at the mount door, on every load.
-pub fn load_dir_session_fetched(
+pub fn load_dir_fetched(
     dir: &Path,
     src: &dyn Source,
     map: &BTreeMap<String, Vec<u8>>,
-) -> Result<LoadedDir, LoadError> {
+) -> Result<Loaded, RunError> {
+    walk_dir_fetched(dir, src, map).map(|w| w.into_loaded()).map_err(RunError::from)
+}
+
+/// The internal sync core — [`load_dir_fetched`] keeping the session
+/// form (the packer compiles over it).
+pub(crate) fn walk_dir_fetched(
+    dir: &Path,
+    src: &dyn Source,
+    map: &BTreeMap<String, Vec<u8>>,
+) -> Result<WalkOutput, LoadError> {
     let manifest = read_manifest(dir, src)?;
     let mut session = Session::new();
 
@@ -301,18 +299,13 @@ pub fn load_dir_session_fetched(
         .name
         .clone()
         .ok_or_else(|| LoadError::law(format!("{} has no `name`", dir.join("rut.jsonc").display())))?;
-    let root_module = load_entry_module(dir, &manifest, src)?;
+    let root_module = fold_peers(load_entry_module(dir, &manifest, src)?, &manifest);
     session.register_module(&root, root_module)?;
-    // the root's dir rides the session's map too, so a later
-    // `assemble_peers` over this session can answer for the root's own
-    // peer declarations (the gate below already ran with the complete
-    // map; this keeps the session self-consistent)
-    session.record_peer_dir(&root, dir);
-    record_peers(&mut session, &root, &manifest);
-    // the loader's own spec → dir map, for the peer gate's group reads —
-    // the Session itself stays I/O-free
-    let mut mounted = std::collections::BTreeMap::new();
-    mounted.insert(root.clone(), dir.to_path_buf());
+    // the root's dir rides its pkg too, so a later gate pass over this
+    // table can answer for the root's own peer declarations (the gate
+    // below already ran with the complete map; this keeps the pkg
+    // self-consistent)
+    session.resolve_mut(&root).unwrap().dir = Some(dir.to_path_buf());
     let mut visiting = vec![dir.to_path_buf()];
     let mut archives: Vec<Archive> = Vec::new();
     {
@@ -321,12 +314,12 @@ pub fn load_dir_session_fetched(
             archives: &mut archives,
             visiting_urls: Default::default(),
         };
-        resolve_table(&mut session, dir, src, &manifest.deps, &mut visiting, &mut mounted, &mut fetched)?;
-        resolve_table(&mut session, dir, src, &manifest.dev_deps, &mut visiting, &mut mounted, &mut fetched)?;
+        resolve_table(&mut session, dir, src, &manifest.deps, &mut visiting, &mut fetched)?;
+        resolve_table(&mut session, dir, src, &manifest.dev_deps, &mut visiting, &mut fetched)?;
     }
-    let sources = sources_of(&session, &mounted);
-    run_peer_gate(&mut session, &root, &sources, &archives)?;
-    Ok(LoadedDir { session, root, archives })
+    run_peer_gate(&mut session, &root, &archives)?;
+    stamp(&mut session, next_walk_id());
+    Ok(WalkOutput { session, root, archives })
 }
 
 /// Namespace one archive's scope ledger into `session`'s numbering and
@@ -360,7 +353,7 @@ fn namescope_ledger(
     })
 }
 
-/// Build a package's entry [`Module`] from bundle entries under
+/// Build a package's entry [`Pkg`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
 /// in-archive counterpart of `load_entry_module`: the declared kind
 /// dispatches (a `type = "host"` pkg is a decl surface; a `type =
@@ -370,7 +363,7 @@ fn bundle_entry_module(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
-) -> Result<Module, LoadError> {
+) -> Result<Pkg, LoadError> {
     let read = |rel: &str| -> Result<String, LoadError> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}")).map_err(LoadError::law)?;
@@ -398,8 +391,8 @@ fn bundle_entry_module(
                     // the surface-only dev state: a decl unit — no host
                     // rows, nothing exported (use sites resolve-miss,
                     // correctly)
-                    return Ok(Module {
-                        body: ModuleBody::Source { text: src, is_decl: true },
+                    return Ok(Pkg {
+                        body: PkgBody::Source { text: src, is_decl: true },
                         entry: manifest.entry.clone(),
                         ..Default::default()
                     });
@@ -417,8 +410,8 @@ fn bundle_entry_module(
         src.push('\n');
         src.push_str(&read(lib)?);
     }
-    Ok(Module {
-        body: ModuleBody::Source { text: src, is_decl: false },
+    Ok(Pkg {
+        body: PkgBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
         ..Default::default()
     })
@@ -463,37 +456,38 @@ fn riding_gen_source(
     Ok(Some(crate::session::GenSource { text, peers }))
 }
 
-/// Mount a `.rutbundle` — a **v7 compiled** bundle (the root's `.rutc`
-/// binary, its pack-time scope ledger, and each dep group as a compiled
-/// `.rutc` or a source file set) or a **v8 decl** bundle (a host root:
-/// the declaration surface mounts as the pkg's host rows — the same
-/// lane a host group rides). The gate order is the law: container CRC
-/// ([`Bundle::parse`]), manifest + exact `format_version` 7|8
-/// ([`Layout::parse`]), then each kind's payload checks (compiled:
-/// per-group decode and verification; decl: the single-package law) —
-/// then, and only then, the mount. Older layouts are refused with the
-/// one-line version error: refuse, never guess. Source sharing stays
-/// what it always was outside bundles: a directory.
-pub fn load_bundle_session(path: &Path) -> Result<(Session, String), LoadError> {
-    let bytes =
-        std::fs::read(path).map_err(|e| LoadError::io(path.display(), e))?;
-    load_bundle_bytes(&bytes, path)
+/// Load a packed `.rutbundle` from disk — a **v9 compiled** bundle (the
+/// root's `.rutc` binary, its pack-time scope ledger, and each dep group
+/// as a compiled `.rutc` or a source file set) or a **v10 decl** bundle
+/// (a host root: the declaration surface mounts as the pkg's host rows —
+/// the same lane a host group rides). The gate order is the law:
+/// container CRC ([`Bundle::parse`]), manifest + exact
+/// `format_version` (the reader's pairing), then each kind's payload
+/// checks (compiled: per-group decode and verification; decl: the
+/// single-package law) — then, and only then, the mount. Older layouts
+/// are refused with the one-line version error: refuse, never guess.
+/// Source sharing stays what it always was outside bundles: a directory.
+pub fn load_bundle_session(path: &Path) -> Result<Loaded, RunError> {
+    let bytes = std::fs::read(path).map_err(|e| LoadError::io(path.display(), e))?;
+    bundle_walk_bytes(&bytes).map(crate::loader::WalkOutput::into_loaded).map_err(RunError::from)
 }
 
-/// [`load_bundle_session`] over in-memory bytes (tests, embedders,
-/// wasm hosts).
-pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String), LoadError> {
+/// The bundle walk's sync core — the pure container parse
+/// ([`Pkg::from_bundle`] is its public face): gates, groups, ledger,
+/// the ONE peer gate over the archive's own pkgs, then the yield.
+pub(crate) fn bundle_walk_bytes(bytes: &[u8]) -> Result<WalkOutput, LoadError> {
+    let origin = "bundle";
     // gate 1: the container — every entry's CRC-32 verified
     let bundle = match Bundle::parse(bytes) {
         Ok(b) => b,
-        Err(e) => return Err(LoadError::Bundle { origin: origin.display().to_string(), message: e.to_string() }),
+        Err(e) => return Err(LoadError::Bundle { origin: origin.to_string(), message: e.to_string() }),
     };
     // gate 2 + 3: the manifest/version, then every group's decode +
     // verification — the layout parse refuses anything it cannot
-    // decode, so a bad binary never reaches the session
+    // decode, so a bad binary never reaches the table
     let layout = match Layout::parse(&bundle) {
         Ok(l) => l,
-        Err(e) => return Err(LoadError::Bundle { origin: origin.display().to_string(), message: e }),
+        Err(e) => return Err(LoadError::Bundle { origin: origin.to_string(), message: e }),
     };
     let (manifest, root, scopes, groups) = match layout {
         Layout::Compiled { manifest, root, scopes, groups } => (manifest, root, scopes, groups),
@@ -504,21 +498,23 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             // groups, no ledger, no closure — a LEAF, done.
             let entries = bundle.entries();
             let root_spec = manifest.name.clone().ok_or_else(|| {
-                LoadError::law(format!("{}: rut.jsonc has no `name`", origin.display()))
+                LoadError::law(format!("{origin}: rut.jsonc has no `name`"))
             })?;
             let mut session = Session::new();
-            let module = bundle_entry_module(entries, "", &manifest)
-                .map_err(|e| LoadError::law(format!("{}: {e}", origin.display())))?;
-            session.register_module(&root_spec, module)?;
-            record_peers(&mut session, &root_spec, &manifest);
-            return Ok((session, root_spec));
+            let pkg = fold_peers(
+                bundle_entry_module(entries, "", &manifest)
+                    .map_err(|e| LoadError::law(format!("{origin}: {e}")))?,
+                &manifest,
+            );
+            session.register_module(&root_spec, pkg)?;
+            return Ok(WalkOutput { session, root: root_spec, archives: Vec::new() });
         }
     };
     let entries = bundle.entries();
     let root_spec = manifest
         .name
         .clone()
-        .ok_or_else(|| LoadError::law(format!("{}: rut.jsonc has no `name`", origin.display())))?;
+        .ok_or_else(|| LoadError::law(format!("{origin}: rut.jsonc has no `name`")))?;
     let mut session = Session::new();
     // the scope ledger first, namespaced: the rows shift into a fresh
     // range of this session and the root's program rebases with the
@@ -535,35 +531,35 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     // A generic-owning root rides its source beside the binary — the
     // on-demand recompile's input (generic-source riding).
     let gen_source = riding_gen_source(entries, "", &manifest)
-        .map_err(|e| LoadError::law(format!("{}: {e}", origin.display())))?;
+        .map_err(|e| LoadError::law(format!("{origin}: {e}")))?;
     session.register_module(
         &root_spec,
-        Module {
-            body: ModuleBody::Compiled(root),
+        Pkg {
+            body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
             bundle_scopes: scopes.clone(),
+            peers: manifest_peers(&manifest),
             ..Default::default()
         },
     )?;
-    record_peers(&mut session, &root_spec, &manifest);
     // the archive's group prefixes (root "" first) — the peer gate's
     // group reads key on these
     let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
-            .map_err(|e| LoadError::Bundle { origin: origin.display().to_string(), message: e })?;
+            .map_err(|e| LoadError::Bundle { origin: origin.to_string(), message: e })?;
         let dm = parse_manifest(&dep_toml).map_err(|e| {
-            LoadError::law(format!("{}: {prefix}/rut.jsonc: {e}", origin.display()))
+            LoadError::law(format!("{origin}: {prefix}/rut.jsonc: {e}"))
         })?;
         let name = dm.name.clone().ok_or_else(|| {
-            LoadError::law(format!("{}: {prefix}/rut.jsonc has no `name`", origin.display()))
+            LoadError::law(format!("{origin}: {prefix}/rut.jsonc has no `name`"))
         })?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (the root, an earlier group)
         }
-        let module = match kind {
+        let pkg = match kind {
             GroupKind::Compiled(program) => {
                 // rebase first, THEN check own-vs-ledger — both sides
                 // of the comparison shift by the same map, so the law
@@ -576,8 +572,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                 // guess — a mismatch is a corrupt or doctored bundle)
                 let Some(own) = rut_core::link::own_scope(&program) else {
                     return Err(LoadError::law(format!(
-                        "{}: {prefix}/{}: the program carries no scope blocks",
-                        origin.display(),
+                        "{origin}: {prefix}/{}: the program carries no scope blocks",
                         name
                     )));
                 };
@@ -585,63 +580,58 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
                     Some(&(row, _)) if row == own => {}
                     Some(&(row, _)) => {
                         return Err(LoadError::law(format!(
-                            "{}: `{name}`'s ledger row says scope {row}, but its binary carries {own}",
-                            origin.display()
+                            "{origin}: `{name}`'s ledger row says scope {row}, but its binary carries {own}"
                         )));
                     }
                     None => {
                         return Err(LoadError::law(format!(
-                            "{}: the scope ledger does not name `{name}` — the bundle is incomplete",
-                            origin.display()
+                            "{origin}: the scope ledger does not name `{name}` — the bundle is incomplete"
                         )));
                     }
                 }
                 let gen_source = riding_gen_source(entries, &format!("{prefix}/"), &dm)
-                    .map_err(|e| LoadError::law(format!("{}: {e}", origin.display())))?;
-                Module {
-                    body: ModuleBody::Compiled(program),
+                    .map_err(|e| LoadError::law(format!("{origin}: {e}")))?;
+                Pkg {
+                    body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
+                    peers: manifest_peers(&dm),
                     ..Default::default()
                 }
             }
-            GroupKind::Source => bundle_entry_module(entries, &format!("{prefix}/"), &dm)
-                .map_err(|e| LoadError::law(format!("{}: {e}", origin.display())))?,
+            GroupKind::Source => fold_peers(
+                bundle_entry_module(entries, &format!("{prefix}/"), &dm)
+                    .map_err(|e| LoadError::law(format!("{origin}: {e}")))?,
+                &dm,
+            ),
         };
-        session.register_module(&name, module)?;
-        record_peers(&mut session, &name, &dm);
+        session.register_module(&name, pkg)?;
         prefixes.insert(name.clone(), format!("{prefix}/"));
     }
     // every declared dep must be satisfied by a group
     for spec in manifest.deps.keys() {
         if session.resolve(spec).is_err() {
             return Err(LoadError::law(format!(
-                "{}: the bundle is missing its `{spec}` dependency group",
-                origin.display()
+                "{origin}: the bundle is missing its `{spec}` dependency group"
             )));
         }
     }
     // pass 3 — the ONE peer gate: the archive's own pkgs are its
     // sources (slot 0), so a source declarer's group file reads from
     // the archive exactly as a dir declarer's reads from disk
-    let mut sources: BTreeMap<String, PkgSource> = prefixes
-        .iter()
-        .map(|(pkg, prefix)| {
-            (
-                pkg.clone(),
-                PkgSource::Archive {
-                    slot: 0,
-                    prefix: prefix.clone(),
-                },
-            )
-        })
-        .collect();
+    for (spec, prefix) in &prefixes {
+        if let Ok(m) = session.resolve_mut(spec) {
+            m.archive = Some((0, prefix.clone()));
+        }
+    }
     let archives = [Archive {
-        origin: origin.display().to_string(),
+        origin: origin.to_string(),
         entries: entries.to_vec(),
     }];
-    run_peer_gate(&mut session, &root_spec, &sources, &archives)?;
-    Ok((session, root_spec))
+    run_peer_gate(&mut session, &root_spec, &archives)?;
+    let mut out = WalkOutput { session, root: root_spec, archives: archives.to_vec() };
+    stamp(&mut out.session, next_walk_id());
+    Ok(out)
 }
 
 /// Pass 3 — the peer gate, ONE post-closure pass over the recorded
@@ -675,24 +665,28 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
 pub(crate) fn run_peer_gate(
     session: &mut Session,
     root: &str,
-    sources: &BTreeMap<String, PkgSource>,
     archives: &[Archive],
 ) -> Result<(), LoadError> {
-    // collected first, applied after — the registry borrows the session
+    // collected first, applied after — the table borrows the session
     let mut appends: Vec<(String, String)> = Vec::new();
     let mut pre_compiled: Vec<String> = Vec::new();
-    for (pkg, peers) in session.peer_decls() {
-        if session.groups_mounted(pkg) {
-            continue; // an earlier gate pass over this session mounted them
-        }
+    // the pass reads the mounted pkgs' own declarations and locations —
+    // the walk folded them into the pkgs at mount
+    let declared: Vec<(String, BTreeMap<String, PeerDecl>)> = session
+        .modules()
+        .filter(|(_, m)| !m.peers.is_empty() && !m.groups_mounted)
+        .map(|(s, m)| (s.clone(), m.peers.clone()))
+        .collect();
+    let all_sources = sources_of(session);
+    for (pkg, peers) in declared {
         // a compiled declarer's rows ride its binary — the presence law
         // still runs below (D1), but there is nothing to read, and the
         // declarer is done after this pass
-        let compiled = matches!(session.resolve(pkg).map(|m| &m.body), Ok(ModuleBody::Compiled(_)));
-        let source = sources.get(pkg);
+        let compiled = matches!(session.resolve(&pkg).map(|m| &m.body), Ok(PkgBody::Compiled(_)));
+        let source = all_sources.get(&pkg).cloned();
         for (peer, decl) in peers {
             if pkg.as_str() == root {
-                if let Some(PkgSource::Dir(pkg_dir)) = source {
+                if let Some(PkgSource::Dir(pkg_dir)) = &source {
                     // self-build: the path must resolve and name the
                     // peer — even when dev-deps already supplied
                     // presence (D3 is directory-time law)
@@ -715,7 +709,7 @@ pub(crate) fn run_peer_gate(
                     }
                 }
             }
-            if session.resolve(peer).is_err() {
+            if session.resolve(&peer).is_err() {
                 if decl.optional {
                     continue; // inert — the group simply never mounts
                 }
@@ -730,7 +724,7 @@ pub(crate) fn run_peer_gate(
             let Some(lib) = &decl.lib else {
                 continue; // presence declared, no integration file to mount
             };
-            let Some(source) = source else {
+            let Some(source) = &source else {
                 return Err(LoadError::law(format!(
                     "pkg `{pkg}` declares `[peer-deps]` but is not mounted"
                 )));
@@ -763,11 +757,12 @@ pub(crate) fn run_peer_gate(
         }
     }
     for (pkg, text) in appends {
-        session.record_peer_group(&pkg, &text);
-        session.mark_groups_mounted(&pkg);
+        let m = session.resolve_mut(&pkg).unwrap();
+        m.peer_groups.push(text);
+        m.groups_mounted = true;
     }
     for pkg in pre_compiled {
-        session.mark_groups_mounted(&pkg);
+        session.resolve_mut(&pkg).unwrap().groups_mounted = true;
     }
     Ok(())
 }
@@ -775,19 +770,19 @@ pub(crate) fn run_peer_gate(
 /// Load a module directory (`rut.jsonc`) or a `.rutbundle` file — the two
 /// packed forms of the same contract. A loose `.rut` file is NOT this: it
 /// is a single-file module with no manifest.
-pub fn load_path_session(path: &Path) -> Result<(Session, String), LoadError> {
+pub fn load_path_session(path: &Path) -> Result<Loaded, RunError> {
     if path.is_dir() {
-        return load_dir_session(path, &FsSource);
+        return load_dir(path, &FsSource);
     }
     if path.extension().map_or(false, |e| e == "rutbundle") {
         return load_bundle_session(path);
     }
     Err(LoadError::Shape {
         path: path.display().to_string(),
-    })
+    }.into())
 }
 
-/// Build a directory's entry [`Module`] from its manifest:
+/// Build a directory's entry [`Pkg`] from its manifest:
 ///
 /// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
 ///   parses in declaration mode and lowers into the module's host fns.
@@ -796,7 +791,7 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), LoadError> {
 ///   compiles; the surface derives from its exports. A declared
 ///   surface with no body is the surface-only dev state (a decl unit);
 ///   `host fn` text is refused in either file — the lib-surface law.
-fn load_entry_module(dir: &Path, manifest: &Manifest, src: &dyn Source) -> Result<Module, LoadError> {
+fn load_entry_module(dir: &Path, manifest: &Manifest, src: &dyn Source) -> Result<Pkg, LoadError> {
     match manifest.pkg_type {
         PkgType::Host => {
             let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
@@ -820,8 +815,8 @@ fn load_entry_module(dir: &Path, manifest: &Manifest, src: &dyn Source) -> Resul
                     // the surface-only dev state: a decl unit — no host
                     // rows, nothing exported (use sites resolve-miss,
                     // correctly)
-                    return Ok(Module {
-                        body: ModuleBody::Source { text: src_text, is_decl: true },
+                    return Ok(Pkg {
+                        body: PkgBody::Source { text: src_text, is_decl: true },
                         entry: manifest.entry.clone(),
                         ..Default::default()
                     });
@@ -842,8 +837,8 @@ fn load_entry_module(dir: &Path, manifest: &Manifest, src: &dyn Source) -> Resul
         src_text.push('\n');
         src_text.push_str(&text);
     }
-    Ok(Module {
-        body: ModuleBody::Source { text: src_text, is_decl: false },
+    Ok(Pkg {
+        body: PkgBody::Source { text: src_text, is_decl: false },
         entry: manifest.entry.clone(),
         ..Default::default()
     })
@@ -854,7 +849,7 @@ fn load_entry_module(dir: &Path, manifest: &Manifest, src: &dyn Source) -> Resul
 /// surface that PARSES and declares host fns is the loud error.
 fn refuse_host_rows(src: &str, origin: &str) -> Result<(), LoadError> {
     if let Ok(m) = crate::decl::lower_decl_module(src, origin) {
-        if let ModuleBody::Host { host_funcs, .. } = m.body {
+        if let PkgBody::Host { host_funcs, .. } = m.body {
             if let Some((name, ..)) = host_funcs.first() {
                 return Err(LoadError::law(format!(
                     "{origin}: `host fn {name}` — a lib pkg cannot declare \
@@ -878,26 +873,25 @@ fn load_entry(dir: &Path, src: &dyn Source, entry: &Entry) -> Result<String, Loa
     read_source_text(src, &dir.join(rel))
 }
 
-/// Record a manifest's `[peer-deps]` into the session's registry (RFC
-/// 0045): the loader reads every mounted pkg's manifest anyway, so the
-/// registry costs no extra I/O.
-fn record_peers(session: &mut Session, pkg: &str, manifest: &Manifest) {
-    for (peer, desc) in &manifest.peer_deps {
-        session.record_peer(pkg, peer, crate::session::PeerDecl::of(desc));
-    }
+/// A manifest's `[peer-deps]` as the pkg's own declaration map — the
+/// loader reads every mounted pkg's manifest anyway, so folding the
+/// table into the pkg costs no extra I/O. The peer gate reads it
+/// post-closure; the reference-site D2 diagnostic resolves against it.
+pub(crate) fn manifest_peers(manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
+    manifest
+        .peer_deps
+        .iter()
+        .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
+        .collect()
 }
 
-/// Mount `dir`'s `[dev-deps]` table into an EXISTING session — the
-/// packer's compile-once-per-owner pass (a dep's unit packs the same
-/// bytes wherever it travels, its dev-mounted peers included).
-/// First-mount-wins, exactly like the `[deps]` walk.
-pub fn mount_dev_table(
-    session: &mut Session,
-    dir: &Path,
-    manifest: &Manifest,
-) -> Result<(), LoadError> {
-    mount_dev_table_fetched(session, dir, manifest, &BTreeMap::new())
+/// [`manifest_peers`] folded into a walked pkg — the constructor + fold
+/// pair the entry lanes share.
+pub(crate) fn fold_peers(mut pkg: Pkg, manifest: &Manifest) -> Pkg {
+    pkg.peers.extend(manifest_peers(manifest));
+    pkg
 }
+
 
 /// [`mount_dev_table`] over pre-fetched url bytes — the pack lane's
 /// flavor (a dir group's dev table may pin url deps of its own).
@@ -908,14 +902,13 @@ pub(crate) fn mount_dev_table_fetched(
     map: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(), LoadError> {
     let mut visiting = Vec::new();
-    let mut mounted = BTreeMap::new();
     let mut archives: Vec<Archive> = Vec::new();
     let mut fetched = Fetched {
         map,
         archives: &mut archives,
         visiting_urls: Default::default(),
     };
-    resolve_table(session, dir, &FsSource, &manifest.dev_deps, &mut visiting, &mut mounted, &mut fetched)
+    resolve_table(session, dir, &FsSource, &manifest.dev_deps, &mut visiting, &mut fetched)
 }
 
 /// Resolve a manifest's `[deps]` recursively — pass 1 of
@@ -926,10 +919,9 @@ fn resolve_deps(
     src: &dyn Source,
     manifest: &Manifest,
     visiting: &mut Vec<std::path::PathBuf>,
-    mounted: &mut BTreeMap<String, std::path::PathBuf>,
     fetched: &mut Fetched<'_>,
 ) -> Result<(), LoadError> {
-    resolve_table(session, dir, src, &manifest.deps, visiting, mounted, fetched)
+    resolve_table(session, dir, src, &manifest.deps, visiting, fetched)
 }
 
 /// Walk one descriptor table — the `[deps]` walk (pass 1; pass 2 feeds
@@ -949,7 +941,6 @@ fn resolve_table(
     src: &dyn Source,
     table: &BTreeMap<String, BTreeMap<String, String>>,
     visiting: &mut Vec<std::path::PathBuf>,
-    mounted: &mut BTreeMap<String, std::path::PathBuf>,
     fetched: &mut Fetched<'_>,
 ) -> Result<(), LoadError> {
     for (spec, desc) in table {
@@ -995,15 +986,14 @@ fn resolve_table(
                 actual: dm.name.as_deref().unwrap_or("<unnamed>").to_string(),
             });
         }
-        let dep_module = load_entry_module(&dep_dir, &dm, src)?;
-        session.register_module(spec, dep_module)?;
-        session.record_peer_dir(spec, &dep_dir);
-        record_peers(session, spec, &dm);
-        mounted.insert(spec.clone(), dep_dir.clone());
+        let dep_pkg = fold_peers(load_entry_module(&dep_dir, &dm, src)?, &dm);
+        let dep_dir2 = dep_dir.clone();
+        session.register_module(spec, dep_pkg)?;
+        session.resolve_mut(spec).unwrap().dir = Some(dep_dir2);
         visiting.push(dep_dir.clone());
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
-        resolve_deps(session, &dep_dir, src, &dm, visiting, mounted, fetched)?;
+        resolve_deps(session, &dep_dir, src, &dm, visiting, fetched)?;
         visiting.pop();
     }
     Ok(())
@@ -1014,7 +1004,7 @@ fn resolve_table(
 /// the bytes meet HERE, on EVERY load (fresh fetch, cache hit,
 /// vendored map, test fixture) — a check the call site performed would
 /// be a check the call site could skip. Gate order mirrors
-/// [`load_bundle_bytes`]:
+/// `bundle_walk_bytes`:
 ///
 /// 0. the pin: `sha256_hex(bytes)` must equal the row's pin (lowercase
 ///    by grammar law) — a mismatch names the dep, the url, and BOTH
@@ -1031,8 +1021,8 @@ fn resolve_table(
 ///    (each binary's ids resolve through its own archive's rows);
 /// 5. the root mounts (first-mount-wins) — compiled for a v7 bundle,
 ///    the decl-surface host rows for a v8 bundle
-///    (`bundle_entry_module`, the group lane); `record_peers`;
-/// 6. the group loop = `load_bundle_bytes`'s (first-mount-wins,
+///    (`bundle_entry_module`, the group lane); the manifest's peers fold in;
+/// 6. the group loop = `bundle_walk_bytes`'s (first-mount-wins,
 ///    own-scope vs ledger consistency for compiled groups,
 ///    `bundle_entry_module` for source groups) — no peer gate inline:
 ///    archives record for the ONE pass-3 gate;
@@ -1090,14 +1080,13 @@ fn mount_url_dep(
                     "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
                 )));
             }
-            let module = bundle_entry_module(&entries, "", &manifest)
-                .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-            session.register_module(&root_spec, module)?;
-            record_peers(session, &root_spec, &manifest);
-            let slot = archives.len();
-            let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
-            prefixes.insert(root_spec.clone(), String::new());
-            session.record_archive_mounts(&prefixes, slot);
+            let pkg = fold_peers(
+                bundle_entry_module(&entries, "", &manifest)
+                    .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
+                &manifest,
+            );
+            session.register_module(&root_spec, pkg)?;
+            session.resolve_mut(&root_spec).unwrap().archive = Some((archives.len(), String::new()));
             archives.push(Archive { origin: url.to_string(), entries });
             return Ok(());
         }
@@ -1133,15 +1122,15 @@ fn mount_url_dep(
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     session.register_module(
         &root_spec,
-        Module {
-            body: ModuleBody::Compiled(root),
+        Pkg {
+            body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
             bundle_scopes: scopes.clone(),
+            peers: manifest_peers(&manifest),
             ..Default::default()
         },
     )?;
-    record_peers(session, &root_spec, &manifest);
     // gate 6 — the group loop, no peer gate inline
     let slot = archives.len();
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
@@ -1189,23 +1178,30 @@ fn mount_url_dep(
                 }
                 let gen_source = riding_gen_source(&entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-                Module {
-                    body: ModuleBody::Compiled(program),
+                Pkg {
+                    body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
+                    peers: manifest_peers(&dm),
                     ..Default::default()
                 }
             }
-            GroupKind::Source => bundle_entry_module(&entries, &format!("{prefix}/"), &dm)
-                .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
+            GroupKind::Source => fold_peers(
+                bundle_entry_module(&entries, &format!("{prefix}/"), &dm)
+                    .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
+                &dm,
+            ),
         };
         session.register_module(&name, module)?;
-        record_peers(session, &name, &dm);
         prefixes.insert(name.clone(), format!("{prefix}/"));
     }
     // where this archive's mounted pkgs' files live (pass 3's reads,
-    // the packer's rode-along copies — the session holds locations only)
-    session.record_archive_mounts(&prefixes, slot);
+    // the packer's rode-along copies — the pkg holds its location)
+    for (spec, prefix) in &prefixes {
+        if let Ok(m) = session.resolve_mut(spec) {
+            m.archive.get_or_insert((slot, prefix.clone()));
+        }
+    }
     archives.push(Archive {
         origin: url.to_string(),
         entries,
@@ -1224,29 +1220,39 @@ fn mount_url_dep(
     Ok(())
 }
 
-/// Mount one package directory — and, recursively, its `[deps]` — into
-/// an EXISTING session: the programmatic counterpart of a manifest's
-/// dep walk (native hosts, tests, plugin loaders). Returns the
-/// package's own name. A name already mounted wins.
+/// Offer one package directory — and, recursively, its `[deps]` — as
+/// walked pkgs: the programmatic counterpart of a manifest's dep walk
+/// (native hosts, tests, plugin loaders). The root is
+/// [`Loaded::root`]; offer every pkg to a run with `RutRun::new().pkg(..)`.
 ///
 /// This is an OFFER to someone else's program, not "building the pkg
 /// itself": no dev-deps are mounted (pass 2 is root-only) and the peer
 /// gate does not run here — the embedder's world grows incrementally,
-/// so presence is a program-closure property the program's own
-/// `load_dir_session`/compile owns. The pkg's peer
-/// declarations are still recorded for the session's registry.
-pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, LoadError> {
-    mount_dir_fetched(session, dir, &BTreeMap::new())
+/// so presence is a program-closure property the run's own
+/// `.compile()` owns (it runs the ONE append pass at close). The
+/// pkgs' peer declarations ride along.
+pub fn dir_pkgs(dir: &Path) -> Result<Loaded, RunError> {
+    dir_pkgs_fetched(dir, &BTreeMap::new())
 }
 
-/// [`mount_dir`] over pre-fetched url bytes — the `mount_dir_with`
-/// lane's sync core. The gate does not run here (the embedder's world
-/// grows incrementally); archive mounts are recorded on the session, so
-/// a later `assemble_peers` sees them — note it reads group files from
-/// the archives the CALLER kept (an embedder that mounts url deps
-/// mount-by-mount owns its archive list; the load/pack lanes run the
-/// gate themselves).
-pub(crate) fn mount_dir_fetched(
+/// [`dir_pkgs`] over pre-fetched url bytes — the `dir_pkgs_with`
+/// lane's sync core. The gate does not run here (the offer law);
+/// archive locations ride the pkgs, so a later gate pass sees them —
+/// note it reads group files from the archives the CALLER kept (an
+/// embedder that mounts url deps offer-by-offer owns its archive
+/// list; the load/pack lanes run the gate themselves).
+pub(crate) fn dir_pkgs_fetched(
+    dir: &Path,
+    map: &BTreeMap<String, Vec<u8>>,
+) -> Result<Loaded, RunError> {
+    let mut session = Session::new();
+    let name = offer_dir(&mut session, dir, map)?;
+    Ok(WalkOutput { session, root: name, archives: Vec::new() }.into_loaded())
+}
+
+/// The offer lane's core (crate-internal): walk `dir` + deps into an
+/// EXISTING table, first-mount-wins, and answer the root's name.
+pub(crate) fn offer_dir(
     session: &mut Session,
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
@@ -1259,170 +1265,49 @@ pub(crate) fn mount_dir_fetched(
     if session.resolve(&name).is_ok() {
         return Ok(name); // the embedder's mount outranks the directory
     }
-    let module = load_entry_module(dir, &manifest, &FsSource)?;
-    session.register_module(&name, module)?;
-    session.record_peer_dir(&name, dir);
-    record_peers(session, &name, &manifest);
+    let pkg = fold_peers(load_entry_module(dir, &manifest, &FsSource)?, &manifest);
+    session.register_module(&name, pkg)?;
+    session.resolve_mut(&name).unwrap().dir = Some(dir.to_path_buf());
     let mut visiting = vec![dir.to_path_buf()];
-    let mut mounted = BTreeMap::new(); // the gate's map — not this path's pass
     let mut archives: Vec<Archive> = Vec::new();
     let mut fetched = Fetched {
         map,
         archives: &mut archives,
         visiting_urls: Default::default(),
     };
-    resolve_deps(session, dir, &FsSource, &manifest, &mut visiting, &mut mounted, &mut fetched)?;
+    resolve_deps(session, dir, &FsSource, &manifest, &mut visiting, &mut fetched)?;
+    stamp(session, next_walk_id());
     Ok(name)
 }
 
-/// Mount a `.rutbundle`'s contents into an EXISTING session — the
-/// in-memory counterpart of [`mount_dir`] (the offer law): the
-/// embedder's world grows incrementally, so no peer gate runs here and
-/// no closure check either (presence is the program's own compile's
-/// business; `assemble_peers` answers for the recorded declarations).
-/// Returns the bundle root's package name; a name already mounted
-/// wins. Both root kinds mount: a v7 compiled root (plus its groups,
-/// first-mount-wins, the scope ledger namespaced into this session) or
-/// a v8 decl root (the host rows). No archive locations are recorded —
-/// a declarer whose peer-gate group files would need reading from the
-/// archive wants the load/pack lanes, which own an archive list. Wasm
-/// hosts mount `include_bytes!`-d CDN artifacts through this.
-pub fn mount_bundle_bytes(session: &mut Session, bytes: &[u8]) -> Result<String, LoadError> {
-    // gate 1 — the container: every entry's CRC-32 verified
-    let bundle = match Bundle::parse(bytes) {
-        Ok(b) => b,
-        Err(e) => return Err(LoadError::law(format!("bundle: {e}"))),
-    };
-    // gate 2 — the layout: manifest, exact version, the kind's payloads
-    let layout = match Layout::parse(&bundle) {
-        Ok(l) => l,
-        Err(e) => return Err(LoadError::law(format!("bundle: {e}"))),
-    };
-    let entries = bundle.entries();
-    let (root_spec, module, groups, manifest) = match layout {
-        Layout::Compiled { manifest, root, scopes, groups } => {
-            let root_spec = manifest
-                .name
-                .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.jsonc has no `name`".to_string()))?;
-            // the ledger, namespaced into THIS session's numbering, and
-            // the root rebased with the same map before mounting
-            let remap = namescope_ledger(session, &scopes)?;
-            let scopes: Vec<(rut_core::id::ScopeId, String)> =
-                scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
-            for (scope, spec) in &scopes {
-                session.record_bundle_scope(*scope, spec);
-            }
-            let root = rut_core::link::rebase(root, &remap);
-            let gen_source = riding_gen_source(entries, "", &manifest)?;
-            let module = Module {
-                body: ModuleBody::Compiled(root),
-                entry: manifest.entry.clone(),
-                gen_source,
-                bundle_scopes: scopes.clone(),
-                ..Default::default()
-            };
-            (root_spec, module, Some((scopes, groups, remap)), manifest)
-        }
-        Layout::Decl { manifest, .. } => {
-            let root_spec = manifest
-                .name
-                .clone()
-                .ok_or_else(|| LoadError::law("bundle: rut.jsonc has no `name`".to_string()))?;
-            let module = bundle_entry_module(entries, "", &manifest)?;
-            (root_spec, module, None, manifest)
-        }
-    };
-    // first mount wins — the embedder's mount outranks the bundle
-    if session.resolve(&root_spec).is_ok() {
-        return Ok(root_spec);
-    }
-    session.register_module(&root_spec, module)?;
-    record_peers(session, &root_spec, &manifest);
-    if let Some((scopes, groups, remap)) = groups {
-        // the group loop — load_bundle_bytes' law, minus the archive
-        // recording (see the doc comment)
-        for (prefix, kind) in &groups {
-            let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
-                .map_err(|e| LoadError::law(format!("bundle: {e}")))?;
-            let dm = parse_manifest(&dep_toml)
-                .map_err(|e| LoadError::law(format!("bundle: {prefix}/rut.jsonc: {e}")))?;
-            let name = dm
-                .name
-                .clone()
-                .ok_or_else(|| LoadError::law(format!("bundle: {prefix}/rut.jsonc has no `name`")))?;
-            if session.resolve(&name).is_ok() {
-                continue; // first mount wins
-            }
-            let module = match kind {
-                GroupKind::Compiled(program) => {
-                    let program = rut_core::link::rebase(program.clone(), &remap);
-                    let Some(own) = rut_core::link::own_scope(&program) else {
-                        return Err(LoadError::law(format!(
-                            "bundle: {prefix}/{name}: the program carries no scope blocks"
-                        )));
-                    };
-                    match scopes.iter().find(|(_, s)| s == &name) {
-                        Some(&(row, _)) if row == own => {}
-                        Some(&(row, _)) => {
-                            return Err(LoadError::law(format!(
-                                "bundle: `{name}`'s ledger row says scope {row}, but its binary carries {own}"
-                            )));
-                        }
-                        None => {
-                            return Err(LoadError::law(format!(
-                                "bundle: the scope ledger does not name `{name}` — the bundle is incomplete"
-                            )));
-                        }
-                    }
-                    let gen_source = riding_gen_source(entries, &format!("{prefix}/"), &dm)?;
-                    Module {
-                        body: ModuleBody::Compiled(program),
-                        entry: dm.entry.clone(),
-                        gen_source,
-                        ..Default::default()
-                    }
-                }
-                GroupKind::Source => bundle_entry_module(entries, &format!("{prefix}/"), &dm)?,
-            };
-            session.register_module(&name, module)?;
-            record_peers(session, &name, &dm);
-        }
-    }
-    Ok(root_spec)
+/// The peer gate for tables built offer-by-offer: runs the gate's
+/// append pass over the peer declarations the offered pkgs carry,
+/// using the locations those offers left on them (dirs and archive
+/// locations). The run chain calls this at `.compile()` — its "close
+/// the world" step — so a loose source that `use json::` gets the
+/// peer-gated container groups exactly like a module-dir program
+/// does. Presence-based as ever: an optional peer absent is inert; a
+/// required peer absent is the loud D1 error. Groups already mounted
+/// by an earlier gate pass are skipped — never double-appended. NOTE
+/// the archive half: this lane owns no archive bytes, so an
+/// archive-mounted declarer's group file read fails loudly — the
+/// load/pack lanes run the gate themselves over their own archive
+/// list (crate-internal).
+pub(crate) fn assemble_peers(session: &mut Session) -> Result<(), LoadError> {
+    run_peer_gate(session, "", &[])
 }
 
-/// The peer gate for sessions built mount-by-mount: runs
-/// the gate's append pass over the peer declarations every `mount_dir`/
-/// dep walk recorded, using the pkg→location map those mounts left
-/// behind (dirs from `record_peer_dir`, archives from the url dep
-/// mounts). The CLI's and the probe's single-file convenience lanes
-/// call this after their tree mounts, so a loose file that `use json::`
-/// gets the peer-gated container groups exactly like a module-dir
-/// program does. Presence-based as ever: an optional peer absent is
-/// inert; a required peer absent is the loud D1 error. Groups already
-/// mounted by an earlier gate pass over this session are skipped —
-/// never double-appended. NOTE the archive half: this lane owns no
-/// archive bytes, so an archive-mounted declarer's group file read
-/// fails loudly — the load/pack lanes run the gate themselves; embedders
-/// that mount url deps mount-by-mount run `run_peer_gate` with their own
-/// archive list (crate-internal).
-pub fn assemble_peers(session: &mut Session) -> Result<(), LoadError> {
-    let sources = sources_of(session, session.peer_dirs());
-    run_peer_gate(session, "", &sources, &[])
-}
-
-/// [`load_dir_session`] with a url-dep remote — the `*_with` lane: HOW
+/// [`load_dir`] with a url-dep remote — the `*_with` lane: HOW
 /// bytes arrive is the remote's (transport, cache, offline policy);
 /// the loader still owns WHAT they are (the pin, at the mount door).
 /// The walk collects the url rows, awaits `fetch` per url
 /// sequentially, then mounts over the bytes map.
-pub async fn load_dir_session_with(
+pub async fn load_dir_with(
     dir: &Path,
     remote: &dyn DepRemote,
-) -> Result<(Session, String), LoadError> {
+) -> Result<Loaded, RunError> {
     let map = prefetch_urls(dir, &FsSource, remote).await?;
-    load_dir_session_fetched(dir, &FsSource, &map).map(|loaded| (loaded.session, loaded.root))
+    load_dir_fetched(dir, &FsSource, &map)
 }
 
 /// [`load_path_session`] with a url-dep remote. A `.rutbundle` path
@@ -1431,87 +1316,25 @@ pub async fn load_dir_session_with(
 pub async fn load_path_session_with(
     path: &Path,
     remote: &dyn DepRemote,
-) -> Result<(Session, String), LoadError> {
+) -> Result<Loaded, RunError> {
     if path.is_dir() {
-        return load_dir_session_with(path, remote).await;
+        return load_dir_with(path, remote).await;
     }
     if path.extension().map_or(false, |e| e == "rutbundle") {
         return load_bundle_session(path);
     }
     Err(LoadError::Shape {
         path: path.display().to_string(),
-    })
+    }.into())
 }
 
-/// [`mount_dir`] with a url-dep remote — collects the url rows,
+/// [`dir_pkgs`] with a url-dep remote — collects the url rows,
 /// fetches, mounts over the bytes map. The gate still does not run
 /// here (the offer law).
-pub async fn mount_dir_with(
-    session: &mut Session,
+pub async fn dir_pkgs_with(
     dir: &Path,
     remote: &dyn DepRemote,
-) -> Result<String, LoadError> {
+) -> Result<Loaded, RunError> {
     let map = prefetch_urls(dir, &FsSource, remote).await?;
-    mount_dir_fetched(session, dir, &map)
-}
-
-/// Read a directory's `rut.jsonc` graph and compile it to one linked program.
-pub fn compile_dir(dir: &Path) -> Result<crate::graph::GraphOutput, LoadError> {
-    let (session, root) = load_dir_session(dir, &FsSource)?;
-    Ok(crate::compile_graph(&session, &root))
-}
-
-/// Restore a symbol table's names and positions into a mounted
-/// session — the load half of compile-time symbol stripping. Each
-/// section resolves its module **spec** through the session (never an
-/// archive path: first-mount-wins has already decided the bodies) and
-/// applies to `ModuleBody::Compiled` programs; the names restore first,
-/// so linking (merge-by-name, ledger keys) and the VM both see the real
-/// thing. Call BEFORE `compile_graph`. Sections whose spec is absent
-/// (or not a compiled module) come back as skipped specs — the caller
-/// decides to warn; a map from a different build simply matches
-/// nothing, which is tolerated, not an error.
-pub fn apply_symbols_to_session(
-    session: &mut Session,
-    map: &rut_core::strip::SymbolMap,
-) -> Vec<String> {
-    // names first: exact-key restore over every mounted compiled module
-    // (kept strings and non-keys pass through)
-    let restore: std::collections::HashMap<&str, &str> = map
-        .names
-        .iter()
-        .map(|(m, o)| (m.as_str(), o.as_str()))
-        .collect();
-    let specs: Vec<String> = session.modules().map(|(s, _)| s.clone()).collect();
-    for spec in &specs {
-        if let Ok(module) = session.resolve_mut(spec) {
-            if let ModuleBody::Compiled(prog) = &mut module.body {
-                prog.interner.remap_tail(|s| {
-                    restore.get(s).copied().unwrap_or(s).to_string()
-                });
-            }
-        }
-    }
-    // then the span/pos sections, spec-resolved like the names
-    let mut skipped: Vec<String> = Vec::new();
-    for section in &map.sections {
-        match session.resolve_mut(&section.spec) {
-            Ok(module) => match &mut module.body {
-                ModuleBody::Compiled(prog) => {
-                    // a fn-count mismatch means the section was taken
-                    // from a different build — matches nothing,
-                    // tolerated silently (the same law as the name rows)
-                    if prog.funcs.len() == section.fns.len() {
-                        for (f, sy) in prog.funcs.iter_mut().zip(&section.fns) {
-                            f.spans = sy.spans.clone();
-                            f.pos = sy.pos.clone();
-                        }
-                    }
-                }
-                _ => skipped.push(section.spec.clone()),
-            },
-            Err(_) => skipped.push(section.spec.clone()),
-        }
-    }
-    skipped
+    dir_pkgs_fetched(dir, &map)
 }

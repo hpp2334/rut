@@ -19,3 +19,5 @@ rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std" }
 rut-parser = { path = "../rut-parser" }
+rut-ast = { path = "../rut-ast" }
+rut-lexer = { path = "../rut-lexer" }

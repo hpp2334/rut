@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session, compile_graph, lower_decl_module, mount_std_async, mount_std_core};
+use rut_driver::lower_decl_module;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 use rut_vm::Completer;
 
@@ -36,6 +36,40 @@ struct Fixture {
     hung: RefCell<Vec<Completer<String>>>,
     /// the cancel arm's receipts
     cancels: Cell<usize>,
+}
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
 }
 
 fn split_arg(u: &str) -> (String, u64) {
@@ -118,24 +152,28 @@ impl Fixture {
 /// boot join: `expected_host_fns` must have EXPANDED the async
 /// rows into their families, or the verify panics here.
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
-    let mut s = Session::new();
-    mount_std_core(&mut s);
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("the ink_host surface is valid");
-    s.register_module("ink_host", ink_host).expect("mount ink_host");
-    mount_std_async(&mut s);
-    let fixture =
-        lower_decl_module(FIXTURE_DECL, "fixture.d.rut").expect("the fixture surface is valid");
-    s.register_module("fixture", fixture).expect("mount fixture");
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    let out = compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    let prog = out.program.expect("linked program");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+        .expect("the ink_host surface is valid")
+        .named("ink_host");
+    let fixture = lower_decl_module(FIXTURE_DECL, "fixture.d.rut")
+        .expect("the fixture surface is valid")
+        .named("fixture");
+    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    pkgs.push(ink_host);
+    pkgs.push(fixture);
+    pkgs.push(rut_driver::Pkg::source("app", src));
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
     let sink2 = sink.clone();
-    let ctx = s.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
@@ -159,7 +197,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::new(Rc::new(flat), &limits, HostHooks::default(), hosts).expect("vm");
+    let vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
     (vm, sink, fx)
 }
 
@@ -534,17 +572,15 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     // session by hand instead of `setup`. Its start closure spawns
     // std::thread — `std::thread` lives in the EMBEDDER closure only;
     // rut-vm touches atomics + the Mutex slot.
-    let mut s = Session::new();
-    mount_std_core(&mut s);
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("ink_host");
-    s.register_module("ink_host", ink_host).expect("mount ink_host");
-    mount_std_async(&mut s);
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+        .expect("ink_host")
+        .named("ink_host");
     let fixture = lower_decl_module(
         &format!("{FIXTURE_DECL}pub host async fn wall(u: str) -> str;\n"),
         "fixture.d.rut",
     )
-    .expect("fixture");
-    s.register_module("fixture", fixture).expect("mount fixture");
+    .expect("fixture")
+    .named("fixture");
     let app = r#"
 use ink_host::{ create_logger, logger_log };
 use futures::launch_future;
@@ -561,16 +597,22 @@ entry fn main() -> nil {
     launch_future(job(log, "t"));
 }
 "#;
-    s.register_module("app", Module { body: ModuleBody::Source { text: app.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    let out = compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    let prog = out.program.expect("linked program");
+    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    pkgs.push(ink_host);
+    pkgs.push(fixture);
+    pkgs.push(rut_driver::Pkg::source("app", app));
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
     let sink2 = sink.clone();
-    let ctx = s.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
@@ -600,7 +642,7 @@ entry fn main() -> nil {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::new(Rc::new(flat), &limits, HostHooks::default(), hosts).expect("vm");
+    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
     vm.call::<_, ()>("main", ()).expect("main");
     // wall-clock polling: the embedder loop spins; the worker thread
     // settles the completer from another thread

@@ -9,37 +9,76 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session, compile_graph, lower_decl_module, mount_std_async, mount_std_core};
+
+use rut_driver::lower_decl_module;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
-    let mut s = Session::new();
-    mount_std_core(&mut s);
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("the ink_host surface is valid");
-    s.register_module("ink_host", ink_host).expect("mount ink_host");
-    mount_std_async(&mut s);
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    let out = compile_graph(&s, "app");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    let prog = out.program.expect("linked program");
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+        .expect("the ink_host surface is valid")
+        .named("ink_host");
+    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    pkgs.push(ink_host);
+    pkgs.push(rut_driver::Pkg::source("app", src));
+    let expected = rut_driver::declared_host_fns(&pkgs);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
     let sink2 = sink.clone();
-    let ctx = s.host_pkg_context();
+    let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
-    hosts.verify_against(&ctx.flatten());
+    hosts.verify_against(&expected);
     let limits = Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::new(Rc::new(flat), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    let vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .expect("vm");
     (vm, sink)
 }
@@ -62,15 +101,24 @@ fn run_loop(vm: &mut Vm, cap: usize) {
     panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
 }
 
+#[allow(dead_code)] // the diag lane some scenarios re-arm
 fn diags_of(src: &str) -> Vec<String> {
-    let mut s = Session::new();
-    mount_std_core(&mut s);
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut").expect("ink_host");
-    s.register_module("ink_host", ink_host).expect("mount ink_host");
-    mount_std_async(&mut s);
-    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register app");
-    compile_graph(&s, "app").diags.iter().map(|d| d.msg.clone()).collect()
+    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+        .expect("ink_host")
+        .named("ink_host");
+    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    pkgs.push(ink_host);
+    pkgs.push(rut_driver::Pkg::source("app", src));
+    rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs, root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap()
+        .graph
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect()
 }
 
 // ---- the weave runs ----

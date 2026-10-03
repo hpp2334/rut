@@ -19,8 +19,10 @@
 //!   through the raw compile_program path (the no-map inertness, in its
 //!   modern form).
 
-use rut_driver::{GraphOutput, Module, ModuleBody, Session};
+use rut_driver::GraphOutput;
 use rut_parser::Mode;
+
+
 
 /// An interface pkg — LINKED into its users (its names bind as used
 /// decls carrying the exporter's spec).
@@ -48,20 +50,45 @@ impl IntBox {
 }
 ";
 
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
 fn graph(modules: &[(&str, &str)]) -> GraphOutput {
-    let mut s = Session::new();
+    let mut chain = rut_driver::RutRun::new();
     for (spec, src) in modules {
-        // every module links now (the linkable-classes phase): foreign
-        // classes cross on their surfaces, and these tests pin
-        // structural satisfaction over LINKED foreign types and
-        // interfaces
-        let _ = s.register_module(
-            spec,
-            Module { spec: spec.to_string(), body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() },
-        );
+        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
     }
     let (root, _) = modules.last().expect("root module");
-    rut_driver::compile_graph(&s, root)
+    graph_of(chain.entrypoint(root).compile())
 }
 
 fn diags_of(g: &GraphOutput) -> String {
@@ -245,18 +272,20 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
     // — the boundary check at the encodeJson entry admits it and the
     // document comes back
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut s = Session::new();
-    rut_driver::mount_std(&mut s);
+    let mut world = Vec::new();
     for dir in ["rut/pouch", "rut/nmapset", "rut/json"] {
-        rut_driver::mount_dir(&mut s, &root.join(dir)).expect("mount tree pkg");
+        world.extend(rut_driver::dir_pkgs(&root.join(dir)).expect("mount tree pkg").pkgs);
     }
-    rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
-    s.register_module(
-        "main",
-        Module {
-            spec: "main".into(),
-            body: ModuleBody::Source {
-                text: "\
+    let mut chain = rut_driver::RutRun::new();
+    for p in &world {
+        chain = chain.pkg(p.clone());
+    }
+    let g = graph_of(
+        chain
+            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_driver::Pkg::source(
+                "main",
+                "\
 use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError, JsonVec };
 use pouch::{ Vec };
 
@@ -281,15 +310,11 @@ entry fn main() -> ?str {
     if (e != nil) { return nil; }
     return doc;
 }
-"
-                .into(),
-                is_decl: false,
-            },
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let g = rut_driver::compile_graph(&s, "main");
+",
+            ))
+            .entrypoint("main")
+            .compile(),
+    );
     let ds = diags_of(&g);
     assert!(g.program.is_some(), "{ds}");
 }

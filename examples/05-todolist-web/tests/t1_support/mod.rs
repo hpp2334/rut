@@ -8,7 +8,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{ HostHooks, HostRegistry, Vm };
+use rut_vm::interp::{ HostHooks, Vm };
 use rut_vm::{ Opaque, OpaqueRef };
 
 use todolist_web::fake_dom::{ FakeDom, Snapshot };
@@ -27,22 +27,25 @@ pub type Host = WebHost<FakeDom>;
 /// turn. (The old second hand-registration of t1 is gone: the
 /// manifest's path rows ARE that statement now.)
 pub fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
-    let (session, root) =
-        mount::load_probe_session("t1_harness").expect("the t1 harness probe mounts");
-    let ctx = session.host_pkg_context();
-    let prog = mount::compile_manifest(&session, &root).expect("the harness compiles");
+    let loaded = mount::probe("t1_harness").expect("the t1 harness probe mounts");
+    let expected = mount::expected_host_fns(&loaded);
+    let mut compiled = mount::compile_walk(&loaded).expect("the harness compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
     state::bind_weak_sink(&slot, &shared);
     shared.borrow_mut().dom.seed_page("div", "app"); // the twin's index.html
 
-    let mut hosts = HostRegistry::new();
-    hosts::install_web_hosts(&mut hosts, &shared);
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&ctx.flatten());
+    // the raw `web` rows join the compiled registry (the nmap bodies
+    // rode the chain)
+    hosts::install_web_hosts(&mut compiled.hosts, &shared);
+    compiled.hosts.verify_against(&expected);
 
-    let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
+    let vm = Vm::builder()
+        .compiled(compiled)
+        .limits(mount::limits())
+        .hooks(HostHooks::default())
+        .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
     let app = host.boot().expect("the boot turn runs");

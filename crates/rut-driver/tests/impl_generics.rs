@@ -5,15 +5,43 @@
 //! inference, no typo-shaped template parameters), the multi-binder
 //! head collects, and the inherent form follows the same law.
 
-use rut_driver::{Module, ModuleBody, Session};
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn diags_of(src: &str) -> Vec<String> {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    session
-        .register_module("test", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
-        .expect("register");
-    rut_driver::compile_graph(&session, "test")
+    compiled("test", src)
         .diags
         .iter()
         .map(|d| d.msg.clone())

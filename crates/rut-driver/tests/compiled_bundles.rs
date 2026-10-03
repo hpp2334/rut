@@ -14,8 +14,42 @@ use std::path::{Path, PathBuf};
 
 use rut_driver::bundle::FsSource;
 use rut_driver::{
-    compile_graph, load_bundle_bytes, load_dir_session, mount_std, pack_dir, ModuleBody,
+    pack_dir, PkgBody,
 };
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-v5-{tag}-{}", std::process::id()));
@@ -90,30 +124,32 @@ fn mixed_world(tag: &str) -> PathBuf {
     root
 }
 
-fn linked_binary(session: &rut_driver::Session, root: &str) -> Vec<u8> {
-    let g = compile_graph(session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    rut_core::binary::encode(&g.program.expect("linked program"))
+fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
+    let g = rut_driver::RutRun::new()
+        .pkgs(loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    rut_core::binary::encode(&g.graph.program.expect("linked program"))
 }
 
-fn run_entry<R: rut_vm::interp::Ret>(session: rut_driver::Session, root: &str, entry: &str) -> R {
-    let mut session = session;
-    mount_std(&mut session);
-    let g = compile_graph(&session, root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
@@ -123,27 +159,27 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     let root = mixed_world("mixed");
     // THE pinned equivalence: the compiled bundle and its source
     // directory link to the identical binary
-    let (dir_session, dir_root) = load_dir_session(&root.join("app"), &FsSource).expect("dir load");
-    let from_dir = linked_binary(&dir_session, &dir_root);
+    let dir_loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("dir load");
+    let from_dir = linked_binary(&dir_loaded);
 
     let bytes = pack_dir(&root.join("app")).expect("pack");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    assert_eq!(app_root, "app");
-    assert_eq!(linked_binary(&session, &app_root), from_dir, "dir and bundle compile identically");
+    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    assert_eq!(loaded.root, "app");
+    assert_eq!(linked_binary(&loaded), from_dir, "dir and bundle compile identically");
 
     // the closure mixed as declared: the linkable pkgs compiled, the
     // explicitly inlined one a source group
     assert!(matches!(
-        session.resolve("app").unwrap().body,
-        ModuleBody::Compiled(_)
+        loaded.pkg("app").unwrap().body,
+        PkgBody::Compiled(_)
     ));
     assert!(matches!(
-        session.resolve("util").unwrap().body,
-        ModuleBody::Compiled(_)
+        loaded.pkg("util").unwrap().body,
+        PkgBody::Compiled(_)
     ));
     assert!(matches!(
-        session.resolve("boxy").unwrap().body,
-        ModuleBody::Source { .. }
+        loaded.pkg("boxy").unwrap().body,
+        PkgBody::Source { .. }
     ));
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
@@ -160,7 +196,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     assert!(ledger.contains("= \"util\""), "{ledger}");
 
     // and the mixed world dispatches: the compiled root answers
-    let got: i64 = run_entry(session, &app_root, "go");
+    let got: i64 = run_entry(loaded, "go");
     assert_eq!(got, 42);
 }
 
@@ -172,45 +208,34 @@ fn a_source_group_splices_into_a_consumer_session() {
     // session, no directory in sight
     let root = mixed_world("splice");
     let bytes = pack_dir(&root.join("app")).expect("pack");
-    let (mut session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    mount_std(&mut session);
-    session
-        .register_module(
-            "consumer",
-            rut_driver::Module {
-                body: ModuleBody::Source {
-                    text: "use boxy::{ Holder };\nuse util::{ twice };\n\n\
-                           entry fn go2() -> i64 {\n\
-                           \x20   let h = Holder<i64>.make(5);\n\
-                           \x20   return twice(h.get());\n\
-                           }\n"
-                        .into(),
-                    is_decl: false,
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    let mut loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    loaded.pkgs.push(rut_driver::Pkg::source(
+        "consumer",
+        "use boxy::{ Holder };\nuse util::{ twice };\n\n\
+         entry fn go2() -> i64 {\n\
+         \x20   let h = Holder<i64>.make(5);\n\
+         \x20   return twice(h.get());\n\
+         }\n",
+    ));
     // the CONSUMER is the root here — a source unit over the bundle's
     // mounted groups, compiled and linked exactly like a directory world
-    let g = rut_driver::compile_graph(&session, "consumer");
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let flat = rut_core::link::flatten(g.program.expect("linked"));
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg())
+        .entrypoint("consumer")
+        .compile()
+        .unwrap();
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     assert_eq!(vm.call::<_, i64>("go2", ()).expect("run"), 10);
-    let _ = app_root;
 }
 
 #[test]
@@ -260,8 +285,8 @@ fn generic_and_iface_param_roots_publish_compiled() {
     // servable at load
     assert!(names.contains(&"app.rut".to_string()), "{names:?}");
     let run = |b: &[u8]| {
-        let (session, app_root) = load_bundle_bytes(b, Path::new("mem")).expect("load");
-        run_entry(session, &app_root, "go")
+        let loaded = rut_driver::Pkg::from_bundle(b).expect("load");
+        run_entry(loaded, "go")
     };
     let got: i64 = run(&bytes);
     assert_eq!(got, 3);
@@ -291,8 +316,8 @@ fn generic_and_iface_param_roots_publish_compiled() {
          }\n",
     );
     let bytes = pack_dir(&app).expect("an iface-param root publishes compiled");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    let got: i32 = run_entry(session, &app_root, "go");
+    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let got: i32 = run_entry(loaded, "go");
     assert_eq!(got, 36);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -334,8 +359,8 @@ fn peer_deps_on_a_compiled_group_ride_the_binary() {
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"libbed/libbed.rutc".to_string()), "{names:?}");
     assert!(!names.contains(&"libbed/ser_p.rut".to_string()), "{names:?}");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    let got: i32 = run_entry(session, &app_root, "go");
+    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let got: i32 = run_entry(loaded, "go");
     assert_eq!(got, 7);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -424,16 +449,16 @@ fn peer_groups_ride_v5_as_compiled_rows() {
 
     // the directory world first (the load-time peer gate rides the same
     // compile — the rows land in the declarer's unit there too)
-    let (dir_session, dir_root) = load_dir_session(&app, &FsSource).expect("dir load");
-    let from_dir = linked_binary(&dir_session, &dir_root);
+    let dir_loaded = rut_driver::load_dir(&app, &FsSource).expect("dir load");
+    let from_dir = linked_binary(&dir_loaded);
 
     let bytes = pack_dir(&app).expect("pack");
-    let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    assert_eq!(linked_binary(&session, &app_root), from_dir, "dir and bundle compile identically");
+    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    assert_eq!(linked_binary(&loaded), from_dir, "dir and bundle compile identically");
 
     // the group rides INSIDE the declarer's compiled binary: the body
     // is compiled, no source group travels
-    assert!(matches!(session.resolve("peered").unwrap().body, ModuleBody::Compiled(_)));
+    assert!(matches!(loaded.pkg("peered").unwrap().body, PkgBody::Compiled(_)));
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(!names.contains(&"peered/ser_tag.rut".to_string()), "{names:?}");
@@ -441,7 +466,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
     assert!(names.contains(&"tagger/tagger.rutc".to_string()), "{names:?}");
 
     // and the group's wrapper dispatches
-    let got: String = run_entry(session, &app_root, "go");
+    let got: String = run_entry(loaded, "go");
     assert_eq!(got, "badged");
 }
 
@@ -487,7 +512,9 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = load_bundle_bytes(&rut_driver::bundle::write_bundle(&stale).unwrap(), Path::new("stale"))        .unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stale).unwrap())
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("util/util.rutc"), "{err}");
     assert!(err.contains("version"), "{err}");
 
@@ -502,7 +529,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         .expect("the entry name rides the container");
     let data_at = at + needle.len() + 30; // local header: fixed 30 bytes + name
     corrupt[data_at] ^= 0x01;
-    let err = load_bundle_bytes(&corrupt, Path::new("crc")).unwrap_err().to_string();
+    let err = rut_driver::Pkg::from_bundle(&corrupt).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a doctored scope ledger: the group's binary carries its own
@@ -527,10 +554,9 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err =
-        load_bundle_bytes(&rut_driver::bundle::write_bundle(&doctored).unwrap(), Path::new("ledger"))
-            .unwrap_err()
-            .to_string();
+    let err = rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&doctored).unwrap())
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("ledger") || err.contains("scope"),
         "{err}"

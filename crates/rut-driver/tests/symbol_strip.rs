@@ -12,8 +12,42 @@
 use std::path::{Path, PathBuf};
 
 use rut_driver::{
-    apply_symbols_to_session, load_bundle_bytes, mount_std, pack_dir_opts, PackOpts,
+    pack_dir_opts, PackOpts,
 };
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-strip-{tag}-{}", std::process::id()));
@@ -150,28 +184,30 @@ fn load_and_run<R: rut_vm::interp::Ret>(
     entry: &str,
     symtab: Option<&[u8]>,
 ) -> R {
-    let (mut session, root) = load_bundle_bytes(bytes, Path::new("mem")).expect("load");
-    mount_std(&mut session);
-    if let Some(sym) = symtab {
-        let map = rut_core::strip::SymbolMap::from_bytes(sym).expect("sidecar decode");
-        let skipped = apply_symbols_to_session(&mut session, &map);
-        assert!(skipped.is_empty(), "no section may skip: {skipped:?}");
+    let loaded = rut_driver::Pkg::from_bundle(bytes).expect("load");
+    let map = symtab.map(|sym| rut_core::strip::SymbolMap::from_bytes(sym).expect("sidecar decode"));
+    if let Some(map) = &map {
+        // no section may skip: every section's pkg rides this bundle
+        for section in &map.sections {
+            assert!(loaded.pkg(&section.spec).is_some(), "no section may skip: {}", section.spec);
+        }
     }
-    let g = rut_driver::compile_graph(&session, &root);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let flat = rut_core::link::flatten(g.program.expect("linked program"));
+    let mut chain = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::calc_pkg());
+    if let Some(map) = &map {
+        chain = chain.symbols(map);
+    }
+    let g = chain.entrypoint(&loaded.root).compile().expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(flat),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
@@ -228,13 +264,16 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
     let map = rut_core::strip::SymbolMap::from_bytes(&symtab).expect("decode");
     let restored: String = load_and_run(&stripped, "probe", Some(&symtab));
     assert_eq!(restored, full, "restoration is exact, frame for frame");
-    // re-applying is a no-op
-    let (mut session, root_spec) = load_bundle_bytes(&stripped, Path::new("mem")).expect("load");
-    mount_std(&mut session);
-    assert!(apply_symbols_to_session(&mut session, &map).is_empty());
-    assert!(apply_symbols_to_session(&mut session, &map).is_empty(), "re-apply runs");
-    let g = rut_driver::compile_graph(&session, &root_spec);
-    assert!(g.diags.is_empty(), "{:?}", g.diags);
+    // re-applying is a no-op: every section matches, twice over
+    let g = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Pkg::from_bundle(&stripped).expect("load"))
+        .pkg(rut_driver::calc_pkg())
+        .symbols(&map)
+        .symbols(&map)
+        .entrypoint("app")
+        .compile()
+        .expect("compile the walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
     let _ = std::fs::remove_dir_all(&root);
 }
 

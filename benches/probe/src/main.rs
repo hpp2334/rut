@@ -22,7 +22,6 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use rut_core::binary::decode;
 use rut_vm::interp::{HostHooks, Limits, Vm};
 
 struct Args {
@@ -120,50 +119,66 @@ fn main() {
 
     // ---- compile (frontend + LIR + binary emit) ----
     // A loose `.rut` workload uses the toolchain libs (`ink`+`ink_host`,
-    // `pouch`) — third-party pkgs mounted from the tree, plus the
-    // engine's core/calc. A module-DIR workload (`rut.jsonc`, the
-    // `nmapset` bench dirs) loads its own `[deps]` graph instead and
-    // yields an already-linked program.
+    // `pouch`) — third-party pkgs walked from the tree, plus the
+    // engine's calc (the core prelude auto-offers). A module-DIR
+    // workload (`rut.jsonc`, the `nmapset` bench dirs) walks its own
+    // `[deps]` graph instead. The rows snapshot (the ctx) comes from
+    // the offered pkgs — the per-iteration registries below install
+    // against it, exactly the snapshot a `.host_pkg` install would.
     let t0 = Instant::now();
     let (ctx, prog) = if path.is_dir() {
-        let (mut session, root) = rut_driver::load_path_session(path)
+        let loaded = rut_driver::load_path_session(path)
             .unwrap_or_else(|e| fail(format!("load {}: {e}", path.display())));
-        rut_driver::mount_std(&mut session);
-        let out = rut_driver::compile_graph(&session, &root);
-        if !out.diags.is_empty() {
-            for d in &out.diags {
+        let compiled = rut_driver::RutRun::new()
+            .pkgs(&loaded)
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(&loaded.root)
+            .compile()
+            .unwrap_or_else(|e| fail(format!("compile: {e}")));
+        if !compiled.graph.diags.is_empty() {
+            for d in &compiled.graph.diags {
                 eprintln!("{}", d.msg);
             }
             fail("compile failed");
         }
-        let prog = out.program.unwrap_or_else(|| fail("no program emitted"));
-        // the mount snapshot replaces the session — the installs answer
-        // to the ctx, owned
-        (session.host_pkg_context(), prog)
+        let prog = compiled.graph.program.unwrap_or_else(|| fail("no program emitted"));
+        // the rows snapshot replaces the walk — the installs answer to
+        // the ctx, owned
+        let mut world = loaded.pkgs;
+        world.push(rut_driver::calc_pkg());
+        (rut_driver::host_pkg_ctx(&world), prog)
     } else {
         let src = std::fs::read_to_string(path)
             .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", path.display())));
-        let mut session = rut_driver::Session::new();
-        rut_driver::mount_std(&mut session);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        // the std mount order (the rut-json survey §1.2's ruling): json
+        // the offer order (the rut-json survey §1.2's ruling): json
         // slots after pouch and nmapset; strbuild is 10th, after json
-        // (RFC 0028's amendment — though json's `[deps]` pulls it
-        // regardless, so the mount here is idempotent by first-wins)
-        rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+ink_host)");
-        rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
-        rut_driver::mount_dir(&mut session, &tree.join("rut/nmapset")).expect("mount nmapset");
-        rut_driver::mount_dir(&mut session, &tree.join("rut/json")).expect("mount json");
-        rut_driver::mount_dir(&mut session, &tree.join("rut/strbuild")).expect("mount strbuild");
-        rut_driver::assemble_peers(&mut session).expect("assemble peer groups");
-        let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "bench");
-        if !out.diags.is_empty() {
-            print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
+        // (though json's `[deps]` pulls it regardless, so the offer
+        // here is idempotent by first-wins)
+        let mut world = Vec::new();
+        for d in ["ink", "pouch", "nmapset", "json", "strbuild"] {
+            world.extend(
+                rut_driver::dir_pkgs(&tree.join("rut").join(d))
+                    .unwrap_or_else(|e| fail(format!("mount {d}: {e}")))
+                    .pkgs,
+            );
+        }
+        world.push(rut_driver::calc_pkg());
+        let mut chain = rut_driver::RutRun::new();
+        for p in &world {
+            chain = chain.pkg(p.clone());
+        }
+        let compiled = chain
+            .pkg(rut_driver::Pkg::source("bench", &src))
+            .entrypoint("bench")
+            .compile()
+            .unwrap_or_else(|e| fail(format!("compile: {e}")));
+        if !compiled.graph.diags.is_empty() {
+            print!("{}", rut_lexer::diag::render_diags(&src, &compiled.graph.diags));
             fail("compile failed");
         }
-        let binary = out.binary.unwrap_or_else(|| fail("no binary emitted"));
-        let prog = decode(&binary).unwrap_or_else(|e| fail(format!("decode: {e}")));
-        (session.host_pkg_context(), prog)
+        let prog = compiled.graph.program.unwrap_or_else(|| fail("no binary emitted"));
+        (rut_driver::host_pkg_ctx(&world), prog)
     };
     let compile_ms = t0.elapsed().as_secs_f64() * 1e3;
 
@@ -215,13 +230,13 @@ fn main() {
             hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
         }
         hosts.verify_against(&ctx.flatten());
-        let mut vm = Vm::new(
-            Rc::clone(&prog),
-            &limits,
-            HostHooks::default(),
-            hosts,
-        )
-        .unwrap_or_else(|t| fail(format!("boot: {}", t.msg)));
+        let mut vm = Vm::builder()
+            .program(Rc::clone(&prog))
+            .limits(limits.clone())
+            .hooks(HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap_or_else(|e| fail(format!("boot: {}", e.msg)));
         // the workloads log their final checksum through `ink_host`; the
         // probe discards it (like the old `print: None`) so stdout stays a
         // single JSON object. Bindings + contract happened pre-Vm above.

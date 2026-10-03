@@ -13,22 +13,60 @@
 //! - the per-type rows ride the binary: a compiled module decodes with
 //!   its disposal row, and the func id survives encode → decode.
 
-use rut_driver::{Module, ModuleBody, Session};
+
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
 
 fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    let mut s = Session::new();
-    rut_driver::mount_std(&mut s);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    rut_driver::mount_dir(&mut s, &root.join("rut/ink")).expect("mount ink (+rt)");
-    s.register_module("app_main", Module { body: ModuleBody::Source { text: combined.into(), is_decl: false }, ..Default::default() }).unwrap();
-    let out = rut_driver::compile_graph(&s, "app_main");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    let prog = out.program.expect("linked program");
+    let ink = rut_driver::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&ink)
+        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_driver::Pkg::source("app_main", &combined))
+        .entrypoint("app_main")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let prog = compiled.graph.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
-    let ctx = s.host_pkg_context();
+    let mut world = ink.pkgs.clone();
+    world.push(rut_driver::calc_pkg());
+    let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
         sink.borrow_mut().push(msg.to_string());
@@ -40,12 +78,7 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        hosts,
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run");
     let out_lines = lines.borrow().clone();
@@ -199,12 +232,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(
-        std::rc::Rc::new(prog),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-        rut_vm::interp::HostRegistry::new(),
-    )
+    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
     .expect("vm");
     let v: i32 = vm.call("main", ()).expect("run");
     assert_eq!(v, 9);

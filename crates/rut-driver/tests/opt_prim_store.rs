@@ -13,28 +13,57 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, ModuleBody, Session};
 
 const POUCH_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch");
 
-fn session_with(app_src: &str) -> Session {
-    let mut session = Session::new();
-    rut_driver::mount_std_core(&mut session);
-    rut_driver::mount_dir(&mut session, std::path::Path::new(POUCH_DIR))
-        .expect("mount pouch");
-    session
-        .register_module(
-            "app_main",
-            Module { spec: "app_main".into(), body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() },
-        )
-        .unwrap();
-    session
+
+
+
+/// One source pkg over the auto core — the chain's graph. Closure and
+/// shape refusals come back as one span-0 diagnostic.
+#[allow(dead_code)] // not every suite in this file needs both lanes
+fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+}
+
+/// [`compiled`] with calc offered (the old `mount_std` shape: core
+/// auto-rides, `calc` is an ordinary pkg).
+#[allow(dead_code)]
+fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Pkg::source(spec, src))
+            .pkg(rut_driver::calc_pkg())
+            .entrypoint(spec)
+            .compile(),
+    )
+}
+
+#[allow(dead_code)]
+fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
+    match c {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            program: None,
+        },
+    }
+}
+
+fn world_with(app_src: &str) -> rut_driver::Loaded {
+    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(POUCH_DIR)).expect("mount pouch");
+    loaded.pkgs.push(rut_driver::Pkg::source("app_main", app_src));
+    loaded
 }
 
 /// Compile, verify, and run `main` — the i64 return.
 fn run_main(app_src: &str) -> i64 {
-    let session = session_with(app_src);
-    let out = rut_driver::compile_graph(&session, "app_main");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&world_with(app_src))
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(
         out.diags.is_empty(),
         "{}",
@@ -47,7 +76,7 @@ fn run_main(app_src: &str) -> i64 {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new())
+    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
         .expect("vm")
         .call::<_, i64>("main", ())
         .expect("run")
@@ -55,8 +84,12 @@ fn run_main(app_src: &str) -> i64 {
 
 /// The linked program's IR dump (lowering evidence).
 fn ir_dump(app_src: &str) -> String {
-    let session = session_with(app_src);
-    let out = rut_driver::compile_graph(&session, "app_main");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&world_with(app_src))
+            .entrypoint("app_main")
+            .compile(),
+    );
     let prog = out.program.expect("linked program");
     rut_driver::ir_dump_of(&prog.funcs, &prog.interner)
 }
@@ -426,18 +459,26 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
             return -555;
         }
     "#;
-    let mut session = session_with(src);
+    let mut world = world_with(src);
     // nmapset pulls the `nmap_host` host pkg through its own [deps]
-    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
-        .expect("mount nmapset");
-    let ctx = session.host_pkg_context();
+    world.pkgs.extend(
+        rut_driver::dir_pkgs(std::path::Path::new(NMAPSET_DIR))
+            .expect("mount nmapset")
+            .pkgs,
+    );
+    let ctx = rut_driver::host_pkg_ctx(&world.pkgs);
     for f in ["map_new", "map_len", "map_hput", "map_hfind", "map_hremove"] {
         assert!(
             ctx.rows_of("nmap_host").is_some_and(|r| r.contains_key(f)),
             "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
         );
     }
-    let out = rut_driver::compile_graph(&session, "app_main");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&world)
+            .entrypoint("app_main")
+            .compile(),
+    );
     assert!(
         out.diags.is_empty(),
         "{}",
@@ -453,7 +494,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
         .expect("vm");
     let v: i64 = vm.call("main", ()).expect("run");
     assert_eq!(v, 555, "primitive V round-trips through the raw sidecar");
@@ -480,8 +521,12 @@ fn prim_store_release_walk_skips_element_slots() {
             return s;
         }
     "#;
-    let session = session_with(src);
-    let out = rut_driver::compile_graph(&session, "app_main");
+    let out = graph_of(
+        rut_driver::RutRun::new()
+            .pkgs(&world_with(src))
+            .entrypoint("app_main")
+            .compile(),
+    );
     let prog = out.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
     let limits = rut_vm::interp::Limits {
@@ -489,7 +534,7 @@ fn prim_store_release_walk_skips_element_slots() {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new())
+    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
         .expect("vm");
     let v: i64 = vm.call("main", ()).expect("run");
     assert_eq!(v, (0i64..100000).sum::<i64>());
