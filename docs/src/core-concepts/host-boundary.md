@@ -162,6 +162,5 @@ diagnostic instead of a runtime mystery.
 
 The full details live in the reference: [embedding and native
 modules](../reference/embedding.md), [the value boundary and
-borrows](../reference/value-boundary.md), [host fns and declaration
-files](../reference/host-fns.md), and the withdrawn C-struct
-experiment recorded at [repr(C) interop](../reference/repr-c.md).
+borrows](../reference/value-boundary.md), and [host fns and
+declaration files](../reference/host-fns.md).

@@ -327,109 +327,104 @@ msgid "Value boundary and borrows"
 msgstr "值边界与借用"
 
 
-#: src/SUMMARY.md:90 src/reference/repr-c.md:1
-msgid "repr(C) struct interop"
-msgstr "repr(C) 结构体互操作"
-
-
-#: src/SUMMARY.md:91 src/reference/host-fns.md:1
+#: src/SUMMARY.md:90 src/reference/host-fns.md:1
 msgid "Host fns and declaration files"
 msgstr "宿主函数与声明文件"
 
 
-#: src/SUMMARY.md:92 src/reference/native-containers.md:1
+#: src/SUMMARY.md:91 src/reference/native-containers.md:1
 msgid "Native containers API surface"
 msgstr "原生容器 API 表面"
 
 
-#: src/SUMMARY.md:93 src/reference/templates.md:1
+#: src/SUMMARY.md:92 src/reference/templates.md:1
 msgid "Templates — f\"...\" across the boundary"
 msgstr "模板——跨越边界的 f\"...\""
 
 
-#: src/SUMMARY.md:94 src/reference/reflection.md:1
+#: src/SUMMARY.md:93 src/reference/reflection.md:1
 msgid "Reflection"
 msgstr "反射"
 
 
-#: src/SUMMARY.md:96
+#: src/SUMMARY.md:95
 msgid "Standard library"
 msgstr "标准库"
 
 
-#: src/SUMMARY.md:98 src/reference/stdlib.md:1
+#: src/SUMMARY.md:97 src/reference/stdlib.md:1
 msgid "core and the swappable packages"
 msgstr "core 与可换包"
 
 
-#: src/SUMMARY.md:100
+#: src/SUMMARY.md:99
 msgid "Toolchain"
 msgstr "工具链"
 
 
-#: src/SUMMARY.md:102 src/reference/frontend.md:1
+#: src/SUMMARY.md:101 src/reference/frontend.md:1
 msgid "The frontend"
 msgstr "前端"
 
 
-#: src/SUMMARY.md:103 src/reference/compiler.md:1
+#: src/SUMMARY.md:102 src/reference/compiler.md:1
 msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:104 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:103 src/core-concepts/the-vm.md:33
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
 
 
-#: src/SUMMARY.md:105 src/reference/module-binary.md:1
+#: src/SUMMARY.md:104 src/reference/module-binary.md:1
 msgid "Module binary and verification"
 msgstr "模块二进制与校验"
 
 
-#: src/SUMMARY.md:106 src/reference/symbol-stripping.md:1
+#: src/SUMMARY.md:105 src/reference/symbol-stripping.md:1
 msgid "Symbol stripping and `.rutsym` sidecars"
 msgstr "符号剥离与 `.rutsym` 旁车"
 
 
-#: src/SUMMARY.md:107 src/reference/vm-core.md:1
+#: src/SUMMARY.md:106 src/reference/vm-core.md:1
 msgid "VM core"
 msgstr "VM 核心"
 
 
-#: src/SUMMARY.md:108 src/reference/loading.md:1
+#: src/SUMMARY.md:107 src/reference/loading.md:1
 msgid "Loading and the embed loop"
 msgstr "加载与嵌入循环"
 
 
-#: src/SUMMARY.md:109 src/reference/diagnostics.md:1
+#: src/SUMMARY.md:108 src/reference/diagnostics.md:1
 msgid "Diagnostics, traces, and symbolication"
 msgstr "诊断、追踪与符号化"
 
 
-#: src/SUMMARY.md:110 src/reference/embedding.md:239 src/reference/bundles.md:1
+#: src/SUMMARY.md:109 src/reference/embedding.md:239 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr "模块捆绑包"
 
 
-#: src/SUMMARY.md:112
+#: src/SUMMARY.md:111
 msgid "Packages and tooling"
 msgstr "包与工具"
 
 
-#: src/SUMMARY.md:114 src/reference/project-structure.md:1
+#: src/SUMMARY.md:113 src/reference/project-structure.md:1
 msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:115 src/tutorial/modules.md:208
+#: src/SUMMARY.md:114 src/tutorial/modules.md:208
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
 
 
-#: src/SUMMARY.md:116 src/reference/cli.md:1
+#: src/SUMMARY.md:115 src/reference/cli.md:1
 msgid "The rut CLI"
 msgstr "rut CLI"
 
@@ -8199,9 +8194,9 @@ msgstr ""
 
 #: src/core-concepts/host-boundary.md:163
 msgid ""
-"The full details live in the reference: [embedding and native modules](../reference/embedding.md), [the value boundary and borrows](../reference/value-boundary.md), [host fns and declaration files](../reference/host-fns.md), and the withdrawn C-struct experiment recorded at [repr(C) interop](../reference/repr-c.md)."
+"The full details live in the reference: [embedding and native modules](../reference/embedding.md), [the value boundary and borrows](../reference/value-boundary.md), and [host fns and declaration files](../reference/host-fns.md)."
 msgstr ""
-"全部细节住在参考手册里：[嵌入与原生模块](../reference/embedding.md)、[值边界与借用](../reference/value-boundary.md)、[宿主 fn 与声明文件](../reference/host-fns.md)，以及记录在 [repr(C) 互操作](../reference/repr-c.md)的已撤回 C 结构体实验。"
+"全部细节住在参考手册里：[嵌入与原生模块](../reference/embedding.md)、[值边界与借用](../reference/value-boundary.md)、[宿主 fn 与声明文件](../reference/host-fns.md)。"
 
 
 #: src/core-concepts/the-vm.md:3
@@ -18366,7 +18361,7 @@ msgid "field"
 msgstr "字段"
 
 
-#: src/reference/async.md:151 src/reference/repr-c.md:14
+#: src/reference/async.md:151
 msgid "content"
 msgstr "内容"
 
@@ -21531,340 +21526,6 @@ msgstr "异步函数体与 `Completer`：[宿主 future 桥](host-futures.md)。
 #: src/reference/value-boundary.md:138
 msgid "Budgets and traps: [resource limits](resource-limits.md)."
 msgstr "预算与陷阱：[资源限制](resource-limits.md)。"
-
-
-#: src/reference/repr-c.md:3
-msgid ""
-"rut has **no C-layout struct interop**. There is no `#[repr(C)]` mirror contract, no host-side zero-copy view over rut record fields, and none of the API that such a contract implies: `register_struct::<T>()`, `StructRef<'v, T>`, `size_of<T>()`, `align_of<T>()`, or per-field offsets exposed to the host. The title is kept because the question comes up on every FFI: here is what actually exists."
-msgstr ""
-"rut **没有 C 布局的结构体互操作**。没有 `#[repr(C)]` 镜像契约，没有宿主侧针对 rut 记录字段的零复制视图，也没有这类契约所隐含的任何 API：`register_struct::<T>()`、`StructRef<'v, T>`、`size_of<T>()`、`align_of<T>()`，或暴露给宿主的逐字段偏移。标题保留，因为每个 FFI 都会问到这个问题：以下是实际存在的东西。"
-
-
-#: src/reference/repr-c.md:10
-msgid "The layout rut records really have"
-msgstr "rut 记录真正拥有的布局"
-
-
-#: src/reference/repr-c.md:12
-msgid "A user record is an **array of 8-byte slots**:"
-msgstr "用户记录是一个 **8 字节槽位的数组**："
-
-
-#: src/reference/repr-c.md:14 src/reference/module-binary.md:170
-msgid "rule"
-msgstr "规则"
-
-
-#: src/reference/repr-c.md:16
-msgid "slot width"
-msgstr "槽位宽度"
-
-
-#: src/reference/repr-c.md:16
-msgid "8 bytes; primitive fields sit inline in their slot"
-msgstr "8 字节；基本类型字段就地放在自己的槽位里"
-
-
-#: src/reference/repr-c.md:17
-msgid "composite fields"
-msgstr "复合字段"
-
-
-#: src/reference/repr-c.md:17
-msgid ""
-"a **cell-handle slot** — a reference to the shared cell ([the Rc heap](rc-heap.md))"
-msgstr "一个**单元句柄槽位**——指向共享单元的引用（[Rc 堆](rc-heap.md)）"
-
-
-#: src/reference/repr-c.md:18
-msgid "declaration order"
-msgstr "声明顺序"
-
-
-#: src/reference/repr-c.md:18
-msgid ""
-"fields keep declaration order; no hidden members; visibility and out-of-body `impl` blocks change nothing"
-msgstr "字段保持声明顺序；没有隐藏成员；可见性与体外 `impl` 块不改变任何东西"
-
-
-#: src/reference/repr-c.md:19
-msgid "heap"
-msgstr "堆"
-
-
-#: src/reference/repr-c.md:19
-msgid "non-moving — a slot's handle stays valid for the cell's life"
-msgstr "不移动——槽位的句柄在单元的一生中保持有效"
-
-
-#: src/reference/repr-c.md:20
-msgid "where it lives"
-msgstr "它存在于何处"
-
-
-#: src/reference/repr-c.md:20
-msgid ""
-"the module's reified type table, not a header contract ([reified types and layout](reified-types.md))"
-msgstr "模块的具体化类型表，而不是头文件契约（[具体化类型与布局](reified-types.md)）"
-
-
-#: src/reference/repr-c.md:22
-msgid ""
-"This layout is a VM-internal invariant, not a stable ABI. It is never promised to Rust code byte-for-byte, and nothing in the toolchain checks a host mirror against it."
-msgstr "这个布局是 VM 内部的不变式，不是稳定的 ABI。它从不逐字节承诺给 Rust 代码，工具链中也没有任何东西拿宿主镜像来核对它。"
-
-
-#: src/reference/repr-c.md:26
-msgid "What the host sees instead"
-msgstr "宿主实际看到什么"
-
-
-#: src/reference/repr-c.md:28
-msgid ""
-"A host touches record data only through the checked boundary ([value boundary](value-boundary.md)):"
-msgstr "宿主只经由经过检查的边界触碰记录数据（[值边界](value-boundary.md)）："
-
-
-#: src/reference/repr-c.md:31
-msgid ""
-"**Flat crossing records** — declare a `host struct` in the package's declaration file. Fields-only, every field a crossing type, no methods. The host constructs and reads the values through the declared field table; the shape is the whole surface."
-msgstr ""
-"**扁平跨越记录**——在包的声明文件里声明一个 `host struct`。只有字段，每个字段都是跨越类型，没有方法。宿主经由声明的字段表构建和读取这些值；形状就是整个表面。"
-
-
-#: src/reference/repr-c.md:36
-msgid ""
-"```rut\n"
-"// server.d.rut\n"
-"pub host struct Point { x: f64, y: f64, tag: str }\n"
-"pub host fn measure(p: Point) -> f64;\n"
-"```"
-msgstr ""
-"```rut\n"
-"// server.d.rut\n"
-"pub host struct Point { x: f64, y: f64, tag: str }\n"
-"pub host fn measure(p: Point) -> f64;\n"
-"```"
-
-
-#: src/reference/repr-c.md:42
-msgid ""
-"**Opaque state** — the rut side holds a class wrapping an `opaque` handle; the host owns the layout entirely ([native containers API surface](native-containers.md))."
-msgstr ""
-"**opaque 状态**——rut 侧持有一个包装 `opaque` 句柄的类；布局完全由宿主拥有（[原生容器 API 表面](native-containers.md)）。"
-
-
-#: src/reference/repr-c.md:45
-msgid ""
-"**Structured reads** — for reflection over arbitrary records (field names, types, children by index), use the reflection surface ([reflection](reflection.md)). It is descriptor-based and read-only; it never exposes raw memory."
-msgstr ""
-"**结构化读取**——要对任意记录做反射（字段名、类型、按索引的子节点），使用反射表面（[反射](reflection.md)）。它基于描述符且只读；它从不暴露原始内存。"
-
-
-#: src/reference/repr-c.md:50
-msgid "Why there is no shared-layout contract"
-msgstr "为什么没有共享布局契约"
-
-
-#: src/reference/repr-c.md:52
-msgid ""
-"The boundary's crossing set is deliberately scalars, immutable buffers, and `opaque` handles; a borrowed user structure with host-writable fields would reintroduce aliasing the borrow guards exist to prevent."
-msgstr "边界的跨越集合刻意只含标量、不可变缓冲区和 `opaque` 句柄；一个带宿主可写字段的、被借用的用户结构会重新引入借用守卫本为防止的别名。"
-
-
-#: src/reference/repr-c.md:55
-msgid ""
-"Records are shared cells, not values: two bindings alias one record, so a `&mut` C view would race with rut-side mutation."
-msgstr "记录是共享单元，不是值：两个绑定别名同一个记录，因此 `&mut` 的 C 视图会与 rut 侧的变更竞争。"
-
-
-#: src/reference/repr-c.md:57
-msgid ""
-"Layout stability belongs to the module binary and its type table ([module binary and verification](module-binary.md)) — a compile-checked, versioned artifact — not to a C header."
-msgstr ""
-"布局的稳定性属于模块二进制及其类型表（[模块二进制与校验](module-binary.md)）——一个经编译检查、带版本的产物——而不是 C 头文件。"
-
-
-#: src/reference/repr-c.md:61
-msgid "Record values at the boundary"
-msgstr "边界处的记录值"
-
-
-#: src/reference/repr-c.md:63
-msgid "rut shape"
-msgstr "rut 形状"
-
-
-#: src/reference/repr-c.md:63
-msgid "what the host sees"
-msgstr "宿主看到什么"
-
-
-#: src/reference/repr-c.md:65
-msgid "tuple (a record of crossing-typed fields)"
-msgstr "元组（一个由可跨越类型字段构成的记录）"
-
-
-#: src/reference/repr-c.md:65
-msgid ""
-"a Rust tuple, positionally, field-by-field under the record's declared field types — arity 1–8 ([value boundary](value-boundary.md))"
-msgstr "一个 Rust 元组，按位置、按记录声明的字段类型逐字段对应——元数 1–8（[值边界](value-boundary.md)）"
-
-
-#: src/reference/repr-c.md:66
-msgid "`host struct`"
-msgstr "`host struct`"
-
-
-#: src/reference/repr-c.md:66
-msgid ""
-"the declared flat record, decoded through the field table; the shape is the whole surface"
-msgstr "声明的扁平记录，经由字段表解码；形状就是整个表面"
-
-
-#: src/reference/repr-c.md:67
-msgid "user record (struct)"
-msgstr "用户记录（struct）"
-
-
-#: src/reference/repr-c.md:67
-msgid ""
-"never crosses whole — pass it as `opaque`, mirror it as a `host struct`, or walk it with reflection"
-msgstr "绝不整体跨越——以 `opaque` 传递，镜像成 `host struct`，或用反射遍历"
-
-
-#: src/reference/repr-c.md:68
-msgid "`Vec<T>` / `[T]`"
-msgstr "`Vec<T>` / `[T]`"
-
-
-#: src/reference/repr-c.md:68
-msgid "never crosses; per-element fns, or `bytes` for raw payloads"
-msgstr "绝不跨越；逐元素函数，或用 `bytes` 装原始载荷"
-
-
-#: src/reference/repr-c.md:70
-msgid ""
-"The positional tuple decode is the one place record _structure_ reaches Rust, and it is fully checked: a field whose type does not cross is a compile error on the entry, and a runtime shape mismatch traps naming both sides."
-msgstr ""
-"按位置的元组解码是记录_结构_抵达 Rust 的唯一地点，而且它被完整检查：类型不可跨越的字段是入口上的编译错误，运行时形状不匹配则触发陷阱并点名双方。"
-
-
-#: src/reference/repr-c.md:75
-msgid "What the toolchain checks instead"
-msgstr "工具链实际检查什么"
-
-
-#: src/reference/repr-c.md:77
-msgid ""
-"A shared-layout contract would be checked once, at registration. rut replaces it with checks it can actually enforce:"
-msgstr "共享布局契约只会在注册时被检查一次。rut 用它真正能强制执行的检查取而代之："
-
-
-#: src/reference/repr-c.md:80
-msgid "guarantee"
-msgstr "保证"
-
-
-#: src/reference/repr-c.md:80
-msgid "enforced by"
-msgstr "由何强制"
-
-
-#: src/reference/repr-c.md:82
-msgid "every value a host receives has the declared type"
-msgstr "宿主收到的每个值都具有声明的类型"
-
-
-#: src/reference/repr-c.md:82
-msgid "the boundary decode ([value boundary](value-boundary.md))"
-msgstr "边界解码（[值边界](value-boundary.md)）"
-
-
-#: src/reference/repr-c.md:83
-msgid "surfaces and bindings agree"
-msgstr "表面与绑定彼此一致"
-
-
-#: src/reference/repr-c.md:83
-msgid "the boot join ([host fns](host-fns.md))"
-msgstr "启动 join（[宿主函数](host-fns.md)）"
-
-
-#: src/reference/repr-c.md:84
-msgid "a consumer and a published package agree"
-msgstr "消费方与已发布的包彼此一致"
-
-
-#: src/reference/repr-c.md:84
-msgid ""
-"the decl digest at link ([module binary and verification](module-binary.md))"
-msgstr "链接时的声明摘要（[模块二进制与校验](module-binary.md)）"
-
-
-#: src/reference/repr-c.md:85
-msgid "registers hold their declared types"
-msgstr "寄存器持有其声明的类型"
-
-
-#: src/reference/repr-c.md:85
-msgid "the verifier ([typed bytecode](typed-bytecode.md))"
-msgstr "校验器（[类型化字节码](typed-bytecode.md)）"
-
-
-#: src/reference/repr-c.md:87
-msgid "Practical recipes"
-msgstr "实用配方"
-
-
-#: src/reference/repr-c.md:89
-msgid "need"
-msgstr "需求"
-
-
-#: src/reference/repr-c.md:89 src/reference/project-structure.md:156
-msgid "shape"
-msgstr "形状"
-
-
-#: src/reference/repr-c.md:91
-msgid "pass numeric payloads cheaply"
-msgstr "低开销地传递数值载荷"
-
-
-#: src/reference/repr-c.md:91
-msgid "cross the fields as primitives, or pack into `bytes`"
-msgstr "把字段作为基本类型跨越，或打包进 `bytes`"
-
-
-#: src/reference/repr-c.md:92
-msgid "share mutable native state"
-msgstr "共享可变的原生状态"
-
-
-#: src/reference/repr-c.md:92
-msgid "`opaque` box + wrapper class"
-msgstr "`opaque` 盒 + 包装类"
-
-
-#: src/reference/repr-c.md:93
-msgid "read rut records from the host"
-msgstr "从宿主读取 rut 记录"
-
-
-#: src/reference/repr-c.md:93
-msgid "reflection descriptors, or a `host struct` mirror"
-msgstr "反射描述符，或 `host struct` 镜像"
-
-
-#: src/reference/repr-c.md:94
-msgid "fixed binary records"
-msgstr "固定的二进制记录"
-
-
-#: src/reference/repr-c.md:94
-msgid "`bytes` + `b.len()`/decode helpers ([primitive types](primitive-types.md))"
-msgstr "`bytes` + `b.len()`/解码辅助函数（[基本类型](primitive-types.md)）"
 
 
 #: src/reference/host-fns.md:3
@@ -26952,6 +26613,11 @@ msgid "check"
 msgstr "检查"
 
 
+#: src/reference/module-binary.md:170
+msgid "rule"
+msgstr "规则"
+
+
 #: src/reference/module-binary.md:172
 msgid "register range"
 msgstr "寄存器范围"
@@ -29175,6 +28841,11 @@ msgstr "树内包"
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr "`rut/` 收纳 CLI 按需 offer 的标准与可换包："
+
+
+#: src/reference/project-structure.md:156
+msgid "shape"
+msgstr "形状"
 
 
 #: src/reference/project-structure.md:158

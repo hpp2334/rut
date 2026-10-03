@@ -40,6 +40,16 @@ PO = 'docs/po/zh_CN.po'
 # changed strings. The Phase C sweep's 69 entries landed and were
 # pruned; see the git history of this file for them.
 FRESH = {
+    # the repr(C) tombstone page goes: the host-boundary closing
+    # sentence loses its trailing clause (the withdrawn C-struct
+    # experiment pointer); the zh sentence drops the same clause
+    'The full details live in the reference: [embedding and native '
+    'modules](../reference/embedding.md), [the value boundary and '
+    'borrows](../reference/value-boundary.md), and [host fns and '
+    'declaration files](../reference/host-fns.md).':
+        '全部细节住在参考手册里：[嵌入与原生模块](../reference/embedding.md)、'
+        '[值边界与借用](../reference/value-boundary.md)、'
+        '[宿主 fn 与声明文件](../reference/host-fns.md)。',
 }
 
 

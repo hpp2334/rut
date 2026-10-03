@@ -87,7 +87,6 @@
 
 - [Embedding and native modules](reference/embedding.md)
 - [Value boundary and borrows](reference/value-boundary.md)
-- [repr(C) struct interop](reference/repr-c.md)
 - [Host fns and declaration files](reference/host-fns.md)
 - [Native containers API surface](reference/native-containers.md)
 - [Templates — f"..." across the boundary](reference/templates.md)
