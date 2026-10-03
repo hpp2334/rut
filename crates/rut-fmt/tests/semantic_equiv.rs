@@ -18,12 +18,12 @@ fn run(src: &str) -> Result<Vec<String>, String> {
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
-            rut_driver::dir_pkgs(&tree.join(d))
+            rut_native::dir_pkgs(&tree.join(d))
                 .map_err(|e| e.to_string())?
                 .pkgs,
         );
     }
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
         .pkg(rut_driver::Pkg::source("probe", src))

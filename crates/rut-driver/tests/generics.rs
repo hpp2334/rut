@@ -18,7 +18,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )

@@ -39,5 +39,6 @@ http = ["dep:reqwest"]
 # the decl↔body contract tests: mount `rut/http_host`,
 # compile a probe, `verify_against` — dev-deps never propagate
 rut-driver = { path = "../rut-driver" }
+rut-native = { path = "../rut-native" }
 rut-parser = { path = "../rut-parser" }
 rut-lexer = { path = "../rut-lexer" }

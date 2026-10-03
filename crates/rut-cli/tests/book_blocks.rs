@@ -132,13 +132,13 @@ fn book_blocks_compile_and_run() {
             ] {
                 if body.contains(&format!("use {name}::")) {
                     world.extend(
-                        rut_driver::dir_pkgs(&tree.join(dir))
+                        rut_native::dir_pkgs(&tree.join(dir))
                             .unwrap_or_else(|e| panic!("{rel}#{n}: mount {name}: {e}"))
                             .pkgs,
                     );
                 }
             }
-            world.push(rut_driver::calc_pkg());
+            world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
             // the rows snapshot the installs answer to
             let ctx = rut_driver::host_pkg_ctx(&world);
 

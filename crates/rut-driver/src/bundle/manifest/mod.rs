@@ -100,7 +100,7 @@ pub enum PkgType {
 
 /// A parsed manifest — either a module manifest (`name` + `entry`) or
 /// a consumer manifest (`deps`), or both.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Manifest {
     pub name: Option<String>,
     /// `type = "lib" | "host"` — the declared kind; absent ⇒ [`PkgType::Lib`]
@@ -134,6 +134,15 @@ pub struct Manifest {
     /// ignored (the forward-compat rule); unknown VALUES trip the
     /// formatter tool, never the loader.
     pub style: BTreeMap<String, String>,
+    /// `namespace` — the qualified-access head (`calc`'s `Math`): the
+    /// manifest's spelling of what the surface grammar cannot say.
+    /// The walk rides it onto the pkg; `use calc::{Math}` binds it.
+    pub namespace: Option<String>,
+    /// `consts` — the host body's compiler-materialized constants
+    /// (name → f64; `calc`'s `Math.PI` family). The surface grammar
+    /// has no `static` field form, so the manifest is their only
+    /// spelling.
+    pub consts: BTreeMap<String, f64>,
 }
 
 /// A malformed manifest — a load error, never a runtime trap.

@@ -15,9 +15,8 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::block_on;
 
-use rut_driver::{
-    load_dir_with, pack_dir, pack_dir_opts, sha256_hex, DepRemote, PkgBody, PackOpts, RemoteError,
-};
+use rut_driver::{sha256_hex, PkgBody, PackOpts};
+use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError};
 
 // ------------------------------------------------------------------
 // the fixture world: a host pkg + a consumer, in scratch dirs
@@ -39,7 +38,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -486,7 +485,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("load");
     let g = rut_driver::RutRun::new()
         .pkgs(&session)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");

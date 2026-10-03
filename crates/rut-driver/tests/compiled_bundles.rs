@@ -12,9 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
-use rut_driver::bundle::FsSource;
+use rut_native::pack_dir;
 use rut_driver::{
-    pack_dir, PkgBody,
+    PkgBody,
 };
 
 
@@ -34,7 +34,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -137,7 +137,7 @@ fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
 fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -159,7 +159,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     let root = mixed_world("mixed");
     // THE pinned equivalence: the compiled bundle and its source
     // directory link to the identical binary
-    let dir_loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("dir load");
+    let dir_loaded = rut_native::load_dir(&root.join("app")).expect("dir load");
     let from_dir = linked_binary(&dir_loaded);
 
     let bytes = pack_dir(&root.join("app")).expect("pack");
@@ -221,7 +221,7 @@ fn a_source_group_splices_into_a_consumer_session() {
     // mounted groups, compiled and linked exactly like a directory world
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint("consumer")
         .compile()
         .unwrap();
@@ -449,7 +449,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
 
     // the directory world first (the load-time peer gate rides the same
     // compile — the rows land in the declarer's unit there too)
-    let dir_loaded = rut_driver::load_dir(&app, &FsSource).expect("dir load");
+    let dir_loaded = rut_native::load_dir(&app).expect("dir load");
     let from_dir = linked_binary(&dir_loaded);
 
     let bytes = pack_dir(&app).expect("pack");

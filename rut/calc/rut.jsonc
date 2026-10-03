@@ -1,8 +1,51 @@
 {
+  // calc/ — the `Math` namespace: the float members are host functions
+  // (f64 bodies in `rut-std`, each with an f32 twin under a `_f` suffix
+  // — `Math.sqrt_f(x: f32) -> f32`; rut has no overloading, so the
+  // width is in the name). A `type = "host"` tree package: the surface
+  // is calc.d.rut, the BODIES stay rut-std behind the inert host-pkg
+  // install (`.host_pkg(rut_std::math::pkg())`) — the declaration
+  // mounts, the embedding Rust binds.
+  //
+  // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
+  // `checked_*`) are core's `builtin impl` methods on the primitives;
+  // `NAN` is core's too (`use core::{NAN}`).
+  //
+  // The namespace head and the constants ride THIS manifest — the
+  // surface grammar has no spelling for either, so the manifest is
+  // their only form:
+  //   "namespace" — the qualified-access head `use calc::{Math}` binds;
+  //   "consts"    — f64, compiler-materialized (JSON has no spelling
+  //                 for the non-finite pair; `"inf"` / `"-inf"` name
+  //                 it): Math.PI Math.TAU Math.E Math.SQRT_2 Math.LN_2
+  //                 Math.LN_10 Math.LOG2_E Math.LOG10_E Math.INFINITY
+  //                 Math.NEG_INFINITY Math.EPSILON Math.MAX Math.MIN
+  //                 Math.MIN_POSITIVE.
+  //
+  // Contract (std/core.d.rut): the surface is kept TRUE to the
+  // implementation — signatures match the mount tables, never
+  // aspirational.
   "format": "rutbundle",
   "format_version": 10,
   "name": "calc",
   "type": "host",
+  "namespace": "Math",
+  "consts": {
+    "PI": 3.141592653589793,
+    "TAU": 6.283185307179586,
+    "E": 2.718281828459045,
+    "SQRT_2": 1.4142135623730951,
+    "LN_2": 0.6931471805599453,
+    "LN_10": 2.302585092994046,
+    "LOG2_E": 1.4426950408889634,
+    "LOG10_E": 0.4342944819032518,
+    "INFINITY": "inf",
+    "NEG_INFINITY": "-inf",
+    "EPSILON": 2.220446049250313e-16,
+    "MAX": 1.7976931348623157e308,
+    "MIN": -1.7976931348623157e308,
+    "MIN_POSITIVE": 2.2250738585072014e-308
+  },
   "entry": {
     "type": "./calc.d.rut"
   }

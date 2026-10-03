@@ -11,6 +11,7 @@ rut-parser = { path = "../rut-parser" }
 rut-ast = { path = "../rut-ast" }
 
 [dev-dependencies]
+rut-native = { path = "../rut-native" }
 rut-driver = { path = "../rut-driver" }
 rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std" }

@@ -32,7 +32,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -53,7 +53,9 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
-    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
     pkgs.push(ink_host);
     pkgs.push(rut_driver::Pkg::source("app", src));
     let expected = rut_driver::declared_host_fns(&pkgs);
@@ -106,7 +108,9 @@ fn diags_of(src: &str) -> Vec<String> {
     let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
         .expect("ink_host")
         .named("ink_host");
-    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
     pkgs.push(ink_host);
     pkgs.push(rut_driver::Pkg::source("app", src));
     rut_driver::RutRun::new()

@@ -71,7 +71,7 @@ fn install_fastlane(hosts: &mut rut_vm::interp::HostRegistry, kept_str: Rc<RefCe
     });}
 
 fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
-    let mut world = rut_driver::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
+    let mut world = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
         .expect("mount fastlane")
         .pkgs;
     world.push(rut_driver::Pkg::source("app", SRC));

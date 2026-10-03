@@ -1,8 +1,7 @@
-//! The pack lane's error currency — real types, not `String`.
-//! Same pattern as the loader's [`crate::LoadError`]: structured
-//! variants for the classes that carry data, a `Law` tail for the
-//! long-tail refusals. Display text is byte-for-byte today's
-//! messages.
+//! The pack lane's error currency — real types, not `String`:
+//! structured variants for the classes that carry data, a `Law` tail
+//! for the long-tail refusals. Display text is byte-for-byte today's
+//! messages. The FS half (rut-native) maps its own errors in.
 
 use thiserror::Error;
 
@@ -21,9 +20,6 @@ pub enum PackError {
     /// the manifest grammar refused
     #[error(transparent)]
     Manifest(#[from] ManifestError),
-    /// the load half refused (the pack walks the same mount passes)
-    #[error(transparent)]
-    Load(#[from] crate::loader::LoadError),
     /// the long tail: today's refusal text, verbatim
     #[error("{0}")]
     Law(String),
@@ -31,12 +27,12 @@ pub enum PackError {
 
 impl PackError {
     /// A long-tail refusal — the message IS the error's text.
-    pub(crate) fn law(msg: impl Into<String>) -> Self {
+    pub fn law(msg: impl Into<String>) -> Self {
         PackError::Law(msg.into())
     }
 
     /// A filesystem read failure at `path`.
-    pub(crate) fn io(path: impl std::fmt::Display, source: std::io::Error) -> Self {
+    pub fn io(path: impl std::fmt::Display, source: std::io::Error) -> Self {
         PackError::Io {
             path: path.to_string(),
             source,

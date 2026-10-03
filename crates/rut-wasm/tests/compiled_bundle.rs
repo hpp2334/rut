@@ -28,7 +28,7 @@ fn pack_world() -> Vec<u8> {
         "use lib::{ four };\nentry fn main() -> i64 { return four(); }\n",
     )
     .unwrap();
-    let bytes = rut_driver::pack_dir(&app).expect("pack");
+    let bytes = rut_native::pack_dir(&app).expect("pack");
     let _ = std::fs::remove_dir_all(&base);
     bytes
 }
@@ -47,7 +47,7 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
     // compiled-mount arm rebases and pushes), link, verify, run
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");

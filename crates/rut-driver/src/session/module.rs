@@ -1,12 +1,13 @@
 //! The package value: its body kinds, the generic-source rider, and
 //! the peer declarations a manifest recorded.
 //!
-//! A `Pkg` is pure data — a named package. The walk (the loaders)
+//! A `Pkg` is pure data — a named package. The walk (rut-native)
 //! yields them; [`crate::run::RutRun`] offers them; the compile-time
 //! mount table (the crate-internal `Session`) holds them. Walker-found
-//! metadata (the deps table, the peer declarations) is pub data on it;
-//! the walk's own bookkeeping (where the pkg's files live) is
-//! crate-internal and dies with the walk in rut-native.
+//! metadata (the deps table, the peer declarations and their
+//! integration texts) is pub data on it; the walk's own bookkeeping
+//! (where the pkg's files live) never rides — it died with the walk's
+//! move to rut-native.
 
 use std::collections::BTreeMap;
 
@@ -119,22 +120,22 @@ pub struct Pkg {
     /// declaration. Pub data: the peer gate reads it post-closure; the
     /// reference-site missing-peer diagnostic resolves against it.
     pub peers: BTreeMap<String, PeerDecl>,
-    /// Where the walk found this pkg's files — the peer gate's group
-    /// reads dispatch on it. Crate-internal: dies with the walk when it
-    /// moves to rut-native.
-    pub(crate) dir: Option<std::path::PathBuf>,
-    /// Where this pkg's archive-mounted files live: `(slot, in-archive
-    /// prefix)`, slot indexing the WALK's archive list. Crate-internal.
-    pub(crate) archive: Option<(usize, String)>,
-    /// Which walk produced this pkg — the archive slots' namespace: two
-    /// walks' slot 0 are different archives. Crate-internal.
-    pub(crate) walk: u64,
+    /// The pkg's declared peer-INTEGRATION texts, read by the walk at
+    /// mount: peer name → the descriptor's `lib` file. `Some` when the
+    /// read succeeded, `None` when the file could not be read (the
+    /// gate's loud D3 packaging-bug error — but ONLY when the peer is
+    /// present; an absent optional peer stays inert). A name absent
+    /// from the map altogether is a hand-offered pkg whose world
+    /// carries no files — the gate's "not mounted" error. Pure data:
+    /// the gate moves a text onto [`Pkg::peer_groups`] on presence.
+    pub peer_libs: BTreeMap<String, Option<String>>,
     /// Presence-gated peer-integration groups recorded for this pkg: the
-    /// gate read the descriptor's `lib` file because the peer is in the
-    /// program's closure. The graph compiles them INTO this pkg's unit
-    /// (after its own source) — a mounted pkg's body is never mutated.
-    /// A host whose world has no filesystem (wasm) appends the same
-    /// texts by hand — the pkg is pure data, the graph only reads.
+    /// gate moved the descriptor's `lib` text here because the peer is
+    /// in the program's closure. The graph compiles them INTO this
+    /// pkg's unit (after its own source) — a mounted pkg's body is
+    /// never mutated. A host whose world has no filesystem (wasm)
+    /// appends the same texts by hand — the pkg is pure data, the
+    /// graph only reads.
     pub peer_groups: Vec<String>,
     /// Have this pkg's peer groups already been appended by an earlier
     /// gate pass (or by the offering host)? A second pass never
@@ -200,10 +201,9 @@ impl Pkg {
     /// walked yield ([`crate::run::Loaded`]) — gates, groups, the scope
     /// ledger, and the ONE peer gate over the archive's own pkgs. No
     /// filesystem, no network: the same contract a url dep rides.
+    /// Pure data: the gate moves a text onto [`Pkg::peer_groups`] on presence.
     pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Loaded, crate::run::RunError> {
         crate::loader::bundle_walk_bytes(bytes)
-            .map(crate::loader::WalkOutput::into_loaded)
-            .map_err(crate::run::RunError::from)
     }
 }
 
@@ -223,9 +223,9 @@ pub struct PeerDecl {
 }
 
 impl PeerDecl {
-    /// The declaration a descriptor table describes — the loader and
+    /// The declaration a descriptor table describes — the walk and
     /// the manifest lanes share the reading.
-    pub(crate) fn of(desc: &BTreeMap<String, String>) -> PeerDecl {
+    pub fn of(desc: &BTreeMap<String, String>) -> PeerDecl {
         PeerDecl {
             optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
             lib: desc.get("lib").cloned(),

@@ -38,7 +38,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -56,10 +56,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn vm_at(dir: &str) -> Vm {
-    let loaded = rut_driver::load_dir(Path::new(dir), &rut_driver::bundle::FsSource).expect("mount");
+    let loaded = rut_native::load_dir(Path::new(dir)).expect("mount");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         // the nmapset group drags nmap_host's declared surface — the
         // bodies install against the rows snapshot (declared host fns
         // run only through the registry)
@@ -636,20 +636,20 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
     let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>.new();\n    v.push(1);\n}\n";
-    let light = rut_driver::load_dir(Path::new(LIGHT), &rut_driver::bundle::FsSource).expect("mount light");
+    let light = rut_native::load_dir(Path::new(LIGHT)).expect("mount light");
     let err = rut_driver::RutRun::new()
         .pkgs(&light)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .pkg(rut_driver::Pkg::source("d2probe", src))
         .entrypoint("d2probe")
         .compile()
         .unwrap_err();
     assert!(err.to_string().contains("pouch"), "the D2 miss names the peer: {err}");
 
-    let full = rut_driver::load_dir(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount full");
+    let full = rut_native::load_dir(Path::new(PKG)).expect("mount full");
     let out = rut_driver::RutRun::new()
         .pkgs(&full)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .pkg(rut_driver::Pkg::source("d2probe", src))
         .entrypoint("d2probe")
         .compile()

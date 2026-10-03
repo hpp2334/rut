@@ -45,7 +45,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -69,10 +69,10 @@ fn vm() -> Vm {
 /// A VM over the fixture with a caller-chosen heap budget — the
 /// charge-hook test grows the builder past a SMALL budget on purpose.
 fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
-    let loaded = rut_driver::load_dir(Path::new(PKG), &rut_driver::bundle::FsSource).expect("mount");
+    let loaded = rut_native::load_dir(Path::new(PKG)).expect("mount");
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");

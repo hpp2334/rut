@@ -16,8 +16,8 @@ use std::task::{Context, Poll};
 /// cold start networks on its misses (the CDN, pinned by the
 /// manifest); a warm start is pure cache hits.
 fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
-    let remote = rut_driver::HttpRemote::project_local(base);
-    block_on(rut_driver::load_path_session_with(base, &remote))
+    let remote = rut_native::HttpRemote::project_local(base);
+    block_on(rut_native::load_path_session_with(base, &remote))
 }
 
 /// The std-only driver for the `_with` lane: the fetched futures are
@@ -40,7 +40,7 @@ fn main() {
     let loaded = load(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()

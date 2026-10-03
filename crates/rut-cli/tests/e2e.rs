@@ -21,14 +21,14 @@ fn case_world() -> Vec<rut_driver::Pkg> {
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
-            rut_driver::dir_pkgs(
+            rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
             )
             .expect("mount case libs")
             .pkgs,
         );
     }
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     world
 }
 
@@ -36,14 +36,14 @@ fn case_ctx() -> rut_vm::interp::HostPkgContext {
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
-            rut_driver::dir_pkgs(
+            rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
             )
             .expect("mount case libs")
             .pkgs,
         );
     }
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     rut_driver::host_pkg_ctx(&world)
 }
 
@@ -140,14 +140,14 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let mut chain = rut_driver::RutRun::new()
         .pkg(rut_driver::Pkg::source(module, &combined));
     for d in ["rut/ink", "rut/pouch"] {
-        let pkgs = rut_driver::dir_pkgs(
+        let pkgs = rut_native::dir_pkgs(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
         )
         .expect("mount case libs");
         chain = chain.pkgs(&pkgs);
     }
     chain
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(module)
         .compile()
         .expect("compile the case")
@@ -2392,14 +2392,14 @@ fn dbg_digest() {
     // writer; no peer group needed)
     for d in ["rut/pouch", "rut/json"] {
         world.extend(
-            rut_driver::dir_pkgs(
+            rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
             )
             .expect("mount pkg")
             .pkgs,
         );
     }
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let out = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
         .pkg(rut_driver::Pkg::source("digests", &src))

@@ -29,7 +29,8 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, Table};
 
-use rut_driver::{load_dir_with, sha256_hex};
+use rut_driver::sha256_hex;
+use rut_native::load_dir_with;
 
 
 
@@ -48,7 +49,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -114,7 +115,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -125,7 +126,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
 fn every_committed_artifact_is_byte_fresh() {
     for (dir, name) in PKGS {
         let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(dir);
-        let fresh = rut_driver::pack_dir(&tree)
+        let fresh = rut_native::pack_dir(&tree)
             .unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
         let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
@@ -262,7 +263,7 @@ fn load_compile_run(
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -398,7 +399,7 @@ entry fn main() -> i32 {
     // offered pkgs' rows snapshot (calc offered beside: the math bodies'
     // scope is declared like any pkg's)
     let mut world = session.pkgs.clone();
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
@@ -514,7 +515,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     // the builder's host rows demand bodies — the embedder half
     // (calc offered beside; the core prelude auto-rides)
     let mut world = session.pkgs.clone();
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
@@ -522,7 +523,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     hosts.verify_against(&ctx.flatten());
     let g = rut_driver::RutRun::new()
         .pkgs(&session)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");

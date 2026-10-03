@@ -75,14 +75,14 @@ struct Widget {
 
 fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm {
     // the source uses `pouch` — a third-party pkg, walked from the tree
-    let mut world = rut_driver::dir_pkgs(
+    let mut world = rut_native::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch")
     .pkgs;
     // `re` — this test's own host pkg, declared in tests/data/re
     world.extend(
-        rut_driver::dir_pkgs(
+        rut_native::dir_pkgs(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/re"),
         )
         .expect("mount re")

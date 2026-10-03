@@ -22,7 +22,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let cache = std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&cache);
-    let remote = rut_driver::HttpRemote::offline(&cache);
+    let remote = rut_native::HttpRemote::offline(&cache);
     let manifest_text =
         std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
@@ -33,13 +33,13 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
         let bytes = std::fs::read(dist.join(artifact)).map_err(|e| {
             format!("the committed artifact is the cache — cannot read {artifact}: {e}")
         })?;
-        rut_driver::DepRemote::write(&remote, url, &bytes).map_err(|e| e.to_string())?;
+        rut_native::DepRemote::write(&remote, url, &bytes).map_err(|e| e.to_string())?;
     }
     // the pack lane over the warmed remote: the prefetch hits only the
     // cache — one noop-waker poll settles the READY futures
     let opts = rut_driver::PackOpts::default();
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-    let mut pinned = std::pin::pin!(rut_driver::pack_dir_opts_with(d, &opts, &remote));
+    let mut pinned = std::pin::pin!(rut_native::pack_dir_opts_with(d, &opts, &remote));
     loop {
         match pinned.as_mut().poll(&mut cx) {
             std::task::Poll::Ready(v) => break v.map(|(bytes, _)| bytes).map_err(|e| e.to_string()),
@@ -80,13 +80,13 @@ fn prime_project_cache() {
             std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
         let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
         let dist = d.join("../../../dist/std");
-        let remote = rut_driver::HttpRemote::offline(d.join(".rut").join("cache"));
+        let remote = rut_native::HttpRemote::offline(d.join(".rut").join("cache"));
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };
             let artifact = url.rsplit('/').next().unwrap_or_default();
             let bytes = std::fs::read(dist.join(artifact))
                 .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
-            rut_driver::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
+            rut_native::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
         }
     });
 }

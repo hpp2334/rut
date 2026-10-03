@@ -71,7 +71,7 @@ pub struct RunError {
 }
 
 impl RunError {
-    pub(crate) fn law(msg: impl Into<String>) -> RunError {
+    pub fn law(msg: impl Into<String>) -> RunError {
         RunError { msg: msg.into() }
     }
 }
@@ -83,12 +83,6 @@ impl std::fmt::Display for RunError {
 }
 
 impl std::error::Error for RunError {}
-
-impl From<crate::loader::LoadError> for RunError {
-    fn from(e: crate::loader::LoadError) -> RunError {
-        RunError::law(e.to_string())
-    }
-}
 
 /// A composed, compiled run: the linked graph (diags inside — check
 /// [`GraphOutput::diags`] before trusting [`GraphOutput::program`]) and
@@ -138,6 +132,47 @@ pub struct RutRun {
     pkgs: BTreeMap<String, Pkg>,
     host_pkgs: Vec<rut_vm::HostPkg>,
     entrypoint: Option<String>,
+}
+
+/// The `core` prelude pkg — the erasure primitive (`opaque`), the
+/// engine's builtin surface (`Iterable`, the disposal pair), and the
+/// compiler-lowered functions (`panic`, the `str`/`bytes` natives).
+/// v1.1 removed `Option`/`Result`/`own` — use sites diagnose with the
+/// removal. A native pkg with no body: its surface is
+/// [`rut_core::binary::Surface::core`], the single source of truth
+/// (`rut/core/core.d.rut` mirrors it for the LSP). Builtin names are
+/// ambient except the `pub builtin` spellings (the disposal pair) —
+/// those resolve only through `use core::{ .. }`; each row
+/// keeps its ambient bit so the binding loops see the split.
+/// `core` needs no `[deps]` declaration: `.compile()` auto-offers it
+/// unconditionally (§0.14), while every other package resolves through
+/// `[deps]` or host registration. Crate-internal: `core` is the one
+/// engine-mounted pkg — there is no public constructor to reach for.
+pub(crate) fn core_pkg() -> Pkg {
+    // the surface is symbol-id based; the host-facing mount table is
+    // string-based — `sym::text` bridges at this boundary only
+    let core = rut_core::binary::Surface::core();
+    let txt = |id: rut_core::IdentId| -> String {
+        rut_core::sym::text(id).unwrap_or_default().to_string()
+    };
+    Pkg {
+        spec: "core".to_string(),
+        // each row keeps its ambient bit — the binding loops read
+        // it off the synthesized surface, so the `pub builtin`
+        // spellings stay import-gated end to end
+        body: PkgBody::Host {
+            native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+            native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
+            consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
+            native_impls: core
+                .native_impls
+                .iter()
+                .map(|(t, n, i)| (*t, txt(*n), *i))
+                .collect(),
+            host_funcs: vec![],
+        },
+        ..Default::default()
+    }
 }
 
 /// The declared host rows of a pkg set, async-expanded — the same
@@ -209,7 +244,7 @@ impl RutRun {
         self
     }
 
-/// The terminal step: validate + compile (the law in the module
+    /// The terminal step: validate + compile (the law in the module
     /// docs). `Ok` always carries a [`Compiled`]; check
     /// `Compiled::graph.diags` for the compile's own diagnostics.
     pub fn compile(self) -> Result<Compiled, RunError> {
@@ -218,7 +253,7 @@ impl RutRun {
         //    offered (first-pkg-wins override)
         let mut pkgs = pkgs;
         if !pkgs.contains_key("core") {
-            pkgs.insert("core".to_string(), crate::core_pkg());
+            pkgs.insert("core".to_string(), core_pkg());
         }
         // 2. close the world, mount rows — plus the mount-by-mount
         //    world's ONE peer-gate append pass (idempotent per pkg: a
@@ -230,82 +265,76 @@ impl RutRun {
         // AND its groups — rebases with the same map before mounting.
         // The walk's own law, applied at the close of the world, so two
         // independently packed bundles never argue about a number (each
-        // binary's ids resolve through its OWN archive's rows). Pkgs
-        // group by the walk's archive slot; the rows ride the group's
-        // root.
-        let mut by_slot: std::collections::BTreeMap<(u64, usize), Vec<String>> = Default::default();
-        let mut grouped: std::collections::BTreeMap<String, Pkg> = Default::default();
-        let mut plain: Vec<(String, Pkg)> = Vec::new();
-        for (name, pkg) in pkgs {
-            match pkg.archive {
-                Some((slot, _)) => {
-                    by_slot.entry((pkg.walk, slot)).or_default().push(name.clone());
-                    grouped.insert(name, pkg);
-                }
-                None => plain.push((name, pkg)),
-            }
-        }
-        for (_, names) in by_slot {
+        // binary's ids resolve through its OWN archive's rows). The
+        // archive's identity is its ROOT's row vector: the pack ledger
+        // names the archive's whole closure, so the members are the
+        // rows' specs — pure data, no walk bookkeeping on the pkg (a
+        // member rebases only when its body is a decoded program; a
+        // shadowed name keeps its own, earlier-won body).
+        let mut roots: BTreeMap<String, Vec<(rut_core::id::ScopeId, String)>> =
+            pkgs.iter()
+                .filter(|(_, p)| !p.bundle_scopes.is_empty())
+                .map(|(n, p)| (n.clone(), p.bundle_scopes.clone()))
+                .collect();
+        for (root, rows) in &roots {
             // one shift per archive: the fit check + the map, applied to
-            // every member body (the rows ride the group's root)
-            let rows = names
-                .iter()
-                .filter_map(|n| grouped.get(n))
-                .find(|p| !p.bundle_scopes.is_empty())
-                .map(|p| p.bundle_scopes.clone())
-                .unwrap_or_default();
-            let base: Option<rut_core::id::ScopeId> = if rows.is_empty() {
-                None
-            } else {
-                let base = session.bundle_scope_next_base().ok_or_else(|| {
-                    RunError::law("the bundle scope numbering space is exhausted")
-                })?;
-                for &(s, _) in &rows {
-                    if s != rut_core::id::BOOT_SCOPE
-                        && base as u32 + s as u32 > rut_core::id::MAX_SCOPE
-                    {
-                        return Err(RunError::law(format!(
-                            "the bundle's scope ledger reaches scope {s}, which does not fit above this program's {base} — the numbering space is exhausted"
-                        )));
-                    }
+            // the root and every decoded member
+            let base = session.bundle_scope_next_base().ok_or_else(|| {
+                RunError::law("the bundle scope numbering space is exhausted")
+            })?;
+            for &(s, _) in rows {
+                if s != rut_core::id::BOOT_SCOPE
+                    && base as u32 + s as u32 > rut_core::id::MAX_SCOPE
+                {
+                    return Err(RunError::law(format!(
+                        "the bundle's scope ledger reaches scope {s}, which does not fit above this program's {base} — the numbering space is exhausted"
+                    )));
                 }
-                for (s, spec) in &rows {
-                    let shifted = if *s == rut_core::id::BOOT_SCOPE {
-                        *s
-                    } else {
-                        base + s
-                    };
-                    session.record_bundle_scope(shifted, spec);
+            }
+            for (s, spec) in rows {
+                let shifted = if *s == rut_core::id::BOOT_SCOPE {
+                    *s
+                } else {
+                    base + s
+                };
+                session.record_bundle_scope(shifted, spec);
+            }
+            let shift = |s: rut_core::id::ScopeId| {
+                if s == rut_core::id::BOOT_SCOPE {
+                    s
+                } else {
+                    base + s
                 }
-                Some(base)
             };
-            for name in names {
-                let Some(mut pkg) = grouped.remove(&name) else { continue };
-                if let Some(base) = base {
-                    let shift = |s: rut_core::id::ScopeId| {
-                        if s == rut_core::id::BOOT_SCOPE {
-                            s
-                        } else {
-                            base + s
-                        }
-                    };
-                    if let PkgBody::Compiled(prog) = &mut pkg.body {
-                        *prog = rut_core::link::rebase(prog.clone(), &shift);
-                    }
-                    pkg.bundle_scopes =
-                        pkg.bundle_scopes.iter().map(|&(s, ref spec)| (shift(s), spec.clone())).collect();
+            if let Some(mut pkg) = pkgs.remove(root) {
+                if let PkgBody::Compiled(prog) = &mut pkg.body {
+                    *prog = rut_core::link::rebase(prog.clone(), &shift);
+                }
+                pkg.bundle_scopes =
+                    pkg.bundle_scopes.iter().map(|&(s, ref spec)| (shift(s), spec.clone())).collect();
+                session
+                    .register_module(root, pkg)
+                    .map_err(|e| RunError::law(e.to_string()))?;
+            }
+            for (_, member) in rows {
+                if member == root || member == "core" {
+                    continue;
+                }
+                let Some(mut pkg) = pkgs.remove(member) else { continue };
+                if let PkgBody::Compiled(prog) = &mut pkg.body {
+                    *prog = rut_core::link::rebase(prog.clone(), &shift);
                 }
                 session
-                    .register_module(&name, pkg)
+                    .register_module(member, pkg)
                     .map_err(|e| RunError::law(e.to_string()))?;
             }
         }
-        for (name, pkg) in plain {
+        for (name, pkg) in pkgs {
             session
                 .register_module(&name, pkg)
                 .map_err(|e| RunError::law(e.to_string()))?;
         }
-        crate::loader::assemble_peers(&mut session).map_err(RunError::from)?;
+        crate::loader::peer_gate(session.table_mut())?;
         // 3. HostRegistry + install every .host_pkg against the rows
         //    snapshot (a wiring drift panics — the contract, unchanged)
         let ctx = session.host_pkg_context();

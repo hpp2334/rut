@@ -10,6 +10,7 @@ rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
+rut-native = { path = "../../crates/rut-native" }
 rut-vm = { path = "../../crates/rut-vm" }
 # the std HTTP lane: reqwest lives behind the DEFAULT-OFF `http`
 # feature (native-only — reqwest-blocking does not build on wasm32;

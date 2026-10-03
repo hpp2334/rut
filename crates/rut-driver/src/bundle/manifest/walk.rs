@@ -111,6 +111,15 @@ pub(super) fn walk_top(
                     .into(),
             ));
         }
+        // the qualified-access head (`calc`'s `Math`): the manifest's
+        // spelling of what the surface grammar cannot say — the
+        // namespace `use <pkg>::{ Head }` binds and qualified member
+        // access routes through
+        "namespace" => m.namespace = Some(expect_string(key, value)?),
+        // the host body's constants (`calc`'s `Math.PI`): name → f64,
+        // compiler-materialized — the surface grammar has no `static`
+        // field form, so the manifest is their only spelling
+        "consts" => walk_consts(value, m)?,
         "entry" => walk_entry(value, m)?,
         "deps" => walk_deps(value, m)?,
         "peer-deps" => walk_peers(value, "peer-deps", m)?,
@@ -193,6 +202,44 @@ pub(super) fn walk_style(value: &Value, m: &mut Manifest) -> Result<(), Manifest
             return Err(underscore_refused("style", key));
         }
         m.style.insert(key.clone(), expect_field_string("style", key, v)?);
+    }
+    Ok(())
+}
+
+/// The `consts` object: name → f64 — the host body's compiler-
+/// materialized constants (`Math.PI`). Each value is a JSON number;
+/// the non-finite pair has no JSON spelling, so the strings `"inf"` /
+/// `"-inf"` (and `"nan"`) name it. f64 is the only width the manifest
+/// carries.
+fn walk_consts(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
+    let table = expect_object("consts", value)?;
+    for (key, v) in table {
+        if key.starts_with('_') {
+            return Err(underscore_refused("consts", key));
+        }
+        let n = match v {
+            Value::Number(_) => v.as_f64().ok_or_else(|| {
+                ManifestError(format!("consts.{key}: expected a number, found {}", raw(v)))
+            })?,
+            Value::String(s) => match s.as_str() {
+                "inf" | "+inf" => f64::INFINITY,
+                "-inf" => f64::NEG_INFINITY,
+                "nan" => f64::NAN,
+                other => {
+                    return Err(ManifestError(format!(
+                        "consts.{key}: `{other}` is not a number — spell a JSON number (the \
+                         non-finite spellings are \"inf\", \"-inf\", \"nan\")"
+                    )));
+                }
+            },
+            other => {
+                return Err(ManifestError(format!(
+                    "consts.{key}: expected a number, found {}",
+                    raw(other)
+                )));
+            }
+        };
+        m.consts.insert(key.clone(), n);
     }
     Ok(())
 }

@@ -55,7 +55,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -158,7 +158,9 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let fixture = lower_decl_module(FIXTURE_DECL, "fixture.d.rut")
         .expect("the fixture surface is valid")
         .named("fixture");
-    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
     pkgs.push(ink_host);
     pkgs.push(fixture);
     pkgs.push(rut_driver::Pkg::source("app", src));
@@ -597,7 +599,9 @@ entry fn main() -> nil {
     launch_future(job(log, "t"));
 }
 "#;
-    let mut pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
     pkgs.push(ink_host);
     pkgs.push(fixture);
     pkgs.push(rut_driver::Pkg::source("app", app));

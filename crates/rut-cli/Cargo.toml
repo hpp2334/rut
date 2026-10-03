@@ -11,6 +11,8 @@ path = "src/main.rs"
 
 [dependencies]
 rut-driver = { path = "../rut-driver" }
+# the walk + the remotes + the pack lanes (the native host half)
+rut-native = { path = "../rut-native" }
 rut-fmt = { path = "../rut-fmt" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
@@ -21,7 +23,7 @@ rut-std = { path = "../rut-std", features = ["http"] }
 rut-lexer = { path = "../rut-lexer" }
 rut-parser = { path = "../rut-parser" }
 rut-ast = { path = "../rut-ast" }
-# the url-dep lane's transport lives in rut-driver now (`HttpRemote`,
+# the url-dep lane's transport lives in rut-native (`HttpRemote`,
 # behind its default-on `http` feature — the lock keeps ONE reqwest
 # entry); the CLI names the cache root (`RUT_CACHE_DIR` override /
 # project-local) and block_on's the READY fetch futures with a noop

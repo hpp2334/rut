@@ -9,12 +9,12 @@ fn case_world() -> Vec<rut_driver::Pkg> {
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
-            rut_driver::dir_pkgs(&root.join(d))
+            rut_native::dir_pkgs(&root.join(d))
                 .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                 .pkgs,
         );
     }
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     world
 }
 

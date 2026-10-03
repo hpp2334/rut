@@ -161,9 +161,9 @@ pub fn mirror_run() -> Result<RutRun, String> {
 /// cache root lives in the tmp dir: a throwaway, not the project-local
 /// `.rut/cache` a `rut run` would warm.
 #[cfg(not(target_arch = "wasm32"))]
-fn std_remote() -> rut_driver::HttpRemote {
+fn std_remote() -> rut_native::HttpRemote {
     static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-    rut_driver::HttpRemote::offline(ROOT.get_or_init(|| {
+    rut_native::HttpRemote::offline(ROOT.get_or_init(|| {
         let root = std::env::temp_dir()
             .join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -188,19 +188,19 @@ fn std_remote() -> rut_driver::HttpRemote {
                 }
             }
         }
-        let warmer = rut_driver::HttpRemote::offline(&root);
+        let warmer = rut_native::HttpRemote::offline(&root);
         for url in &urls {
             let artifact = url.rsplit('/').next().unwrap_or_default();
             let bytes = std::fs::read(dist.join(artifact)).unwrap_or_else(|e| {
                 panic!("the committed artifact is the cache — {artifact}: {e}")
             });
-            rut_driver::DepRemote::write(&warmer, url, &bytes).expect("prime the cache");
+            rut_native::DepRemote::write(&warmer, url, &bytes).expect("prime the cache");
         }
         root
     }))
 }
 
-/// The manifest lane's directory walk: [`rut_driver::load_dir_with`]
+/// The manifest lane's directory walk: [`rut_native::load_dir_with`]
 /// over [`std_remote`] — the same embedder shape the other examples
 /// spell, with the offline flavor swapped in. One noop-waker poll
 /// settles the READY futures: every url row is a primed cache hit, so
@@ -209,7 +209,7 @@ fn std_remote() -> rut_driver::HttpRemote {
 pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
     use std::future::Future as _;
     let remote = std_remote();
-    let fut = rut_driver::load_dir_with(dir, &remote);
+    let fut = rut_native::load_dir_with(dir, &remote);
     let mut fut = std::pin::pin!(fut);
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
     loop {

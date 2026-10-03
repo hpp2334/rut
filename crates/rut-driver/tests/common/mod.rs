@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::task::{Context, Poll};
 
-use rut_driver::{DepRemote, RemoteError};
+use rut_native::{DepRemote, RemoteError};
 
 /// The in-memory remote: url → bytes, answered `ready` (sync impls are
 /// first-class on the trait).

@@ -5,9 +5,8 @@
 
 use std::path::Path;
 
-use rut_driver::bundle::FsSource;
 use rut_driver::Pkg;
-use rut_driver::{load_bundle_session, load_dir, load_path_session, pack_dir};
+use rut_native::{load_bundle_session, load_dir, load_path_session, pack_dir};
 
 
 
@@ -28,7 +27,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -82,7 +81,7 @@ fn bundle_round_trip_matches_the_directory() {
     let dir = make_dir(&base);
 
     // the directory form
-    let loaded = load_dir(&dir, &FsSource).unwrap();
+    let loaded = load_dir(&dir).unwrap();
     let from_dir = linked_binary(&loaded);
 
     // the packed form: same sources, same linked bytes
@@ -452,7 +451,7 @@ fn the_directory_manifest_speaks_jsonc() {
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
-    let loaded = rut_driver::load_dir(&dir, &FsSource).unwrap();
+    let loaded = rut_native::load_dir(&dir).unwrap();
     let root = loaded.root;
     assert_eq!(root, "mod");
     let _ = std::fs::remove_dir_all(&base);
@@ -472,7 +471,7 @@ fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
-    let err = rut_driver::load_dir(&dir, &FsSource).unwrap_err().to_string();
+    let err = rut_native::load_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("rut.json"), "{err}");
     assert!(err.contains("rut.jsonc"), "{err}");
     assert!(err.contains("re-name the file or re-pack the directory"), "{err}");

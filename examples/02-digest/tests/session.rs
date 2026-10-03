@@ -17,7 +17,7 @@ use rut_vm::OpaqueRef;
 /// dist/std plays the wire: the committed artifacts prime an OFFLINE
 /// remote (`DepRemote::write` is the stand-in for the GET), so this
 /// gate cannot network by construction — no env, no set_var races.
-fn warm(base: &Path) -> rut_driver::HttpRemote {
+fn warm(base: &Path) -> rut_native::HttpRemote {
     // a unique root per call: the tests run in parallel threads, and a
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -25,7 +25,7 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
     let root = std::env::temp_dir()
         .join(format!("rut-02-digest-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let remote = rut_driver::HttpRemote::offline(&root);
+    let remote = rut_native::HttpRemote::offline(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest =
         rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
@@ -35,7 +35,7 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
         let artifact = url.rsplit('/').next().unwrap_or_default();
         let bytes = std::fs::read(dist.join(artifact))
             .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
-        rut_driver::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
+        rut_native::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
     }
     remote
 }
@@ -54,7 +54,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 fn load() -> rut_driver::Loaded {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = warm(base);
-    block_on(rut_driver::load_path_session_with(base, &remote)).expect("load the module dir")
+    block_on(rut_native::load_path_session_with(base, &remote)).expect("load the module dir")
 }
 
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
@@ -65,7 +65,7 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
     let loaded = load();
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install here
         .host_pkg(rut_std::strbuild::pkg())

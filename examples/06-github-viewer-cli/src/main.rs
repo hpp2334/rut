@@ -52,12 +52,12 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 /// closure).
 fn load_rgh() -> Result<(rut_driver::Loaded, rut_driver::Loaded), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let remote = rut_driver::HttpRemote::project_local(base);
-    let loaded = block_on(rut_driver::load_path_session_with(base, &remote))
+    let remote = rut_native::HttpRemote::project_local(base);
+    let loaded = block_on(rut_native::load_path_session_with(base, &remote))
         .map_err(|e| e.to_string())?;
     // the example's own CLI-I/O pkg (nothing fetches — the embedder
     // binds the bodies)
-    let rgh_host = rut_driver::dir_pkgs(&base.join("rgh_host")).map_err(|e| e.to_string())?;
+    let rgh_host = rut_native::dir_pkgs(&base.join("rgh_host")).map_err(|e| e.to_string())?;
     Ok((loaded, rgh_host))
 }
 
@@ -76,7 +76,9 @@ fn main() {
         }
     };
     let root = loaded.root.clone();
-    let async_pkgs = rut_driver::std_async_pkgs().expect("the async pair walks");
+    let async_pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
 
     let src =
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh.rut"))
@@ -87,7 +89,7 @@ fn main() {
         chain = chain.pkg(p);
     }
     let chain = chain
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .pkgs(&rgh_host)
         .host_pkg(rut_std::math::pkg())
         .host_pkg(rut_std::nmap::pkg())

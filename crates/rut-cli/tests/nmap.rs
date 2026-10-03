@@ -316,7 +316,7 @@ entry fn valued_strs(t: opaque) -> i64 {
 
 fn vm_with_nmap() -> Vm {
     // `nmap_host` — this test's host pkg, declared in tests/data/nmap_host
-    let mut world = rut_driver::dir_pkgs(std::path::Path::new(PKG_DIR))
+    let mut world = rut_native::dir_pkgs(std::path::Path::new(PKG_DIR))
         .expect("mount nmap_host")
         .pkgs;
     world.push(rut_driver::Pkg::source("app", SRC));

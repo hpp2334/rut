@@ -10,11 +10,11 @@
 //! `offline()` remains the cache-only lane.
 
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
 
-use crate::loader::error::RemoteError;
-use crate::loader::sha256_hex;
+use crate::error::RemoteError;
+use rut_driver::sha256_hex;
 
 /// The fetch cap: a bundle beyond this is refused without buffering
 /// it (the content-length is honored when present; the buffered length
@@ -24,15 +24,15 @@ const MAX_FETCH_BYTES: usize = 256 * 1024 * 1024;
 /// HOW url-dep bytes arrive — the call site's half of the layer split.
 /// Transport, caching, and offline policy are ALL the remote's, at the
 /// bytes level: no `PathBuf` crosses the trait, and eviction is
-/// concrete (`HttpRemote::path_for`/`evict`). The loader owns only
+/// concrete (`HttpRemote::path_for`/`evict`). The walk owns only
 /// WHAT the bytes are declared to be (the `sha256` pin, verified at
 /// the mount door on every load — fresh fetch, cache hit, vendored
 /// map, test fixture).
 ///
 /// Dyn-compatible by law: `fetch` returns a hand-rolled
 /// `Pin<Box<dyn Future ..>>` (NOT the async-trait crate), so every
-/// load lane takes `&dyn DepRemote` and the [`super::Loader`] stays
-/// non-generic. One alloc per url fetch is nothing at dep granularity.
+/// load lane takes `&dyn DepRemote` and the walk stays non-generic. One
+/// alloc per url fetch is nothing at dep granularity.
 /// Sync impls (cache hits, test fixtures) are first-class via
 /// `std::future::ready`; deliberately NOT `+ Send`: JS-backed futures
 /// (a browser fetch bridge) are `!Send`.
@@ -77,7 +77,7 @@ impl HttpRemote {
     /// global state. Wire on: a cold start GETs its misses (the
     /// `http` feature) and caches them here; a warm start is pure
     /// cache hits.
-    pub fn project_local(project: &Path) -> Self {
+    pub fn project_local(project: &std::path::Path) -> Self {
         Self::at(project.join(".rut").join("cache"))
     }
 

@@ -102,14 +102,16 @@ fn world_pkgs() -> Vec<rut_driver::Pkg> {
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     let mut pkgs = Vec::new();
     for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        pkgs.extend(rut_driver::dir_pkgs(&tree.join(d)).expect("mount tree pkg").pkgs);
+        pkgs.extend(rut_native::dir_pkgs(&tree.join(d)).expect("mount tree pkg").pkgs);
     }
     pkgs.extend(
-        rut_driver::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
+        rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
             .expect("mount rgh_host")
             .pkgs,
     );
-    pkgs.extend(rut_driver::std_async_pkgs().expect("the async pair walks"));
+    pkgs.extend(rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs);
     pkgs
 }
 
@@ -125,7 +127,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
         chain = chain.host_pkg(hp);
     }
     let compiled = chain
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .pkg(rut_driver::Pkg::source("rgh", src))
         .entrypoint("rgh")
         .compile()
@@ -142,7 +144,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
 /// surfaces included) — the raw rows' contract check reads it.
 fn world_expected() -> rut_vm::interp::ExpectedHostFns {
     let mut world = world_pkgs();
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     rut_driver::declared_host_fns(&world)
 }
 

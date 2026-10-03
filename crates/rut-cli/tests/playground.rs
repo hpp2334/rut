@@ -48,10 +48,10 @@ fn classics_run_clean() {
         // the classics use the toolchain libs offered from the tree;
         // calc rides beside; the core prelude auto-offers
         let mut chain = rut_driver::RutRun::new()
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .pkg(rut_driver::Pkg::source("main", &src));
         for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
-            let pkgs = rut_driver::dir_pkgs(&tree.join(d))
+            let pkgs = rut_native::dir_pkgs(&tree.join(d))
                 .unwrap_or_else(|e| panic!("mount {d}: {e}"));
             chain = chain.pkgs(&pkgs);
         }
@@ -92,12 +92,12 @@ fn classics_run_clean() {
         let mut world = Vec::new();
         for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join(d))
+                rut_native::dir_pkgs(&tree.join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );
         }
-        world.push(rut_driver::calc_pkg());
+        world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));

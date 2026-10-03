@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use std::task::{Context, Poll};
 
 /// The remote for a project: `RUT_CACHE_DIR` overrides the root (the
-/// CLI-side override — the driver never reads env), otherwise the
+/// CLI-side override — the walk never reads env), otherwise the
 /// project-local cache (`<project>/.rut/cache`). Cache-first either
 /// way: a hit never touches the network.
-fn remote_for(project: &std::path::Path) -> rut_driver::HttpRemote {
+fn remote_for(project: &std::path::Path) -> rut_native::HttpRemote {
     match std::env::var_os("RUT_CACHE_DIR") {
-        Some(dir) => rut_driver::HttpRemote::at(PathBuf::from(dir)),
-        None => rut_driver::HttpRemote::project_local(project),
+        Some(dir) => rut_native::HttpRemote::at(PathBuf::from(dir)),
+        None => rut_native::HttpRemote::project_local(project),
     }
 }
 
@@ -162,13 +162,13 @@ fn evict_poisoned_cache(project: &std::path::Path, err: &str) {
 /// `.rutbundle`, with url deps served by the cache-first remote.
 fn load_with_cache(path: &std::path::Path) -> Result<rut_driver::Loaded, String> {
     let remote = remote_for(path);
-    block_on(rut_driver::load_path_session_with(path, &remote)).map_err(|e| e.to_string())
+    block_on(rut_native::load_path_session_with(path, &remote)).map_err(|e| e.to_string())
 }
 
 fn load(path: &str) -> String {
     // one file is one module unit — there is no include form (
     // use paths are inter-module), so loading is a plain read
-    match rut_driver::load_module_source(std::path::Path::new(path)) {
+    match rut_native::load_module_source(std::path::Path::new(path)) {
         Ok(src) => src,
         Err(e) => {
             eprintln!("cannot read {path}: {e}");
@@ -267,13 +267,14 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
         }
         chain = chain.symbols(&map);
     }
-    // the CLI is a host: it offers calc (the `Math` surface; the core
-    // prelude auto-rides in .compile()) and installs the matching pkgs —
-    // the blanket-install lane (the asymmetry makes it legal): math
-    // always, the logger to stdout when a program uses ink, the rest
-    // merging inert unless the program mounts their pkg
+    // the CLI is a host: it offers calc from the toolchain tree (the
+    // `Math` surface; the core prelude auto-rides in .compile()) and
+    // installs the matching pkgs — the blanket-install lane (the
+    // asymmetry makes it legal): math always, the logger to stdout
+    // when a program uses ink, the rest merging inert unless the
+    // program mounts their pkg
     let compiled = match chain
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .host_pkg(rut_std::math::pkg())
         // the nmap experiment's native key table (the mapset-host plan) — a
         // program only reaches it when it declares `use nmap_host::{...}` or a
@@ -419,7 +420,7 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
 fn pack(dir: &str, out: Option<&str>, strip: bool) {
     let p = std::path::Path::new(dir);
     let remote = remote_for(p);
-    let (bytes, symtab) = match block_on(rut_driver::pack_dir_opts_with(
+    let (bytes, symtab) = match block_on(rut_native::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts { strip },
         &remote,
@@ -433,7 +434,7 @@ fn pack(dir: &str, out: Option<&str>, strip: bool) {
     };
     let out = out
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| rut_driver::bundle::default_out_path(p));
+        .unwrap_or_else(|| rut_native::default_out_path(p));
     if let Err(e) = std::fs::write(&out, &bytes) {
         eprintln!("pack: cannot write {}: {e}", out.display());
         std::process::exit(1);

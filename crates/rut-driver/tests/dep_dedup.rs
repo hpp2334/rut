@@ -39,7 +39,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -57,7 +57,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
-    rut_driver::load_dir(Path::new(&format!("{PEERS}/{rel}")), &rut_driver::bundle::FsSource)
+    rut_native::load_dir(Path::new(&format!("{PEERS}/{rel}")))
     .map_err(|e| e.to_string())
 }
 

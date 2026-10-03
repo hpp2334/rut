@@ -1,22 +1,15 @@
-//! Manifest- and file-set helpers over a [`Source`]: reading a
-//! directory's `rut.jsonc`, normalizing bundle entry names, and
-//! collecting a package's **source file set** — the `rut.jsonc` +
-//! entry + `libs` + peer-group files shape a source group rides inside
-//! a compiled bundle. The packer itself (which compiles the closure
-//! and emits the `.rutc` groups) lives in [`crate::pack`] — it needs
-//! the compiler, and this module stays compiler-free. Same input ⇒
-//! same bytes; the packer only ever reads manifest-named paths, never
-//! lists directories.
-
-use std::path::{Path, PathBuf};
-
-use super::manifest::{parse_manifest, Manifest};
-use super::Source;
+//! Entry-key and manifest-reference helpers over in-memory values:
+//! normalizing bundle entry names, reading one entry's text, and the
+//! manifest's file name. Same input ⇒ same bytes; the collectors only
+//! ever read manifest-named paths, never list directories. The
+//! file-reading half (a directory's `rut.jsonc`, a package's source
+//! file set, the output-path suggestion) lives in rut-native — the
+//! native host's crate.
 
 /// The manifest's file name — ONE name, no fallback lane: a directory
 /// is one module and its manifest is `rut.jsonc` (JSONC: comments and
 /// trailing commas legal). A directory still holding the retired
-/// `rut.json` gets the pointed refusal in [`read_manifest`].
+/// `rut.json` gets the pointed refusal (rut-native's reader).
 pub const MANIFEST_NAME: &str = "rut.jsonc";
 
 /// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
@@ -43,85 +36,4 @@ pub fn entry_rel(manifest: &Manifest) -> Option<&String> {
     manifest.entry.lib.as_ref().or(manifest.entry.type_path.as_ref())
 }
 
-/// `read_to_string` over a [`Source`] — bytes then UTF-8, answering the
-/// same "stream did not contain valid UTF-8" text std's reader gives.
-pub(crate) fn read_text(path: &Path, src: &dyn Source) -> Result<String, String> {
-    let bytes = src.read(path)?;
-    String::from_utf8(bytes).map_err(|_| "stream did not contain valid UTF-8".to_string())
-}
-
-/// Read a directory's `rut.jsonc` through `src` and parse it. A
-/// directory still holding the RETIRED `rut.json` name gets the
-/// pointed cutover refusal — no fallback lane reads it (refuse, never
-/// guess).
-pub fn read_manifest(dir: &Path, src: &dyn Source) -> Result<Manifest, String> {
-    let text = match read_text(&dir.join(MANIFEST_NAME), src) {
-        Ok(text) => text,
-        Err(missing) => {
-            if read_text(&dir.join("rut.json"), src).is_ok() {
-                return Err(format!(
-                    "{} found — the manifest is `{MANIFEST_NAME}` (JSONC: comments and \
-                     trailing commas legal) since wire 9; re-name the file or re-pack the directory",
-                    dir.join("rut.json").display()
-                ));
-            }
-            return Err(missing);
-        }
-    };
-    parse_manifest(&text).map_err(|e| e.to_string())
-}
-
-/// Collect a package's SOURCE file set — the group shape — under
-/// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.jsonc`
-/// byte-for-byte, its entry file, each `entry.libs` file beside the
-/// entry, and each `[peer-deps]` descriptor's `lib` group file.
-/// Descriptor order is the manifest's (BTreeMap), so the archive stays
-/// deterministic. A compiled group does not take this shape (its
-/// `.rutc` is the linking truth); splice-needed deps and host pkgs ride
-/// the bundle exactly like this.
-pub fn collect_source_group(
-    dir: &Path,
-    manifest: &Manifest,
-    prefix: &str,
-    src: &dyn Source,
-    out: &mut Vec<(String, Vec<u8>)>,
-) -> Result<(), String> {
-    let text = read_text(&dir.join(MANIFEST_NAME), src)?;
-    out.push((format!("{prefix}{MANIFEST_NAME}"), text.into_bytes()));
-    let rel = entry_rel(manifest)
-        .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
-    // normalize the entry's `./` prefix before the group prefix joins it
-    let rel = rel.strip_prefix("./").unwrap_or(rel);
-    let key = bundle_key(&format!("{prefix}{rel}"))?;
-    let body = read_text(&dir.join(rel), src)
-        .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-    out.push((key, body.into_bytes()));
-    // each pkg's `entry.libs` files ride beside the entry, in manifest
-    // order — the array IS the order the loader splices back, so the
-    // archive stays deterministic
-    for lib in &manifest.entry.libs {
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let body = read_text(&dir.join(rel), src)
-            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-        out.push((key, body.into_bytes()));
-    }
-    for desc in manifest.peer_deps.values() {
-        let Some(lib) = desc.get("lib") else {
-            continue; // presence declared, no integration file to pack
-        };
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let body = read_text(&dir.join(rel), src)
-            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
-        out.push((key, body.into_bytes()));
-    }
-    Ok(())
-}
-
-/// The conventional pack output: `<dirname>.rutbundle`, a sibling of
-/// the directory (`demo/mod` → `demo/mod.rutbundle`).
-pub fn default_out_path(dir: &Path) -> PathBuf {
-    let stem = dir.file_name().unwrap_or(dir.as_os_str()).to_string_lossy();
-    dir.with_file_name(format!("{stem}.rutbundle"))
-}
+use super::manifest::Manifest;

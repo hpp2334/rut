@@ -1,0 +1,34 @@
+[package]
+name = "rut-native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the native host half — the directory walk (the Source/DepRemote traits, FsSource, HttpRemote), the pack lanes, and the toolchain-tree pkg offers; everything with a filesystem or a wire lives here"
+
+[lib]
+name = "rut_native"
+path = "src/lib.rs"
+
+[dependencies]
+rut-core = { path = "../rut-core" }
+rut-driver = { path = "../rut-driver" }
+# the url-dep lane's transport, behind the default-on `http` feature
+# (the wasm graphs opt out — same reqwest pin as rut-std's HTTP lane
+# MINUS `blocking`; the wire runs on the remote's own private worker
+# thread, one tokio runtime per request, so ANY executor works: the
+# fetch futures come back READY)
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "gzip",
+    "brotli",
+], optional = true }
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+], optional = true }
+thiserror = { workspace = true }
+# the pin law's arithmetic rides the driver (`rut_driver::sha256_hex`) —
+# no sha2 dependency of our own
+
+[features]
+default = ["http"]
+http = ["dep:reqwest", "dep:tokio"]

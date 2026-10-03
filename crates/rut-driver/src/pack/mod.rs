@@ -1,56 +1,55 @@
-//! The packer: a module directory (+ its whole `deps` closure) →
-//! one deterministic `.rutbundle`. TWO root kinds, paired with the
-//! format version: a **lib** root packs **compiled** (v9 — the root and
-//! every source dep ride as `.rutc` binaries (bodies + surface — the
-//! linking truth); host/decl pkgs ride as their declaration file sets),
-//! and a **host** root packs as a **v10 decl root** (single-package: its
-//! `.d.rut` surface rides as source, nothing to compile — the surface
-//! verifies at pack time by parsing + lowering once, then the module
-//! is discarded).
-//! Instantiation is owner-anchored (a generic export links, its
-//! consumers request), class methods cross on the surface's inherent
-//! rows, and the pack-time scope ledger lets a loader rebase every
-//! decoded program onto its own numbering.
+//! The packer — the driver's PURE half: compile the walked closure and
+//! emit one deterministic `.rutbundle`. The FS half lives in
+//! rut-native (`pack_dir*`): the root manifest bytes, the `[deps]`
+//! walk, the dev-table mounts (compile once per owner — a dep's unit
+//! is the same bytes wherever it is packed), the peer gate, and the
+//! file reader. They meet here: the [`PackWorld`] the walk assembles
+//! compiles over the crate-internal table (auto core — the §0.14 law;
+//! every OTHER package is the program's own closure, `calc` included,
+//! an ordinary tree package) and emits from the pkgs and the reader.
+//! Same input directory ⇒ byte-identical bundle.
 //!
-//! The packer lives in the driver because it needs the compiler: it
-//! loads the directory's session, mounts every dep's `[dev-deps]` too
-//! (compile once per owner — a dep's unit is the same bytes wherever
-//! it is packed), and walks the graph once ([`compile_units`]). The
-//! bytes come back; writing the output file stays with the caller
-//! (the CLI). Same input directory ⇒ byte-identical bundle.
+//! TWO root kinds, paired with the format version: a **lib** root packs
+//! **compiled** (v9 — the root and every source dep ride as `.rutc`
+//! binaries (bodies + surface — the linking truth); host/decl pkgs ride
+//! as their declaration file sets), and a **host** root packs as a
+//! **v10 decl root** (single-package: its `.d.rut` surface rides as
+//! source, nothing to compile — that arm lives in rut-native, no
+//! compiler needed). Instantiation is owner-anchored (a generic export
+//! links, its consumers request), class methods cross on the surface's
+//! inherent rows, and the pack-time scope ledger lets a loader rebase
+//! every decoded program onto its own numbering.
 //!
 //! A `[deps]` row may pin a **url**: the fetched `.rutbundle`'s groups
-//! ride along (`PkgSource::Archive` locations, enumerated closed — no
+//! ride along ([`PkgSource::Archive`] locations, enumerated closed — no
 //! recursion). `.rutc` emission stays ONE path: archive-backed
 //! compiled modules were rebased onto this session's numbering by the
-//! mount→compile pipeline, so they encode from `units` exactly like
-//! dir deps; only the group's FILE reads (`rut.jsonc`, `.d.rut`, source
-//! sets) dispatch on the source. The manifest rides byte-for-byte (the
-//! law) — url+sha256 rows carry into the output satisfied by the
-//! rode-along groups.
+//! walk, so they encode from `units` exactly like dir deps; only the
+//! group's FILE reads (manifests, `.d.rut`, source sets) dispatch on
+//! the source. The manifest rides byte-for-byte (the law) — url+sha256
+//! rows carry into the output satisfied by the rode-along groups.
 //!
 //! Refusals (never guesses): cycles and name collisions — the graph's
 //! own laws, surfaced as pack errors; plus the v1 url-dep refusals
 //! below. Source sharing stays what it always was outside bundles: a
 //! directory (`rut run <dir>`).
 
-
 mod error;
 mod groups;
 mod strip;
 
 pub use error::PackError;
-use groups::{group_file, group_manifest, has_open_generic_surface, ride_generic_source, rides_compiled};
+pub use groups::{collect_source_group, has_open_generic_surface};
+use groups::{group_file, group_manifest, ride_generic_source, rides_compiled};
 use strip::strip_arm;
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::rc::Rc;
 
-use crate::bundle::{bundle_key, collect_source_group, parse_manifest, write_bundle, FsSource};
-
+use crate::bundle::{bundle_key, write_bundle, Manifest, MANIFEST_NAME};
 use crate::graph::compile_units;
-use crate::loader::{mount_dev_table_fetched, run_peer_gate, walk_dir_fetched, PkgSource};
-use crate::session::PkgBody;
+use crate::run::Loaded;
+use crate::session::{PkgBody, Session};
 
 /// The v9 bundle layout version — a **compiled** root (a lib pkg).
 /// The bump from 7 rides the manifest's own name change (`rut.json` →
@@ -64,65 +63,45 @@ pub const FORMAT_VERSION: u64 = 9;
 /// total, both directions refused at the gate.
 pub const FORMAT_VERSION_DECL: u64 = 10;
 
-/// The `rut.scopes` ledger: one `<scope> = "<spec>"` row per linked
-/// module of the packed closure (engine mounts included), ascending by
-/// scope. A loader rebases every decoded program's foreign ids through
-/// it — a reference with no row is refused, never guessed.
-fn ledger_text(rows: &[(rut_core::id::ScopeId, String)]) -> String {
-    let mut out = String::new();
-    for (scope, spec) in rows {
-        out.push_str(&format!("{scope} = \"{spec}\"\n"));
-    }
-    out
+/// Where a group's files ride from — the emission's read dispatch. The
+/// `Dir` arm carries the DIRECTORY KEY (an opaque string; the FS math
+/// is the caller reader's), the `Archive` arm the walked archive's
+/// slot and the group's in-archive prefix.
+#[derive(Clone, Debug)]
+pub enum PkgSource {
+    Dir(String),
+    Archive { slot: usize, prefix: String },
 }
 
-/// Pack a `type = "host"` directory as a **v10 decl root** —
-/// single-package, byte-deterministic: the manifest byte-for-byte plus
-/// its declaration surface file(s) (the same file-set shape a host
-/// group rides inside a v9 bundle). The pack-time VERIFICATION is the
-/// surface's own parse + lower (the exact lane a mount runs) — the
-/// lowered module is discarded; decls ride as source and the embedding
-/// Rust binds the bodies. A host pkg has no deps, no programs, no
-/// ledger — nothing else to emit.
-fn pack_host_root(
-    dir: &Path,
-    manifest: &crate::bundle::Manifest,
-    manifest_bytes: Vec<u8>,
-) -> Result<Vec<u8>, PackError> {
-    let rel = manifest.entry.type_path.as_deref().ok_or_else(|| {
-        PackError::law(format!("{} is a host pkg with no `entry.type`", dir.join("rut.jsonc").display()))
-    })?;
-    let rel = rel.strip_prefix("./").unwrap_or(rel);
-    let src_path = dir.join(rel);
-    let src = std::fs::read_to_string(&src_path)
-        .map_err(|e| PackError::io(src_path.display(), e))?;
-    // the verification: the surface parses and lowers into host rows —
-    // a broken `.d.rut` refuses to pack (discard the output)
-    crate::decl::lower_decl_module(&src, &src_path.display().to_string())
-        .map_err(PackError::law)?;
-    // entries = rut.jsonc + the surface (the root file set, prefix "") —
-    // the exact shape `bundle_entry_module` reads back at load
-    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-    entries.push((super::bundle::files::MANIFEST_NAME.into(), manifest_bytes));
-    let key = bundle_key(rel).map_err(PackError::law)?;
-    entries.push((key, src.into_bytes()));
-    write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
+/// One fetched archive's decoded entries, kept by the CALLER (the walk
+/// stays I/O-free beyond the source; it records only where files
+/// live: slot + prefix). `origin` is the url, for error messages.
+#[derive(Clone, Debug)]
+pub struct Archive {
+    pub origin: String,
+    pub entries: Vec<(String, Vec<u8>)>,
 }
 
-/// Pack a lib directory into a deterministic v9 `.rutbundle` (compiled
-/// root), or a `type = "host"` directory into a v10 decl root.
-pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, PackError> {
-    Ok(pack_dir_opts(dir, &PackOpts::default())?.0)
-}
+/// The reader the emission's dir reads go through: `(dir key, rel) →
+/// bytes`. String keys by law — the driver never does key math and
+/// never sees a `Path`.
+pub type PackRead = Rc<dyn Fn(&str, &str) -> Result<Vec<u8>, String>>;
 
-/// [`pack_dir`] over pre-fetched url bytes — the fetched core the
-/// `*_with` lane calls after awaiting `dep_fetch`. Url rows read the
-/// map; a url row absent from it is the loud no-fetcher error.
-pub fn pack_dir_fetched(
-    dir: &Path,
-    map: &BTreeMap<String, Vec<u8>>,
-) -> Result<Vec<u8>, PackError> {
-    Ok(pack_dir_opts_fetched(dir, &PackOpts::default(), map)?.0)
+/// The walked world the pack compiles over — rut-native's `pack_dir*`
+/// assembles it: the walked closure (gate run, dev tables mounted),
+/// the root manifest (bytes + parse), the group-source map, the
+/// archives the url deps opened, and the file reader.
+pub struct PackWorld {
+    pub loaded: Loaded,
+    /// the root's `rut.jsonc`, byte-for-byte (the law)
+    pub manifest_bytes: Vec<u8>,
+    pub manifest: Manifest,
+    /// the root's dir key — the emission's root-file reads go through
+    /// the reader with it
+    pub root_dir: String,
+    pub sources: BTreeMap<String, PkgSource>,
+    pub archives: Vec<Archive>,
+    pub read: PackRead,
 }
 
 /// Pack options. `strip` mangles every renameable name and strips the
@@ -134,103 +113,50 @@ pub struct PackOpts {
     pub strip: bool,
 }
 
-/// [`pack_dir`] with options. Returns the bundle bytes and — under
-/// `strip` — the serialized symbol table. Deterministic end to end:
-/// same input dir ⇒ byte-identical bundle (mangling is sorted-union
-/// based) ⇒ byte-identical symtab. Url rows refuse here: pass a
-/// fetcher (`pack_dir_opts_with`) or pre-fetch a map.
-pub fn pack_dir_opts(dir: &Path, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    pack_dir_opts_fetched(dir, opts, &BTreeMap::new())
-}
-
-/// [`pack_dir_opts`] over pre-fetched url bytes.
-pub fn pack_dir_opts_fetched(
-    dir: &Path,
-    opts: &PackOpts,
-    map: &BTreeMap<String, Vec<u8>>,
-) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    let manifest_path = dir.join(super::bundle::files::MANIFEST_NAME);
-    let manifest_bytes = match std::fs::read(&manifest_path) {
-        Ok(bytes) => bytes,
-        Err(e) if std::fs::read(dir.join("rut.json")).is_ok() => {
-            // the retired manifest name: the pointed cutover refusal —
-            // no fallback lane reads it
-            let _ = e;
-            return Err(PackError::law(format!(
-                "{} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
-                 since wire 9; re-name the file or re-pack the directory",
-                dir.join("rut.json").display(),
-                super::bundle::files::MANIFEST_NAME,
-            )));
-        }
-        Err(e) => return Err(PackError::io(manifest_path.display(), e)),
-    };
-    let manifest = parse_manifest(&String::from_utf8(manifest_bytes.clone()).map_err(
-        |_| PackError::law(format!("{}: not UTF-8", manifest_path.display())),
-    )?)?;
-    let name = manifest
+/// Pack the walked world: compile the closure (auto core rides; every
+/// other pkg is program-owned), run the strip arm under `opts`, emit
+/// the entries. Answers the bundle bytes and — under `strip` — the
+/// serialized symbol table. Deterministic end to end: same input dir
+/// ⇒ byte-identical bundle ⇒ byte-identical symtab.
+pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
+    let name = w
+        .manifest
         .name
         .clone()
-        .ok_or_else(|| PackError::law(format!("{} has no `name`", manifest_path.display())))?;
-    // the packed rut.jsonc is the directory's rut.jsonc byte-for-byte,
-    // so the bundle keys must already be there — directory loading
-    // ignores them, but a bundle loader refuses without them (refuse,
-    // never guess): v9 since the jsonc-manifest cutover, v10 for a host
-    // root (its surface rides as source — there is nothing to compile)
-    let want_version = match manifest.pkg_type {
-        crate::bundle::PkgType::Host => FORMAT_VERSION_DECL,
-        crate::bundle::PkgType::Lib => FORMAT_VERSION,
-    };
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
-    {
-        return Err(PackError::law(format!(
-            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = {want_version}`",
-            manifest_path.display()
-        )));
-    }
-    // the host-root arm: no closure (the grammar refuses a host
-    // manifest's deps tables), no compile walk — the surface verifies
-    // by parsing + lowering once, then rides as source
-    if manifest.pkg_type == crate::bundle::PkgType::Host {
-        if opts.strip {
-            return Err(PackError::law(
-                "a host bundle has no symbols to strip — its root is a declaration surface, \
-                 not a program; there is no binary and no sidecar",
-            ));
+        .ok_or_else(|| PackError::law("the manifest has no `name`".to_string()))?;
+    let root = w.loaded.root.clone();
+    // the closure's session: the walked pkgs + the prelude (the ONLY
+    // engine mount — `calc` and the rest are the program's own closure)
+    let mut session = Session::new();
+    // the scope ledger: the walk namespaced each archive against its
+    // own growing ledger, so the union of the stamped rows IS the
+    // walked ledger — record it, then mount (compiled bodies are
+    // already rebased)
+    let mut ledger_rows: Vec<(rut_core::id::ScopeId, String)> = Vec::new();
+    for pkg in &w.loaded.pkgs {
+        for (s, spec) in &pkg.bundle_scopes {
+            ledger_rows.push((*s, spec.clone()));
         }
-        return pack_host_root(dir, &manifest, manifest_bytes).map(|bytes| (bytes, None));
     }
-    // the closure's session: the [deps] walk + the dev pass + the peer
-    // gate, then the engine mounts the closure's code needs (the
-    // prelude always; `calc` when a program reaches `Math`)
-    let loaded = walk_dir_fetched(dir, &FsSource, map)?;
-    let (mut session, root, archives) = (loaded.session, loaded.root, loaded.archives);
-    crate::compile::std::mount_std_pkgs(&mut session);
-    if root != name {
-        return Err(PackError::law(format!(
-            "{} names itself `{root}` — expected `{name}`",
-            manifest_path.display()
-        )));
+    ledger_rows.sort();
+    ledger_rows.dedup();
+    for (s, spec) in &ledger_rows {
+        session.record_bundle_scope(*s, spec);
     }
-    // the closure's group set: dir deps as directories, url deps as
-    // their archive's locations (enumerated closed — no recursion)
-    let mut sources = BTreeMap::new();
-    collect_group_sources(
-        dir,
-        &manifest,
-        &session,
-        &mut sources,
-        &mut std::collections::BTreeSet::new(),
-    )?;
+    for pkg in w.loaded.pkgs.clone() {
+        let spec = pkg.spec.clone();
+        session.register_module(&spec, pkg).map_err(|e| PackError::law(e.to_string()))?;
+    }
+    let _ = session.mount(crate::run::core_pkg());
     // the rode-along closure law: every dep an archive group's manifest
     // declares must ride in this output — a group the mount skipped
     // without a source of its own would leave the output declaring a
     // dep without a group (v1: loud, named)
-    for (spec, source) in &sources {
+    for (spec, source) in &w.sources {
         if let PkgSource::Archive { .. } = source {
-            let dm = group_manifest(source, &archives).map_err(PackError::law)?;
+            let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
             for dep in dm.deps.keys() {
-                if !sources.contains_key(dep) && *dep != root {
+                if !w.sources.contains_key(dep) && *dep != root {
                     return Err(PackError::law(format!(
                         "packed dep `{spec}` declares `{dep}`, but that group did not ride — the output would be missing its `{dep}` group; vendor this dep (unpack the url dep into your project) instead"
                     )));
@@ -238,37 +164,6 @@ pub fn pack_dir_opts_fetched(
             }
         }
     }
-    // compile once per owner: every DIR dep group's unit is the same
-    // bytes wherever it is packed, so each one's own `[dev-deps]` mount
-    // too — the presence a declarer's peer groups ride (json's rows
-    // ship with json, wherever json travels). Archive-backed groups'
-    // dev tables are IGNORED, not walked (their paths never crossed the
-    // pack boundary); one that still declares dirs it needs is the v1
-    // refusal.
-    for (spec, source) in &sources {
-        match source {
-            PkgSource::Dir(gdir) => {
-                let dm = crate::bundle::read_manifest(gdir, &FsSource).map_err(PackError::law)?;
-                mount_dev_table_fetched(&mut session, gdir, &dm, map)?;
-            }
-            PkgSource::Archive { .. } => {
-                let dm = group_manifest(source, &archives).map_err(PackError::law)?;
-                let rides_source = matches!(
-                    session.resolve(spec).map(|m| &m.body),
-                    Ok(PkgBody::Source { .. })
-                );
-                if rides_source && !dm.dev_deps.is_empty() {
-                    return Err(PackError::law(format!(
-                        "packed dep `{spec}` needs its own [dev-deps] directories, which do not travel in a bundle — vendor this dep (unpack the url dep into your project) instead"
-                    )));
-                }
-            }
-        }
-    }
-    // re-run the ONE peer gate over the grown closure (the dev mounts
-    // may have supplied peers) — archive group reads dispatch on the
-    // recorded locations, through the archives the load opened
-    run_peer_gate(&mut session, &root, &archives)?;
     let mut units = compile_units(&session, &root);
     if !units.diags.is_empty() || !units.ok {
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
@@ -277,7 +172,7 @@ pub fn pack_dir_opts_fetched(
     // a compiled group the walk never ensured cannot ride: its binary
     // still spells ITS pack's scopes, which this output's ledger does
     // not carry — refuse, never guess (v1: use it or vendor the dep)
-    for (spec, source) in &sources {
+    for (spec, source) in &w.sources {
         if let PkgSource::Archive { slot, .. } = source {
             if matches!(
                 session.resolve(spec).map(|m| &m.body),
@@ -286,14 +181,14 @@ pub fn pack_dir_opts_fetched(
             {
                 return Err(PackError::law(format!(
                     "compiled group `{spec}` (from {}) is not part of this program's compiled closure — a bundled binary cannot ride unpackaged; use it or vendor this dep",
-                    archives[*slot].origin
+                    w.archives[*slot].origin
                 )));
             }
         }
     }
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     // the manifest byte-for-byte, then the scope ledger
-    entries.push((super::bundle::files::MANIFEST_NAME.into(), manifest_bytes));
+    entries.push((MANIFEST_NAME.into(), w.manifest_bytes.clone()));
     let mut ledger: Vec<(rut_core::id::ScopeId, String)> = units
         .linked
         .iter()
@@ -331,90 +226,11 @@ pub fn pack_dir_opts_fetched(
     // 3. the mangle itself: one closure-wide string→string map over
     //    every encoded program, symbolication tables taken into the
     //    sidecar.
-    let mut symtab: Option<Vec<u8>> = None;
-    if opts.strip {
-        {
-            let root_prog = &units.programs[root_idx];
-            if has_open_generic_surface(root_prog) {
-                return Err(PackError::law(format!(
-                    "--strip refuses a generic-owning closure: the root `{root}` exports \
-                     generics, so its source rides the bundle to serve consumer-spelled \
-                     shapes at load — the ridden text would recompile clean-named beside \
-                     mangled binaries. Pack without `--strip`"
-                )));
-            }
-            for (spec, source) in &sources {
-                if *spec == root || session.resolve(spec).is_err() {
-                    continue;
-                }
-                if !rides_compiled(&session, spec, &units) {
-                    continue;
-                }
-                let &(idx, _) = units.linked.get(spec).unwrap();
-                if has_open_generic_surface(&units.programs[idx]) {
-                    return Err(PackError::law(format!(
-                        "--strip refuses a generic-owning closure: the compiled group \
-                         `{spec}` (from {}) exports generics, so its source rides the \
-                         bundle to serve consumer-spelled shapes at load — the ridden \
-                         text would recompile clean-named beside mangled binaries. Pack \
-                         without `--strip`",
-                        match source {
-                            PkgSource::Dir(d) => d.display().to_string(),
-                            PkgSource::Archive { slot, .. } => archives[*slot].origin.clone(),
-                        }
-                    )));
-                }
-            }
-        }
-        for (spec, source) in &sources {
-            if *spec == root || session.resolve(spec).is_err() {
-                continue; // the root rides compiled above; unmounted names never ride
-            }
-            if rides_compiled(&session, spec, &units) {
-                continue; // a `.rutc` group — no source binds anything
-            }
-            let dm = group_manifest(source, &archives).map_err(PackError::law)?;
-            for dep in dm.deps.keys() {
-                let dep_compiled = rides_compiled(&session, dep, &units);
-                if dep_compiled {
-                    return Err(PackError::law(format!(
-                        "--strip needs a fully-compiled closure: the source group \
-                         `{spec}` binds compiled `{dep}`'s surface at load, whose \
-                         names would be mangled — drop the `inline` flag / \
-                         restructure the closure, or pack without `--strip`"
-                    )));
-                }
-            }
-        }
-        // the encoded set: the root, then every compiled-riding group in
-        // `sources` order — gathered in ONE pass so the programs reborrow
-        // disjointly
-        let mut wanted: Vec<(String, usize)> = vec![(root.clone(), root_idx)];
-        for (spec, _) in &sources {
-            if *spec == root || session.resolve(spec).is_err() {
-                continue;
-            }
-            if !rides_compiled(&session, spec, &units) {
-                continue; // the declaration file set — no binary to strip
-            }
-            let &(idx, _) = units.linked.get(spec).unwrap();
-            wanted.push((spec.clone(), idx));
-        }
-        let mut groups: Vec<(String, &mut rut_core::binary::Program)> =
-            Vec::with_capacity(wanted.len());
-        for (i, prog) in units.programs.iter_mut().enumerate() {
-            if let Some((spec, _)) = wanted.iter().find(|(_, ix)| *ix == i) {
-                groups.push((spec.clone(), prog));
-            }
-        }
-        let map = rut_core::strip::strip_programs(&mut groups).map_err(PackError::law)?;
-        symtab = Some(map.to_bytes());
-    }
+    let symtab = strip_arm(&mut units, &session, &w.sources, &w.archives, &w.read, &root, root_idx, opts.strip)?;
     entries.push((format!("{name}.rutc"), rut_core::binary::encode(&units.programs[root_idx])));
-    if let Some(rel) = &manifest.entry.type_path {
+    if let Some(rel) = &w.manifest.entry.type_path {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
-        let text = std::fs::read(dir.join(rel))
-            .map_err(|e| PackError::io(dir.join(rel).display(), e))?;
+        let text = (w.read)(&w.root_dir, rel).map_err(PackError::law)?;
         entries.push((bundle_key(&format!("{name}.d.rut")).map_err(PackError::law)?, text));
     }
     // the generic-source riding law (v7, additive): a compiled pkg whose
@@ -424,51 +240,46 @@ pub fn pack_dir_opts_fetched(
     // lib's presence is the loader's dispatch marker; non-generic pkgs
     // stay source-free. (`--strip` refuses the combination above.)
     if has_open_generic_surface(&units.programs[root_idx]) {
-        ride_generic_source(&manifest, "", &mut entries, &|rel| {
-            std::fs::read(dir.join(rel))
-                .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))
-        })
-        .map_err(PackError::law)?;
+        ride_generic_source(&w.manifest, "", &mut entries, &|rel| (w.read)(&w.root_dir, rel))
+            .map_err(PackError::law)?;
     }
     // the dep groups, name order: source pkgs → compiled, host/decl
     // pkgs and declared-but-unused pkgs → the declaration file set
-    for (spec, source) in &sources {
+    for (spec, source) in &w.sources {
         if *spec == root || session.resolve(spec).is_err() {
             continue; // the root rode above; names are already mounted
         }
-        let dm = group_manifest(source, &archives).map_err(PackError::law)?;
+        let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
         let prefix = format!("{spec}/");
         if rides_compiled(&session, spec, &units) {
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
             // its name, mount flags, and peer declarations from it
             let toml =
-                group_file(source, super::bundle::files::MANIFEST_NAME, &archives).map_err(PackError::law)?;
+                group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
             entries.push((
-                bundle_key(&format!("{prefix}{}", super::bundle::files::MANIFEST_NAME))
-                    .map_err(PackError::law)?,
+                bundle_key(&format!("{prefix}{MANIFEST_NAME}")).map_err(PackError::law)?,
                 toml,
             ));
             entries.push((bundle_key(&format!("{prefix}{spec}.rutc")).map_err(PackError::law)?, rut_core::binary::encode(&units.programs[idx])));
             if let Some(rel) = &dm.entry.type_path {
                 let rel = rel.strip_prefix("./").unwrap_or(rel);
-                let text = group_file(source, rel, &archives).map_err(PackError::law)?;
+                let text = group_file(source, rel, &w.archives, &w.read).map_err(PackError::law)?;
                 entries.push((bundle_key(&format!("{prefix}{rel}")).map_err(PackError::law)?, text));
             }
             // the generic-source riding law, group flavor (see the root
             // arm above): a generic-owning compiled group rides its
             // source under the group prefix
             if has_open_generic_surface(&units.programs[idx]) {
-                let source = source.clone();
                 ride_generic_source(&dm, &prefix, &mut entries, &|rel| {
-                    group_file(&source, rel, &archives)
+                    group_file(source, rel, &w.archives, &w.read)
                 })
                 .map_err(PackError::law)?;
             }
         } else {
             match source {
                 PkgSource::Dir(gdir) => {
-                    collect_source_group(gdir, &dm, &prefix, &FsSource, &mut entries)
+                    collect_source_group(gdir, &dm, &prefix, &w.read, &mut entries)
                         .map_err(PackError::law)?;
                 }
                 PkgSource::Archive { slot, prefix: old } => {
@@ -476,7 +287,7 @@ pub fn pack_dir_opts_fetched(
                     // prefix — the archive already decided the set
                     // (manifest, entry, libs, peer-group files), in
                     // archive order (deterministic)
-                    let archive = &archives[*slot];
+                    let archive = &w.archives[*slot];
                     for (key, bytes) in &archive.entries {
                         let Some(rest) = key.strip_prefix(old.as_str()) else {
                             continue;
@@ -494,88 +305,14 @@ pub fn pack_dir_opts_fetched(
     Ok((bundle, symtab))
 }
 
-/// `[pack_dir]` with a url-dep fetcher — the `*_with` lane: collect the
-/// url rows, await `dep_fetch` per url sequentially, pack over the
-/// bytes map.
-pub async fn pack_dir_with(dir: &Path, fetch: &dyn crate::loader::DepRemote) -> Result<Vec<u8>, PackError> {
-    Ok(pack_dir_opts_with(dir, &PackOpts::default(), fetch).await?.0)
-}
-
-/// [`pack_dir_opts`] with a url-dep fetcher (the CLI's `--strip` lane).
-pub async fn pack_dir_opts_with(
-    dir: &Path,
-    opts: &PackOpts,
-    fetch: &dyn crate::loader::DepRemote,
-) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    let map = crate::loader::prefetch_urls(dir, &FsSource, fetch).await?;
-    pack_dir_opts_fetched(dir, opts, &map)
-}
-
-/// The `[deps]` graph, recursively — each package under its name, as
-/// the source its files ride from: dir deps as [`PkgSource::Dir`], url
-/// deps as their archive's [`PkgSource::Archive`] locations (the
-/// archive root at prefix `""`, every group at its prefix — enumerated
-/// from the mount ledger, closed: no recursion into archive
-/// manifests). Name-checked against each manifest (the packer only
-/// ever reads manifest-named paths).
-fn collect_group_sources(
-    dir: &Path,
-    manifest: &crate::bundle::Manifest,
-    session: &crate::session::Session,
-    out: &mut BTreeMap<String, PkgSource>,
-    seen: &mut std::collections::BTreeSet<String>,
-) -> Result<(), PackError> {
-    for (spec, desc) in &manifest.deps {
-        if !seen.insert(spec.clone()) {
-            continue;
-        }
-        if desc.contains_key("url") {
-            // the archive root's location, then every group the same
-            // archive contributed (first-mount-wins decided which)
-            let Some(m) = session.resolve(spec).ok() else {
-                return Err(PackError::law(format!(
-                    "dep `{spec}` is declared by url but was not mounted from an archive"
-                )));
-            };
-            let Some((slot, _)) = m.archive else {
-                return Err(PackError::law(format!(
-                    "dep `{spec}` is declared by url but was not mounted from an archive"
-                )));
-            };
-            out.insert(
-                spec.clone(),
-                PkgSource::Archive { slot, prefix: String::new() },
-            );
-            for (group, g) in session.modules() {
-                if let Some((gslot, gprefix)) = &g.archive {
-                    if gslot == &slot {
-                        out.insert(
-                            group.clone(),
-                            PkgSource::Archive {
-                                slot,
-                                prefix: gprefix.clone(),
-                            },
-                        );
-                    }
-                }
-            }
-            continue; // closed — the archive brought its whole closure
-        }
-        let rel = desc
-            .get("path")
-            .ok_or_else(|| PackError::law(format!("dep `{spec}` has no `path`")))?;
-        let dep_dir = dir.join(rel);
-        let dm = crate::bundle::read_manifest(&dep_dir, &FsSource).map_err(PackError::law)?;
-        if dm.name.as_deref() != Some(spec.as_str()) {
-            return Err(PackError::law(format!(
-                "dep `{spec}` points at `{}` — the manifest there names it `{}`",
-                dep_dir.display(),
-                dm.name.as_deref().unwrap_or("<unnamed>")
-            )));
-        }
-        out.insert(spec.clone(), PkgSource::Dir(dep_dir.clone()));
-        collect_group_sources(&dep_dir, &dm, session, out, seen)?;
+/// The `rut.scopes` ledger: one `<scope> = "<spec>"` row per linked
+/// module of the packed closure (engine mounts included), ascending by
+/// scope. A loader rebases every decoded program's foreign ids through
+/// it — a reference with no row is refused, never guessed.
+fn ledger_text(rows: &[(rut_core::id::ScopeId, String)]) -> String {
+    let mut out = String::new();
+    for (scope, spec) in rows {
+        out.push_str(&format!("{scope} = \"{spec}\"\n"));
     }
-    Ok(())
+    out
 }
-

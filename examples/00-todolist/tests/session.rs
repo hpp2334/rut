@@ -11,7 +11,7 @@ use rut_vm::OpaqueRef;
 /// gate cannot network by construction — no env, no set_var races.
 /// The Loader + the warmed remote are the same embedder shape
 /// src/main.rs spells, with the offline flavor swapped in.
-fn warm(base: &Path) -> rut_driver::HttpRemote {
+fn warm(base: &Path) -> rut_native::HttpRemote {
     // a unique root per call: the tests run in parallel threads, and a
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -19,7 +19,7 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
     let root = std::env::temp_dir()
         .join(format!("rut-00-todolist-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let remote = rut_driver::HttpRemote::offline(&root);
+    let remote = rut_native::HttpRemote::offline(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest =
         rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
@@ -29,7 +29,7 @@ fn warm(base: &Path) -> rut_driver::HttpRemote {
         let artifact = url.rsplit('/').next().unwrap_or_default();
         let bytes = std::fs::read(dist.join(artifact))
             .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
-        rut_driver::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
+        rut_native::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
     }
     remote
 }
@@ -48,7 +48,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 fn load() -> rut_driver::Loaded {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = warm(base);
-    block_on(rut_driver::load_path_session_with(base, &remote)).expect("load the module dir")
+    block_on(rut_native::load_path_session_with(base, &remote)).expect("load the module dir")
 }
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {

@@ -49,12 +49,12 @@ impl Plugin {
     /// is frozen from then on.
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
         let loaded = {
-            let remote = rut_driver::HttpRemote::project_local(path);
+            let remote = rut_native::HttpRemote::project_local(path);
             // the std-only driver for the walk's future: the remote's
             // fetch futures come back READY, so one noop-waker poll
             // settles them
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-            let mut pinned = std::pin::pin!(rut_driver::load_path_session_with(path, &remote));
+            let mut pinned = std::pin::pin!(rut_native::load_path_session_with(path, &remote));
             loop {
                 match pinned.as_mut().poll(&mut cx) {
                     std::task::Poll::Ready(v) => break v,

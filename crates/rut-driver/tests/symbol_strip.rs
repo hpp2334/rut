@@ -11,9 +11,8 @@
 
 use std::path::{Path, PathBuf};
 
-use rut_driver::{
-    pack_dir_opts, PackOpts,
-};
+use rut_driver::PackOpts;
+use rut_native::pack_dir_opts;
 
 
 
@@ -32,7 +31,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -194,7 +193,7 @@ fn load_and_run<R: rut_vm::interp::Ret>(
     }
     let mut chain = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg());
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     if let Some(map) = &map {
         chain = chain.symbols(map);
     }
@@ -267,7 +266,7 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
     // re-applying is a no-op: every section matches, twice over
     let g = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Pkg::from_bundle(&stripped).expect("load"))
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .symbols(&map)
         .symbols(&map)
         .entrypoint("app")

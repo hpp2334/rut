@@ -1,23 +1,17 @@
-//! The load lane's error currency — real types, not `String`.
+//! The walk lane's error currency — ported from the driver's old
+//! `loader::error`: structured variants for the classes that carry
+//! data, a `Law(String)` tail for the long-tail refusals whose text is
+//! built at the refusal site. LAW: every `Display` spells the
+//! messages byte-for-byte, so existing assertions keep passing.
 //!
-//! [`LoadError`] is what the load/mount lanes return: structured
-//! variants for the classes that carry data (`Io`, `Manifest`,
-//! `Bundle`, `Pin`, `Remote`, `DepName`, `Shape`, `Resolve`), and a
-//! `Law(String)` tail for the long-tail refusals whose text is built
-//! at the refusal site. The taxonomy grows as variants are needed,
-//! never blocks. [`RemoteError`] is the [`super::DepRemote`] trait's
-//! currency: a message plus an optional boxed source.
-//!
-//! LAW: every `Display` here spells today's message byte-for-byte, so
-//! existing assertions keep passing with only a `.to_string()` added.
-//! All types derive with `thiserror` — one error style crate-wide.
+//! `From<LoadError> for rut_driver::RunError` flattens into the run
+//! chain's one error type (the message IS the diagnostic).
 
 use thiserror::Error;
 
-use crate::bundle::ManifestError;
-use crate::session::ResolveError;
+use rut_driver::bundle::ManifestError;
 
-/// The load/mount lanes' error: why a module directory or a
+/// The walk/mount lanes' error: why a module directory or a
 /// `.rutbundle` did not load.
 #[derive(Debug, Error)]
 pub enum LoadError {
@@ -57,9 +51,6 @@ pub enum LoadError {
     /// the input path is neither of the two loadable shapes
     #[error("{path} is neither a module directory (no `rut.jsonc`) nor a `.rutbundle`")]
     Shape { path: String },
-    /// the session refused a mount (a duplicate name, a bad spec)
-    #[error(transparent)]
-    Resolve(#[from] ResolveError),
     /// the long tail: today's refusal text, verbatim
     #[error("{0}")]
     Law(String),
@@ -67,12 +58,12 @@ pub enum LoadError {
 
 impl LoadError {
     /// A long-tail refusal — the message IS the error's text.
-    pub(crate) fn law(msg: impl Into<String>) -> Self {
+    pub fn law(msg: impl Into<String>) -> Self {
         LoadError::Law(msg.into())
     }
 
     /// A filesystem read failure at `path`.
-    pub(crate) fn io(path: impl std::fmt::Display, source: std::io::Error) -> Self {
+    pub fn io(path: impl std::fmt::Display, source: std::io::Error) -> Self {
         LoadError::Io {
             path: path.to_string(),
             source,
@@ -80,7 +71,21 @@ impl LoadError {
     }
 }
 
-/// A remote-policy failure — the [`super::DepRemote`] trait's error
+/// The pack lanes' currency: the walk's structured load errors flatten
+/// into the pack error's long tail (the message IS the diagnostic).
+impl From<LoadError> for rut_driver::pack::PackError {
+    fn from(e: LoadError) -> rut_driver::pack::PackError {
+        rut_driver::pack::PackError::law(e.to_string())
+    }
+}
+
+impl From<LoadError> for rut_driver::RunError {
+    fn from(e: LoadError) -> rut_driver::RunError {
+        rut_driver::RunError::law(e.to_string())
+    }
+}
+
+/// A remote-policy failure — the [`crate::DepRemote`] trait's error
 /// currency: a message plus an optional boxed source (the transport's
 /// own error, when there is one).
 #[derive(Debug, Error)]

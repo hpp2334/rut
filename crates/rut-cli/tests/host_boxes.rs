@@ -73,14 +73,14 @@ struct Widget {
 
 fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     // the sources use `pouch` — a third-party pkg, walked from the tree
-    let mut world = rut_driver::dir_pkgs(
+    let mut world = rut_native::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch")
     .pkgs;
     // `boxes` — this test's own host pkg, declared in tests/data/boxes
     world.extend(
-        rut_driver::dir_pkgs(
+        rut_native::dir_pkgs(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/boxes"),
         )
         .expect("mount boxes")
@@ -234,12 +234,12 @@ entry fn churn(n: i64) -> nil {
     }
 }
 "#;
-    let mut world = rut_driver::dir_pkgs(
+    let mut world = rut_native::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch")
     .pkgs;
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
         .pkg(rut_driver::Pkg::source("churn", src))

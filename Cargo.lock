@@ -235,6 +235,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -779,6 +780,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-vm",
 ]
@@ -974,6 +976,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1056,6 +1059,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1070,6 +1074,7 @@ dependencies = [
  "rut-driver",
  "rut-fmt",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1083,18 +1088,17 @@ version = "0.1.0"
 name = "rut-driver"
 version = "0.1.0"
 dependencies = [
- "reqwest",
  "rut-ast",
  "rut-core",
  "rut-lexer",
  "rut-lir",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
  "serde_json",
  "sha2",
  "thiserror",
- "tokio",
  "zip",
 ]
 
@@ -1106,6 +1110,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1151,6 +1156,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rut-native"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "rut-core",
+ "rut-driver",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "rut-parser"
 version = "0.1.0"
 dependencies = [
@@ -1168,6 +1184,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-vm",
 ]
@@ -1195,6 +1212,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1330,6 +1348,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",
@@ -1432,6 +1451,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-native",
  "rut-parser",
  "rut-vm",
 ]
@@ -1443,6 +1463,7 @@ dependencies = [
  "js-sys",
  "rut-core",
  "rut-driver",
+ "rut-native",
  "rut-parser",
  "rut-std",
  "rut-vm",

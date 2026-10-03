@@ -8,10 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use rut_driver::bundle::FsSource;
-use rut_driver::{
-    pack_dir,
-};
+use rut_native::pack_dir;
 
 
 
@@ -30,7 +27,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -86,7 +83,7 @@ fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Loaded, root: &str, ent
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkgs(world)
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(root)
             .compile(),
     );
@@ -171,7 +168,7 @@ entry fn go2() -> i64 {
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&s)
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint("app")
             .compile(),
     );
@@ -396,7 +393,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&lone)
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint("late")
             .compile(),
     );
@@ -476,12 +473,12 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
          \x20   return p.fst * 2;\n\
          }\n",
     );
-    let dir_loaded = rut_driver::load_dir(&app, &FsSource).expect("dir load");
+    let dir_loaded = rut_native::load_dir(&app).expect("dir load");
     let from_dir = {
         let g = graph_of(
             rut_driver::RutRun::new()
                 .pkgs(&dir_loaded)
-                .pkg(rut_driver::calc_pkg())
+                .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
                 .entrypoint(&dir_loaded.root)
                 .compile(),
         );
@@ -493,7 +490,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&session)
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(&session.root)
             .compile(),
     );

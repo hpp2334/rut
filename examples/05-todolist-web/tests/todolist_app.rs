@@ -444,7 +444,7 @@ fn an_event_without_a_door_traps_loud() {
 /// module dir, `core` the only mount: no web surface, no nmap, no
 /// widgets (no crossings declared or used is the fixture's point).
 fn make_fixture() -> WebHost<FakeDom> {
-    let loaded = rut_driver::load_dir(&mount::probe_dir("softfail"), &rut_driver::bundle::FsSource)
+    let loaded = rut_native::load_dir(&mount::probe_dir("softfail"))
         .expect("the fixture mounts");
     // no web surface, no nmap, no widgets (no crossings declared or
     // used is the fixture's point) — the bare walk, core riding auto

@@ -709,10 +709,12 @@ entry fn boot_stream(url: str) -> nil {
     fn boot(
         fixture: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
     ) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, HttpFixture) {
-        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
         for d in ["ink_host", "http_host", "http"] {
             world.extend(
-                rut_driver::dir_pkgs(&std::path::Path::new(PKG_DIR).join(d))
+                rut_native::dir_pkgs(&std::path::Path::new(PKG_DIR).join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );
@@ -888,11 +890,13 @@ entry fn boot(url: str) -> nil {
 }
 "#;
         // splice the probe source over the default one and re-boot by hand
-        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join(d))
+                rut_native::dir_pkgs(&tree.join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );
@@ -990,11 +994,13 @@ entry fn boot(url: str) -> nil {
     launch_future(probe2(log, url));
 }
 "#;
-        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join(d))
+                rut_native::dir_pkgs(&tree.join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );
@@ -1079,11 +1085,13 @@ entry fn boot() -> nil {
     launch_future(probe(log));
 }
 "#;
-        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join(d))
+                rut_native::dir_pkgs(&tree.join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );
@@ -1144,7 +1152,7 @@ entry fn boot() -> nil {
 
     #[test]
     fn the_decl_rows_join_both_lanes() {
-        let world = rut_driver::dir_pkgs(&std::path::Path::new(PKG_DIR).join("http_host"))
+        let world = rut_native::dir_pkgs(&std::path::Path::new(PKG_DIR).join("http_host"))
             .expect("mount http_host")
             .pkgs;
         let ctx = rut_driver::host_pkg_ctx(&world);
@@ -1177,11 +1185,13 @@ entry fn boot() -> nil {
         });
         let url = format!("http://{addr}/stream");
         // reuse the standard boot with the REAL lane bolted on
-        let mut world = rut_driver::std_async_pkgs().expect("the async pair walks");
+        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
         for d in ["ink_host", "http_host", "http"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join(d))
+                rut_native::dir_pkgs(&tree.join(d))
                     .unwrap_or_else(|e| panic!("mount {d}: {e}"))
                     .pkgs,
             );

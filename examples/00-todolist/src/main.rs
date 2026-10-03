@@ -17,8 +17,8 @@ use std::task::{Context, Poll};
 /// only thing an embedder names, and only when the manifest declares
 /// url rows (this one does).
 fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
-    let remote = rut_driver::HttpRemote::project_local(base);
-    block_on(rut_driver::load_path_session_with(base, &remote))
+    let remote = rut_native::HttpRemote::project_local(base);
+    block_on(rut_native::load_path_session_with(base, &remote))
 }
 
 /// The std-only driver for the Loader's future: the remote's fetch

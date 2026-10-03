@@ -28,7 +28,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -47,8 +47,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut loaded = rut_driver::dir_pkgs(&root.join("rut/ink")).expect("mount ink");
-    loaded.pkgs.extend(rut_driver::std_async_pkgs().expect("the async pair walks"));
+    let mut loaded = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink");
+    loaded.pkgs.extend(rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs);
     loaded.pkgs.push(rut_driver::Pkg::source("app", src));
     let expected = rut_driver::declared_host_fns(&loaded.pkgs);
     let compiled = rut_driver::RutRun::new()

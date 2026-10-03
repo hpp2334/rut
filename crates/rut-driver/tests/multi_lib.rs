@@ -15,8 +15,7 @@
 //!   already happened at pack), so the archive carries the binary, not
 //!   the files; the packed form compiles identically to the directory
 
-use rut_driver::bundle::FsSource;
-use rut_driver::pack_dir;
+use rut_native::pack_dir;
 use std::path::{Path, PathBuf};
 
 
@@ -36,7 +35,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -132,7 +131,7 @@ fn multi_lib_is_one_module_in_manifest_order() {
     // c before b in the array: the splice order is the LIST's, never
     // alphabetical, never a directory listing
     let root = world("order", Some("\"./part_c.rut\", \"./part_b.rut\""), None);
-    let loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("load");
+    let loaded = rut_native::load_dir(&root.join("app")).expect("load");
     let kid = loaded.pkg("kid").expect("kid mounted");
     let rut_driver::PkgBody::Source { text: src, .. } = &kid.body else {
         panic!("kid has a source body");
@@ -153,22 +152,22 @@ fn manifest_libs_laws_are_loud() {
     let kid = root.join("kid");
     let text = std::fs::read_to_string(kid.join("rut.jsonc")).unwrap();
     std::fs::write(&kid.join("rut.jsonc"), text.replacen(r#""lib": "./kid.rut", "#, "", 1)).unwrap();
-    let err = rut_driver::load_dir(&kid, &FsSource).unwrap_err().to_string();
+    let err = rut_native::load_dir(&kid).unwrap_err().to_string();
     assert!(err.contains("needs `entry.lib`"), "{err}");
 
     // a `.d.rut` element — a decl surface is not a body
     let root = world("declrut", Some("\"./part_b.rut\", \"./x.d.rut\""), None);
-    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_native::load_dir(&root.join("kid")).unwrap_err().to_string();
     assert!(err.contains("`.d.rut`"), "{err}");
 
     // the base named again in the tail — the splice would duplicate it
     let root = world("dup", Some("\"./part_b.rut\", \"./kid.rut\""), None);
-    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_native::load_dir(&root.join("kid")).unwrap_err().to_string();
     assert!(err.contains("twice"), "{err}");
 
     // a missing file — the exact path, never a silent skip
     let root = world("gone", Some("\"./gone.rut\""), None);
-    let err = rut_driver::load_dir(&root.join("kid"), &FsSource).unwrap_err().to_string();
+    let err = rut_native::load_dir(&root.join("kid")).unwrap_err().to_string();
     assert!(err.contains("gone.rut"), "{err}");
 }
 
@@ -190,7 +189,7 @@ fn multi_lib_packs_compiled_and_loads_identically() {
     assert_eq!(run_main(session.clone()), 23);
 
     // the packed form compiles to the SAME linked binary as the directory
-    let dir_loaded = rut_driver::load_dir(&root.join("app"), &FsSource).expect("dir load");
+    let dir_loaded = rut_native::load_dir(&root.join("app")).expect("dir load");
     let linked = |l: &rut_driver::Loaded| {
         let g = rut_driver::RutRun::new()
             .pkgs(l)

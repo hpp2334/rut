@@ -21,7 +21,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -266,7 +266,7 @@ fn pouch_module_source_compiles() {
     // rut/pouch/pouch.rut — one file, one module unit
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");
-    let merged = rut_driver::load_module_source(&pouch).expect("read");
+    let merged = rut_native::load_module_source(&pouch).expect("read");
     assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
         "{merged}\nentry fn main() -> i32 {{\n\
@@ -315,7 +315,7 @@ fn loads_a_directory_graph() {
     .unwrap();
     std::fs::write(lib.join("lib.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
 
-    let loaded = rut_driver::load_dir(&app, &rut_driver::bundle::FsSource).expect("load_dir");
+    let loaded = rut_native::load_dir(&app).expect("load_dir");
     let out = rut_driver::RutRun::new()
         .pkgs(&loaded)
         .entrypoint(&loaded.root)
@@ -344,7 +344,7 @@ fn consumer_uses_pouch_vec() {
     // through the surface's inherent rows
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");
-    let coll_src = rut_driver::load_module_source(&pouch).expect("read");
+    let coll_src = rut_native::load_module_source(&pouch).expect("read");
     let out = graph_of(
         rut_driver::RutRun::new()
             // core first: the pouch source uses its prelude names

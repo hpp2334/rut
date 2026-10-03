@@ -11,13 +11,18 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# default-features = false: the `http` wire (reqwest + tokio) does not
-# build on wasm32-unknown-unknown — this graph loads url-free projects
-# and bundles only, so it never needs a remote
-rut-driver = { path = "../rut-driver", default-features = false }
+# the driver is pure (no wire, no fs — its old `http` feature moved to
+# rut-native); this graph loads url-free projects and bundles only, so
+# it never needs a remote
+rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std" }
 rut-parser = { path = "../rut-parser" }
 rut-ast = { path = "../rut-ast" }
 rut-lexer = { path = "../rut-lexer" }
+
+[dev-dependencies]
+# HOST-ONLY (cargo test never builds for wasm32): the pack lane that
+# builds the test bundle and the tree-pkg offer
+rut-native = { path = "../rut-native" }

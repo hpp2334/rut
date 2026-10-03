@@ -34,7 +34,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -52,7 +52,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
-    rut_driver::load_dir(Path::new(&format!("{DATA}/{rel}")), &rut_driver::bundle::FsSource)
+    rut_native::load_dir(Path::new(&format!("{DATA}/{rel}")))
         .map_err(|e| e.to_string())
 }
 
@@ -332,7 +332,7 @@ fn mount_dir_mounts_no_dev_deps_and_runs_no_gate() {
     // it is not "building the pkg itself", so the dev pass and the
     // peer gate are not its business (the peer DECLARATIONS are still
     // recorded for the registry).
-    let s = rut_driver::dir_pkgs(Path::new(&format!("{DATA}/json"))).expect("mount");
+    let s = rut_native::dir_pkgs(Path::new(&format!("{DATA}/json"))).expect("mount");
     assert_eq!(s.root, "json");
     assert!(s.pkg("json").is_some());
     assert!(s.pkg("pouch").is_none(), "dev-deps must not ride the embedder path");

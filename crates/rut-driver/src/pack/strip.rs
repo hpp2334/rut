@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 
 use super::groups::{group_manifest, has_open_generic_surface, rides_compiled};
-use crate::loader::{Archive, PkgSource};
+use crate::pack::Archive;
+use crate::pack::{PackRead, PkgSource};
 use crate::PackError;
 
 // the strip arm — after the compile walk, before any encode. Three
@@ -31,6 +32,7 @@ pub(super) fn strip_arm(
     session: &crate::session::Session,
     sources: &BTreeMap<String, PkgSource>,
     archives: &[Archive],
+    read: &PackRead,
     root: &str,
     root_idx: usize,
     strip: bool,
@@ -64,7 +66,7 @@ pub(super) fn strip_arm(
                          text would recompile clean-named beside mangled binaries. Pack \
                          without `--strip`",
                         match source {
-                            PkgSource::Dir(d) => d.display().to_string(),
+                            PkgSource::Dir(d) => d.clone(),
                             PkgSource::Archive { slot, .. } => archives[*slot].origin.clone(),
                         }
                     )));
@@ -78,7 +80,7 @@ pub(super) fn strip_arm(
             if rides_compiled(session, spec, &units) {
                 continue; // a `.rutc` group — no source binds anything
             }
-            let dm = group_manifest(source, archives).map_err(PackError::law)?;
+            let dm = group_manifest(source, archives, read).map_err(PackError::law)?;
             for dep in dm.deps.keys() {
                 let dep_compiled = rides_compiled(session, dep, &units);
                 if dep_compiled {

@@ -52,7 +52,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -121,7 +121,7 @@ fn compile_diags(src: &str) -> Vec<String> {
 fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let ink = rut_driver::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
+    let ink = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
     let out = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&ink)
@@ -139,7 +139,7 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
     let mut world = ink.pkgs.clone();
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
@@ -376,7 +376,7 @@ fn weak_over_host_box_dies_with_the_entry() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     // the test's own host pkg (the host_boxes pattern): the decl surface
     // here, the body bound below
-    let weak_host = rut_driver::dir_pkgs(&root.join("crates/rut-driver/tests/data/weak_host"))
+    let weak_host = rut_native::dir_pkgs(&root.join("crates/rut-driver/tests/data/weak_host"))
         .expect("mount weak_host");
     let src = r#"
 use core::{ Weak };

@@ -7,7 +7,8 @@
 use std::path::Path;
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
-use rut_driver::{load_path_session, lower_decl_module};
+use rut_driver::lower_decl_module;
+use rut_native::load_path_session;
 use rut_vm::OpaqueRef;
 
 const INK_HOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/ink_host");
@@ -30,7 +31,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )

@@ -202,6 +202,12 @@ impl Session {
         self.modules.iter()
     }
 
+    /// The whole table — the pure peer gate's pass runs over it at the
+    /// close of the world.
+    pub(crate) fn table_mut(&mut self) -> &mut BTreeMap<String, Pkg> {
+        &mut self.modules
+    }
+
     /// Take every mounted pkg out — the walk collectors' yield
     /// (`Loaded`): the session dies, the pkgs travel.
     pub(crate) fn drain_pkgs(&mut self) -> Vec<Pkg> {

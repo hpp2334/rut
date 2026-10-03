@@ -118,7 +118,7 @@ fn leaf_bundle(tag: &str) -> Vec<u8> {
     let util = root.join("util");
     write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
     write(&util, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
-    rut_driver::pack_dir(&util).expect("pack util")
+    rut_native::pack_dir(&util).expect("pack util")
 }
 
 #[test]

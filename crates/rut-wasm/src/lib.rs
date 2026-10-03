@@ -199,6 +199,26 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         )
         .expect("the strbuild_host surface is valid"),
     );
+    // calc rides as a lowered surface + the manifest's namespace/consts
+    // rows — the same shape a `tree_pkg("calc")` walk yields (the wasm
+    // host has no filesystem, so the files ride `include_str!`; the
+    // core prelude auto-offers in `.compile()`)
+    let calc_manifest = rut_driver::parse_manifest(include_str!("../../../rut/calc/rut.jsonc"))
+        .expect("the calc manifest is valid");
+    let mut calc = rut_driver::lower_decl_module(
+        include_str!("../../../rut/calc/calc.d.rut"),
+        "calc.d.rut",
+    )
+    .expect("the calc surface is valid");
+    calc.namespace = calc_manifest.namespace.clone();
+    if let rut_driver::PkgBody::Host { consts, .. } = &mut calc.body {
+        *consts = calc_manifest
+            .consts
+            .iter()
+            .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
+            .collect();
+    }
+    let calc = named("calc", calc);
     // the library world (everything but the program's own source): the
     // run-side install snapshot reads its declared rows
     let lib_pkgs = vec![
@@ -217,9 +237,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         strbuild_host,
         rut_driver::Pkg::source("strbuild", include_str!("../../../rut/strbuild/strbuild.rut")),
         rut_driver::Pkg::source("json", include_str!("../../../rut/json/json.rut")),
-        // calc rides explicitly (the core prelude auto-offers in
-        // `.compile()`)
-        rut_driver::calc_pkg(),
+        calc,
     ];
     // the rows snapshot `rut_run`'s installs answer to (owned; the
     // compile-time world dies here, the table travels)

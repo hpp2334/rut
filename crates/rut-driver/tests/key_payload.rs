@@ -61,7 +61,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -79,7 +79,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn vm_with_host() -> Vm {
-    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(PKG_DIR)).expect("mount keypayload");
+    let mut loaded = rut_native::dir_pkgs(std::path::Path::new(PKG_DIR)).expect("mount keypayload");
     let expected = rut_driver::declared_host_fns(&loaded.pkgs);
     loaded.pkgs.push(rut_driver::Pkg::source("app", SRC));
     let g = rut_driver::RutRun::new()

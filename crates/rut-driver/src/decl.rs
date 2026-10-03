@@ -136,3 +136,22 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Pkg, String> {
         ..Default::default()
     })
 }
+
+/// The lib-surface law: `host fn` text lives only in `type = "host"`
+/// pkgs. Non-parsing surfaces stay inert (doc-only); a surface that
+/// PARSES and declares host fns is the loud error. The walk runs it on
+/// every lib pkg's declared surface, both lanes.
+pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
+    if let Ok(m) = lower_decl_module(src, origin) {
+        if let PkgBody::Host { host_funcs, .. } = m.body {
+            if let Some((name, ..)) = host_funcs.first() {
+                return Err(format!(
+                    "{origin}: `host fn {name}` — a lib pkg cannot declare \
+                     host fns; split the rows into a `type = \"host\"` pkg \
+                     and depend on it"
+                ));
+            }
+        }
+    }
+    Ok(())
+}

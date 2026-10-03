@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, Table};
 
-use rut_driver::{bundle::FsSource, load_dir, pack_dir, sha256_hex};
+use rut_driver::sha256_hex;
+use rut_native::{load_dir, pack_dir};
 
 // ------------------------------------------------------------------
 // the fixture world: real dirs, real packed bundles
@@ -38,7 +39,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -112,7 +113,7 @@ fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
 fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -173,7 +174,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let loaded = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
+    let loaded = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("url load");
     assert_eq!(loaded.root, "app");
     // the url dep is a leaf: mounted, not walked — its body is the
@@ -189,13 +190,13 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     let twin = root.join("app_path");
     write(&twin, "rut.jsonc", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
     write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
-    let dir_loaded = load_dir(&twin, &FsSource).expect("dir load");
+    let dir_loaded = load_dir(&twin).expect("dir load");
     assert_eq!(
         linked_binary(&dir_loaded),
         {
             let mut table = BTreeMap::new();
             table.insert(url.to_string(), bytes);
-            let s = block_on(rut_driver::load_dir_with(&app, &Table::from(table))).unwrap();
+            let s = block_on(rut_native::load_dir_with(&app, &Table::from(table))).unwrap();
             linked_binary(&s)
         },
         "dir and url lanes compile identically"
@@ -225,7 +226,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     let err =
-        block_on(rut_driver::load_dir_with(&app, &Table::from(table.clone())))
+        block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
             .unwrap_err()
             .to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
@@ -237,7 +238,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
     // the law runs on EVERY load — a correct pin passes (the happy
     // path's twin), and the same wrong pin refuses the vendored-map
     // lane identically: the door, not the fetcher, holds the lock
-    let err = rut_driver::load_dir_fetched(&app, &FsSource, &table).unwrap_err().to_string();
+    let err = rut_native::load_dir_fetched(&app, &table).unwrap_err().to_string();
     assert!(err.contains("sha256 pin mismatch"), "{err}");
 }
 
@@ -257,7 +258,7 @@ fn name_vs_key_refuses() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let err = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
+    let err = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
     assert!(
@@ -304,7 +305,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
-    let err = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
+    let err = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
     assert!(
@@ -334,7 +335,7 @@ fn embedder_mount_outranks_the_url_dep() {
         .pkg(rut_driver::Pkg::source("util", "// the embedder's"));
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
-    let walked = block_on(rut_driver::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
+    let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
     assert_eq!(walked.root, "app");
     chain = chain.pkgs(&walked);
     // the compile closes the world; the closure check would name a
@@ -424,7 +425,7 @@ fn mixed_dir_and_archive_peer_gate() {
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes);
     let session =
-        block_on(rut_driver::load_dir_with(&app, &Table::from(table.clone())))
+        block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
             .expect("url load");
     // zeta: compiled; codec: the archive's source group; pouch: the DIR
     // mount won (first-mount-wins across the two lanes)
@@ -456,7 +457,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest("app2", "app2.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
     write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
-    let session2 = block_on(rut_driver::load_dir_with(&app2, &Table::from(table)))
+    let session2 = block_on(rut_native::load_dir_with(&app2, &Table::from(table)))
         .expect("light load");
     assert!(
         !probe_compiles(&session2, CODEC_POUCH_PROBE),
@@ -497,7 +498,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
     let mut table = BTreeMap::new();
     table.insert("https://fixtures.test/a.rutbundle".to_string(), bytes_a);
     table.insert("https://fixtures.test/b.rutbundle".to_string(), bytes_b);
-    let session = block_on(rut_driver::load_dir_with(&app, &Table::from(table)))
+    let session = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
     assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::PkgBody::Compiled(_)));
     assert!(matches!(session.pkg("util_b").unwrap().body, rut_driver::PkgBody::Compiled(_)));
@@ -519,7 +520,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     );
     write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
-    let err = load_dir(&app, &FsSource).unwrap_err().to_string();
+    let err = load_dir(&app).unwrap_err().to_string();
     assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
     assert!(err.contains("`load_dir_with`"), "{err}");
     assert!(err.contains("vendor the dep"), "{err}");
@@ -551,9 +552,9 @@ fn pack_url_dep_rode_along_and_deterministic() {
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
-    let packed = rut_driver::pack_dir_fetched(&app, &map).expect("pack");
+    let packed = rut_native::pack_dir_fetched(&app, &map).expect("pack");
     // determinism: same manifest + same pins ⇒ same bytes
-    let packed_again = rut_driver::pack_dir_fetched(&app, &map).expect("pack again");
+    let packed_again = rut_native::pack_dir_fetched(&app, &map).expect("pack again");
     assert_eq!(packed, packed_again, "same inputs must pack byte-identically");
 
     // the rode-along group: the output carries util as a compiled group
@@ -579,7 +580,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert_eq!(run_entry::<i64>(session, "go"), 42);
 
     // the async lane settles identically through the noop-waker driver
-    let via_with = block_on(rut_driver::pack_dir_with(&app, &Table::from(map))).expect("pack_with");
+    let via_with = block_on(rut_native::pack_dir_with(&app, &Table::from(map))).expect("pack_with");
     assert_eq!(packed, via_with);
 }
 
@@ -607,7 +608,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
 
     let mut map = BTreeMap::new();
     map.insert(url, bytes);
-    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err().to_string();
+    let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("packed dep `codec` needs its own [dev-deps] directories"),
         "{err}"
@@ -633,7 +634,7 @@ fn pack_refuses_unused_compiled_url_dep() {
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
-    let err = rut_driver::pack_dir_fetched(&app, &map).unwrap_err().to_string();
+    let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("compiled group `util`"),
         "{err}"

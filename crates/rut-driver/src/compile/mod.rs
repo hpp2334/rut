@@ -1,18 +1,18 @@
-//! The compile pipeline over one module and the engine package
-//! constructors: [`compile_module`] (the single-source lane — auto
-//! core + `calc`), the program compiler ([`program`]), the seed types
-//! ([`seeds`]), the engine pkg constructors ([`std`]), and the IR
-//! dump renderer ([`dump`]).
+//! The compile pipeline over one module: [`compile_module`] (the
+//! single-source lane — auto core), the program compiler
+//! ([`program`]), the seed types ([`seeds`]), and the IR dump renderer
+//! ([`dump`]). The engine's own packages are no constructors: `core`
+//! auto-rides in `.compile()` (the §0.14 law made literal), and every
+//! other package — `calc` included — is an ordinary walked tree
+//! package (rut-native's `tree_pkg`).
 
 pub mod dump;
 pub mod program;
 pub mod seeds;
-pub mod std;
 
 pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
-pub use std::{calc_pkg, core_pkg, std_async_pkgs};
 
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
@@ -32,10 +32,13 @@ pub struct CompileOutput {
     pub binary: Option<Vec<u8>>,
 }
 
-/// Full pipeline over one module: the engine's packages ride the run
-/// chain (auto core, explicit `calc`), the source offers as the root
-/// pkg under `module_name`, and one `.compile()` runs the whole law.
-/// The embedder-facing single-source lane (the wasm demo, `rut dump`).
+/// Full pipeline over one module: the core prelude auto-rides (the
+/// `.compile()` law), the source offers as the root pkg under
+/// `module_name`, and one `.compile()` runs the whole law. The
+/// embedder-facing single-source lane (the wasm demo, `rut dump`).
+/// NOTE: the walked packages (`calc`'s `Math`, the async pair) are NOT
+/// here — a host that wants them offers them (`rut-native`'s
+/// `tree_pkg`); the single-source lane knows no names.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
     let (ast, diags) = parse(src, mode);
     let tree = ast_dump::to_dump_tree(&ast);
@@ -46,7 +49,6 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     }
     let compiled: Result<Compiled, RunError> = RutRun::new()
         .pkg(Pkg::source(module_name, src))
-        .pkg(calc_pkg())
         .entrypoint(module_name)
         .compile();
     render(compiled, ast_dump, ast_json)

@@ -31,7 +31,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -51,10 +51,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let ink = rut_driver::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
+    let ink = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&ink)
-        .pkg(rut_driver::calc_pkg())
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .pkg(rut_driver::Pkg::source("app_main", &combined))
         .entrypoint("app_main")
         .compile()
@@ -65,7 +65,7 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
     let mut world = ink.pkgs.clone();
-    world.push(rut_driver::calc_pkg());
+    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {

@@ -56,7 +56,7 @@ entry fn twins_agree(n: i64) -> i64 {
 /// bodies, boot the Vm. Bindings before the Vm, contract
 /// checked by `verify_against` at boot.
 fn vm_with_surface(pkg_dir: &str) -> Vm {
-    let mut world = rut_driver::dir_pkgs(std::path::Path::new(pkg_dir))
+    let mut world = rut_native::dir_pkgs(std::path::Path::new(pkg_dir))
         .expect("mount bench_cross")
         .pkgs;
     world.push(rut_driver::Pkg::source("app", SRC));
@@ -90,8 +90,8 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
 /// surfaces is a boot panic or this assert, never a silent skew.
 #[test]
 fn both_surfaces_declare_the_same_contract() {
-    let world_a = rut_driver::dir_pkgs(std::path::Path::new(FIXTURE_DIR)).unwrap().pkgs;
-    let world_b = rut_driver::dir_pkgs(std::path::Path::new(COMMITTED_DIR)).unwrap().pkgs;
+    let world_a = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR)).unwrap().pkgs;
+    let world_b = rut_native::dir_pkgs(std::path::Path::new(COMMITTED_DIR)).unwrap().pkgs;
     let ctx_a = rut_driver::host_pkg_ctx(&world_a);
     let ctx_b = rut_driver::host_pkg_ctx(&world_b);
     assert_eq!(ctx_a.flatten(), ctx_b.flatten());

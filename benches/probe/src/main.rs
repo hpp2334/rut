@@ -127,11 +127,11 @@ fn main() {
     // against it, exactly the snapshot a `.host_pkg` install would.
     let t0 = Instant::now();
     let (ctx, prog) = if path.is_dir() {
-        let loaded = rut_driver::load_path_session(path)
+        let loaded = rut_native::load_path_session(path)
             .unwrap_or_else(|e| fail(format!("load {}: {e}", path.display())));
         let compiled = rut_driver::RutRun::new()
             .pkgs(&loaded)
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(&loaded.root)
             .compile()
             .unwrap_or_else(|e| fail(format!("compile: {e}")));
@@ -145,7 +145,7 @@ fn main() {
         // the rows snapshot replaces the walk — the installs answer to
         // the ctx, owned
         let mut world = loaded.pkgs;
-        world.push(rut_driver::calc_pkg());
+        world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
         (rut_driver::host_pkg_ctx(&world), prog)
     } else {
         let src = std::fs::read_to_string(path)
@@ -158,12 +158,12 @@ fn main() {
         let mut world = Vec::new();
         for d in ["ink", "pouch", "nmapset", "json", "strbuild"] {
             world.extend(
-                rut_driver::dir_pkgs(&tree.join("rut").join(d))
+                rut_native::dir_pkgs(&tree.join("rut").join(d))
                     .unwrap_or_else(|e| fail(format!("mount {d}: {e}")))
                     .pkgs,
             );
         }
-        world.push(rut_driver::calc_pkg());
+        world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
         let mut chain = rut_driver::RutRun::new();
         for p in &world {
             chain = chain.pkg(p.clone());

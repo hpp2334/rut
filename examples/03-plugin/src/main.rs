@@ -7,7 +7,7 @@
 //!
 //! The plugin loads twice from the same source: as a module **directory**
 //! (`plugin/rut.jsonc`) and as a packed **`.rutbundle`** produced by
-//! `rut_driver::pack_dir` — the two forms of one contract.
+//! `rut_native::pack_dir` — the two forms of one contract.
 //! Both run the identical scripted session; the transcript printed at
 //! the end is what `tests/session.rs` asserts.
 
@@ -61,13 +61,13 @@ fn main() {
     // output, so the packed form stays closed (loading it never
     // fetches).
     let bytes = {
-        let remote = rut_driver::HttpRemote::project_local(dir);
+        let remote = rut_native::HttpRemote::project_local(dir);
         let opts = rut_driver::PackOpts::default();
         // the remote's fetch futures come back READY: one noop-waker
         // poll settles the pack lane's prefetch
         let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
         let mut pinned =
-            std::pin::pin!(rut_driver::pack_dir_opts_with(dir, &opts, &remote));
+            std::pin::pin!(rut_native::pack_dir_opts_with(dir, &opts, &remote));
         let (bytes, _) = loop {
             match pinned.as_mut().poll(&mut cx) {
                 std::task::Poll::Ready(v) => break v.unwrap(),

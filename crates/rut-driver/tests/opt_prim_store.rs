@@ -33,7 +33,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source(spec, src))
-            .pkg(rut_driver::calc_pkg())
+            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
     )
@@ -51,7 +51,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn world_with(app_src: &str) -> rut_driver::Loaded {
-    let mut loaded = rut_driver::dir_pkgs(std::path::Path::new(POUCH_DIR)).expect("mount pouch");
+    let mut loaded = rut_native::dir_pkgs(std::path::Path::new(POUCH_DIR)).expect("mount pouch");
     loaded.pkgs.push(rut_driver::Pkg::source("app_main", app_src));
     loaded
 }
@@ -462,7 +462,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let mut world = world_with(src);
     // nmapset pulls the `nmap_host` host pkg through its own [deps]
     world.pkgs.extend(
-        rut_driver::dir_pkgs(std::path::Path::new(NMAPSET_DIR))
+        rut_native::dir_pkgs(std::path::Path::new(NMAPSET_DIR))
             .expect("mount nmapset")
             .pkgs,
     );
