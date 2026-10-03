@@ -17,8 +17,8 @@
 //! pub host fn __completer_yield(f: opaque, cx: opaque);       // cancelled retire
 //! ```
 //!
-//! Declared by `rut/async_engine/engine.d.rut` (scope `async_engine`);
-//! the `rut/async_host` inline package wraps them in
+//! Declared by `rut/async_host/engine.d.rut` (scope `async_host`);
+//! the `rut/futures` inline package wraps them in
 //! the typed surface (`launch_future`, `LaunchedFutureHandle::abort`,
 //! `sleep`). Each embedder mounts the modules AND installs these bodies
 //! — a session that mounts neither simply has no launcher, and `await`
@@ -229,7 +229,7 @@ fn mint_select2(vm: &Vm, a: Slot, b: Slot) -> Result<OpaqueRef, Trap> {
 /// `arm_timer`) — the engine owns the queues, the host owns only the
 /// crossing.
 pub fn pkg() -> HostPkg {
-    let mut pkg = HostPkg::new("async_engine");
+    let mut pkg = HostPkg::new("async_host");
     // launch_future's engine half: unbox the sealed frame (the box the
     // rut launcher minted with `opaque(f)`); the queue takes its own
     // reference

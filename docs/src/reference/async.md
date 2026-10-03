@@ -30,7 +30,7 @@ frame is representation; the handle is the surface.
 
 ```rut
 use ink::{ Logger };
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 
 async fn countdown(n: u32) -> u32 {
     let log = Logger.new("count");
@@ -117,7 +117,7 @@ records each await's resume state.)
 ## The standard launcher set
 
 Launchers are **host surface** — ordinary rut code over the closed
-`Future` class, provided by the `rut/async_host` package (users may
+`Future` class, provided by the `rut/futures` package (users may
 write their own the same way):
 
 ```rut
@@ -126,8 +126,8 @@ pub fn sleep(ms: u32) -> Future<nil>;
 // LaunchedFutureHandle<T>: the receipt — one member, abort() -> bool
 ```
 
-Each embedder mounts `rut/async_engine` (the rows `__launch`, `__abort`,
-`__sleep`, `__sleep_yield`) plus `rut/async_host`, and installs the row
+Each embedder mounts `rut/async_host` (the rows `__launch`, `__abort`,
+`__sleep`, `__sleep_yield`) plus `rut/futures`, and installs the row
 bodies. A session that mounts neither simply has no launcher; `await`
 still works inline.
 

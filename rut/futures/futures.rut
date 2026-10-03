@@ -1,4 +1,4 @@
-// async_host/async_host.rut — the standard launcher surface in rut
+// futures/futures.rut — the standard launcher surface in rut
 // (ruling 8: launch_future / LaunchedFutureHandle / sleep are HOST
 // surface — ordinary code over the closed `Future` class, mounted by
 // each embedder by choice; users may write their own launchers the
@@ -19,7 +19,7 @@
 // vocabulary drives).
 
 use core::{ Future };
-use async_engine::{ __launch, __abort, __sleep, __select2, __select_all, __completer, __resolve };
+use async_host::{ __launch, __abort, __sleep, __select2, __select_all, __completer, __resolve };
 
 // The launched future's receipt: the frame held by its cell (`?T` is
 // the cell reference — here a one-slot box over the frame).

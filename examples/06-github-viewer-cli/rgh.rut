@@ -30,7 +30,7 @@ use json::{
     DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonDeserialize,
     JsonReader, JsonSerialize, JsonWriter,
 };
-use async_host::launch_future;
+use futures::launch_future;
 use http::{ HttpClient, Response };
 use rgh_host::{ out, eprint, write_file, append_file, exit };
 

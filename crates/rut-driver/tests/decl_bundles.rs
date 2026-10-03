@@ -177,7 +177,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 /// carry their format keys (the std-cdn phase added them), so the
 /// tree's `rut.jsonc` rides byte-for-byte — the point is REAL surfaces
 /// (including `nmap_host`, whose surface is named `nmap.d.rut` — NOT
-/// `<name>.d.rut` — and `async_engine`, `engine.d.rut`: the entry's
+/// `<name>.d.rut` — and `async_host`, `engine.d.rut`: the entry's
 /// own rel path keys the archive).
 fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(name);
@@ -193,7 +193,7 @@ fn the_real_tree_host_pkgs_pack_and_load() {
     for (name, surface) in [
         ("ink_host", "ink_host.d.rut"),
         ("nmap_host", "nmap.d.rut"),
-        ("async_engine", "engine.d.rut"),
+        ("async_host", "engine.d.rut"),
         ("core", "core.d.rut"),
     ] {
         let dir = shim_tree_host("tree", name, surface);

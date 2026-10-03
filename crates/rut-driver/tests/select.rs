@@ -64,7 +64,7 @@ fn run_loop(vm: &mut Vm, cap: usize) {
 fn select2_answers_the_first_ready() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, select2, Either2 };
+use futures::{ launch_future, sleep, select2, Either2 };
 
 async fn slow(log: opaque) -> str {
     await sleep(500);
@@ -105,7 +105,7 @@ fn select2_types_the_two_sides_distinctly() {
     // type is the fn signature's Either2<T, U>, no casts anywhere.
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, select2, Either2 };
+use futures::{ launch_future, sleep, select2, Either2 };
 
 async fn fetch(log: opaque) -> str {
     await sleep(500);
@@ -141,7 +141,7 @@ fn select2_cancels_the_loser_through_its_drop_path() {
 use core::{ DisposalContext };
 use ink::{ Logger };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, select2, Either2 };
+use futures::{ launch_future, sleep, select2, Either2 };
 
 class Tracked {
     n: i32 = 0;
@@ -195,7 +195,7 @@ fn select_all_answers_the_winner_index_and_value() {
 use core::{ Future, DisposalContext };
 use ink::{ Logger };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, select_all };
+use futures::{ launch_future, sleep, select_all };
 
 class Tracked {
     tag: str;
@@ -245,7 +245,7 @@ fn completer_resolves_a_parked_awaiter() {
     let src = r#"
 use core::{ Future };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, completer, Completer };
+use futures::{ launch_future, sleep, completer, Completer };
 
 async fn waiter(log: opaque, f: Future<str>) -> nil {
     let v = await f;
@@ -278,7 +278,7 @@ fn completer_answers_before_the_await() {
     let src = r#"
 use core::{ Future };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, completer };
+use futures::{ launch_future, completer };
 
 async fn waiter(log: opaque, f: Future<u32>, done: Completer<u32>) -> nil {
     done.resolve(41);
@@ -305,7 +305,7 @@ fn completer_feeds_a_select_race() {
     let src = r#"
 use core::{ Future };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, select2, completer, Completer, Either2 };
+use futures::{ launch_future, sleep, select2, completer, Completer, Either2 };
 
 // the callback side: settle the future when the "response" arrives
 fn fake_fetch(tag: str) -> Future<str> {

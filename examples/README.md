@@ -50,7 +50,7 @@ instantiations in its ledger, and a compiled pkg whose surface exports
 generics rides the source that serves consumer-spelled shapes — so the
 CDN delivers **host surfaces** (the v6 decl bundles), **concrete-class
 libs** (`http` — 06 rides it), **and the generic owners** (`pouch`,
-`nmapset`, `json`, `async_host` — the examples' `Vec<Todo>` and
+`nmapset`, `json`, `futures` — the examples' `Vec<Todo>` and
 `Vec<str>` shapes compile from the bundles at the link; a consumer's
 closure must also contain the names a bundle-mounted json's ledger
 spells — `pouch`, `nmapset` beside it
@@ -491,7 +491,7 @@ The run recipes:
 - **A module dir**: `[deps] http = { path = ".../rut/http" }` —
   `rut run <dir>`; http's own `[deps]` pulls http_host AND strbuild
   (the builder's header accumulator). The fetch sites `await`, so
-  the program's entry runs under the launcher (`use async_host::
+  the program's entry runs under the launcher (`use futures::
   launch_future`).
 - **The worked example**: [`06-github-viewer-cli/`](06-github-viewer-cli/)
   — `rgh` consumes the pair from an embedder (`http::pkg()`, the
@@ -503,7 +503,7 @@ The run recipes:
 
 ```rut
 use http::HttpClient;
-use async_host::launch_future;
+use futures::launch_future;
 use ink::Logger;
 
 async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {

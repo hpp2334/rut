@@ -2,7 +2,7 @@
 // The weave (checkpoint brtable, the await expansion, the cancelled
 // probe → drop path), the driving loop (ready + timer queues,
 // drive / next_deadline / cancel), and the standard host set
-// (async_engine + async_host). Trigger→completion is observed through
+// (async_host + futures). Trigger→completion is observed through
 // the ink_host logger's recording native — the fmt batch's semantic-test
 // pattern; diagnostics are pinned per message.
 
@@ -79,7 +79,7 @@ fn diags_of(src: &str) -> Vec<String> {
 fn launch_runs_to_completion() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 
 async fn work(log: opaque, n: u32) -> nil {
     logger_log(log, 2, "begin");
@@ -104,7 +104,7 @@ entry fn main() -> nil {
 fn park_and_resume_through_sleep() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 
 async fn tick(log: opaque) -> nil {
     for (let i = 0; i < 3; i += 1) {
@@ -133,7 +133,7 @@ entry fn main() -> nil {
 fn nested_awaits() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 
 async fn inner(log: opaque, tag: str) -> nil {
     logger_log(log, 2, f"{tag}:enter");
@@ -172,7 +172,7 @@ entry fn main() -> nil {
 fn abort_after_park_runs_the_drop_path_then_reports_false() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+use futures::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn victim(log: opaque) -> nil {
     let buf: ?str = "held";
@@ -250,7 +250,7 @@ fn abort_after_park_disposes_locals_at_the_checkpoint() {
         r#"{DROPLOG}
 use core::{{ DisposalContext }};
 use ink_host::{{ create_logger, logger_log }};
-use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
+use futures::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(log: opaque) -> nil {{
     let buf = DropLog.new(log);
@@ -297,7 +297,7 @@ fn dispose_locals_fire_in_reverse_order_at_the_checkpoint() {
         r#"{DROPLOG}
 use core::{{ DisposalContext }};
 use ink_host::{{ create_logger, logger_log }};
-use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
+use futures::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(log: opaque) -> nil {{
     let a = DropTag.new(log, "drop:a");
@@ -339,7 +339,7 @@ entry fn main() -> nil {{
 fn abort_before_first_drive_never_runs_the_body() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 
 async fn job(log: opaque) -> nil {
     logger_log(log, 2, "body-ran");
@@ -371,7 +371,7 @@ fn vm_first_ready(vm: &mut Vm) -> rut_vm::Slot {
 fn the_cx_cancelled_probe_answers_in_a_live_body() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 
 async fn work(log: opaque) -> nil {
     if (cx.cancelled()) { logger_log(log, 2, "flagged"); } else { logger_log(log, 2, "live"); }
@@ -399,7 +399,7 @@ fn a_bound_sleep_future_drives_and_aborts_through_the_box() {
     let src = r#"
 use core::{ Future };
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+use futures::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn parker(log: opaque) -> nil {
     // the annotated binding: the downcast's `?Future<nil>` answer
@@ -443,7 +443,7 @@ entry fn main() -> nil {
 fn fuel_is_charged_per_drive_step() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 
 async fn work(log: opaque) -> nil {
     logger_log(log, 2, "ran");
@@ -471,7 +471,7 @@ fn async_local_captured_by_closure_shares_its_slot() {
     // call (and across the park, since the cell rides the frame)
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 
 struct Box2 { v: i32 }
 

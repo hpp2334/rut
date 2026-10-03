@@ -126,8 +126,8 @@ fn book_blocks_compile_and_run() {
                 ("flow", "rut/flow"),
                 ("json", "rut/json"),
                 ("strbuild", "rut/strbuild"),
-                ("async_engine", "rut/async_engine"),
                 ("async_host", "rut/async_host"),
+                ("futures", "rut/futures"),
                 ("http_host", "rut/http_host"),
                 ("http", "rut/http"),
             ] {

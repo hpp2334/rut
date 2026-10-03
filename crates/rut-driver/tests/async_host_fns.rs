@@ -197,7 +197,7 @@ fn run_loop(vm: &mut Vm, fx: &Fixture, cap: usize) {
 fn await_orders_after_completion() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 async fn job(log: opaque, u: str) -> nil {
@@ -228,7 +228,7 @@ entry fn main() -> nil {
 fn two_awaits_run_concurrently_and_settle_by_deadline() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 async fn job(log: opaque, u: str) -> nil {
@@ -260,7 +260,7 @@ entry fn main() -> nil {
 fn a_launched_host_future_settles_without_an_awaiter() {
     let src = r#"
 use ink_host::create_logger;
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 entry fn main() -> nil {
@@ -281,7 +281,7 @@ entry fn main() -> nil {
 fn a_failed_completer_traps_with_its_message() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::boom;
 
 async fn victim(log: opaque, u: str) -> nil {
@@ -325,7 +325,7 @@ entry fn main() -> nil {
 fn cancel_maps_the_data_path_to_the_arm_and_discards_late_results() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+use futures::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
 
 async fn victim(log: opaque) -> nil {
@@ -393,7 +393,7 @@ entry fn main() -> nil {
 fn await_delivers_the_host_answer() {
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 async fn job(log: opaque, u: str) -> nil {
@@ -422,7 +422,7 @@ fn await_delivers_through_user_frames_and_type_checks() {
     // body awaits the HOST row — the value crosses two answer lanes
     let src = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 async fn inner(log: opaque, u: str) -> str {
@@ -465,7 +465,7 @@ entry fn main() -> nil {
 #[test]
 fn the_rows_drive_directly_through_call_host_row() {
     let src = r#"
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::probe;
 
 async fn job(u: str) -> nil {
@@ -547,7 +547,7 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     s.register_module("fixture", fixture).expect("mount fixture");
     let app = r#"
 use ink_host::{ create_logger, logger_log };
-use async_host::launch_future;
+use futures::launch_future;
 use fixture::wall;
 
 async fn job(log: opaque, u: str) -> nil {

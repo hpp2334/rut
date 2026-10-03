@@ -54,10 +54,10 @@ Two consume paths, and exactly one per future:
 `sleep(ms)` is the one built-in pender — a `Future<nil>` that parks its
 frame until the VM's clock reaches the deadline.
 
-Both `launch_future` and `sleep` come from the `async_host` package:
+Both `launch_future` and `sleep` come from the `futures` package:
 
 ```rut
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 ```
 
 ## Who drives?
@@ -185,7 +185,7 @@ see [workers and channels](../reference/workers-and-channels.md).
 ## Put it together
 
 ```rut
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) {

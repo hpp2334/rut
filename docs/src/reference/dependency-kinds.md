@@ -141,7 +141,7 @@ generics **also rides the source that serves consumer-spelled shapes**:
   classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent
   rows with its whole closure riding inside;
 - **generic owners deliver too** — `pouch`, `nmapset`, `json`,
-  `async_host` ride their entry + group source beside the binaries, so
+  `futures` ride their entry + group source beside the binaries, so
   a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the
   consumer's link**: the ridden text lowers in the consumer's session,
   the monomorphized bodies register under the declaring pkg's spec (one

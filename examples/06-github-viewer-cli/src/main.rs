@@ -11,7 +11,7 @@
 //!   writers, the file pair (`write_file` truncates, `append_file`
 //!   grows — the streaming download's two halves), and the `exit` row
 //!   (the process exits with the brain's i32);
-//! - `boot` launches the brain (`launch_future` — the async_host
+//! - `boot` launches the brain (`launch_future` — the futures
 //!   standard launcher); this file then pumps the driving loop to
 //!   idle (the run lane): `run_ready` + a short wall-clock
 //!   sleep per spin until `pending_tasks()` hits zero. The `exit` row

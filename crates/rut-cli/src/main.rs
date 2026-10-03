@@ -341,8 +341,8 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
     // `use bench_cross::{...}` (the bench row)
     hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
     // the async host set: launch/abort/sleep bodies for the
-    // `async_engine` rows — reached only by a program that mounts the
-    // async packages (a `use async_host::` pulls the tree pkg)
+    // `async_host` rows — reached only by a program that mounts the
+    // async packages (a `use futures::` pulls the tree pkg)
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the string builder's bodies (the host strbuild pkg): reached only
     // by a program that mounts the strbuild pkg (a `use strbuild::` /

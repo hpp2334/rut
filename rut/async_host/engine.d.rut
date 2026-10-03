@@ -1,9 +1,9 @@
-// async_engine/engine.d.rut — the async host set's engine rows
+// async_host/engine.d.rut — the async host set's engine rows
 // The futures themselves never cross the boundary raw (the
 // survey's law: engine-minted, compiler-owned); these rows cross the
 // erasure box — `opaque(f)` seals a frame, `downcast<T>`
 // recovers it — so the typed `Future<T> -> LaunchedFutureHandle<T>`
-// arrow lives in rut code (the `async_host` inline package), where the
+// arrow lives in rut code (the `futures` inline package), where the
 // type system can hold it.
 //
 // The crossings, one by one:
@@ -33,7 +33,7 @@
 //     downcast. Fixed arity is the boundary's law, not a choice: `host
 //     fn` signatures are concrete over the crossing set. When the two
 //     answers already allow it, wider reach composes in rut (see
-//     async_host's `select_all`).
+//     futures' `select_all`).
 //   `__select_all` — the same race over a sealed cohort (`opaque` box
 //     over the `[Future<T>]` array): every member is armed and launched,
 //     the first retirement answers `(i, v)` sealed in the tuple, and

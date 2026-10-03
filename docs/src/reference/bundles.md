@@ -343,7 +343,7 @@ artifacts ARE the delivery and the publish act is a git tag:
   lane delivers **host surfaces** (v10 decl bundles), **concrete-class
   libs** (`http`, `ink`, `strbuild` — methods cross on the surface's
   inherent rows), **and the generic owners** (`pouch`, `nmapset`,
-  `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>`
+  `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>`
   compile at the link from the ridden source). A bundle that predates
   the riding refuses a consumer-spelled shape loudly and says so
   (re-pack it), and a bundle-mounted json names its pack-time dev

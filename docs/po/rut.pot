@@ -4150,7 +4150,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/async.md:57
-msgid "Both `launch_future` and `sleep` come from the `async_host` package:"
+msgid "Both `launch_future` and `sleep` come from the `futures` package:"
 msgstr ""
 
 #: src/tutorial/async.md:63
@@ -4321,7 +4321,7 @@ msgstr ""
 #: src/tutorial/async.md:187
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
 "async fn countdown(log: Logger, n: u32) {\n"
@@ -6215,7 +6215,7 @@ msgstr ""
 #: src/core-concepts/async-model.md:23
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
 "async fn countdown(log: Logger, n: u32) -> nil {\n"
@@ -15885,7 +15885,7 @@ msgstr ""
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "\n"
 "async fn countdown(n: u32) -> u32 {\n"
 "    let log = Logger.new(\"count\");\n"
@@ -16030,8 +16030,8 @@ msgstr ""
 #: src/reference/async.md:119
 msgid ""
 "Launchers are **host surface** — ordinary rut code over the closed `Future` "
-"class, provided by the `rut/async_host` package (users may write their own "
-"the same way):"
+"class, provided by the `rut/futures` package (users may write their own the "
+"same way):"
 msgstr ""
 
 #: src/reference/async.md:123
@@ -16045,10 +16045,10 @@ msgstr ""
 
 #: src/reference/async.md:129
 msgid ""
-"Each embedder mounts `rut/async_engine` (the rows `__launch`, `__abort`, "
-"`__sleep`, `__sleep_yield`) plus `rut/async_host`, and installs the row "
-"bodies. A session that mounts neither simply has no launcher; `await` still "
-"works inline."
+"Each embedder mounts `rut/async_host` (the rows `__launch`, `__abort`, "
+"`__sleep`, `__sleep_yield`) plus `rut/futures`, and installs the row bodies. "
+"A session that mounts neither simply has no launcher; `await` still works "
+"inline."
 msgstr ""
 
 #: src/reference/async.md:134
@@ -16461,7 +16461,7 @@ msgstr ""
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
-"use async_host::{ launch_future, sleep, select2, Either2 };\n"
+"use futures::{ launch_future, sleep, select2, Either2 };\n"
 "\n"
 "async fn slow_fetch() -> str {            // the stand-in for any slow "
 "producer\n"
@@ -16536,7 +16536,7 @@ msgid ""
 "```rut\n"
 "use core::{ Future };\n"
 "use ink::{ Logger };\n"
-"use async_host::{ completer, Completer, launch_future, sleep };\n"
+"use futures::{ completer, Completer, launch_future, sleep };\n"
 "\n"
 "// a PLAIN fn returning a Future; no async block needed:\n"
 "fn fetch_like(tag: str) -> Future<str> {\n"
@@ -16862,7 +16862,7 @@ msgstr ""
 #: src/reference/host-futures.md:97
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "\n"
 "// `fetch` is the host's async fn (the mypkg::fetch row family above);\n"
 "// a stand-in body keeps the block runnable end to end:\n"
@@ -17272,7 +17272,7 @@ msgid "// core + calc\n"
 msgstr ""
 
 #: src/reference/embedding.md:41
-msgid "// async_engine + async_host (optional)\n"
+msgid "// async_host + futures (optional)\n"
 msgstr ""
 
 #: src/reference/embedding.md:42
@@ -17512,7 +17512,7 @@ msgid "`mount_std_async(&mut s)`"
 msgstr ""
 
 #: src/reference/embedding.md:196
-msgid "mount `async_engine` + `async_host`"
+msgid "mount `async_host` + `futures`"
 msgstr ""
 
 #: src/reference/embedding.md:197
@@ -20749,7 +20749,7 @@ msgid "the `Math` namespace"
 msgstr ""
 
 #: src/reference/stdlib.md:124
-msgid "`async_engine` / `async_host`"
+msgid "`async_host` / `futures`"
 msgstr ""
 
 #: src/reference/stdlib.md:124
@@ -21386,8 +21386,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:401
 msgid ""
-"`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
-"`__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: "
+"`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
+"`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
 "Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> "
 "bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair "
 "**and** installs `rut_std::async_host::pkg()`; a session that mounts neither "
@@ -21438,8 +21438,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:435
 msgid ""
-"`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) "
-"are source-inlined into each consumer — required for class-method surfaces, "
+"`inline = true` packages (ink, pouch, nmapset, json, strbuild, futures) are "
+"source-inlined into each consumer — required for class-method surfaces, "
 "whose inherent impls cross no module link boundary yet ([the "
 "frontend](frontend.md))."
 msgstr ""
@@ -22425,8 +22425,8 @@ msgid ""
 "That leaves `inline = true` for packages whose methods live on class bodies "
 "(inherent impls cross no surface yet): the graph compiler splices their "
 "source into every consumer instead of linking them (`ink`, `json`, "
-"`nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See [Project "
-"structure and rut.jsonc](project-structure.md)."
+"`nmapset`, `strbuild`, `futures`, `http`, `pouch`). See [Project structure "
+"and rut.jsonc](project-structure.md)."
 msgstr ""
 
 #: src/reference/compiler.md:117
@@ -25375,7 +25375,7 @@ msgid ""
 "nothing persisted). So the CDN lane delivers **host surfaces** (v10 decl "
 "bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross "
 "on the surface's inherent rows), **and the generic owners** (`pouch`, "
-"`nmapset`, `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` "
+"`nmapset`, `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` "
 "compile at the link from the ridden source). A bundle that predates the "
 "riding refuses a consumer-spelled shape loudly and says so (re-pack it), and "
 "a bundle-mounted json names its pack-time dev closure in its ledger, so the "
@@ -25735,7 +25735,7 @@ msgid "host pkg: math surface (`mount_calc`)"
 msgstr ""
 
 #: src/reference/project-structure.md:156
-msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
+msgid "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
 #: src/reference/project-structure.md:156
@@ -25743,7 +25743,7 @@ msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
 #: src/reference/project-structure.md:157
-msgid "`ink`, `http`, `strbuild`, `async_host`"
+msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
 #: src/reference/project-structure.md:157
@@ -26005,17 +26005,16 @@ msgstr ""
 
 #: src/reference/dependency-kinds.md:143
 msgid ""
-"**generic owners deliver too** — `pouch`, `nmapset`, `json`, `async_host` "
-"ride their entry + group source beside the binaries, so a consumer's "
-"`Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: "
-"the ridden text lowers in the consumer's session, the monomorphized bodies "
-"register under the declaring pkg's spec (one row program-wide, identity by "
-"owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that "
-"predates the riding — no source beside the binary — refuses a "
-"consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json "
-"also names its pack-time dev closure in its ledger, so the consumer's "
-"closure must contain those names (`pouch`, `nmapset` beside `json` — the "
-"six-pin law)."
+"**generic owners deliver too** — `pouch`, `nmapset`, `json`, `futures` ride "
+"their entry + group source beside the binaries, so a consumer's `Vec<Todo>` "
+"or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden "
+"text lowers in the consumer's session, the monomorphized bodies register "
+"under the declaring pkg's spec (one row program-wide, identity by owner), "
+"and nothing persists (`.rutc` caches stay pack-time). A bundle that predates "
+"the riding — no source beside the binary — refuses a consumer-spelled shape "
+"loudly and says so: re-pack it. A bundle-mounted json also names its "
+"pack-time dev closure in its ledger, so the consumer's closure must contain "
+"those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
 
 #: src/reference/dependency-kinds.md:155

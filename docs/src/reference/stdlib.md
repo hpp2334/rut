@@ -121,7 +121,7 @@ constants are `calc`'s.
 | `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and their wrapper families |
 | `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |
 | `calc` | host pkg | the `Math` namespace |
-| `async_engine` / `async_host` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
+| `async_host` / `futures` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
 | `http_host` / `http` | host pkg + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |
 
@@ -398,8 +398,8 @@ For the common accumulator shape no builder is needed at all:
 
 ### `calc`'s company: `async` and `http`
 
-- `async_engine` declares the engine rows (`__launch`, `__abort`,
-  `__sleep`, `__sleep_yield`); `async_host` restores the typed surface:
+- `async_host` declares the engine rows (`__launch`, `__abort`,
+  `__sleep`, `__sleep_yield`); `futures` restores the typed surface:
   `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`,
   `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
   Each embedder mounts the pair **and** installs
@@ -433,7 +433,7 @@ For the common accumulator shape no builder is needed at all:
   bundles](bundles.md)); the `rut` CLI mounts the tree packages a loose
   file names by `use` ([the rut CLI](cli.md)).
 - `inline = true` packages (ink, pouch, nmapset, json, strbuild,
-  async_host) are source-inlined into each consumer — required for
+  futures) are source-inlined into each consumer — required for
   class-method surfaces, whose inherent impls cross no module link
   boundary yet ([the frontend](frontend.md)).
 - Generic exports link on their own: instantiation happens where the

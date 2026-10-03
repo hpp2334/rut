@@ -84,7 +84,7 @@ impl AuditLog {
 // cancellation is DATA the frame reads, not an exception it catches.
 
 use core::{ Future };
-use async_host::{ sleep };
+use futures::{ sleep };
 
 /// A staged producer as an async block: `steps` checkpoints, each
 /// parking one tick, the audit counting every resumption off the
@@ -127,12 +127,12 @@ fn cancellable(log: ?AuditLog) -> Future<nil> {
 // ---------------------------------------------------------------- launch --
 
 // The launched receipt — the user-space twin of the engine standard
-// set's `LaunchedFutureHandle` (the async_host package): the future and
+// set's `LaunchedFutureHandle` (the futures package): the future and
 // the shared audit cell it was launched with. The receipt is NOT a
 // Future (it cannot be awaited), not re-launchable (a type error, never
 // a runtime check), one member: the cancel edge.
 
-use async_engine::{ __abort, __launch };
+use async_host::{ __abort, __launch };
 
 struct CustomLaunched {
     task: ?Future<nil>;  // the cell reference — the driven frame

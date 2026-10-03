@@ -582,7 +582,7 @@ fn rate_limit_and_other_statuses_map() {
 /// (the drain degrades to empty) — through the SAME fixture lane.
 const ONESHOT_SRC: &str = r#"
 use http::HttpClient;
-use async_host::launch_future;
+use futures::launch_future;
 use rgh_host::{ out };
 
 async fn body_first(url: str) -> nil {

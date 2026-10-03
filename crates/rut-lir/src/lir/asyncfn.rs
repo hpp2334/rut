@@ -1025,7 +1025,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     // frame type below
     let fut_inst = ctx.mk_future_inst(sym::FUTURE, TY_NIL);
     let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
-    let thunk_name = ctx.intern("async_engine::__sleep_yield");
+    let thunk_name = ctx.intern("async_host::__sleep_yield");
     // the host thunk must EXIST (the wrapper calls it; the join resolves
     // its binding) even though the fill now points at the wrapper
     ctx.ensure_inst(crate::check::Inst {
@@ -1039,7 +1039,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     // `opaque`. The vtable fill points at this tiny compiler-minted fn,
     // which seals both registers into erasure boxes and calls the host
     // thunk; the row's wire is then boxes, the shared ABI is untouched.
-    let wrap_name = ctx.intern("async_engine::__sleep_yield.wrap");
+    let wrap_name = ctx.intern("async_host::__sleep_yield.wrap");
     let wfid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(wrap_name),
         subst: vec![],
@@ -1059,8 +1059,8 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
 /// (the seal is the erasure; the bodies unbox through the crossing,
 /// never through a recorded type). Answers `(thunk fid, wrap fid)`.
 pub(crate) fn ensure_engine_yield_pair(ctx: &mut Ctx, row: &str) -> TcResult<(u32, u32)> {
-    let thunk_name = ctx.intern(&format!("async_engine::{row}"));
-    let wrap_name = ctx.intern(&format!("async_engine::{row}.wrap"));
+    let thunk_name = ctx.intern(&format!("async_host::{row}"));
+    let wrap_name = ctx.intern(&format!("async_host::{row}.wrap"));
     let thunk_fid = ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(thunk_name),
         subst: vec![],
@@ -1090,7 +1090,7 @@ pub(crate) fn ensure_select_future(ctx: &mut Ctx, a_ans: TypeId, b_ans: TypeId, 
     if ctx.find_data(either2_name).is_none() {
         ctx.err(
             sp,
-            "`__select2` is engine-internal — the typed surface is async_host's `select2`",
+            "`__select2` is engine-internal — the typed surface is futures' `select2`",
         );
         return Err(());
     }
@@ -1230,8 +1230,8 @@ fn finish_engine_future(ctx: &mut Ctx, frame_ty: TypeId, answer_ty: TypeId, _thu
 /// their raw (frame, cx) registers; the boxes live and die inside the
 /// wrapper's own frame (ref-typed locals release at exit).
 pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -> TcResult<()> {
-    const THUNK: &str = "async_engine::__sleep_yield";
-    const WRAP: &str = "async_engine::__sleep_yield.wrap";
+    const THUNK: &str = "async_host::__sleep_yield";
+    const WRAP: &str = "async_host::__sleep_yield.wrap";
     if thunk_name == ctx.intern(WRAP) {
         // the wrapper: seal r0 (frame) and r1 (cx), call the host thunk
         // with the boxes. Requires the sleep mint (the frame/cx types and
@@ -1321,12 +1321,12 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
     // register is spelled `opaque` (the seal is the erasure, not a
     // re-type), so one wrapper serves every composite's fill.
     for row in ["__select2_yield", "__select_all_yield", "__completer_yield"] {
-        let wrap = ctx.intern(&format!("async_engine::{row}.wrap"));
+        let wrap = ctx.intern(&format!("async_host::{row}.wrap"));
         if thunk_name == wrap {
             let cx_ty = ctx.run_context_ty();
             // the thunk was ensured beside the mint (`ensure_engine_yield_pair`)
             let thunk_key = crate::check::Inst {
-                key: crate::check::FnKey::HostThunk(ctx.intern(&format!("async_engine::{row}"))),
+                key: crate::check::FnKey::HostThunk(ctx.intern(&format!("async_host::{row}"))),
                 subst: vec![],
                 iface_origins: vec![],
             };
@@ -1360,7 +1360,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
             ctx.funcs[fid as usize] = fc;
             return Ok(());
         }
-        let thunk = ctx.intern(&format!("async_engine::{row}"));
+        let thunk = ctx.intern(&format!("async_host::{row}"));
         if thunk_name == thunk {
             let fc = rut_core::binary::FuncCode {
                 name: thunk_name,

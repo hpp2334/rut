@@ -293,9 +293,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 row_name == "__select2" || row_name == "__select_all" || row_name == "__completer";
             if row_takes_type_args {
                 let (want, what) = if row_name == "__select2" {
-                    (2, "`__select2<T, U>` takes the two futures' answer types — the typed surface is async_host's `select2`")
+                    (2, "`__select2<T, U>` takes the two futures' answer types — the typed surface is futures' `select2`")
                 } else {
-                    (1, "the row takes the answer type as its type argument — the typed surface is async_host's")
+                    (1, "the row takes the answer type as its type argument — the typed surface is futures'")
                 };
                 if generics.len() != want {
                     self.ctx.err(sp, what);

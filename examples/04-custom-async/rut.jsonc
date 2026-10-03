@@ -4,7 +4,7 @@
   // rut program the repo carries is a module dir with a `rut.jsonc` — and
   // the parser conformance suite is the gate that keeps the entry
   // parseable; the program itself is not runnable today.
-  // The deps row is honesty: the entry imports `async_engine`
+  // The deps row is honesty: the entry imports `async_host`
   // (`__abort`/`__launch`), so the manifest names it — `core` stays off
   // the list (engine-ambient). A run resolves the row and mounts the
   // pkg; binding its launcher rows (and running) rides in with the
@@ -14,8 +14,8 @@
     "lib": "./custom_async.rut"
   },
   "deps": {
-    "async_engine": {
-      "path": "../../rut/async_engine"
+    "async_host": {
+      "path": "../../rut/async_host"
     }
   }
 }

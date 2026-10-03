@@ -67,8 +67,8 @@ pub fn mount_std(session: &mut Session) {
 }
 
 /// Mount the standard async set: the engine rows
-/// (`async_engine` — a decl module) and the typed launcher surface
-/// (`async_host` — an inline rut package). Pair with
+/// (`async_host` — a decl module) and the typed launcher surface
+/// (`futures` — an inline rut package). Pair with
 /// `rut_std::async_host::pkg()` installed through
 /// `HostRegistry::install_host_pkg` before `Vm::new`; a session
 /// that mounts neither simply has no launcher, and `await` stays
@@ -78,8 +78,8 @@ pub fn mount_std_async(session: &mut Session) {
         .join("../../rut")
         .canonicalize()
         .expect("the toolchain tree's rut/ dir");
-    mount_dir(session, &root.join("async_engine")).expect("mount async_engine");
     mount_dir(session, &root.join("async_host")).expect("mount async_host");
+    mount_dir(session, &root.join("futures")).expect("mount futures");
 }
 
 /// Mount `calc` — a native module: `f64` host functions

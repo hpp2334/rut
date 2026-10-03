@@ -21,7 +21,7 @@ nothing runs unless the driving loop runs it.
 ## The surface
 
 ```rut
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) -> nil {

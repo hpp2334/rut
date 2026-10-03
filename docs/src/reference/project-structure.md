@@ -153,8 +153,8 @@ demand:
 |---|---|
 | `core` | the only standard package — the builtin surface, mounted unconditionally |
 | `calc` | host pkg: math surface (`mount_calc`) |
-| `ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
-| `ink`, `http`, `strbuild`, `async_host` | inline rut wrappers over host rows (`inline = true`) |
+| `ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std` |
+| `ink`, `http`, `strbuild`, `futures` | inline rut wrappers over host rows (`inline = true`) |
 | `pouch` | the sequence library (plain linked package) |
 | `json` | the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md) |
 | `nmapset` | native-key maps/sets over `nmap_host` |

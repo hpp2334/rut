@@ -45,12 +45,12 @@ const PKGS: &[(&str, &str)] = &[
     ("json", "json"),
     ("ink", "ink"),
     ("http", "http"),
-    ("async_host", "async_host"),
+    ("futures", "futures"),
     ("ink_host", "ink_host"),
     ("http_host", "http_host"),
     ("nmap_host", "nmap_host"),
     ("strbuild_host", "strbuild_host"),
-    ("async_engine", "async_engine"),
+    ("async_host", "async_host"),
     ("core", "core"),
     ("calc", "calc"),
     ("bench-cross", "bench_cross"),
@@ -138,7 +138,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
     // (the concrete surface law — no owner-anchored instantiation).
     let mut table = BTreeMap::new();
     let mut rows = String::new();
-    for key in ["async_host", "http", "json", "nmapset", "pouch"] {
+    for key in ["futures", "http", "json", "nmapset", "pouch"] {
         let (url, bytes) = artifact(key);
         rows.push_str(&format!(
             "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",

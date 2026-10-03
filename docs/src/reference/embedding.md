@@ -38,7 +38,7 @@ use std::rc::Rc;
 // 1. Mount the packages the program uses. core + calc are the base.
 let mut session = rut_driver::Session::new();
 rut_driver::mount_std(&mut session);        // core + calc
-rut_driver::mount_std_async(&mut session);  // async_engine + async_host (optional)
+rut_driver::mount_std_async(&mut session);  // async_host + futures (optional)
 rut_driver::mount_dir(&mut session, "plugins/server")?;
 rut_driver::assemble_peers(&mut session)?;  // peer-gated impl groups
 
@@ -193,7 +193,7 @@ contain those names.
 |---|---|
 | `Session::new()` | an empty mounting session |
 | `mount_std(&mut s)` | mount `core` + `calc` |
-| `mount_std_async(&mut s)` | mount `async_engine` + `async_host` |
+| `mount_std_async(&mut s)` | mount `async_host` + `futures` |
 | `mount_dir(&mut s, dir)` | mount a package directory (`rut.jsonc`); returns its name |
 | `assemble_peers(&mut s)` | append peer-gated impl groups ([dependency kinds](dependency-kinds.md)) |
 | `compile_module(src, mode, name)` | full pipeline over one module against a fresh core+calc session |

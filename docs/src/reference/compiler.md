@@ -111,7 +111,7 @@ the binary ships one copy of each instantiation's code.
 That leaves `inline = true` for packages whose methods live on class
 bodies (inherent impls cross no surface yet): the graph compiler splices
 their source into every consumer instead of linking them (`ink`, `json`,
-`nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See
+`nmapset`, `strbuild`, `futures`, `http`, `pouch`). See
 [Project structure and rut.jsonc](project-structure.md).
 
 ## The type lattice

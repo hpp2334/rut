@@ -648,7 +648,7 @@ mod tests {
     const SRC: &str = r#"
 use http::{ HttpClient, ClientQueryMethod };
 use http_host::{ http_status, http_err, http_read_err };
-use async_host::launch_future;
+use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
@@ -882,7 +882,7 @@ entry fn boot_stream(url: str) -> nil {
     fn the_body_lane_answers_the_short_drain_after_a_mid_read_death() {
         let src = r#"
 use http::HttpClient;
-use async_host::launch_future;
+use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
@@ -953,7 +953,7 @@ entry fn boot(url: str) -> nil {
     fn the_one_shot_law_degrades_second_takers() {
         let src = r#"
 use http::HttpClient;
-use async_host::launch_future;
+use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
@@ -1066,7 +1066,7 @@ entry fn boot(url: str) -> nil {
     fn the_builder_walks_every_verb_and_header() {
         let src = r#"
 use http::{ HttpClient, ClientQueryMethod };
-use async_host::launch_future;
+use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque) -> nil {
@@ -1201,7 +1201,7 @@ entry fn boot() -> nil {
         }
         let stream_src = r#"
 use http::HttpClient;
-use async_host::launch_future;
+use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn streamed(log: opaque, url: str) -> nil {

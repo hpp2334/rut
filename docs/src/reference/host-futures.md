@@ -95,7 +95,7 @@ Rut side, the closure's own surface is invisible — callers see a
 normal async fn (the cx is injected, never spelled):
 
 ```rut
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 
 // `fetch` is the host's async fn (the mypkg::fetch row family above);
 // a stand-in body keeps the block runnable end to end:

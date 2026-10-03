@@ -5190,8 +5190,8 @@ msgstr "`sleep(ms)` 是唯一的内置 pender——一个 `Future<nil>`，它把
 
 
 #: src/tutorial/async.md:57
-msgid "Both `launch_future` and `sleep` come from the `async_host` package:"
-msgstr "`launch_future` 和 `sleep` 都来自 `async_host` 包："
+msgid "Both `launch_future` and `sleep` come from the `futures` package:"
+msgstr "`launch_future` 和 `sleep` 都来自 `futures` 包："
 
 
 #: src/tutorial/async.md:63
@@ -5356,7 +5356,7 @@ msgstr ""
 #: src/tutorial/async.md:187
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
 "async fn countdown(log: Logger, n: u32) {\n"
@@ -7419,7 +7419,7 @@ msgstr "语言表面"
 #: src/core-concepts/async-model.md:23
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "use ink::{ Logger };\n"
 "\n"
 "async fn countdown(log: Logger, n: u32) -> nil {\n"
@@ -18152,7 +18152,7 @@ msgstr ""
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "\n"
 "async fn countdown(n: u32) -> u32 {\n"
 "    let log = Logger.new(\"count\");\n"
@@ -18299,9 +18299,9 @@ msgstr "标准启动器集"
 
 #: src/reference/async.md:119
 msgid ""
-"Launchers are **host surface** — ordinary rut code over the closed `Future` class, provided by the `rut/async_host` package (users may write their own the same way):"
+"Launchers are **host surface** — ordinary rut code over the closed `Future` class, provided by the `rut/futures` package (users may write their own the same way):"
 msgstr ""
-"启动器是**宿主面**——封闭 `Future` 类之上的普通 rut 代码，由 `rut/async_host` 包提供（用户可以同样方式编写自己的启动器）："
+"启动器是**宿主面**——封闭 `Future` 类之上的普通 rut 代码，由 `rut/futures` 包提供（用户可以同样方式编写自己的启动器）："
 
 
 #: src/reference/async.md:123
@@ -18321,9 +18321,9 @@ msgstr ""
 
 #: src/reference/async.md:129
 msgid ""
-"Each embedder mounts `rut/async_engine` (the rows `__launch`, `__abort`, `__sleep`, `__sleep_yield`) plus `rut/async_host`, and installs the row bodies. A session that mounts neither simply has no launcher; `await` still works inline."
+"Each embedder mounts `rut/async_host` (the rows `__launch`, `__abort`, `__sleep`, `__sleep_yield`) plus `rut/futures`, and installs the row bodies. A session that mounts neither simply has no launcher; `await` still works inline."
 msgstr ""
-"每个嵌入方都挂载 `rut/async_engine`（`__launch`、`__abort`、`__sleep`、`__sleep_yield` 这几行）外加 `rut/async_host`，并安装这些行的函数体。哪一样都不挂载的会话就是没有启动器；`await` 仍可内联工作。"
+"每个嵌入方都挂载 `rut/async_host`（`__launch`、`__abort`、`__sleep`、`__sleep_yield` 这几行）外加 `rut/futures`，并安装这些行的函数体。哪一样都不挂载的会话就是没有启动器；`await` 仍可内联工作。"
 
 
 #: src/reference/async.md:134
@@ -18789,7 +18789,7 @@ msgstr "竞速——`select2` / `select_all`（标准库）"
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
-"use async_host::{ launch_future, sleep, select2, Either2 };\n"
+"use futures::{ launch_future, sleep, select2, Either2 };\n"
 "\n"
 "async fn slow_fetch() -> str {            // the stand-in for any slow producer\n"
 "    await sleep(200);\n"
@@ -18860,7 +18860,7 @@ msgid ""
 "```rut\n"
 "use core::{ Future };\n"
 "use ink::{ Logger };\n"
-"use async_host::{ completer, Completer, launch_future, sleep };\n"
+"use futures::{ completer, Completer, launch_future, sleep };\n"
 "\n"
 "// a PLAIN fn returning a Future; no async block needed:\n"
 "fn fetch_like(tag: str) -> Future<str> {\n"
@@ -19238,7 +19238,7 @@ msgstr ""
 #: src/reference/host-futures.md:97
 msgid ""
 "```rut\n"
-"use async_host::{ launch_future, sleep };\n"
+"use futures::{ launch_future, sleep };\n"
 "\n"
 "// `fetch` is the host's async fn (the mypkg::fetch row family above);\n"
 "// a stand-in body keeps the block runnable end to end:\n"
@@ -19684,9 +19684,9 @@ msgstr ""
 
 #: src/reference/embedding.md:41
 msgid ""
-"// async_engine + async_host (optional)\n"
+"// async_host + futures (optional)\n"
 msgstr ""
-"// async_engine + async_host (optional)\n"
+"// async_host + futures (optional)\n"
 
 
 #: src/reference/embedding.md:42
@@ -19946,8 +19946,8 @@ msgstr "`mount_std_async(&mut s)`"
 
 
 #: src/reference/embedding.md:196
-msgid "mount `async_engine` + `async_host`"
-msgstr "挂载 `async_engine` + `async_host`"
+msgid "mount `async_host` + `futures`"
+msgstr "挂载 `async_host` + `futures`"
 
 
 #: src/reference/embedding.md:197
@@ -23575,8 +23575,8 @@ msgstr "`Math` 命名空间"
 
 
 #: src/reference/stdlib.md:124
-msgid "`async_engine` / `async_host`"
-msgstr "`async_engine` / `async_host`"
+msgid "`async_host` / `futures`"
+msgstr "`async_host` / `futures`"
 
 
 #: src/reference/stdlib.md:124
@@ -24297,9 +24297,9 @@ msgstr "`calc` 的同伴：`async` 与 `http`"
 
 #: src/reference/stdlib.md:401
 msgid ""
-"`async_engine` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `async_host` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([launched futures](launched-futures.md), [host futures](host-futures.md))."
+"`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `futures` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder mounts the pair **and** installs `rut_std::async_host::pkg()`; a session that mounts neither has no launcher ([launched futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
-"`async_engine` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`async_host` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[已启动的 future](launched-futures.md)、[宿主 future](host-futures.md)）。"
+"`async_host` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`futures` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都挂载这对**并**安装 `rut_std::async_host::pkg()`；两者皆未挂载的会话没有启动器（[已启动的 future](launched-futures.md)、[宿主 future](host-futures.md)）。"
 
 
 #: src/reference/stdlib.md:408
@@ -24357,9 +24357,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:435
 msgid ""
-"`inline = true` packages (ink, pouch, nmapset, json, strbuild, async_host) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
+"`inline = true` packages (ink, pouch, nmapset, json, strbuild, futures) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
 msgstr ""
-"`inline = true` 的包（ink、pouch、nmapset、json、strbuild、async_host）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
+"`inline = true` 的包（ink、pouch、nmapset、json、strbuild、futures）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
 
 
 #: src/reference/stdlib.md:439
@@ -25426,9 +25426,9 @@ msgstr ""
 
 #: src/reference/compiler.md:111
 msgid ""
-"That leaves `inline = true` for packages whose methods live on class bodies (inherent impls cross no surface yet): the graph compiler splices their source into every consumer instead of linking them (`ink`, `json`, `nmapset`, `strbuild`, `async_host`, `http`, `pouch`). See [Project structure and rut.jsonc](project-structure.md)."
+"That leaves `inline = true` for packages whose methods live on class bodies (inherent impls cross no surface yet): the graph compiler splices their source into every consumer instead of linking them (`ink`, `json`, `nmapset`, `strbuild`, `futures`, `http`, `pouch`). See [Project structure and rut.jsonc](project-structure.md)."
 msgstr ""
-"于是 `inline = true` 留给了那些方法写在类体里的包（固有 impl 尚不能跨表面）：图编译器把它们的源码拼接进每个消费方，而不是链接它们（`ink`、`json`、`nmapset`、`strbuild`、`async_host`、`http`、`pouch`）。见[项目结构与 rut.jsonc](project-structure.md)。"
+"于是 `inline = true` 留给了那些方法写在类体里的包（固有 impl 尚不能跨表面）：图编译器把它们的源码拼接进每个消费方，而不是链接它们（`ink`、`json`、`nmapset`、`strbuild`、`futures`、`http`、`pouch`）。见[项目结构与 rut.jsonc](project-structure.md)。"
 
 
 #: src/reference/compiler.md:117
@@ -28471,9 +28471,9 @@ msgstr ""
 
 #: src/reference/bundles.md:335
 msgid ""
-"**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (v10 decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `async_host` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). A bundle that predates the riding refuses a consumer-spelled shape loudly and says so (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
+"**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (v10 decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). A bundle that predates the riding refuses a consumer-spelled shape loudly and says so (re-pack it), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
-"**一个编译的包能服务什么。** 实例化由 owner 锚定：编译的 owner 在其台账中承载其打包期闭包拼写的泛型实例化 —— 加上泛型源码承载法则，表面导出泛型的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。因此 CDN 通道交付**宿主表面**（v10 decl 包）、**具体类库**（`http`、`ink`、`strbuild` —— 方法在表面的固有行上跨越），**以及泛型 owner**（`pouch`、`nmapset`、`json`、`async_host` —— `Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。早于承载法则的包会大声拒绝消费者拼写的形状并说明缘由（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
+"**一个编译的包能服务什么。** 实例化由 owner 锚定：编译的 owner 在其台账中承载其打包期闭包拼写的泛型实例化 —— 加上泛型源码承载法则，表面导出泛型的编译 pkg 还会在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账缺失的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。因此 CDN 通道交付**宿主表面**（v10 decl 包）、**具体类库**（`http`、`ink`、`strbuild` —— 方法在表面的固有行上跨越），**以及泛型 owner**（`pouch`、`nmapset`、`json`、`futures` —— `Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。早于承载法则的包会大声拒绝消费者拼写的形状并说明缘由（重新打包它），而包装载的 json 在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 
 #: src/reference/bundles.md:352
@@ -28828,8 +28828,8 @@ msgstr "宿主包：数学表面（`mount_calc`）"
 
 
 #: src/reference/project-structure.md:156
-msgid "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
-msgstr "`ink_host`, `http_host`, `nmap_host`, `async_engine`, `bench_cross`"
+msgid "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
+msgstr "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 
 
 #: src/reference/project-structure.md:156
@@ -28838,8 +28838,8 @@ msgstr "宿主包——纯 `.d.rut` 表面；函数体住在 `rut-std`"
 
 
 #: src/reference/project-structure.md:157
-msgid "`ink`, `http`, `strbuild`, `async_host`"
-msgstr "`ink`, `http`, `strbuild`, `async_host`"
+msgid "`ink`, `http`, `strbuild`, `futures`"
+msgstr "`ink`, `http`, `strbuild`, `futures`"
 
 
 #: src/reference/project-structure.md:157
@@ -29072,9 +29072,9 @@ msgstr ""
 
 #: src/reference/dependency-kinds.md:143
 msgid ""
-"**generic owners deliver too** — `pouch`, `nmapset`, `json`, `async_host` ride their entry + group source beside the binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden text lowers in the consumer's session, the monomorphized bodies register under the declaring pkg's spec (one row program-wide, identity by owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that predates the riding — no source beside the binary — refuses a consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json also names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
+"**generic owners deliver too** — `pouch`, `nmapset`, `json`, `futures` ride their entry + group source beside the binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the consumer's link**: the ridden text lowers in the consumer's session, the monomorphized bodies register under the declaring pkg's spec (one row program-wide, identity by owner), and nothing persists (`.rutc` caches stay pack-time). A bundle that predates the riding — no source beside the binary — refuses a consumer-spelled shape loudly and says so: re-pack it. A bundle-mounted json also names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
-"**泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`async_host` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
+"**泛型 owner 也交付** —— `pouch`、`nmapset`、`json`、`futures` 在二进制旁承载其入口 + 组源码，因此消费者的 `Vec<Todo>` 或 `decodeJson<Vec<Todo>>` 在**消费者的链接处**编译：被承载的文本在消费者的会话中降低，单态化代码体以声明 pkg 的 spec 注册（全程序一行，以 owner 为身份），不持久化任何东西（`.rutc` 缓存保持打包期）。早于承载的包 —— 二进制旁没有源码 —— 会大声拒绝消费者拼写的形状并说明缘由：重新打包它。包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset` —— 六钉法则）。"
 
 
 #: src/reference/dependency-kinds.md:155

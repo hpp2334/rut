@@ -92,7 +92,7 @@ driving and the audit over the same `Future` surface, so the producer
 never knows which launcher started it:
 
 ```rut
-use async_engine::{ __abort, __launch };
+use async_host::{ __abort, __launch };
 
 fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
     __launch(opaque(f));

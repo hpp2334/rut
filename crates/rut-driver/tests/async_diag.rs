@@ -23,7 +23,7 @@ fn one_diag(src: &str) -> String {
 #[test]
 fn await_outside_an_async_fn_diagnoses() {
     let msg = one_diag(r#"
-use async_host::sleep;
+use futures::sleep;
 
 entry fn main() -> nil {
     await sleep(5);
@@ -80,7 +80,7 @@ entry fn main() -> nil {
 #[test]
 fn await_on_the_receipt_diagnoses_with_the_join_law() {
     let msg = one_diag(r#"
-use async_host::{ launch_future, LaunchedFutureHandle };
+use futures::{ launch_future, LaunchedFutureHandle };
 
 async fn work() -> nil { }
 
@@ -103,7 +103,7 @@ fn relaunching_the_receipt_is_a_type_error() {
     // ruling 6: `launch_future(launch_future(f))` — the receipt is not
     // a Future; the arrow fails to type, never a runtime check
     let msg = one_diag(r#"
-use async_host::launch_future;
+use futures::launch_future;
 
 async fn work() -> nil { }
 
@@ -164,7 +164,7 @@ fn a_user_launcher_over_the_same_future_surface() {
     let mut s = Session::new();
     mount_std_core(&mut s);
     let engine = rut_driver::lower_decl_module(
-        include_str!("../../../rut/async_engine/engine.d.rut"),
+        include_str!("../../../rut/async_host/engine.d.rut"),
         "engine.d.rut",
     )
     .expect("engine surface");

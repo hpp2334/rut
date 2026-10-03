@@ -197,23 +197,23 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface mounts as a linked source module —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
-    let async_engine = rut_driver::lower_decl_module(
-        include_str!("../../../rut/async_engine/engine.d.rut"),
+    let async_host = rut_driver::lower_decl_module(
+        include_str!("../../../rut/async_host/engine.d.rut"),
         "engine.d.rut",
     )
-    .expect("the async_engine surface is valid");
+    .expect("the async_host surface is valid");
     session
-        .register_module("async_engine", async_engine)
-        .expect("mount async_engine");
+        .register_module("async_host", async_host)
+        .expect("mount async_host");
     session
         .register_module(
-            "async_host",
+            "futures",
             rut_driver::Module {
-                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/async_host/async_host.rut").to_string(), is_decl: false },
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/futures/futures.rut").to_string(), is_decl: false },
                 ..Default::default()
             },
         )
-        .expect("mount async_host");
+        .expect("mount futures");
     // the book lane (the run buttons in docs/): `json` and `strbuild`
     // complete the CLI's loose-file host set — a book block that
     // `use json::` / `use strbuild::` gets the same packages `rut run`
@@ -434,7 +434,7 @@ pub extern "C" fn rut_run(
     // that does (`nmapset`); the CLI mounts it the same way
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     // the async host set: launch/abort/sleep bodies for the
-    // `async_engine` rows the playground mounts in `compile_playground`
+    // `async_host` rows the playground mounts in `compile_playground`
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     // the string builder's bodies (the host strbuild pkg): a program
     // only reaches them when it declares `use strbuild::` (or `use
@@ -780,7 +780,7 @@ entry fn main() {
     // so the countdown completes (a clock that never moves parks after
     // the first sleep and the lines after it never fire)
     const BOOK_ASYNC: &str = r#"
-use async_host::{ launch_future, sleep };
+use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) {

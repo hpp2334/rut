@@ -91,7 +91,7 @@ through a callback.
 
 ```rut
 use ink::{ Logger };
-use async_host::{ launch_future, sleep, select2, Either2 };
+use futures::{ launch_future, sleep, select2, Either2 };
 
 async fn slow_fetch() -> str {            // the stand-in for any slow producer
     await sleep(200);
@@ -144,7 +144,7 @@ whole `await`/`select2` vocabulary drives:
 ```rut
 use core::{ Future };
 use ink::{ Logger };
-use async_host::{ completer, Completer, launch_future, sleep };
+use futures::{ completer, Completer, launch_future, sleep };
 
 // a PLAIN fn returning a Future; no async block needed:
 fn fetch_like(tag: str) -> Future<str> {
