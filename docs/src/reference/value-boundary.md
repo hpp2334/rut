@@ -4,8 +4,9 @@ The one place tagged values exist: the host boundary. Inside the VM,
 registers are untagged slots ([the VM heap](vm-heap.md)); crossing into Rust
 materializes a checked, borrow-guarded value. The currency of the boundary
 is **typed Rust**: the registered closure's parameter types and the
-`vm.call` return type are the whole contract. The crate-internal marshaling
-formats (`Value`, `Slot`) never leave the VM crate.
+`vm.call` return type are the whole contract. The internal marshaling formats
+stay out of it: `Slot` never appears, and the raw `Value` enum surfaces only
+as the one untyped read in the map below.
 
 ## The crossing set
 
@@ -43,7 +44,7 @@ a compile error on the declaration or binding — never a call-time failure.
 | `Option<OpaqueRef>` / `Option<Opaque<T>>` | `?opaque` | return (answer lane) | as above |
 | `Option<T>` (other `T`) | — | — | **no lane**: traps naming `?str`/`?bytes`/`?opaque` |
 | `(A, B, …)` up to 8 | tuple | both | field-by-field under the record's own field types |
-| `Value` | any | read | positional decode for generic tooling |
+| `Value` | whatever's declared | return only | positional decode for generic tooling |
 
 The optional read is **nil-flattening**: the null slot is `None`, a
 some-slot decodes its payload as `T`. There is no separate optional

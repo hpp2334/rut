@@ -1329,7 +1329,7 @@ msgstr "无符号整数"
 
 
 #: src/tutorial/values-and-variables.md:15 src/reference/primitive-types.md:9
-#: src/reference/value-boundary.md:32
+#: src/reference/value-boundary.md:33
 msgid "`u8` `u16` `u32` `u64`"
 msgstr "`u8` `u16` `u32` `u64`"
 
@@ -1345,7 +1345,7 @@ msgstr "有符号整数"
 
 
 #: src/tutorial/values-and-variables.md:16 src/reference/primitive-types.md:10
-#: src/reference/value-boundary.md:31
+#: src/reference/value-boundary.md:32
 msgid "`i8` `i16` `i32` `i64`"
 msgstr "`i8` `i16` `i32` `i64`"
 
@@ -1396,8 +1396,8 @@ msgstr "文本"
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
-#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:35
-#: src/reference/value-boundary.md:36 src/reference/templates.md:19
+#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:36
+#: src/reference/value-boundary.md:37 src/reference/templates.md:19
 msgid "`str`"
 msgstr "`str`"
 
@@ -1415,7 +1415,7 @@ msgstr "二进制"
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
-#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr "`bytes`"
 
@@ -1431,8 +1431,8 @@ msgstr "已擦除"
 
 
 #: src/tutorial/values-and-variables.md:21 src/examples/playground-corpus.md:56
-#: src/reference/primitive-types.md:18 src/reference/value-boundary.md:39
-#: src/reference/value-boundary.md:40
+#: src/reference/primitive-types.md:18 src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "`opaque`"
 msgstr "`opaque`"
 
@@ -4758,7 +4758,7 @@ msgstr "形式"
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:180 src/reference/host-futures.md:34
 #: src/reference/embedding.md:276 src/reference/embedding.md:294
-#: src/reference/embedding.md:324 src/reference/value-boundary.md:96
+#: src/reference/embedding.md:324 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:297 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
@@ -8036,7 +8036,7 @@ msgstr ""
 "而加载期联结把三类接线错误当作 panic 拒绝 —— 那是嵌入方的错误，绝不是脚本的诊断：声明了却无绑定的行、绑定了却无声明的绑定、以及签名漂移。“绑定什么就 offer 什么”：offer 一个包的嵌入方声明了它的行，就必须绑定它们。"
 
 
-#: src/core-concepts/host-boundary.md:54 src/reference/value-boundary.md:10
+#: src/core-concepts/host-boundary.md:54 src/reference/value-boundary.md:11
 msgid "The crossing set"
 msgstr "可跨越集合"
 
@@ -11692,7 +11692,7 @@ msgid "`false`"
 msgstr "`false`"
 
 
-#: src/reference/lexical-structure.md:48 src/reference/value-boundary.md:34
+#: src/reference/lexical-structure.md:48 src/reference/value-boundary.md:35
 msgid "`nil`"
 msgstr "`nil`"
 
@@ -19022,7 +19022,7 @@ msgstr "`Completer::new() -> Completer<T>`"
 
 
 #: src/reference/host-futures.md:36 src/reference/host-futures.md:37
-#: src/reference/host-futures.md:40 src/reference/value-boundary.md:46
+#: src/reference/host-futures.md:40
 msgid "any"
 msgstr "任意"
 
@@ -20179,7 +20179,7 @@ msgstr ""
 
 
 #: src/reference/embedding.md:276 src/reference/embedding.md:294
-#: src/reference/embedding.md:324 src/reference/value-boundary.md:96
+#: src/reference/embedding.md:324 src/reference/value-boundary.md:97
 #: src/reference/native-containers.md:103 src/reference/templates.md:39
 msgid "API"
 msgstr "API"
@@ -20969,561 +20969,566 @@ msgstr "遍历 std 包，绑定示例本地的 I/O 行，启动异步 entry fn�
 
 #: src/reference/value-boundary.md:3
 msgid ""
-"The one place tagged values exist: the host boundary. Inside the VM, registers are untagged slots ([the VM heap](vm-heap.md)); crossing into Rust materializes a checked, borrow-guarded value. The currency of the boundary is **typed Rust**: the registered closure's parameter types and the `vm.call` return type are the whole contract. The crate-internal marshaling formats (`Value`, `Slot`) never leave the VM crate."
+"The one place tagged values exist: the host boundary. Inside the VM, registers are untagged slots ([the VM heap](vm-heap.md)); crossing into Rust materializes a checked, borrow-guarded value. The currency of the boundary is **typed Rust**: the registered closure's parameter types and the `vm.call` return type are the whole contract. The internal marshaling formats stay out of it: `Slot` never appears, and the raw `Value` enum surfaces only as the one untyped read in the map below."
 msgstr ""
-"带标记的值唯一存在的地方：宿主边界。VM 内部，寄存器是不带标记的槽位（[VM 堆](vm-heap.md)）；跨越进 Rust 时会具体化出一个经过检查、带借用守卫的值。边界的通货是**带类型的 Rust**：注册闭包的参数类型与 `vm.call` 的返回类型就是全部契约。crate 内部的编组格式（`Value`、`Slot`）绝不离开 VM crate。"
+"带标记的值唯一存在的地方：宿主边界。VM 内部，寄存器是不带标记的槽位（[VM 堆](vm-heap.md)）；跨越进 Rust 时会具体化出一个经过检查、带借用守卫的值。边界的通货是**带类型的 Rust**：注册闭包的参数类型与 `vm.call` 的返回类型就是全部契约。内部编组格式不进入契约：`Slot` 从不出现，原始 `Value` 枚举仅作为下表中的唯一无类型读取路径露出。"
 
 
-#: src/reference/value-boundary.md:12
+#: src/reference/value-boundary.md:13
 msgid ""
 "What may cross is a **compile-time property of the surface**. A violation is a compile error on the declaration or binding — never a call-time failure."
 msgstr "什么可以跨越，是**表面的编译期属性**。违例是声明或绑定上的编译错误——绝不是调用时的失败。"
 
 
-#: src/reference/value-boundary.md:15
+#: src/reference/value-boundary.md:16
 msgid ""
 "**Parameters** cross over: the primitives (`i8`–`i64`, `u8`–`u64`, `f32`, `f64`, `bool`), `str`, `bytes`, and `opaque`."
 msgstr ""
 "**参数**可以跨越：基本类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`、`bool`）、`str`、`bytes` 和 `opaque`。"
 
 
-#: src/reference/value-boundary.md:17
+#: src/reference/value-boundary.md:18
 msgid ""
 "**Returns** cross over the same set **plus** the answer optionals `?str`, `?bytes`, `?opaque`."
 msgstr "**返回值**可以跨越同一集合**外加**应答可空类型 `?str`、`?bytes`、`?opaque`。"
 
 
-#: src/reference/value-boundary.md:19
+#: src/reference/value-boundary.md:20
 msgid "Tuples cross field-by-field; each field must itself cross."
 msgstr "元组逐字段跨越；每个字段自身必须可跨越。"
 
 
-#: src/reference/value-boundary.md:20
+#: src/reference/value-boundary.md:21
 msgid ""
 "Entry fns follow the same rule in both directions: `?T` crosses iff `T` crosses, decoded nil-flattened."
 msgstr "入口 fn 在两个方向遵循同一规则：`?T` 可跨越当且仅当 `T` 可跨越，解码时 nil 展平。"
 
 
-#: src/reference/value-boundary.md:22
+#: src/reference/value-boundary.md:23
 msgid ""
 "Everything else — structs, classes, `Vec<T>`, `[T]`, interface-typed values, closures — stays inside the VM. Seal polymorphic values in the erasure box: `opaque(v)` at the call, `opaque.downcast<T>(v)` after ([opaque — erasure and downcast](opaque.md))."
 msgstr ""
 
 
-#: src/reference/value-boundary.md:27
+#: src/reference/value-boundary.md:28
 msgid "Rust ↔ rut type map"
 msgstr "Rust ↔ rut 类型映射"
 
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "Rust type"
 msgstr "Rust 类型"
 
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "rut type"
 msgstr "rut 类型"
 
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "direction"
 msgstr "方向"
 
 
-#: src/reference/value-boundary.md:29 src/reference/diagnostics.md:65
+#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:65
 msgid "cost"
 msgstr "开销"
 
 
-#: src/reference/value-boundary.md:31 src/reference/value-boundary.md:32
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:32 src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "same"
 msgstr "相同"
 
 
-#: src/reference/value-boundary.md:31 src/reference/value-boundary.md:32
-#: src/reference/value-boundary.md:33 src/reference/value-boundary.md:34
-#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
-#: src/reference/value-boundary.md:39 src/reference/value-boundary.md:40
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:32 src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34 src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40 src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:46
 msgid "both"
 msgstr "双向"
 
 
-#: src/reference/value-boundary.md:31
+#: src/reference/value-boundary.md:32
 msgid "the raw slot bits"
 msgstr "原始槽位比特"
 
 
-#: src/reference/value-boundary.md:32
+#: src/reference/value-boundary.md:33
 msgid "raw bits (`u64` is never narrowed through `i64`)"
 msgstr "原始比特（`u64` 绝不经由 `i64` 窄化）"
 
 
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "`f32` `f64` `bool`"
 msgstr "`f32` `f64` `bool`"
 
 
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "raw slot bits"
 msgstr "原始槽位比特"
 
 
-#: src/reference/value-boundary.md:34
+#: src/reference/value-boundary.md:35
 msgid "`()`"
 msgstr "`()`"
 
 
-#: src/reference/value-boundary.md:34
+#: src/reference/value-boundary.md:35
 msgid "the zero word"
 msgstr "零字"
 
 
-#: src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:36
 msgid "`&str`"
 msgstr "`&str`"
 
 
-#: src/reference/value-boundary.md:35 src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
 msgid "param only"
 msgstr "仅参数"
 
 
-#: src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:36
 msgid "**zero-copy** borrow of the block store, scoped to the call"
 msgstr "块存储的**零复制**借用，以调用为作用域"
 
 
-#: src/reference/value-boundary.md:36
+#: src/reference/value-boundary.md:37
 msgid "`String`"
 msgstr "`String`"
 
 
-#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:39
 msgid "owned copy"
 msgstr "持有式复制"
 
 
-#: src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:38
 msgid "`&[u8]`"
 msgstr "`&[u8]`"
 
 
-#: src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:38
 msgid "zero-copy borrow"
 msgstr "零复制借用"
 
 
-#: src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:39
 msgid "`Vec<u8>`"
 msgstr "`Vec<u8>`"
 
 
-#: src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40
 msgid "`OpaqueRef`"
 msgstr "`OpaqueRef`"
 
 
-#: src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40
 msgid "the handle; the rc **transfers** across"
 msgstr "句柄；rc **转移**过去"
 
 
-#: src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "`Opaque<T>`"
 msgstr "`Opaque<T>`"
 
 
-#: src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "typed payload view; a wrong `T` traps naming both sides"
 msgstr "带类型的载荷视图；`T` 不符时触发陷阱，点名双方"
 
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`Option<String>`"
 msgstr "`Option<String>`"
 
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`?str`"
 msgstr "`?str`"
 
 
-#: src/reference/value-boundary.md:41 src/reference/value-boundary.md:42
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:42 src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "return (answer lane)"
 msgstr "返回（应答链路）"
 
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`Some` mints the opt box; `None` is the flat nil"
 msgstr "`Some` 铸造可空盒；`None` 是展平的 nil"
 
 
-#: src/reference/value-boundary.md:42
+#: src/reference/value-boundary.md:43
 msgid "`Option<Vec<u8>>`"
 msgstr "`Option<Vec<u8>>`"
 
 
-#: src/reference/value-boundary.md:42
+#: src/reference/value-boundary.md:43
 msgid "`?bytes`"
 msgstr "`?bytes`"
 
 
-#: src/reference/value-boundary.md:42 src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:43 src/reference/value-boundary.md:44
 #: src/reference/reflection.md:35
 msgid "as above"
 msgstr "同上"
 
 
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "`Option<OpaqueRef>` / `Option<Opaque<T>>`"
 msgstr "`Option<OpaqueRef>` / `Option<Opaque<T>>`"
 
 
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "`?opaque`"
 msgstr "`?opaque`"
 
 
-#: src/reference/value-boundary.md:44
+#: src/reference/value-boundary.md:45
 msgid "`Option<T>` (other `T`)"
 msgstr "`Option<T>`（其他 `T`）"
 
 
-#: src/reference/value-boundary.md:44 src/reference/reflection.md:37
+#: src/reference/value-boundary.md:45 src/reference/reflection.md:37
 msgid "—"
 msgstr "—"
 
 
-#: src/reference/value-boundary.md:44
+#: src/reference/value-boundary.md:45
 msgid "**no lane**: traps naming `?str`/`?bytes`/`?opaque`"
 msgstr "**没有链路**：触发陷阱并点名 `?str`/`?bytes`/`?opaque`"
 
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "`(A, B, …)` up to 8"
 msgstr "`(A, B, …)` 最多 8 个"
 
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "tuple"
 msgstr "元组"
 
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "field-by-field under the record's own field types"
 msgstr "按记录自身的字段类型逐字段进行"
 
 
-#: src/reference/value-boundary.md:46
+#: src/reference/value-boundary.md:47
 msgid "`Value`"
 msgstr "`Value`"
 
 
-#: src/reference/value-boundary.md:46
-msgid "read"
-msgstr "读取"
+#: src/reference/value-boundary.md:47
+msgid "whatever's declared"
+msgstr "以声明的为准"
 
 
-#: src/reference/value-boundary.md:46
+#: src/reference/value-boundary.md:47
+msgid "return only"
+msgstr "仅返回"
+
+
+#: src/reference/value-boundary.md:47
 msgid "positional decode for generic tooling"
 msgstr "面向通用工具的按位置解码"
 
 
-#: src/reference/value-boundary.md:48
+#: src/reference/value-boundary.md:49
 msgid ""
 "The optional read is **nil-flattening**: the null slot is `None`, a some-slot decodes its payload as `T`. There is no separate optional currency — nil _is_ absence."
 msgstr "可空读取是 **nil 展平**的：null 槽位是 `None`，some 槽位把载荷解码为 `T`。没有单独的可空通货——nil _就是_缺席。"
 
 
-#: src/reference/value-boundary.md:52
+#: src/reference/value-boundary.md:53
 msgid "Borrows and copies"
 msgstr "借用与复制"
 
 
-#: src/reference/value-boundary.md:54
+#: src/reference/value-boundary.md:55
 msgid ""
 "`&str`/`&[u8]` params read the block store directly. The handler bound is higher-ranked over the borrow's lifetime, so a borrowed param **cannot outlive its call** — smuggling one out is a type error, not a runtime check. Owned `String`/`Vec<u8>` params are the explicit \"I keep this data\" copy."
 msgstr ""
 "`&str`/`&[u8]` 参数直接读取块存储。处理器 bound 相对借用的生命周期是高阶的，因此被借用的参数**不可能活得比它的调用更久**——把它偷带出去是类型错误，而不是运行时检查。持有的 `String`/`Vec<u8>` 参数则是明示的\"我要留下这份数据\"式复制。"
 
 
-#: src/reference/value-boundary.md:60
+#: src/reference/value-boundary.md:61
 msgid "Borrow guards, the whole rule:"
 msgstr "借用守卫，完整规则："
 
 
-#: src/reference/value-boundary.md:62
+#: src/reference/value-boundary.md:63
 msgid ""
 "A borrow is **call-scoped**. The Rust lifetime prevents storing it past return; the object's guard flag additionally excludes conflicting access."
 msgstr "借用以**调用为作用域**。Rust 生命周期阻止把它存到返回之后；对象的守卫标志还额外排除冲突的访问。"
 
 
-#: src/reference/value-boundary.md:64
+#: src/reference/value-boundary.md:65
 msgid ""
 "While an exclusive borrow is held, a re-entrant `vm.call` that touches the same box traps `borrowed by an outer host call` instead of aliasing."
 msgstr ""
 "独占借用被持有期间，触碰同一个盒的重入 `vm.call` 会触发 `borrowed by an outer host call` 陷阱，而不是产生别名。"
 
 
-#: src/reference/value-boundary.md:66
+#: src/reference/value-boundary.md:67
 msgid "Shared borrows stack; an active exclusive borrow excludes them."
 msgstr "共享借用可以叠加；活跃的独占借用排除它们。"
 
 
-#: src/reference/value-boundary.md:67
+#: src/reference/value-boundary.md:68
 msgid "Guards clear on return. To keep data, the host copies."
 msgstr "守卫在返回时清除。想留下数据，宿主就复制。"
 
 
-#: src/reference/value-boundary.md:69
+#: src/reference/value-boundary.md:70
 msgid "The two-channel law"
 msgstr "双通道法则"
 
 
-#: src/reference/value-boundary.md:71
+#: src/reference/value-boundary.md:72
 msgid ""
 "A rut entry typed `-> (?T, err)` decodes positionally as `(Option<T>, String)` — or generically as `Value::Tuple([Nil|payload, Str(err)])`:"
 msgstr ""
 "类型为 `-> (?T, err)` 的 rut 入口按位置解码为 `(Option<T>, String)`——或以通用形式解码为 `Value::Tuple([Nil|payload, Str(err)])`："
 
 
-#: src/reference/value-boundary.md:75
+#: src/reference/value-boundary.md:76
 msgid ""
 "A **returned err is data**: it crosses as the pair's second component; the host reads it and acts. The pair's convention belongs to the caller: empty err + a value = success; empty err + nil = \"not found\"; non-empty err = \"failed\"."
 msgstr ""
 "**返回的 err 是数据**：它作为对偶的第二个成分跨越；宿主读取它并据此行动。对偶的约定属于调用方：空 err + 一个值 = 成功；空 err + nil = \"未找到\"；非空 err = \"失败\"。"
 
 
-#: src/reference/value-boundary.md:79
+#: src/reference/value-boundary.md:80
 msgid ""
 "A **panic is drift**: it stays on the loud channel (`Result<_, Trap>` — `Err` means a trapped turn, a bug) and never fills an err field. The two channels are never merged."
 msgstr ""
 "**panic 是漂移**：它留在响亮的通道上（`Result<_, Trap>`——`Err` 意味着一轮被陷阱打断，属于 bug），并且绝不填入 err 字段。两条通道从不合并。"
 
 
-#: src/reference/value-boundary.md:83
+#: src/reference/value-boundary.md:84
 msgid "`opaque` — the one cell the host holds"
 msgstr "`opaque`——宿主持有的那个唯一单元"
 
 
-#: src/reference/value-boundary.md:85
+#: src/reference/value-boundary.md:86
 msgid ""
 "A host payload and a host-held rut value share the one erasure box. The store entry is one of two kinds:"
 msgstr "宿主载荷与宿主持有的 rut 值共享同一个擦除盒。存储表项是两种之一："
 
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "entry"
 msgstr "表项"
 
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "holds"
 msgstr "持有"
 
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "identity"
 msgstr "同一性"
 
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`Host`"
 msgstr "`Host`"
 
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`Box<dyn Any>` + a type name + an optional finalize hook"
 msgstr "`Box<dyn Any>` + 一个类型名 + 一个可选的 finalize 钩子"
 
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`TypeId` guards the payload view"
 msgstr "`TypeId` 守卫载荷视图"
 
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "`Rut`"
 msgstr "`Rut`"
 
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "a rut cell slot"
 msgstr "一个 rut 单元槽位"
 
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "identity _is_ the cell; rut-side `downcast` reads the cell's runtime kind"
 msgstr "同一性_就是_单元本身；rut 侧的 `downcast` 读取单元的运行时种类"
 
 
-#: src/reference/value-boundary.md:93
+#: src/reference/value-boundary.md:94
 msgid ""
 "The rut-side value addresses the entry directly (a tagged slot word); the Rust-side typed view is:"
 msgstr "rut 侧的值直接寻址表项（一个带标记的槽位字）；Rust 侧带类型的视图是："
 
 
-#: src/reference/value-boundary.md:98 src/reference/native-containers.md:105
+#: src/reference/value-boundary.md:99 src/reference/native-containers.md:105
 msgid "`Opaque::alloc(vm, val)`"
 msgstr "`Opaque::alloc(vm, val)`"
 
 
-#: src/reference/value-boundary.md:98
+#: src/reference/value-boundary.md:99
 msgid "mint a box; `size_of::<T>()` charged to the heap budget"
 msgstr "铸造一个盒；`size_of::<T>()` 记入堆预算"
 
 
-#: src/reference/value-boundary.md:99 src/reference/native-containers.md:106
+#: src/reference/value-boundary.md:100 src/reference/native-containers.md:106
 msgid "`Opaque::alloc_hosted(vm, val)`"
 msgstr "`Opaque::alloc_hosted(vm, val)`"
 
 
-#: src/reference/value-boundary.md:99
+#: src/reference/value-boundary.md:100
 msgid ""
 "mint a box whose payload opted into the release hook (`T: HostPayload`); `finalize` runs at entry death, before `Drop`"
 msgstr "铸造一个载荷选择加入释放钩子的盒（`T: HostPayload`）；`finalize` 在表项死亡时、于 `Drop` 之前运行"
 
 
-#: src/reference/value-boundary.md:100 src/reference/native-containers.md:107
+#: src/reference/value-boundary.md:101 src/reference/native-containers.md:107
 msgid "`Opaque::from_handle(&h)`"
 msgstr "`Opaque::from_handle(&h)`"
 
 
-#: src/reference/value-boundary.md:100
+#: src/reference/value-boundary.md:101
 msgid ""
 "the checked view; a wrong payload `T` traps naming both sides, a rut-value box names the rut-side recovery"
 msgstr "经过检查的视图；载荷 `T` 不符时触发陷阱并点名双方，rut 值盒则点名 rut 侧的取回方式"
 
 
-#: src/reference/value-boundary.md:101 src/reference/native-containers.md:108
+#: src/reference/value-boundary.md:102 src/reference/native-containers.md:108
 msgid "`o.with(\\|v\\| …)`"
 msgstr "`o.with(\\|v\\| …)`"
 
 
-#: src/reference/value-boundary.md:101
+#: src/reference/value-boundary.md:102
 msgid "shared borrow of the payload; nested `with`s stack"
 msgstr "载荷的共享借用；嵌套的 `with` 可以叠加"
 
 
-#: src/reference/value-boundary.md:102 src/reference/native-containers.md:109
+#: src/reference/value-boundary.md:103 src/reference/native-containers.md:109
 msgid "`o.with_mut(vm, \\|vm, v\\| …)`"
 msgstr "`o.with_mut(vm, \\|vm, v\\| …)`"
 
 
-#: src/reference/value-boundary.md:102
+#: src/reference/value-boundary.md:103
 msgid "exclusive borrow; flows `&mut Vm` for in-crossing rc work"
 msgstr "独占借用；为跨越内的 rc 工作流入 `&mut Vm`"
 
 
-#: src/reference/value-boundary.md:103 src/reference/native-containers.md:110
+#: src/reference/value-boundary.md:104 src/reference/native-containers.md:110
 msgid "`o.handle()`"
 msgstr "`o.handle()`"
 
 
-#: src/reference/value-boundary.md:103
+#: src/reference/value-boundary.md:104
 msgid "the erased `OpaqueRef`, for passing the box back across"
 msgstr "被擦除的 `OpaqueRef`，用于把盒传回边界另一侧"
 
 
-#: src/reference/value-boundary.md:105
+#: src/reference/value-boundary.md:106
 msgid ""
 "Death is deterministic: at rc-0 inside the release walk, `finalize(heap)` runs first, then the payload's own `Drop` ([the Rc heap](rc-heap.md)). Instances are per-map/per-logger, never per-op."
 msgstr ""
 "死亡是确定性的：在释放遍历中的 rc-0 时刻，`finalize(heap)` 先运行，然后是载荷自身的 `Drop`（[Rc 堆](rc-heap.md)）。实例是每映射/每 logger 一份，绝不是每操作一份。"
 
 
-#: src/reference/value-boundary.md:109
+#: src/reference/value-boundary.md:110
 msgid "Calling in"
 msgstr "调入"
 
 
-#: src/reference/value-boundary.md:112
+#: src/reference/value-boundary.md:113
 msgid ""
 "// entry fn half(x: f64) -> f64\n"
 msgstr ""
 "// entry fn half(x: f64) -> f64\n"
 
 
-#: src/reference/value-boundary.md:113
+#: src/reference/value-boundary.md:114
 msgid "\"half\""
 msgstr "\"half\""
 
 
-#: src/reference/value-boundary.md:114
+#: src/reference/value-boundary.md:115
 msgid ""
 "// entry fn find(id: i64) -> (?str, err) — the two-channel shape\n"
 msgstr ""
 "// entry fn find(id: i64) -> (?str, err) — the two-channel shape\n"
 
 
-#: src/reference/value-boundary.md:116
+#: src/reference/value-boundary.md:117
 msgid "\"find\""
 msgstr "\"find\""
 
 
-#: src/reference/value-boundary.md:117
+#: src/reference/value-boundary.md:118
 msgid "/* \"failed\" */"
 msgstr "/* \"failed\" */"
 
 
-#: src/reference/value-boundary.md:118
+#: src/reference/value-boundary.md:119
 msgid ""
 "// an opaque round trip\n"
 msgstr ""
 "// an opaque round trip\n"
 
 
-#: src/reference/value-boundary.md:121
+#: src/reference/value-boundary.md:122
 msgid "\"stash\""
 msgstr "\"stash\""
 
 
-#: src/reference/value-boundary.md:124
+#: src/reference/value-boundary.md:125
 msgid ""
 "`vm.call::<A, R>(export, args)` converts the args under the export's declared parameter types, runs, and decodes the answer under the declared return. A shape mismatch traps naming both sides."
 msgstr ""
 "`vm.call::<A, R>(export, args)` 按导出声明的参数类型转换实参，运行，并按声明的返回类型解码答案。形状不匹配时触发陷阱并点名双方。"
 
 
-#: src/reference/value-boundary.md:127
+#: src/reference/value-boundary.md:128
 msgid "`vm.resume::<R>()` continues a budget-parked call."
 msgstr "`vm.resume::<R>()` 继续一次因预算而停放的调用。"
 
 
-#: src/reference/value-boundary.md:128
+#: src/reference/value-boundary.md:129
 msgid ""
 "Argument bundles are tuples up to arity 8 (`CallArgs`); each element must be a `CallArg` (`Copy` prims, `String`, `&str`, `Vec<u8>`, `&[u8]`, `OpaqueRef`, `Opaque<T>`)."
 msgstr ""
 "实参束是最多 8 元的元组（`CallArgs`）；每个元素都必须是 `CallArg`（`Copy` 基本类型、`String`、`&str`、`Vec<u8>`、`&[u8]`、`OpaqueRef`、`Opaque<T>`）。"
 
 
-#: src/reference/value-boundary.md:132
+#: src/reference/value-boundary.md:133
 msgid "Cross-links"
 msgstr "交叉链接"
 
 
-#: src/reference/value-boundary.md:134
+#: src/reference/value-boundary.md:135
 msgid ""
 "Declaring and binding the surface: [host fns and declaration files](host-fns.md)."
 msgstr "声明并绑定表面：[宿主函数与声明文件](host-fns.md)。"
 
 
-#: src/reference/value-boundary.md:135
+#: src/reference/value-boundary.md:136
 msgid ""
 "Wrapping host state in rut classes: [native containers API surface](native-containers.md)."
 msgstr "用 rut 类包装宿主状态：[原生容器 API 表面](native-containers.md)。"
 
 
-#: src/reference/value-boundary.md:136
+#: src/reference/value-boundary.md:137
 msgid ""
 "Async bodies and the `Completer`: [the host futures bridge](host-futures.md)."
 msgstr "异步函数体与 `Completer`：[宿主 future 桥](host-futures.md)。"
 
 
-#: src/reference/value-boundary.md:137
+#: src/reference/value-boundary.md:138
 msgid "Budgets and traps: [resource limits](resource-limits.md)."
 msgstr "预算与陷阱：[资源限制](resource-limits.md)。"
 

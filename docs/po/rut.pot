@@ -1152,7 +1152,7 @@ msgid "unsigned integers"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:15 src/reference/primitive-types.md:9
-#: src/reference/value-boundary.md:32
+#: src/reference/value-boundary.md:33
 msgid "`u8` `u16` `u32` `u64`"
 msgstr ""
 
@@ -1165,7 +1165,7 @@ msgid "signed integers"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:16 src/reference/primitive-types.md:10
-#: src/reference/value-boundary.md:31
+#: src/reference/value-boundary.md:32
 msgid "`i8` `i16` `i32` `i64`"
 msgstr ""
 
@@ -1207,8 +1207,8 @@ msgstr ""
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
-#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:35
-#: src/reference/value-boundary.md:36 src/reference/templates.md:19
+#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:36
+#: src/reference/value-boundary.md:37 src/reference/templates.md:19
 msgid "`str`"
 msgstr ""
 
@@ -1223,7 +1223,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
 #: src/reference/by-reference-and-nullable.md:101
-#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr ""
 
@@ -1236,8 +1236,8 @@ msgid "erased"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:21 src/examples/playground-corpus.md:56
-#: src/reference/primitive-types.md:18 src/reference/value-boundary.md:39
-#: src/reference/value-boundary.md:40
+#: src/reference/primitive-types.md:18 src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "`opaque`"
 msgstr ""
 
@@ -3773,7 +3773,7 @@ msgstr ""
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:180 src/reference/host-futures.md:34
 #: src/reference/embedding.md:276 src/reference/embedding.md:294
-#: src/reference/embedding.md:324 src/reference/value-boundary.md:96
+#: src/reference/embedding.md:324 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:297 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
@@ -6815,7 +6815,7 @@ msgid ""
 "an embedder that offers a package declares its rows and must bind them."
 msgstr ""
 
-#: src/core-concepts/host-boundary.md:54 src/reference/value-boundary.md:10
+#: src/core-concepts/host-boundary.md:54 src/reference/value-boundary.md:11
 msgid "The crossing set"
 msgstr ""
 
@@ -10035,7 +10035,7 @@ msgstr ""
 msgid "`false`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:48 src/reference/value-boundary.md:34
+#: src/reference/lexical-structure.md:48 src/reference/value-boundary.md:35
 msgid "`nil`"
 msgstr ""
 
@@ -16689,7 +16689,7 @@ msgid "`Completer::new() -> Completer<T>`"
 msgstr ""
 
 #: src/reference/host-futures.md:36 src/reference/host-futures.md:37
-#: src/reference/host-futures.md:40 src/reference/value-boundary.md:46
+#: src/reference/host-futures.md:40
 msgid "any"
 msgstr ""
 
@@ -17750,7 +17750,7 @@ msgid "The walk API (`rut-native`)"
 msgstr ""
 
 #: src/reference/embedding.md:276 src/reference/embedding.md:294
-#: src/reference/embedding.md:324 src/reference/value-boundary.md:96
+#: src/reference/embedding.md:324 src/reference/value-boundary.md:97
 #: src/reference/native-containers.md:103 src/reference/templates.md:39
 msgid "API"
 msgstr ""
@@ -18440,39 +18440,40 @@ msgid ""
 "registers are untagged slots ([the VM heap](vm-heap.md)); crossing into Rust "
 "materializes a checked, borrow-guarded value. The currency of the boundary "
 "is **typed Rust**: the registered closure's parameter types and the "
-"`vm.call` return type are the whole contract. The crate-internal marshaling "
-"formats (`Value`, `Slot`) never leave the VM crate."
+"`vm.call` return type are the whole contract. The internal marshaling "
+"formats stay out of it: `Slot` never appears, and the raw `Value` enum "
+"surfaces only as the one untyped read in the map below."
 msgstr ""
 
-#: src/reference/value-boundary.md:12
+#: src/reference/value-boundary.md:13
 msgid ""
 "What may cross is a **compile-time property of the surface**. A violation is "
 "a compile error on the declaration or binding — never a call-time failure."
 msgstr ""
 
-#: src/reference/value-boundary.md:15
+#: src/reference/value-boundary.md:16
 msgid ""
 "**Parameters** cross over: the primitives (`i8`–`i64`, `u8`–`u64`, `f32`, "
 "`f64`, `bool`), `str`, `bytes`, and `opaque`."
 msgstr ""
 
-#: src/reference/value-boundary.md:17
+#: src/reference/value-boundary.md:18
 msgid ""
 "**Returns** cross over the same set **plus** the answer optionals `?str`, "
 "`?bytes`, `?opaque`."
 msgstr ""
 
-#: src/reference/value-boundary.md:19
+#: src/reference/value-boundary.md:20
 msgid "Tuples cross field-by-field; each field must itself cross."
 msgstr ""
 
-#: src/reference/value-boundary.md:20
+#: src/reference/value-boundary.md:21
 msgid ""
 "Entry fns follow the same rule in both directions: `?T` crosses iff `T` "
 "crosses, decoded nil-flattened."
 msgstr ""
 
-#: src/reference/value-boundary.md:22
+#: src/reference/value-boundary.md:23
 msgid ""
 "Everything else — structs, classes, `Vec<T>`, `[T]`, interface-typed values, "
 "closures — stays inside the VM. Seal polymorphic values in the erasure box: "
@@ -18480,197 +18481,201 @@ msgid ""
 "and downcast](opaque.md))."
 msgstr ""
 
-#: src/reference/value-boundary.md:27
+#: src/reference/value-boundary.md:28
 msgid "Rust ↔ rut type map"
 msgstr ""
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "Rust type"
 msgstr ""
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "rut type"
 msgstr ""
 
-#: src/reference/value-boundary.md:29
+#: src/reference/value-boundary.md:30
 msgid "direction"
 msgstr ""
 
-#: src/reference/value-boundary.md:29 src/reference/diagnostics.md:65
+#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:65
 msgid "cost"
 msgstr ""
 
-#: src/reference/value-boundary.md:31 src/reference/value-boundary.md:32
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:32 src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "same"
 msgstr ""
 
-#: src/reference/value-boundary.md:31 src/reference/value-boundary.md:32
-#: src/reference/value-boundary.md:33 src/reference/value-boundary.md:34
-#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
-#: src/reference/value-boundary.md:39 src/reference/value-boundary.md:40
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:32 src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34 src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40 src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:46
 msgid "both"
 msgstr ""
 
-#: src/reference/value-boundary.md:31
+#: src/reference/value-boundary.md:32
 msgid "the raw slot bits"
 msgstr ""
 
-#: src/reference/value-boundary.md:32
+#: src/reference/value-boundary.md:33
 msgid "raw bits (`u64` is never narrowed through `i64`)"
 msgstr ""
 
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "`f32` `f64` `bool`"
 msgstr ""
 
-#: src/reference/value-boundary.md:33
+#: src/reference/value-boundary.md:34
 msgid "raw slot bits"
 msgstr ""
 
-#: src/reference/value-boundary.md:34
+#: src/reference/value-boundary.md:35
 msgid "`()`"
 msgstr ""
 
-#: src/reference/value-boundary.md:34
+#: src/reference/value-boundary.md:35
 msgid "the zero word"
 msgstr ""
 
-#: src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:36
 msgid "`&str`"
 msgstr ""
 
-#: src/reference/value-boundary.md:35 src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
 msgid "param only"
 msgstr ""
 
-#: src/reference/value-boundary.md:35
+#: src/reference/value-boundary.md:36
 msgid "**zero-copy** borrow of the block store, scoped to the call"
 msgstr ""
 
-#: src/reference/value-boundary.md:36
+#: src/reference/value-boundary.md:37
 msgid "`String`"
 msgstr ""
 
-#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:37 src/reference/value-boundary.md:39
 msgid "owned copy"
 msgstr ""
 
-#: src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:38
 msgid "`&[u8]`"
 msgstr ""
 
-#: src/reference/value-boundary.md:37
+#: src/reference/value-boundary.md:38
 msgid "zero-copy borrow"
 msgstr ""
 
-#: src/reference/value-boundary.md:38
+#: src/reference/value-boundary.md:39
 msgid "`Vec<u8>`"
 msgstr ""
 
-#: src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40
 msgid "`OpaqueRef`"
 msgstr ""
 
-#: src/reference/value-boundary.md:39
+#: src/reference/value-boundary.md:40
 msgid "the handle; the rc **transfers** across"
 msgstr ""
 
-#: src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "`Opaque<T>`"
 msgstr ""
 
-#: src/reference/value-boundary.md:40
+#: src/reference/value-boundary.md:41
 msgid "typed payload view; a wrong `T` traps naming both sides"
 msgstr ""
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`Option<String>`"
 msgstr ""
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`?str`"
 msgstr ""
 
-#: src/reference/value-boundary.md:41 src/reference/value-boundary.md:42
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:42 src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "return (answer lane)"
 msgstr ""
 
-#: src/reference/value-boundary.md:41
+#: src/reference/value-boundary.md:42
 msgid "`Some` mints the opt box; `None` is the flat nil"
 msgstr ""
 
-#: src/reference/value-boundary.md:42
+#: src/reference/value-boundary.md:43
 msgid "`Option<Vec<u8>>`"
 msgstr ""
 
-#: src/reference/value-boundary.md:42
+#: src/reference/value-boundary.md:43
 msgid "`?bytes`"
 msgstr ""
 
-#: src/reference/value-boundary.md:42 src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:43 src/reference/value-boundary.md:44
 #: src/reference/reflection.md:35
 msgid "as above"
 msgstr ""
 
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "`Option<OpaqueRef>` / `Option<Opaque<T>>`"
 msgstr ""
 
-#: src/reference/value-boundary.md:43
+#: src/reference/value-boundary.md:44
 msgid "`?opaque`"
 msgstr ""
 
-#: src/reference/value-boundary.md:44
+#: src/reference/value-boundary.md:45
 msgid "`Option<T>` (other `T`)"
 msgstr ""
 
-#: src/reference/value-boundary.md:44 src/reference/reflection.md:37
+#: src/reference/value-boundary.md:45 src/reference/reflection.md:37
 msgid "—"
 msgstr ""
 
-#: src/reference/value-boundary.md:44
+#: src/reference/value-boundary.md:45
 msgid "**no lane**: traps naming `?str`/`?bytes`/`?opaque`"
 msgstr ""
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "`(A, B, …)` up to 8"
 msgstr ""
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "tuple"
 msgstr ""
 
-#: src/reference/value-boundary.md:45
+#: src/reference/value-boundary.md:46
 msgid "field-by-field under the record's own field types"
 msgstr ""
 
-#: src/reference/value-boundary.md:46
+#: src/reference/value-boundary.md:47
 msgid "`Value`"
 msgstr ""
 
-#: src/reference/value-boundary.md:46
-msgid "read"
+#: src/reference/value-boundary.md:47
+msgid "whatever's declared"
 msgstr ""
 
-#: src/reference/value-boundary.md:46
+#: src/reference/value-boundary.md:47
+msgid "return only"
+msgstr ""
+
+#: src/reference/value-boundary.md:47
 msgid "positional decode for generic tooling"
 msgstr ""
 
-#: src/reference/value-boundary.md:48
+#: src/reference/value-boundary.md:49
 msgid ""
 "The optional read is **nil-flattening**: the null slot is `None`, a "
 "some-slot decodes its payload as `T`. There is no separate optional currency "
 "— nil _is_ absence."
 msgstr ""
 
-#: src/reference/value-boundary.md:52
+#: src/reference/value-boundary.md:53
 msgid "Borrows and copies"
 msgstr ""
 
-#: src/reference/value-boundary.md:54
+#: src/reference/value-boundary.md:55
 msgid ""
 "`&str`/`&[u8]` params read the block store directly. The handler bound is "
 "higher-ranked over the borrow's lifetime, so a borrowed param **cannot "
@@ -18678,41 +18683,41 @@ msgid ""
 "Owned `String`/`Vec<u8>` params are the explicit \"I keep this data\" copy."
 msgstr ""
 
-#: src/reference/value-boundary.md:60
+#: src/reference/value-boundary.md:61
 msgid "Borrow guards, the whole rule:"
 msgstr ""
 
-#: src/reference/value-boundary.md:62
+#: src/reference/value-boundary.md:63
 msgid ""
 "A borrow is **call-scoped**. The Rust lifetime prevents storing it past "
 "return; the object's guard flag additionally excludes conflicting access."
 msgstr ""
 
-#: src/reference/value-boundary.md:64
+#: src/reference/value-boundary.md:65
 msgid ""
 "While an exclusive borrow is held, a re-entrant `vm.call` that touches the "
 "same box traps `borrowed by an outer host call` instead of aliasing."
 msgstr ""
 
-#: src/reference/value-boundary.md:66
+#: src/reference/value-boundary.md:67
 msgid "Shared borrows stack; an active exclusive borrow excludes them."
 msgstr ""
 
-#: src/reference/value-boundary.md:67
+#: src/reference/value-boundary.md:68
 msgid "Guards clear on return. To keep data, the host copies."
 msgstr ""
 
-#: src/reference/value-boundary.md:69
+#: src/reference/value-boundary.md:70
 msgid "The two-channel law"
 msgstr ""
 
-#: src/reference/value-boundary.md:71
+#: src/reference/value-boundary.md:72
 msgid ""
 "A rut entry typed `-> (?T, err)` decodes positionally as `(Option<T>, "
 "String)` — or generically as `Value::Tuple([Nil|payload, Str(err)])`:"
 msgstr ""
 
-#: src/reference/value-boundary.md:75
+#: src/reference/value-boundary.md:76
 msgid ""
 "A **returned err is data**: it crosses as the pair's second component; the "
 "host reads it and acts. The pair's convention belongs to the caller: empty "
@@ -18720,196 +18725,196 @@ msgid ""
 "\"failed\"."
 msgstr ""
 
-#: src/reference/value-boundary.md:79
+#: src/reference/value-boundary.md:80
 msgid ""
 "A **panic is drift**: it stays on the loud channel (`Result<_, Trap>` — "
 "`Err` means a trapped turn, a bug) and never fills an err field. The two "
 "channels are never merged."
 msgstr ""
 
-#: src/reference/value-boundary.md:83
+#: src/reference/value-boundary.md:84
 msgid "`opaque` — the one cell the host holds"
 msgstr ""
 
-#: src/reference/value-boundary.md:85
+#: src/reference/value-boundary.md:86
 msgid ""
 "A host payload and a host-held rut value share the one erasure box. The "
 "store entry is one of two kinds:"
 msgstr ""
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "entry"
 msgstr ""
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "holds"
 msgstr ""
 
-#: src/reference/value-boundary.md:88
+#: src/reference/value-boundary.md:89
 msgid "identity"
 msgstr ""
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`Host`"
 msgstr ""
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`Box<dyn Any>` + a type name + an optional finalize hook"
 msgstr ""
 
-#: src/reference/value-boundary.md:90
+#: src/reference/value-boundary.md:91
 msgid "`TypeId` guards the payload view"
 msgstr ""
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "`Rut`"
 msgstr ""
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "a rut cell slot"
 msgstr ""
 
-#: src/reference/value-boundary.md:91
+#: src/reference/value-boundary.md:92
 msgid "identity _is_ the cell; rut-side `downcast` reads the cell's runtime kind"
 msgstr ""
 
-#: src/reference/value-boundary.md:93
+#: src/reference/value-boundary.md:94
 msgid ""
 "The rut-side value addresses the entry directly (a tagged slot word); the "
 "Rust-side typed view is:"
 msgstr ""
 
-#: src/reference/value-boundary.md:98 src/reference/native-containers.md:105
+#: src/reference/value-boundary.md:99 src/reference/native-containers.md:105
 msgid "`Opaque::alloc(vm, val)`"
 msgstr ""
 
-#: src/reference/value-boundary.md:98
+#: src/reference/value-boundary.md:99
 msgid "mint a box; `size_of::<T>()` charged to the heap budget"
 msgstr ""
 
-#: src/reference/value-boundary.md:99 src/reference/native-containers.md:106
+#: src/reference/value-boundary.md:100 src/reference/native-containers.md:106
 msgid "`Opaque::alloc_hosted(vm, val)`"
 msgstr ""
 
-#: src/reference/value-boundary.md:99
+#: src/reference/value-boundary.md:100
 msgid ""
 "mint a box whose payload opted into the release hook (`T: HostPayload`); "
 "`finalize` runs at entry death, before `Drop`"
 msgstr ""
 
-#: src/reference/value-boundary.md:100 src/reference/native-containers.md:107
+#: src/reference/value-boundary.md:101 src/reference/native-containers.md:107
 msgid "`Opaque::from_handle(&h)`"
 msgstr ""
 
-#: src/reference/value-boundary.md:100
+#: src/reference/value-boundary.md:101
 msgid ""
 "the checked view; a wrong payload `T` traps naming both sides, a rut-value "
 "box names the rut-side recovery"
 msgstr ""
 
-#: src/reference/value-boundary.md:101 src/reference/native-containers.md:108
+#: src/reference/value-boundary.md:102 src/reference/native-containers.md:108
 msgid "`o.with(\\|v\\| …)`"
 msgstr ""
 
-#: src/reference/value-boundary.md:101
+#: src/reference/value-boundary.md:102
 msgid "shared borrow of the payload; nested `with`s stack"
 msgstr ""
 
-#: src/reference/value-boundary.md:102 src/reference/native-containers.md:109
+#: src/reference/value-boundary.md:103 src/reference/native-containers.md:109
 msgid "`o.with_mut(vm, \\|vm, v\\| …)`"
 msgstr ""
 
-#: src/reference/value-boundary.md:102
+#: src/reference/value-boundary.md:103
 msgid "exclusive borrow; flows `&mut Vm` for in-crossing rc work"
 msgstr ""
 
-#: src/reference/value-boundary.md:103 src/reference/native-containers.md:110
+#: src/reference/value-boundary.md:104 src/reference/native-containers.md:110
 msgid "`o.handle()`"
 msgstr ""
 
-#: src/reference/value-boundary.md:103
+#: src/reference/value-boundary.md:104
 msgid "the erased `OpaqueRef`, for passing the box back across"
 msgstr ""
 
-#: src/reference/value-boundary.md:105
+#: src/reference/value-boundary.md:106
 msgid ""
 "Death is deterministic: at rc-0 inside the release walk, `finalize(heap)` "
 "runs first, then the payload's own `Drop` ([the Rc heap](rc-heap.md)). "
 "Instances are per-map/per-logger, never per-op."
 msgstr ""
 
-#: src/reference/value-boundary.md:109
+#: src/reference/value-boundary.md:110
 msgid "Calling in"
 msgstr ""
 
-#: src/reference/value-boundary.md:112
+#: src/reference/value-boundary.md:113
 msgid "// entry fn half(x: f64) -> f64\n"
 msgstr ""
 
-#: src/reference/value-boundary.md:113
+#: src/reference/value-boundary.md:114
 msgid "\"half\""
 msgstr ""
 
-#: src/reference/value-boundary.md:114
+#: src/reference/value-boundary.md:115
 msgid "// entry fn find(id: i64) -> (?str, err) — the two-channel shape\n"
 msgstr ""
 
-#: src/reference/value-boundary.md:116
+#: src/reference/value-boundary.md:117
 msgid "\"find\""
 msgstr ""
 
-#: src/reference/value-boundary.md:117
+#: src/reference/value-boundary.md:118
 msgid "/* \"failed\" */"
 msgstr ""
 
-#: src/reference/value-boundary.md:118
+#: src/reference/value-boundary.md:119
 msgid "// an opaque round trip\n"
 msgstr ""
 
-#: src/reference/value-boundary.md:121
+#: src/reference/value-boundary.md:122
 msgid "\"stash\""
 msgstr ""
 
-#: src/reference/value-boundary.md:124
+#: src/reference/value-boundary.md:125
 msgid ""
 "`vm.call::<A, R>(export, args)` converts the args under the export's "
 "declared parameter types, runs, and decodes the answer under the declared "
 "return. A shape mismatch traps naming both sides."
 msgstr ""
 
-#: src/reference/value-boundary.md:127
+#: src/reference/value-boundary.md:128
 msgid "`vm.resume::<R>()` continues a budget-parked call."
 msgstr ""
 
-#: src/reference/value-boundary.md:128
+#: src/reference/value-boundary.md:129
 msgid ""
 "Argument bundles are tuples up to arity 8 (`CallArgs`); each element must be "
 "a `CallArg` (`Copy` prims, `String`, `&str`, `Vec<u8>`, `&[u8]`, "
 "`OpaqueRef`, `Opaque<T>`)."
 msgstr ""
 
-#: src/reference/value-boundary.md:132
+#: src/reference/value-boundary.md:133
 msgid "Cross-links"
 msgstr ""
 
-#: src/reference/value-boundary.md:134
+#: src/reference/value-boundary.md:135
 msgid ""
 "Declaring and binding the surface: [host fns and declaration "
 "files](host-fns.md)."
 msgstr ""
 
-#: src/reference/value-boundary.md:135
+#: src/reference/value-boundary.md:136
 msgid ""
 "Wrapping host state in rut classes: [native containers API "
 "surface](native-containers.md)."
 msgstr ""
 
-#: src/reference/value-boundary.md:136
+#: src/reference/value-boundary.md:137
 msgid ""
 "Async bodies and the `Completer`: [the host futures bridge](host-futures.md)."
 msgstr ""
 
-#: src/reference/value-boundary.md:137
+#: src/reference/value-boundary.md:138
 msgid "Budgets and traps: [resource limits](resource-limits.md)."
 msgstr ""
 
