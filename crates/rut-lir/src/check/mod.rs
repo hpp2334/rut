@@ -337,6 +337,14 @@ pub struct Ctx<'a> {
     /// linkable-classes phase): the class-method rows a consumer's
     /// `b.append(..)` / `Logger.new(..)` resolve through
     pub extern_inherents: Vec<ExternInherent>,
+    /// the `[constructor]` designation registry (the third designated
+    /// surface): class name → the member the call form `Name(..)`
+    /// lowers to. Filled at collect for this module's own classes and
+    /// at surface binding for used/linked ones (the marker byte crosses
+    /// the surface row); the 1-seg call's fallback reads it. A newtype
+    /// never registers — its `Name(v)` surface already IS the
+    /// construction, the marker diagnoses there.
+    pub class_ctors: std::collections::HashMap<IdentId, IdentId>,
     /// generic fns bound from used modules' surfaces: name → the
     /// placeholder signature + parameter names. The call mints the
     /// mirror instantiation and requests the body from the owner.
@@ -605,6 +613,7 @@ impl<'a> Ctx<'a> {
             carried_names: std::collections::HashMap::new(),
             pending_mirror_owner: None,
             extern_inherents: Vec::new(),
+            class_ctors: std::collections::HashMap::new(),
             extern_enums: std::collections::HashMap::new(),
             extern_generic_fns: std::collections::HashMap::new(),
             for_of_sigs: std::collections::HashMap::new(),

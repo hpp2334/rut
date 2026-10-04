@@ -186,8 +186,10 @@ pub struct SurfaceMethod {
     pub generics: Vec<IdentId>,
     /// the engine-designated slot the member fills, if any (v20): the
     /// closed marker set, engine-owned — 0 none, 1 `[disposal]`, 2
-    /// `[iterable]`. The consumer's for-of/disposal paths read THIS,
-    /// never a per-(type × trait) lookup.
+    /// `[iterable]`, 3 `[constructor]`. The consumer's for-of/disposal
+    /// paths read THIS, never a per-(type × trait) lookup; the
+    /// `[constructor]` byte feeds the consumer's `Type(..)` fallback
+    /// (a call-site consumer — no engine row rides it).
     pub marker: u8,
 }
 
@@ -195,6 +197,7 @@ pub struct SurfaceMethod {
 pub const MARKER_NONE: u8 = 0;
 pub const MARKER_DISPOSAL: u8 = 1;
 pub const MARKER_ITERABLE: u8 = 2;
+pub const MARKER_CONSTRUCTOR: u8 = 3;
 
 /// A builtin container published by `core`'s native surface:
 /// the type constructor is the compiler's own. Each row carries its

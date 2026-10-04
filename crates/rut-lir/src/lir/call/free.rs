@@ -193,7 +193,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.self_ty = saved_self;
         self.subst = saved_subst;
         if args.len() != ptys.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+            self.ctx.err(sp, format!(
+                "call arity: `{}.{}` takes {} parameter{}, {} given",
+                self.ctx.name(dname),
+                self.ctx.name(mname),
+                ptys.len(),
+                if ptys.len() == 1 { "" } else { "s" },
+                args.len()
+            ));
             return Err(());
         }
         let mut aregs = Vec::new();

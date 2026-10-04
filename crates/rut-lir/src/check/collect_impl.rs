@@ -231,6 +231,17 @@ impl<'a> Ctx<'a> {
             if std::env::var("RUT_DEBUG_SATISFY").is_ok() {
                 eprintln!("DBG attach: {} methods {:?} at collect", self.name(tname), mths.iter().map(|(n, _)| self.name(*n).to_string()).collect::<Vec<_>>());
             }
+            // the `[constructor]` designation registers here — the
+            // 1-seg call's fallback reads it (`Point(..)` lowers exactly
+            // like `Point.<member>(..)`); a call-site consumer, so no
+            // eager queue and no engine row
+            let constructor = sym::CONSTRUCTOR_MARKER;
+            if let Some((cn, _)) = mths
+                .iter()
+                .find(|(_, m)| self.ast.method_decl(*m).marker == Some(constructor))
+            {
+                self.class_ctors.insert(tname, *cn);
+            }
             self.datas[idx].1.methods.extend(mths);
             for n in marked {
                 self.ensure_inst(Inst {
@@ -257,9 +268,14 @@ impl<'a> Ctx<'a> {
                         "`{}` cannot carry `[disposal]` — only a struct or class can (the engine disposes a record's cell; an enum's members are immortal singletons)",
                         self.name(tname)
                     ));
+                } else if word == sym::CONSTRUCTOR_MARKER {
+                    self.err(self.ast.span(mnode.id()), format!(
+                        "`{}` cannot carry `[constructor]` — only a class can (an enum's members are its own immortal singletons; there is no call form to designate)",
+                        self.name(tname)
+                    ));
                 } else if word != sym::ITERABLE_MARKER {
                     self.err(self.ast.span(mnode.id()), format!(
-                        "`[{}]` is not an engine contract — the closed marker set is `[disposal]` and `[iterable]`",
+                        "`[{}]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`",
                         self.name(word)
                     ));
                 }
@@ -277,23 +293,31 @@ impl<'a> Ctx<'a> {
     }
 
     /// The bracket markers' CHECKER half (v20): the parser accepts any
-    /// `[word]`, this validates the engine's CLOSED set and each
-    /// contract's law.
+    /// `[word]`, this validates the DESIGNATED SURFACES' closed set and
+    /// each surface's law.
     ///
-    /// - the set: `[disposal]`, `[iterable]` — engine-owned, nothing
-    ///   else marks;
-    /// - at most one per contract per class (a second `[disposal]`
-    ///   member has no slot to fill);
+    /// - the set: `[disposal]`, `[iterable]`, `[constructor]` — the
+    ///   three designated surfaces, nothing else marks;
+    /// - at most one per surface per class (a second `[disposal]`
+    ///   member has no slot to fill; a second `[constructor]` leaves
+    ///   `Type(..)` ambiguous — the duplicate names both members);
     /// - inherent-members-only (the parser already rejects the trait /
     ///   trait-impl spellings; the builtin-class targets never reach
     ///   here — they diagnosed above);
-    /// - the signature per contract: `[disposal] fn <free>(mut self,
+    /// - the signature per surface: `[disposal] fn <free>(mut self,
     ///   cx: DisposalContext)` — the name is FREE, the bracket
     ///   designates; the engine calls it at refcount zero, so the
     ///   target must be a CONCRETE struct/class (the row keys the
     ///   cell's type id; a generic target has no static row);
     ///   `[iterable] fn <free>(self, emit: fn(E) -> bool)` — the
-    ///   element type falls out of the marked member's own signature.
+    ///   element type falls out of the marked member's own signature;
+    ///   `[constructor] fn <free>(..) -> Self | ?Self` — class targets
+    ///   only, no receiver: the call form `Type(..)` lowers exactly
+    ///   like `Type.<member>(..)` (a call-site consumer, not an engine
+    ///   row), so the visibility seal rides the member's `pub` and a
+    ///   `?Self` return makes the call a try-construction. A newtype
+    ///   never carries it — the newtype's `Name(v)` surface already IS
+    ///   the construction.
     fn validate_markers(
         &mut self,
         tname: IdentId,
@@ -304,6 +328,7 @@ impl<'a> Ctx<'a> {
     ) {
         let disposal = sym::DISPOSAL_MARKER;
         let iterable = sym::ITERABLE_MARKER;
+        let constructor = sym::CONSTRUCTOR_MARKER;
         // the target's own type parameters bind as template placeholders
         // for the signature checks — a `[iterable]` member on a generic
         // class (`impl<E> Flow<E>`) spells the element type with the
@@ -318,11 +343,11 @@ impl<'a> Ctx<'a> {
         for (n, mnode) in mths {
             let md = self.ast.method_decl(*mnode);
             let Some(word) = md.marker else { continue };
-            if word != disposal && word != iterable {
+            if word != disposal && word != iterable && word != constructor {
                 self.err(
                     self.ast.span(mnode.id()),
                     format!(
-                        "`[{}]` is not an engine contract — the closed marker set is `[disposal]` and `[iterable]`",
+                        "`[{}]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`",
                         self.name(word)
                     ),
                 );
@@ -334,7 +359,7 @@ impl<'a> Ctx<'a> {
                     format!("`[{}]` marks a synchronous contract — `async` is not allowed here", self.name(word)),
                 );
             }
-            // at most one per contract per class — the decl's existing
+            // at most one per surface per class — the decl's existing
             // methods count too (an earlier impl block may have marked)
             let already = self
                 .find_data(tname)
@@ -348,14 +373,52 @@ impl<'a> Ctx<'a> {
                     pn != n && self.ast.method_decl(*pm).marker == Some(word)
                 });
             if already {
-                self.err(
-                    self.ast.span(mnode.id()),
-                    format!(
-                        "`{}` already carries a `[{}]` member — at most one per contract per class (the engine's slot is singular)",
-                        self.name(tname),
-                        self.name(word)
-                    ),
-                );
+                if word == constructor {
+                    // the duplicate names BOTH member spellings — the
+                    // call form `Type(..)` has to pick one
+                    let other = self
+                        .find_data(tname)
+                        .and_then(|d| {
+                            d.methods
+                                .iter()
+                                .find(|(pn, pm)| *pn != *n && self.ast.method_decl(*pm).marker == Some(word))
+                                .map(|(pn, _)| *pn)
+                        })
+                        .or_else(|| {
+                            mths.iter()
+                                .find(|(pn, pm)| pn != n && self.ast.method_decl(*pm).marker == Some(word))
+                                .map(|(pn, _)| *pn)
+                        });
+                    match other {
+                        Some(o) => self.err(
+                            self.ast.span(mnode.id()),
+                            format!(
+                                "`{}` already carries a `[constructor]` member — `{}` and `{}` both designate the construction surface; at most one per class (`{}(..)` must lower to one member)",
+                                self.name(tname),
+                                self.name(o),
+                                self.name(*n),
+                                self.name(tname)
+                            ),
+                        ),
+                        None => self.err(
+                            self.ast.span(mnode.id()),
+                            format!(
+                                "`{}` already carries a `[constructor]` member — at most one per class (`{}(..)` must lower to one member)",
+                                self.name(tname),
+                                self.name(tname)
+                            ),
+                        ),
+                    }
+                } else {
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!(
+                            "`{}` already carries a `[{}]` member — at most one per contract per class (the engine's slot is singular)",
+                            self.name(tname),
+                            self.name(word)
+                        ),
+                    );
+                }
             }
             match word {
                 w if w == disposal => {
@@ -461,6 +524,87 @@ impl<'a> Ctx<'a> {
                             "an `[iterable]` member returns nil — the drive consumes through `emit`",
                         );
                     }
+                }
+                w if w == constructor => {
+                    // NEWTYPES NEVER CARRY THE MARKER (Law 2a): the
+                    // newtype's call surface (`Name(v)`) already IS the
+                    // construction — the compile_newtype_ctor mint — and
+                    // nothing designates it. Cover the extern-newtype
+                    // spelling too (a used type takes no impl block, so
+                    // the ordinary path never gets here; the gate keeps
+                    // the law in one place).
+                    let is_newtype = self
+                        .find_data(tname)
+                        .map(|d| d.newtype)
+                        .unwrap_or(false)
+                        || self.extern_newtypes.contains(&tname);
+                    if is_newtype {
+                        self.err(
+                            sp,
+                            format!(
+                                "`{}` cannot carry `[constructor]` — the newtype's call surface (`{0}(v)`) already IS the construction; there is nothing to designate",
+                                self.name(tname)
+                            ),
+                        );
+                        continue;
+                    }
+                    // CLASS targets only (Law 4): a struct constructs by
+                    // literal, an enum's members are its own singletons
+                    match self.find_data(tname).map(|d| d.kind) {
+                        Some(crate::check::DataKind::Class) => {}
+                        Some(crate::check::DataKind::Struct) => {
+                            self.err(
+                                sp,
+                                format!(
+                                    "`{}` cannot carry `[constructor]` — structs construct by literal (`{0} {{ .. }}`); the marker designates a class's call form",
+                                    self.name(tname)
+                                ),
+                            );
+                            continue;
+                        }
+                        None => {
+                            self.err(
+                                sp,
+                                format!(
+                                    "`{}` cannot carry `[constructor]` — only a class can (the marker designates the `{}(..)` call form)",
+                                    self.name(tname),
+                                    self.name(tname)
+                                ),
+                            );
+                            continue;
+                        }
+                    }
+                    // signature: NO receiver (the class itself is the
+                    // call's subject) and the return is `Self` or `?Self`
+                    if matches!(
+                        md.params.first().map(|p| self.ast.param(*p)),
+                        Some(MemberKind::SelfParam(_))
+                    ) {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)",
+                        );
+                    }
+                    // the return resolves against the target's own
+                    // binders as placeholders — `Self` binds the target
+                    // type, `?Self` its nullable (the try-construction)
+                    let ret_ok = md
+                        .ret
+                        .map(|r| {
+                            let t = self.resolve_sig_ty(r, &param_env, Some(target_ty));
+                            t == target_ty || t == self.mk_opt(target_ty)
+                        })
+                        .unwrap_or(false);
+                    if !ret_ok {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)",
+                        );
+                    }
+                    // (the call sites lower the member like any class
+                    // method — `Type(..)` IS `Type.<member>(..)`; the
+                    // designation registry rides collect_impl_inherent
+                    // below, no eager queue, no engine row)
                 }
                 _ => {}
             }

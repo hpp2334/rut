@@ -465,10 +465,10 @@ pub struct FieldDeclData {
 pub struct MethodDeclData {
     pub vis: Option<Vis>,
     pub is_async: bool,
-    /// the engine-designated slot the member fills, if any (v20): a
-    /// bracket marker `[disposal]` / `[iterable]` — a CONTEXTUAL word in
-    /// a closed engine-owned set, checked against the engine's contract
-    /// (one per class, inherent members only, signature must match).
+    /// the designated surface the member fills, if any (v20): a
+    /// bracket marker `[disposal]` / `[iterable]` / `[constructor]` — a
+    /// CONTEXTUAL word in a closed set, checked at collect (one per
+    /// surface per class, inherent members only, signature must match).
     /// The name of the marked fn itself is FREE: designation is by
     /// bracket, never by spelling.
     pub marker: Option<IdentId>,

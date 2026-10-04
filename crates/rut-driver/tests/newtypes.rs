@@ -244,7 +244,9 @@ fn wrapped_value_checks_against_the_instantiated_field() {
 
 #[test]
 fn braced_one_field_class_has_no_constructor() {
-    // the seal holds: the positional spelling is what arms the call
+    // the seal holds: the positional spelling is what arms the call —
+    // a braced class's type-call miss names the designated-constructor
+    // fix instead
     let ds = diags_of(
         "class Plain { inner: i32; }\n\
          entry fn main() {\n\
@@ -252,8 +254,8 @@ fn braced_one_field_class_has_no_constructor() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("construction is a method call")),
-        "a braced class keeps the old diagnostic: {ds:?}"
+        ds.iter().any(|d| d == "`Plain` constructs through its class methods (`Plain.new(..)`) — mark one `[constructor]` to call the class itself"),
+        "a braced class keeps the seal, the miss names the fix: {ds:?}"
     );
 }
 

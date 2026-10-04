@@ -845,7 +845,7 @@ impl TypeBodyFrame {
         p.bump(); // [
         let word = p.expect_ident("a marker name after `[`").unwrap_or(IdentId(0));
         if p.expect(Tok::RBracket).is_none() {
-            p.err(lo, "unterminated marker — `[disposal]` / `[iterable]`");
+            p.err(lo, "unterminated marker — `[disposal]` / `[iterable]` / `[constructor]`");
         }
         Some(word)
     }
@@ -1028,7 +1028,7 @@ impl TypeBodyFrame {
                         }
                     }
                     if matches!(p.tok(), Tok::LBracket) {
-                        p.err(lo, "the bracket marker comes first — `[disposal] pub fn ..` (marker-before-visibility)");
+                        p.err(lo, "the bracket marker comes first — e.g. `[constructor] pub fn ..` (marker-before-visibility)");
                     }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
@@ -1119,9 +1119,9 @@ pub(crate) struct MethodFrame {
     lo: u32,
     vis: Option<Vis>,
     is_async: bool,
-    /// the bracket marker (`[disposal]` / `[iterable]`) — parsed as a
-    /// contextual word, validated against the engine's closed set by
-    /// the checker
+    /// the bracket marker (`[disposal]` / `[iterable]` /
+    /// `[constructor]` — the designated surfaces) — parsed as a
+    /// contextual word, validated against the closed set by the checker
     marker: Option<IdentId>,
     with_body: bool,
     /// rut methods take inline bounds; surface (.d.rut) members

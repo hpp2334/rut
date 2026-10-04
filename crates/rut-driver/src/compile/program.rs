@@ -22,6 +22,7 @@ fn marker_code(m: Option<rut_core::IdentId>) -> u8 {
         None => rut_core::binary::MARKER_NONE,
         Some(w) if w == rut_core::sym::DISPOSAL_MARKER => rut_core::binary::MARKER_DISPOSAL,
         Some(w) if w == rut_core::sym::ITERABLE_MARKER => rut_core::binary::MARKER_ITERABLE,
+        Some(w) if w == rut_core::sym::CONSTRUCTOR_MARKER => rut_core::binary::MARKER_CONSTRUCTOR,
         Some(_) => rut_core::binary::MARKER_NONE,
     }
 }

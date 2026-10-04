@@ -357,15 +357,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if let Some(d) = self.ctx.find_data(name).cloned() {
             // the newtype decl's call construction — `JsonI64(64)`: the
-            // spelled constructor, the manufacture mechanism. An
-            // ordinary (braced) class still diagnoses: the seal holds.
+            // spelled constructor, the manufacture mechanism. The arm
+            // stays FIRST (Law: the newtype's call surface already IS
+            // the construction — the marker can never compete with it,
+            // the checker rejects that pairing outright). An
+            // ordinary (braced) class falls through to its designated
+            // constructor, the seal holds.
             if d.newtype {
                 return self.compile_newtype_ctor(name, &d, generics, args, expected, sp);
             }
-            self.ctx.err(sp, format!(
-                "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}`",
-                self.ctx.name(name), self.ctx.name(name)
-            ));
+            // the `[constructor]` designation — `Point(..)` lowers
+            // exactly like `Point.from_xy(..)` (byte-identical: the
+            // class-method call is the construction, the bracket only
+            // aims it)
+            if let Some(&ctor) = self.ctx.class_ctors.get(&name) {
+                return self.compile_static_call(name, generics, ctor, vec![], args, expected, sp);
+            }
+            if d.kind == crate::check::DataKind::Class {
+                self.ctx.err(sp, format!(
+                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    self.ctx.name(name)
+                ));
+            } else {
+                self.ctx.err(sp, format!(
+                    "construction is a method call, never a type-call — use a struct literal `{} {{ .. }}`",
+                    self.ctx.name(name)
+                ));
+            }
             return Err(());
         }
         // a USED newtype class — the surface row's flag arms the same
@@ -373,6 +391,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // consumer manufactures the wrapper over the foreign value)
         if self.ctx.extern_newtypes.contains(&name) {
             return self.compile_extern_newtype_ctor(name, generics, args, expected, sp);
+        }
+        // a used/linked class's designated constructor — the marker
+        // byte crossed the surface row, the registry names the member:
+        // the identical lowering (`Point(..)` at a distance)
+        if let Some(&ctor) = self.ctx.class_ctors.get(&name) {
+            return self.compile_static_call(name, generics, ctor, vec![], args, expected, sp);
+        }
+        // a used type's miss — a known name, a known fix: the used
+        // class's construction is a (designated) class method, a used
+        // struct's a literal. An unknown name keeps the ordinary miss
+        // below.
+        if let Some(&t) = self.ctx.extern_types.get(&name) {
+            if self.ctx.extern_classes.contains(&t) {
+                self.ctx.err(sp, format!(
+                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    self.ctx.name(name)
+                ));
+            } else {
+                self.ctx.err(sp, format!(
+                    "construction is a method call, never a type-call — use a struct literal `{} {{ .. }}`",
+                    self.ctx.name(name)
+                ));
+            }
+            return Err(());
         }
         let msg = self
             .ctx

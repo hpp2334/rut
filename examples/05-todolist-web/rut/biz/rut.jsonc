@@ -29,14 +29,14 @@
       "path": "../ui"
     },
     // THE STD CLOSURE, from the CDN: pouch and nmapset ship as committed
-    // compiled bundles on jsDelivr at the std-v6 tag, sha256-pinned here
+    // compiled bundles on jsDelivr at the std-v7 tag, sha256-pinned here
     // (the pin is law at the mount door on every load). Both are GENERIC
     // owners — since the generic-source riding law their bundles carry
     // the source beside the binaries, so this app's consumer-spelled
     // shapes compile from the bundles at the link. The tests prime an
     // offline remote from the committed artifacts (dist/std plays the
     // wire), so the gates never network.
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v6/dist/std/pouch.rutbundle", "sha256": "55ef9c4be9ba7ae9d14f070e5c097b5c917c8dfd9106274f4568035468144dbe" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v6/dist/std/nmapset.rutbundle", "sha256": "2553f084ce207b82c9b5f23c9813daab5054b8a4d489ef84d915369152155901" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/pouch.rutbundle", "sha256": "49f9958c7cec1b6b3ab87aa8c87cddadf31461d8dc6cd2e66f3d6b7b140c389b" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/nmapset.rutbundle", "sha256": "ff8e542e73644cea0f2e117231a74179cbfcdaec98cbce577ab6c0c3c3c5fb1a" }
   }
 }

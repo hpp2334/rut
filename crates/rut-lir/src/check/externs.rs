@@ -372,10 +372,19 @@ impl<'a> Ctx<'a> {
 
     /// Bind a used class's inherent method surface (the
     /// linkable-classes phase): `methods` ride the surface verbatim,
-    /// each fn id scope-qualified with the exporter's scope.
+    /// each fn id scope-qualified with the exporter's scope. A
+    /// `[constructor]` byte on a row fills the designation registry —
+    /// the consumer's `Name(..)` fallback reads it (the marker crossed
+    /// the surface; the exporter's own gate proved the class law).
     pub fn add_extern_inherent(&mut self, target: TypeId, methods: Vec<rut_core::binary::SurfaceMethod>) {
         if methods.is_empty() {
             return;
+        }
+        let cname = self.types.type_at(target).name;
+        for m in &methods {
+            if m.marker == rut_core::binary::MARKER_CONSTRUCTOR {
+                self.class_ctors.insert(cname, m.name);
+            }
         }
         self.extern_inherents.push(ExternInherent { target, methods });
     }
