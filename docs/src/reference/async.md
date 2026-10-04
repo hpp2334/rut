@@ -33,7 +33,7 @@ use ink::{ Logger };
 use futures::{ launch_future, sleep };
 
 async fn countdown(n: u32) -> u32 {
-    let log = Logger.new("count");
+    let log = Logger("count");
     let mut i = n;
     while (i > 0) {
         await sleep(1000);            // the ONLY suspension point

@@ -29,7 +29,7 @@ enum Light { Green, Yellow, Red }
 enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4
 
 entry fn main() {
-    let log = Logger.new("enums");
+    let log = Logger("enums");
     log.info(f"{Light.Green} {Direction.Left} {Direction.Right}");
 }
 ```
@@ -74,7 +74,7 @@ struct Style {
 }
 
 entry fn main() {
-    let log = Logger.new("structs");
+    let log = Logger("structs");
     let p = Point { x: 1, y: 2 };                    // every field, by name
     let s = Style {};                                // defaults fill the rest
     let r = Rect { min: Point { x: 0, y: 0 }, max: p };
@@ -103,7 +103,7 @@ use ink::{ Logger };
 struct Point { x: f32; y: f32 }
 
 entry fn main() {
-    let log = Logger.new("sharing");
+    let log = Logger("sharing");
     let mut p = Point { x: 1, y: 2 };
     let q = p;              // q and p name ONE cell
     p.x = 4;                // q.x is 4 now
@@ -139,7 +139,7 @@ fn count(n: ?Node) -> i32 {
 }
 
 entry fn main() {
-    let log = Logger.new("nodes");
+    let log = Logger("nodes");
     let n = Node {
         value: 1,
         left: Node { value: 2, left: nil, right: nil },
@@ -183,7 +183,7 @@ impl Counter {
 }
 
 entry fn main() {
-    let log = Logger.new("counter");
+    let log = Logger("counter");
     let c = Counter.new();
     c.press();
     c.press();
@@ -232,7 +232,7 @@ impl Rect {
 }
 
 entry fn main() {
-    let log = Logger.new("rect");
+    let log = Logger("rect");
     let r = Rect.new(3, 4);
     let sq = Rect.from_square(2);
     log.info(f"area={r.area()} square={sq.area()}");
@@ -317,7 +317,7 @@ impl Rect {
 }
 
 entry fn main() {
-    let log = Logger.new("classes");
+    let log = Logger("classes");
     let c = Counter.new();
     c.press();
     c.press();

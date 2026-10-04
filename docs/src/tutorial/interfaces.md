@@ -51,7 +51,7 @@ impl Circle {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     let c = Circle { r: 1.0 };
     log.info(f"{c.name()}={c.area()}");
 }
@@ -105,7 +105,7 @@ impl Circle {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     let c = Circle.new(1.0);
     log.info(f"r={c.r}");
 }
@@ -152,7 +152,7 @@ fn describe(s: Shape) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     log.info(describe(Circle { r: 1.0 }));    // Circle satisfies: checked here
     log.info(describe(Square { side: 3.0 })); // and here
 }
@@ -200,7 +200,7 @@ impl Square {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     let s: Shape = Square { side: 2.0 };   // asserted and checked
     log.info(f"area={s.area()}");
 }
@@ -235,7 +235,7 @@ impl Square {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     let mut shapes: Vec<Shape> = Vec.new();   // each push checks
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
@@ -274,7 +274,7 @@ impl NumI64 {
 fn print_it(x: Show) -> str { return x.show(); }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     log.info(print_it(NumI64(64)));    // spelled manufacture
 }
 ```
@@ -320,7 +320,7 @@ impl Square {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
     let mut shapes: Vec<Shape> = Vec.new();
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 2.0 });
@@ -371,7 +371,7 @@ impl CountUp {
 }
 
 entry fn main() {
-    let log = Logger.new("iter");
+    let log = Logger("iter");
     let ups = CountUp { n: 4 };
     let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures
     for (let v of ups) {
@@ -426,7 +426,7 @@ fn describe(s: Shape) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("interfaces");
+    let log = Logger("interfaces");
 
     let c: Shape = Circle { r: 1.0 };        // satisfaction assertion
     log.info(describe(c));                    // single origin: static call

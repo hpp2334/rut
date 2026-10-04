@@ -11,7 +11,7 @@ view can never observe mutation, so no pointer spelling is needed.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let s = "hello world";
     let w = s.slice(6, 11);        // "world" — no copy
     log.info(w);
@@ -40,7 +40,7 @@ world
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let accented = "héllo!";
     log.info(f"{accented.len()} {accented.encode().len()} {accented.slice(1, 2)}");
 }

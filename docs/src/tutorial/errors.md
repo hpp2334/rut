@@ -27,7 +27,7 @@ struct Node {
 }
 
 entry fn main() {
-    let log = Logger.new("nodes");
+    let log = Logger("nodes");
     let n = Node { value: 1, left: nil, right: nil };
     log.info(f"left is nil: {n.left == nil}");
 }
@@ -46,8 +46,8 @@ use nmapset::{ HashMap };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("optional");
-    let mut scores: HashMap<str, i32> = HashMap.new();
+    let log = Logger("optional");
+    let mut scores: HashMap<str, i32> = HashMap();
     scores.put("rut", 41);
     let mut n = 0;
     let hit = scores.get("rut");      // ?i32
@@ -113,7 +113,7 @@ use json::{ decodeJson, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("json");
+    let log = Logger("json");
     let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
         log.info(f"n={n.get()}");
@@ -157,7 +157,7 @@ use json::{ decodeJson, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("json");
+    let log = Logger("json");
     let (bad, be) = decodeJson<JsonI64>("[1,2,3]");
     if (be != nil) {
         let why = be;
@@ -212,7 +212,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32 }
 
 entry fn main() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });
     let p = opaque.downcast<Point>(box1);   // ?Point
     when (p != nil) {
@@ -237,7 +237,7 @@ use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("json");
+    let log = Logger("json");
 
     // a successful decode: (value, nil)
     let (n, e) = decodeJson<JsonI64>("42");

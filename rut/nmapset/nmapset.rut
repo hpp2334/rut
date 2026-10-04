@@ -42,7 +42,7 @@ pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 }
 
 impl<K, V> HashMap<K, V> {
-    pub fn new() -> Self {
+    [constructor] pub fn new() -> Self {
         return HashMap.with_capacity(8);
     }
 
@@ -128,7 +128,7 @@ pub class HashSet<T requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 }
 
 impl<T> HashSet<T> {
-    pub fn new() -> Self {
+    [constructor] pub fn new() -> Self {
         return HashSet.with_capacity(8);
     }
 

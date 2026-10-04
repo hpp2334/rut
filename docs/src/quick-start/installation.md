@@ -173,7 +173,7 @@ cat > hello/main.rut <<'EOF'
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("hello");
+    let log = Logger("hello");
     log.info(f"hello, rut!");
 }
 EOF

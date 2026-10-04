@@ -28,7 +28,7 @@ fn length(pt: Point) -> f64 {
 }
 
 entry fn main() {
-    let log = Logger.new("fns");
+    let log = Logger("fns");
     let xs = Vec<i32>.from([1, 2, 3]);
     swap(xs, 0, 2);
     log.info(f"first={xs[0]} length={length(Point { x: 3, y: 4 })}");
@@ -58,7 +58,7 @@ types, which is what lets it inhabit a first-class `fn` type:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("closures");
+    let log = Logger("closures");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };
 
     let area_of = fn (r: f32) -> f32 {
@@ -86,7 +86,7 @@ fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
 }
 
 entry fn main() {
-    let log = Logger.new("fns");
+    let log = Logger("fns");
     let double = fn (x: i32) -> i32 { return x * 2; };
     log.info(f"apply={apply(double, 21)}");
 }
@@ -112,7 +112,7 @@ use pouch::{ Vec };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("cap");
+    let log = Logger("cap");
     let mut xs: Vec<i32> = Vec.new();
     xs.push(1);
     let len = fn() -> i32 { return xs.len(); };
@@ -140,7 +140,7 @@ fn first<T>(xs: [T], fallback: T) -> T {
 }
 
 entry fn main() {
-    let log = Logger.new("generics");
+    let log = Logger("generics");
     let head = first([10, 20], -1);      // first<i32> — inferred
     let name = first(["a", "b"], "?");   // first<str> — a separate instance
     log.info(f"head={head} name={name}");
@@ -186,7 +186,7 @@ fn name<T requires Labeled>(x: T) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("bounds");
+    let log = Logger("bounds");
     log.info(name(Tag { id: 7 }));
 }
 ```
@@ -225,7 +225,7 @@ fn nudged(pt: Point) -> Point {
 }
 
 entry fn main() {
-    let log = Logger.new("free-fns");
+    let log = Logger("free-fns");
     let p = nudged(Point { x: 2, y: 5 });
     log.info(f"p.x={p.x} p.y={p.y}");
 }
@@ -261,7 +261,7 @@ fn sum(xs: Vec<i32>) -> i32 {
 }
 
 entry fn main() {
-    let log = Logger.new("closures");
+    let log = Logger("closures");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };
     let area_of = fn (r: f32) -> f32 {
         let sq = r * r;

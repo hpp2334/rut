@@ -45,7 +45,7 @@ impl Conn {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let c = Conn { log: log, url: "tcp://edge" };
     log.info("main is done");
 }   // c's refcount reaches zero here; dispose runs at the call boundary
@@ -96,7 +96,7 @@ use ink::{ Logger };
 struct Tile { v: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let tile = Tile { v: 7 };
     let w = Weak.new(tile);        // does NOT keep the cell alive
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead

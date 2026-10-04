@@ -111,7 +111,7 @@ async fn run_race(log: Logger) -> nil {
 }
 
 entry fn main() {
-    let log = Logger.new("race");
+    let log = Logger("race");
     launch_future(run_race(log));
 }
 ```
@@ -164,7 +164,7 @@ async fn consume(log: Logger) -> nil {
 }
 
 entry fn main() {
-    let log = Logger.new("completer");
+    let log = Logger("completer");
     launch_future(consume(log));
 }
 ```

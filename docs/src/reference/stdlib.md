@@ -137,7 +137,7 @@ no-op — a script cannot accidentally spam an embedded host's stdout.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("app");
+    let log = Logger("app");
     log.info(f"started");
 }
 ```
@@ -145,6 +145,9 @@ entry fn main() {
 ```text
 started
 ```
+
+`Logger("app")` constructs through the designated `new` — the call
+form and `Logger.new("app")` are the same call.
 
 | method | level passed to `ink_host` |
 |---|---|
@@ -194,7 +197,7 @@ use flow::{ Flow, IntoFlow, FromFlow, VecFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
+    let log = Logger("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4);
     let src: VecFlow<i32> = VecFlow(nums);       // the spelled manufacture
@@ -237,7 +240,7 @@ state is one `opaque` handle, every method one host call.
 
 ```rut
 pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {
-    pub fn new() -> Self;
+    [constructor] pub fn new() -> Self;
     pub fn with_capacity(n: i32) -> Self;
     pub fn put(mut self, k: K, v: V) -> bool;      // true = newly inserted
     pub fn get(self, k: K) -> ?V;                  // the STORED cell, not a copy
@@ -247,6 +250,10 @@ pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 }
 pub class HashSet<T requires ..same key set..> { new, with_capacity, put, has, remove, len }
 ```
+
+Both classes designate `new` — `HashMap()` / `HashSet()` spell the
+construction (the same call as `HashMap.new()` / `HashSet.new()`);
+`with_capacity` stays a named constructor.
 
 Laws: the key set is closed (no floats — no stable equality; encode a
 custom key canonically to `bytes`); `get` answers the stored cell, so two
@@ -263,7 +270,7 @@ use calc::{ Math };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let x = 3.0f64;
     let y = 4.0f64;
     let d = Math.sqrt(x * x + y * y);
@@ -360,7 +367,7 @@ use ink::{ Logger };
 use strbuild::{ StringBuilder };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let k = "name";
     let mut b = StringBuilder.with_cap(1024);   // octet hint
     b.append(f"{k}=");
@@ -376,7 +383,7 @@ name=!
 
 | member | meaning |
 |---|---|
-| `new()` | grow from small |
+| `new()` | grow from small — the designated `[constructor]`: `StringBuilder()` spells it |
 | `with_cap(cap: i32)` | pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap) |
 | `append(mut self, value: str)` | amortized O(\|s\|), in place |
 | `append_code(mut self, cp: u32)` | one codepoint; invalid scalars mint U+FFFD |
@@ -411,12 +418,13 @@ For the common accumulator shape no builder is needed at all:
 - `http_host` declares the transport rows (three async, five sync
   readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` /
   `Request` / `Response` / `ByteStream` — async only at the points that
-  really wait:
+  really wait, and `HttpClient()` constructs through the designated
+  `new`:
 
   ```rut
   use http::{ HttpClient, ClientQueryMethod };
 
-  let resp = await HttpClient.new().request()
+  let resp = await HttpClient().request()
       .method(ClientQueryMethod.Post)
       .url("https://example.com/api")
       .header("Accept", "application/json")

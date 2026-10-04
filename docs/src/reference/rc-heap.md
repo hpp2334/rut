@@ -62,7 +62,7 @@ impl Audit {
 }
 
 fn work() {
-    let log = Logger.new("work");
+    let log = Logger("work");
     let buf = Audit { log: log, n: 4 };
     log.info("working — 4 octets in flight");
 }   // buf's count reaches zero here

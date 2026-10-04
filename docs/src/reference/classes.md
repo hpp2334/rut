@@ -29,7 +29,7 @@ impl Rect {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let r = Rect.from_square(3);
     log.info(f"area={r.area()}");
 }
@@ -51,7 +51,11 @@ area=9
   `new` is not special syntax — just the conventional primary-constructor
   name (`from`, `parse`, `open`, `default` are its siblings); it is an
   ordinary identifier. Try-construction returns the nullable: a class
-  method `fn parse(s: str) -> ?Version` answers `nil` on failure.
+  method `fn parse(s: str) -> ?Version` answers `nil` on failure. A
+  class may designate its primary constructor with `[constructor]` —
+  then the call form spells the construction too: std's `Logger("t")`
+  is the same call as `Logger.new("t")` (the `[constructor]` section
+  below).
 
 - **The `Self { field: expr, .. }` literal is the class-private
   construction** — legal anywhere inside the class body (class methods
@@ -106,7 +110,7 @@ impl Point {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let p = Point(1.0, 2.0);      // sugar for Point.from_xy(1.0, 2.0)
     log.info(f"p=({p.x}, {p.y})");
 }

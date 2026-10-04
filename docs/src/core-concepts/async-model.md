@@ -32,7 +32,7 @@ async fn countdown(log: Logger, n: u32) -> nil {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("countdown");
+    let log = Logger("countdown");
     launch_future(countdown(log, 3));  // the other consume: launch
 }
 ```

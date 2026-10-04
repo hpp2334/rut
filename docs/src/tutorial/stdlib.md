@@ -36,7 +36,7 @@ trap on overflow; these never do:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("ladder");
+    let log = Logger("ladder");
     let mut v: u8 = 250;
     v = v.wrapping_add(10);            // 4 — two's-complement wrap
     let over = 200u8.checked_add(100); // (44, false) — .1 false = escaped
@@ -58,7 +58,7 @@ way. Pick per call site: a checksum wraps, a length checks.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("str");
+    let log = Logger("str");
     let s = "héllo rut";
     log.info(f"len={s.len()} first={s.code()}");
     log.info(f"at1={s.code_at(1)} octets={s.encode().len()}");
@@ -94,7 +94,7 @@ table. See [string slicing and views](../reference/string-views.md).
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("bytes");
+    let log = Logger("bytes");
     let b = "rut runs".encode();
     log.info(f"len={b.len()} decode={b.decode()}");
     let copy = b.clone();     // the ONLY copy escape hatch
@@ -141,7 +141,7 @@ use pouch::{ Vec };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("pouch");
+    let log = Logger("pouch");
     let mut xs: Vec<i32> = Vec.new();         // or Vec.with_capacity(64)
     xs.push(10);                              // amortized O(1)
     let v = Vec<f32>.filled(0.0, 1024);       // n slots of one value
@@ -174,8 +174,8 @@ use nmapset::{ HashMap, HashSet };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("nmapset");
-    let mut counts: HashMap<str, i32> = HashMap.new();
+    let log = Logger("nmapset");
+    let mut counts: HashMap<str, i32> = HashMap();
     let fresh = counts.put("rut", 1);          // answers true when the key was NEWLY added
     let mut n = 0;
     let hit = counts.get("rut");   // ?i32 — nil means absent
@@ -184,7 +184,7 @@ entry fn main() {
     let gone = counts.remove("runs");         // answers whether it was there
     let size = counts.len();
 
-    let mut seen: HashSet<str> = HashSet.new();
+    let mut seen: HashSet<str> = HashSet();
     let first = seen.put("x");     // true — newly added
     let again = seen.put("x");     // false
     log.info(f"fresh={fresh} n={n} has={there} removed={gone} len={size}");
@@ -201,7 +201,9 @@ Keys come from a fixed set — integers, `bool`, `str`, `bytes` (no
 floats: they have no stable equality contract) — hashed by the host; a
 user-defined key escapes by encoding canonically to `bytes`. A hit
 returns the stored cell, not a copy. There is no iteration surface:
-maps and sets answer questions, they don't walk.
+maps and sets answer questions, they don't walk. Construction spells
+the call form — `HashMap()` / `HashSet()` are the designated `new`
+(the same call as `HashMap.new()`); `with_capacity(n)` stays named.
 
 ## `flow` — the push pipeline
 
@@ -219,7 +221,7 @@ use flow::{ Flow, IntoFlow, FromFlow, VecFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
+    let log = Logger("flow");
     let nums: Vec<i32> = Vec.new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
 
@@ -276,9 +278,9 @@ use strbuild::{ StringBuilder };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("strbuild");
+    let log = Logger("strbuild");
     let n = 3;
-    let mut b = StringBuilder.new();     // or StringBuilder.with_cap(1024)
+    let mut b = StringBuilder();     // or StringBuilder.with_cap(1024)
     b.append("count: ");
     b.append_code(33);                   // one codepoint
     b.append(f" up to {n}");             // appends are amortized O(1)
@@ -291,6 +293,9 @@ entry fn main() {
 count: ! up to 3
 ```
 
+`StringBuilder()` is the designated `new` (the same call as
+`StringBuilder.new()`); `with_cap(n)` pre-sizes and stays named.
+
 Every `out = f"{out}{chunk}"` loop copies the whole prefix each time;
 the builder appends into one growable cell and copies once, at
 `build()`.
@@ -302,7 +307,7 @@ use calc::{ Math };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("calc");
+    let log = Logger("calc");
     let x: f64 = -2.0;
     let a: f64 = 3.0;
     let b: f64 = 7.0;
@@ -330,7 +335,7 @@ use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("json");
+    let log = Logger("json");
     let (n, e) = decodeJson<JsonI64>("42");           // (?JsonI64, ?E) — see errors
     let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));
     if (e == nil && ee == nil) {
@@ -368,7 +373,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let n = 3;
-    let log = Logger.new("app");
+    let log = Logger("app");
     log.info(f"started with {n} items");
     log.debug("..."); log.warn("..."); log.error("...");
 }
@@ -405,7 +410,7 @@ use ink::{ Logger };
 fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 
 entry fn main() {
-    let log = Logger.new("std");
+    let log = Logger("std");
 
     // Vec: build, pop, read
     let mut v: Vec<i32> = Vec.new();
@@ -420,7 +425,7 @@ entry fn main() {
     log.info(f"joined={string_join(parts.as_array())}");
 
     // StringBuilder: amortized appends, one materialization
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder();
     b.append("count: ");
     b.append_code(33);
     b.append(f" up to {v.len()}");

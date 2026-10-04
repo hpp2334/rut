@@ -12,7 +12,7 @@ pub class Logger {
 }
 
 impl Logger {
-    pub fn new(name: str) -> Self {
+    [constructor] pub fn new(name: str) -> Self {
         return Self { internal: create_logger(name) };
     }
 

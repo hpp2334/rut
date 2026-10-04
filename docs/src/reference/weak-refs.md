@@ -48,7 +48,7 @@ impl Node {
 }
 
 fn use_node(n: Node) {
-    let log = Logger.new("t");
+    let log = Logger("t");
     log.info(f"node {n.value}");
 }
 
@@ -89,7 +89,7 @@ node 1
   fn make() -> Payload { return Payload { n: 1 }; }
 
   entry fn main() {
-      let log = Logger.new("t");
+      let log = Logger("t");
       let v = make();
       let w = Weak.new(v);  // watches the binding v — lives as long as v does
       log.info(f"{w.upgrade() != nil}");

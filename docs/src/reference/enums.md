@@ -19,7 +19,7 @@ enum Color { Red, Green, Blue }              // 0, 1, 2
 enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     log.info(f"{Color.Blue} {Direction.Right}");
 }
 ```
@@ -45,7 +45,7 @@ use ink::{ Logger };
 enum Light { Red, Yellow, Green }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let l = Light.Yellow;
     log.info(f"{l == Light.Yellow}");   // true — members are immortal singleton cells
 }
@@ -70,9 +70,9 @@ use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-fn go() { let log = Logger.new("t"); log.info("go"); }
-fn brake() { let log = Logger.new("t"); log.info("brake"); }
-fn stop() { let log = Logger.new("t"); log.info("stop"); }
+fn go() { let log = Logger("t"); log.info("go"); }
+fn brake() { let log = Logger("t"); log.info("brake"); }
+fn stop() { let log = Logger("t"); log.info("stop"); }
 
 entry fn main() {
     let l = Light.Yellow;
@@ -111,7 +111,7 @@ impl Dial {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let d = Dial.default().flipped();
     log.info(when (d) {
         Dial.Low  -> "low",
@@ -157,7 +157,7 @@ impl Light {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     for (let l of Light.Red) {
         log.info(f"{l}");
     }

@@ -13,7 +13,7 @@ Braces are always required, whatever the body length:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("flow");
+    let log = Logger("flow");
     for (let hits of [0, 5, 12]) {
         let mut first = false;
         let mut warm = false;
@@ -47,7 +47,7 @@ no parenthesized-assignment footgun.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("sieve");
+    let log = Logger("sieve");
     let i = 2;
     let limit = 12;
     let mut marks = [0; 16];
@@ -74,7 +74,7 @@ the loop calls that ONE designated member; see
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("loops");
+    let log = Logger("loops");
     let mut n = 0;
     for (let w of ["rut", "runs", "rut"]) {
         // w is a str
@@ -99,7 +99,7 @@ the update clause (and the body) may assign it without `mut`.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("loops");
+    let log = Logger("loops");
     let xs = [3, 1, 4];
     let n = xs.len();
     let mut total = 0;
@@ -134,7 +134,7 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 }
 
 entry fn main() {
-    let log = Logger.new("swap");
+    let log = Logger("swap");
     let xs = Vec<i32>.from([1, 2, 3]);
     swap(xs, 0, 2);
     log.info(f"first={xs[0]} last={xs[2]}");
@@ -162,7 +162,7 @@ fn classify(n: i32) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("when");
+    let log = Logger("when");
     for (let n of [0, 2, 9]) {
         log.info(f"{n}: {classify(n)}");
     }
@@ -182,9 +182,9 @@ use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-fn go()    { Logger.new("light").info("go"); }
-fn brake() { Logger.new("light").info("brake"); }
-fn stop()  { Logger.new("light").info("stop"); }
+fn go()    { Logger("light").info("go"); }
+fn brake() { Logger("light").info("brake"); }
+fn stop()  { Logger("light").info("stop"); }
 
 entry fn main() {
     let l = Light.Yellow;
@@ -223,9 +223,9 @@ use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-fn go()    { Logger.new("light").info("go"); }
-fn brake() { Logger.new("light").info("brake"); }
-fn stop()  { Logger.new("light").info("stop"); }
+fn go()    { Logger("light").info("go"); }
+fn brake() { Logger("light").info("brake"); }
+fn stop()  { Logger("light").info("stop"); }
 
 fn drive(l: Light) {
     when (l) {
@@ -244,7 +244,7 @@ fn describe(n: i32) -> str {
 
 entry fn main() {
     drive(Light.Red);
-    let log = Logger.new("light");
+    let log = Logger("light");
     log.info(describe(0));
     log.info(describe(7));
 }
@@ -264,7 +264,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32 }
 
 entry fn main() {
-    let log = Logger.new("nullable");
+    let log = Logger("nullable");
     let p: ?Point = Point { x: 1, y: 2 };
     when (p != nil) {
         true -> { log.info(f"point {p.x} {p.y}"); },
@@ -300,7 +300,7 @@ fn light_for(i: i32) -> Light {
 }
 
 entry fn main() {
-    let log = Logger.new("light");
+    let log = Logger("light");
     log.info(f"{light_for(0)} {light_for(1)} {light_for(5)}");
 }
 ```
@@ -341,7 +341,7 @@ fn classify(n: i32) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("lights");
+    let log = Logger("lights");
 
     for (let n of [0, 2, 9]) {
         log.info(f"{n}: {classify(n)}");

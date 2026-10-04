@@ -16,7 +16,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let xs: [i32] = [1, 2, 3];   // the literal allocates the cell
     let ys: [?Point] = [nil; 4]; // the repeat: a VALUE and a count
     log.info(f"{xs.len()} {ys.len()}");
@@ -122,7 +122,7 @@ use ink::{ Logger };
 struct Tile { v: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let tile = Tile { v: 7 };
     let w = Weak.new(tile);        // the class-method construction
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead

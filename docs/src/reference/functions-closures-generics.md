@@ -13,7 +13,7 @@ fn add(a: i32, b: i32) -> i32 {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     log.info(f"{add(2, 3)}");
 }
 ```
@@ -45,7 +45,7 @@ form:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };
     let area_of = fn (r: f32) -> f32 {
         let sq = r * r;
@@ -86,7 +86,7 @@ fn first<T>(xs: [T], fallback: T) -> T {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let head = first([10, 20], -1);      // first<i32>   — monomorphized
     let name = first(["a", "b"], "?");   // first<str>   — separate instance
     log.info(f"{head} {name}");

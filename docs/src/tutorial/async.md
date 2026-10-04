@@ -92,7 +92,7 @@ construction sugar:
 ```rut
 use http::{ HttpClient };
 
-let client = HttpClient.new();
+let client = HttpClient();
 let resp = await client.get(url).build().send();
 ```
 
@@ -199,7 +199,7 @@ async fn countdown(log: Logger, n: u32) {
 }
 
 entry fn main() {
-    let log = Logger.new("countdown");
+    let log = Logger("countdown");
     launch_future(countdown(log, 3));
 }
 ```

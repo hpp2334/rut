@@ -31,7 +31,7 @@ iterates as one-codepoint `str`s, and codepoints read as `u32`
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("vars");
+    let log = Logger("vars");
     let a = 10;          // an immutable binding
     let mut b = 10;      // a mutable binding
     b = 20;              // OK — b may be reassigned
@@ -64,7 +64,7 @@ the expected type only while it fits the default.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("numbers");
+    let log = Logger("numbers");
     let a = 10;                        // i32
     let b = 10u8;                      // u8 via suffix
     let c: u64 = 10;                   // u64 via annotation — 10 fits
@@ -87,7 +87,7 @@ they never trap.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("casts");
+    let log = Logger("casts");
     let cast = 300 as u8;   // 44 — keeps the low 8 bits
     log.info(f"cast={cast}");
 }
@@ -116,7 +116,7 @@ ever happens implicitly.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("text");
+    let log = Logger("text");
     let name = "rut";
     let s = "hi\tname";              // plain: escapes processed
     let raw = r"C:\temp\log.txt";    // raw: every byte is literal
@@ -138,7 +138,7 @@ identifiers, calls, arithmetic — except nested string literals
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("text");
+    let log = Logger("text");
     log.info(f"open{{close}} braces");   // prints: open{close} braces
 }
 ```
@@ -162,7 +162,7 @@ The fixed array `[T]` is built from a literal or a repeat:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("arrays");
+    let log = Logger("arrays");
     let arr = [1, 2, 3];         // [i32] — fixed length
     let zero: [u8] = [0u8; 34];  // 34 slots of 0
     log.info(f"len={arr.len()} first={arr[0]} zero.len={zero.len()}");
@@ -187,7 +187,7 @@ for the full surface.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("bytes");
+    let log = Logger("bytes");
     let b = "rut runs".encode();
     let ok = b.decode() == "rut runs";   // true — content comparison
     log.info(f"len={b.len()} roundtrip={ok}");
@@ -211,7 +211,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32 }
 
 entry fn main() {
-    let log = Logger.new("sharing");
+    let log = Logger("sharing");
     let mut p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
     p.x = 4;            // q.x is 4 now
@@ -250,7 +250,7 @@ fn divmod(a: i32, b: i32) -> (i32, i32) {
 }
 
 entry fn main() {
-    let log = Logger.new("tuples");
+    let log = Logger("tuples");
     let (q, r) = divmod(17, 5);   // destructuring
     let t = (1, true);
     log.info(f"q={q} r={r} t.0={t.0}");
@@ -292,7 +292,7 @@ use ink::{ Logger };
 struct Point { x: f32; y: f32 }
 
 fn literals(name: str) {
-    let log = Logger.new("literals");
+    let log = Logger("literals");
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix
     let c: u64 = 10;                 // u64 via annotation — fits the default

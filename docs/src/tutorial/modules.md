@@ -33,7 +33,7 @@ let app_name = "app";                  // any literal works
 fn main_body() { /* statements live here */ }
 
 entry fn main() {
-    let log = Logger.new("app");
+    let log = Logger("app");
     let origin = Point { x: 0, y: 0 }; // record literals live in function bodies
     log.info(f"{app_name} v{version} origin.x={origin.x}");
 }
@@ -167,7 +167,7 @@ use greet::{ Greeting };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("app");
+    let log = Logger("app");
     let mut g = Greeting.new("rut");
     g.add("hello");
     g.add("from a package");

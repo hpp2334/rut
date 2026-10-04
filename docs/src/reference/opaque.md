@@ -24,7 +24,7 @@ struct Point { x: i32; y: i32; }
 enum Flavor { Sour, Sweet }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name
     let p = opaque.downcast<Point>(box1);      // ?Point — the nullable
     when (p != nil) {
@@ -55,7 +55,7 @@ wrong == nil: true
   use ink::{ Logger };
 
   entry fn main() {
-      let log = Logger.new("t");
+      let log = Logger("t");
       let mut n = 5;
       let b = opaque(n);    // a prim payload COPIES the bits
       n = 9;                // ...so the source moving stays out
@@ -87,7 +87,7 @@ wrong == nil: true
   use ink::{ Logger };
 
   entry fn main() {
-      let log = Logger.new("t");
+      let log = Logger("t");
       let b = opaque("hello");
       log.info(f"{b is str} {opaque.downcast<str>(b) != nil}");
   }
@@ -115,7 +115,7 @@ use pouch::{ Vec };
 struct Point { x: i32; y: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two")];
     let vec: Vec<opaque> = Vec.from([opaque(5)]);
     log.info(f"{boxes.len()} {vec.len()}");

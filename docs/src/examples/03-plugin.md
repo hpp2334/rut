@@ -152,7 +152,7 @@ entry fn render_line(topic: str, payload: str) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("bus");
+    let log = Logger("bus");
     log.info(render_line("broadcast", "<ada> hello world"));
 }
 ```

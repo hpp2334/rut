@@ -108,7 +108,7 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) {
 }
 
 entry fn main() {
-    let log = Logger.new("sort");
+    let log = Logger("sort");
     let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 
@@ -146,7 +146,7 @@ struct Point { x: f32; y: f32 }
 enum Flavor { Sweet, Sour }
 
 fn erase_and_recover() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
     let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
     let box3 = opaque("hello");

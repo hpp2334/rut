@@ -61,7 +61,7 @@ impl Point {
 }
 
 entry fn main() {
-    let log = Logger.new("areas");
+    let log = Logger("areas");
     let p = Point { x: 3, y: 4 };
     log.info(f"area = {p.area()}");     // a concrete receiver: static
 }
@@ -127,7 +127,7 @@ impl Canvas {
 fn blit(g: Canvas, s: Area) { g.render(s.area()); }   // a parameter over any Area
 
 entry fn main() {
-    let log = Logger.new("shapes");
+    let log = Logger("shapes");
     let g = Canvas { log: log };
     let mut mixed: Vec<Area> = Vec.new();   // heterogeneous storage
     mixed.push(Circle { r: 1.0 });
@@ -235,7 +235,7 @@ impl CountUp {
 }
 
 entry fn main() {
-    let log = Logger.new("iter");
+    let log = Logger("iter");
     for (let v of CountUp { n: 3 }) {
         log.info(f"tick {v}");
     }

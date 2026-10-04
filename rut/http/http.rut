@@ -57,7 +57,7 @@ pub class HttpClient {
 }
 
 impl HttpClient {
-    pub fn new() -> Self {
+    [constructor] pub fn new() -> Self {
         return Self { c: opaque(nil) };
     }
 

@@ -26,7 +26,7 @@ use ink::{ Logger };
 struct Node { next: ?Node }
 
 entry fn main() {
-    let log = Logger.new("cells");
+    let log = Logger("cells");
     let a: ?Node = Node { next: nil };
     let b = a;              // one retain
     log.info(f"a == b: {a == b}");   // one cell — it dies when the LAST of a, b goes away
@@ -83,7 +83,7 @@ impl Connection {
 }
 
 entry fn main() {
-    let log = Logger.new("rc");
+    let log = Logger("rc");
     let conn = Connection.open("tcp://edge", log);
     log.info("main is done — the count hits zero at the boundary");
 }
@@ -131,7 +131,7 @@ class View {
 }
 
 entry fn main() {
-    let log = Logger.new("rc");
+    let log = Logger("rc");
     let mut m = Model { name: "doc" };
     let v = View { model: nil, observer: Weak.new(m) };   // observe without owning
     log.info(f"holding {m.name}; the view holds only a weak edge");

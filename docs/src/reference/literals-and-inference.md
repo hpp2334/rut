@@ -14,7 +14,7 @@ expected type only while it fits that default.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let a = 10;                // i32 (default)
     let b = 10u8;              // u8 via suffix
     let c: u64 = 10;           // u64 via annotation — fits the default
@@ -50,7 +50,7 @@ use calc::{ Math };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let cast = 300 as u8;      // 44
     let x = 3;
     let y = 4;
@@ -89,7 +89,7 @@ fn divmod(a: i32, b: i32) -> (i32, i32) {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let pair = (1, "two");         // (i32, str)
     let (n, s) = pair;
     log.info(f"{n} {s} {divmod(7, 2).0}");

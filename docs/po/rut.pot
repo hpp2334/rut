@@ -2,7 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00
+"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -399,7 +400,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sieve\");\n"
+"    let log = Logger(\"sieve\");\n"
 "    let primes = sieve(100);\n"
 "    log.info(f\"{primes.len()} primes up to 100, last={primes[primes.len() - "
 "1]}\");\n"
@@ -737,7 +738,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"hello\");\n"
+"    let log = Logger(\"hello\");\n"
 "    log.info(f\"hello, rut!\");\n"
 "}\n"
 "EOF\n"
@@ -818,7 +819,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"hello\");\n"
+"    let log = Logger(\"hello\");\n"
 "    let name = \"rut\";\n"
 "    log.info(f\"hello, {name}!\");\n"
 "}\n"
@@ -885,29 +886,36 @@ msgstr ""
 
 #: src/quick-start/first-program.md:69
 msgid ""
+"**`Logger(\"hello\")`** constructs the logger through the class's designated "
+"`[constructor]` member — the same call as `Logger.new(\"hello\")`, spelled "
+"as the call form ([classes](../reference/classes.md))."
+msgstr ""
+
+#: src/quick-start/first-program.md:73
+msgid ""
 "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any "
 "expression, rendered through the value's display contract."
 msgstr ""
 
-#: src/quick-start/first-program.md:72
+#: src/quick-start/first-program.md:76
 msgid "`entry fn main()` is the entry the CLI calls."
 msgstr ""
 
-#: src/quick-start/first-program.md:74
+#: src/quick-start/first-program.md:78
 msgid "Values, briefly"
 msgstr ""
 
-#: src/quick-start/first-program.md:76
+#: src/quick-start/first-program.md:80
 msgid "Extend the file — rut infers, and every type is known at compile time:"
 msgstr ""
 
-#: src/quick-start/first-program.md:78
+#: src/quick-start/first-program.md:82
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"hello\");\n"
+"    let log = Logger(\"hello\");\n"
 "    let n = 10;            // i32 — the integer default\n"
 "    let scale = 1.5;       // f32 — the float default\n"
 "    let big: u64 = 10;     // u64 via annotation — fits the default\n"
@@ -921,7 +929,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/quick-start/first-program.md:99
+#: src/quick-start/first-program.md:103
 msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values "
 "and variables](../tutorial/values-and-variables.md) tutorial, and the exact "
@@ -929,44 +937,44 @@ msgid ""
 "inference](../reference/literals-and-inference.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:104
+#: src/quick-start/first-program.md:108
 msgid "Format"
 msgstr ""
 
-#: src/quick-start/first-program.md:106
+#: src/quick-start/first-program.md:110
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:109 src/reference/cli.md:75
+#: src/quick-start/first-program.md:113 src/reference/cli.md:75
 msgid "# rewrite in place\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:110
+#: src/quick-start/first-program.md:114
 msgid "# verify only (note: --check goes AFTER the path)\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:111
+#: src/quick-start/first-program.md:115
 msgid "# walk a directory tree, every *.rut file\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:114
+#: src/quick-start/first-program.md:118
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs "
 "changes, which makes it a clean CI gate. A file that does not parse is "
 "refused loudly rather than half-formatted."
 msgstr ""
 
-#: src/quick-start/first-program.md:118
+#: src/quick-start/first-program.md:122
 msgid "Inspect"
 msgstr ""
 
-#: src/quick-start/first-program.md:120
+#: src/quick-start/first-program.md:124
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a "
 "snippet behaves differently than you expect:"
 msgstr ""
 
-#: src/quick-start/first-program.md:127
+#: src/quick-start/first-program.md:131
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the "
 "packages, so it is the tool for surface questions (\"what does this lower "
@@ -974,15 +982,15 @@ msgid ""
 "panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:133
+#: src/quick-start/first-program.md:137
 msgid "Budget it"
 msgstr ""
 
-#: src/quick-start/first-program.md:135
+#: src/quick-start/first-program.md:139
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr ""
 
-#: src/quick-start/first-program.md:141
+#: src/quick-start/first-program.md:145
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — "
 "the same contract the VM enforces for embedded hosts, along with heap "
@@ -990,23 +998,23 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:146
+#: src/quick-start/first-program.md:150
 msgid "Where next"
 msgstr ""
 
-#: src/quick-start/first-program.md:148
+#: src/quick-start/first-program.md:152
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
 msgstr ""
 
-#: src/quick-start/first-program.md:150
+#: src/quick-start/first-program.md:154
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
 msgstr ""
 
-#: src/quick-start/first-program.md:152
+#: src/quick-start/first-program.md:156
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
@@ -1253,7 +1261,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"vars\");\n"
+"    let log = Logger(\"vars\");\n"
 "    let a = 10;          // an immutable binding\n"
 "    let mut b = 10;      // a mutable binding\n"
 "    b = 20;              // OK — b may be reassigned\n"
@@ -1296,7 +1304,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"numbers\");\n"
+"    let log = Logger(\"numbers\");\n"
 "    let a = 10;                        // i32\n"
 "    let b = 10u8;                      // u8 via suffix\n"
 "    let c: u64 = 10;                   // u64 via annotation — 10 fits\n"
@@ -1322,7 +1330,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"casts\");\n"
+"    let log = Logger(\"casts\");\n"
 "    let cast = 300 as u8;   // 44 — keeps the low 8 bits\n"
 "    log.info(f\"cast={cast}\");\n"
 "}\n"
@@ -1364,7 +1372,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"text\");\n"
+"    let log = Logger(\"text\");\n"
 "    let name = \"rut\";\n"
 "    let s = \"hi\\tname\";              // plain: escapes processed\n"
 "    let raw = r\"C:\\temp\\log.txt\";    // raw: every byte is literal\n"
@@ -1388,7 +1396,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"text\");\n"
+"    let log = Logger(\"text\");\n"
 "    log.info(f\"open{{close}} braces\");   // prints: open{close} braces\n"
 "}\n"
 "```"
@@ -1418,7 +1426,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"arrays\");\n"
+"    let log = Logger(\"arrays\");\n"
 "    let arr = [1, 2, 3];         // [i32] — fixed length\n"
 "    let zero: [u8] = [0u8; 34];  // 34 slots of 0\n"
 "    log.info(f\"len={arr.len()} first={arr[0]} zero.len={zero.len()}\");\n"
@@ -1447,7 +1455,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"bytes\");\n"
+"    let log = Logger(\"bytes\");\n"
 "    let b = \"rut runs\".encode();\n"
 "    let ok = b.decode() == \"rut runs\";   // true — content comparison\n"
 "    log.info(f\"len={b.len()} roundtrip={ok}\");\n"
@@ -1474,7 +1482,7 @@ msgid ""
 "struct Point { x: i32; y: i32 }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sharing\");\n"
+"    let log = Logger(\"sharing\");\n"
 "    let mut p = Point { x: 1, y: 2 };\n"
 "    let q = p;          // q and p name ONE cell\n"
 "    p.x = 4;            // q.x is 4 now\n"
@@ -1553,7 +1561,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"tuples\");\n"
+"    let log = Logger(\"tuples\");\n"
 "    let (q, r) = divmod(17, 5);   // destructuring\n"
 "    let t = (1, true);\n"
 "    log.info(f\"q={q} r={r} t.0={t.0}\");\n"
@@ -1571,7 +1579,7 @@ msgstr ""
 #: src/tutorial/functions.md:242 src/tutorial/types.md:278
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:257 src/tutorial/async.md:185
-#: src/tutorial/stdlib.md:396
+#: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr ""
 
@@ -1616,7 +1624,7 @@ msgid ""
 "struct Point { x: f32; y: f32 }\n"
 "\n"
 "fn literals(name: str) {\n"
-"    let log = Logger.new(\"literals\");\n"
+"    let log = Logger(\"literals\");\n"
 "    let a = 10;                      // i32 (default)\n"
 "    let b = 10u8;                    // u8 via suffix\n"
 "    let c: u64 = 10;                 // u64 via annotation — fits the "
@@ -1676,7 +1684,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"flow\");\n"
+"    let log = Logger(\"flow\");\n"
 "    for (let hits of [0, 5, 12]) {\n"
 "        let mut first = false;\n"
 "        let mut warm = false;\n"
@@ -1714,7 +1722,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sieve\");\n"
+"    let log = Logger(\"sieve\");\n"
 "    let i = 2;\n"
 "    let limit = 12;\n"
 "    let mut marks = [0; 16];\n"
@@ -1743,7 +1751,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"loops\");\n"
+"    let log = Logger(\"loops\");\n"
 "    let mut n = 0;\n"
 "    for (let w of [\"rut\", \"runs\", \"rut\"]) {\n"
 "        // w is a str\n"
@@ -1772,7 +1780,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"loops\");\n"
+"    let log = Logger(\"loops\");\n"
 "    let xs = [3, 1, 4];\n"
 "    let n = xs.len();\n"
 "    let mut total = 0;\n"
@@ -1814,7 +1822,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"swap\");\n"
+"    let log = Logger(\"swap\");\n"
 "    let xs = Vec<i32>.from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
 "    log.info(f\"first={xs[0]} last={xs[2]}\");\n"
@@ -1846,7 +1854,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"when\");\n"
+"    let log = Logger(\"when\");\n"
 "    for (let n of [0, 2, 9]) {\n"
 "        log.info(f\"{n}: {classify(n)}\");\n"
 "    }\n"
@@ -1865,9 +1873,9 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"fn go()    { Logger.new(\"light\").info(\"go\"); }\n"
-"fn brake() { Logger.new(\"light\").info(\"brake\"); }\n"
-"fn stop()  { Logger.new(\"light\").info(\"stop\"); }\n"
+"fn go()    { Logger(\"light\").info(\"go\"); }\n"
+"fn brake() { Logger(\"light\").info(\"brake\"); }\n"
+"fn stop()  { Logger(\"light\").info(\"stop\"); }\n"
 "\n"
 "entry fn main() {\n"
 "    let l = Light.Yellow;\n"
@@ -1922,9 +1930,9 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"fn go()    { Logger.new(\"light\").info(\"go\"); }\n"
-"fn brake() { Logger.new(\"light\").info(\"brake\"); }\n"
-"fn stop()  { Logger.new(\"light\").info(\"stop\"); }\n"
+"fn go()    { Logger(\"light\").info(\"go\"); }\n"
+"fn brake() { Logger(\"light\").info(\"brake\"); }\n"
+"fn stop()  { Logger(\"light\").info(\"stop\"); }\n"
 "\n"
 "fn drive(l: Light) {\n"
 "    when (l) {\n"
@@ -1944,7 +1952,7 @@ msgid ""
 "\n"
 "entry fn main() {\n"
 "    drive(Light.Red);\n"
-"    let log = Logger.new(\"light\");\n"
+"    let log = Logger(\"light\");\n"
 "    log.info(describe(0));\n"
 "    log.info(describe(7));\n"
 "}\n"
@@ -1963,7 +1971,7 @@ msgid ""
 "struct Point { x: i32; y: i32 }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"nullable\");\n"
+"    let log = Logger(\"nullable\");\n"
 "    let p: ?Point = Point { x: 1, y: 2 };\n"
 "    when (p != nil) {\n"
 "        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
@@ -2006,7 +2014,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"light\");\n"
+"    let log = Logger(\"light\");\n"
 "    log.info(f\"{light_for(0)} {light_for(1)} {light_for(5)}\");\n"
 "}\n"
 "```"
@@ -2044,7 +2052,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"lights\");\n"
+"    let log = Logger(\"lights\");\n"
 "\n"
 "    for (let n of [0, 2, 9]) {\n"
 "        log.info(f\"{n}: {classify(n)}\");\n"
@@ -2101,7 +2109,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"fns\");\n"
+"    let log = Logger(\"fns\");\n"
 "    let xs = Vec<i32>.from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
 "    log.info(f\"first={xs[0]} length={length(Point { x: 3, y: 4 })}\");\n"
@@ -2139,7 +2147,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"closures\");\n"
+"    let log = Logger(\"closures\");\n"
 "    let add = fn (a: i32, b: i32) -> i32 { return a + b; };\n"
 "\n"
 "    let area_of = fn (r: f32) -> f32 {\n"
@@ -2168,7 +2176,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"fns\");\n"
+"    let log = Logger(\"fns\");\n"
 "    let double = fn (x: i32) -> i32 { return x * 2; };\n"
 "    log.info(f\"apply={apply(double, 21)}\");\n"
 "}\n"
@@ -2196,7 +2204,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() -> nil {\n"
-"    let log = Logger.new(\"cap\");\n"
+"    let log = Logger(\"cap\");\n"
 "    let mut xs: Vec<i32> = Vec.new();\n"
 "    xs.push(1);\n"
 "    let len = fn() -> i32 { return xs.len(); };\n"
@@ -2233,7 +2241,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"generics\");\n"
+"    let log = Logger(\"generics\");\n"
 "    let head = first([10, 20], -1);      // first<i32> — inferred\n"
 "    let name = first([\"a\", \"b\"], \"?\");   // first<str> — a separate "
 "instance\n"
@@ -2291,7 +2299,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"bounds\");\n"
+"    let log = Logger(\"bounds\");\n"
 "    log.info(name(Tag { id: 7 }));\n"
 "}\n"
 "```"
@@ -2336,7 +2344,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"free-fns\");\n"
+"    let log = Logger(\"free-fns\");\n"
 "    let p = nudged(Point { x: 2, y: 5 });\n"
 "    log.info(f\"p.x={p.x} p.y={p.y}\");\n"
 "}\n"
@@ -2372,7 +2380,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"closures\");\n"
+"    let log = Logger(\"closures\");\n"
 "    let add = fn (a: i32, b: i32) -> i32 { return a + b; };\n"
 "    let area_of = fn (r: f32) -> f32 {\n"
 "        let sq = r * r;\n"
@@ -2439,7 +2447,7 @@ msgid ""
 "enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"enums\");\n"
+"    let log = Logger(\"enums\");\n"
 "    log.info(f\"{Light.Green} {Direction.Left} {Direction.Right}\");\n"
 "}\n"
 "```"
@@ -2493,7 +2501,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"structs\");\n"
+"    let log = Logger(\"structs\");\n"
 "    let p = Point { x: 1, y: 2 };                    // every field, by "
 "name\n"
 "    let s = Style {};                                // defaults fill the "
@@ -2528,7 +2536,7 @@ msgid ""
 "struct Point { x: f32; y: f32 }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sharing\");\n"
+"    let log = Logger(\"sharing\");\n"
 "    let mut p = Point { x: 1, y: 2 };\n"
 "    let q = p;              // q and p name ONE cell\n"
 "    p.x = 4;                // q.x is 4 now\n"
@@ -2569,7 +2577,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"nodes\");\n"
+"    let log = Logger(\"nodes\");\n"
 "    let n = Node {\n"
 "        value: 1,\n"
 "        left: Node { value: 2, left: nil, right: nil },\n"
@@ -2616,7 +2624,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"counter\");\n"
+"    let log = Logger(\"counter\");\n"
 "    let c = Counter.new();\n"
 "    c.press();\n"
 "    c.press();\n"
@@ -2681,7 +2689,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"rect\");\n"
+"    let log = Logger(\"rect\");\n"
 "    let r = Rect.new(3, 4);\n"
 "    let sq = Rect.from_square(2);\n"
 "    log.info(f\"area={r.area()} square={sq.area()}\");\n"
@@ -2789,7 +2797,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"classes\");\n"
+"    let log = Logger(\"classes\");\n"
 "    let c = Counter.new();\n"
 "    c.press();\n"
 "    c.press();\n"
@@ -2865,7 +2873,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    let c = Circle { r: 1.0 };\n"
 "    log.info(f\"{c.name()}={c.area()}\");\n"
 "}\n"
@@ -2943,7 +2951,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    let c = Circle.new(1.0);\n"
 "    log.info(f\"r={c.r}\");\n"
 "}\n"
@@ -3000,7 +3008,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    log.info(describe(Circle { r: 1.0 }));    // Circle satisfies: checked "
 "here\n"
 "    log.info(describe(Square { side: 3.0 })); // and here\n"
@@ -3038,7 +3046,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    let s: Shape = Square { side: 2.0 };   // asserted and checked\n"
 "    log.info(f\"area={s.area()}\");\n"
 "}\n"
@@ -3075,7 +3083,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    let mut shapes: Vec<Shape> = Vec.new();   // each push checks\n"
 "    shapes.push(Circle { r: 1.0 });\n"
 "    shapes.push(Square { side: 3.0 });\n"
@@ -3118,7 +3126,7 @@ msgid ""
 "fn print_it(x: Show) -> str { return x.show(); }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    log.info(print_it(NumI64(64)));    // spelled manufacture\n"
 "}\n"
 "```"
@@ -3175,7 +3183,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "    let mut shapes: Vec<Shape> = Vec.new();\n"
 "    shapes.push(Circle { r: 1.0 });\n"
 "    shapes.push(Square { side: 2.0 });\n"
@@ -3236,7 +3244,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"iter\");\n"
+"    let log = Logger(\"iter\");\n"
 "    let ups = CountUp { n: 4 };\n"
 "    let got: Vec<i32> = Vec.new();   // shared: survives the loop's "
 "captures\n"
@@ -3294,7 +3302,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"interfaces\");\n"
+"    let log = Logger(\"interfaces\");\n"
 "\n"
 "    let c: Shape = Circle { r: 1.0 };        // satisfaction assertion\n"
 "    log.info(describe(c));                    // single origin: static call\n"
@@ -3366,7 +3374,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"nodes\");\n"
+"    let log = Logger(\"nodes\");\n"
 "    let n = Node { value: 1, left: nil, right: nil };\n"
 "    log.info(f\"left is nil: {n.left == nil}\");\n"
 "}\n"
@@ -3387,8 +3395,8 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"optional\");\n"
-"    let mut scores: HashMap<str, i32> = HashMap.new();\n"
+"    let log = Logger(\"optional\");\n"
+"    let mut scores: HashMap<str, i32> = HashMap();\n"
 "    scores.put(\"rut\", 41);\n"
 "    let mut n = 0;\n"
 "    let hit = scores.get(\"rut\");      // ?i32\n"
@@ -3489,7 +3497,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"json\");\n"
+"    let log = Logger(\"json\");\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
 "    if (e == nil) {\n"
 "        log.info(f\"n={n.get()}\");\n"
@@ -3545,7 +3553,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"json\");\n"
+"    let log = Logger(\"json\");\n"
 "    let (bad, be) = decodeJson<JsonI64>(\"[1,2,3]\");\n"
 "    if (be != nil) {\n"
 "        let why = be;\n"
@@ -3625,7 +3633,7 @@ msgid ""
 "struct Point { x: i32; y: i32 }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"opaque\");\n"
+"    let log = Logger(\"opaque\");\n"
 "    let box1 = opaque(Point { x: 1, y: 2 });\n"
 "    let p = opaque.downcast<Point>(box1);   // ?Point\n"
 "    when (p != nil) {\n"
@@ -3650,7 +3658,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"json\");\n"
+"    let log = Logger(\"json\");\n"
 "\n"
 "    // a successful decode: (value, nil)\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
@@ -3734,7 +3742,7 @@ msgid ""
 "fn main_body() { /* statements live here */ }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"app\");\n"
+"    let log = Logger(\"app\");\n"
 "    let origin = Point { x: 0, y: 0 }; // record literals live in function "
 "bodies\n"
 "    log.info(f\"{app_name} v{version} origin.x={origin.x}\");\n"
@@ -3934,7 +3942,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"app\");\n"
+"    let log = Logger(\"app\");\n"
 "    let mut g = Greeting.new(\"rut\");\n"
 "    g.add(\"hello\");\n"
 "    g.add(\"from a package\");\n"
@@ -4331,7 +4339,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"countdown\");\n"
+"    let log = Logger(\"countdown\");\n"
 "    launch_future(countdown(log, 3));\n"
 "}\n"
 "```"
@@ -4403,7 +4411,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"ladder\");\n"
+"    let log = Logger(\"ladder\");\n"
 "    let mut v: u8 = 250;\n"
 "    v = v.wrapping_add(10);            // 4 — two's-complement wrap\n"
 "    let over = 200u8.checked_add(100); // (44, false) — .1 false = escaped\n"
@@ -4429,7 +4437,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"str\");\n"
+"    let log = Logger(\"str\");\n"
 "    let s = \"héllo rut\";\n"
 "    log.info(f\"len={s.len()} first={s.code()}\");\n"
 "    log.info(f\"at1={s.code_at(1)} octets={s.encode().len()}\");\n"
@@ -4464,7 +4472,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"bytes\");\n"
+"    let log = Logger(\"bytes\");\n"
 "    let b = \"rut runs\".encode();\n"
 "    log.info(f\"len={b.len()} decode={b.decode()}\");\n"
 "    let copy = b.clone();     // the ONLY copy escape hatch\n"
@@ -4524,7 +4532,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"pouch\");\n"
+"    let log = Logger(\"pouch\");\n"
 "    let mut xs: Vec<i32> = Vec.new();         // or Vec.with_capacity(64)\n"
 "    xs.push(10);                              // amortized O(1)\n"
 "    let v = Vec<f32>.filled(0.0, 1024);       // n slots of one value\n"
@@ -4564,8 +4572,8 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"nmapset\");\n"
-"    let mut counts: HashMap<str, i32> = HashMap.new();\n"
+"    let log = Logger(\"nmapset\");\n"
+"    let mut counts: HashMap<str, i32> = HashMap();\n"
 "    let fresh = counts.put(\"rut\", 1);          // answers true when the "
 "key was NEWLY added\n"
 "    let mut n = 0;\n"
@@ -4576,7 +4584,7 @@ msgid ""
 "there\n"
 "    let size = counts.len();\n"
 "\n"
-"    let mut seen: HashSet<str> = HashSet.new();\n"
+"    let mut seen: HashSet<str> = HashSet();\n"
 "    let first = seen.put(\"x\");     // true — newly added\n"
 "    let again = seen.put(\"x\");     // false\n"
 "    log.info(f\"fresh={fresh} n={n} has={there} removed={gone} "
@@ -4592,14 +4600,16 @@ msgid ""
 "they have no stable equality contract) — hashed by the host; a user-defined "
 "key escapes by encoding canonically to `bytes`. A hit returns the stored "
 "cell, not a copy. There is no iteration surface: maps and sets answer "
-"questions, they don't walk."
+"questions, they don't walk. Construction spells the call form — `HashMap()` "
+"/ `HashSet()` are the designated `new` (the same call as `HashMap.new()`); "
+"`with_capacity(n)` stays named."
 msgstr ""
 
-#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:173
+#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:176
 msgid "`flow` — the push pipeline"
 msgstr ""
 
-#: src/tutorial/stdlib.md:208
+#: src/tutorial/stdlib.md:210
 msgid ""
 "`Flow<E>` chains the push contract. A type is iterable when it marks an "
 "`[iterable]` member — `for (x of it)` calls that ONE designated member — and "
@@ -4609,7 +4619,7 @@ msgid ""
 "`ArrFlow(xs)`, `StrFlow(s)`) — and everything after is chaining:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:216
+#: src/tutorial/stdlib.md:218
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4617,7 +4627,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() -> nil {\n"
-"    let log = Logger.new(\"flow\");\n"
+"    let log = Logger(\"flow\");\n"
 "    let nums: Vec<i32> = Vec.new();\n"
 "    nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);\n"
 "\n"
@@ -4642,11 +4652,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:247
+#: src/tutorial/stdlib.md:249
 msgid "Three laws to know:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:249
+#: src/tutorial/stdlib.md:251
 msgid ""
 "**The entries and sinks are interfaces, satisfied structurally** — "
 "`IntoFlow<E>` is `fn into_flow(self) -> Flow<E>`: `Flow` itself carries the "
@@ -4659,14 +4669,14 @@ msgid ""
 "auto-inserted."
 msgstr ""
 
-#: src/tutorial/stdlib.md:258
+#: src/tutorial/stdlib.md:260
 msgid ""
 "**`map` introduces a new type variable.** Annotate the lambda, spell the "
 "type argument (`.map<i32>(..)`), or pass a fn path — a lambda that spells "
 "nothing diagnoses with the fix."
 msgstr ""
 
-#: src/tutorial/stdlib.md:261
+#: src/tutorial/stdlib.md:263
 msgid ""
 "**Stateful stages are single-shot.** `take`/`skip` hold their counter in a "
 "record the drive mutates; a drained stage stays drained. `take` answers "
@@ -4675,7 +4685,7 @@ msgid ""
 "start."
 msgstr ""
 
-#: src/tutorial/stdlib.md:267
+#: src/tutorial/stdlib.md:269
 msgid ""
 "Pipelines are the clarity tier: each stage costs one indirect call per "
 "element, and the fused builtin loops stay the perf tier. The full member "
@@ -4683,20 +4693,20 @@ msgid ""
 "reference](../reference/stdlib.md#flow-the-push-pipeline)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:272
+#: src/tutorial/stdlib.md:274
 msgid "`strbuild` — the string builder"
 msgstr ""
 
-#: src/tutorial/stdlib.md:274
+#: src/tutorial/stdlib.md:276
 msgid ""
 "```rut\n"
 "use strbuild::{ StringBuilder };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"strbuild\");\n"
+"    let log = Logger(\"strbuild\");\n"
 "    let n = 3;\n"
-"    let mut b = StringBuilder.new();     // or StringBuilder.with_cap(1024)\n"
+"    let mut b = StringBuilder();     // or StringBuilder.with_cap(1024)\n"
 "    b.append(\"count: \");\n"
 "    b.append_code(33);                   // one codepoint\n"
 "    b.append(f\" up to {n}\");             // appends are amortized O(1)\n"
@@ -4707,24 +4717,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:294
+#: src/tutorial/stdlib.md:296
+msgid ""
+"`StringBuilder()` is the designated `new` (the same call as "
+"`StringBuilder.new()`); `with_cap(n)` pre-sizes and stays named."
+msgstr ""
+
+#: src/tutorial/stdlib.md:299
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the "
 "builder appends into one growable cell and copies once, at `build()`."
 msgstr ""
 
-#: src/tutorial/stdlib.md:298
+#: src/tutorial/stdlib.md:303
 msgid "`calc` — float math"
 msgstr ""
 
-#: src/tutorial/stdlib.md:300
+#: src/tutorial/stdlib.md:305
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"calc\");\n"
+"    let log = Logger(\"calc\");\n"
 "    let x: f64 = -2.0;\n"
 "    let a: f64 = 3.0;\n"
 "    let b: f64 = 7.0;\n"
@@ -4740,24 +4756,24 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:323
+#: src/tutorial/stdlib.md:328
 msgid ""
 "rut has no overloading, so the width lives in the name. The integer ladder "
 "is _not_ here — those are core's, always available."
 msgstr ""
 
-#: src/tutorial/stdlib.md:326
+#: src/tutorial/stdlib.md:331
 msgid "`json` — encode and decode"
 msgstr ""
 
-#: src/tutorial/stdlib.md:328
+#: src/tutorial/stdlib.md:333
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"json\");\n"
+"    let log = Logger(\"json\");\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");           // (?JsonI64, ?E) — "
 "see errors\n"
 "    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), "
@@ -4769,7 +4785,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:346
+#: src/tutorial/stdlib.md:351
 msgid ""
 "A bare `[i64]` never satisfies anything — the wrapper is the manufacture, "
 "spelled at the call (`JsonArr([JsonI64(1), ..])`), and the decode direction "
@@ -4778,7 +4794,7 @@ msgid ""
 "on its own inherent impl."
 msgstr ""
 
-#: src/tutorial/stdlib.md:353
+#: src/tutorial/stdlib.md:358
 msgid ""
 "Decode is direct and schema-driven: your type's `decode` member reads "
 "exactly the fields it expects, no intermediate tree. Your types opt in with "
@@ -4789,29 +4805,29 @@ msgid ""
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:362
+#: src/tutorial/stdlib.md:367
 msgid "`ink` — logging"
 msgstr ""
 
-#: src/tutorial/stdlib.md:364
+#: src/tutorial/stdlib.md:369
 msgid "All output goes through a logger:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:366
+#: src/tutorial/stdlib.md:371
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
 "    let n = 3;\n"
-"    let log = Logger.new(\"app\");\n"
+"    let log = Logger(\"app\");\n"
 "    log.info(f\"started with {n} items\");\n"
 "    log.debug(\"...\"); log.warn(\"...\"); log.error(\"...\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:384
+#: src/tutorial/stdlib.md:389
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder "
 "chooses the sink (the `rut` CLI prints to stdout). The same pattern — "
@@ -4820,18 +4836,18 @@ msgid ""
 "modules](../reference/embedding.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:390
+#: src/tutorial/stdlib.md:395
 msgid "`http`"
 msgstr ""
 
-#: src/tutorial/stdlib.md:392
+#: src/tutorial/stdlib.md:397
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: futures, workers, and channels](async.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:398
+#: src/tutorial/stdlib.md:403
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4843,7 +4859,7 @@ msgid ""
 "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"std\");\n"
+"    let log = Logger(\"std\");\n"
 "\n"
 "    // Vec: build, pop, read\n"
 "    let mut v: Vec<i32> = Vec.new();\n"
@@ -4858,7 +4874,7 @@ msgid ""
 "    log.info(f\"joined={string_join(parts.as_array())}\");\n"
 "\n"
 "    // StringBuilder: amortized appends, one materialization\n"
-"    let mut b = StringBuilder.new();\n"
+"    let mut b = StringBuilder();\n"
 "    b.append(\"count: \");\n"
 "    b.append_code(33);\n"
 "    b.append(f\" up to {v.len()}\");\n"
@@ -4877,7 +4893,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:449
+#: src/tutorial/stdlib.md:454
 msgid ""
 "That completes the tutorial. From here, the [core "
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
@@ -5191,7 +5207,7 @@ msgid ""
 "struct Point { x: f32; y: f32 }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"values\");\n"
+"    let log = Logger(\"values\");\n"
 "    let mut p = Point { x: 1, y: 2 };\n"
 "    let q = p;          // q and p name ONE cell\n"
 "    p.x = 4;            // q.x is 4 now — sharing is the law\n"
@@ -5254,7 +5270,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"values\");\n"
+"    let log = Logger(\"values\");\n"
 "    let u = lookup(7);                // ?User\n"
 "    log.info(f\"u.name = {u.name}\");   // auto-deref when non-nil\n"
 "    let missing = lookup(8);\n"
@@ -5350,7 +5366,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"values\");\n"
+"    let log = Logger(\"values\");\n"
 "    let (raw, err) = parse_hex(\"4869\");\n"
 "    if (err != \"\") { log.info(f\"err: {err}\"); return; }   // propagate\n"
 "    log.info(f\"ok: {raw.decode()} ({raw.len()} bytes)\");\n"
@@ -5783,7 +5799,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"areas\");\n"
+"    let log = Logger(\"areas\");\n"
 "    let p = Point { x: 3, y: 4 };\n"
 "    log.info(f\"area = {p.area()}\");     // a concrete receiver: static\n"
 "}\n"
@@ -5873,7 +5889,7 @@ msgid ""
 "any Area\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"shapes\");\n"
+"    let log = Logger(\"shapes\");\n"
 "    let g = Canvas { log: log };\n"
 "    let mut mixed: Vec<Area> = Vec.new();   // heterogeneous storage\n"
 "    mixed.push(Circle { r: 1.0 });\n"
@@ -6042,7 +6058,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"iter\");\n"
+"    let log = Logger(\"iter\");\n"
 "    for (let v of CountUp { n: 3 }) {\n"
 "        log.info(f\"tick {v}\");\n"
 "    }\n"
@@ -6217,7 +6233,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() -> nil {\n"
-"    let log = Logger.new(\"countdown\");\n"
+"    let log = Logger(\"countdown\");\n"
 "    launch_future(countdown(log, 3));  // the other consume: launch\n"
 "}\n"
 "```"
@@ -6451,7 +6467,7 @@ msgid ""
 "struct Node { next: ?Node }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"cells\");\n"
+"    let log = Logger(\"cells\");\n"
 "    let a: ?Node = Node { next: nil };\n"
 "    let b = a;              // one retain\n"
 "    log.info(f\"a == b: {a == b}\");   // one cell — it dies when the LAST "
@@ -6525,7 +6541,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"rc\");\n"
+"    let log = Logger(\"rc\");\n"
 "    let conn = Connection.open(\"tcp://edge\", log);\n"
 "    log.info(\"main is done — the count hits zero at the boundary\");\n"
 "}\n"
@@ -6595,7 +6611,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"rc\");\n"
+"    let log = Logger(\"rc\");\n"
 "    let mut m = Model { name: \"doc\" };\n"
 "    let v = View { model: nil, observer: Weak.new(m) };   // observe without "
 "owning\n"
@@ -7565,7 +7581,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"todos\");\n"
+"    let log = Logger(\"todos\");\n"
 "    let mut list = TodoList.new();\n"
 "    list.add(\"implement the VM\");\n"
 "    list.add(\"ship the demo\");\n"
@@ -7810,7 +7826,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sort\");\n"
+"    let log = Logger(\"sort\");\n"
 "    let bank: ?Bank = Bank { data: Vec<i32>.from([5, 2, 9, 2]) };\n"
 "    let c = opaque(bank);\n"
 "    log.info(f\"serialized: {serialize(c)}\");\n"
@@ -7898,7 +7914,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sort\");\n"
+"    let log = Logger(\"sort\");\n"
 "    let bank: ?Bank = Bank { data: nil };\n"
 "    let c = opaque(bank);\n"
 "    fill(c, 8, 42);\n"
@@ -8130,7 +8146,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"crc\");\n"
+"    let log = Logger(\"crc\");\n"
 "    let vector = \"123456789\".encode();   // the canonical CRC-32 test "
 "vector\n"
 "    log.info(f\"crc32(vector) = {crc32(vector)} — check value 0xCBF43926: "
@@ -8480,7 +8496,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"bus\");\n"
+"    let log = Logger(\"bus\");\n"
 "    log.info(render_line(\"broadcast\", \"<ada> hello world\"));\n"
 "}\n"
 "```"
@@ -9725,7 +9741,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"sort\");\n"
+"    let log = Logger(\"sort\");\n"
 "    let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> "
 "growable\n"
 "    quicksort(xs, 0, xs.len() - 1);\n"
@@ -9774,7 +9790,7 @@ msgid ""
 "enum Flavor { Sweet, Sour }\n"
 "\n"
 "fn erase_and_recover() {\n"
-"    let log = Logger.new(\"opaque\");\n"
+"    let log = Logger(\"opaque\");\n"
 "    let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;\n"
 "    let box2 = opaque(Flavor.Sour);             // zero-copy (shares the "
 "cell)\n"
@@ -10332,7 +10348,7 @@ msgid ""
 "use ink::Logger;\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"uses\");\n"
+"    let log = Logger(\"uses\");\n"
 "    let v = Vec<i32>.new();\n"
 "    log.info(f\"{v.len()}\");\n"
 "}\n"
@@ -10344,7 +10360,7 @@ msgid ""
 "The package is **one bare identifier**; the names are one or more idents. "
 "rut is fully statically typed: the compiler resolves every used name and "
 "knows from usage whether it lands in type position (`Vec` in an annotation) "
-"or value position (`Logger.new(..)`), so there is nothing for the user to "
+"or value position (`Logger(..)`), so there is nothing for the user to "
 "annotate. An unreferenced use name is a lint, not an error."
 msgstr ""
 
@@ -10524,7 +10540,7 @@ msgstr ""
 msgid "seq"
 msgstr ""
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:324
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:331
 msgid "`Vec<T>`"
 msgstr ""
 
@@ -10534,7 +10550,7 @@ msgid ""
 "generic types](builtin-generic-types.md))"
 msgstr ""
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:323
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:330
 msgid "`[T]`"
 msgstr ""
 
@@ -10548,7 +10564,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:322
+#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:329
 msgid "`?T`"
 msgstr ""
 
@@ -10789,7 +10805,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let xs: [i32] = [1, 2, 3];   // the literal allocates the cell\n"
 "    let ys: [?Point] = [nil; 4]; // the repeat: a VALUE and a count\n"
 "    log.info(f\"{xs.len()} {ys.len()}\");\n"
@@ -11024,7 +11040,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:383
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:390
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -11040,7 +11056,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:171
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:174
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -11056,7 +11072,7 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:170
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:173
 msgid "`freeze() -> bytes`"
 msgstr ""
 
@@ -11091,7 +11107,7 @@ msgid ""
 "struct Tile { v: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak.new(tile);        // the class-method construction\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
@@ -11184,7 +11200,7 @@ msgid ""
 "enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    log.info(f\"{Color.Blue} {Direction.Right}\");\n"
 "}\n"
 "```"
@@ -11220,7 +11236,7 @@ msgid ""
 "enum Light { Red, Yellow, Green }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let l = Light.Yellow;\n"
 "    log.info(f\"{l == Light.Yellow}\");   // true — members are immortal "
 "singleton cells\n"
@@ -11256,9 +11272,9 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"fn go() { let log = Logger.new(\"t\"); log.info(\"go\"); }\n"
-"fn brake() { let log = Logger.new(\"t\"); log.info(\"brake\"); }\n"
-"fn stop() { let log = Logger.new(\"t\"); log.info(\"stop\"); }\n"
+"fn go() { let log = Logger(\"t\"); log.info(\"go\"); }\n"
+"fn brake() { let log = Logger(\"t\"); log.info(\"brake\"); }\n"
+"fn stop() { let log = Logger(\"t\"); log.info(\"stop\"); }\n"
 "\n"
 "entry fn main() {\n"
 "    let l = Light.Yellow;\n"
@@ -11300,7 +11316,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let d = Dial.default().flipped();\n"
 "    log.info(when (d) {\n"
 "        Dial.Low  -> \"low\",\n"
@@ -11356,7 +11372,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    for (let l of Light.Red) {\n"
 "        log.info(f\"{l}\");\n"
 "    }\n"
@@ -11418,7 +11434,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let a = 10;                // i32 (default)\n"
 "    let b = 10u8;              // u8 via suffix\n"
 "    let c: u64 = 10;           // u64 via annotation — fits the default\n"
@@ -11473,7 +11489,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let cast = 300 as u8;      // 44\n"
 "    let x = 3;\n"
 "    let y = 4;\n"
@@ -11523,7 +11539,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let pair = (1, \"two\");         // (i32, str)\n"
 "    let (n, s) = pair;\n"
 "    log.info(f\"{n} {s} {divmod(7, 2).0}\");\n"
@@ -11749,7 +11765,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    log.info(f\"{describe(0)} {describe(2)} {describe(10)}\");\n"
 "}\n"
 "```"
@@ -11848,9 +11864,9 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"fn go() { let log = Logger.new(\"t\"); log.info(\"go\"); }\n"
-"fn brake() { let log = Logger.new(\"t\"); log.info(\"brake\"); }\n"
-"fn stop() { let log = Logger.new(\"t\"); log.info(\"stop\"); }\n"
+"fn go() { let log = Logger(\"t\"); log.info(\"go\"); }\n"
+"fn brake() { let log = Logger(\"t\"); log.info(\"brake\"); }\n"
+"fn stop() { let log = Logger(\"t\"); log.info(\"stop\"); }\n"
 "\n"
 "entry fn main() {\n"
 "    let l = Light.Yellow;\n"
@@ -11875,7 +11891,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let p: ?Point = Point { x: 7, y: 0 };\n"
 "    when (p != nil) {\n"
 "        true -> { log.info(f\"{p.x}\"); },\n"
@@ -11907,7 +11923,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let s = Style {};\n"
 "    log.info(f\"{s.color} {s.width}\");\n"
 "}\n"
@@ -11934,7 +11950,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let mut p = Point { x: 1, y: 2 };\n"
 "    let q = p;                       // SHARE: q and p name one cell (O(1))\n"
 "    p.x = 4;                         // q.x is 4 now — sharing is the law\n"
@@ -11965,7 +11981,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let p2 = nudged(Point { x: 1, y: 2 });\n"
 "    log.info(f\"{p2.x} {p2.y}\");\n"
 "}\n"
@@ -12017,7 +12033,7 @@ msgid ""
 "struct Rect { min: Point; max: Point; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let q = Point { x: 9, y: 9 };\n"
 "    let s = Style {};                     // zero-value defaults fill the "
 "fields\n"
@@ -12088,7 +12104,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let c = Counter.new().bump().bump();\n"
 "    log.info(f\"{c.value()}\");\n"
 "}\n"
@@ -12190,7 +12206,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let r = Rect.from_square(3);\n"
 "    log.info(f\"area={r.area()}\");\n"
 "}\n"
@@ -12218,10 +12234,13 @@ msgid ""
 "`new` is not special syntax — just the conventional primary-constructor name "
 "(`from`, `parse`, `open`, `default` are its siblings); it is an ordinary "
 "identifier. Try-construction returns the nullable: a class method `fn "
-"parse(s: str) -> ?Version` answers `nil` on failure."
+"parse(s: str) -> ?Version` answers `nil` on failure. A class may designate "
+"its primary constructor with `[constructor]` — then the call form spells the "
+"construction too: std's `Logger(\"t\")` is the same call as "
+"`Logger.new(\"t\")` (the `[constructor]` section below)."
 msgstr ""
 
-#: src/reference/classes.md:56
+#: src/reference/classes.md:60
 msgid ""
 "**The `Self { field: expr, .. }` literal is the class-private construction** "
 "— legal anywhere inside the class body (class methods and instance methods "
@@ -12233,7 +12252,7 @@ msgid ""
 "build one."
 msgstr ""
 
-#: src/reference/classes.md:65
+#: src/reference/classes.md:69
 msgid ""
 "**No implicit default construction.** A class whose fields all have "
 "initializers still needs an explicit `fn new() -> Self { return Self {}; }` "
@@ -12241,13 +12260,13 @@ msgid ""
 "method is **sealed** — constructible only inside its own body."
 msgstr ""
 
-#: src/reference/classes.md:71
+#: src/reference/classes.md:75
 msgid ""
 "**No parameter properties**: parameters are parameters — the `Self { field: "
 "name }` literal makes the param→field mapping explicit."
 msgstr ""
 
-#: src/reference/classes.md:74
+#: src/reference/classes.md:78
 msgid ""
 "**`async` class methods are allowed** — same function, `await` in the body. "
 "No partially constructed instance ever exists across an `await`: the `Self { "
@@ -12255,105 +12274,105 @@ msgid ""
 "frame."
 msgstr ""
 
-#: src/reference/classes.md:79
+#: src/reference/classes.md:83
 msgid "`[constructor]` — the designated construction surface"
 msgstr ""
 
-#: src/reference/classes.md:81
+#: src/reference/classes.md:85
 msgid ""
 "A bracket marker designates THE member a surface binds to — the member's "
 "name is free; the designation routes the call. Three designated surfaces, "
 "one law:"
 msgstr ""
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:89
 msgid "marker"
 msgstr ""
 
-#: src/reference/classes.md:85 src/reference/stdlib.md:117
-#: src/reference/stdlib.md:213
+#: src/reference/classes.md:89 src/reference/stdlib.md:117
+#: src/reference/stdlib.md:216
 msgid "surface"
 msgstr ""
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:89
 msgid "caller"
 msgstr ""
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:89
 msgid "signature owner"
 msgstr ""
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:89
 msgid "body compiled"
 msgstr ""
 
-#: src/reference/classes.md:87 src/reference/stdlib.md:89
+#: src/reference/classes.md:91 src/reference/stdlib.md:89
 msgid "`[disposal]`"
 msgstr ""
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:91
 msgid "cell death"
 msgstr ""
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:91
 msgid "the engine, at refcount zero"
 msgstr ""
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:91
 msgid "the engine — `(mut self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:91
 msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/classes.md:88 src/reference/stdlib.md:88
+#: src/reference/classes.md:92 src/reference/stdlib.md:88
 msgid "`[iterable]`"
 msgstr ""
 
-#: src/reference/classes.md:88
+#: src/reference/classes.md:92
 msgid "`for (x of it)`"
 msgstr ""
 
-#: src/reference/classes.md:88
+#: src/reference/classes.md:92
 msgid "the for-of desugar"
 msgstr ""
 
-#: src/reference/classes.md:88
+#: src/reference/classes.md:92
 msgid "the member — its `emit` parameter fixes `E`"
 msgstr ""
 
-#: src/reference/classes.md:88
+#: src/reference/classes.md:92
 msgid "fused into the loop ([interfaces](interfaces.md))"
 msgstr ""
 
-#: src/reference/classes.md:89 src/reference/stdlib.md:90
+#: src/reference/classes.md:93 src/reference/stdlib.md:90
 msgid "`[constructor]`"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:93
 msgid "the call form `Type(..)`"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:93
 msgid "user code"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:93
 msgid "the member — its parameters fix the call's shape"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:93
 msgid "byte-identical to `Point.from_xy(..)`"
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:95
 msgid ""
 "`[constructor]` designates the class's construction surface — the call form "
 "`Type(..)` binds to the one marked member:"
 msgstr ""
 
-#: src/reference/classes.md:94
+#: src/reference/classes.md:98
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12370,14 +12389,14 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let p = Point(1.0, 2.0);      // sugar for Point.from_xy(1.0, 2.0)\n"
 "    log.info(f\"p=({p.x}, {p.y})\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/classes.md:119
+#: src/reference/classes.md:123
 msgid ""
 "**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to "
 "`Point.from_xy(1.0, 2.0)` — the marker changes what the call form binds to, "
@@ -12386,7 +12405,7 @@ msgid ""
 "the bare name."
 msgstr ""
 
-#: src/reference/classes.md:125
+#: src/reference/classes.md:129
 msgid ""
 "**One designated constructor per class, on the inherent impl only.** Class "
 "bodies stay fields-only; a second `[constructor]` member is refused — "
@@ -12402,14 +12421,14 @@ msgid ""
 "and `[constructor]`\"."
 msgstr ""
 
-#: src/reference/classes.md:138
+#: src/reference/classes.md:142
 msgid ""
 "**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> "
 "?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` "
 "on a refused construction, exactly like the method call it is."
 msgstr ""
 
-#: src/reference/classes.md:142
+#: src/reference/classes.md:146
 msgid ""
 "**Newtypes never carry it** — `JsonI64(64)` is already the newtype's "
 "construction surface, the compiler-provided positional mint; there is "
@@ -12418,7 +12437,7 @@ msgid ""
 "singletons."
 msgstr ""
 
-#: src/reference/classes.md:147
+#: src/reference/classes.md:151
 msgid ""
 "**The seal holds.** Visibility rides the method's `pub` — an unannotated "
 "(module-private) constructor answers `Type(..)` only inside its own module. "
@@ -12428,20 +12447,20 @@ msgid ""
 "(`Point.from_xy`)."
 msgstr ""
 
-#: src/reference/classes.md:153
+#: src/reference/classes.md:157
 msgid ""
 "**Resolution order for `Name(args)`**: a local fn value, then free fns, then "
 "the prelude, then the newtype mint, then the designated constructor, then "
 "the error — a free fn named `Point` wins."
 msgstr ""
 
-#: src/reference/classes.md:156
+#: src/reference/classes.md:160
 msgid ""
 "**Generics ride the method-call path.** `Box(3)` infers exactly like "
 "`Box.of(3)` — the sugar IS the member call after resolution."
 msgstr ""
 
-#: src/reference/classes.md:158
+#: src/reference/classes.md:162
 msgid ""
 "**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, "
 "`default` — every existing class method keeps its place; the marker "
@@ -12449,18 +12468,18 @@ msgid ""
 "siblings."
 msgstr ""
 
-#: src/reference/classes.md:163
+#: src/reference/classes.md:167
 msgid "Newtypes: the one-field wrapper"
 msgstr ""
 
-#: src/reference/classes.md:165
+#: src/reference/classes.md:169
 msgid ""
 "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary "
 "class: exactly one field, `inner`, of the wrapped type. The positional "
 "spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr ""
 
-#: src/reference/classes.md:170
+#: src/reference/classes.md:174
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -12474,7 +12493,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:181
+#: src/reference/classes.md:185
 msgid ""
 "**The wrapped type is unrestricted** — primitives, composites, tuples, fn "
 "types, another module's class: `class Opt(?i64);`, `class Pair((i32, "
@@ -12484,7 +12503,7 @@ msgid ""
 "declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr ""
 
-#: src/reference/classes.md:188
+#: src/reference/classes.md:192
 msgid ""
 "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability "
 "exists exactly where the constructor is spelled. And no implicit forwarding: "
@@ -12492,14 +12511,14 @@ msgid ""
 "ordinary visibility) and its `impl` methods."
 msgstr ""
 
-#: src/reference/classes.md:193
+#: src/reference/classes.md:197
 msgid ""
 "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never "
 "`JsonExt`). Per-type wrappers with type-specific bodies when the bodies "
 "differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr ""
 
-#: src/reference/classes.md:197
+#: src/reference/classes.md:201
 msgid ""
 "**The generic instantiation law**: a binder is determined by the wrapped "
 "argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a "
@@ -12510,7 +12529,7 @@ msgid ""
 "str>(7)`, never `Pair<i32>(7)`."
 msgstr ""
 
-#: src/reference/classes.md:205
+#: src/reference/classes.md:209
 msgid ""
 "**The third-party adapter** (the orphan case, dissolved): `class "
 "TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the "
@@ -12518,7 +12537,7 @@ msgid ""
 "the newtype flag rides the class's surface row like the class itself does."
 msgstr ""
 
-#: src/reference/classes.md:210
+#: src/reference/classes.md:214
 msgid ""
 "A braced class — even one with a single `inner` field — has no call "
 "construction of its own: the positional spelling is what provides the "
@@ -12527,17 +12546,17 @@ msgid ""
 "the marker — its mint already IS `Name(v)`; everything else stays sealed."
 msgstr ""
 
-#: src/reference/classes.md:217
+#: src/reference/classes.md:221
 msgid ""
 "At runtime the construction mints a real cell: the wrapper is a value like "
 "every class."
 msgstr ""
 
-#: src/reference/classes.md:220
+#: src/reference/classes.md:224
 msgid "Methods: explicit `self`"
 msgstr ""
 
-#: src/reference/classes.md:222
+#: src/reference/classes.md:226
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the "
 "first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields "
@@ -12545,7 +12564,7 @@ msgid ""
 "`let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/classes.md:227
+#: src/reference/classes.md:231
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on "
 "the class itself (`Rect.new(..)`, `Self.new(..)` inside the body). Presence "
@@ -12553,23 +12572,23 @@ msgid ""
 "functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 
-#: src/reference/classes.md:232
+#: src/reference/classes.md:236
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes "
 "an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr ""
 
-#: src/reference/classes.md:235
+#: src/reference/classes.md:239
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, "
 "with the same visibility forms as fields."
 msgstr ""
 
-#: src/reference/classes.md:238
+#: src/reference/classes.md:242
 msgid "Member visibility"
 msgstr ""
 
-#: src/reference/classes.md:240
+#: src/reference/classes.md:244
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and "
 "visibility](modules-and-visibility.md)): an unannotated field or method is "
@@ -12579,11 +12598,11 @@ msgid ""
 "its module."
 msgstr ""
 
-#: src/reference/classes.md:247
+#: src/reference/classes.md:251
 msgid "Reference semantics and equality"
 msgstr ""
 
-#: src/reference/classes.md:249
+#: src/reference/classes.md:253
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see "
 "[By-reference and nullable](by-reference-and-nullable.md)): assignment "
@@ -12591,17 +12610,17 @@ msgid ""
 "field-wise comparison is an interface you write for it."
 msgstr ""
 
-#: src/reference/classes.md:254
+#: src/reference/classes.md:258
 msgid "No inheritance"
 msgstr ""
 
-#: src/reference/classes.md:256
+#: src/reference/classes.md:260
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no "
 "method overriding, no `super.m()`, no `protected`."
 msgstr ""
 
-#: src/reference/classes.md:258
+#: src/reference/classes.md:262
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or "
 "free functions; polymorphism is only the structural kind — a type used "
@@ -12609,7 +12628,7 @@ msgid ""
 "dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/classes.md:262
+#: src/reference/classes.md:266
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell "
 "payload (see [Reified types and layout](reified-types.md)) — no prefix "
@@ -12688,7 +12707,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let c = Conn { log: log, url: \"tcp://edge\" };\n"
 "    log.info(\"main is done\");\n"
 "}   // c's refcount reaches zero here; dispose runs at the call boundary\n"
@@ -12770,7 +12789,7 @@ msgid ""
 "struct Tile { v: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak.new(tile);        // does NOT keep the cell alive\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
@@ -13258,7 +13277,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"shapes\");\n"
+"    let log = Logger(\"shapes\");\n"
 "\n"
 "    dump(Circle { r: 1.0 });          // 2. the boundary checks the member "
 "set\n"
@@ -13429,7 +13448,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    for (let v of CountUp.new(3)) {\n"
 "        log.info(f\"tick {v}\");\n"
 "    }\n"
@@ -13596,7 +13615,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    log.info(f\"{add(2, 3)}\");\n"
 "}\n"
 "```"
@@ -13649,7 +13668,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let add = fn (a: i32, b: i32) -> i32 { return a + b; };\n"
 "    let area_of = fn (r: f32) -> f32 {\n"
 "        let sq = r * r;\n"
@@ -13697,7 +13716,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let head = first([10, 20], -1);      // first<i32>   — monomorphized\n"
 "    let name = first([\"a\", \"b\"], \"?\");   // first<str>   — separate "
 "instance\n"
@@ -13845,7 +13864,7 @@ msgid ""
 "enum Flavor { Sour, Sweet }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type "
 "name\n"
 "    let p = opaque.downcast<Point>(box1);      // ?Point — the nullable\n"
@@ -13875,7 +13894,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let mut n = 5;\n"
 "    let b = opaque(n);    // a prim payload COPIES the bits\n"
 "    n = 9;                // ...so the source moving stays out\n"
@@ -13920,7 +13939,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let b = opaque(\"hello\");\n"
 "    log.info(f\"{b is str} {opaque.downcast<str>(b) != nil}\");\n"
 "}\n"
@@ -13959,7 +13978,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque(\"two\")];\n"
 "    let vec: Vec<opaque> = Vec.from([opaque(5)]);\n"
 "    log.info(f\"{boxes.len()} {vec.len()}\");\n"
@@ -14069,7 +14088,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let TID_POINT: u32 = type_id<Point>();\n"
 "    log.info(f\"{TID_POINT} eq={type_id<Point>() == TID_POINT}\");\n"
 "}\n"
@@ -14244,7 +14263,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let s = \"hello world\";\n"
 "    let w = s.slice(6, 11);        // \"world\" — no copy\n"
 "    log.info(w);\n"
@@ -14286,7 +14305,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let accented = \"héllo!\";\n"
 "    log.info(f\"{accented.len()} {accented.encode().len()} "
 "{accented.slice(1, 2)}\");\n"
@@ -14474,7 +14493,7 @@ msgid ""
 "let trip: Km = 1500;          // Km is Meters is i64 — all one type\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let plain: Meters = trip;     // no conversion: the alias IS the target\n"
 "    log.info(f\"{trip} {plain}\");\n"
 "}\n"
@@ -14594,7 +14613,7 @@ msgid ""
 "fn kind<T requires Ridge | Trench>(x: T) -> str { return \"geo\"; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    log.info(f\"{name(Ridge { depth: 3 })} {kind(Trench { depth: 1 })}\");\n"
 "}\n"
 "```"
@@ -14709,7 +14728,7 @@ msgid ""
 "struct Point { x: i32; y: i32; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let mut p = Point { x: 1, y: 2 };\n"
 "    let q = p;              // SHARE: one cell, two names — no copy\n"
 "    p.x = 4;                // q.x is 4 now\n"
@@ -14864,7 +14883,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let header = bytes.from([1, 2, 3]);\n"
 "    let alias = header;              // shares: one buffer, two names\n"
 "    let diverged = header.clone();   // a fresh buffer, same octets\n"
@@ -15040,7 +15059,7 @@ msgid ""
 "}\n"
 "\n"
 "fn work() {\n"
-"    let log = Logger.new(\"work\");\n"
+"    let log = Logger(\"work\");\n"
 "    let buf = Audit { log: log, n: 4 };\n"
 "    log.info(\"working — 4 octets in flight\");\n"
 "}   // buf's count reaches zero here\n"
@@ -15357,7 +15376,7 @@ msgid ""
 "}\n"
 "\n"
 "fn use_node(n: Node) {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    log.info(f\"node {n.value}\");\n"
 "}\n"
 "\n"
@@ -15413,7 +15432,7 @@ msgid ""
 "fn make() -> Payload { return Payload { n: 1 }; }\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let v = make();\n"
 "    let w = Weak.new(v);  // watches the binding v — lives as long as v "
 "does\n"
@@ -16094,7 +16113,7 @@ msgid ""
 "use futures::{ launch_future, sleep };\n"
 "\n"
 "async fn countdown(n: u32) -> u32 {\n"
-"    let log = Logger.new(\"count\");\n"
+"    let log = Logger(\"count\");\n"
 "    let mut i = n;\n"
 "    while (i > 0) {\n"
 "        await sleep(1000);            // the ONLY suspension point\n"
@@ -16689,7 +16708,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"race\");\n"
+"    let log = Logger(\"race\");\n"
 "    launch_future(run_race(log));\n"
 "}\n"
 "```"
@@ -16762,7 +16781,7 @@ msgid ""
 "}\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"completer\");\n"
+"    let log = Logger(\"completer\");\n"
 "    launch_future(consume(log));\n"
 "}\n"
 "```"
@@ -19602,8 +19621,8 @@ msgid "emitted row"
 msgstr ""
 
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
-#: src/reference/stdlib.md:164 src/reference/stdlib.md:213
-#: src/reference/stdlib.md:377 src/reference/typed-bytecode.md:101
+#: src/reference/stdlib.md:167 src/reference/stdlib.md:216
+#: src/reference/stdlib.md:384 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:43 src/reference/cli.md:172
 msgid "meaning"
 msgstr ""
@@ -20344,7 +20363,7 @@ msgstr ""
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:75 src/reference/stdlib.md:318
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:325
 msgid "members"
 msgstr ""
 
@@ -20616,117 +20635,123 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"app\");\n"
+"    let log = Logger(\"app\");\n"
 "    log.info(f\"started\");\n"
 "}\n"
 "```"
 msgstr ""
 
 #: src/reference/stdlib.md:149
-msgid "method"
-msgstr ""
-
-#: src/reference/stdlib.md:149
-msgid "level passed to `ink_host`"
-msgstr ""
-
-#: src/reference/stdlib.md:151
-msgid "`debug(msg)`"
-msgstr ""
-
-#: src/reference/stdlib.md:151
-msgid "0"
+msgid ""
+"`Logger(\"app\")` constructs through the designated `new` — the call form "
+"and `Logger.new(\"app\")` are the same call."
 msgstr ""
 
 #: src/reference/stdlib.md:152
+msgid "method"
+msgstr ""
+
+#: src/reference/stdlib.md:152
+msgid "level passed to `ink_host`"
+msgstr ""
+
+#: src/reference/stdlib.md:154
+msgid "`debug(msg)`"
+msgstr ""
+
+#: src/reference/stdlib.md:154
+msgid "0"
+msgstr ""
+
+#: src/reference/stdlib.md:155
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:152 src/reference/frontend.md:98
+#: src/reference/stdlib.md:155 src/reference/frontend.md:98
 #: src/reference/bundles.md:200
 msgid "1"
 msgstr ""
 
-#: src/reference/stdlib.md:153
+#: src/reference/stdlib.md:156
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:153 src/reference/frontend.md:99
+#: src/reference/stdlib.md:156 src/reference/frontend.md:99
 #: src/reference/bundles.md:201
 msgid "2"
 msgstr ""
 
-#: src/reference/stdlib.md:154
+#: src/reference/stdlib.md:157
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:154 src/reference/frontend.md:100
+#: src/reference/stdlib.md:157 src/reference/frontend.md:100
 #: src/reference/bundles.md:202
 msgid "3"
 msgstr ""
 
-#: src/reference/stdlib.md:156
+#: src/reference/stdlib.md:159
 msgid ""
 "Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on "
 "the run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` "
 "along (`deps`)."
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:163
 msgid "`pouch` — `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:165
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:164 src/reference/stdlib.md:377
+#: src/reference/stdlib.md:167 src/reference/stdlib.md:384
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:166
+#: src/reference/stdlib.md:169
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:166
+#: src/reference/stdlib.md:169
 msgid "construction (`[v; n]` under the hood)"
 msgstr ""
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:170
 msgid "`push(v)` / `pop() -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:170
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > "
 "0`"
 msgstr ""
 
-#: src/reference/stdlib.md:168
+#: src/reference/stdlib.md:171
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr ""
 
-#: src/reference/stdlib.md:168
+#: src/reference/stdlib.md:171
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:172
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:172
 msgid "bridges to the fixed array"
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:173
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:174
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:175
+#: src/reference/stdlib.md:178
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it marks an "
 "`[iterable]` member, and a Flow wraps one drive in adapter stages — a "
@@ -20734,7 +20759,7 @@ msgid ""
 "fused builtin loops stay the perf tier."
 msgstr ""
 
-#: src/reference/stdlib.md:180
+#: src/reference/stdlib.md:183
 msgid ""
 "Entry and sink are **interfaces, satisfied structurally**: `IntoFlow<E>` is "
 "`fn into_flow(self) -> Flow<E>` — `Flow` itself carries the identity member "
@@ -20747,7 +20772,7 @@ msgid ""
 "every time."
 msgstr ""
 
-#: src/reference/stdlib.md:191
+#: src/reference/stdlib.md:194
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -20755,7 +20780,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() -> nil {\n"
-"    let log = Logger.new(\"flow\");\n"
+"    let log = Logger(\"flow\");\n"
 "    let nums: Vec<i32> = Vec.new();\n"
 "    nums.push(1); nums.push(2); nums.push(3); nums.push(4);\n"
 "    let src: VecFlow<i32> = VecFlow(nums);       // the spelled manufacture\n"
@@ -20768,91 +20793,91 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:218
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:218
 msgid ""
 "the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the "
 "wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest"
 msgstr ""
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:219
 msgid "`VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)`"
 msgstr ""
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:219
 msgid ""
 "the adapters — newtype wrappers manufactured at the call site; a primitive "
 "or bare container cannot carry members, the wrapper does"
 msgstr ""
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:220
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:220
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:221
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:221
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:222
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:222
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:223
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:223
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:224
 msgid "`W<T>.from_flow(it: Flow<E>) -> W<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:224
 msgid ""
 "the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and "
 "`SetFlow<T>`; `collected()` / `items()` unwrap the materialized container"
 msgstr ""
 
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:225
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:225
 msgid ""
 "chains are iterable — the `[iterable]` member on `Flow<E>` feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:224
+#: src/reference/stdlib.md:227
 msgid ""
 "**Import the interfaces you spell and the pipeline type**: `use flow::{ "
 "Flow, IntoFlow, FromFlow }` — the use-both law names each one."
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:230
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
 "host-table walk — json's map encode grows with it) and a map sink (nmapset's "
@@ -20860,22 +20885,22 @@ msgid ""
 "wrappers are the precedent such a family would follow)."
 msgstr ""
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:236
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:235
+#: src/reference/stdlib.md:238
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:238
+#: src/reference/stdlib.md:241
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
 "bool | str | bytes, V> {\n"
-"    pub fn new() -> Self;\n"
+"    [constructor] pub fn new() -> Self;\n"
 "    pub fn with_capacity(n: i32) -> Self;\n"
 "    pub fn put(mut self, k: K, v: V) -> bool;      // true = newly inserted\n"
 "    pub fn get(self, k: K) -> ?V;                  // the STORED cell, not a "
@@ -20889,7 +20914,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:251
+#: src/reference/stdlib.md:254
+msgid ""
+"Both classes designate `new` — `HashMap()` / `HashSet()` spell the "
+"construction (the same call as `HashMap.new()` / `HashSet.new()`); "
+"`with_capacity` stays a named constructor."
+msgstr ""
+
+#: src/reference/stdlib.md:258
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -20900,18 +20932,18 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:259
+#: src/reference/stdlib.md:266
 msgid "`calc` — the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:261
+#: src/reference/stdlib.md:268
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let x = 3.0f64;\n"
 "    let y = 4.0f64;\n"
 "    let d = Math.sqrt(x * x + y * y);\n"
@@ -20923,7 +20955,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:280
+#: src/reference/stdlib.md:287
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, "
 "`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, "
@@ -20934,31 +20966,31 @@ msgid ""
 "methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:288
+#: src/reference/stdlib.md:295
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:290
+#: src/reference/stdlib.md:297
 msgid ""
 "Pure rut, `inline = true`, zero host fns — offering json adds no host "
 "bindings."
 msgstr ""
 
-#: src/reference/stdlib.md:302
+#: src/reference/stdlib.md:309
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:312
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:308
+#: src/reference/stdlib.md:315
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
@@ -20967,7 +20999,7 @@ msgid ""
 "them without asking."
 msgstr ""
 
-#: src/reference/stdlib.md:313
+#: src/reference/stdlib.md:320
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no "
 "inherent members to have. The wrapper families are the spelled, per-call "
@@ -20975,95 +21007,95 @@ msgid ""
 "auto-inserted, forever."
 msgstr ""
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:325
 msgid "wrapper"
 msgstr ""
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:325
 msgid "wraps"
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:327
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:327
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:327
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:321
+#: src/reference/stdlib.md:328
 msgid "`JsonU64`"
 msgstr ""
 
-#: src/reference/stdlib.md:321
+#: src/reference/stdlib.md:328
 msgid "`u64`"
 msgstr ""
 
-#: src/reference/stdlib.md:321
+#: src/reference/stdlib.md:328
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies "
 "`JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode "
 "row); `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:329
 msgid "`SOpt<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:329
 msgid ""
 "both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction "
 "bound means a decode-only `T` cannot ride it)"
 msgstr ""
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:330
 msgid "`JsonArr<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:330
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:331
 msgid "`JsonVec<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:331
 msgid "both (the pouch peer group); `to_vec()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:332
 msgid ""
 "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:332
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:332
 msgid ""
 "decode-only (the nmapset peer group); `to_map()` unwraps — `JMapBytes` "
 "answers the bytes-keys disclosure"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:333
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:333
 msgid "`HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:333
 msgid "decode-only (the nmapset peer group); `to_set()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:328
+#: src/reference/stdlib.md:335
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -21071,13 +21103,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:339
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:334
+#: src/reference/stdlib.md:341
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -21086,11 +21118,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:346
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:347
 msgid ""
 "**Ownership**: json owns the interfaces; all container wrappers live in "
 "json, gated by peer groups — `JsonVec` activates when `pouch` is anywhere in "
@@ -21099,17 +21131,17 @@ msgid ""
 "mounts json light."
 msgstr ""
 
-#: src/reference/stdlib.md:345
+#: src/reference/stdlib.md:352
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:356
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:351
+#: src/reference/stdlib.md:358
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -21119,14 +21151,14 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:358
+#: src/reference/stdlib.md:365
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "use strbuild::{ StringBuilder };\n"
 "\n"
 "entry fn main() {\n"
-"    let log = Logger.new(\"t\");\n"
+"    let log = Logger(\"t\");\n"
 "    let k = \"name\";\n"
 "    let mut b = StringBuilder.with_cap(1024);   // octet hint\n"
 "    b.append(f\"{k}=\");\n"
@@ -21137,53 +21169,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:379
+#: src/reference/stdlib.md:386
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:379
-msgid "grow from small"
+#: src/reference/stdlib.md:386
+msgid ""
+"grow from small — the designated `[constructor]`: `StringBuilder()` spells it"
 msgstr ""
 
-#: src/reference/stdlib.md:380
+#: src/reference/stdlib.md:387
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:380
+#: src/reference/stdlib.md:387
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:381
+#: src/reference/stdlib.md:388
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:381
+#: src/reference/stdlib.md:388
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:389
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:389
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:383
+#: src/reference/stdlib.md:390
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:391
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:391
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:386
+#: src/reference/stdlib.md:393
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -21193,25 +21226,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:393
+#: src/reference/stdlib.md:400
 msgid ""
 "Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain. "
 "Offering `strbuild` pulls `strbuild_host` along (`deps`); offering `json` "
 "pulls both (its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:397
+#: src/reference/stdlib.md:404
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:408
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:403
+#: src/reference/stdlib.md:410
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
@@ -21222,19 +21255,20 @@ msgid ""
 "futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:411
+#: src/reference/stdlib.md:418
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); "
 "`http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / "
-"`Response` / `ByteStream` — async only at the points that really wait:"
+"`Response` / `ByteStream` — async only at the points that really wait, and "
+"`HttpClient()` constructs through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:416
+#: src/reference/stdlib.md:424
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
 "\n"
-"let resp = await HttpClient.new().request()\n"
+"let resp = await HttpClient().request()\n"
 "    .method(ClientQueryMethod.Post)\n"
 "    .url(\"https://example.com/api\")\n"
 "    .header(\"Accept\", \"application/json\")\n"
@@ -21244,18 +21278,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:428
+#: src/reference/stdlib.md:436
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:432
+#: src/reference/stdlib.md:440
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:434
+#: src/reference/stdlib.md:442
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -21266,7 +21300,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:442
+#: src/reference/stdlib.md:450
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, futures) are "
 "source-inlined into each consumer — required for class-method surfaces, "
@@ -21274,7 +21308,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:446
+#: src/reference/stdlib.md:454
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "

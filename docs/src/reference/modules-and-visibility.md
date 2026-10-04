@@ -34,7 +34,7 @@ use pouch::{ Vec };
 use ink::Logger;
 
 entry fn main() {
-    let log = Logger.new("uses");
+    let log = Logger("uses");
     let v = Vec<i32>.new();
     log.info(f"{v.len()}");
 }
@@ -47,7 +47,7 @@ entry fn main() {
 The package is **one bare identifier**; the names are one or more
 idents. rut is fully statically typed: the compiler resolves every used
 name and knows from usage whether it lands in type position (`Vec` in
-an annotation) or value position (`Logger.new(..)`), so there is nothing
+an annotation) or value position (`Logger(..)`), so there is nothing
 for the user to annotate. An unreferenced use name is a lint, not an
 error.
 

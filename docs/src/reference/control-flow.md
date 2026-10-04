@@ -55,7 +55,7 @@ fn describe(n: i32) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     log.info(f"{describe(0)} {describe(2)} {describe(10)}");
 }
 ```
@@ -98,9 +98,9 @@ use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-fn go() { let log = Logger.new("t"); log.info("go"); }
-fn brake() { let log = Logger.new("t"); log.info("brake"); }
-fn stop() { let log = Logger.new("t"); log.info("stop"); }
+fn go() { let log = Logger("t"); log.info("go"); }
+fn brake() { let log = Logger("t"); log.info("brake"); }
+fn stop() { let log = Logger("t"); log.info("stop"); }
 
 entry fn main() {
     let l = Light.Yellow;
@@ -124,7 +124,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let p: ?Point = Point { x: 7, y: 0 };
     when (p != nil) {
         true -> { log.info(f"{p.x}"); },

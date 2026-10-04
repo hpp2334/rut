@@ -34,7 +34,7 @@ use ink::{ Logger };
 struct Point { x: f32; y: f32 }
 
 entry fn main() {
-    let log = Logger.new("values");
+    let log = Logger("values");
     let mut p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
     p.x = 4;            // q.x is 4 now — sharing is the law
@@ -83,7 +83,7 @@ fn lookup(id: i64) -> ?User {
 }
 
 entry fn main() {
-    let log = Logger.new("values");
+    let log = Logger("values");
     let u = lookup(7);                // ?User
     log.info(f"u.name = {u.name}");   // auto-deref when non-nil
     let missing = lookup(8);
@@ -153,7 +153,7 @@ fn hex_digit(c: u32) -> i64 {
 }
 
 entry fn main() {
-    let log = Logger.new("values");
+    let log = Logger("values");
     let (raw, err) = parse_hex("4869");
     if (err != "") { log.info(f"err: {err}"); return; }   // propagate
     log.info(f"ok: {raw.decode()} ({raw.len()} bytes)");

@@ -19,7 +19,7 @@ struct Style {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let s = Style {};
     log.info(f"{s.color} {s.width}");
 }
@@ -42,7 +42,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let mut p = Point { x: 1, y: 2 };
     let q = p;                       // SHARE: q and p name one cell (O(1))
     p.x = 4;                         // q.x is 4 now — sharing is the law
@@ -71,7 +71,7 @@ fn nudged(pt: Point) -> Point {     // builds a NEW record
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let p2 = nudged(Point { x: 1, y: 2 });
     log.info(f"{p2.x} {p2.y}");
 }
@@ -107,7 +107,7 @@ struct Style { color: u32 = 0xff00ff; width: f32 = 1; }
 struct Rect { min: Point; max: Point; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let q = Point { x: 9, y: 9 };
     let s = Style {};                     // zero-value defaults fill the fields
     let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell
@@ -161,7 +161,7 @@ impl Counter {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let c = Counter.new().bump().bump();
     log.info(f"{c.value()}");
 }

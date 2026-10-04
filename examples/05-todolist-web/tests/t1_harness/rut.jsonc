@@ -15,6 +15,6 @@
     // offline remote from the committed dist/std artifacts, so the gate
     // never networks)
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/pouch.rutbundle", "sha256": "49f9958c7cec1b6b3ab87aa8c87cddadf31461d8dc6cd2e66f3d6b7b140c389b" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/nmapset.rutbundle", "sha256": "ff8e542e73644cea0f2e117231a74179cbfcdaec98cbce577ab6c0c3c3c5fb1a" }
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/nmapset.rutbundle", "sha256": "c74b763539f6a664b2af21ac9ada3c13219b8809639294c9f04906961e31d006" }
   }
 }

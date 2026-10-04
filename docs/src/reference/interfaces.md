@@ -198,7 +198,7 @@ fn dump(x: Shape) -> f64 {            // 1. interface-typed parameter
 }
 
 entry fn main() {
-    let log = Logger.new("shapes");
+    let log = Logger("shapes");
 
     dump(Circle { r: 1.0 });          // 2. the boundary checks the member set
 
@@ -308,7 +308,7 @@ impl CountUp {
 }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     for (let v of CountUp.new(3)) {
         log.info(f"tick {v}");
     }

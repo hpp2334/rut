@@ -17,7 +17,7 @@ language, the types, and the workflow below are the same either way.
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("hello");
+    let log = Logger("hello");
     let name = "rut";
     log.info(f"hello, {name}!");
 }
@@ -66,6 +66,10 @@ Three things to notice:
   and the manifest's `deps` row is what mounts it: a `use` line says
   *which* names the program wants, the manifest says *where* the package
   lives ([project structure](../reference/project-structure.md)).
+- **`Logger("hello")`** constructs the logger through the class's
+  designated `[constructor]` member — the same call as
+  `Logger.new("hello")`, spelled as the call form
+  ([classes](../reference/classes.md)).
 - **`f"hello, {name}!"`** is a format literal: `{expr}` interpolates any
   expression, rendered through the value's display contract.
 
@@ -79,7 +83,7 @@ Extend the file — rut infers, and every type is known at compile time:
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("hello");
+    let log = Logger("hello");
     let n = 10;            // i32 — the integer default
     let scale = 1.5;       // f32 — the float default
     let big: u64 = 10;     // u64 via annotation — fits the default

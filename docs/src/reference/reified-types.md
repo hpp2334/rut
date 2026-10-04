@@ -23,7 +23,7 @@ use ink::{ Logger };
 struct Point { x: i32; y: i32; }
 
 entry fn main() {
-    let log = Logger.new("t");
+    let log = Logger("t");
     let TID_POINT: u32 = type_id<Point>();
     log.info(f"{TID_POINT} eq={type_id<Point>() == TID_POINT}");
 }
