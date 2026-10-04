@@ -4724,7 +4724,7 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:107
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:108
 msgid "Visibility"
 msgstr "可见性"
 
@@ -4735,13 +4735,13 @@ msgid ""
 msgstr "每个声明都有一个可见性，不标注即**模块私有**——这是安全的默认。除非写明 `pub`，任何东西都不会外泄："
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:113
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:114
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr "形式"
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:113
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:114
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -4755,7 +4755,7 @@ msgid "Meaning"
 msgstr "含义"
 
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:115
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:116
 msgid "`pub fn ..`"
 msgstr "`pub fn ..`"
 
@@ -4765,7 +4765,7 @@ msgid "public — importable by any module, other packages included"
 msgstr "公开——任何模块都可导入，其他包也不例外"
 
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:116
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:117
 msgid "`pub(mod) fn ..`"
 msgstr "`pub(mod) fn ..`"
 
@@ -4775,7 +4775,7 @@ msgid "visible everywhere in this package's module tree"
 msgstr "在本包的模块树内处处可见"
 
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:117
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:118
 msgid "`pub(super) fn ..`"
 msgstr "`pub(super) fn ..`"
 
@@ -5715,7 +5715,7 @@ msgstr ""
 "键来自一个固定集合——整数、`bool`、`str`、`bytes`（没有浮点数：它们没有稳定的相等契约）——由宿主做哈希；用户自定义的键以规范编码成 `bytes` 的方式破例。命中返回的是存储的单元，不是副本。没有迭代表面：map 和 set 回答问题，不做遍历。"
 
 
-#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:171
+#: src/tutorial/stdlib.md:206 src/reference/stdlib.md:173
 msgid "`flow` — the push pipeline"
 msgstr "`flow` —— 推送管线"
 
@@ -6232,7 +6232,7 @@ msgstr ""
 
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
-#: src/core-concepts/interfaces-and-dispatch.md:284
+#: src/core-concepts/interfaces-and-dispatch.md:288
 #: src/core-concepts/memory.md:208
 msgid "What this buys you"
 msgstr "这给你带来什么"
@@ -6933,57 +6933,58 @@ msgstr ""
 
 #: src/core-concepts/interfaces-and-dispatch.md:21
 msgid ""
-"**marker = engine hook** — the bracket markers (`[disposal]`, `[iterable]`) are engine contract slots, not polymorphism."
+"**marker = designation** — the bracket markers (`[disposal]`, `[iterable]`, `[constructor]`) are designated surfaces, not polymorphism (`[disposal]` and `[iterable]` are engine hooks; `[constructor]` binds the user's `Type(..)` call form)."
 msgstr ""
+"**标记 = 指定**——括号标记（`[disposal]`、`[iterable]`、`[constructor]`）是指定表面，不是多态（`[disposal]` 与 `[iterable]` 是引擎钩子；`[constructor]` 绑定的是用户的 `Type(..)` 调用形式）。"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:23
+#: src/core-concepts/interfaces-and-dispatch.md:25
 msgid ""
 "**closed class = engine value** — `Future<T>` and `RunContext` are engine-minted; no user spelling can become one."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:26
-msgid "And the corollaries that keep the model honest:"
-msgstr ""
-
-
 #: src/core-concepts/interfaces-and-dispatch.md:28
-msgid ""
-"**Scope changes spelling, never meaning.** What a module imports changes which names resolve, never what a type can do."
+msgid "And the corollaries that keep the model honest:"
 msgstr ""
 
 
 #: src/core-concepts/interfaces-and-dispatch.md:30
 msgid ""
-"**One job per mechanism.** The member-set check admits; the itable dispatches; the marker designates. No mechanism does two jobs."
+"**Scope changes spelling, never meaning.** What a module imports changes which names resolve, never what a type can do."
 msgstr ""
 
 
 #: src/core-concepts/interfaces-and-dispatch.md:32
 msgid ""
+"**One job per mechanism.** The member-set check admits; the itable dispatches; the marker designates. No mechanism does two jobs."
+msgstr ""
+
+
+#: src/core-concepts/interfaces-and-dispatch.md:34
+msgid ""
 "**No mechanism may make a type's capability depend on imports.** A type's members are where the type is declared; no `use` anywhere can add or remove them."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:35
+#: src/core-concepts/interfaces-and-dispatch.md:37
 msgid ""
 "**Wrappers are explicit manufacture at the call site.** A primitive crosses into polymorphism inside a spelled wrapper construction — never auto-inserted."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:38
+#: src/core-concepts/interfaces-and-dispatch.md:40
 msgid ""
 "**Satisfaction is boundary checking, never resolution search.** The compiler checks the member set at param-passing, typed lets/assigns, returns, and boxing sites; it never scans the program for \"who might implement this\"."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:43
+#: src/core-concepts/interfaces-and-dispatch.md:45
 msgid "The shape of an interface"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:45
+#: src/core-concepts/interfaces-and-dispatch.md:47
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -7010,48 +7011,48 @@ msgid ""
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:72
+#: src/core-concepts/interfaces-and-dispatch.md:74
 msgid ""
 "**Signatures only, no bodies.** An interface declares members — no fields, no properties, and no default implementations, ever. One member kind means one dispatch candidate per call; a default body would be a second candidate with a resolution law of its own."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:76
+#: src/core-concepts/interfaces-and-dispatch.md:78
 msgid ""
 "**`Self` and generics are legal** in signatures; interface generic parameters take no bounds. Each type-argument list gives the interface its own member set."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:79
+#: src/core-concepts/interfaces-and-dispatch.md:81
 msgid ""
 "**No `pub` on members, no `requires` on the interface, no embedding.** A flat member set; compose by declaring the members."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:81
+#: src/core-concepts/interfaces-and-dispatch.md:83
 msgid ""
 "**One impl form.** `impl T { .. }` defines the type's inherent members and may live only in the module that declares `T`. `impl I for T` does not parse — there is no second form."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:85
+#: src/core-concepts/interfaces-and-dispatch.md:87
 msgid ""
 "Type bodies are **fields only** — a `fn` inside a `struct` or `class` body is a parse error. Every method a type has lives in an impl block."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:88
+#: src/core-concepts/interfaces-and-dispatch.md:90
 msgid "Interface-typed values"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:90
+#: src/core-concepts/interfaces-and-dispatch.md:92
 msgid ""
 "An interface name in type position is the bare name — there is no object-type keyword:"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:93
+#: src/core-concepts/interfaces-and-dispatch.md:95
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -7099,133 +7100,133 @@ msgid ""
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:142
+#: src/core-concepts/interfaces-and-dispatch.md:144
 msgid ""
 "An interface-typed value is a reference to a real cell that still carries its exact class. Passing a concrete value at an interface-typed position is implicit on assignment, argument passing, and returns, allocates nothing, and is gated by exactly one question: does the value's type have the members? There is no top interface to widen to, and intersection types (`A & B`) are ruled out by design — when you need both capabilities, declare an interface that spells both member sets."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:151
+#: src/core-concepts/interfaces-and-dispatch.md:153
 msgid "Dispatch: the two-rule law"
 msgstr "分派：两条规则的法则"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:153
+#: src/core-concepts/interfaces-and-dispatch.md:155
 msgid ""
 "Every method call compiles under one of exactly two rules, fixed at compile time as a property of the _call site_:"
 msgstr "每个方法调用都恰好按两条规则之一编译，编译期即固定，是_调用点_的属性："
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:156
+#: src/core-concepts/interfaces-and-dispatch.md:158
 msgid ""
 "**Static** — the call site names exactly one concrete type. The call binds directly to that type's member, no table involved:"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:158
+#: src/core-concepts/interfaces-and-dispatch.md:160
 msgid "a concrete receiver (`c.area()` on `c: Circle`);"
 msgstr "具体接收者（`c: Circle` 上的 `c.area()`）；"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:159
+#: src/core-concepts/interfaces-and-dispatch.md:161
 msgid ""
 "an interface-typed local whose single concrete origin the compiler tracked (`let s: Area = Point { .. }; s.area()`);"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:161
+#: src/core-concepts/interfaces-and-dispatch.md:163
 msgid ""
 "an interface-typed _parameter_ — the function specializes per concrete argument at monomorphization, so an interface parameter is effectively an implicit generic bound;"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:164
+#: src/core-concepts/interfaces-and-dispatch.md:166
 msgid "inside monomorphized generics."
 msgstr "单态化的泛型内部。"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:165
+#: src/core-concepts/interfaces-and-dispatch.md:167
 #: src/reference/interfaces.md:245
 msgid ""
 "**Itable** — the receiver is interface-typed with multiple possible concrete origins; the call consults the value's itable — the per-(concrete type × interface) method table:"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:168
+#: src/core-concepts/interfaces-and-dispatch.md:170
 msgid "elements of a heterogeneous container (`Vec<Area>`);"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:169
+#: src/core-concepts/interfaces-and-dispatch.md:171
 msgid "interface-typed field and element loads (the cell may hold any satisfier);"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:171
+#: src/core-concepts/interfaces-and-dispatch.md:173
 msgid ""
 "branch-merged bindings (`if` arms carrying different concretes into one interface-typed variable)."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:174
+#: src/core-concepts/interfaces-and-dispatch.md:176
 msgid ""
 "The itable rows are synthesized at the boxing sites — the same boundary checks that proved satisfaction fill the rows. The origin analysis is conservative: any merge, indirection, or cross-function flow counts as multiple. Mis-analysis cannot produce wrong code — an uncertain origin costs one itable hop, never a wrong static bind. And the same descriptor that answers itable calls answers `is` probes: one runtime truth per value."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:182
+#: src/core-concepts/interfaces-and-dispatch.md:184
 msgid "Type tests"
 msgstr "类型测试"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:184
+#: src/core-concepts/interfaces-and-dispatch.md:186
 msgid ""
 "`expr is Type` yields a `bool` and is total — it never traps. Two probes, one keyword:"
 msgstr "`expr is Type` 产出 `bool` 且是全函数——它从不触发陷阱。两个探测，一个关键字："
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:187
+#: src/core-concepts/interfaces-and-dispatch.md:189
 msgid ""
 "**Concrete RHS**: is the value's exact type `T`? (No inheritance — a single id compare.)"
 msgstr "**具体类型右侧**：值的确切类型是不是 `T`？（没有继承——一次单独的 id 比较。）"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:189
+#: src/core-concepts/interfaces-and-dispatch.md:191
 msgid ""
 "**Interface RHS**: does the value's concrete type have itable fills for the interface — i.e. was it satisfaction-boxed somewhere? A capability probe, usable on any value (`k is Encodable`)."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:193
+#: src/core-concepts/interfaces-and-dispatch.md:195
 msgid ""
 "`is` has no flow-sensitive effects: a true probe does not narrow `x`. When the static type already answers — on an exact receiver the member set decides at compile time — the probe folds to a constant. Interface-typed values cannot be downcast to a concrete type at all — if you need `Circle`\\-specific behavior behind an `Area`, put that member on the interface. The one recovery path for erased values is the explicit `opaque` box (see the reference on [`opaque`](../reference/opaque.md))."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:202
+#: src/core-concepts/interfaces-and-dispatch.md:204
 msgid "Visibility: the use-both gate"
 msgstr "可见性：use 双侧闸门"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:204
+#: src/core-concepts/interfaces-and-dispatch.md:206
 msgid ""
 "Calling an interface's member requires **both** names in scope: the type (by declaration or `use`) _and_ the interface (`use`). Inherent members need only the type. A call through an interface no `use` brings in is an error — \"use `I` to call its methods on `T`\" — so a foreign interface can never silently change what a call site means. The gate is diagnostic-level: it governs which calls a module may spell, never what a type can do (scope changes spelling, never meaning)."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:213
+#: src/core-concepts/interfaces-and-dispatch.md:215
 msgid "The iteration protocol"
 msgstr "迭代协议"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:215
+#: src/core-concepts/interfaces-and-dispatch.md:217
 msgid ""
 "A type is iterable when an inherent impl marks a member `[iterable]` (the bracket marker — the contract's shape is `fn <free>(self, emit: fn(E) -> bool)`, the element falling out of the marked member's own signature):"
 msgstr ""
 "当一个固有 impl 把某个成员标记为 `[iterable]` 时，该类型就是可迭代的（括号标记——契约的形状是 `fn <自由名>(self, emit: fn(E) -> bool)`，元素类型从被标记成员自己的签名中掉出来）："
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:220
+#: src/core-concepts/interfaces-and-dispatch.md:222
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -7253,48 +7254,49 @@ msgid ""
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:251
+#: src/core-concepts/interfaces-and-dispatch.md:253
 msgid ""
 "`for (let v of it) { body }` desugars to `it.<member>(emit)` with a synthetic closure: the body runs, then `emit` returns `true`; `break` returns `false`. The loop variable is ONE variable reassigned per iteration — the same law the fused index loops follow (the capture law treats the two forms identically; see [functions, closures, and generics](../reference/functions-closures-generics.md)). The builtin sequences (`[T]`, `str`, `bytes`, and the standard growable `Vec`) keep fused index loops instead; they never pay a per-element call."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:261
+#: src/core-concepts/interfaces-and-dispatch.md:263
 msgid "Engine contracts are not interfaces"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:263
+#: src/core-concepts/interfaces-and-dispatch.md:265
 msgid ""
-"The engine's own contracts stand alone — no polymorphism machinery, no member-set checks: the bracket markers `[disposal]` and `[iterable]` designate inherent impl members (one per contract per class, the signature checked against the contract, dispatched through a designated slot — never an itable lookup), and the async protocol lives on two CLOSED `builtin class` rows, `Future<T>` and `RunContext`. The closure IS the wall: futures and cx records are engine-minted only, so a user type cannot BE one — the member-set law cannot see engine identity, and nominal closure is the only spelling of \"engine-minted only\". See [the async model](async-model.md), [interfaces](../reference/interfaces.md), and [the Rc heap](../reference/rc-heap.md)."
+"The engine's own contracts stand alone — no polymorphism machinery, no member-set checks: the bracket markers `[disposal]`, `[iterable]`, and `[constructor]` designate inherent impl members (one per contract per class, the signature checked against the contract — `[disposal]` and `[iterable]` dispatched through a designated slot, never an itable lookup; `[constructor]` bound at the call form `Type(..)`, byte-identical to the member call), and the async protocol lives on two CLOSED `builtin class` rows, `Future<T>` and `RunContext`. The closure IS the wall: futures and cx records are engine-minted only, so a user type cannot BE one — the member-set law cannot see engine identity, and nominal closure is the only spelling of \"engine-minted only\". See [the async model](async-model.md), [interfaces](../reference/interfaces.md), and [the Rc heap](../reference/rc-heap.md)."
 msgstr ""
+"引擎自己的契约独立存在——没有多态机器，没有成员集检查：括号标记 `[disposal]`、`[iterable]` 与 `[constructor]` 指定固有 impl 成员（每个类每个契约一个，签名对照契约检查——`[disposal]` 与 `[iterable]` 经指定槽位分派，绝不走 itable 查找；`[constructor]` 绑定在调用形式 `Type(..)` 上，与成员调用逐字节相同），而 async 协议住在两个**封闭的** `builtin class` 行上，`Future<T>` 与 `RunContext`。封闭就是墙：future 与 cx 记录只由引擎铸造，用户类型不可能成为其中之一——成员集法则看不见引擎身份，名义封闭是“仅引擎铸造”的唯一写法。见[异步模型](async-model.md)、[接口](../reference/interfaces.md)与 [the Rc heap](../reference/rc-heap.md)。"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:277
+#: src/core-concepts/interfaces-and-dispatch.md:281
 msgid "Equality is not an interface"
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:279
+#: src/core-concepts/interfaces-and-dispatch.md:283
 msgid ""
 "`==` is builtin and cannot be opted into or out of: primitives compare by value, `str`/`bytes` by content, everything else by cell identity. Field-wise comparison is a loop you write, or the map packages' own key rules. See [everything is a value](everything-is-a-value.md)."
 msgstr ""
 "`==` 是内置的，不能选择加入或退出：原始类型按值比较，`str`/`bytes` 按内容，其余一切按单元身份。逐字段比较是你自己写的循环，或者 map 包自带的键规则。参见[一切皆值](everything-is-a-value.md)。"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:286
+#: src/core-concepts/interfaces-and-dispatch.md:290
 msgid ""
 "**Structural satisfaction keeps the surface small**: one mechanism (the member set), one checking moment (the boundary), no registry to reason about — a type's capability is readable off its own impl."
 msgstr ""
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:289
+#: src/core-concepts/interfaces-and-dispatch.md:293
 msgid ""
 "**The two-rule law** makes dispatch predictable: you can tell, per call site, whether you are paying a hop."
 msgstr "**两条规则的法则**让分派可预测：对每个调用点，你都能说出自己是否在付一次跳转的钱。"
 
 
-#: src/core-concepts/interfaces-and-dispatch.md:291
+#: src/core-concepts/interfaces-and-dispatch.md:295
 msgid ""
 "**The boundary check** keeps costs local: satisfaction is proved where the value crosses, the itable row is filled right there, and nothing anywhere else in the program can change either."
 msgstr ""
@@ -11779,15 +11781,15 @@ msgstr ""
 
 
 #: src/reference/lexical-structure.md:62
-msgid "`disposal` / `iterable`"
-msgstr "`disposal` / `iterable`"
+msgid "`disposal` / `iterable` / `constructor`"
+msgstr "`disposal` / `iterable` / `constructor`"
 
 
 #: src/reference/lexical-structure.md:62
 msgid ""
-"the bracket markers — `[disposal] fn` / `[iterable] fn` designate an inherent impl member as an engine contract slot (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md))"
+"the bracket markers — `[disposal] fn` / `[iterable] fn` / `[constructor] fn` designate an inherent impl member as a designated surface (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md))"
 msgstr ""
-"the bracket markers — `[disposal] fn` / `[iterable] fn` 将一个固有 impl 成员指定为引擎契约槽位（在可见性之前：`[disposal] pub fn ..`）；该集合是封闭且引擎所有的（[接口](interfaces.md)）"
+"括号标记——`[disposal] fn` / `[iterable] fn` / `[constructor] fn` 将固有 impl 的一个成员指定为指定表面（写在可见性之前：`[disposal] pub fn ..`）；该集合是封闭且引擎所有的（[接口](interfaces.md)）"
 
 
 #: src/reference/lexical-structure.md:64
@@ -11884,12 +11886,12 @@ msgstr ""
 
 #: src/reference/lexical-structure.md:100
 msgid ""
-"**Construction is a method call, never a type-call.** User classes construct through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` — see [Classes and constructors](classes.md). The one exception is the newtype decl's own constructor: `class JsonI64(i64);` constructs as the call `JsonI64(64)` (see [Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin surfaces keep other call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat `[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic types](builtin-generic-types.md))."
+"**Construction is a method call; the call form binds by designation.** User classes construct through their own class methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` — see [Classes and constructors](classes.md). A class that designates a `[constructor]` member additionally takes the call form: `Point(1.0, 2.0)` is sugar for the designated member call, byte-identical lowering. The newtype decl's own constructor needs no marker: `class JsonI64(i64);` constructs as the call `JsonI64(64)` — the compiler-provided positional mint (see [Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin surfaces keep the other call forms: `bytes.zeroed(n)`, `opaque(v)`, the repeat `[v; n]`, and `Vec<T>.from(..)` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
-"**构造是方法调用，绝不是类型调用。** 用户类通过自己的类方法进行构造：`Rect.new(3, 4)`、`Rect.from(other)`、`Version.parse(s)` —— 参见[类与构造器](classes.md)。唯一的例外是新类型（newtype）声明自己的构造器：`class JsonI64(i64);` 以调用 `JsonI64(64)` 的形式构造（参见[新类型](classes.md#newtypes-the-one-field-wrapper)）。只有内置接口面保留其余调用形式：`bytes.zeroed(n)`、`opaque(v)`、重复形式 `[v; n]`，以及 `Vec<T>.from(..)`（参见[内置泛型类型](builtin-generic-types.md)）。"
+"**构造是方法调用；调用形式以指定来绑定。** 用户类通过自己的类方法进行构造：`Rect.new(3, 4)`、`Rect.from(other)`、`Version.parse(s)` —— 参见[类与构造器](classes.md)。指定了 `[constructor]` 成员的类还接受调用形式：`Point(1.0, 2.0)` 是指定成员调用的构造糖——lowering 逐字节相同。新类型（newtype）声明自己的构造器无需标记：`class JsonI64(i64);` 以调用 `JsonI64(64)` 的形式构造——编译器提供的位置铸造（参见[新类型](classes.md#newtypes-the-one-field-wrapper)）。只有内置表面保留其余调用形式：`bytes.zeroed(n)`、`opaque(v)`、重复形式 `[v; n]`，以及 `Vec<T>.from(..)`（参见[内置泛型类型](builtin-generic-types.md)）。"
 
 
-#: src/reference/lexical-structure.md:110
+#: src/reference/lexical-structure.md:113
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the compiler attaches no semantics to it."
 msgstr "尾部 `$` 标记仅靠这条风格规则保持其意义；编译器不为它附加任何语义。"
@@ -12046,121 +12048,122 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:54
 msgid ""
-"The engine's builtin names — the primitives, `opaque`, `panic`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The gated names resolve only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave never needs the import, only source that spells one of the names does. The bracket markers (`[disposal]`/`[iterable]`) need no import — the marker word is the designation, not a name ([Host fns and declaration files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through `use`."
+"The engine's builtin names — the primitives, `opaque`, `panic`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The gated names resolve only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave never needs the import, only source that spells one of the names does. The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — the marker word is the designation, not a name ([Host fns and declaration files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through `use`."
 msgstr ""
+"引擎的内建名字——各基本类型、`opaque`、`panic`、`type_id<T>()`、`str(x)`——是**环境性的**：使用它们无需 `use`。被把守的名字只能经 `use core::{ .. }` 解析：常量 `NAN`、disposal 上下文 `DisposalContext`、弱引用 `Weak<T>`，以及封闭的 async 对（`Future<T>`、`RunContext`）——引擎的编织从不需要导入，需要导入的只是拼写了其中某个名字的源代码。括号标记（`[disposal]`/`[iterable]`/`[constructor]`）无需导入——标记词就是指定，不是名字（[宿主 fn 与声明文件](host-fns.md)）。包代码（`pouch`、`ink`、`nmapset`、...）只经 `use` 挂载。"
 
 
-#: src/reference/modules-and-visibility.md:67
+#: src/reference/modules-and-visibility.md:68
 msgid "Module-level `let`"
 msgstr "模块级 `let`"
 
 
-#: src/reference/modules-and-visibility.md:69
+#: src/reference/modules-and-visibility.md:70
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, builtin operators over load-time expressions, struct literals whose fields are load-time expressions, fixed-array literals whose elements are, `type_id<T>()`, and builtin zero allocations (`[nil; n]` with a const `n`). Calls to user functions are not load-time expressions."
 msgstr ""
 "初始化式必须是**加载期表达式**：字面量、枚举成员、作用于加载期表达式的内置运算符、字段均为加载期表达式的结构体字面量、元素均为加载期表达式的定长数组字面量、`type_id<T>()`，以及内置的零值分配（`[nil; n]`，其中 `n` 为常量）。对用户函数的调用不是加载期表达式。"
 
 
-#: src/reference/modules-and-visibility.md:80
+#: src/reference/modules-and-visibility.md:81
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or held by the embedder and passed across the boundary. **No user code runs at load.**"
 msgstr "不存在可变的模块状态：程序状态在 `main` 中构造，或由嵌入方持有并跨边界传入。**加载期间不会运行任何用户代码。**"
 
 
-#: src/reference/modules-and-visibility.md:84
+#: src/reference/modules-and-visibility.md:85
 msgid "Entry points"
 msgstr "入口点"
 
 
-#: src/reference/modules-and-visibility.md:86
+#: src/reference/modules-and-visibility.md:87
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — `entry fn main` for a script, sync or async. `entry fn` publishes a function to the _embedder_; `entry` is orthogonal to visibility and does not combine with `pub`. Consequences of declarations-only loading: no use side-effect ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 "嵌入方加载模块后会显式调用一个入口函数 —— 脚本就是 `entry fn main`，同步或异步均可。`entry fn` 把函数发布给 _嵌入方_；`entry` 与可见性正交，且不与 `pub` 组合。只含声明的加载带来的结果：不存在 use 副作用的顺序问题，不存在加载顺序 bug，加载行为确定且开销低。"
 
 
-#: src/reference/modules-and-visibility.md:93
+#: src/reference/modules-and-visibility.md:94
 msgid "Bindings: `let` vs `let mut`"
 msgstr "绑定：`let` 与 `let mut`"
 
 
-#: src/reference/modules-and-visibility.md:95
+#: src/reference/modules-and-visibility.md:96
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through `x`, and no `mut self` method calls on it. It is a **read-only view of the shared object**."
 msgstr ""
 "`let x = e;` 以不可变方式绑定 —— 不能重新赋值，不能通过 `x` 给字段赋值，也不能对它调用 `mut self` 方法。它是**共享对象的只读视图**。"
 
 
-#: src/reference/modules-and-visibility.md:98
+#: src/reference/modules-and-visibility.md:99
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object it holds**. Every non-primitive is a shared cell (see [By-reference and nullable](by-reference-and-nullable.md)), so that write is visible through every other handle: `mut` is _permission_, never a copy. Every assignment path must run through a `mut` binding."
 msgstr ""
 "`let mut x = e;` 可以重新赋值，并授予**对其所持有对象**的写访问权。每个非基本类型值都是共享单元（参见[按引用与可空](by-reference-and-nullable.md)），因此这一写入会透过其他所有句柄可见：`mut` 是 _权限_，绝不是复制。每条赋值路径都必须经过 `mut` 绑定。"
 
 
-#: src/reference/modules-and-visibility.md:103
+#: src/reference/modules-and-visibility.md:104
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn area(p: Point)` promises not to."
 msgstr ""
 "参数可以声明 `mut name` —— 这是被调用方**改动调用方对象**的许可：`fn step(mut p: Point)` 会移动调用方的点；`fn area(p: Point)` 则承诺不这样做。"
 
 
-#: src/reference/modules-and-visibility.md:109
+#: src/reference/modules-and-visibility.md:110
 msgid ""
 "Modules form a tree per package (files in directories; the package root is the root module). Every declaration — and every class member — carries a visibility:"
 msgstr "每个包内的模块构成一棵树（文件存放于目录中；包根即根模块）。每个声明 —— 以及每个类成员 —— 都带有一种可见性："
 
 
-#: src/reference/modules-and-visibility.md:115
+#: src/reference/modules-and-visibility.md:116
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr "**public** —— 可被任何 rut 模块命名（包括其他包）"
 
 
-#: src/reference/modules-and-visibility.md:116
+#: src/reference/modules-and-visibility.md:117
 msgid "visible everywhere inside this **package's module tree**"
 msgstr "在本**包的模块树**内随处可见"
 
 
-#: src/reference/modules-and-visibility.md:117
+#: src/reference/modules-and-visibility.md:118
 msgid "visible to the **parent module** only"
 msgstr "仅对**父模块**可见"
 
 
-#: src/reference/modules-and-visibility.md:118
+#: src/reference/modules-and-visibility.md:119
 msgid "`pub(self) fn ..`"
 msgstr "`pub(self) fn ..`"
 
 
-#: src/reference/modules-and-visibility.md:118
+#: src/reference/modules-and-visibility.md:119
 msgid "module-private — **the default**"
 msgstr "模块私有 —— **默认值**"
 
 
-#: src/reference/modules-and-visibility.md:120
+#: src/reference/modules-and-visibility.md:121
 msgid "Unannotated = `pub(self)`: nothing leaks unless it says `pub`."
 msgstr "未加注解即等同 `pub(self)`：除非显式写明 `pub`，否则任何东西都不会泄漏。"
 
 
-#: src/reference/modules-and-visibility.md:121
+#: src/reference/modules-and-visibility.md:122
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an impl exports with its target type), `fn`, `type` aliases. On a `class` declaration it means the _type name_ is visible."
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:124
+#: src/reference/modules-and-visibility.md:125
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is module-private; `pub` (optionally scoped) exposes it. See [Classes and constructors](classes.md)."
 msgstr "**类成员采用同样的形式**：未加注解的字段或方法是模块私有的；`pub`（可带作用域）将其公开。参见[类与构造器](classes.md)。"
 
 
-#: src/reference/modules-and-visibility.md:127
+#: src/reference/modules-and-visibility.md:128
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see [Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub fn` exports cross-module, plain `fn` is module-private — the same law a class's methods follow, enums included (see [Structs](structs.md) and [Enums](enums.md)). Interface members take no `pub` at all — they are as visible as their interface; satisfaction reads a type's **public** inherent members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:135
+#: src/reference/modules-and-visibility.md:136
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones."
 msgstr ""
@@ -12214,7 +12217,7 @@ msgid "seq"
 msgstr "序列"
 
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:322
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:324
 msgid "`Vec<T>`"
 msgstr "`Vec<T>`"
 
@@ -12225,7 +12228,7 @@ msgid ""
 msgstr "可变、可增长的缓冲区 —— 共享；一个构建在 `[T]` 之上的库类（参见[内置泛型类型](builtin-generic-types.md)）"
 
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:321
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:323
 msgid "`[T]`"
 msgstr "`[T]`"
 
@@ -12242,7 +12245,7 @@ msgstr "可空"
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:320
+#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:322
 msgid "`?T`"
 msgstr "`?T`"
 
@@ -12313,7 +12316,7 @@ msgid ""
 msgstr "码点索引 `i` 处的码点（越界即陷阱 —— 索引越界是 bug，而非数据问题）"
 
 
-#: src/reference/primitive-types.md:29 src/reference/stdlib.md:40
+#: src/reference/primitive-types.md:29 src/reference/stdlib.md:41
 msgid "`str.from_code(n: u32) -> str`"
 msgstr "`str.from_code(n: u32) -> str`"
 
@@ -12778,7 +12781,7 @@ msgid "element access; out-of-bounds traps"
 msgstr "元素访问；越界陷阱"
 
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:381
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:383
 msgid "`len() -> i32`"
 msgstr "`len() -> i32`"
 
@@ -12798,7 +12801,7 @@ msgid "iteration; `x` is the shared element"
 msgstr "迭代；`x` 是共享的元素"
 
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:169
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:171
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr "`slice(from, to) -> ?Vec<T>`"
 
@@ -12818,7 +12821,7 @@ msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr "把活跃元素复制到一个全新的、大小恰好的数组"
 
 
-#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:168
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:170
 msgid "`freeze() -> bytes`"
 msgstr "`freeze() -> bytes`"
 
@@ -14289,18 +14292,216 @@ msgstr ""
 
 
 #: src/reference/classes.md:79
+msgid "`[constructor]` — the designated construction surface"
+msgstr "`[constructor]`——指定的构造表面"
+
+
+#: src/reference/classes.md:81
+msgid ""
+"A bracket marker designates THE member a surface binds to — the member's name is free; the designation routes the call. Three designated surfaces, one law:"
+msgstr "括号标记指定的是表面所绑定的**那一个**成员——成员的名字是自由的；指定路由调用。三个指定表面，一条法则："
+
+
+#: src/reference/classes.md:85
+msgid "marker"
+msgstr "标记"
+
+
+#: src/reference/classes.md:85 src/reference/stdlib.md:117
+#: src/reference/stdlib.md:213
+msgid "surface"
+msgstr "表面"
+
+
+#: src/reference/classes.md:85
+msgid "caller"
+msgstr "调用者"
+
+
+#: src/reference/classes.md:85
+msgid "signature owner"
+msgstr "签名归属"
+
+
+#: src/reference/classes.md:85
+msgid "body compiled"
+msgstr "体如何编译"
+
+
+#: src/reference/classes.md:87 src/reference/stdlib.md:89
+msgid "`[disposal]`"
+msgstr "`[disposal]`"
+
+
+#: src/reference/classes.md:87
+msgid "cell death"
+msgstr "单元死亡"
+
+
+#: src/reference/classes.md:87
+msgid "the engine, at refcount zero"
+msgstr "引擎，在引用计数归零时"
+
+
+#: src/reference/classes.md:87
+msgid "the engine — `(mut self, cx: DisposalContext)`"
+msgstr "引擎——`(mut self, cx: DisposalContext)`"
+
+
+#: src/reference/classes.md:87
+msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
+msgstr "死亡时即刻入队（[the Rc heap](rc-heap.md)）"
+
+
+#: src/reference/classes.md:88 src/reference/stdlib.md:88
+msgid "`[iterable]`"
+msgstr "`[iterable]`"
+
+
+#: src/reference/classes.md:88
+msgid "`for (x of it)`"
+msgstr "`for (x of it)`"
+
+
+#: src/reference/classes.md:88
+msgid "the for-of desugar"
+msgstr "for-of 脱糖"
+
+
+#: src/reference/classes.md:88
+msgid "the member — its `emit` parameter fixes `E`"
+msgstr "成员——它的 `emit` 参数定下 `E`"
+
+
+#: src/reference/classes.md:88
+msgid "fused into the loop ([interfaces](interfaces.md))"
+msgstr "融合进循环（[接口](interfaces.md)）"
+
+
+#: src/reference/classes.md:89 src/reference/stdlib.md:90
+msgid "`[constructor]`"
+msgstr "`[constructor]`"
+
+
+#: src/reference/classes.md:89
+msgid "the call form `Type(..)`"
+msgstr "调用形式 `Type(..)`"
+
+
+#: src/reference/classes.md:89
+msgid "user code"
+msgstr "用户代码"
+
+
+#: src/reference/classes.md:89
+msgid "the member — its parameters fix the call's shape"
+msgstr "成员——它的参数定下调用的形状"
+
+
+#: src/reference/classes.md:89
+msgid "byte-identical to `Point.from_xy(..)`"
+msgstr "与 `Point.from_xy(..)` 逐字节相同"
+
+
+#: src/reference/classes.md:91
+msgid ""
+"`[constructor]` designates the class's construction surface — the call form `Type(..)` binds to the one marked member:"
+msgstr "`[constructor]` 指定类的构造表面——调用形式 `Type(..)` 绑定到那**一个**被标记的成员："
+
+
+#: src/reference/classes.md:94
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Point {\n"
+"    x: f32;\n"
+"    y: f32;\n"
+"}\n"
+"\n"
+"impl Point {\n"
+"    [constructor] pub fn from_xy(x: f32, y: f32) -> Self {\n"
+"        return Self { x: x, y: y };\n"
+"    }\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger.new(\"t\");\n"
+"    let p = Point(1.0, 2.0);      // sugar for Point.from_xy(1.0, 2.0)\n"
+"    log.info(f\"p=({p.x}, {p.y})\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/classes.md:119
+msgid ""
+"**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to `Point.from_xy(1.0, 2.0)` — the marker changes what the call form binds to, never what the call compiles to. `Point` as a bare (non-call) expression stays an error: the construction surface is the call form `Type(..)`, never the bare name."
+msgstr ""
+"**是糖，不是新机制。** `Point(1.0, 2.0)` 的 lower 与 `Point.from_xy(1.0, 2.0)` 逐字节相同——标记改变的是调用形式绑定到谁，绝不是调用被编译成什么。`Point` 作为裸的（非调用）表达式仍是错误：构造表面是调用形式 `Type(..)`，绝不是裸名字。"
+
+
+#: src/reference/classes.md:125
+msgid ""
+"**One designated constructor per class, on the inherent impl only.** Class bodies stay fields-only; a second `[constructor]` member is refused — \"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\". The member takes no receiver — \"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\" — and returns `Self` (or `?Self`): \"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\". An unknown bracket word was always refused, and the closed set now names three: \"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"."
+msgstr ""
+"**每个类至多一个被指定的构造器，且只在固有 impl 上。** 类主体保持只有字段；第二个 `[constructor]` 成员会被拒绝——\"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\"。该成员不带接收者——\"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\"——并且返回 `Self`（或 `?Self`）：\"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\"。未知的括号词从来都会被拒绝，而封闭集合现在点名三个：\"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"。"
+
+
+#: src/reference/classes.md:138
+msgid ""
+"**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> ?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` on a refused construction, exactly like the method call it is."
+msgstr ""
+"**`?Self` 是 try 构造。** 拼写为 `fn parse(s: str) -> ?Self` 的构造器让 `Type(..)` 应答 `?Type`——调用产出可空，构造被拒时得到 `nil`，与它本来就是的那次方法调用完全一致。"
+
+
+#: src/reference/classes.md:142
+msgid ""
+"**Newtypes never carry it** — `JsonI64(64)` is already the newtype's construction surface, the compiler-provided positional mint; there is nothing for the marker to designate. Structs and enums are refused too — structs construct by literal, and an enum's members are its own immortal singletons."
+msgstr ""
+"**新类型（newtype）从不携带它**——`JsonI64(64)` 已经是新类型的构造表面，即编译器提供的位置铸造；标记无可指定之物。结构体与枚举同样被拒绝——结构体以字面量构造，枚举的成员是它自己的不朽单例。"
+
+
+#: src/reference/classes.md:147
+msgid ""
+"**The seal holds.** Visibility rides the method's `pub` — an unannotated (module-private) constructor answers `Type(..)` only inside its own module. Outside, the used-class hint says so: \"`Point` constructs through its class methods (`Point.new(..)`) — mark one `[constructor]` to call the class itself\". Arity is the member call's — the refusal names the member (`Point.from_xy`)."
+msgstr ""
+"**密封依然成立。** 可见性跟随方法的 `pub`——未加注解的（模块私有）构造器只在自己的模块内应答 `Type(..)`。在模块之外，用到该类处的提示会说明这一点：\"`Point` constructs through its class methods (`Point.new(..)`) — mark one `[constructor]` to call the class itself\"。参数个数沿用成员调用的——拒绝信息点名成员（`Point.from_xy`）。"
+
+
+#: src/reference/classes.md:153
+msgid ""
+"**Resolution order for `Name(args)`**: a local fn value, then free fns, then the prelude, then the newtype mint, then the designated constructor, then the error — a free fn named `Point` wins."
+msgstr ""
+"**`Name(args)` 的解析顺序**：局部 fn 值，然后自由函数，然后 prelude，然后新类型铸造，然后被指定的构造器，最后才是错误——名为 `Point` 的自由函数胜出。"
+
+
+#: src/reference/classes.md:156
+msgid ""
+"**Generics ride the method-call path.** `Box(3)` infers exactly like `Box.of(3)` — the sugar IS the member call after resolution."
+msgstr "**泛型走方法调用路径。** `Box(3)` 的推断与 `Box.of(3)` 完全一致——解析之后，糖**就是**那次成员调用。"
+
+
+#: src/reference/classes.md:158
+msgid ""
+"**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, `default` — every existing class method keeps its place; the marker designates one of them as the call form's target, it does not remove the siblings."
+msgstr ""
+"**命名构造器依然可用。** `new`、`from_square`、`parse`、`open`、`default`——每个既有类方法都留在原位；标记只是把其中之一指定为调用形式的目标，绝不移除其余兄弟。"
+
+
+#: src/reference/classes.md:163
 msgid "Newtypes: the one-field wrapper"
 msgstr "新类型：单字段包装器"
 
 
-#: src/reference/classes.md:81
+#: src/reference/classes.md:165
 msgid ""
 "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary class: exactly one field, `inner`, of the wrapped type. The positional spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr ""
 "`class Name(Wrapped);` —— 位置式单字段声明。它就是一个普通的类：恰好一个字段 `inner`，类型是被包装的类型。位置式写法额外提供了构造器——调用形式 `Name(value)`："
 
 
-#: src/reference/classes.md:86
+#: src/reference/classes.md:170
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -14315,126 +14516,127 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:181
 msgid ""
 "**The wrapped type is unrestricted** — primitives, composites, tuples, fn types, another module's class: `class Opt(?i64);`, `class Pair((i32, str));`, `class Cb(fn(i32) -> str);` are all legal. The wrapped position is a FIELD type, never an impl target — that is the point. A wrapper is how a primitive or a third-party type gains a capability satisfaction can't reach: declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr ""
 "**被包装的类型不受限制** —— 原始类型、复合类型、元组、fn 类型、另一个模块的类：`class Opt(?i64);`、`class Pair((i32, str));`、`class Cb(fn(i32) -> str);` 全都合法。被包装的位置是一个字段类型，绝不是 impl 目标——这正是要点。包装器，就是让原始类型或第三方类型获得满足（satisfaction）够不着的能力的方式：声明包装器，在其上实现，把包装器递过边界。"
 
 
-#: src/reference/classes.md:104
+#: src/reference/classes.md:188
 msgid ""
 "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability exists exactly where the constructor is spelled. And no implicit forwarding: the wrapper exposes exactly its own members — `inner` (the ordinary field, ordinary visibility) and its `impl` methods."
 msgstr ""
 "**绝不自动插入。** `dump(64)` 永远是错误；能力只存在于拼写出构造器的地方。也没有隐式转发：包装器暴露的恰好是它自己的成员——`inner`（普通字段，普通可见性）与它的 `impl` 方法。"
 
 
-#: src/reference/classes.md:109
+#: src/reference/classes.md:193
 msgid ""
 "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never `JsonExt`). Per-type wrappers with type-specific bodies when the bodies differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr ""
 "**命名法则**：包装器以它所包装的东西命名（`JsonI64`，绝不是 `JsonExt`）。方法体各异时用逐类型的包装器，各带自己的方法体；一致的地方用泛型包装器覆盖：`class DebugWrap<T>(T);`。"
 
 
-#: src/reference/classes.md:113
+#: src/reference/classes.md:197
 msgid ""
 "**The generic instantiation law**: a binder is determined by the wrapped argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a `Tail<i32>`), or by explicit type arguments at the constructor (`Converter<i32>(\"64\")` — `class Converter<T>(str);` cannot infer, the binder is not in `str`). If any binder is undetermined, the call spells ALL binders — all-or-nothing: `class Pair<A, B>(i32);` accepts `Pair<i32, str>(7)`, never `Pair<i32>(7)`."
 msgstr ""
 "**泛型实例化法则**：绑定名出现在被包装实参中时，由该实参确定（`class Tail<T>([T]);` → `Tail([1, 2])` 就是一个 `Tail<i32>`）；否则由构造器处的显式类型实参确定（`Converter<i32>(\"64\")` —— `class Converter<T>(str);` 无法推断，绑定名不在 `str` 里）。只要有任何一个绑定名未被确定，调用就必须拼写出全部绑定名——全有或全无：`class Pair<A, B>(i32);` 接受 `Pair<i32, str>(7)`，绝不接受 `Pair<i32>(7)`。"
 
 
-#: src/reference/classes.md:121
+#: src/reference/classes.md:205
 msgid ""
 "**The third-party adapter** (the orphan case, dissolved): `class TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the capability — consumers manufacture `TheirJson(x)` from their own modules; the newtype flag rides the class's surface row like the class itself does."
 msgstr ""
 "**第三方适配器**（孤儿情形，就此消解）：`class TheirJson(TheirType);` 加上固有的 `encode`，就把能力交到了他们的类型手里——使用方在自己的模块里制造 `TheirJson(x)`；newtype 标志与类本身一样，搭载在类的接口面行上。"
 
 
-#: src/reference/classes.md:126
+#: src/reference/classes.md:210
 msgid ""
-"A braced class — even one with a single `inner` field — has no call construction. The positional spelling is what provides the constructor; everything else stays sealed."
-msgstr "花括号类——哪怕只有一个 `inner` 字段——也没有调用构造。位置式写法才提供构造器；其余一切保持封闭。"
+"A braced class — even one with a single `inner` field — has no call construction of its own: the positional spelling is what provides the newtype's constructor, and a braced class gains the call form only by designating a `[constructor]` member (above). A newtype itself never carries the marker — its mint already IS `Name(v)`; everything else stays sealed."
+msgstr ""
+"花括号类——哪怕只有一个 `inner` 字段——也没有自己的调用构造：位置式写法才是新类型构造器的提供者，而花括号类只有指定一个 `[constructor]` 成员（见上）才能获得调用形式。新类型本身从不携带该标记——它的铸造**就是** `Name(v)`；其余一切保持封闭。"
 
 
-#: src/reference/classes.md:130
+#: src/reference/classes.md:217
 msgid ""
 "At runtime the construction mints a real cell: the wrapper is a value like every class."
 msgstr "在运行时，这次构造铸造一个真实的单元：包装器和任何类一样，是一个值。"
 
 
-#: src/reference/classes.md:133
+#: src/reference/classes.md:220
 msgid "Methods: explicit `self`"
 msgstr "方法：显式 `self`"
 
 
-#: src/reference/classes.md:135
+#: src/reference/classes.md:222
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields through `self`. A method that mutates declares `mut self` and requires a `let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 "**接收者是显式的。** 实例方法把接收者写为第一个参数 —— `fn add(self, x: i32, y: i32)` —— 体内透过 `self` 读取字段。会做修改的方法声明 `mut self`，并要求 `let mut` 接收者（参见[模块与可见性](modules-and-visibility.md)）。"
 
 
-#: src/reference/classes.md:140
+#: src/reference/classes.md:227
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on the class itself (`Rect.new(..)`, `Self.new(..)` inside the body). Presence or absence of `self` is the whole distinction. Class methods are ordinary functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 "**没有** `self` 参数的方法是**类方法** —— 在类本身上调用（`Rect.new(..)`，体内为 `Self.new(..)`）。有或没有 `self` 就是全部区别。类方法就是普通函数：它们做校验、给默认值、缓存、注册或发放单例。"
 
 
-#: src/reference/classes.md:145
+#: src/reference/classes.md:232
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr "**计算属性就是一个方法**（`c.count()`），可写的属性则接受一个参数（`c.set_count(n)`）。一种成员类别，一种调用约定。"
 
 
-#: src/reference/classes.md:148
+#: src/reference/classes.md:235
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, with the same visibility forms as fields."
 msgstr "**静态字段**在类体内声明为 `static name: T = init;`，拥有与字段相同的可见性形式。"
 
 
-#: src/reference/classes.md:151
+#: src/reference/classes.md:238
 msgid "Member visibility"
 msgstr "成员可见性"
 
 
-#: src/reference/classes.md:153
+#: src/reference/classes.md:240
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and visibility](modules-and-visibility.md)): an unannotated field or method is **module-private**; `pub`, `pub(mod)`, `pub(super)`, `pub(self)` expose it to the form's audience. The construction surface is therefore explicit: `pub fn new(..)` builds; unannotated members stay the class's own business within its module."
 msgstr ""
 "成员遵循与声明相同的可见性形式（参见[模块与可见性](modules-and-visibility.md)）：未加注解的字段或方法是**模块私有**的；`pub`、`pub(mod)`、`pub(super)`、`pub(self)` 将其暴露给相应形式的受众。构造面因此是显式的：`pub fn new(..)` 负责构建；未加注解的成员仍是类在其模块内的私事。"
 
 
-#: src/reference/classes.md:160
+#: src/reference/classes.md:247
 msgid "Reference semantics and equality"
 msgstr "引用语义与相等"
 
 
-#: src/reference/classes.md:162
+#: src/reference/classes.md:249
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see [By-reference and nullable](by-reference-and-nullable.md)): assignment shares, mutation is visible through aliases. `==` is cell identity; field-wise comparison is an interface you write for it."
 msgstr ""
 
 
-#: src/reference/classes.md:167
+#: src/reference/classes.md:254
 msgid "No inheritance"
 msgstr "没有继承"
 
 
-#: src/reference/classes.md:169
+#: src/reference/classes.md:256
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`."
 msgstr ""
 "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。"
 
 
-#: src/reference/classes.md:171
+#: src/reference/classes.md:258
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or free functions; polymorphism is only the structural kind — a type used through an interface whose members it has (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/classes.md:175
+#: src/reference/classes.md:262
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell payload (see [Reified types and layout](reified-types.md)) — no prefix layout, no fat pointers, and every object has exactly one concrete class forever. That keeps `is` a single descriptor check."
 msgstr ""
@@ -15283,11 +15485,12 @@ msgstr ""
 
 #: src/reference/interfaces.md:346
 msgid ""
-"**The bracket markers** — `[disposal]` and `[iterable]` designate an inherent impl member. The parser accepts any contextual word in the brackets; the checker validates the engine's CLOSED set, at most one member per contract per class, inherent-members-only, and each contract's signature. The descriptor ABI is a designated slot per class — the engine's release path and the for-of weave read their slot directly, never an itable lookup:"
+"**The bracket markers** — `[disposal]`, `[iterable]`, and `[constructor]` designate an inherent impl member. The parser accepts any contextual word in the brackets; the checker validates the engine's CLOSED set, at most one member per contract per class, inherent-members-only, and each contract's signature. The descriptor ABI is a designated slot per class — the engine's release path and the for-of weave read their slot directly, never an itable lookup; `[constructor]`'s slot is bound at the call site — the call form `Type(..)` resolves to the designated member:"
 msgstr ""
+"**括号标记**——`[disposal]`、`[iterable]` 与 `[constructor]` 指定固有 impl 的一个成员。解析器接受括号里的任何上下文词；检查器校验引擎的**封闭**集合：每个类每个契约至多一个成员、仅限固有成员、并校验每个契约的签名。描述符 ABI 是每类一个指定槽位——引擎的释放路径与 for-of 编织直接读取自己的槽位，绝不走 itable 查找；`[constructor]` 的槽位在调用点绑定——调用形式 `Type(..)` 解析到被指定的成员："
 
 
-#: src/reference/interfaces.md:354
+#: src/reference/interfaces.md:356
 msgid ""
 "```rut\n"
 "impl Db {\n"
@@ -15299,57 +15502,61 @@ msgid ""
 "impl Rows {\n"
 "    [iterable] fn iterate(self, emit: fn(Row) -> bool) { .. }   // for-of reads\n"
 "}                                                               // this slot\n"
+"\n"
+"impl Point {\n"
+"    [constructor] fn from_xy(x: f32, y: f32) -> Self { .. }     // Point(..)\n"
+"}                                                               // binds this slot\n"
 "```"
 msgstr ""
 
 
-#: src/reference/interfaces.md:366
-msgid ""
-"`[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` — the engine calls it when a value of the type reaches refcount zero ([the Rc heap](rc-heap.md)); the target must be a CONCRETE struct or class (the row keys the cell's type id). `[iterable]`'s contract is the iteration protocol above."
-msgstr ""
-"`[disposal]` 的契约：`fn <自由名>(mut self, cx: DisposalContext)`——当该类型的值的引用计数归零时，引擎调用它（[the Rc heap](rc-heap.md)）；目标必须是具体的结构体或类（行以单元的类型 id 为键）。`[iterable]` 的契约即上文迭代协议。"
-
-
 #: src/reference/interfaces.md:372
+msgid ""
+"`[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` — the engine calls it when a value of the type reaches refcount zero ([the Rc heap](rc-heap.md)); the target must be a CONCRETE struct or class (the row keys the cell's type id). `[iterable]`'s contract is the iteration protocol above. `[constructor]`'s contract: `fn <free>(..) -> Self` (or `?Self`) on a class's inherent impl — the one user-invoked surface: `Type(..)` lowers byte-identically to the designated member call, the seal rides the method's `pub`, and newtypes are refused (their positional mint already IS `Name(v)`) — see [Classes and constructors](classes.md)."
+msgstr ""
+"`[disposal]` 的契约：`fn <free>(mut self, cx: DisposalContext)`——当该类型的值的引用计数归零时，引擎调用它（[the Rc heap](rc-heap.md)）；目标必须是具体的结构体或类（行以单元的类型 id 为键）。`[iterable]` 的契约即上文迭代协议。`[constructor]` 的契约：类固有 impl 上的 `fn <free>(..) -> Self`（或 `?Self`）——唯一由用户调用的表面：`Type(..)` 的 lower 与被指定成员的调用逐字节相同，密封跟随方法的 `pub`，新类型被拒绝（它们的位置铸造**就是** `Name(v)`）——参见[类与构造器](classes.md)。"
+
+
+#: src/reference/interfaces.md:383
 msgid ""
 "**The closed builtin classes** — `Future<T>` and `RunContext` carry the async protocol. Both are `pub builtin` (the import-gated spelling) and **closed**: no constructor, no impl lane, no user-callable members beyond `RunContext`'s two reads — a user type cannot BE a future or a cx. The walls hold by nominal closure: the member-set law cannot see engine identity, so closure is the only spelling of \"engine-minted only\". The ENGINE weaves without them — async frames, the minted cx, and the fused `for..of` loops never consult user scope; source that SPELLS a name resolves it only through `use core::{ .. }` (a launcher's `f: Future<T>`, `downcast<Future<..>>`, a `cx` probe in an async body — see [Async and await](async.md), [host fns and declaration files](host-fns.md), and [the Rc heap](rc-heap.md))."
 msgstr ""
 
 
-#: src/reference/interfaces.md:386
+#: src/reference/interfaces.md:397
 msgid "Accepted debts"
 msgstr ""
 
 
-#: src/reference/interfaces.md:388
+#: src/reference/interfaces.md:399
 msgid "The model trades two guarantees for its one mechanism, on purpose:"
 msgstr ""
 
 
-#: src/reference/interfaces.md:390
+#: src/reference/interfaces.md:401
 msgid ""
 "**Shape-equal satisfaction.** Two types with public members of the same shapes both satisfy an interface, whether or not either author intended it. There is no opt-in to fence this — the mitigation is convention (distinct member shapes, spelled receivers), documented here as accepted debt."
 msgstr ""
 
 
-#: src/reference/interfaces.md:395
+#: src/reference/interfaces.md:406
 msgid ""
 "**Wrappers at every primitive boundary.** Because primitives never satisfy, every polymorphic hand-off of a primitive spells a wrapper construction — `dump(JsonI64(64))`, per call site. The spelling is the price of having no auto-insertion; the payback is that a wrapper's presence is greppable and its cost is visible."
 msgstr ""
 
 
-#: src/reference/interfaces.md:400
+#: src/reference/interfaces.md:411
 msgid ""
 "**Bare containers never derive.** A `[T]`, a tuple, or a `?T` will never grow members; container polymorphism always goes through an explicit wrapper family (`JsonArr<T>`, `ArrFlow<T>`, …), never a compiler-derived instance."
 msgstr ""
 
 
-#: src/reference/interfaces.md:405
+#: src/reference/interfaces.md:416
 msgid "Equality"
 msgstr "相等"
 
 
-#: src/reference/interfaces.md:407
+#: src/reference/interfaces.md:418
 msgid ""
 "`==` is a builtin operator with no dynamic dispatch: primitives by value, `str`/`bytes` by content, everything else by cell identity — see [Rc, dispose, and identity](rc-dispose-identity.md). Field-wise comparison is an interface-shaped contract implemented per type; it is not connected to `==`."
 msgstr ""
@@ -15361,7 +15568,7 @@ msgid ""
 msgstr "函数声明、匿名闭包，以及带仅准入约束的单态化泛型。"
 
 
-#: src/reference/functions-closures-generics.md:6 src/reference/stdlib.md:33
+#: src/reference/functions-closures-generics.md:6 src/reference/stdlib.md:34
 msgid "Functions"
 msgstr "函数"
 
@@ -17253,7 +17460,7 @@ msgid ""
 msgstr "循环可能透过普通结构体字段（`next: ?Node` 反向指针）产生，也可能透过集合产生。"
 
 
-#: src/reference/weak-refs.md:24 src/reference/stdlib.md:77
+#: src/reference/weak-refs.md:24 src/reference/stdlib.md:78
 msgid "`Weak<T>`"
 msgstr "`Weak<T>`"
 
@@ -20919,7 +21126,7 @@ msgid "`bench_cross::pkg()`"
 msgstr "`bench_cross::pkg()`"
 
 
-#: src/reference/embedding.md:422 src/reference/stdlib.md:126
+#: src/reference/embedding.md:422 src/reference/stdlib.md:128
 msgid "the crossing-tax benchmark rows"
 msgstr "跨越税基准测试行"
 
@@ -21755,7 +21962,7 @@ msgid "allowed"
 msgstr "允许"
 
 
-#: src/reference/host-fns.md:138 src/reference/stdlib.md:85
+#: src/reference/host-fns.md:138 src/reference/stdlib.md:86
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr "说明"
@@ -22023,9 +22230,9 @@ msgid "emitted row"
 msgstr "生成行"
 
 
-#: src/reference/host-fns.md:289 src/reference/stdlib.md:35
-#: src/reference/stdlib.md:162 src/reference/stdlib.md:211
-#: src/reference/stdlib.md:375 src/reference/typed-bytecode.md:101
+#: src/reference/host-fns.md:289 src/reference/stdlib.md:36
+#: src/reference/stdlib.md:164 src/reference/stdlib.md:213
+#: src/reference/stdlib.md:377 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:43 src/reference/cli.md:172
 msgid "meaning"
 msgstr "含义"
@@ -22761,56 +22968,57 @@ msgstr "core——前奏表面"
 
 #: src/reference/stdlib.md:19
 msgid ""
-"The builtin fns, primitives, and containers are in scope in every compilation unit; no `use` is needed. A `use core::{ … };` statement stays legal but is redundant for them. The exceptions — the **import-gated** spellings, resolving only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave itself never needs the import, only source that spells the names (a `cx: T` parameter, a launcher's `f: Future<T>`, a `downcast<Future<..>>`). The bracket markers (`[disposal]`/`[iterable]`) need NO import — the marker word is the designation, not a name. The two builtin spellings (ambient vs import-gated) are documented in [Host fns and declaration files](host-fns.md)."
+"The builtin fns, primitives, and containers are in scope in every compilation unit; no `use` is needed. A `use core::{ … };` statement stays legal but is redundant for them. The exceptions — the **import-gated** spellings, resolving only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave itself never needs the import, only source that spells the names (a `cx: T` parameter, a launcher's `f: Future<T>`, a `downcast<Future<..>>`). The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need NO import — the marker word is the designation, not a name. The two builtin spellings (ambient vs import-gated) are documented in [Host fns and declaration files](host-fns.md)."
 msgstr ""
+"内建 fn、基本类型与容器在每个编译单元内都在作用域中；无需 `use`。`use core::{ … };` 语句仍然合法，但对它们是多余的。例外——**导入把守的**拼写，只能经 `use core::{ .. }` 解析：常量 `NAN`、disposal 上下文 `DisposalContext`、弱引用 `Weak<T>`，以及封闭的 async 对（`Future<T>`、`RunContext`）——引擎的编织本身从不需要导入，需要导入的只是拼写了这些名字的源代码（一个 `cx: T` 参数、启动器的 `f: Future<T>`、一次 `downcast<Future<..>>`）。括号标记（`[disposal]`/`[iterable]`/`[constructor]`）无需导入——标记词就是指定，不是名字。两种内建拼写（环境性 vs 导入把守）记载于[宿主 fn 与声明文件](host-fns.md)。"
 
 
-#: src/reference/stdlib.md:35
+#: src/reference/stdlib.md:36
 msgid "signature"
 msgstr "签名"
 
 
-#: src/reference/stdlib.md:37
+#: src/reference/stdlib.md:38
 msgid "`panic(msg: str) -> nil`"
 msgstr "`panic(msg: str) -> nil`"
 
 
-#: src/reference/stdlib.md:37
+#: src/reference/stdlib.md:38
 msgid "abort with the message"
 msgstr "带着该消息中止"
 
 
-#: src/reference/stdlib.md:38
+#: src/reference/stdlib.md:39
 msgid "`string_join(parts: [str]) -> str`"
 msgstr "`string_join(parts: [str]) -> str`"
 
 
-#: src/reference/stdlib.md:38
+#: src/reference/stdlib.md:39
 msgid "join in one pass"
 msgstr "一趟完成拼接"
 
 
-#: src/reference/stdlib.md:39
+#: src/reference/stdlib.md:40
 msgid "`capture_stacktrace() -> StackTrace`"
 msgstr "`capture_stacktrace() -> StackTrace`"
 
 
-#: src/reference/stdlib.md:39
+#: src/reference/stdlib.md:40
 msgid "opt-in stack snapshot: raw frames only, symbols resolved lazily per access"
 msgstr "选择加入的栈快照：只有原始帧，符号在每次访问时惰性解析"
 
 
-#: src/reference/stdlib.md:40
+#: src/reference/stdlib.md:41
 msgid "the 1-codepoint string"
 msgstr "单码点字符串"
 
 
-#: src/reference/stdlib.md:42
+#: src/reference/stdlib.md:43
 msgid "Primitives and their members"
 msgstr "基本类型及其成员"
 
 
-#: src/reference/stdlib.md:44
+#: src/reference/stdlib.md:45
 msgid ""
 "```rut\n"
 "builtin primitive str {\n"
@@ -22859,330 +23067,327 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:67
+#: src/reference/stdlib.md:68
 msgid ""
 "Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)` wraps (the class-method construction; the `Weak` name itself is import-gated — `use core::{ Weak }`) ([opaque](opaque.md), [weak references](weak-refs.md))."
 msgstr ""
 "构造保留其内置形式：`opaque(v)` 封存，`Weak.new(v)` 包装（类方法构造；`Weak` 这个名字本身是导入把守的——`use core::{ Weak }`）（[opaque](opaque.md)、[弱引用](weak-refs.md)）。"
 
 
-#: src/reference/stdlib.md:72
+#: src/reference/stdlib.md:73
 msgid "Builtin classes"
 msgstr "内建类"
 
 
-#: src/reference/stdlib.md:74
+#: src/reference/stdlib.md:75
 msgid "class"
 msgstr "类"
 
 
-#: src/reference/stdlib.md:74 src/reference/stdlib.md:316
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:318
 msgid "members"
 msgstr "成员"
 
 
-#: src/reference/stdlib.md:76
+#: src/reference/stdlib.md:77
 msgid "`StackTrace`"
 msgstr "`StackTrace`"
 
 
-#: src/reference/stdlib.md:76
+#: src/reference/stdlib.md:77
 msgid ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str`"
 msgstr ""
 "`len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str`"
 
 
-#: src/reference/stdlib.md:77
+#: src/reference/stdlib.md:78
 msgid ""
 "`Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }`"
 msgstr ""
 "`Weak.new(v)`（对 nil 触发陷阱；仅引用类型）、`upgrade() -> ?T`——所指者死亡后为 `nil`。**导入把守**——`use core::{ Weak }`"
 
 
-#: src/reference/stdlib.md:78
+#: src/reference/stdlib.md:79
 msgid "`DisposalContext`"
 msgstr "`DisposalContext`"
 
 
-#: src/reference/stdlib.md:78
+#: src/reference/stdlib.md:79
 msgid ""
 "no members — the engine-minted parameter of a `[disposal]` member; it exists so the context can grow without touching the marker's signature"
 msgstr ""
 
 
-#: src/reference/stdlib.md:80
+#: src/reference/stdlib.md:81
 msgid "Engine contracts — markers and the closed async pair"
 msgstr "引擎契约——标记与封闭的 async 对"
 
 
-#: src/reference/stdlib.md:82
+#: src/reference/stdlib.md:83
 msgid ""
 "The engine's contracts are spellings on types, standing alone — no interface machinery behind them:"
 msgstr ""
 
 
-#: src/reference/stdlib.md:85
+#: src/reference/stdlib.md:86
 msgid "contract"
 msgstr "契约"
 
 
-#: src/reference/stdlib.md:85 src/reference/typed-bytecode.md:114
+#: src/reference/stdlib.md:86 src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr "拼写"
 
 
-#: src/reference/stdlib.md:87
-msgid "`[iterable]`"
-msgstr "`[iterable]`"
-
-
-#: src/reference/stdlib.md:87
+#: src/reference/stdlib.md:88
 msgid "`fn <free>(self, emit: fn(E) -> bool)` on an inherent impl"
 msgstr "固有 impl 上的 `fn <自由名>(self, emit: fn(E) -> bool)`"
 
 
-#: src/reference/stdlib.md:87
+#: src/reference/stdlib.md:88
 msgid ""
 "`for (x of it)` calls that ONE designated member; `emit` returning `false` stops; the element type falls out of the marked member's signature. No import — the marker IS the designation; the builtin sequences' fused loops never mark one"
 msgstr ""
 
 
-#: src/reference/stdlib.md:88
-msgid "`[disposal]`"
-msgstr "`[disposal]`"
-
-
-#: src/reference/stdlib.md:88
+#: src/reference/stdlib.md:89
 msgid "`fn <free>(mut self, cx: DisposalContext)` on an inherent impl"
 msgstr "固有 impl 上的 `fn <自由名>(mut self, cx: DisposalContext)`"
 
 
-#: src/reference/stdlib.md:88
+#: src/reference/stdlib.md:89
 msgid ""
 "the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); `DisposalContext` is **import-gated** — `use core::{ DisposalContext }`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:89
+#: src/reference/stdlib.md:90
+msgid "`fn <free>(..) -> Self` (or `?Self`) on a class's inherent impl"
+msgstr "类固有 impl 上的 `fn <free>(..) -> Self`（或 `?Self`）"
+
+
+#: src/reference/stdlib.md:90
+msgid ""
+"the construction surface: the call form `Type(..)` binds to the ONE designated member — user-invoked, the lowering byte-identical to `Type.<name>(..)`; one per class, no receiver; newtypes are refused — their positional mint already IS `Name(v)` ([classes](classes.md))"
+msgstr ""
+"构造表面：调用形式 `Type(..)` 绑定到**那一个**被指定的成员——由用户调用，lowering 与 `Type.<name>(..)` 逐字节相同；每类一个，不带接收者；新类型被拒绝——它们的位置铸造**就是** `Name(v)`（[类与构造器](classes.md)）"
+
+
+#: src/reference/stdlib.md:91
 msgid "`Future<T>`"
 msgstr "`Future<T>`"
 
 
-#: src/reference/stdlib.md:89
+#: src/reference/stdlib.md:91
 msgid "`pub builtin class` — closed"
 msgstr "`pub builtin class` —— 封闭"
 
 
-#: src/reference/stdlib.md:89
+#: src/reference/stdlib.md:91
 msgid ""
 "every async producer's answer ([async and await](async.md)); **import-gated** — `use core::{ Future }` (a launcher's `f: Future<T>`, `downcast<Future<..>>`). No constructor, no impl lane — engine-minted only"
 msgstr ""
 
 
-#: src/reference/stdlib.md:90
+#: src/reference/stdlib.md:92
 msgid "`RunContext`"
 msgstr "`RunContext`"
 
 
-#: src/reference/stdlib.md:90
+#: src/reference/stdlib.md:92
 msgid "`pub builtin class` — closed; `checkpoint() -> u32`, `cancelled() -> bool`"
 msgstr "`pub builtin class` —— 封闭；`checkpoint() -> u32`、`cancelled() -> bool`"
 
 
-#: src/reference/stdlib.md:90
+#: src/reference/stdlib.md:92
 msgid ""
 "the cx the weave INJECTS into every async body; **import-gated** — `use core::{ RunContext }` (a `cx` probe's type). No constructor — engine-minted per async call"
 msgstr ""
 
 
-#: src/reference/stdlib.md:92
+#: src/reference/stdlib.md:94
 msgid ""
 "The ENGINE weaves without any of them — async frames, the minted cx, and the fused `for..of` loops never consult user scope: a module that imports nothing still iterates builtins, awaits, and launches."
 msgstr ""
 
 
-#: src/reference/stdlib.md:96
+#: src/reference/stdlib.md:98
 msgid "Numeric methods (per integer width `i8`–`u64`)"
 msgstr "数值方法（每个整数宽度 `i8`–`u64` 各有一套）"
 
 
-#: src/reference/stdlib.md:105
+#: src/reference/stdlib.md:107
 msgid ""
 "Ambient like the primitives themselves: `x.wrapping_add(y)` needs no `use`. The trap-on-overflow `+`/`-`/`*`/`<<` stay the default operators."
 msgstr ""
 "像基本类型本身一样环境自带：`x.wrapping_add(y)` 不需要 `use`。溢出即陷阱的 `+`/`-`/`*`/`<<` 仍是默认运算符。"
 
 
-#: src/reference/stdlib.md:108
+#: src/reference/stdlib.md:110
 msgid "Constants"
 msgstr "常量"
 
 
-#: src/reference/stdlib.md:110
+#: src/reference/stdlib.md:112
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float constants are `calc`'s."
 msgstr "`NAN`（f64）——core 唯一的常量，由 `use core::{NAN}` 点名。其余浮点常量都是 `calc` 的。"
 
 
-#: src/reference/stdlib.md:113
+#: src/reference/stdlib.md:115
 msgid "The swappable set"
 msgstr "可换集合"
 
 
-#: src/reference/stdlib.md:115 src/reference/project-structure.md:156
+#: src/reference/stdlib.md:117 src/reference/project-structure.md:156
 msgid "package"
 msgstr "包"
 
 
-#: src/reference/stdlib.md:115
+#: src/reference/stdlib.md:117
 msgid "kind"
 msgstr "种类"
 
 
-#: src/reference/stdlib.md:115 src/reference/stdlib.md:211
-msgid "surface"
-msgstr "表面"
-
-
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:119
 msgid "`ink_host`"
 msgstr "`ink_host`"
 
 
-#: src/reference/stdlib.md:117 src/reference/stdlib.md:123
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:119 src/reference/stdlib.md:125
+#: src/reference/stdlib.md:128
 msgid "host pkg"
 msgstr "宿主包"
 
 
-#: src/reference/stdlib.md:117
+#: src/reference/stdlib.md:119
 msgid ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)`"
 msgstr ""
 "`create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)`"
 
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:120
 msgid "`ink`"
 msgstr "`ink`"
 
 
-#: src/reference/stdlib.md:118 src/reference/stdlib.md:119
+#: src/reference/stdlib.md:120 src/reference/stdlib.md:121
 msgid "inline rut pkg"
 msgstr "内联 rut 包"
 
 
-#: src/reference/stdlib.md:118
+#: src/reference/stdlib.md:120
 msgid "the `Logger` class over `ink_host`"
 msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 
-#: src/reference/stdlib.md:119 src/reference/project-structure.md:162
+#: src/reference/stdlib.md:121 src/reference/project-structure.md:162
 msgid "`pouch`"
 msgstr "`pouch`"
 
 
-#: src/reference/stdlib.md:119
+#: src/reference/stdlib.md:121
 msgid "the growable sequence `Vec<T>`"
 msgstr "可增长序列 `Vec<T>`"
 
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:122
 msgid "`nmap_host` / `nmapset`"
 msgstr "`nmap_host` / `nmapset`"
 
 
-#: src/reference/stdlib.md:120 src/reference/stdlib.md:122
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:122 src/reference/stdlib.md:124
+#: src/reference/stdlib.md:126
 msgid "host pkg + inline rut pkg"
 msgstr "宿主包 + 内联 rut 包"
 
 
-#: src/reference/stdlib.md:120
+#: src/reference/stdlib.md:122
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:163
+#: src/reference/stdlib.md:123 src/reference/project-structure.md:163
 msgid "`json`"
 msgstr "`json`"
 
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:123
 msgid "inline rut pkg (pulls `strbuild_host`)"
 msgstr "内联 rut 包（随行拉取 `strbuild_host`）"
 
 
-#: src/reference/stdlib.md:121
+#: src/reference/stdlib.md:123
 msgid ""
 "`encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and their wrapper families"
 msgstr ""
 
 
-#: src/reference/stdlib.md:122
+#: src/reference/stdlib.md:124
 msgid "`strbuild_host` / `strbuild`"
 msgstr "`strbuild_host` / `strbuild`"
 
 
-#: src/reference/stdlib.md:122
+#: src/reference/stdlib.md:124
 msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:123 src/reference/project-structure.md:159
+#: src/reference/stdlib.md:125 src/reference/project-structure.md:159
 msgid "`calc`"
 msgstr "`calc`"
 
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:125
 msgid "the `Math` namespace"
 msgstr "`Math` 命名空间"
 
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:126
 msgid "`async_host` / `futures`"
 msgstr "`async_host` / `futures`"
 
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:126
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr "启动器各行；`launch_future` / `sleep`"
 
 
-#: src/reference/stdlib.md:125
+#: src/reference/stdlib.md:127
 msgid "`http_host` / `http`"
 msgstr "`http_host` / `http`"
 
 
-#: src/reference/stdlib.md:125
+#: src/reference/stdlib.md:127
 msgid "host pkg + rut pkg"
 msgstr "宿主包 + rut 包"
 
 
-#: src/reference/stdlib.md:125 src/reference/cli.md:62
+#: src/reference/stdlib.md:127 src/reference/cli.md:62
 msgid "the std HTTP lanes"
 msgstr "标准 HTTP 链路"
 
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:128
 msgid "`bench-cross`"
 msgstr "`bench-cross`"
 
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:130
 msgid "`ink_host` and `ink` — logging"
 msgstr "`ink_host` 与 `ink`——日志"
 
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:132
 msgid ""
 "There is no global output builtin. All logging goes through a used logger; the host owns the sink, and an uninstalled sink is a silent no-op — a script cannot accidentally spam an embedded host's stdout."
 msgstr ""
 "没有全局输出内建。所有日志都经过一个被使用的 logger；汇点由宿主拥有，未安装的汇点是无声的空操作——脚本不可能意外刷屏嵌入式宿主的 stdout。"
 
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:136
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -23203,145 +23408,145 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:147
+#: src/reference/stdlib.md:149
 msgid "method"
 msgstr "方法"
 
 
-#: src/reference/stdlib.md:147
+#: src/reference/stdlib.md:149
 msgid "level passed to `ink_host`"
 msgstr "传给 `ink_host` 的级别"
 
 
-#: src/reference/stdlib.md:149
+#: src/reference/stdlib.md:151
 msgid "`debug(msg)`"
 msgstr "`debug(msg)`"
 
 
-#: src/reference/stdlib.md:149
+#: src/reference/stdlib.md:151
 msgid "0"
 msgstr "0"
 
 
-#: src/reference/stdlib.md:150
+#: src/reference/stdlib.md:152
 msgid "`info(msg)` / `log(msg)`"
 msgstr "`info(msg)` / `log(msg)`"
 
 
-#: src/reference/stdlib.md:150 src/reference/frontend.md:98
+#: src/reference/stdlib.md:152 src/reference/frontend.md:98
 #: src/reference/bundles.md:200
 msgid "1"
 msgstr "1"
 
 
-#: src/reference/stdlib.md:151
+#: src/reference/stdlib.md:153
 msgid "`warn(msg)`"
 msgstr "`warn(msg)`"
 
 
-#: src/reference/stdlib.md:151 src/reference/frontend.md:99
+#: src/reference/stdlib.md:153 src/reference/frontend.md:99
 #: src/reference/bundles.md:201
 msgid "2"
 msgstr "2"
 
 
-#: src/reference/stdlib.md:152
+#: src/reference/stdlib.md:154
 msgid "`error(msg)`"
 msgstr "`error(msg)`"
 
 
-#: src/reference/stdlib.md:152 src/reference/frontend.md:100
+#: src/reference/stdlib.md:154 src/reference/frontend.md:100
 #: src/reference/bundles.md:202
 msgid "3"
 msgstr "3"
 
 
-#: src/reference/stdlib.md:154
+#: src/reference/stdlib.md:156
 msgid ""
 "Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on the run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` along (`deps`)."
 msgstr ""
 "嵌入方一侧：在运行链上 `.host_pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))`（[嵌入](embedding.md)）。offer `ink` 会经 `deps` 拉上 `ink_host`。"
 
 
-#: src/reference/stdlib.md:158
+#: src/reference/stdlib.md:160
 msgid "`pouch` — `Vec<T>`"
 msgstr "`pouch`——`Vec<T>`"
 
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:162
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr "可增长序列，用 rut 写在定长 `[T]` 数组之上："
 
 
-#: src/reference/stdlib.md:162 src/reference/stdlib.md:375
+#: src/reference/stdlib.md:164 src/reference/stdlib.md:377
 msgid "member"
 msgstr "成员"
 
 
-#: src/reference/stdlib.md:164
+#: src/reference/stdlib.md:166
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 
 
-#: src/reference/stdlib.md:164
+#: src/reference/stdlib.md:166
 msgid "construction (`[v; n]` under the hood)"
 msgstr "构造（底层是 `[v; n]`）"
 
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:167
 msgid "`push(v)` / `pop() -> T`"
 msgstr "`push(v)` / `pop() -> T`"
 
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:167
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > 0`"
 msgstr "`pop` 返回被移除的元素；**对空触发陷阱**——用 `len() > 0` 设守卫"
 
 
-#: src/reference/stdlib.md:166
+#: src/reference/stdlib.md:168
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr "`get`/`set` via `v[i]`, `for (x of v)`"
 
 
-#: src/reference/stdlib.md:166
+#: src/reference/stdlib.md:168
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr "编译器下降；元素访问别名所存储的单元"
 
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:169
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr "`from([T])` / `as_array() -> [T]`"
 
 
-#: src/reference/stdlib.md:167
+#: src/reference/stdlib.md:169
 msgid "bridges to the fixed array"
 msgstr "通往定长数组的桥"
 
 
-#: src/reference/stdlib.md:168
+#: src/reference/stdlib.md:170
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr "`Vec<u8>` → 不可变 `bytes` 的复制（恰好是存活长度）"
 
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:171
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr "编译器下降的 O(1) 定长窗口；增长时脱离"
 
 
-#: src/reference/stdlib.md:173
+#: src/reference/stdlib.md:175
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it marks an `[iterable]` member, and a Flow wraps one drive in adapter stages — a closure per STAGE, never per element. Pipelines are the clarity tier; the fused builtin loops stay the perf tier."
 msgstr ""
 
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:180
 msgid ""
 "Entry and sink are **interfaces, satisfied structurally**: `IntoFlow<E>` is `fn into_flow(self) -> Flow<E>` — `Flow` itself carries the identity member (a chain re-enters as a source), and the builtin structural targets (which can never carry members) enter through the spelled adapter wrappers `ArrFlow<T>`, `StrFlow`, `BytesFlow`, and `VecFlow<T>`. `FromFlow<E>` is the no-self sink member `fn from_flow(it: Flow<E>) -> Self` — carried by the wrappers `VecFlow<T>` (with `collected()` unwrapping) and `SetFlow<T>` (with `items()`). Nothing is auto-inserted: the call site spells the wrapper, every time."
 msgstr ""
 
 
-#: src/reference/stdlib.md:189
+#: src/reference/stdlib.md:191
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -23363,118 +23568,118 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:215
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr "`x.into_flow() -> Flow<E>`"
 
 
-#: src/reference/stdlib.md:213
+#: src/reference/stdlib.md:215
 msgid ""
 "the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest"
 msgstr ""
 
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:216
 msgid "`VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:214
+#: src/reference/stdlib.md:216
 msgid ""
 "the adapters — newtype wrappers manufactured at the call site; a primitive or bare container cannot carry members, the wrapper does"
 msgstr ""
 
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:217
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 
 
-#: src/reference/stdlib.md:215
+#: src/reference/stdlib.md:217
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell the type argument; a fn path infers"
 msgstr "变换——引入新的类型变量，因此请标注 lambda 或写明类型实参；具名 fn 可自动推断"
 
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:218
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr "`filter(p: fn(E) -> bool) -> Self`"
 
 
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:218
 msgid "keep the elements the predicate admits"
 msgstr "保留谓词放行的元素"
 
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:219
 msgid "`take(n)` / `skip(n)`"
 msgstr "`take(n)` / `skip(n)`"
 
 
-#: src/reference/stdlib.md:217
+#: src/reference/stdlib.md:219
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained"
 msgstr "前 `n` 个 / 跳过前 `n` 个之后的全部——计数器是一个由 drive 改动的记录，耗尽的阶段保持耗尽"
 
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:220
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
 msgstr ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>`"
 
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:220
 msgid "the one-drive consumers"
 msgstr "单次 drive 的消费者"
 
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:221
 msgid "`W<T>.from_flow(it: Flow<E>) -> W<T>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:221
 msgid ""
 "the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and `SetFlow<T>`; `collected()` / `items()` unwrap the materialized container"
 msgstr ""
 
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:222
 msgid "`for (x of chain)`"
 msgstr "`for (x of chain)`"
 
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:222
 msgid ""
 "chains are iterable — the `[iterable]` member on `Flow<E>` feeds the ordinary desugar"
 msgstr ""
 
 
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:224
 msgid ""
 "**Import the interfaces you spell and the pipeline type**: `use flow::{ Flow, IntoFlow, FromFlow }` — the use-both law names each one."
 msgstr ""
 
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:227
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no host-table walk — json's map encode grows with it) and a map sink (nmapset's `HashMap` has no wrapper family in flow yet — json's decode-only `JMap*` wrappers are the precedent such a family would follow)."
 msgstr ""
 
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:233
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr "`nmapset`——`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:235
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state is one `opaque` handle, every method one host call."
 msgstr "架在原生键表（`nmap_host` 行）之上的薄包装：全部状态就是一个 `opaque` 句柄，每个方法一次宿主调用。"
 
 
-#: src/reference/stdlib.md:236
+#: src/reference/stdlib.md:238
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {\n"
@@ -23503,19 +23708,19 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:249
+#: src/reference/stdlib.md:251
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom key canonically to `bytes`); `get` answers the stored cell, so two gets of one key name one value until a replace; values release host-side. `str` keys hash by content; `str` keys also carry `*_range(parent, off, len)` members keyed by a byte range of the parent string — a range key is the same key as its content, with no key cell minted on a probe ([string views](string-views.md))."
 msgstr ""
 "法则：键集合是封闭的（没有浮点数——没有稳定的相等契约；自定义键以规范编码成 `bytes` 的方式破例）；`get` 应答的是存储的单元，因此对同一个键的两次 get 在替换之前指名同一个值；值在宿主侧释放。`str` 键按内容哈希；`str` 键还携带以父串字节范围为键的 `*_range(parent, off, len)` 成员——范围键与其内容是同一个键，探查时不铸造任何键单元（[字符串视图](string-views.md)）。"
 
 
-#: src/reference/stdlib.md:257
+#: src/reference/stdlib.md:259
 msgid "`calc` — the `Math` namespace"
 msgstr "`calc`——`Math` 命名空间"
 
 
-#: src/reference/stdlib.md:259
+#: src/reference/stdlib.md:261
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -23548,205 +23753,205 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:278
+#: src/reference/stdlib.md:280
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`, `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`. Constants: `Math.PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE`. Integer numeric methods are core's, not `calc`'s."
 msgstr ""
 "函数（各带一个 `_f` 的 f32 孪生）：`sqrt`、`floor`、`ceil`、`round`、`trunc`、`exp`、`ln`、`log2`、`log10`、`sin`、`cos`、`tan`、`asin`、`acos`、`atan`、`sinh`、`cosh`、`tanh`、`pow`、`atan2`、`hypot`、`copysign`、`fma`，外加浮点辅助 `abs`、`min`、`max`、`signum`。常量：`Math.PI`、`TAU`、`E`、`SQRT_2`、`LN_2`、`LN_10`、`LOG2_E`、`LOG10_E`、`INFINITY`、`NEG_INFINITY`、`EPSILON`、`MAX`、`MIN`、`MIN_POSITIVE`。整数的数值方法是 core 的，不是 `calc` 的。"
 
 
-#: src/reference/stdlib.md:286
+#: src/reference/stdlib.md:288
 msgid "`json` — the serde package"
 msgstr "`json`——serde 包"
 
 
-#: src/reference/stdlib.md:288
+#: src/reference/stdlib.md:290
 msgid ""
 "Pure rut, `inline = true`, zero host fns — offering json adds no host bindings."
 msgstr "纯 rut、`inline = true`、零宿主函数 —— offer json 不增加任何宿主绑定。"
 
 
-#: src/reference/stdlib.md:300
+#: src/reference/stdlib.md:302
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 "**对偶法则**：`(?T, ?E)` 恰好一个 nil——成功 = `(value, nil)`，失败 = `(nil, err)`。Encode 返回 `?EncodeJsonError`，因为循环结构被预期为可恢复的数据，而不是陷阱。"
 
 
-#: src/reference/stdlib.md:303
+#: src/reference/stdlib.md:305
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its expectations straight off the cursor. A `Vec<Row>` decode mints exactly the program's values, once."
 msgstr ""
 "**直接解码**：没有中间文档；类型的 `decode` 直接从游标上读取它期望的东西。一次 `Vec<Row>` 解码恰好铸造程序需要的值，且只铸一次。"
 
 
-#: src/reference/stdlib.md:306
+#: src/reference/stdlib.md:308
 msgid ""
 "**Satisfaction is structural**: your type satisfies `JsonSerialize`/`JsonDeserialize` by spelling the members on its own inherent impl — `impl Row { pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError { .. } }`. json owns the interfaces; user types satisfy them without asking."
 msgstr ""
 
 
-#: src/reference/stdlib.md:311
+#: src/reference/stdlib.md:313
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no inherent members to have. The wrapper families are the spelled, per-call manufacture: `encodeJson(JsonI64(64))`, never `encodeJson(64)` — nothing is auto-inserted, forever."
 msgstr ""
 
 
-#: src/reference/stdlib.md:316
+#: src/reference/stdlib.md:318
 msgid "wrapper"
 msgstr ""
 
 
-#: src/reference/stdlib.md:316
+#: src/reference/stdlib.md:318
 msgid "wraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:320
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:320
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:318
+#: src/reference/stdlib.md:320
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:321
 msgid "`JsonU64`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:321
 msgid "`u64`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:321
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies `JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode row); `get()` unwraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:322
 msgid "`SOpt<T requires JsonSerialize>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:322
 msgid ""
 "both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction bound means a decode-only `T` cannot ride it)"
 msgstr ""
 
 
-#: src/reference/stdlib.md:321
+#: src/reference/stdlib.md:323
 msgid "`JsonArr<T requires JsonSerialize>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:321
+#: src/reference/stdlib.md:323
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:324
 msgid "`JsonVec<T requires JsonSerialize>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:324
 msgid "both (the pouch peer group); `to_vec()` unwraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:325
 msgid "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:325
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:325
 msgid ""
 "decode-only (the nmapset peer group); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure"
 msgstr ""
 
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:326
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:326
 msgid "`HashSet<T>`"
 msgstr ""
 
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:326
 msgid "decode-only (the nmapset peer group); `to_set()` unwraps"
 msgstr ""
 
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:328
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = `WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common range, ±1 ulp beyond (disclosed); encode renders the shortest round-trip decimal."
 msgstr ""
 "**数字**：`i64` 只接受整型词素（溢出/带小数点的词素 = `WrongType`，绝不无声回绕）；`f64` 在常见范围内按 IEEE 精确解析，范围之外误差 ±1 ulp（明示）；encode 渲染最短往返十进制。"
 
 
-#: src/reference/stdlib.md:330
+#: src/reference/stdlib.md:332
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable (`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 "**深度**：两个方向都以 128 封顶，可恢复（`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`）。"
 
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:334
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, `EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`; decode details carry `at`/`got`/`expected`, encode details carry `at` and the lazily built `$.rows[3].name` path."
 msgstr ""
 "**错误**：无载荷的种类枚举 + 固定字段结构体——`DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`、`EncodeErrorKind { Depth, NotFinite, KeyUnsupported }`；decode 细节携带 `at`/`got`/`expected`，encode 细节携带 `at` 和惰性构建的 `$.rows[3].name` 路径。"
 
 
-#: src/reference/stdlib.md:337
+#: src/reference/stdlib.md:339
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr "`decodeJsonBytes` 是严格 UTF-8（`InvalidUtf8`），绝不有损。"
 
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:340
 msgid ""
 "**Ownership**: json owns the interfaces; all container wrappers live in json, gated by peer groups — `JsonVec` activates when `pouch` is anywhere in the consumer's closure, the `JMap*`/`JSet` rows when `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer without the peers mounts json light."
 msgstr ""
 
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:345
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader rides the core `str.scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 "写入器经由 `strbuild` 的 `StringBuilder` 累积；读取器搭载 core 的 `str.scan`/`starts_with` 原语和 O(1) 字符串视图。"
 
 
-#: src/reference/stdlib.md:347
+#: src/reference/stdlib.md:349
 msgid "`strbuild` — the builder"
 msgstr "`strbuild`——构建器"
 
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:351
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the `strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`, registered under the pkg-name scope), and the `strbuild` package wraps them in the `StringBuilder` class. Core ships no string-building machinery; offering strbuild pairs with the bodies:"
 msgstr ""
 "构建器如今是一个宿主包（`ink`/`Logger` 模式）：`strbuild_host` decl 包声明五行（`sb_new` / `sb_push` / `sb_push_code` / `sb_len` / `sb_finish`，以包名作用域注册），`strbuild` 包把它们包成 `StringBuilder` 类。核心不自带字符串构建机构；offer strbuild 与安装函数体配套："
 
 
-#: src/reference/stdlib.md:356
+#: src/reference/stdlib.md:358
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -23779,103 +23984,103 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:377
+#: src/reference/stdlib.md:379
 msgid "`new()`"
 msgstr "`new()`"
 
 
-#: src/reference/stdlib.md:377
+#: src/reference/stdlib.md:379
 msgid "grow from small"
 msgstr "从小处开始增长"
 
 
-#: src/reference/stdlib.md:378
+#: src/reference/stdlib.md:380
 msgid "`with_cap(cap: i32)`"
 msgstr "`with_cap(cap: i32)`"
 
 
-#: src/reference/stdlib.md:378
+#: src/reference/stdlib.md:380
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap)"
 msgstr "按八位组提示预定尺寸（负数触发陷阱；提示仅供参考 —— 每个容量值的行为完全相同）"
 
 
-#: src/reference/stdlib.md:379
+#: src/reference/stdlib.md:381
 msgid "`append(mut self, value: str)`"
 msgstr "`append(mut self, value: str)`"
 
 
-#: src/reference/stdlib.md:379
+#: src/reference/stdlib.md:381
 msgid "amortized O(\\|s\\|), in place"
 msgstr "均摊 O(\\|s\\|)，就地追加"
 
 
-#: src/reference/stdlib.md:380
+#: src/reference/stdlib.md:382
 msgid "`append_code(mut self, cp: u32)`"
 msgstr "`append_code(mut self, cp: u32)`"
 
 
-#: src/reference/stdlib.md:380
+#: src/reference/stdlib.md:382
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr "一个码点；无效标量铸造 U+FFFD"
 
 
-#: src/reference/stdlib.md:381
+#: src/reference/stdlib.md:383
 msgid "codepoints so far, O(1)"
 msgstr "迄今为止的码点数，O(1)"
 
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:384
 msgid "`build() -> str`"
 msgstr "`build() -> str`"
 
 
-#: src/reference/stdlib.md:382
+#: src/reference/stdlib.md:384
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr "全新的不可变 str；构建器保留自己的缓冲区"
 
 
-#: src/reference/stdlib.md:384
+#: src/reference/stdlib.md:386
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land in the caller's document; copies happen at exactly two engineered points — `build`'s materialization and growth's prefix move. Growth consults the embedder's heap budget BEFORE growing (the geometric next-capacity is charged), so the wasm 4 MiB cap governs builder growth exactly as it governs engine allocations."
 msgstr ""
 "共享是默认：经由别名（或 `mut` 参数）做出的追加落进调用方的文档；复制恰好发生在两个刻意设计的位置——`build` 的实体化和增长时的前缀搬移。增长在发生之前先询问嵌入方的堆预算（几何下一容量按记账收取），因此 wasm 的 4 MiB 上限对构建器增长的约束与对引擎分配完全一致。"
 
 
-#: src/reference/stdlib.md:391
+#: src/reference/stdlib.md:393
 msgid ""
 "Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain. Offering `strbuild` pulls `strbuild_host` along (`deps`); offering `json` pulls both (its writer rides the builder)."
 msgstr ""
 "嵌入方一侧：在运行链上 `.host_pkg(rut_std::strbuild::pkg())`。offer `strbuild` 会经 `deps` 拉上 `strbuild_host`；offer `json` 两者都拉（它的写入器搭载在构建器上）。"
 
 
-#: src/reference/stdlib.md:395
+#: src/reference/stdlib.md:397
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = f\"{out}{t}\"` appends in place, linear in the total output ([f-strings](literals-and-inference.md))."
 msgstr ""
 "对常见的累加器形状，完全不需要构建器：`out = f\"{out}{t}\"` 就地追加，总输出量级为线性（[f 字符串](literals-and-inference.md)）。"
 
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:401
 msgid "`calc`'s company: `async` and `http`"
 msgstr "`calc` 的同伴：`async` 与 `http`"
 
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:403
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, `__sleep_yield`); `futures` restores the typed surface: `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`, `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`. Each embedder offers `rut/futures` (a `rut_native::tree_pkg` walk) and installs `rut_std::async_host::pkg()` on the chain; a world that offers neither has no launcher ([launched futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 "`async_host` 声明引擎行（`__launch`、`__abort`、`__sleep`、`__sleep_yield`）；`futures` 还原类型化面：`launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`、`LaunchedFutureHandle.abort() -> bool`、`sleep(ms: u32) -> Future<nil>`。每个嵌入方都 offer `rut/futures`（一次 `rut_native::tree_pkg` 遍历）并在链上安装 `rut_std::async_host::pkg()`；两者皆不 offer 的世界没有启动器（[已启动的 future](launched-futures.md)、[宿主 future](host-futures.md)）。"
 
 
-#: src/reference/stdlib.md:409
+#: src/reference/stdlib.md:411
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait:"
 msgstr ""
 "`http_host` 声明传输各行（三个异步，五个同步读回）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的："
 
 
-#: src/reference/stdlib.md:414
+#: src/reference/stdlib.md:416
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -23902,33 +24107,33 @@ msgstr ""
 "```"
 
 
-#: src/reference/stdlib.md:426
+#: src/reference/stdlib.md:428
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; `byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for transport failure. The reqwest lane is native-only."
 msgstr ""
 "`send` 在响应头处解析；`body(cx)` 排干线上的响应体；`byte_stream()`/`next(cx)` 逐块行走。状态 `0` 保留给传输失败。reqwest 链路仅限原生构建。"
 
 
-#: src/reference/stdlib.md:430
+#: src/reference/stdlib.md:432
 msgid "Offering"
 msgstr ""
 
 
-#: src/reference/stdlib.md:432
+#: src/reference/stdlib.md:434
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless a pkg named `core` was offered. `calc` and the async pair are ordinary tree packages: the host offers them (`rut_native::tree_pkg(..)`) when the program's surface names them, and binds the bodies (`rut_std::math::pkg()`, `rut_std::async_host::pkg()`) on the chain ([embedding](embedding.md)). The `rut` CLI offers the tree packages a loose file names by `use` ([the rut CLI](cli.md))."
 msgstr ""
 "`core` 自动承载 —— 每次运行的 `.compile()` 都会 offer 核心前奏，除非已 offer 了名为 `core` 的包。`calc` 与 async 对是普通的树包：程序表面点名时宿主就 offer 它们（`rut_native::tree_pkg(..)`），并在链上绑定函数体（`rut_std::math::pkg()`、`rut_std::async_host::pkg()`）（[嵌入](embedding.md)）。`rut` CLI 会 offer 松散文件 `use` 点名的树包（[rut CLI](cli.md)）。"
 
 
-#: src/reference/stdlib.md:440
+#: src/reference/stdlib.md:442
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, futures) are source-inlined into each consumer — required for class-method surfaces, whose inherent impls cross no module link boundary yet ([the frontend](frontend.md))."
 msgstr ""
 "`inline = true` 的包（ink、pouch、nmapset、json、strbuild、futures）以源码形式内联进每个消费方——类方法表面需要如此，其固有 impl 尚不能跨模块链接边界（[前端](frontend.md)）。"
 
 
-#: src/reference/stdlib.md:444
+#: src/reference/stdlib.md:446
 msgid ""
 "Generic exports link on their own: instantiation happens where the body lives, consumers request it, and `Vec<i64>` is one type program-wide ([the compiler pipeline](compiler.md))."
 msgstr ""

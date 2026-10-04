@@ -58,7 +58,8 @@ needed for them. The gated names resolve only through
 `DisposalContext`, the weak reference `Weak<T>`, and the closed async
 pair (`Future<T>`, `RunContext`) — the engine's weave never needs the
 import, only source that spells one of the names does. The bracket
-markers (`[disposal]`/`[iterable]`) need no import — the marker word
+markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import —
+the marker word
 is the designation, not a name
 ([Host fns and declaration files](host-fns.md)).
 Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through

@@ -25,7 +25,8 @@ stays legal but is redundant for them. The exceptions — the
 pair (`Future<T>`, `RunContext`) — the engine's weave itself never
 needs the import, only source that spells the names (a `cx: T`
 parameter, a launcher's `f: Future<T>`, a `downcast<Future<..>>`).
-The bracket markers (`[disposal]`/`[iterable]`) need NO import — the
+The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need
+NO import — the
 marker word is the designation, not a name. The two builtin spellings
 (ambient vs import-gated) are documented in
 [Host fns and declaration files](host-fns.md).
@@ -86,6 +87,7 @@ interface machinery behind them:
 |---|---|---|
 | `[iterable]` | `fn <free>(self, emit: fn(E) -> bool)` on an inherent impl | `for (x of it)` calls that ONE designated member; `emit` returning `false` stops; the element type falls out of the marked member's signature. No import — the marker IS the designation; the builtin sequences' fused loops never mark one |
 | `[disposal]` | `fn <free>(mut self, cx: DisposalContext)` on an inherent impl | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); `DisposalContext` is **import-gated** — `use core::{ DisposalContext }` |
+| `[constructor]` | `fn <free>(..) -> Self` (or `?Self`) on a class's inherent impl | the construction surface: the call form `Type(..)` binds to the ONE designated member — user-invoked, the lowering byte-identical to `Type.<name>(..)`; one per class, no receiver; newtypes are refused — their positional mint already IS `Name(v)` ([classes](classes.md)) |
 | `Future<T>` | `pub builtin class` — closed | every async producer's answer ([async and await](async.md)); **import-gated** — `use core::{ Future }` (a launcher's `f: Future<T>`, `downcast<Future<..>>`). No constructor, no impl lane — engine-minted only |
 | `RunContext` | `pub builtin class` — closed; `checkpoint() -> u32`, `cancelled() -> bool` | the cx the weave INJECTS into every async body; **import-gated** — `use core::{ RunContext }` (a `cx` probe's type). No constructor — engine-minted per async call |
 

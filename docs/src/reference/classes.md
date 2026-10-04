@@ -76,6 +76,90 @@ area=9
   `await`: the `Self { .. }` literal is an ordinary expression, and
   locals live in the coroutine frame.
 
+### `[constructor]` — the designated construction surface
+
+A bracket marker designates THE member a surface binds to — the
+member's name is free; the designation routes the call. Three
+designated surfaces, one law:
+
+| marker | surface | caller | signature owner | body compiled |
+|---|---|---|---|---|
+| `[disposal]` | cell death | the engine, at refcount zero | the engine — `(mut self, cx: DisposalContext)` | eagerly queued at death ([the Rc heap](rc-heap.md)) |
+| `[iterable]` | `for (x of it)` | the for-of desugar | the member — its `emit` parameter fixes `E` | fused into the loop ([interfaces](interfaces.md)) |
+| `[constructor]` | the call form `Type(..)` | user code | the member — its parameters fix the call's shape | byte-identical to `Point.from_xy(..)` |
+
+`[constructor]` designates the class's construction surface — the
+call form `Type(..)` binds to the one marked member:
+
+```rut
+use ink::{ Logger };
+
+class Point {
+    x: f32;
+    y: f32;
+}
+
+impl Point {
+    [constructor] pub fn from_xy(x: f32, y: f32) -> Self {
+        return Self { x: x, y: y };
+    }
+}
+
+entry fn main() {
+    let log = Logger.new("t");
+    let p = Point(1.0, 2.0);      // sugar for Point.from_xy(1.0, 2.0)
+    log.info(f"p=({p.x}, {p.y})");
+}
+```
+
+```text
+p=(1, 2)
+```
+
+- **Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers
+  byte-identically to `Point.from_xy(1.0, 2.0)` — the marker changes
+  what the call form binds to, never what the call compiles to.
+  `Point` as a bare (non-call) expression stays an error: the
+  construction surface is the call form `Type(..)`, never the bare
+  name.
+- **One designated constructor per class, on the inherent impl only.**
+  Class bodies stay fields-only; a second `[constructor]` member is
+  refused — "`Point` already carries a `[constructor]` member —
+  `origin` and `from_xy` both designate the construction surface; at
+  most one per class (`Point(..)` must lower to one member)". The
+  member takes no receiver — "a `[constructor]` member takes no
+  receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the
+  class, not a value)" — and returns `Self` (or `?Self`): "a
+  `[constructor]` member returns `Self` (or `?Self` — the
+  try-construction: `Type(..)` then yields `?Type`)". An unknown
+  bracket word was always refused, and the closed set now names three:
+  "`[fragile]` is not a designated surface — the closed marker set is
+  `[disposal]`, `[iterable]`, and `[constructor]`".
+- **`?Self` is try-construction.** A constructor spelled
+  `fn parse(s: str) -> ?Self` makes `Type(..)` answer `?Type` — the
+  call yields the nullable, `nil` on a refused construction, exactly
+  like the method call it is.
+- **Newtypes never carry it** — `JsonI64(64)` is already the
+  newtype's construction surface, the compiler-provided positional
+  mint; there is nothing for the marker to designate. Structs and
+  enums are refused too — structs construct by literal, and an enum's
+  members are its own immortal singletons.
+- **The seal holds.** Visibility rides the method's `pub` — an
+  unannotated (module-private) constructor answers `Type(..)` only
+  inside its own module. Outside, the used-class hint says so: "`Point`
+  constructs through its class methods (`Point.new(..)`) — mark one
+  `[constructor]` to call the class itself". Arity is the member
+  call's — the refusal names the member (`Point.from_xy`).
+- **Resolution order for `Name(args)`**: a local fn value, then free
+  fns, then the prelude, then the newtype mint, then the designated
+  constructor, then the error — a free fn named `Point` wins.
+- **Generics ride the method-call path.** `Box(3)` infers exactly
+  like `Box.of(3)` — the sugar IS the member call after resolution.
+- **Named constructors stay live.** `new`, `from_square`, `parse`,
+  `open`, `default` — every existing class method keeps its place;
+  the marker designates one of them as the call form's target, it
+  does not remove the siblings.
+
 ## Newtypes: the one-field wrapper
 
 `class Name(Wrapped);` — the positional one-field decl. It IS an
@@ -124,8 +208,11 @@ dump(JsonI64(64));               // manufacture at the boundary
   own modules; the newtype flag rides the class's surface row like the
   class itself does.
 - A braced class — even one with a single `inner` field — has no call
-  construction. The positional spelling is what provides the
-  constructor; everything else stays sealed.
+  construction of its own: the positional spelling is what provides
+  the newtype's constructor, and a braced class gains the call form
+  only by designating a `[constructor]` member (above). A newtype
+  itself never carries the marker — its mint already IS `Name(v)`;
+  everything else stays sealed.
 
 At runtime the construction mints a real cell: the wrapper is a value
 like every class.

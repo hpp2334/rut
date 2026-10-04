@@ -18,8 +18,10 @@ they are worth internalizing before any syntax:
 - **newtype = manufacture** — a wrapper class manufactures a member
   set for a type that cannot carry one (a primitive, a composite);
   the call site spells the manufacture, every time.
-- **marker = engine hook** — the bracket markers (`[disposal]`,
-  `[iterable]`) are engine contract slots, not polymorphism.
+- **marker = designation** — the bracket markers (`[disposal]`,
+  `[iterable]`, `[constructor]`) are designated surfaces, not
+  polymorphism (`[disposal]` and `[iterable]` are engine hooks;
+  `[constructor]` binds the user's `Type(..)` call form).
 - **closed class = engine value** — `Future<T>` and `RunContext` are
   engine-minted; no user spelling can become one.
 
@@ -261,10 +263,12 @@ per-element call.
 ## Engine contracts are not interfaces
 
 The engine's own contracts stand alone — no polymorphism machinery,
-no member-set checks: the bracket markers `[disposal]` and
-`[iterable]` designate inherent impl members (one per contract per
-class, the signature checked against the contract, dispatched through
-a designated slot — never an itable lookup), and the async protocol
+no member-set checks: the bracket markers `[disposal]`, `[iterable]`,
+and `[constructor]` designate inherent impl members (one per contract
+per class, the signature checked against the contract — `[disposal]`
+and `[iterable]` dispatched through a designated slot, never an
+itable lookup; `[constructor]` bound at the call form `Type(..)`,
+byte-identical to the member call), and the async protocol
 lives on two CLOSED `builtin class` rows, `Future<T>` and
 `RunContext`. The closure IS the wall: futures and cx records are
 engine-minted only, so a user type cannot BE one — the member-set law

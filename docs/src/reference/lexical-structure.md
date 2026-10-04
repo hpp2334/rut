@@ -59,7 +59,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
-| `disposal` / `iterable` | the bracket markers — `[disposal] fn` / `[iterable] fn` designate an inherent impl member as an engine contract slot (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md)) |
+| `disposal` / `iterable` / `constructor` | the bracket markers — `[disposal] fn` / `[iterable] fn` / `[constructor] fn` designate an inherent impl member as a designated surface (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md)) |
 
 `panic(msg)` is a prelude function, not a keyword.
 
@@ -97,15 +97,18 @@ sugar over it.
   `str`, `bytes`.
 - **Functions and methods are lower_snake_case** — `unwrap_or(d)`,
   `push(v)`, `checked_add(y)`, `spawn_worker(..)`.
-- **Construction is a method call, never a type-call.** User classes
-  construct through their own class methods: `Rect.new(3, 4)`,
-  `Rect.from(other)`, `Version.parse(s)` — see
-  [Classes and constructors](classes.md). The one exception is the
-  newtype decl's own constructor: `class JsonI64(i64);` constructs as
-  the call `JsonI64(64)` (see
+- **Construction is a method call; the call form binds by
+  designation.** User classes construct through their own class
+  methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` —
+  see [Classes and constructors](classes.md). A class that designates
+  a `[constructor]` member additionally takes the call form:
+  `Point(1.0, 2.0)` is sugar for the designated member call,
+  byte-identical lowering. The newtype decl's own constructor needs
+  no marker: `class JsonI64(i64);` constructs as the call
+  `JsonI64(64)` — the compiler-provided positional mint (see
   [Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin
-  surfaces keep other call forms: `bytes.zeroed(n)`, `opaque(v)`, the
-  repeat `[v; n]`, and `Vec<T>.from(..)` (see
+  surfaces keep the other call forms: `bytes.zeroed(n)`, `opaque(v)`,
+  the repeat `[v; n]`, and `Vec<T>.from(..)` (see
   [Builtin generic types](builtin-generic-types.md)).
 - The trailing-`$` marker is kept meaningful by this style rule alone;
   the compiler attaches no semantics to it.

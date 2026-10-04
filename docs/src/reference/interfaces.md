@@ -343,13 +343,15 @@ The engine's own contracts stand alone — they are neither interfaces
 nor user-visible polymorphism, and they share no machinery with the
 member-set law. Two mechanisms, one job each:
 
-**The bracket markers** — `[disposal]` and `[iterable]` designate an
-inherent impl member. The parser accepts any contextual word in the
-brackets; the checker validates the engine's CLOSED set, at most one
-member per contract per class, inherent-members-only, and each
-contract's signature. The descriptor ABI is a designated slot per
-class — the engine's release path and the for-of weave read their
-slot directly, never an itable lookup:
+**The bracket markers** — `[disposal]`, `[iterable]`, and
+`[constructor]` designate an inherent impl member. The parser accepts
+any contextual word in the brackets; the checker validates the
+engine's CLOSED set, at most one member per contract per class,
+inherent-members-only, and each contract's signature. The descriptor
+ABI is a designated slot per class — the engine's release path and
+the for-of weave read their slot directly, never an itable lookup;
+`[constructor]`'s slot is bound at the call site — the call form
+`Type(..)` resolves to the designated member:
 
 ```rut
 impl Db {
@@ -361,13 +363,22 @@ impl Db {
 impl Rows {
     [iterable] fn iterate(self, emit: fn(Row) -> bool) { .. }   // for-of reads
 }                                                               // this slot
+
+impl Point {
+    [constructor] fn from_xy(x: f32, y: f32) -> Self { .. }     // Point(..)
+}                                                               // binds this slot
 ```
 
 `[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` —
 the engine calls it when a value of the type reaches refcount zero
 ([the Rc heap](rc-heap.md)); the target must be a CONCRETE struct or
 class (the row keys the cell's type id). `[iterable]`'s contract is
-the iteration protocol above.
+the iteration protocol above. `[constructor]`'s contract:
+`fn <free>(..) -> Self` (or `?Self`) on a class's inherent impl — the
+one user-invoked surface: `Type(..)` lowers byte-identically to the
+designated member call, the seal rides the method's `pub`, and
+newtypes are refused (their positional mint already IS `Name(v)`) —
+see [Classes and constructors](classes.md).
 
 **The closed builtin classes** — `Future<T>` and `RunContext` carry
 the async protocol. Both are `pub builtin` (the import-gated spelling)

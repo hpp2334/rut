@@ -85,8 +85,9 @@ source text by design; a partially translated book is a valid book.
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
 | pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定 |
 | fetch | 拉取 | the `DepRemote` contract → `DepRemote` 契约（代码不译）；`rut fetch` stays code |
-| bracket marker | 括号标记 | `[disposal]` / `[iterable]` stay code；标记词不译——方括号即指定 |
+| bracket marker | 括号标记 | `[disposal]` / `[iterable]` / `[constructor]` stay code；标记词不译——方括号即指定 |
 | marker | 标记 | the closed marker set → 封闭标记集；designation by bracket, not name → 以方括号指定，而非以名字指定 |
+| designated surface | 指定表面 | the three designated surfaces：`[disposal]`（引擎事件）、`[iterable]`（for-of 脱糖）、`[constructor]`（用户调用的 `Type(..)`）——stay code；the designation routes the call → 指定路由调用；designate → 指定 |
 | designated slot | 指定槽位 | for-of reads this slot → for-of 读取该指定槽位 |
 | mint (verb) | 铸造 | the engine mints the frame → 引擎铸造帧；engine-minted → 引擎铸造 |
 | async block | async 块 | `async { .. }` stays code；the async primitive → async 原语 |
