@@ -249,8 +249,8 @@ let loaded = rut_native::load_bundle_session(Path::new("vendor/plugin.rutbundle"
 let loaded = rut_driver::Pkg::from_bundle(&bytes)?;
 ```
 
-Both root kinds load (a v9 compiled root with its groups and its
-pack-time scope ledger, rebased at the close of the world; a v10 decl
+Both root kinds load (a compiled root with its groups and its
+pack-time scope ledger, rebased at the close of the world; a decl
 root as the pkg's host rows), first-mount-wins, and the bundle root's
 package name is `loaded.root`. Wasm hosts `include_bytes!` the
 committed artifact and parse through `Pkg::from_bundle`. For the
@@ -261,13 +261,15 @@ not the walk. The container, the manifest grammar, and the reader are
 
 **What to take from a url** is the engine's instantiation law, read
 from the embedding side: a compiled bundle serves host surfaces,
-concrete-class libs, **and** — since the generic-source riding law —
+concrete-class libs, **and** — by the generic-source riding law —
 the generic owners: a request the pack-time ledger lacks lowers the
 ridden source in the consumer's world and compiles the monomorphized
 body under the declaring pkg's spec, at the link, nothing persisted
 (`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the
-std-CDN section). A legacy bundle without the riding refuses such a
-request loudly (re-pack it), and a bundle-mounted json names its
+std-CDN section). A bundle that owns an open generic surface but
+carries no riding source refuses at the mount (`pouch` owns an open
+generic surface but its bundle carries no riding source — re-pack the
+directory), and a bundle-mounted json names its
 pack-time dev closure in its ledger, so the consumer's closure must
 contain those names.
 
@@ -286,7 +288,7 @@ contain those names.
 | `tree_pkg(name)` | one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused |
 | `load_module_source(path)` | one `.rut` file's text — a loose file is a single module, no manifest |
 | `prefetch_urls(&src, &dir, &remote)` | collect a manifest's url rows and fetch them — the `_with` lanes' input step |
-| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **v9 compiled** root for a lib pkg, a **v10 decl** root for a host pkg; returns the bytes ([module bundles](bundles.md)) |
+| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 10); returns the bytes ([module bundles](bundles.md)) |
 | `default_out_path(dir)` | the conventional pack output path |
 
 ## The run chain API (`rut-driver`)

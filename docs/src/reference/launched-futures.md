@@ -179,7 +179,7 @@ entry fn main() {
 
 ## Structure and fairness
 
-- v1 launched futures are **unstructured**: aborting a frame does not abort frames
+- Launched futures are **unstructured**: aborting a frame does not abort frames
   it awaits. Structured scopes — `scope { .. }` cancelling children on
   exit — are the specified remedy.
 - The ready ring is **round-robin**: each drive runs a frame to its

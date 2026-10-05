@@ -158,7 +158,7 @@ explicitly. Two rules to know:
   whose type is just `T`. Pass concrete values in, spell an interface
   bound (`T requires Labeled`), or take an interface-typed parameter
   (next chapter).
-- In v1 a *generic class* in a parameter position does not unify —
+- A *generic class* in a parameter position does not unify —
   `fn sum(xs: Vec<i32>)` is fine, but a function generic over `T`
   taking `Vec<T>` is not yet the shape to reach for. Concrete
   instantiations cover most code.

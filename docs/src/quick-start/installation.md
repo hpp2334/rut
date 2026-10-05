@@ -164,8 +164,8 @@ cat > hello/rut.jsonc <<'EOF'
   "entry": { "lib": "./main.rut" },
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
-    // std-v5 tag, pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
+    // std-v8 tag, pinned by sha256
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
   }
 }
 EOF

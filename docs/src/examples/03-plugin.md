@@ -171,7 +171,7 @@ plus its deps, loadable as-is and packable unchanged
 // plugin/rut.jsonc
 {
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "plugin",
   "entry": { "lib": "./plugin.rut" },
 
@@ -194,7 +194,7 @@ pub host fn emit(bus: opaque, topic: str, payload: str);
 
 `main.rs` packs the same directory with `rut_native::pack_dir_opts_with`
 — a
-v9 **compiled** bundle: the plugin rides as a `.rutc` binary, its host
+**compiled** bundle: the plugin rides as a `.rutc` binary, its host
 pkg `server` as a source group — writes `plugin.rutbundle` to temp, and
 loads it back through the identical `Plugin::load`. The transcript
 equality print is the proof. The CLI drives the same loader for any self-contained module:

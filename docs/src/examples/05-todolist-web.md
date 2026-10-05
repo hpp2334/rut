@@ -217,10 +217,10 @@ privacy boundary, which is why there are exactly two
   "deps": {
     // the sibling package — the consumer's own local package
     "ui":      { "path": "../ui" },
-    // the toolchain's packages, from jsDelivr at the std-v5 tag,
+    // the toolchain's packages, from jsDelivr at the std-v8 tag,
     // pinned by sha256
-    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/pouch.rutbundle", "sha256": "3ceedd188659972ff6c797289e57e9fc9a686da9ea55f49ceb28ce4127c6ac80" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/nmapset.rutbundle", "sha256": "f6a25a44df8c478b5f03244583665e5479a4d9221251dcf542ef9f8fdf714001" }
+    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/nmapset.rutbundle", "sha256": "ee9a7cf00c7ab18b6037badfcac49f1abb1c94036c5349288570a43da7ecc598" }
   }
 }
 ```

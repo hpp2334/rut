@@ -25,7 +25,7 @@ pub struct Limits {
 | **Observability** | `vm.heap_usage()` (live), `vm.heap_peak()` (high-water) |
 
 `Vec` growth charges the budget before the write; shrinking is never
-refunded (v1 overcounts rather than undercounts).
+refunded (the accounting overcounts rather than undercounts).
 
 ## Fuel
 

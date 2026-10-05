@@ -117,7 +117,7 @@ this CDN — that is the recommended import for everything the toolchain
 ships. A `path` row is for **your own local packages**: a sibling
 directory in the same project (the modules tutorial's `greet` app
 mounting `../pkg` is the shape). The tag advances with format changes
-(`std-v5` today) and is never re-pointed, so a pin at a tag stays
+(`std-v8` today) and is never re-pointed, so a pin at a tag stays
 honest forever.
 
 The std tree ships as committed per-package bundles —
@@ -132,7 +132,7 @@ repack — CI never touches the network).
 
 **What a url row can deliver** is the engine's instantiation law, read
 from the CDN side: a compiled bundle carries the generic instantiations
-its own pack closure spelled **in its ledger**, and — since the
+its own pack closure spelled **in its ledger**, and — by the
 generic-source riding law — a compiled pkg whose surface exports
 generics **also rides the source that serves consumer-spelled shapes**:
 
@@ -146,9 +146,11 @@ generics **also rides the source that serves consumer-spelled shapes**:
   consumer's link**: the ridden text lowers in the consumer's session,
   the monomorphized bodies register under the declaring pkg's spec (one
   row program-wide, identity by owner), and nothing persists (`.rutc`
-  caches stay pack-time). A bundle that predates the riding — no source
-  beside the binary — refuses a consumer-spelled shape loudly and says
-  so: re-pack it. A bundle-mounted json also names its pack-time dev
+  caches stay pack-time). The riding law binds both sides: a pkg that
+  owns an open generic surface but carries no riding source refuses at
+  the mount (`pouch` owns an open generic surface but its bundle
+  carries no riding source — re-pack the directory). A bundle-mounted
+  json also names its pack-time dev
   closure in its ledger, so the consumer's closure must contain those
   names (`pouch`, `nmapset` beside `json` — the six-pin law).
 

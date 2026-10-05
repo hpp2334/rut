@@ -54,7 +54,7 @@ Accounting checks run **before any write**: a failed allocation leaves
 the heap byte-identical to its state before the op, and the trap is
 resumable ([resource limits](resource-limits.md)).
 
-## Allocation strategy (v1)
+## Allocation strategy
 
 - **Fixed-size cell slots in the arena.** Cells are one fixed-size
   record carved from 1024-slot chunks with a free list; a dead slot is
@@ -79,7 +79,7 @@ resumable ([resource limits](resource-limits.md)).
   two-kind entries (rut value / host payload) with its own borrow
   guards; entries charge their bytes on insert and refund on death, so
   the budget and the receipts stay honest.
-- **No compaction in v1.** Non-moving keeps host borrows into `Vec`
+- **No compaction.** Non-moving keeps host borrows into `Vec`
   buffers sound and freelists trivial.
 - **Cells are addressed by raw pointer** in the slot word. A 32-bit
   handle design was prototyped and reverted on measurement: ref-heavy

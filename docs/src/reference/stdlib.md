@@ -146,8 +146,8 @@ entry fn main() {
 started
 ```
 
-`Logger("app")` constructs through the designated `new` — the call
-form and `Logger.new("app")` are the same call.
+`Logger("app")` constructs through the class's `[constructor]` member —
+the call form spells the construction.
 
 | method | level passed to `ink_host` |
 |---|---|
@@ -252,8 +252,7 @@ pub class HashSet<T requires ..same key set..> { new, with_capacity, put, has, r
 ```
 
 Both classes designate `new` — `HashMap()` / `HashSet()` spell the
-construction (the same call as `HashMap.new()` / `HashSet.new()`);
-`with_capacity` stays a named constructor.
+construction; `with_capacity` stays a named constructor.
 
 Laws: the key set is closed (no floats — no stable equality; encode a
 custom key canonically to `bytes`); `get` answers the stored cell, so two

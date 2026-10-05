@@ -202,8 +202,8 @@ floats: they have no stable equality contract) — hashed by the host; a
 user-defined key escapes by encoding canonically to `bytes`. A hit
 returns the stored cell, not a copy. There is no iteration surface:
 maps and sets answer questions, they don't walk. Construction spells
-the call form — `HashMap()` / `HashSet()` are the designated `new`
-(the same call as `HashMap.new()`); `with_capacity(n)` stays named.
+the call form — `HashMap()` / `HashSet()` are the designated `new`;
+`with_capacity(n)` stays named.
 
 ## `flow` — the push pipeline
 
@@ -293,8 +293,8 @@ entry fn main() {
 count: ! up to 3
 ```
 
-`StringBuilder()` is the designated `new` (the same call as
-`StringBuilder.new()`); `with_cap(n)` pre-sizes and stays named.
+`StringBuilder()` is the designated `new`; `with_cap(n)` pre-sizes and
+stays named.
 
 Every `out = f"{out}{chunk}"` loop copies the whole prefix each time;
 the builder appends into one growable cell and copies once, at

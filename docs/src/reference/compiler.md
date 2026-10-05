@@ -158,7 +158,7 @@ A fixed pipeline with no flags:
    → the constant `N` (with const-index bounds checks folded against it),
    statically-decided `is` probes, dead branches.
 2. **Inlining** — single-callee calls and small bodies (a callee op-count
-   budget). Cross-module inlining after linking is future work; v1 binaries
+   budget). Cross-module inlining after linking is future work; binaries
    carry no cross-function inlined code.
 3. **CSE / LICM** over pure operations — type-id loads, downcast checks,
    field loads on immutable records.

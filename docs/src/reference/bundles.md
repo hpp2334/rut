@@ -2,31 +2,30 @@
 
 `rut pack mod/` reads a module directory and emits **one file** —
 `mod.rutbundle` — a zip archive carrying the module in one of two root
-kinds, paired with the format version: a **lib** pkg packs **compiled**
-(v9 — the root's `.rutc` binary, its scope ledger, and each dependency
-as a compiled `.rutc` group or a source file set), and a `type = "host"`
-pkg packs as a **decl** root (v10 — its `.d.rut` surface rides as
-source; single-package). A bundle is the same
-contract as the directory it was packed from, in one file: the loader
-mounts it exactly like the directory, and the two compile to identical
-programs.
+kinds, routed by the manifest's `type` key: a **lib** pkg packs
+**compiled** (the root's `.rutc` binary, its scope ledger, and each
+dependency as a compiled `.rutc` group or a source file set), and a
+`type = "host"` pkg packs as a **decl** root (its `.d.rut` surface
+rides as source; single-package). A bundle is the same contract as the
+directory it was packed from, in one file: the loader mounts it
+exactly like the directory, and the two compile to identical programs.
 
 ## Layout rules
 
 - **Entry names are paths relative to the module root** — `rut.jsonc`,
   `<pkg>.rutc`, `<pkg>.d.rut`, `<dep>/…` group entries for deps. No
   directories otherwise, no metadata entries. Unknown extra entries are
-  ignored by loaders (forward compatibility) — except in a v10 decl
+  ignored by loaders (forward compatibility) — except in a decl
   bundle, where a group entry, a root `.rutc`, or a ledger is a
-  contradiction and refuses (see [the v10 layout](#the-v10-layout)).
+  contradiction and refuses (see [the decl root](#the-decl-root-host)).
 - The manifest's `name` is the package name the bundle answers to — a
   bare `[a-zA-Z0-9_]+` name, the same law as directory manifests.
 - Includes and splices never escape the archive: there is no outside.
 
-## The v9 layout — a compiled root
+## The compiled root (lib)
 
 ```text
-rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 9
+rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
 rut.scopes               the pack-time scope ledger (scope = "spec" rows)
 <pkg>.rutc               the root's compiled binary — bodies + surface
 <pkg>.rut                the root's generic-bearing source, when its surface
@@ -73,20 +72,22 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   `entry.libs` file, and each `peer-deps` group file, verbatim,
   beside the binary. The entry lib's presence is the loader's dispatch
   marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
-  source-free. At the consumer's link, a request the ledger lacks
-  lowers the ridden text in the consumer's session and compiles the
-  monomorphized body with owner = the pkg's spec — one row
+  source-free by law. At the consumer's link, a request the ledger
+  lacks lowers the ridden text in the consumer's session and compiles
+  the monomorphized body with owner = the pkg's spec — one row
   program-wide, indistinguishable from a pack-time one, nothing
-  persisted. A bundle with no riding source refuses such a request
-  loudly (`this bundle predates generic-source riding — re-pack it`),
-  never mislinks. `--strip` refuses the combination: the ridden text
-  would recompile clean-named beside mangled binaries.
+  persisted. The law binds both sides: a pkg that owns an open
+  generic surface but whose bundle carries no riding source refuses at
+  the mount (`pouch` owns an open generic surface but its bundle
+  carries no riding source — re-pack the directory), never mislinks.
+  `--strip` refuses the combination: the ridden text would recompile
+  clean-named beside mangled binaries.
 - **The root must be linkable** — else `pack: <pkg> is inline — its
   source is its interface and it cannot be published compiled; share
   the directory instead`. A root that has nothing to compile is not
-  this refusal: a `type = "host"` pkg packs as a v10 decl root, below.
+  this refusal: a `type = "host"` pkg packs as the decl root, below.
 
-## The v10 layout — a host root
+## The decl root (host)
 
 A `type = "host"` pkg's root IS its declaration surface, so a host
 bundle is the manifest plus that surface, riding as source —
@@ -97,28 +98,14 @@ rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version":
 <pkg>.d.rut              the declaration surface — the root itself
 ```
 
-The pairing is **total**, both directions refused at the version gate:
-
-- **v9 ⇔ compiled.** A host manifest at v9 refuses — a v9 bundle's
-  root must be a `.rutc` a host pkg cannot have.
-- **v10 ⇔ decl.** A lib manifest at v10 refuses — lib roots stay v9,
-  compiled.
-- A v10 bundle carrying a root `.rutc` (`a host bundle's root is its
-  surface, not a compiled unit`), a `rut.scopes` ledger, or any group
-  entry (`a host bundle is single-package`) refuses: contradictions,
-  never guesses.
-- Writers emit 10 **only** for decl roots — every lib bundle stays
-  byte-identical v9, and old readers refuse a v10 bundle loudly at the
-  version gate.
-
 `rut pack <host-dir>` works (the surface verifies by parsing and
 lowering once — the exact lane a mount runs — then rides as source),
 `--strip` refuses on a host root (`no symbols to strip` — no programs,
 no sidecar), and `rut run <host.rutbundle>` refuses with intent: a
 host bundle carries a declaration surface — nothing to run; bind its
 rows from the embedder ([host fns](host-fns.md)). The mount is the
-same lane a host group rides inside a v9 bundle: the surface lowers
-into the pkg's host rows.
+same lane a host group rides inside a compiled bundle: the surface
+lowers into the pkg's host rows.
 
 ## The manifest — `rut.jsonc`
 
@@ -129,10 +116,10 @@ what makes a bundle-shaped directory pack unchanged:
 
 ```jsonc
 {
-  // the bundle LAYOUT version — independent of the module-binary
-  // version; a host root declares 10 instead (see the v10 layout)
+  // the bundle wire — 10, always; the manifest's `type` routes the
+  // root kind (the module-binary version is a different constant)
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   // the package this bundle answers to
   "name": "plugin",
   // directory-time; the compiled form rides plugin.rutc instead
@@ -181,55 +168,40 @@ Because the manifest rides byte-for-byte, url rows carry into a
 consumer's own `rut pack` output, satisfied by the rode-along groups:
 the archive's groups re-encode from the consumer session's units (one
 `.rutc` path), source groups copy their file set under the new prefix,
-and the same manifest + pins still pack byte-identically. v1 refuses,
-loudly and named, the cases that would emit a bundle the loader must
-reject: an archive source group still declaring `dev-deps`
+and the same manifest + pins still pack byte-identically. The pack
+refuses, loudly and named, the cases that would emit a bundle the
+loader must reject: an archive source group still declaring `dev-deps`
 directories (vendor the dep), a compiled group the consumer's closure
 never uses (it cannot ride unpackaged), and a declared dep that did
 not ride.
 
-## The layout ledger
+## The wire version
 
-`format_version` versions the zip layout and manifest keys themselves.
-Loaders refuse a version they do not know **before reading anything
-else** — refuse, never guess; the same gate makes an older loader refuse
-a newer bundle.
+`format_version` is 10 — the one bundle wire, both root kinds; the
+manifest's `type` routes lib-compiled vs host-decl. A loader refuses
+any other value **before reading anything else** — refuse, never
+guess: `this toolchain reads bundle format_version 10 only (found {v})
+— re-pack the directory`.
 
-| version | layout | status today |
-|---|---|---|
-| 1 | one module, sources only | refused — re-pack the directory |
-| 2 | + the whole `deps` graph as `<pkg>/` groups | refused — re-pack the directory |
-| 3 | + each package's `peer-deps` `lib` group files | refused — re-pack the directory |
-| 4 | + each package's `entry.libs` files | refused — re-pack the directory |
-| 5 | compiled: `.rutc` (v17) + `.d.rut` per linkable pkg — the manifest TOML | refused — re-pack the directory (the pre-JSON shape) |
-| 6 | decl: a `type = "host"` root — the manifest TOML | refused — re-pack the directory (the pre-JSON shape) |
-| 7 | compiled, the manifest JSON (`rut.json`): `.rutc` (v17) + `.d.rut` per linkable pkg — generic exports included, their instantiations seeded into the binaries, and a generic-owning pkg's source riding beside its binary — mixed source groups for `inline` deps and host pkgs | refused — re-pack the directory (the pre-JSONC wire) |
-| 8 | decl, the manifest JSON (`rut.json`): a `type = "host"` root — the manifest + its `.d.rut` surface, single-package | refused — re-pack the directory (the pre-JSONC wire) |
-| 9 | compiled, the manifest JSONC (`rut.jsonc`): the v7 layout under the JSONC cutover — the manifest file renamed, comments + trailing commas legal | **the lib root's layout** |
-| 10 | decl, the manifest JSONC (`rut.jsonc`): a `type = "host"` root — the manifest + its `.d.rut` surface, single-package | **the host root's layout** |
+Every file in the two layouts is part of the package: a bundle that
+dropped peer groups or multi-lib files would load base-only —
+semantically wrong, so the closure law is checked at the mount.
+Compilation is the delivery contract — one exception, the riding law
+above: a pkg with an open generic surface rides its source beside the
+binary so consumer-spelled shapes stay servable. Source sharing as the
+general contract stays a directory (`rut run <dir>`), as it always was
+outside bundles.
 
-The 8→9 bump rides the manifest's own RENAME (`rut.json` →
-`rut.jsonc`): the entry name is layout, so the number moves with it —
-an old reader must never silently misparse a file whose name it does
-not know. Each historical extension existed because the added files
-were *part of
-the package*: a bundle that dropped peer groups or multi-lib files would
-load base-only — semantically wrong. v7 replaced the source contract
-with the compiled one — one exception, the riding law above: a
-generic-owning compiled pkg's source rides beside its binary so
-consumer-spelled shapes stay servable. Source sharing as the general
-contract stays a directory (`rut run <dir>`), as it always was outside
-bundles.
-
-Peer-gated packages publish inside v9 two ways, per their group-kind
-law: a NON-generic compiled declarer's peer groups compile into its
-binary at pack time (the rows ride the binary; the group files do not
-travel), and a splice-needed declarer publishes as a source group, its
-group files riding beside the entry — the loader's peer gate appends by
-presence exactly as in a directory world ([Dependency
-kinds](dependency-kinds.md)). A generic-owning compiled declarer rides
-its group files too (the riding law), and the on-demand recompile
-splices exactly the rows whose peers are in the consumer's closure.
+Peer-gated packages publish inside a compiled bundle two ways, per
+their group-kind law: a NON-generic compiled declarer's peer groups
+compile into its binary at pack time (the rows ride the binary; the
+group files do not travel), and a splice-needed declarer publishes as
+a source group, its group files riding beside the entry — the loader's
+peer gate appends by presence exactly as in a directory world
+([Dependency kinds](dependency-kinds.md)). A generic-owning compiled
+declarer rides its group files too (the riding law), and the
+on-demand recompile splices exactly the rows whose peers are in the
+consumer's closure.
 
 **The ledger namespaces per archive.** Each archive's scope rows shift
 into a fresh numeric range of the consuming run's world (boot passes
@@ -298,15 +270,15 @@ and version, then every group's decode, then the mount.
 | check | rule on mismatch |
 |---|---|
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
-| `rut.jsonc` present, `"format": "rutbundle"` | refuse — not a rut bundle; a `rut.json` entry instead → "predates wire 9 — re-pack the directory" |
-| `format_version` exactly 9 or 10 | refuse — "reads bundle format_version 9 (compiled) and 10 (decl) only"; ≤8 adds "the pre-JSONC wire is retired" |
-| v9 with a `type = "host"` root / v10 with a lib root | refuse — the pairing is total |
-| v10 carrying a root `.rutc`, a `rut.scopes` ledger, or a group entry | refuse — a host bundle is its surface, single-package |
-| `rut.scopes` present, every row a bare package name (v9) | refuse — not a v9 compiled bundle |
+| `rut.jsonc` present, `"format": "rutbundle"` | refuse — not a rut bundle |
+| `format_version` exactly 10 | refuse — `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory` |
+| a host root carrying a root `.rutc` | refuse — a host bundle's root is its surface, not a compiled unit |
+| a host root carrying a `rut.scopes` ledger or a group entry | refuse — a host bundle is its surface, single-package |
+| a compiled root without its `rut.scopes` ledger, or a ledger row that is not a bare package name | refuse — a corrupt compiled bundle |
 | `<pkg>.rutc` decode: version, tables, surface ids | refuse — names the entry and the cause |
 | a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
 | a riding source entry that fails to read or decode (UTF-8) | refuse — names the entry; a bad archive never reaches the session |
-| every declared dep satisfied by a group (v9) | refuse — names the missing group |
+| every declared dep satisfied by a group (compiled roots) | refuse — names the missing group |
 
 ## The std tree on a CDN — the per-package delivery
 
@@ -343,13 +315,15 @@ artifacts ARE the delivery and the publish act is a git tag:
   request the ledger lacks lowers the ridden text in the consumer's
   session and compiles the monomorphized body under the declaring
   pkg's spec (one row program-wide, nothing persisted). So the CDN
-  lane delivers **host surfaces** (v10 decl bundles), **concrete-class
+  lane delivers **host surfaces** (decl bundles), **concrete-class
   libs** (`http`, `ink`, `strbuild` — methods cross on the surface's
   inherent rows), **and the generic owners** (`pouch`, `nmapset`,
   `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>`
-  compile at the link from the ridden source). A bundle that predates
-  the riding refuses a consumer-spelled shape loudly and says so
-  (re-pack it), and a bundle-mounted json names its pack-time dev
+  compile at the link from the ridden source). The riding law binds
+  this lane too: a pkg that owns an open generic surface but carries
+  no riding source refuses at the mount (`pouch` owns an open generic
+  surface but its bundle carries no riding source — re-pack the
+  directory), and a bundle-mounted json names its pack-time dev
   closure in its ledger, so the consumer's closure must contain those
   names (`pouch`, `nmapset` beside `json` — the six-pin law).
 - **Duplicate mounts are safe.** Two archives may carry the same group

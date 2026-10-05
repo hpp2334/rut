@@ -15,8 +15,8 @@ pub struct Program {
     pub name: String,               // module / program name
     pub scope: ScopeId,             // stable module scope (0 if unset)
     pub interner: Interner,         // every IdentId in the program
-    pub surface: Surface,           // exports, for using modules (on the wire since v16)
-    pub inst_types: Vec<InstTy>,    // the instantiation ledger (v17)
+    pub surface: Surface,           // exports, for using modules
+    pub inst_types: Vec<InstTy>,    // the instantiation ledger
     pub inst_fns: Vec<InstFn>,      //   — link unifies rows by key
     pub types: TypeTable,           // type descriptors, dense ids
     pub ifaces: Vec<IfaceDesc>,     // interface tables
@@ -32,9 +32,9 @@ pub struct Program {
 The `Surface` is the export record — functions, constants, types,
 interface declarations, inherent method surfaces, and the builtin
 names `core` publishes. It is how a *using* module binds a *used*
-module's members at compile time; since v16 it is part of the wire
-format too — the surface section rides after `exports`, and decode
-validates every row against the tables above it.
+module's members at compile time, and it is part of the wire format
+too — the surface section rides after `exports`, and decode validates
+every row against the tables above it.
 
 ## Wire layout
 
@@ -46,7 +46,7 @@ host.
 ```
 offset  field
 0       magic "RUTC"                      # 4 bytes
-4       version: u32                      # refuses any other value
+4       version: u32                      # VERSION = 21; refuses any other value
 8       name: str
         name table: u32 count, then count × str
         types: u32 count, then per type { name: IdentId, kind }
@@ -57,10 +57,10 @@ offset  field
         consts: u32 count, then tag + payload (below)
         funcs: u32 count, then per func (below)
         exports: u32 count, then (name: IdentId, func: u32) pairs
-        instantiation ledger: type rows, then fn identities   # v17, below
+        instantiation ledger: type rows, then fn identities   # below
         surface: namespace, funcs, consts, types + scope blocks + type
                  exports, interface decls, inherent method surfaces,
-                 the native rows   # v16, below
+                 the native rows   # below
 ```
 
 - **Name table.** Names are interner ids everywhere — type names, field
@@ -79,7 +79,7 @@ offset  field
   capture count, the typed register table, both operand pools, the op
   stream, the span table, the parallel `(line, col)` position table, and
   the host-fn binding id when the function is a bodyless thunk.
-- **Instantiation ledger** (v17): the owner-anchored identity of every
+- **Instantiation ledger**: the owner-anchored identity of every
   instantiation the program compiled — type rows `(owner, decl,
   arguments, type id)` first, then fn identities (the kind, the
   substitution values, and the local fn id). Instantiation is owned by
@@ -87,23 +87,21 @@ offset  field
   program-wide row; a consumer resolves its requests against a packaged
   binary's ledger. Type exports carry their generic parameter lists
   beside this (see the surface below).
-- **Surface** (v16): the exported surface rides after `exports` — the
+- **Surface**: the exported surface rides after `exports` — the
   namespace head, funcs (with their async/host rows), consts, the
   carried type descriptors + scope blocks + type exports (generic
-  exports carry their parameter names in order, v17), interface
+  exports carry their parameter names in order), interface
   declarations (`SurfaceIface` — every module publishes the interfaces
   it declares; a consumer links them into one merged table), the
   inherent method surfaces (the linkable-classes phase's one row per
   class with methods), and the native rows with their ambient bits.
-  There are no impl-registration rows on the wire since v21 —
-  satisfaction is structural, so nothing registers. Names are ids into
-  the name table above; decode rejects any id its tables cannot
-  resolve.
+  There are no impl-registration rows on the wire — satisfaction is
+  structural, so nothing registers. Names are ids into the name table
+  above; decode rejects any id its tables cannot resolve.
 - **Versioning policy**: the version `u32` must equal the toolchain's
   exactly — there is no migration or best-effort decode. A byte that
   changes observable behavior bumps the version; artifacts from older
-  compilers are refused with the standard version error (v21 refused
-  the v20 artifacts that still carried the impl-registration rows).
+  compilers are refused with the standard version error.
 
 ## Determinism
 

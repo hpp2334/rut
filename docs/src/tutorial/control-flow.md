@@ -205,7 +205,7 @@ above are statement arms.
 
 ### Patterns
 
-v1 patterns are: enum members (`Light.Red`), literals (integers,
+The patterns are: enum members (`Light.Red`), literals (integers,
 floats, `bool`, `str`), comma-separated alternatives, and `else`.
 There are no ranges, no destructuring, and no guards — an `if` inside
 the arm body does that job.

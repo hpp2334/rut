@@ -54,8 +54,8 @@ area=9
   method `fn parse(s: str) -> ?Version` answers `nil` on failure. A
   class may designate its primary constructor with `[constructor]` —
   then the call form spells the construction too: std's `Logger("t")`
-  is the same call as `Logger.new("t")` (the `[constructor]` section
-  below).
+  constructs through the `[constructor]` member (the `[constructor]`
+  section below).
 
 - **The `Self { field: expr, .. }` literal is the class-private
   construction** — legal anywhere inside the class body (class methods

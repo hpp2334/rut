@@ -277,8 +277,8 @@ the two packages the program uses, and the program is
   "entry": { "lib": "./main.rut" },
 
   "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/pouch.rutbundle", "sha256": "3ceedd188659972ff6c797289e57e9fc9a686da9ea55f49ceb28ce4127c6ac80" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v5/dist/std/ink.rutbundle", "sha256": "200ab1ea41bee7145d20c0665f799302436dcbe82bdab8858c7c74708d1b306a" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
   }
 }
 ```
