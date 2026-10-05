@@ -17,7 +17,7 @@ pub class SetFlow<T>(HashSet<T>);
 
 impl<T> SetFlow<T> {
     pub fn from_flow(it: Flow<T>) -> Self {
-        let out: HashSet<T> = HashSet.new();
+        let out: HashSet<T> = HashSet();
         it.iterate(fn (x: T) -> bool { out.put(x); return true; });
         return SetFlow(out);
     }

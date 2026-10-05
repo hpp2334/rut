@@ -63,7 +63,7 @@ impl HttpClient {
 
     /// the manual entry: method defaults to GET
     pub fn request(self) -> RequestBuilder {
-        return RequestBuilder { c: self.c, m: "GET", url: "", headers: StringBuilder.new(), body: "".encode() };
+        return RequestBuilder { c: self.c, m: "GET", url: "", headers: StringBuilder(), body: "".encode() };
     }
 
     // the five verbs — BUILD sugars: sync, no I/O, each a one-step
