@@ -1,12 +1,12 @@
 //! The bundle reader: parse the bytes once, then read. [`Bundle`] is
 //! the entry-level view (CRC-verified at parse, entries by name); the
-//! [`Layout`] is the structured view, ONE of two root kinds: a
-//! **v9 compiled** root (the decoded root program, the pack-time scope
-//! ledger, and each dep group as compiled `.rutc` or source file set)
-//! or a **v10 decl** root (a `type = "host"` pkg whose root IS its
-//! declaration surface — single-package, nothing to decode). Parsing a
-//! layout verifies what each kind carries, so a bad archive never
-//! reaches the session.
+//! [`Layout`] is the structured view, ONE of two root kinds — the
+//! manifest's `type` routes: a lib root (no `type`) is the **compiled**
+//! layout (`.rutc` + scope ledger + ridden source), a `type = "host"`
+//! root is the **decl** layout (its `.d.rut` surface, single-package).
+//! One wire number: `format_version` is 10, always. Parsing a layout
+//! verifies what each kind carries, so a bad archive never reaches the
+//! session.
 
 use super::container::{parse_bundle, BundleError};
 use super::manifest::{parse_manifest, Manifest};
@@ -57,10 +57,11 @@ pub enum GroupKind {
     Source,
 }
 
-/// The one bundle layout — the root kind pairs with the version:
-/// **v9 ⇔ compiled** (a lib root; `<pkg>.rutc` + ledger + groups),
-/// **v10 ⇔ decl** (a host root; the manifest + its surface, nothing
-/// else). The pairing is total, both directions refused at the gate.
+/// The one bundle layout — ONE wire number, the manifest's `type`
+/// routes the root kind: a lib root (no `type`) is **compiled**
+/// (`<pkg>.rutc` + ledger + groups), a `type = "host"` root is
+/// **decl** (the manifest + its surface, single-package, nothing
+/// else).
 #[derive(Clone, Debug)]
 pub enum Layout {
     Compiled {
@@ -73,7 +74,7 @@ pub enum Layout {
         /// `(archive prefix, payload)` per dep group, archive order
         groups: Vec<(String, GroupKind)>,
     },
-    /// a v10 host root: the pkg's declaration surface rides as its own
+    /// a decl root: the pkg's declaration surface rides as its own
     /// source — a single-package bundle, no ledger, no groups, nothing
     /// to decode
     Decl {
@@ -87,24 +88,17 @@ pub enum Layout {
 
 impl Layout {
     /// Parse a bundle: manifest + version gate first (`format_version`
-    /// must be exactly 9 or 10 — refuse, never guess), then the
-    /// kind's own checks (v9: the scope ledger, the root and every
-    /// group's binary decode + verification; v10: the single-package
-    /// law and the surface read). The load order is: container CRC
-    /// (the [`Bundle::parse`] this takes), manifest/version, then the
-    /// kind's payloads — the mount is the caller's.
+    /// is 10 — one wire number for both root kinds; anything else
+    /// refuses with the one re-pack recipe, never guesses), then the
+    /// kind's own checks (compiled: the scope ledger, the root and
+    /// every group's binary decode + verification; decl: the
+    /// single-package law and the surface read). The load order is:
+    /// container CRC (the [`Bundle::parse`] this takes),
+    /// manifest/version, then the kind's payloads — the mount is the
+    /// caller's.
     pub fn parse(bundle: &Bundle) -> Result<Layout, String> {
         let manifest_text = match bundle.read(super::files::MANIFEST_NAME) {
             Ok(text) => text,
-            Err(_) if bundle.bytes("rut.json").is_some() => {
-                // the retired entry name: a pre-JSONC bundle — the
-                // pointed refusal, never a fallback lane
-                return Err(
-                    "no `rut.jsonc` entry — found `rut.json`: this bundle predates wire 9 \
-                     (9 compiled / 10 decl) — re-pack the directory"
-                        .to_string(),
-                );
-            }
             Err(_) => return Err("no `rut.jsonc` entry — not a rut bundle".to_string()),
         };
         let manifest = parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
@@ -112,32 +106,27 @@ impl Layout {
             return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
-            Some(9) => Self::parse_compiled(bundle, manifest),
-            Some(10) => Self::parse_decl(bundle, manifest),
-            // the pre-JSONC wire (≤8) and the reserved band (99+) refuse
-            // LOUDLY with the recipe — an old archive must never
-            // silently misparse
-            Some(v) if v <= 8 => Err(format!(
-                "this toolchain reads bundle format_version 9 (compiled) and 10 (decl) only \
-                 (found {v:?}) — the pre-JSONC wire is retired: re-pack the directory"
-            )),
+            // ONE wire number, both root kinds: the manifest's `type`
+            // routes the layout — a host root is its own decl surface,
+            // a lib root the compiled layout
+            Some(10) => match manifest.pkg_type {
+                super::manifest::PkgType::Host => Self::parse_decl(bundle, manifest),
+                super::manifest::PkgType::Lib => Self::parse_compiled(bundle, manifest),
+            },
             other => Err(format!(
-                "this toolchain reads bundle format_version 9 (compiled) and 10 (decl) only \
-                 (found {other:?}) — re-pack the directory"
+                "this toolchain reads bundle format_version 10 only (found {}) — re-pack the directory",
+                match other {
+                    Some(v) => v.to_string(),
+                    None => "none".to_string(),
+                }
             )),
         }
     }
 
-    /// The v9 arm: a lib root, compiled. A host manifest here is the
-    /// broken pairing (v9's root must be a `.rutc` a host pkg cannot
-    /// have) — refuse, never guess.
+    /// The compiled arm: a lib root (no `type` — the grammar routes a
+    /// `type = "host"` root to the decl arm), the layout the packer
+    /// emits: root `.rutc` + scope ledger + dep groups.
     fn parse_compiled(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        if manifest.pkg_type == super::manifest::PkgType::Host {
-            return Err(
-                "a `type = \"host\"` root packs at format_version 10 — a v9 bundle's root is compiled, and a host pkg has nothing to compile; re-pack the directory"
-                    .into(),
-            );
-        }
         let name = manifest
             .name
             .clone()
@@ -146,7 +135,7 @@ impl Layout {
         // module of the packed closure, ascending by scope
         let ledger = bundle
             .read("rut.scopes")
-            .map_err(|_| "no `rut.scopes` entry — not a v9 compiled bundle".to_string())?;
+            .map_err(|_| "no `rut.scopes` entry — a compiled bundle carries the scope ledger".to_string())?;
         let mut scopes = Vec::new();
         for (lineno, raw) in ledger.lines().enumerate() {
             let line = raw.split('#').next().unwrap_or("").trim();
@@ -174,7 +163,7 @@ impl Layout {
         let root = decode(
             bundle
                 .bytes(&format!("{name}.rutc"))
-                .ok_or_else(|| format!("no `{name}.rutc` entry — a v9 bundle's root is compiled"))?,
+                .ok_or_else(|| format!("no `{name}.rutc` entry — a compiled bundle's root is a `.rutc`"))?,
         )
         .map_err(|e| format!("{name}.rutc: {e}"))?;
         // the dep groups: every archive prefix, compiled iff its
@@ -211,20 +200,14 @@ impl Layout {
         Ok(Layout::Compiled { manifest, root, scopes, groups })
     }
 
-    /// The v10 arm: a host root, its surface riding as source. A lib
-    /// manifest here is the broken pairing (lib roots stay v9
-    /// compiled) — refuse; so does anything compiled-shaped the archive
-    /// cannot legally carry: a root `.rutc` (a host bundle's root is its
-    /// surface), a scope ledger (no programs, no ledger), any dep group
-    /// (a host bundle is single-package — the grammar refuses a host
-    /// manifest's deps tables, so there is nothing for a group to be).
+    /// The decl arm: a `type = "host"` root, its surface riding as
+    /// source. Anything compiled-shaped the archive cannot legally
+    /// carry refuses: a root `.rutc` (a host bundle's root is its
+    /// surface), a scope ledger (no programs, no ledger), any dep
+    /// group (a host bundle is single-package — the grammar refuses a
+    /// host manifest's deps tables, so there is nothing for a group
+    /// to be).
     fn parse_decl(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        if manifest.pkg_type != super::manifest::PkgType::Host {
-            return Err(
-                "format_version 10 is the decl-root layout — a lib root packs at 9, compiled; re-pack the directory"
-                    .into(),
-            );
-        }
         let name = manifest
             .name
             .clone()

@@ -313,10 +313,10 @@ mod tests {
 
     #[test]
     fn bundle_manifest_keys() {
-        let text = r#"{"format": "rutbundle", "format_version": 1, "name": "x", "entry": {"lib": "./x.rut"}}"#;
+        let text = r#"{"format": "rutbundle", "format_version": 10, "name": "x", "entry": {"lib": "./x.rut"}}"#;
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(1));
+        assert_eq!(m.format_version, Some(10));
     }
 
     #[test]
@@ -409,12 +409,12 @@ mod tests {
         // the decl-root grammar: `format`/`format_version` are LEGAL on a
         // `type = "host"` manifest — a host pkg packs as a decl root
         let m = parse_manifest(
-            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
+            r#"{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
         )
         .unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(8));
+        assert_eq!(m.format_version, Some(10));
     }
 
     #[test]
@@ -424,18 +424,18 @@ mod tests {
         // keys present
         for table in ["deps", "peer-deps", "dev-deps"] {
             let err = parse_manifest(&format!(
-                r#"{{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
+                r#"{{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
             assert!(err.to_string().contains("a host pkg is pure surface"), "[{table}]: {err}");
         }
         let err = parse_manifest(
-            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
+            r#"{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
         )
         .unwrap_err();
         assert!(err.to_string().contains("no body"), "{err}");
         let err = parse_manifest(
-            r#"{"format": "rutbundle", "format_version": 8, "name": "h", "type": "host"}"#,
+            r#"{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host"}"#,
         )
         .unwrap_err();
         assert!(err.to_string().contains("needs `entry.type`"), "{err}");

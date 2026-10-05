@@ -76,8 +76,9 @@ impl Default for PkgBody {
 /// generics rides this so consumer-spelled shapes stay servable; the
 /// graph lowers it in the CONSUMER's session only when a request misses
 /// the pack-time ledger — nothing persists, `.rutc` caches stay
-/// pack-time. `None` for directory mounts, for non-generic compiled
-/// pkgs, and for legacy bundles that predate the riding.
+/// pack-time. `None` for directory mounts and for non-generic compiled
+/// pkgs (source-free by the packer's riding law — a generic-owning pkg
+/// without the riding refuses at the mount seam).
 #[derive(Clone, Debug)]
 pub struct GenSource {
     /// the pkg's own source: `entry.lib` + `entry.libs`, '\n'-joined —

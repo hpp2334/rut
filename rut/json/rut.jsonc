@@ -21,7 +21,7 @@
   // inside json's binary and the `lib` keys stay the presence/D2
   // contract.
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "json",
   "entry": {
     "lib": "./json.rut"

@@ -77,7 +77,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// `rut <args>` with this test's cache dir, env-cleaned (no XDG/HOME

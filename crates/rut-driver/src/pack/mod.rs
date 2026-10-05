@@ -9,13 +9,14 @@
 //! an ordinary tree package) and emits from the pkgs and the reader.
 //! Same input directory ⇒ byte-identical bundle.
 //!
-//! TWO root kinds, paired with the format version: a **lib** root packs
-//! **compiled** (v9 — the root and every source dep ride as `.rutc`
-//! binaries (bodies + surface — the linking truth); host/decl pkgs ride
-//! as their declaration file sets), and a **host** root packs as a
-//! **v10 decl root** (single-package: its `.d.rut` surface rides as
-//! source, nothing to compile — that arm lives in rut-native, no
-//! compiler needed). Instantiation is owner-anchored (a generic export
+//! TWO root kinds, ONE wire number (`format_version` is 10, always;
+//! the manifest's `type` routes): a **lib** root packs **compiled**
+//! (the root and every source dep ride as `.rutc` binaries (bodies +
+//! surface — the linking truth); host/decl pkgs ride as their
+//! declaration file sets), and a **host** root packs a **decl root**
+//! (single-package: its `.d.rut` surface rides as source, nothing to
+//! compile — that arm lives in rut-native, no compiler needed).
+//! Instantiation is owner-anchored (a generic export
 //! links, its consumers request), class methods cross on the surface's
 //! inherent rows, and the pack-time scope ledger lets a loader rebase
 //! every decoded program onto its own numbering.
@@ -51,17 +52,11 @@ use crate::graph::compile_units;
 use crate::run::Loaded;
 use crate::session::{PkgBody, Session};
 
-/// The v9 bundle layout version — a **compiled** root (a lib pkg).
-/// The bump from 7 rides the manifest's own name change (`rut.json` →
-/// `rut.jsonc`): a layout change, so old readers must never silently
-/// misparse — they refuse loudly.
-pub const FORMAT_VERSION: u64 = 9;
-
-/// The v10 bundle layout version — a **decl** root (a `type = "host"`
-/// pkg: its `.d.rut` surface rides as source, single-package). Writers
-/// emit 10 ONLY for decl roots; readers accept 9|10 — the pairing is
-/// total, both directions refused at the gate.
-pub const FORMAT_VERSION_DECL: u64 = 10;
+/// The bundle wire version — 10, always, ONE number for both root
+/// kinds. The manifest's `type` routes the layout (a lib root packs
+/// compiled, a `type = "host"` root packs its decl surface); a reader
+/// refuses anything else with one re-pack recipe — never guesses.
+pub const FORMAT_VERSION: u64 = 10;
 
 /// Where a group's files ride from — the emission's read dispatch. The
 /// `Dir` arm carries the DIRECTORY KEY (an opaque string; the FS math

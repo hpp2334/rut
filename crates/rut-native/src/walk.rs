@@ -785,9 +785,9 @@ pub(crate) fn run_gate(world: &mut World, root: &str) -> Result<(), LoadError> {
 ///    compiled programs rebase with the same map BEFORE mounting —
 ///    two independently packed bundles never argue about a number
 ///    (each binary's ids resolve through its own archive's rows);
-/// 5. the root mounts (first-mount-wins) — compiled for a v9 bundle,
-///    the decl-surface host rows for a v10 bundle; the manifest's peers
-///    fold in;
+/// 5. the root mounts (first-mount-wins) — compiled for a lib root,
+///    the decl-surface host rows for a `type = "host"` root; the
+///    manifest's peers fold in;
 /// 6. the group loop = the driver's bundle walk's (first-mount-wins,
 ///    own-scope vs ledger consistency for compiled groups) — the gate
 ///    runs once, post-closure;
@@ -886,8 +886,9 @@ fn mount_url_dep(
     // list — cloned before the root mounts
     let entries = bundle.entries().to_vec();
     // gate 5 — the root: a compiled module (the packer refuses any
-    // other); a generic-owning root rides its source beside the binary
-    let gen_source = rut_driver::loader::riding_gen_source(&entries, "", &manifest)
+    // other); a generic-owning root rides its source beside the binary,
+    // and the riding law refuses a generic-owning unit that carries none
+    let gen_source = rut_driver::loader::riding_source(&root_spec, &root, &entries, "", &manifest)
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     let libs = archive_peer_libs(&entries, "", url, &manifest)?;
     world.register(
@@ -952,7 +953,7 @@ fn mount_url_dep(
                         )));
                     }
                 }
-                let gen_source = rut_driver::loader::riding_gen_source(&entries, &format!("{prefix}/"), &dm)
+                let gen_source = rut_driver::loader::riding_source(&name, &program, &entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
                 let libs = archive_peer_libs(&entries, &format!("{prefix}/"), url, &dm)?;
                 Pkg {
@@ -1094,15 +1095,16 @@ pub(crate) fn offer_dir(
 // bundles from disk
 // ---------------------------------------------------------------------
 
-/// Load a packed `.rutbundle` from disk — a **v9 compiled** bundle (the
-/// root's `.rutc` binary, its pack-time scope ledger, and each dep group
-/// as a compiled `.rutc` or a source file set) or a **v10 decl** bundle
-/// (a host root: the declaration surface mounts as the pkg's host rows —
-/// the same lane a host group rides). The gate order is the law:
-/// container CRC, manifest + exact `format_version` (the reader's
-/// pairing), then each kind's payload checks — then, and only then, the
-/// mount. Older layouts are refused with the one-line version error:
-/// refuse, never guess. The walk itself is the driver's PURE container
+/// Load a packed `.rutbundle` from disk — a **compiled** bundle (a lib
+/// root: the root's `.rutc` binary, its pack-time scope ledger, and
+/// each dep group as a compiled `.rutc` or a source file set) or a
+/// **decl** bundle (a `type = "host"` root: the declaration surface
+/// mounts as the pkg's host rows — the same lane a host group rides).
+/// One wire number, the manifest's `type` routes. The gate order is
+/// the law: container CRC, manifest + exact `format_version` (10 —
+/// anything else refuses with the one re-pack recipe), then each
+/// kind's payload checks — then, and only then, the mount. Refuse,
+/// never guess. The walk itself is the driver's PURE container
 /// lane (every read is an in-memory entry) — this lane adds only the
 /// file read.
 pub fn load_bundle_session(path: &Path) -> Result<Loaded, RunError> {

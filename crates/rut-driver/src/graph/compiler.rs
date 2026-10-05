@@ -549,8 +549,9 @@ impl<'a> GraphCompiler<'a> {
     /// PACKAGED owner grows the same way when its pkg RIDES generic
     /// source: the ridden text lowers in this session and the
     /// monomorphized bodies compile at the link, owner = the pkg's spec.
-    /// A LEGACY packaged owner's binary must already carry the row, or
-    /// the consumer refuses loudly (re-pack it). Seeds cascade — a
+    /// A packaged owner that rides no source — non-generic by the
+    /// packer's riding law — must already carry the row, or the
+    /// consumer refuses loudly (re-pack it). Seeds cascade — a
     /// seeded owner's compile may request from further owners — until
     /// the queue drains; every round processes in canonical (sorted)
     /// order.
@@ -657,8 +658,9 @@ impl<'a> GraphCompiler<'a> {
     /// indistinguishable in the ledger from pack-time ones: ONE row
     /// program-wide, link unifies the mirrors onto it. Nothing persists:
     /// this is per-load compilation, the `.rutc` caches stay pack-time.
-    /// A LEGACY bundle (the marker absent — no riding source) still
-    /// cannot grow: the loud refusal names the fix.
+    /// A compiled owner that rides no source (non-generic by the
+    /// packer's riding law) still cannot grow: the loud refusal names
+    /// the fix.
     fn reseed_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
         let Some((idx, scope)) = self.done.get(owner).map(|u| (u.idx, u.scope)) else {
             return;
@@ -669,8 +671,8 @@ impl<'a> GraphCompiler<'a> {
             .ok()
             .and_then(|m| m.gen_source.clone())
         else {
-            // the legacy-refusal law: the ledger lacks the shape AND no
-            // source rides — this bundle predates generic-source riding
+            // the no-riding law: the ledger lacks the shape AND no
+            // source rides — the binary must already carry the shape
             self.check_compiled_owner(owner, seeds);
             return;
         };
@@ -727,9 +729,10 @@ impl<'a> GraphCompiler<'a> {
         self.programs[idx] = out.program.expect("checked above");
     }
 
-    /// A legacy packaged owner cannot grow: its binary carries exactly
-    /// the instantiations the pack-time closure requested, and no
-    /// source rides to serve anything else. Each consumer request must
+    /// A compiled owner without riding source cannot grow: its binary
+    /// carries exactly the instantiations the pack-time closure
+    /// requested, and no source rides to serve anything else. Each
+    /// consumer request must
     /// already have a ledger row — link unifies the requester's mirror
     /// onto it — or the closure was packed without this consumer,
     /// which is a loud refusal naming the re-pack fix, never a guess.

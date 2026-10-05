@@ -185,7 +185,7 @@ mod tests {
         let entries = vec![
             (
                 "rut.jsonc".to_string(),
-                br#"{"format": "rutbundle", "format_version": 9, "name": "golden"}"#.to_vec(),
+                br#"{"format": "rutbundle", "format_version": 10, "name": "golden"}"#.to_vec(),
             ),
             ("golden.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
         ];
@@ -197,7 +197,7 @@ mod tests {
             .collect();
         assert_eq!(
             hex,
-            "5a23daf2ab7a32d50c43e08676df5d91cd9141d23fe4d7162e2a63312787d7a4",
+            "894a325fbcb5d3e8d8633a3f223be1a86f995875bdbfda4e2d1145f597609096",
             "the .rutbundle byte layout moved — is the shift intended? re-pin consciously: {hex}"
         );
     }

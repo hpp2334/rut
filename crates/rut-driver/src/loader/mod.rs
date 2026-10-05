@@ -87,7 +87,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
         Layout::Decl { manifest, .. } => {
             // the decl root: a host pkg — the surface mounts as the
             // pkg's host rows through `bundle_entry_pkg` (the lane a
-            // host group rides inside a v7 bundle). Single-package: no
+            // host group rides inside a bundle). Single-package: no
             // groups, no ledger, no closure — a LEAF, done.
             let entries = bundle.entries();
             let root_spec = manifest
@@ -123,8 +123,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     let root = rut_core::link::rebase(root, &remap);
     // the root: a compiled module (the packer refuses any other root).
     // A generic-owning root rides its source beside the binary — the
-    // on-demand recompile's input (generic-source riding).
-    let gen_source = riding_gen_source(entries, "", &manifest).map_err(err)?;
+    // on-demand recompile's input (generic-source riding); the riding
+    // law refuses a generic-owning unit that carries none
+    let gen_source = riding_source(&root_spec, &root, entries, "", &manifest).map_err(err)?;
     let libs = archive_peer_libs(entries, "", &manifest).map_err(err)?;
     pkgs.insert(
         root_spec.clone(),
@@ -185,7 +186,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                         )));
                     }
                 }
-                let gen_source = riding_gen_source(entries, &format!("{prefix}/"), &dm)
+                let gen_source = riding_source(&name, &program, entries, &format!("{prefix}/"), &dm)
                     .map_err(err)?;
                 let libs = archive_peer_libs(entries, &format!("{prefix}/"), &dm).map_err(err)?;
                 Pkg {
@@ -371,11 +372,12 @@ fn plain_entry_pkg(
 /// archive under `prefix` (empty for the root, `<pkg>/` for a group):
 /// the entry lib + `entry.libs` spliced, plus the `[peer-deps]` group
 /// files keyed by peer. The entry lib's PRESENCE is the dispatch
-/// marker the packer laid down — its absence is a legacy bundle (or a
-/// non-generic pkg), which rides nothing and refuses consumer-spelled
-/// shapes at link. Once the marker answers, every other riding file
-/// must be there (refuse, never guess — a corrupt archive is a load
-/// error).
+/// marker the packer laid down — the packer rides source iff the pkg
+/// owns an open generic surface, so absence means a non-generic pkg
+/// (source-free by law); a generic-owning unit without the marker
+/// refuses at the mount seam ([`riding_source`]). Once the marker
+/// answers, every other riding file must be there (refuse, never
+/// guess — a corrupt archive is a load error).
 pub fn riding_gen_source(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -391,7 +393,7 @@ pub fn riding_gen_source(
     };
     let mut text = match read(base) {
         Ok(t) => t,
-        Err(_) => return Ok(None), // the marker's absence: a legacy bundle
+        Err(_) => return Ok(None), // the marker's absence: a non-generic pkg — source-free by law
     };
     for lib in &manifest.entry.libs {
         text.push('\n');
@@ -404,6 +406,30 @@ pub fn riding_gen_source(
         }
     }
     Ok(Some(crate::session::GenSource { text, peers }))
+}
+
+/// The mount seam's riding law, ONE helper: read the generic-bearing
+/// source a compiled unit rides ([`riding_gen_source`]), then apply
+/// the packer's own predicate — a unit that owns an open generic
+/// surface (`has_open_generic_surface`, the same law the packer applies
+/// when it decides to ride) MUST carry that source; its absence on a
+/// generic-owning unit is a torn or doctored bundle, refused loudly
+/// here — the earliest point the decoded prog is in hand. A non-generic
+/// unit rides nothing and loads source-free by the same law.
+pub fn riding_source(
+    pkg: &str,
+    program: &rut_core::binary::Program,
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    manifest: &Manifest,
+) -> Result<Option<crate::session::GenSource>, String> {
+    let gen = riding_gen_source(entries, prefix, manifest)?;
+    if gen.is_none() && crate::pack::has_open_generic_surface(program) {
+        return Err(format!(
+            "`{pkg}` owns an open generic surface but its bundle carries no riding source — re-pack the directory"
+        ));
+    }
+    Ok(gen)
 }
 
 /// Pass 3 — the peer gate, the PURE presence law (the walk's

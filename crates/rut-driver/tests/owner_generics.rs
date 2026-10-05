@@ -65,7 +65,7 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// One world, one in-memory pkg set (no filesystem): the specs'

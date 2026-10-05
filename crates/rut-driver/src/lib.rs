@@ -26,6 +26,6 @@ pub use graph::GraphOutput;
 pub use loader::{
     bundle_entry_pkg, bundle_walk_bytes, riding_gen_source, sha256_hex,
 };
-pub use pack::{pack, Archive, PackError, PackOpts, PackWorld, PkgSource, FORMAT_VERSION, FORMAT_VERSION_DECL};
+pub use pack::{pack, Archive, PackError, PackOpts, PackWorld, PkgSource, FORMAT_VERSION};
 pub use run::{Compiled, Loaded, Pkg, PkgBody, RunError, RutRun, declared_host_fns, host_pkg_ctx};
 pub use session::{GenSource, HostRow, PeerDecl};

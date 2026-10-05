@@ -3,8 +3,9 @@
 //! 1. **Freshness** — `pack_dir(rut/<pkg>)` is byte-identical to the
 //!    committed bundle, for all 16 (the Q4 determinism law turned into
 //!    a pure equality gate; CI never touches the network).
-//! 2. **The version pairing** — lib roots at 9 (compiled), host roots
-//!    at 10 (decl), read from the committed bytes.
+//! 2. **The one wire number** — every manifest reads `format_version`
+//!    10; the manifest's `type` routes the root kind, read from the
+//!    committed bytes.
 //! 3. **The duplicate-mount law** — two archives in one session:
 //!    first-mount-wins, and the scope ledgers namespace per archive
 //!    (independently packed bundles never argue about a number).
@@ -13,8 +14,8 @@
 //!    RIDES its generic source serves consumer-spelled shapes at the
 //!    consumer's link (`Vec<i64>` from a bundle-mounted pouch
 //!    compiles and runs; json's peer groups instantiate the consumer's
-//!    `T`). A LEGACY bundle — the riding absent — refuses loudly
-//!    (re-pack it). Determinism: same bundle + same consumer ⇒
+//!    `T`). A bundle stripped of its riding source refuses loudly at
+//!    mount (re-pack it). Determinism: same bundle + same consumer ⇒
 //!    byte-identical output.
 //! 5. **The concrete-lib law** — a compiled concrete-class lib (the
 //!    string builder) serves its consumers from the bundle: the
@@ -139,18 +140,18 @@ fn every_committed_artifact_is_byte_fresh() {
 }
 
 #[test]
-fn the_artifact_set_spells_the_version_pairing() {
-    // lib roots at 9 (compiled), host roots at 10 (decl) — read from the
-    // committed bytes, the exact pairing the reader refuses to break
+fn the_artifact_set_spells_the_one_wire_number() {
+    // every manifest packs format_version 10 — the ONE wire number;
+    // the manifest's `type` routes the root kind (read from the
+    // committed bytes)
     for (dir, name) in PKGS {
         let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
         let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
         let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
-            m.format_version,
-            Some(if is_host { 10 } else { 9 }),
-            "rut/{dir}: the riding manifest's version must match its kind"
+            m.format_version, Some(10),
+            "rut/{dir}: the manifest packs the one wire number"
         );
         if is_host {
             // single-package: manifest + surface, nothing else
@@ -201,46 +202,43 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
 }
 
 #[test]
-fn a_legacy_bundle_without_ridden_source_refuses_consumer_shapes() {
-    // THE GENERIC BOUNDARY, the legacy arm: a bundle that predates
-    // generic-source riding carries no source beside its binary — a
-    // consumer spelling a NEW shape (`Vec<i64>` from a pouch packed
-    // without the riding) refuses loudly, naming the owner and the fix.
-    // The fixture is the honest legacy artifact: the fresh pack, minus
-    // its riding source entries, re-written into an archive.
+fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
+    // THE GENERIC BOUNDARY, the mount seam: a compiled pkg whose
+    // surface exports generics MUST ride its source — the packer rides
+    // iff `has_open_generic_surface`, so a bundle stripped of the
+    // riding refuses LOUDLY at mount (the earliest point the decoded
+    // prog is in hand), naming the fix. The fixture is the honest torn
+    // artifact: the fresh pack, minus its riding source entries,
+    // re-written into an archive.
     let (url, bytes) = artifact("pouch");
     let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
     assert!(
         parsed.iter().any(|(n, _)| n == "pouch.rut"),
         "the fresh pack rides its source (the riding law moved; this fixture strips it)"
     );
-    let legacy: Vec<(String, Vec<u8>)> = parsed
+    let torn: Vec<(String, Vec<u8>)> = parsed
         .into_iter()
         .filter(|(n, _)| !(n.ends_with(".rut") && n != "rut.jsonc"))
         .collect();
-    let legacy_bytes =
-        rut_driver::bundle::write_bundle(&legacy).expect("re-write the legacy archive");
+    let torn_bytes =
+        rut_driver::bundle::write_bundle(&torn).expect("re-write the torn archive");
     let base = std::env::temp_dir().join(format!("rut-std-cdn-wall-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let mut table = BTreeMap::new();
-    table.insert(url.clone(), legacy_bytes.clone());
-    let diags = load_and_compile(
+    table.insert(url.clone(), torn_bytes.clone());
+    let err = load_and_compile(
         &base,
         &format!(
             "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
-            sha256_hex(&legacy_bytes)
+            sha256_hex(&torn_bytes)
         ),
         table,
         "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>.new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
     )
-    .expect("the legacy world loads");
-    let all = diags.join("; ");
-    assert!(
-        all.contains("was not compiled into `pouch`'s binary"),
-        "{all}"
-    );
-    assert!(all.contains("no generic source rides"), "{all}");
-    assert!(all.contains("predates generic-source riding"), "{all}");
+    .expect_err("the torn bundle refuses at mount");
+    assert!(err.contains("`pouch` owns an open generic surface"), "{err}");
+    assert!(err.contains("no riding source"), "{err}");
+    assert!(err.contains("re-pack the directory"), "{err}");
     let _ = std::fs::remove_dir_all(&base);
 }
 

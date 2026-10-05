@@ -106,12 +106,8 @@ pub fn pack_dir_opts_fetched(
     // the packed rut.jsonc is the directory's rut.jsonc byte-for-byte,
     // so the bundle keys must already be there — directory loading
     // ignores them, but a bundle loader refuses without them (refuse,
-    // never guess): v9 since the jsonc-manifest cutover, v10 for a host
-    // root (its surface rides as source — there is nothing to compile)
-    let want_version = match manifest.pkg_type {
-        PkgType::Host => rut_driver::pack::FORMAT_VERSION_DECL,
-        PkgType::Lib => rut_driver::pack::FORMAT_VERSION,
-    };
+    // never guess): `format_version = 10`, both root kinds
+    let want_version = rut_driver::pack::FORMAT_VERSION;
     if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
     {
         return Err(PackError::law(format!(
@@ -196,10 +192,10 @@ pub fn pack_dir_opts_fetched(
     rut_driver::pack::pack(&world_pack, opts)
 }
 
-/// Pack a `type = "host"` directory as a **v10 decl root** —
+/// Pack a `type = "host"` directory as a **decl root** —
 /// single-package, byte-deterministic: the manifest byte-for-byte plus
 /// its declaration surface file(s) (the same file-set shape a host
-/// group rides inside a v9 bundle). The pack-time VERIFICATION is the
+/// group rides inside a compiled bundle). The pack-time VERIFICATION is the
 /// surface's own parse + lower (the exact lane a mount runs) — the
 /// lowered module is discarded; decls ride as source and the embedding
 /// Rust binds the bodies. A host pkg has no deps, no programs, no

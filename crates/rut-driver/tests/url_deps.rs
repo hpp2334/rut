@@ -73,7 +73,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 
 fn manifest(name: &str, entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the entry object (`, "deps": { … }`)
-    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.

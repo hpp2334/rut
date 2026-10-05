@@ -1,10 +1,10 @@
-//! The v6 decl root — a `type = "host"` pkg packs as its OWN bundle:
+//! The decl root — a `type = "host"` pkg packs as its OWN bundle:
 //! the root IS its declaration surface (single-package, no ledger, no
-//! groups, nothing to decode), format_version 10, readers accept 9|10 —
-//! the pairing is total, both directions refused. The mechanism tests:
-//! the pack/load round trip, the url lane (pin law, name-vs-key, the
-//! leaf law), the refusal matrix, the v5 byte-stability law (writers
-//! emit 6 ONLY for decl roots), and host-pack determinism. The CLI face
+//! groups, nothing to decode), `format_version` 10 — the ONE wire
+//! number, the manifest's `type` routes the root kind. The mechanism
+//! tests: the pack/load round trip, the url lane (pin law,
+//! name-vs-key, the leaf law), the refusal matrix, the one-wire-number
+//! law over a lib root, and host-pack determinism. The CLI face
 //! (`rut pack` works, `rut run` refuses) is pinned in rut-cli's
 //! `decl_bundles_cli.rs`.
 
@@ -262,21 +262,21 @@ fn host_pack_is_deterministic() {
 }
 
 #[test]
-fn v5_byte_stability_writers_emit_6_only_for_decl_roots() {
-    // a lib root packs EXACTLY as before the mechanism existed: v5 in
+fn a_lib_root_packs_the_one_wire_number_too() {
+    // a lib root packs compiled under the SAME one wire number: 10 in
     // the riding manifest, compiled root, ledger, groups — the
-    // explicit pairing law, pinned from the packed bytes
-    let base = scratch("v5stable");
+    // `type` row (absent ⇒ lib) routes the layout, never the version
+    let base = scratch("onewire");
     let lib = base.join("util");
     write(&lib, "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "util", "entry": {"lib": "./util.rut"}}"#);
+        r#"{"format": "rutbundle", "format_version": 10, "name": "util", "entry": {"lib": "./util.rut"}}"#);
     write(&lib, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
         &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(9), "a lib root's manifest still declares 9");
+    assert_eq!(m.format_version, Some(10), "a lib root's manifest declares 10, the one wire number");
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
     assert!(names.contains(&"util.rutc".to_string()), "{names:?}");
@@ -293,35 +293,38 @@ fn strip_refuses_on_a_host_root() {
 }
 
 #[test]
-fn the_v9_v10_pairing_is_total() {
-    // v9 + host manifest: the broken pairing — a v9 root must be a
-    // compiled `.rutc` a host pkg cannot have
+fn any_other_version_refuses_with_the_one_recipe() {
+    // ONE wire number: a v9 manifest — host flavor or lib flavor —
+    // refuses with the same uniform re-pack recipe; the pairing laws
+    // are gone, the version gate is the whole law
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
-    let v5_manifest = format!(
+    let v9_host = format!(
         r#"{{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
     );
-    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", &v5_manifest))
+    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("packs at format_version 10"), "{err}");
-    assert!(err.contains("a v9 bundle's root is compiled"), "{err}");
+    assert!(err.contains("reads bundle format_version 10 only"), "{err}");
+    assert!(err.contains("found 9"), "{err}");
+    assert!(err.contains("re-pack the directory"), "{err}");
 
-    // v10 + lib manifest: the other broken half — lib roots stay v9
+    // a v10 lib manifest routes to the COMPILED layout (the `type`
+    // row does the routing, never the version) — a host pack carries
+    // no ledger, so the compiled law refuses it
     let v10_lib = r#"{"format": "rutbundle", "format_version": 10, "name": "h", "entry": {"lib": "./h.rut"}}"#;
     let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", v10_lib))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("decl-root layout"), "{err}");
-    assert!(err.contains("a lib root packs at 9"), "{err}");
+    assert!(err.contains("no `rut.scopes` entry"), "{err}");
 }
 
 #[test]
-fn v6_refuses_compiled_shaped_entries() {
+fn a_decl_root_refuses_compiled_shaped_entries() {
     let dir = host_world("shapes", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
 
-    // a root `.rutc` in a v6 host bundle: the contradiction refusal —
+    // a root `.rutc` in a host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "h.rutc", b"not a real program");
     let err = rut_driver::Pkg::from_bundle(&with_rutc).unwrap_err().to_string();

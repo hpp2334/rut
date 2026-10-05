@@ -69,7 +69,7 @@ fn manifest(name: &str, entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 9, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
 }
 
 /// The fully-compiled closure: `app` (linkable root) uses `util`
@@ -116,7 +116,7 @@ fn trace_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     let mut src = String::from("fn boom() -> str {\n");
     src.push_str(&pad(25));

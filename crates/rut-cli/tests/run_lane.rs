@@ -35,7 +35,7 @@ fn hello_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
     write(&dir, "main.rut", "entry fn main() -> nil { return; }\n");
     root
@@ -134,7 +134,7 @@ fn two_entries(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
     write(
         &dir,
@@ -196,7 +196,7 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
     );
     // a pure library shape compiles clean — the designation is where
     // the run stops, never a source diagnostic

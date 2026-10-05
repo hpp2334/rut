@@ -18,7 +18,7 @@
   // `completer<T>()` — the manually-resolvable future primitive: the
   // mint plus the resolution RIGHT (`Completer<T>`).
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "futures",
   "entry": {
     "lib": "./futures.rut"

@@ -5,7 +5,7 @@
   // inherent rows, so `Logger.new(..)` and `logger.log(..)` bind in every
   // consumer from this pkg's binary — no source ever crosses.
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "ink",
   "entry": {
     "lib": "./ink.rut"

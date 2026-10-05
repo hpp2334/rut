@@ -5,7 +5,7 @@
   // cross on the surface's inherent rows, so every consumer's call site
   // binds them from this pkg's binary.
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "http",
   "entry": {
     "lib": "./http.rut"

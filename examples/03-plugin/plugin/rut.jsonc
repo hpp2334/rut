@@ -1,13 +1,13 @@
 {
   // plugin/ — the moderator module (one directory is one module).
   //
-  // The manifest is bundle-shaped (layout v7): directory
+  // The manifest is bundle-shaped (layout 10): directory
   // loading ignores the format keys, and `rut pack plugin/` needs them —
-  // so the same directory packs to a v7 compiled `.rutbundle` unchanged,
+  // so the same directory packs to a compiled `.rutbundle` unchanged,
   // with linkable deps riding as `.rutc` groups and splice-needed deps
   // (server's host surface) as source groups.
   //
-  // THE CDN ROW: `pouch` ships as a COMMITTED v7 compiled bundle
+  // THE CDN ROW: `pouch` ships as a COMMITTED compiled bundle
   // (dist/std/pouch.rutbundle, jsDelivr-served at the tag, sha256-pinned
   // here — the pin is law at the mount door on every load). pouch is a
   // GENERIC owner, and since the generic-source riding law its bundle
@@ -20,7 +20,7 @@
   // rode-along law carries the pouch group inside the plugin's own
   // bundle, so the packed form stays closed.
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "plugin",
   "entry": {
     "lib": "./plugin.rut"
@@ -29,6 +29,6 @@
     "server": {
       "path": "../server"
     },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v7/dist/std/pouch.rutbundle", "sha256": "49f9958c7cec1b6b3ab87aa8c87cddadf31461d8dc6cd2e66f3d6b7b140c389b" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" }
   }
 }

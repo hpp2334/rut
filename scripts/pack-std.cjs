@@ -7,8 +7,9 @@
  * publish ADVANCES the number, never rewrites a tag).
  *
  * The bundle set is exhaustive over `rut/` (16 pkgs): lib pkgs pack as
- * compiled v9 roots (their closures ride inside), host pkgs pack as
- * decl v10 roots (single-package — the surface IS the root). Same
+ * compiled roots (their closures ride inside), host pkgs pack as decl
+ * roots (single-package — the surface IS the root); `format_version`
+ * is 10, always — the manifest's `type` routes the root kind. Same
  * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
  * PURE EQUALITY gate — CI never touches the network.
  *
@@ -52,7 +53,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const DEFAULT_TAG = "std-v7";
+const DEFAULT_TAG = "std-v8";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +119,7 @@ if ([doPins, doCheck, doTag].filter(Boolean).length > 1) {
 // ---------------------------------------------------------------------------
 
 const PKGS = [
-  // lib pkgs — compiled v7 roots; each closure rides inside
+  // lib pkgs — compiled roots; each closure rides inside
   { dir: "pouch" },
   { dir: "flow" },
   { dir: "nmapset" },
@@ -127,7 +128,7 @@ const PKGS = [
   { dir: "ink" },
   { dir: "http" },
   { dir: "futures" },
-  // host pkgs — decl v8 roots, single-package
+  // host pkgs — decl roots, single-package
   { dir: "ink_host" },
   { dir: "http_host" },
   { dir: "nmap_host" },

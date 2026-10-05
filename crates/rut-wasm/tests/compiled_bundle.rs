@@ -20,7 +20,7 @@ fn pack_world() -> Vec<u8> {
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 9, "name": "app", "entry": {"lib": "./app.rut"}, "deps": {"lib": {"path": "../lib"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "entry": {"lib": "./app.rut"}, "deps": {"lib": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(

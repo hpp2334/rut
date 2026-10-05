@@ -173,7 +173,7 @@ fn manifest_libs_laws_are_loud() {
 
 #[test]
 fn multi_lib_packs_compiled_and_loads_identically() {
-    let root = world("v9", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(9));
+    let root = world("v10", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(10));
     let bytes = pack_dir(&root.join("app")).expect("pack");
     // determinism: same dir ⇒ byte-identical bundle
     assert_eq!(bytes, pack_dir(&root.join("app")).unwrap());

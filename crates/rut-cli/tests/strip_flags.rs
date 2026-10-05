@@ -36,7 +36,7 @@ fn panic_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 9, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "entry": {"lib": "./app.rut"}}"#,
     );
     let mut src = String::from("fn boom() -> str {\n");
     for i in 0..25 {

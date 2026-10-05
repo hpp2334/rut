@@ -46,9 +46,9 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn make_dir_manifest() -> String {
     // bundle-shaped: the keys a `rut pack` needs are already there,
-    // and directory loading ignores them (layout v9 — the compiled
-    // format; the packer emits v9 and the loader reads v9 only)
-    r#"{"format": "rutbundle", "format_version": 9, "name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_string()
+    // and directory loading ignores them (layout 10 — the one wire
+    // number; the packer emits 10 and the loader reads 10 only)
+    r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_string()
 }
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -137,13 +137,12 @@ fn refusals() {
     let err = rut_driver::Pkg::from_bundle(&not_a_bundle).unwrap_err().to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
-    // pre-9 layouts are refused by the one-line version gate — the
-    // same refusal an OLDER loader applies to a version it does not
-    // know, before reading anything else (refuse, never guess). The
-    // retired wire (≤8: the rut.json name, 7/8 versions) refuses
-    // LOUDLY here: that IS the no-compat law — re-pack the directory.
-    // 99+ is the reserved band, the same loud refusal.
-    for v in [1u8, 2, 3, 4, 5, 6, 7, 8, 99, 100] {
+    // anything that is not 10 refuses at the one-line version gate —
+    // the same refusal an OLDER loader applies to a version it does
+    // not know, before reading anything else (refuse, never guess).
+    // ONE uniform re-pack recipe: the old wires, the reserved band,
+    // anything.
+    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 11, 99, 100] {
         let manifest = format!(
             r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"lib": "./x.rut"}}}}"#
         );
@@ -154,20 +153,17 @@ fn refusals() {
         .unwrap();
         let err = rut_driver::Pkg::from_bundle(&old).unwrap_err().to_string();
         assert!(err.contains("format_version"), "{err}");
-        assert!(err.contains("reads bundle format_version 9 (compiled) and 10 (decl) only"), "{err}");
+        assert!(err.contains("reads bundle format_version 10 only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
-        if v <= 8 {
-            assert!(err.contains("pre-JSONC wire is retired"), "{err}");
-        }
     }
 
-    // the retired ENTRY NAME: a bundle whose root manifest still rides
-    // as `rut.json` (the pre-9 spelling) gets the pointed
-    // re-pack refusal — no fallback lane reads it
+    // a manifest riding under the retired ENTRY NAME falls to the
+    // generic refusal: the reader routes on `rut.jsonc` only — no
+    // `rut.jsonc` entry, not a rut bundle
     let old_name = rut_driver::bundle::write_bundle(&[
         (
             "rut.json".into(),
-            br#"{"format": "rutbundle", "format_version": 7, "name": "x", "entry": {"lib": "./x.rut"}}"#
+            br#"{"format": "rutbundle", "format_version": 10, "name": "x", "entry": {"lib": "./x.rut"}}"#
                 .to_vec(),
         ),
         ("x.rut".into(), src.to_vec()),
@@ -177,12 +173,10 @@ fn refusals() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("no `rut.jsonc` entry"), "{err}");
-    assert!(err.contains("found `rut.json`"), "{err}");
-    assert!(err.contains("predates wire 9"), "{err}");
-    assert!(err.contains("re-pack the directory"), "{err}");
+    assert!(err.contains("not a rut bundle"), "{err}");
 
     // missing `format = "rutbundle"`
-    let manifest = r#"{"format_version": 9, "name": "x", "entry": {"lib": "./x.rut"}}"#;
+    let manifest = r#"{"format_version": 10, "name": "x", "entry": {"lib": "./x.rut"}}"#;
     let no_format = rut_driver::bundle::write_bundle(&[
         ("rut.jsonc".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -207,7 +201,7 @@ fn refusals() {
     std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 9, "name": "mod", "entry": {"lib": "./mod.rut", "type": "./surface.d.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"lib": "./mod.rut", "type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
@@ -245,7 +239,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 9, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -292,7 +286,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 9, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s2"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -365,7 +359,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 9, "name": "main", "entry": {"lib": "./entry.rut"}, "deps": {"m": {"path": "../m"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./entry.rut"}, "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -437,7 +431,7 @@ fn the_directory_manifest_speaks_jsonc() {
 {
   // the header prose
   "format": "rutbundle",
-  "format_version": 9, /* the compiled layout */
+  "format_version": 10, /* the one wire number */
   "name": "mod",
   "entry": {
     "lib": "./mod.rut", // trailing prose

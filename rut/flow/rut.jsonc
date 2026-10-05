@@ -13,7 +13,7 @@
   // sources beside the binary, so a consumer's `Flow<i32>` compiles at
   // the consumer's link.
   "format": "rutbundle",
-  "format_version": 9,
+  "format_version": 10,
   "name": "flow",
   "entry": {
     "lib": "./flow.rut"
