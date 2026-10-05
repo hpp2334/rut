@@ -16,7 +16,7 @@ fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, mut out: Vec<f32>) {
 }
 
 entry fn main() {
-    let log = Logger.new("matrix");
+    let log = Logger("matrix");
     let n = 4;
     let mut a = Vec<f32>.filled(0.0, n * n);   // `mut`: index writes
     let mut b = Vec<f32>.filled(0.0, n * n);

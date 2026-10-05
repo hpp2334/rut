@@ -634,7 +634,7 @@ use futures::launch_future;
 use rgh_host::{ out };
 
 async fn body_first(url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient();
     let resp = await client.get(url).build().send();
     let b = await resp.body();
     out(f"body={b.len()}");
@@ -648,7 +648,7 @@ async fn body_first(url: str) -> nil {
 }
 
 async fn stream_first(url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient();
     let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
     let c = await s.next();

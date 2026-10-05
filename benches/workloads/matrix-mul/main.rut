@@ -29,5 +29,5 @@ entry fn main() -> nil {
     for (let i = 0; i < n * n; i += 1) {
         s += out[i];
     }
-    Logger.new("app").info(f"CHECKSUM {s}");
+    Logger("app").info(f"CHECKSUM {s}");
 }

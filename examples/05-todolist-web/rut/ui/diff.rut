@@ -65,9 +65,9 @@ pub struct T1Root {
 /// `#app`). Unknown ids trap loud at the crossing.
 pub fn t1_mount(root_id: str) -> T1Root {
     let parent = ui_get(root_id);
-    let els: HashMap<str, opaque> = HashMap.new();
-    let regs: HashMap<str, Ev> = HashMap.new();
-    let lids: HashMap<str, i64> = HashMap.new();
+    let els: HashMap<str, opaque> = HashMap();
+    let regs: HashMap<str, Ev> = HashMap();
+    let lids: HashMap<str, i64> = HashMap();
     return T1Root {
         parent: parent,
         els: els,

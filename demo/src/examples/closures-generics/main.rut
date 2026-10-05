@@ -20,7 +20,7 @@ fn sum(xs: Vec<i32>) -> i32 {             // a generic CLASS (Vec<T>) in a
 }
 
 entry fn main() {
-    let log = Logger.new("closures");
+    let log = Logger("closures");
     let add = fn (a: i32, b: i32) -> i32 { return a + b; };   // anonymous fn
     let area_of = fn (r: f32) -> f32 {                        // block body
         let sq = r * r;

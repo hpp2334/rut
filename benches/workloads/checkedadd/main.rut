@@ -32,5 +32,5 @@ entry fn main() -> nil {
         }
     }
     s = s.wrapping_add(bad);
-    Logger.new("app").info(f"CHECKSUM {s}");
+    Logger("app").info(f"CHECKSUM {s}");
 }

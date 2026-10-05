@@ -18,7 +18,7 @@ use ink::{ Logger };
 
 fn word_counts(log: Logger) {
     // the str-key lane: put/get/has/remove/len over content-equal keys
-    let mut counts: HashMap<str, i32> = HashMap.new();
+    let mut counts: HashMap<str, i32> = HashMap();
     for (let w of ["rut", "runs", "rut", "real", "rut"]) {
         let hit = counts.get(w);            // ?i32 — nil = first sight
         let mut n = 1;
@@ -41,7 +41,7 @@ fn word_counts(log: Logger) {
 fn id_lane(log: Logger) {
     // the id lane: `HashMap<str, i64>` — id -> payload over the
     // keyed-collection family (one name, one decl)
-    let mut scores: HashMap<str, i64> = HashMap.new();
+    let mut scores: HashMap<str, i64> = HashMap();
     scores.put("a", 10i64);
     scores.put("b", 20i64);
     let a = "a";
@@ -55,7 +55,7 @@ fn id_lane(log: Logger) {
 
 fn badges(log: Logger) {
     // HashSet<T> — membership only, no value machinery
-    let mut seen: HashSet<str> = HashSet.new();
+    let mut seen: HashSet<str> = HashSet();
     let x = "x";
     let y = "y";
     let z = "z";
@@ -67,7 +67,7 @@ fn badges(log: Logger) {
 }
 
 entry fn main() {
-    let log = Logger.new("maps");
+    let log = Logger("maps");
     word_counts(log);
     id_lane(log);
     badges(log);

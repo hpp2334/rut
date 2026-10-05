@@ -37,7 +37,7 @@ fn length(pt: Point) -> f64 {     // free function instead of a method
 }
 
 fn structs() {
-    let log = Logger.new("structs");
+    let log = Logger("structs");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding
     let q = p;                          // SHARE: q and p name one cell (O(1))

@@ -63,5 +63,5 @@ entry fn main() -> nil {
         vv += v[i] * v[i];
     }
     let norm = fsqrt(vbv / vv);
-    Logger.new("app").info(f"CHECKSUM {norm}");
+    Logger("app").info(f"CHECKSUM {norm}");
 }

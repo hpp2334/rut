@@ -13,7 +13,7 @@ use ink::{ Logger };
 struct Point { x: f32; y: f32 }
 
 fn literals(name: str) {
-    let log = Logger.new("literals");
+    let log = Logger("literals");
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix
     let c: u64 = 10;                 // u64 via annotation — fits the default

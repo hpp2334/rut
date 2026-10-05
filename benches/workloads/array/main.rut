@@ -36,5 +36,5 @@ fn churn(n: i32, m: i32) -> i64 {
 
 entry fn main() -> nil {
     let checksum = churn(1000000, 1000003);
-    Logger.new("app").info(f"CHECKSUM {checksum}");
+    Logger("app").info(f"CHECKSUM {checksum}");
 }

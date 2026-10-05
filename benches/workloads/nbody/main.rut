@@ -126,5 +126,5 @@ entry fn main() -> nil {
         advance(pos, vel, mass, 0.01);
     }
     let e = energy(pos, vel, mass);
-    Logger.new("app").info(f"CHECKSUM {e}");
+    Logger("app").info(f"CHECKSUM {e}");
 }

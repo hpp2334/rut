@@ -30,7 +30,7 @@ fn make_cycle() -> ?Node {                  // a -> b -> a : strong cycle
 }
 
 entry fn main() {
-    let log = Logger.new("cycle");
+    let log = Logger("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next != nil}");
     // the cycle stays live to the end of scope: both cells free only

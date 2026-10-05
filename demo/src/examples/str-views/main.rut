@@ -11,7 +11,7 @@
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("views");
+    let log = Logger("views");
 
     // the O(1) window: the 1 MiB-buffer parse shape at toy scale
     let line = "hello world, rut here";

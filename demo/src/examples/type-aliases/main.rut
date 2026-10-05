@@ -44,7 +44,7 @@ fn kind<T requires Ridge | Trench>(x: T) -> str {
 }
 
 fn aliases() {
-    let log = Logger.new("aliases");
+    let log = Logger("aliases");
 
     let trip: Km = 1500;          // Km is Meters is i64 — all one type
     let plain: Meters = trip;     // no conversion: the alias IS the target

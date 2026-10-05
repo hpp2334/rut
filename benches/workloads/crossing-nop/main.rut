@@ -51,5 +51,5 @@ entry fn main() -> nil {
         acc = acc + nop4_rut(i, i + 1, i + 2, i + 3);
         i += 1;
     }
-    Logger.new("app").info(f"CHECKSUM {acc}");
+    Logger("app").info(f"CHECKSUM {acc}");
 }

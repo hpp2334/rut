@@ -479,7 +479,7 @@ async fn rgh_run(args: str) -> i32 {
     if (!have_ref) { return usage("missing --ref=<tag|branch|sha>"); }
     if (i >= argc) { return usage("missing a subcommand (list | download)"); }
 
-    let client = HttpClient.new();
+    let client = HttpClient();
     let sub = argv[i];
     if (sub == "list") {
         if (i + 1 < argc) { return usage(f"list takes no arguments (got {argv[i + 1]})"); }

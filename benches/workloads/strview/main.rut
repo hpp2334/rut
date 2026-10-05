@@ -27,7 +27,7 @@ fn build_parent(n: i32) -> str {
 }
 
 fn churn(p: str, n: i32) -> i32 {
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap();
     // build — every key is new
     let mut added = 0;
     for (let i = 0; i < n; i += 1) {
@@ -94,5 +94,5 @@ fn churn(p: str, n: i32) -> i32 {
 
 entry fn main() -> nil {
     let n = 50000;
-    Logger.new("app").info(f"CHECKSUM {churn(build_parent(n), n)}");
+    Logger("app").info(f"CHECKSUM {churn(build_parent(n), n)}");
 }

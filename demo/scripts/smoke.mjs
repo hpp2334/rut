@@ -199,7 +199,7 @@ console.log('\n[2b] fuel off by default: >10M ops of bounded work, no cap');
     'use ink::{Logger};',
     '',
     'entry fn main() {',
-    '    let log = Logger.new("case");',
+    '    let log = Logger("case");',
     '    let mut i = 0;',
     '    while (i < 2000000) {',
     '        i += 1;',

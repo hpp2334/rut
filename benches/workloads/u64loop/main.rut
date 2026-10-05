@@ -15,5 +15,5 @@ entry fn main() -> nil {
         h = h ^ (h >> 31);
         h = h.wrapping_mul(2654435761u64);
     }
-    Logger.new("app").info(f"CHECKSUM {h}");
+    Logger("app").info(f"CHECKSUM {h}");
 }

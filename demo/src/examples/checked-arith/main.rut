@@ -15,7 +15,7 @@ fn show(name: str, r: (u8, bool)) -> str {
 }
 
 entry fn main() {
-    let log = Logger.new("checked");
+    let log = Logger("checked");
 
     // wrapping: two's-complement, always defined
     let mut v: u8 = 250;

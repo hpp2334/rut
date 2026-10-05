@@ -43,5 +43,5 @@ entry fn main() -> nil {
     for (let i = 0; i < n; i += 1) {
         h = (h.wrapping_mul(31)).wrapping_add(xs[i]);
     }
-    Logger.new("app").info(f"CHECKSUM {h}");
+    Logger("app").info(f"CHECKSUM {h}");
 }

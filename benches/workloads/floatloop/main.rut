@@ -8,5 +8,5 @@ entry fn main() -> nil {
     for (let i = 0; i < 2000000; i += 1) {
         s = s * 1.0000001 + 0.5;
     }
-    Logger.new("app").info(f"CHECKSUM {s}");
+    Logger("app").info(f"CHECKSUM {s}");
 }

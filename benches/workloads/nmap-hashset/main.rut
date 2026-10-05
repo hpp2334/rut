@@ -13,7 +13,7 @@ use nmapset::{ HashSet };
 // Scale: n = 100000 keys.
 
 fn churn(n: i32) -> i32 {
-    let mut s: HashSet<i32> = HashSet.new();
+    let mut s: HashSet<i32> = HashSet();
     // add — every key is new
     let mut added = 0;
     for (let i = 0; i < n; i += 1) {
@@ -51,7 +51,7 @@ fn churn(n: i32) -> i32 {
     }
     // a second set over the multiples of three, counted against the
     // survivors (the odd keys) of the first — intersection-style
-    let mut s2: HashSet<i32> = HashSet.new();
+    let mut s2: HashSet<i32> = HashSet();
     let mut s2added = 0;
     for (let i = 0; i < n; i += 3) {
         if (s2.put(i.wrapping_mul(-1640531535))) {
@@ -77,5 +77,5 @@ fn churn(n: i32) -> i32 {
 }
 
 entry fn main() -> nil {
-    Logger.new("app").info(f"CHECKSUM {churn(100000)}");
+    Logger("app").info(f"CHECKSUM {churn(100000)}");
 }

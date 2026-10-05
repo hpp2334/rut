@@ -31,7 +31,7 @@ impl Session {
 }
 
 fn erase_and_recover() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
     let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
     let box3 = opaque("hello");
@@ -47,7 +47,7 @@ fn erase_and_recover() {
 }
 
 fn alias_law() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let mut pt = Point { x: 1, y: 2 };
     let b = opaque(pt);                         // the box shares pt's cell
     let mut p = opaque.downcast<Point>(b);      // the ?T shares it too
@@ -59,7 +59,7 @@ fn alias_law() {
 }
 
 fn share_vs_copy() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let s = Session.new("abc");
     let o = opaque(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
@@ -70,7 +70,7 @@ fn share_vs_copy() {
 }
 
 fn prim_value() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     let mut n = 5;
     let b = opaque(n);            // a prim payload COPIES the bits
     n = 9;                        // ...so the source moving stays out
@@ -84,7 +84,7 @@ fn prim_value() {
 }
 
 fn nested() {
-    let log = Logger.new("opaque");
+    let log = Logger("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     //
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];

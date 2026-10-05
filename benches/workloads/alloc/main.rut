@@ -15,5 +15,5 @@ entry fn main() -> nil {
         let p = Point { x: i, y: i.wrapping_add(1) };
         s = (s.wrapping_add(p.x)).wrapping_add(p.y);
     }
-    Logger.new("app").info(f"CHECKSUM {s}");
+    Logger("app").info(f"CHECKSUM {s}");
 }

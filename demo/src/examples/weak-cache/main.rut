@@ -30,7 +30,7 @@ fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
 }
 
 entry fn main() {
-    let log = Logger.new("weak");
+    let log = Logger("weak");
     let cache: Vec<?Tile> = Vec.new();
 
     let alive = Tile.new(1);

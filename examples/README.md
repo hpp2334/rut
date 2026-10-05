@@ -424,7 +424,7 @@ as a PAIR:
 - **`http`** — the rut face over the handles (the ink pattern,
   `inline = true` — the class-method law), ASYNC-ONLY and
   unsuffixed: only the operations that really wait are async points;
-  everything else is sync construction sugar. `HttpClient.new()`
+  everything else is sync construction sugar. `HttpClient()`
   with the five verbs as BUILD sugars (`get`/`post`/`put`/`patch`/
   `del` — sync, no I/O, each a one-step `RequestBuilder`), the
   chainable builder (`method`/`url`/`header` — repeatable —
@@ -438,7 +438,7 @@ as a PAIR:
   verbatim:
 
   ```rut
-  let client = HttpClient.new();
+  let client = HttpClient();
   let resp = await client.request()
       .method(ClientQueryMethod.Post)
       .url("https://example.com/api")
@@ -507,7 +507,7 @@ use futures::launch_future;
 use ink::Logger;
 
 async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient();
     let r = await client.get(url).build().send(cx);
     let e = r.transport_error();
     if (e != nil) {
@@ -520,7 +520,7 @@ async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {
 }
 
 entry fn main() {
-    let log = Logger.new("demo");
+    let log = Logger("demo");
     launch_future(fetch(log, "https://example.com"));
 }
 ```

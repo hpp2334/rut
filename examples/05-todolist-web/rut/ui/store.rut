@@ -176,13 +176,13 @@ impl Store {
     pub fn new() -> Self {
         return Self {
             ids: 0,
-            gens: HashMap.new(),
-            kv: HashMap.new(),
-            kinds: HashMap.new(),
-            lanes: HashMap.new(),
-            programs: HashMap.new(),
-            edges: HashMap.new(),
-            seen: HashMap.new(),
+            gens: HashMap(),
+            kv: HashMap(),
+            kinds: HashMap(),
+            lanes: HashMap(),
+            programs: HashMap(),
+            edges: HashMap(),
+            seen: HashMap(),
             in_flight: Vec.new(),
             n_recomputes: 0,
         };
@@ -360,7 +360,7 @@ impl Store {
 
     fn note_seen(mut self, id: u32) -> nil {
         let deps = self.edges.get(id);
-        let s: HashMap<u32, i64> = HashMap.new();
+        let s: HashMap<u32, i64> = HashMap();
         for (let d of deps) {
             s.put(d, self.gen_of(d));
         }

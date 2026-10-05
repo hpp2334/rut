@@ -12,7 +12,7 @@
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("bytes");
+    let log = Logger("bytes");
 
     // text <-> octets
     let s = "rut runs";

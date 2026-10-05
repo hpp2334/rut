@@ -21,5 +21,5 @@ entry fn main() -> nil {
         acc = acc + Math.max(x, y);
         acc = acc + Math.signum(x - y) * 0.5;
     }
-    Logger.new("app").info(f"CHECKSUM {acc}");
+    Logger("app").info(f"CHECKSUM {acc}");
 }

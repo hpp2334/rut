@@ -11,5 +11,5 @@ fn fib(n: i32) -> i32 {
 }
 
 entry fn main() -> nil {
-    Logger.new("app").info(f"CHECKSUM {fib(28)}");
+    Logger("app").info(f"CHECKSUM {fib(28)}");
 }

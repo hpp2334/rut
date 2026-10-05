@@ -56,10 +56,10 @@ fn count12(m: HashMap<str, i32>, seq: str, n: i32) -> i32 {
 
 fn main_checksum(n: i32) -> i32 {
     let seq = lcg_seq(n);
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap();
     let frag_sum = count12(m, seq, n);
     // 1-mers: four keys, total n
-    let mut m1: HashMap<str, i32> = HashMap.new();
+    let mut m1: HashMap<str, i32> = HashMap();
     for (let i = 0; i < n; i += 1) {
         let kmer = seq.slice(i, i + 1);
         let p = m1.get(kmer);
@@ -70,7 +70,7 @@ fn main_checksum(n: i32) -> i32 {
         }
     }
     // 2-mers: sixteen keys, total n - 1
-    let mut m2: HashMap<str, i32> = HashMap.new();
+    let mut m2: HashMap<str, i32> = HashMap();
     for (let i = 0; i < n - 1; i += 1) {
         let kmer = seq.slice(i, i + 2);
         let p = m2.get(kmer);
@@ -106,5 +106,5 @@ fn main_checksum(n: i32) -> i32 {
 }
 
 entry fn main() -> nil {
-    Logger.new("app").info(f"CHECKSUM {main_checksum(200000)}");
+    Logger("app").info(f"CHECKSUM {main_checksum(200000)}");
 }

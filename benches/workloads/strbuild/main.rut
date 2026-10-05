@@ -55,7 +55,7 @@ fn frags() -> Vec<str> {
     let letters = "abcde";
     let mut k: i32 = 0;
     for (let c of letters) {
-        let mut b = StringBuilder.new();
+        let mut b = StringBuilder();
         let letter = f"{c}";
         let n = 2 * k + 1;
         for (let j = 0; j < n; j += 1) {
@@ -152,5 +152,5 @@ entry fn main() -> nil {
         total = total.wrapping_mul(31 as i64).wrapping_add(s);
     }
     let final_c = total.wrapping_mul(31 as i64).wrapping_add(reps as i64);
-    Logger.new("app").info(f"CHECKSUM {final_c}");
+    Logger("app").info(f"CHECKSUM {final_c}");
 }

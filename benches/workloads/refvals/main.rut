@@ -59,7 +59,7 @@ fn key(i: i64) -> i64 {
 }
 
 fn churn(n: i32, gn: i32) -> i64 {
-    let mut m: HashMap<i64, Pt> = HashMap.new();
+    let mut m: HashMap<i64, Pt> = HashMap();
 
     // (1a) build — every key new; one fresh Pt cell per put
     let mut added: i64 = 0;
@@ -127,7 +127,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // ~260k cells, the largest last. Then an overwrite pass (fresh
     // cells, written after the last grow — the drain-stub invariant
     // above) and a full read-back of y.
-    let mut g: HashMap<i64, Pt> = HashMap.new();
+    let mut g: HashMap<i64, Pt> = HashMap();
     let mut added_g: i64 = 0;
     for (let i = 0; i < gn; i += 1) {
         if (g.put(key(i as i64), Pt { x: i.wrapping_add(1), y: i.wrapping_mul(2) })) {
@@ -195,5 +195,5 @@ fn churn(n: i32, gn: i32) -> i64 {
 
 entry fn main() -> nil {
     let c = churn(100000, 200000);
-    Logger.new("app").info(f"CHECKSUM {c}");
+    Logger("app").info(f"CHECKSUM {c}");
 }

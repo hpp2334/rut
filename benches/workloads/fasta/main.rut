@@ -22,5 +22,5 @@ fn fasta(n: i32) -> str {
 }
 
 entry fn main() -> nil {
-    Logger.new("app").info(f"CHECKSUM {fasta(10000)}");
+    Logger("app").info(f"CHECKSUM {fasta(10000)}");
 }
