@@ -8,6 +8,7 @@ members = [
     "crates/rut-lexer",
     "crates/rut-ast",
     "crates/rut-parser",
+    "crates/rut-semantic",
     "crates/rut-lir",
     "crates/rut-driver",
     "crates/rut-native",

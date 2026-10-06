@@ -1,4 +1,4 @@
-//! Semantic tokens + document symbols — the M1 classifier (rut-lsp). Pure rut-side, no LSP types: token-level classes come from the
+//! Semantic tokens + document symbols — the M1 classifier (rut-semantic). Pure rut-side, no LSP types: token-level classes come from the
 //! lexed stream (keywords by text; literals; f-string
 //! tiling with fully-lexed holes), identifier classes from
 //! a flat walk of the AST arena. Names are interner ids whose nodes carry

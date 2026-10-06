@@ -1140,6 +1140,7 @@ dependencies = [
  "rut-ast",
  "rut-lexer",
  "rut-parser",
+ "rut-semantic",
  "serde_json",
  "tokio",
  "tower",
@@ -1173,6 +1174,15 @@ dependencies = [
  "rut-ast",
  "rut-core",
  "rut-lexer",
+]
+
+[[package]]
+name = "rut-semantic"
+version = "0.1.0"
+dependencies = [
+ "rut-ast",
+ "rut-lexer",
+ "rut-parser",
 ]
 
 [[package]]

@@ -116,6 +116,7 @@ rut/
 │   ├── rut-lexer/        # spans, tokens, the lexer, diagnostics
 │   ├── rut-ast/          # the flat arena AST + dumper
 │   ├── rut-parser/       # the frame machine, Mode::Impl | Mode::Decl
+│   ├── rut-semantic/     # the semantic classifier (spans + token classes)
 │   ├── rut-lir/          # the fused middle end: check/ (resolve,
 │   │                     #   typecheck, monomorphize) + lir/ (bodies,
 │   │                     #   peephole, SROA, async lowering)
@@ -145,7 +146,9 @@ driver, never the reverse — the driver is provably pure: no fs, no
 net, no `std::path`), hosts
 (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those.
 `rut-lsp` sits on the frontend crates only — tokens, diagnostics, and
-symbols need no VM.
+symbols need no VM. Its classifier is `rut-semantic` (re-exported as
+`rut_lsp::semantic`), which sits on the frontend crates for the same
+reason — embedders take it without the server.
 
 ## The in-tree packages
 

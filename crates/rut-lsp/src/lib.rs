@@ -5,8 +5,9 @@
 //! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs /
 //! Sublime configs in `integrations/README.md`).
 //! Layout: `line_index` (byte spans ⇄ UTF-16 positions over the
-//! normalized source), `semantic` (the pure classifier — `legend`,
-//! `tokens`, `names`, `recover`, `symbols`),
+//! normalized source), `semantic` (the pure classifier — it lives in
+//! `rut-semantic` and is re-exported here; `legend`, `tokens`, `names`,
+//! `recover`, `symbols`),
 //! `analysis` (one pure pass
 //! over a document → LSP values, plus the document-level hover /
 //! completion / definition / inlay / references / signature-help
