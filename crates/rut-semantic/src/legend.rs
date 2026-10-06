@@ -20,9 +20,10 @@ pub enum TokenType {
     Class,
     Interface,
     Operator,
+    Comment,
 }
 
-pub const ALL: [TokenType; 14] = [
+pub const ALL: [TokenType; 15] = [
     TokenType::Keyword,
     TokenType::Number,
     TokenType::String,
@@ -37,6 +38,7 @@ pub const ALL: [TokenType; 14] = [
     TokenType::Class,
     TokenType::Interface,
     TokenType::Operator,
+    TokenType::Comment,
 ];
 
 impl TokenType {
@@ -56,6 +58,7 @@ impl TokenType {
             TokenType::Class => "class",
             TokenType::Interface => "interface",
             TokenType::Operator => "operator",
+            TokenType::Comment => "comment",
         }
     }
     pub fn index(self) -> u32 {

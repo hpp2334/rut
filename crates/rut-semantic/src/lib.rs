@@ -24,8 +24,11 @@ use self::recover::finalize;
 use self::tokens::{classify_token, flatten_holes};
 
 pub use self::legend::{is_keyword, is_primitive_ty, TokenType, ALL};
+pub use self::source::classify_source;
 pub use self::symbols::{symbols, RawSymbol, SymKind};
 pub use self::tokens::token_type;
+
+mod source;
 
 /// Classify a whole document: token-level classes, then AST-level name
 /// classes (which win at equal positions). Output is sorted by start and

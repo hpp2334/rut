@@ -173,3 +173,91 @@ fn symbols_outline() {
         assert!(s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi, "{}", s.name);
     }
 }
+
+#[test]
+fn comment_is_appended_to_the_legend() {
+    assert_eq!(ALL.len(), 15);
+    assert_eq!(TokenType::Comment.index(), 14);
+    // the trailing append moved nothing
+    assert_eq!(TokenType::Operator.index(), 13);
+    assert_eq!(TokenType::legend().last().copied(), Some("comment"));
+}
+
+#[test]
+fn line_comments_color_exactly_and_stop_at_newline() {
+    let src = "// lead\nlet x = 1; // trail\nlet y = 2;\n";
+    let spans = classify_source(src, Mode::Impl);
+    assert_eq!(
+        find(src, &spans, "// lead"),
+        vec![TokenType::Comment],
+        "the leading line comment is one comment span"
+    );
+    assert_eq!(
+        find(src, &spans, "// trail"),
+        vec![TokenType::Comment],
+        "the trailing line comment stops before the newline"
+    );
+    assert_eq!(spans.iter().filter(|(_, t)| *t == TokenType::Comment).count(), 2);
+}
+
+#[test]
+fn block_comments_color_and_unterminated_clamps() {
+    let src = "let x = 1; /* mid */ let y = 2; /* never closed";
+    let spans = classify_source(src, Mode::Impl);
+    assert_eq!(find(src, &spans, "/* mid */"), vec![TokenType::Comment]);
+    let unclosed: Vec<&str> = spans
+        .iter()
+        .filter(|(_, t)| *t == TokenType::Comment)
+        .filter(|(sp, _)| span_text(src, *sp).starts_with("/* never"))
+        .map(|(sp, _)| span_text(src, *sp))
+        .collect();
+    assert_eq!(
+        unclosed,
+        vec!["/* never closed"],
+        "an unterminated block comment clamps at the gap's end"
+    );
+}
+
+#[test]
+fn comments_do_not_touch_adjacent_strings() {
+    let src = "let s = \"a\"/*c*/;\nlet t = \"// not a comment\"; // real\n";
+    let spans = classify_source(src, Mode::Impl);
+    // the string keeps its class; the gap comment is its own span; the
+    // run stays sorted and disjoint
+    let mut prev_hi = 0;
+    for (sp, _) in &spans {
+        assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
+        prev_hi = sp.hi;
+    }
+    assert_eq!(find(src, &spans, "\"// not a comment\""), vec![TokenType::String]);
+    assert_eq!(find(src, &spans, "/*c*/"), vec![TokenType::Comment]);
+    assert_eq!(find(src, &spans, "// real"), vec![TokenType::Comment]);
+}
+
+#[test]
+fn classify_source_tiles_sorted_and_disjoint() {
+    // comments at the very start, between every construct, and at the end
+    let src = "// top\n/* banner */\nlet a = 1; // one\nfn f(x: i32) -> i32 { x } /* tail */\n";
+    let spans = classify_source(src, Mode::Impl);
+    let mut prev_hi = 0;
+    for (sp, _) in &spans {
+        assert!(sp.lo < sp.hi, "empty span at {}", sp.lo);
+        assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
+        assert!(sp.hi as usize <= src.len(), "out of file");
+        prev_hi = sp.hi;
+    }
+    assert!(spans.iter().any(|(_, t)| *t == TokenType::Comment));
+    assert!(spans.iter().any(|(_, t)| *t == TokenType::Keyword));
+}
+
+#[test]
+fn broken_source_still_classifies_with_comments() {
+    // missing closing brace — the recovery AST simply yields fewer names;
+    // `entry` is contextual (AST-owned), so it may drop its class, but
+    // reserved words (`let`, `fn`) are token-owned and never do
+    let src = "// still colored\nentry fn main( {\n  let x = ;\n";
+    let spans = classify_source(src, Mode::Impl);
+    assert_eq!(find(src, &spans, "// still colored"), vec![TokenType::Comment]);
+    assert_eq!(find(src, &spans, "let"), vec![TokenType::Keyword]);
+    assert_eq!(find(src, &spans, "fn"), vec![TokenType::Keyword]);
+}
