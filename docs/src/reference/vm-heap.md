@@ -99,6 +99,3 @@ vm.call::<_, ()>("main", ())?;
 println!("used {} bytes (peak {})", vm.heap_usage(), vm.heap_peak());
 // dropping `vm` frees every remaining slab
 ```
-
-Worker heaps are per-VM and charged to the child's own budget
-([workers and channels](workers-and-channels.md)).

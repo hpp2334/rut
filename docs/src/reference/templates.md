@@ -97,7 +97,6 @@ rut_vm::register!(hosts, "app::label", (rut_vm::Template,) -> (),
   construction.
 - Arguments are retained by the template's boxes; a template keeps its
   args alive as any cell does ([the Rc heap](rc-heap.md)).
-- A `Template` crosses the host boundary, and crosses isolate channels
-  like any builtin ([workers and channels](workers-and-channels.md)) — a
-  worker may return one where the main VM expects `Template`.
+- A `Template` crosses the host boundary like any builtin — a host fn
+  may return one where the VM expects `Template`.
 

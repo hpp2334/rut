@@ -213,5 +213,4 @@ frame's checkpoint.
 See [launched futures](launched-futures.md) for receipts, cancellation, and the
 race/completer tier (`select2` / `select_all` / `completer`);
 [the host futures bridge](host-futures.md) for backing a host
-async fn with Rust; [workers and channels](workers-and-channels.md) for
-isolate parallelism.
+async fn with Rust.

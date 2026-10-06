@@ -1,4 +1,4 @@
-# Async: futures, workers, and channels
+# Async: futures and await
 
 rut's concurrency is **pull-based**. An `async fn` compiles into a
 *future* — a cold value that runs nothing until something drives it.
@@ -115,8 +115,8 @@ real status — 4xx and 5xx included — is a normal response
 (`resp.ok()` is the 2xx test), and a mid-read wire death surfaces as
 `nil` from `next()` with the reason in `stream.error()`.
 
-A complete worker from the repository's GitHub-viewer example — send,
-then drain:
+A complete request handler from the repository's GitHub-viewer example —
+send, then drain:
 
 ```rut
 async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
@@ -170,17 +170,12 @@ the grammar but not in this build — the compiler gates it. See
 [launched futures](../reference/launched-futures.md) for the race and
 completer surfaces.
 
-## Workers and channels
+## Parallelism
 
-For true parallelism, a host can spawn **workers** — separate VMs on
-separate threads with separate heaps. There is no shared memory: all
-data crosses typed channels, and what may cross is a checked rule —
-primitives and `str` copy; a cell (vec, record, class instance)
-transfers when exclusively held, else deep-copies; endpoints
-(`Sender`/`Receiver`) transfer; **closures do not cross**. A trap in a
-worker kills only that worker. The API is a host facility
-(`spawn_worker`, `Channel<T>`), so its shape depends on your embedder —
-see [workers and channels](../reference/workers-and-channels.md).
+The language has none: a VM is single-threaded by construction (`!Send`,
+one heap — [the VM](../core-concepts/the-vm.md)); async is the whole
+concurrency story. A host that wants parallelism runs separate VMs —
+rut defines no surface for sharing between them.
 
 ## Put it together
 

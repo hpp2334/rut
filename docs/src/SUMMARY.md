@@ -19,7 +19,7 @@
 - [Interfaces and impl blocks](tutorial/interfaces.md)
 - [Errors and optionality](tutorial/errors.md)
 - [Modules and packages](tutorial/modules.md)
-- [Async: futures, workers, and channels](tutorial/async.md)
+- [Async: futures and await](tutorial/async.md)
 - [The standard library](tutorial/stdlib.md)
 
 # Core Concepts
@@ -81,7 +81,6 @@
 - [Async and await](reference/async.md)
 - [Launched futures](reference/launched-futures.md)
 - [The host futures bridge](reference/host-futures.md)
-- [Workers and channels](reference/workers-and-channels.md)
 
 ## Embedding and interop
 

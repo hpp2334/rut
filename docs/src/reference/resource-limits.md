@@ -86,12 +86,7 @@ Anything blocking that cannot be bounded by fuel (IO, locks) belongs on
 a worker thread answering a `Completer` — the VM thread never blocks on
 it ([the host futures bridge](host-futures.md)).
 
-## Workers
-
-A worker VM is constructed with **its own `Limits`**; argument
-transfers are counted against the *child* budget before the worker
-starts, so a worker cannot OOM its parent
-([workers and channels](workers-and-channels.md)).
+## Fairness
 
 Within one VM, the ready ring is round-robin: one greedy launched
 future cannot starve the rest of a queue drain indefinitely — each

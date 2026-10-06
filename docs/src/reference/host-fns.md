@@ -126,9 +126,6 @@ stays a lint, not an error.
   ([native containers API surface](native-containers.md)). Destructors
   still run deterministically: when a box's rc hits 0, the payload's
   finalize hook runs, then Rust `Drop` ([the Rc heap](rc-heap.md)).
-- **Workers**: an `opaque` box crosses isolates only if the host
-  registered the boxed type as `send` — checked at the transfer, by type
-  ([workers and channels](workers-and-channels.md)).
 
 ## Declaration mode
 

@@ -75,8 +75,8 @@ msgstr "模块与包"
 
 
 #: src/SUMMARY.md:22 src/tutorial/async.md:1
-msgid "Async: futures, workers, and channels"
-msgstr "异步：future、worker 与通道"
+msgid "Async: futures and await"
+msgstr "异步：future 与 await"
 
 
 #: src/SUMMARY.md:23 src/tutorial/stdlib.md:1
@@ -121,7 +121,7 @@ msgstr "内存：Rc 堆、弱引用与循环引用"
 
 
 #: src/SUMMARY.md:33 src/core-concepts/host-boundary.md:1
-#: src/reference/vm-core.md:53
+#: src/reference/vm-core.md:52
 msgid "The host boundary"
 msgstr "宿主边界"
 
@@ -306,120 +306,114 @@ msgid "The host futures bridge"
 msgstr "宿主 future 桥"
 
 
-#: src/SUMMARY.md:84 src/tutorial/async.md:173
-#: src/reference/workers-and-channels.md:1
-msgid "Workers and channels"
-msgstr "worker 与通道"
-
-
-#: src/SUMMARY.md:86
+#: src/SUMMARY.md:85
 msgid "Embedding and interop"
 msgstr "嵌入与互操作"
 
 
-#: src/SUMMARY.md:88 src/reference/embedding.md:1
+#: src/SUMMARY.md:87 src/reference/embedding.md:1
 msgid "Embedding and native modules"
 msgstr "嵌入与原生模块"
 
 
-#: src/SUMMARY.md:89 src/reference/value-boundary.md:1
+#: src/SUMMARY.md:88 src/reference/value-boundary.md:1
 msgid "Value boundary and borrows"
 msgstr "值边界与借用"
 
 
-#: src/SUMMARY.md:90 src/reference/host-fns.md:1
+#: src/SUMMARY.md:89 src/reference/host-fns.md:1
 msgid "Host fns and declaration files"
 msgstr "宿主函数与声明文件"
 
 
-#: src/SUMMARY.md:91 src/reference/native-containers.md:1
+#: src/SUMMARY.md:90 src/reference/native-containers.md:1
 msgid "Native containers API surface"
 msgstr "原生容器 API 表面"
 
 
-#: src/SUMMARY.md:92 src/reference/templates.md:1
+#: src/SUMMARY.md:91 src/reference/templates.md:1
 msgid "Templates — f\"...\" across the boundary"
 msgstr "模板——跨越边界的 f\"...\""
 
 
-#: src/SUMMARY.md:94
+#: src/SUMMARY.md:93
 msgid "Standard library"
 msgstr "标准库"
 
 
-#: src/SUMMARY.md:96 src/reference/stdlib.md:1
+#: src/SUMMARY.md:95 src/reference/stdlib.md:1
 msgid "core and the swappable packages"
 msgstr "core 与可换包"
 
 
-#: src/SUMMARY.md:98
+#: src/SUMMARY.md:97
 msgid "Toolchain"
 msgstr "工具链"
 
 
-#: src/SUMMARY.md:100 src/reference/frontend.md:1
+#: src/SUMMARY.md:99 src/reference/frontend.md:1
 msgid "The frontend"
 msgstr "前端"
 
 
-#: src/SUMMARY.md:101 src/reference/compiler.md:1
+#: src/SUMMARY.md:100 src/reference/compiler.md:1
 msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:101 src/core-concepts/the-vm.md:32
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
 
 
-#: src/SUMMARY.md:103 src/reference/module-binary.md:1
+#: src/SUMMARY.md:102 src/reference/module-binary.md:1
 msgid "Module binary and verification"
 msgstr "模块二进制与校验"
 
 
-#: src/SUMMARY.md:104 src/reference/symbol-stripping.md:1
+#: src/SUMMARY.md:103 src/reference/symbol-stripping.md:1
 msgid "Symbol stripping and `.rutsym` sidecars"
 msgstr "符号剥离与 `.rutsym` 旁车"
 
 
-#: src/SUMMARY.md:105 src/reference/vm-core.md:1
+#: src/SUMMARY.md:104 src/reference/vm-core.md:1
 msgid "VM core"
 msgstr "VM 核心"
 
 
-#: src/SUMMARY.md:106 src/reference/loading.md:1
+#: src/SUMMARY.md:105 src/reference/loading.md:1
 msgid "Loading and the embed loop"
 msgstr "加载与嵌入循环"
 
 
-#: src/SUMMARY.md:107 src/reference/diagnostics.md:1
+#: src/SUMMARY.md:106 src/reference/diagnostics.md:1
 msgid "Diagnostics, traces, and symbolication"
 msgstr "诊断、追踪与符号化"
 
 
-#: src/SUMMARY.md:108 src/reference/embedding.md:239 src/reference/bundles.md:1
+#: src/SUMMARY.md:107 src/reference/embedding.md:239 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr "模块捆绑包"
 
 
-#: src/SUMMARY.md:110
+#: src/SUMMARY.md:109
 msgid "Packages and tooling"
 msgstr "包与工具"
 
 
-#: src/SUMMARY.md:112 src/reference/project-structure.md:1
+#: src/SUMMARY.md:111 src/reference/project-structure.md:1
 msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:113 src/tutorial/modules.md:208
+#: src/SUMMARY.md:112 src/tutorial/modules.md:208
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
 
 
-#: src/SUMMARY.md:114 src/reference/cli.md:1
+#: src/SUMMARY.md:113 src/reference/cli.md:1
 msgid "The rut CLI"
 msgstr "rut CLI"
 
@@ -717,7 +711,7 @@ msgstr ""
 
 
 #: src/quick-start/installation.md:88 src/core-concepts/host-boundary.md:33
-#: src/reference/embedding.md:90 src/reference/host-fns.md:172
+#: src/reference/embedding.md:90 src/reference/host-fns.md:169
 msgid "\"app\""
 msgstr "\"app\""
 
@@ -1342,8 +1336,8 @@ msgstr "文本"
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
-#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:36
-#: src/reference/value-boundary.md:37 src/reference/templates.md:19
+#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
+#: src/reference/templates.md:19
 msgid "`str`"
 msgstr "`str`"
 
@@ -1739,7 +1733,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
 #: src/tutorial/functions.md:242 src/tutorial/types.md:278
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:257 src/tutorial/async.md:185
+#: src/tutorial/modules.md:257 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr "综合运用"
@@ -2389,7 +2383,7 @@ msgstr ""
 
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:78
+#: src/reference/functions-closures-generics.md:76
 msgid "Generics"
 msgstr "泛型"
 
@@ -3978,7 +3972,7 @@ msgstr "形式"
 #: src/reference/async.md:180 src/reference/host-futures.md:34
 #: src/reference/embedding.md:278 src/reference/embedding.md:296
 #: src/reference/embedding.md:326 src/reference/value-boundary.md:97
-#: src/reference/host-fns.md:297 src/reference/native-containers.md:103
+#: src/reference/host-fns.md:294 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
 msgstr "含义"
@@ -4318,8 +4312,8 @@ msgstr ""
 
 
 #: src/tutorial/modules.md:267
-msgid "Next: [async: futures, workers, and channels](async.md)."
-msgstr "下一章：[异步：future、worker 与通道](async.md)。"
+msgid "Next: [async: futures and await](async.md)."
+msgstr "下一章：[异步：future 与 await](async.md)。"
 
 
 #: src/tutorial/async.md:3
@@ -4486,8 +4480,8 @@ msgstr ""
 
 #: src/tutorial/async.md:118
 msgid ""
-"A complete worker from the repository's GitHub-viewer example — send, then drain:"
-msgstr "来自仓库 GitHub-viewer 示例的一个完整 worker——先 send，再排干："
+"A complete request handler from the repository's GitHub-viewer example — send, then drain:"
+msgstr "来自仓库 GitHub-viewer 示例的一个完整请求处理函数——先 send，再排干："
 
 
 #: src/tutorial/async.md:121
@@ -4554,14 +4548,19 @@ msgstr ""
 "`select2(a, b)` 对两个 future 竞速，以 `Either2` 应答先就绪的一侧（`is_a()`/`a_value()` 或 `is_b()`/`b_value()`）；落败者会被取消，各自的 drop 路径在下一个检查点运行。`select_all(futs)` 把竞速扩展到一整组，应答 `(i, v)`。连接已启动 future 的值（`await handle`）仍在语法里拼写，但本构建尚未实现——编译器会设门。竞速与 completer 表面见[已启动的 future](../reference/launched-futures.md)。"
 
 
+#: src/tutorial/async.md:173
+msgid "Parallelism"
+msgstr "并行"
+
+
 #: src/tutorial/async.md:175
 msgid ""
-"For true parallelism, a host can spawn **workers** — separate VMs on separate threads with separate heaps. There is no shared memory: all data crosses typed channels, and what may cross is a checked rule — primitives and `str` copy; a cell (vec, record, class instance) transfers when exclusively held, else deep-copies; endpoints (`Sender`/`Receiver`) transfer; **closures do not cross**. A trap in a worker kills only that worker. The API is a host facility (`spawn_worker`, `Channel<T>`), so its shape depends on your embedder — see [workers and channels](../reference/workers-and-channels.md)."
+"The language has none: a VM is single-threaded by construction (`!Send`, one heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency story. A host that wants parallelism runs separate VMs — rut defines no surface for sharing between them."
 msgstr ""
-"要真正的并行，宿主可以生成 **worker**——独立线程上、拥有独立堆的独立 VM。没有共享内存：所有数据都经由类型化通道穿越，而什么可以穿越是一条受检规则——基本类型和 `str` 复制；单元（vec、记录、类实例）在独占持有时转移，否则深复制；端点（`Sender`/`Receiver`）转移；**闭包不穿越**。worker 里的陷阱只杀死那个 worker。这个 API 是宿主设施（`spawn_worker`、`Channel<T>`），它的形状取决于你的嵌入方——参见 [worker 与通道](../reference/workers-and-channels.md)。"
+"语言层面没有并行：VM 在构造上就是单线程的（`!Send`，一套堆——[VM](../core-concepts/the-vm.md)）；异步就是全部的并发故事。想要并行的宿主运行多个独立的 VM——rut 不为它们之间的共享定义任何表面。"
 
 
-#: src/tutorial/async.md:187
+#: src/tutorial/async.md:182
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4585,7 +4584,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:214
+#: src/tutorial/async.md:209
 msgid "Next: [the standard library](stdlib.md)."
 msgstr "下一章：[标准库](stdlib.md)。"
 
@@ -5064,9 +5063,9 @@ msgstr "`http`"
 
 #: src/tutorial/stdlib.md:397
 msgid ""
-"The async HTTP client lives with the concurrency chapter — builder construction, `send(cx)` resolving at headers, body drains and byte streams — in [async: futures, workers, and channels](async.md)."
+"The async HTTP client lives with the concurrency chapter — builder construction, `send(cx)` resolving at headers, body drains and byte streams — in [async: futures and await](async.md)."
 msgstr ""
-"异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：future、worker 与通道](async.md)。"
+"异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：future 与 await](async.md)。"
 
 
 #: src/tutorial/stdlib.md:403
@@ -5265,40 +5264,39 @@ msgstr "执行模型"
 
 #: src/core-concepts/design-goals.md:115
 msgid ""
-"**One thread per VM.** A `Vm` instance runs on one thread with one heap and no atomics; workers are separate VMs communicating by typed message passing."
-msgstr ""
-"**每个 VM 一个线程。**一个 `Vm` 实例运行在一个线程上，拥有一套堆，不使用原子操作；worker 是彼此独立的 VM，通过类型化的消息传递通信。"
+"**One thread per VM.** A `Vm` instance runs on one thread with one heap and no atomics."
+msgstr "**每个 VM 一个线程。**一个 `Vm` 实例运行在一个线程上，拥有一套堆，不使用原子操作。"
 
 
-#: src/core-concepts/design-goals.md:118
+#: src/core-concepts/design-goals.md:117
 msgid ""
 "**The host owns time.** The VM exposes stepping verbs — drain the ready queue, expire timers, poll with a deadline — plus op budgets and interrupt callbacks. A UI host drives script between frames and stays responsive; a test host virtualizes the clock and gets fully deterministic schedules."
 msgstr ""
 "**时间归宿主所有。**VM 暴露一组步进动词——排空就绪队列、让到期的定时器触发、带截止时间的 poll——外加操作预算与中断回调。UI 宿主在帧间驱动脚本并保持响应；测试宿主虚拟化时钟，得到完全确定性的调度。"
 
 
-#: src/core-concepts/design-goals.md:123
+#: src/core-concepts/design-goals.md:122
 msgid ""
 "**Traps stop at the boundary.** A panic in script (overflow, nil deref) unwinds as a `Trap` value to the host call — rut code never catches one. Bugs become host-visible errors with a script backtrace, not corrupted state."
 msgstr ""
 "**陷阱止步于边界。**脚本中的 panic（溢出、对 nil 解引用）会以 `Trap` 值的形式沿栈展开到宿主调用——rut 代码永远捕获不到它。bug 变成宿主可见、带脚本回溯的错误，而不是被破坏的状态。"
 
 
-#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
+#: src/core-concepts/design-goals.md:127 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:288
 #: src/core-concepts/memory.md:208
 msgid "What this buys you"
 msgstr "这给你带来什么"
 
 
-#: src/core-concepts/design-goals.md:130
+#: src/core-concepts/design-goals.md:129
 msgid ""
 "If you are **writing scripts**: assignments never deep-copy; cleanup runs when the last reference dies; a miss is `nil`, a failure is a returned `err` string, and a crash is a loud trap with a real stack trace. If you are **embedding**: you declare your API once in a rut declaration file, bind it with typed Rust closures, and the compiler plus the load-time verifier reject every mismatched shape before any script runs — there is no bridge boilerplate to maintain."
 msgstr ""
 "如果你在**写脚本**：赋值从不深拷贝；清理在最后一个引用消亡时运行；未命中是 `nil`，失败是一个返回的 `err` 字符串，崩溃则是伴随真实栈回溯的响亮陷阱。如果你在**做嵌入**：你在 rut 声明文件里一次性声明 API，用带类型的 Rust 闭包绑定它，编译器加上加载期校验器会在任何脚本运行之前拒绝每一个不匹配的形状——没有任何需要维护的桥接样板。"
 
 
-#: src/core-concepts/design-goals.md:138
+#: src/core-concepts/design-goals.md:137
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the day-to-day syntax, and the reference pins down exact rules."
 msgstr "本节其余部分将逐一深入每根支柱；教程展示日常语法，参考手册钉死精确规则。"
@@ -6604,7 +6602,7 @@ msgstr "一切皆单元"
 
 #: src/core-concepts/memory.md:13
 msgid ""
-"Every non-primitive value — strings, byte buffers, arrays, records, enums, interface objects, erasure boxes, nullable boxes, coroutine frames — is a heap cell. Each cell starts with a header: a refcount, a type id, and a few flags. The counts are plain integers: a VM runs on one thread with one heap, workers are separate VMs, and nothing is ever shared between them, so there are no atomics anywhere in the heap."
+"Every non-primitive value — strings, byte buffers, arrays, records, enums, interface objects, erasure boxes, nullable boxes, coroutine frames — is a heap cell. Each cell starts with a header: a refcount, a type id, and a few flags. The counts are plain integers: a VM runs on one thread with one heap and nothing is ever shared, so there are no atomics anywhere in the heap."
 msgstr ""
 
 
@@ -7212,185 +7210,185 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:25
 msgid ""
-"A VM is single-threaded by construction (`!Send`); workers are separate VM instances communicating by messages. The host holds one and drives it with methods: `call` an entry point, `run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption. See [the host boundary](host-boundary.md) for the embed loop and [the async model](async-model.md) for the queues' role in scheduling."
+"A VM is single-threaded by construction (`!Send`). The host holds one and drives it with methods: `call` an entry point, `run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption. See [the host boundary](host-boundary.md) for the embed loop and [the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
-"VM 在构造上就是单线程的（`!Send`）；worker 是通过消息通信的独立 VM 实例。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
+"VM 在构造上就是单线程的（`!Send`）。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
 
 
-#: src/core-concepts/the-vm.md:35
+#: src/core-concepts/the-vm.md:34
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a per-frame slot file, and **every register has a static type recorded in the function's signature**. That single decision is what lets the hot path stay tag-free (see [reified types](reified-types.md)) and what makes refcounting precise: the compiler emits plain moves for scalars and retain/release moves for references, with no runtime tag checks."
 msgstr ""
 "指令集基于寄存器：操作数是指向每帧槽位文件的 `u16` 索引，而**每个寄存器都有记录在函数签名中的静态类型**。正是这一个决定让热路径保持无标签（参见[具体化类型](reified-types.md)），也让引用计数精确：编译器为标量生成普通移动，为引用生成保留/释放移动，没有任何运行时标签检查。"
 
 
-#: src/core-concepts/the-vm.md:42
+#: src/core-concepts/the-vm.md:41
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, branch tables) living in per-function pools. A representative sample:"
 msgstr "操作小而定长，变长的操作数列表（调用实参、分支表）放在每函数的池子里。一份代表性样本："
 
 
-#: src/core-concepts/the-vm.md:60
+#: src/core-concepts/the-vm.md:59
 msgid "The type system also decides what is _not_ an op:"
 msgstr "类型系统同样决定什么_不是_操作："
 
 
-#: src/core-concepts/the-vm.md:62
+#: src/core-concepts/the-vm.md:61
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a constant — no \"get type id\" instruction, no length load for a fixed-size array."
 msgstr "**没有静态之事。**类型表在编译期能回答的都会变成常量——没有\"取类型 id\"指令，定长数组也没有长度加载。"
 
 
-#: src/core-concepts/the-vm.md:65
+#: src/core-concepts/the-vm.md:64
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has exactly one op (the itable call); string concatenation is a native call, not an opcode."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:68
+#: src/core-concepts/the-vm.md:67
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only through compile-time-known layouts, plus the two reads reification needs: \"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 "**具体的内存、控制流，外加两个读回。**操作只透过编译期已知的布局触碰内存，再加上具体化需要的两次读取：\"它是什么\"（`tidof`）与向下转型背后带守卫的载荷提取。"
 
 
-#: src/core-concepts/the-vm.md:73
+#: src/core-concepts/the-vm.md:72
 msgid "The module binary"
 msgstr "模块二进制"
 
 
-#: src/core-concepts/the-vm.md:75
+#: src/core-concepts/the-vm.md:74
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, constants, functions (with their typed register signatures), imports, and a symbol table for backtraces. Its properties matter more than its layout:"
 msgstr "编译为每个模块产出一个带版本、自包含的二进制：类型、常量、函数（带各自的类型化寄存器签名）、导入，以及用于回溯的符号表。它的性质比它的布局更重要："
 
 
-#: src/core-concepts/the-vm.md:80
+#: src/core-concepts/the-vm.md:79
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions produce byte-identical binaries, so artifacts are cacheable by content hash and shippable instead of sources."
 msgstr "**确定性。**同样的源码加同样的依赖版本产出逐字节相同的二进制，因此产物可以按内容哈希缓存，可以交付二进制而非源码。"
 
 
-#: src/core-concepts/the-vm.md:83
+#: src/core-concepts/the-vm.md:82
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for traces by default; a release build can strip them, and a sidecar map file (keyed by content hash) can restore symbolication later. See the reference on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 "**自描述但可剥离。**名字与源码区间默认为追踪保留；release 构建可以剥离它们，而一个旁车 map 文件（按内容哈希为键）可以在日后恢复符号化。参见关于[诊断](../reference/diagnostics.md)的参考章节。"
 
 
-#: src/core-concepts/the-vm.md:88
+#: src/core-concepts/the-vm.md:87
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into the VM's global table at link, where the interface tables merge by name. Cross-module interface-typed calls specialize per concrete argument here too — the static-dispatch rule of [interfaces and dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:94
+#: src/core-concepts/the-vm.md:93
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts are platform-independent by construction rather than by luck."
 msgstr "**处处小端**，依律而行——每个序列化的字都是——产物因此从构造上就平台无关，而不是靠运气。"
 
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:97
 msgid "Verification at load"
 msgstr "加载时校验"
 
 
-#: src/core-concepts/the-vm.md:100
+#: src/core-concepts/the-vm.md:99
 msgid ""
 "Loading re-checks each function before anything executes: register operands against the signature, operand pools and jump targets in range, type operands present in the type table, native slots declared, and async state tables closed. A failed verification is a load error naming the module and function — **corrupted binaries never execute**. This is also where crossing rules are enforced for host-facing signatures, so a non-crossing shape is rejected before any script runs."
 msgstr ""
 "加载会在任何东西执行之前重新检查每个函数：寄存器操作数对照签名、操作数池与跳转目标在范围内、类型操作数在类型表中存在、原生槽位已声明、异步状态表封闭。校验失败是一个指名模块与函数的加载错误——**损坏的二进制永不执行**。这里也是宿主向签名的跨越规则被强制之处，因此不可跨越的形状在任何脚本运行之前就被拒绝。"
 
 
-#: src/core-concepts/the-vm.md:108
+#: src/core-concepts/the-vm.md:107
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum members, constant expressions, and interned string literals become constants in the binary. A user function call in a module initializer is a compile error — there is no load-time execution at all. Loading a module runs nothing."
 msgstr ""
 "模块级初始化在编译期折叠：字面量、枚举成员、常量表达式与驻留字符串字面量都成为二进制中的常量。模块初始化器里的用户函数调用是编译错误——根本不存在加载期执行。加载模块不运行任何东西。"
 
 
-#: src/core-concepts/the-vm.md:114
+#: src/core-concepts/the-vm.md:113
 msgid "The interpreter loop and traps"
 msgstr "解释器循环与陷阱"
 
 
-#: src/core-concepts/the-vm.md:116
+#: src/core-concepts/the-vm.md:115
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's code, a program counter, its typed register file, and (for async frames) the resume state. Calls push frames; returns pop them; direct calls are an index plus jump, and interface calls are two loads plus an indirect jump through the itable."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:122
+#: src/core-concepts/the-vm.md:121
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer overflow on the plain operators, a `nil` deref, an out-of-bounds index, a `panic(..)`, or an exhausted budget. A trap captures the raw frame chain (rendered lazily — symbolication happens only if someone prints it), runs destructors on the way out, and unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one; the boundary is the catch point (see [the host boundary](host-boundary.md))."
 msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:104
 msgid "Budgets and interrupts"
 msgstr "预算与中断"
 
 
-#: src/core-concepts/the-vm.md:133
+#: src/core-concepts/the-vm.md:132
 msgid ""
 "Two knobs make it safe to run third-party code, both set at construction and mutable while running:"
 msgstr "两个旋钮让运行第三方代码变得安全，两者都在构造时设置、运行期间可变："
 
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:136
 msgid ""
 "// one unit per op, counts down\n"
 msgstr ""
 "// 每操作一个单位，倒数\n"
 
 
-#: src/core-concepts/the-vm.md:138
+#: src/core-concepts/the-vm.md:137
 msgid ""
 "// checked at every allocation\n"
 msgstr ""
 "// 每次分配都检查\n"
 
 
-#: src/core-concepts/the-vm.md:139
+#: src/core-concepts/the-vm.md:138
 msgid ""
 "// default: check every 1024 ops\n"
 msgstr ""
 "// 默认：每 1024 个操作检查一次\n"
 
 
-#: src/core-concepts/the-vm.md:142
+#: src/core-concepts/the-vm.md:141
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel, raise the heap limit, or flip the interrupt flag and resume. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
 msgstr ""
 "耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料、调高堆限额或翻转中断标志然后恢复。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
 
 
-#: src/core-concepts/the-vm.md:147
+#: src/core-concepts/the-vm.md:146
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves the heap byte-identical (see [memory](memory.md))."
 msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 
-#: src/core-concepts/the-vm.md:150
+#: src/core-concepts/the-vm.md:149
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host bug by contract — and the interrupt hook is the host's lever at native return points."
 msgstr "原生函数运行在燃料预算之外——挂死的原生函数按契约就是宿主的 bug——而中断钩子是宿主在原生返回点上的操纵杆。"
 
 
-#: src/core-concepts/the-vm.md:154
+#: src/core-concepts/the-vm.md:153
 msgid "Why no JIT is viable"
 msgstr "为什么无 JIT 是可行的"
 
 
-#: src/core-concepts/the-vm.md:156
+#: src/core-concepts/the-vm.md:155
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about polymorphic property loads. rut has no polymorphic loads: field access is by known index, calls bind statically whenever the site names one concrete type, generics are monomorphized, and the remaining dynamic dispatch is an honest checked vtable hop. The optimizer's currency is **type stability** — what the checker proves is everything the optimizer gets — and its passes (constant folding, inlining, monomorphization, register-level cleanup) all run ahead of time. The result is a runtime with no warmup curve, no deoptimization asymmetries, and per-op costs you can reason about from the bytecode alone."
 msgstr ""
 "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:167
 msgid ""
 "The full tables and laws live in the reference: [typed bytecode](../reference/typed-bytecode.md), [the module binary and verification](../reference/module-binary.md), [VM core](../reference/vm-core.md), and [resource limits and fuel](../reference/resource-limits.md)."
 msgstr ""
@@ -8733,13 +8731,13 @@ msgstr ""
 
 
 #: src/examples/03-plugin.md:122 src/reference/embedding.md:80
-#: src/reference/host-fns.md:161
+#: src/reference/host-fns.md:158
 msgid "\"server\""
 msgstr ""
 
 
 #: src/examples/03-plugin.md:123 src/reference/embedding.md:81
-#: src/reference/host-fns.md:164
+#: src/reference/host-fns.md:161
 msgid "\"emit\""
 msgstr ""
 
@@ -10292,7 +10290,7 @@ msgid "`fn`"
 msgstr "`fn`"
 
 
-#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:141
+#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:138
 msgid "`let`"
 msgstr "`let`"
 
@@ -10327,12 +10325,12 @@ msgid "`of`"
 msgstr "`of`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:142
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:139
 msgid "`enum`"
 msgstr "`enum`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:144
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:141
 msgid "`struct`"
 msgstr "`struct`"
 
@@ -10342,7 +10340,7 @@ msgid "`class`"
 msgstr "`class`"
 
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:143
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
 msgid "`interface`"
 msgstr "`interface`"
 
@@ -10610,9 +10608,9 @@ msgstr ""
 
 #: src/reference/lexical-structure.md:98
 msgid ""
-"**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, `checked_add(y)`, `spawn_worker(..)`."
+"**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, `checked_add(y)`, `string_len(s)`."
 msgstr ""
-"**函数与方法采用 lower_snake_case** —— `unwrap_or(d)`、`push(v)`、`checked_add(y)`、`spawn_worker(..)`。"
+"**函数与方法采用 lower_snake_case** —— `unwrap_or(d)`、`push(v)`、`checked_add(y)`、`string_len(s)`。"
 
 
 #: src/reference/lexical-structure.md:100
@@ -11280,8 +11278,6 @@ msgstr "其写法**仅为前缀且结合最紧** —— `?` 作用于紧随其�
 #: src/reference/builtin-generic-types.md:54
 #: src/reference/literals-and-inference.md:136
 #: src/reference/by-reference-and-nullable.md:61
-#: src/reference/workers-and-channels.md:17
-#: src/reference/workers-and-channels.md:47
 msgid "Type"
 msgstr "类型"
 
@@ -14127,13 +14123,7 @@ msgstr ""
 "**捕获法则**：标量、`nil` 和 `fn` 值按复制走——被捕获的标量是闭包自己的槽位，在闭包内重新赋值绝不会移动原绑定。以引用为头的值（记录、`Vec`、数组、`str`/`bytes`、`?T`、枚举）以句柄跨越：穿过被捕获句柄的写入抵达共享单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。引用计数让捕获保持存活；闭包本身就是一个共享单元值。"
 
 
-#: src/reference/functions-closures-generics.md:75
-msgid ""
-"Closures are not transferable across isolates (a worker boundary transfers values, not closures)."
-msgstr "闭包不能跨隔离单元转移（worker 边界转移的是值，不是闭包）。"
-
-
-#: src/reference/functions-closures-generics.md:80
+#: src/reference/functions-closures-generics.md:78
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14153,80 +14143,80 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:100
+#: src/reference/functions-closures-generics.md:98
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own typed code. `T` infers from the arguments; explicit type arguments may be spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 "**泛型在编译期单态化**：每个实例化发出自己的类型化代码。`T` 从实参推断；显式类型实参可以写在调用点，包括方法调用：`self.st.get<T>(self)`。"
 
 
-#: src/reference/functions-closures-generics.md:104
+#: src/reference/functions-closures-generics.md:102
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:106
+#: src/reference/functions-closures-generics.md:104
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or spell the bound (`T requires I`)."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:109
+#: src/reference/functions-closures-generics.md:107
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their shapes (`[T]` is one type; lengths are runtime values)."
 msgstr "没有常量泛型用户参数。内置接口面固定了它们的形状（`[T]` 是一个类型；长度是运行期值）。"
 
 
-#: src/reference/functions-closures-generics.md:112
+#: src/reference/functions-closures-generics.md:110
 msgid "Inline bounds — `requires`"
 msgstr "内联约束 —— `requires`"
 
 
-#: src/reference/functions-closures-generics.md:119
+#: src/reference/functions-closures-generics.md:117
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, and class generic parameters (struct and interface generic parameters reject `requires`):"
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:123
+#: src/reference/functions-closures-generics.md:121
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every substitution-completing site (free-fn calls, method instantiation, impl-method enqueue). A failing instantiation diagnoses with the bound spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 "约束把关哪些实例化可以编译：在每一个完成替换的位置强制执行（自由函数调用、方法实例化、impl 方法入队）。失败的实例化会带着写明的约束诊断 —— \"`bool` does not satisfy `T` requires `i32 | str`\"。"
 
 
-#: src/reference/functions-closures-generics.md:128
+#: src/reference/functions-closures-generics.md:126
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), aliases (expanded first — see [Type aliases and union bounds](type-aliases.md)), a single interface (satisfied structurally — the member set checks where `T` is chosen), or a **type union** of concrete names/aliases. An interface member inside a union spelling is invalid — an interface bound stands alone."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:135
+#: src/reference/functions-closures-generics.md:133
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an interface type fails any bound — only a concrete type with the members admits."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:138
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains no method calls on bare `T`."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:141
+#: src/reference/functions-closures-generics.md:139
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a union-bounded value requires **every** member to provide the method — even a member that is never actually instantiated. Dispatch is untouched: each instantiation still binds the concrete member's own method."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:146
+#: src/reference/functions-closures-generics.md:144
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires [T]>(x: U)`."
 msgstr "约束可以引用条目的其他泛型：`fn hold<T, U requires [T]>(x: U)`。"
 
 
-#: src/reference/functions-closures-generics.md:148
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on the class descriptor and admits every instantiation: `pub class HashMap<K requires i8 | .. | bytes, V>` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
@@ -14419,12 +14409,6 @@ msgstr ""
 
 
 #: src/reference/opaque.md:139
-msgid ""
-"Crossing isolates is allowed iff the boxed value's type is crossable, checked at runtime via the type descriptor."
-msgstr "跨越隔离单元是允许的，当且仅当被装盒值的类型是可跨越的，在运行时经由类型描述符检查。"
-
-
-#: src/reference/opaque.md:141
 msgid ""
 "An `opaque` box can do nothing until it is recovered — no methods, no fields, no format-string rendering. That is the difference from gradual typing: the erased-storage type for a hot loop is a smell; lints flag downcasts inside loop bodies and `opaque` parameters/returns on non-storage functions."
 msgstr ""
@@ -15351,109 +15335,108 @@ msgstr ""
 
 #: src/reference/rc-heap.md:3
 msgid ""
-"rut's heap is **reference-counted**. When an object's strong count reaches zero it is destroyed **immediately**, at a deterministic point in the program. There is no collector: strong cycles leak by design — [weak references](weak-refs.md) are the answer. Every VM owns one heap on one thread and nothing is shared between isolates ([workers and channels](workers-and-channels.md)), so the counters are plain cells with no atomics and no locks."
+"rut's heap is **reference-counted**. When an object's strong count reaches zero it is destroyed **immediately**, at a deterministic point in the program. There is no collector: strong cycles leak by design — [weak references](weak-refs.md) are the answer. Every VM owns one heap on one thread, so the counters are plain cells with no atomics and no locks."
 msgstr ""
-"rut 的堆是**引用计数**的。当对象的强计数归零时，它**立即**被销毁，发生在程序中一个确定的点。没有收集器：强循环按设计会泄漏 —— [弱引用](weak-refs.md)是答案。每个 VM 在一个线程上拥有一个堆，隔离单元之间不共享任何东西（[worker 与通道](workers-and-channels.md)），因此计数器就是普通单元，没有原子操作，也没有锁。"
+"rut 的堆是**引用计数**的。当对象的强计数归零时，它**立即**被销毁，发生在程序中一个确定的点。没有收集器：强循环按设计会泄漏 —— [弱引用](weak-refs.md)是答案。每个 VM 在一个线程上拥有一个堆，因此计数器就是普通单元，没有原子操作，也没有锁。"
 
 
-#: src/reference/rc-heap.md:11
+#: src/reference/rc-heap.md:10
 msgid "The cell model"
 msgstr "单元模型"
 
 
-#: src/reference/rc-heap.md:13
+#: src/reference/rc-heap.md:12
 msgid "Everything except primitives and `fn` values is a heap cell:"
 msgstr "除基本类型与 `fn` 值之外，一切都是堆单元："
 
 
-#: src/reference/rc-heap.md:15
+#: src/reference/rc-heap.md:14
 msgid "Inline (moved by plain copy)"
 msgstr "内联（按普通复制移动）"
 
 
-#: src/reference/rc-heap.md:15
+#: src/reference/rc-heap.md:14
 msgid "Heap cells (refcounted handles)"
 msgstr "堆单元（引用计数的句柄）"
 
 
-#: src/reference/rc-heap.md:17
+#: src/reference/rc-heap.md:16
 msgid "`u8..u64`, `i8..i64`, `u`/`isize`, `f32`, `f64`, `bool`, `nil`"
 msgstr "`u8..u64`, `i8..i64`, `u`/`isize`, `f32`, `f64`, `bool`, `nil`"
 
 
-#: src/reference/rc-heap.md:17
+#: src/reference/rc-heap.md:16
 msgid ""
 "`str`, `bytes`, `Vec<T>`, `[T]`, enums, structs, classes, interface objects, `opaque` boxes, host boxes, `?T` boxes, coroutine frames"
 msgstr ""
 
 
-#: src/reference/rc-heap.md:19
+#: src/reference/rc-heap.md:18
 msgid ""
 "Assignment, argument passing, and returning copy the **handle** (retain), never the bytes. Mutation through one alias is visible through every alias — reference semantics is the one default regime; there is no eager copy anywhere. `bytes.clone()` is the **only** copy escape hatch."
 msgstr ""
 "赋值、传参和返回复制的是**句柄**（retain），绝不是字节。透过一个别名做出的修改透过每个别名可见 —— 引用语义是唯一的默认体制；任何地方都没有急切复制。`bytes.clone()` 是**唯一的**复制逃生口。"
 
 
-#: src/reference/rc-heap.md:24
+#: src/reference/rc-heap.md:23
 msgid ""
-"There is no borrow syntax and no lifetimes: a handle simply keeps its referent alive, so nothing dangles. Uniqueness matters only when transferring buffers across isolates, where it is detected at runtime (`rc == 1`) — never proven statically."
-msgstr ""
-"没有借用语法，也没有生命周期：句柄只是让它的被引用对象保持存活，所以没有任何东西悬垂。唯一性只在跨隔离单元转移缓冲时才重要，在那里它在运行时被检测（`rc == 1`）—— 绝不静态证明。"
+"There is no borrow syntax and no lifetimes: a handle simply keeps its referent alive, so nothing dangles."
+msgstr "没有借用语法，也没有生命周期：句柄只是让它的被引用对象保持存活，所以没有任何东西悬垂。"
 
 
-#: src/reference/rc-heap.md:29
+#: src/reference/rc-heap.md:26
 msgid "Refcounting rules"
 msgstr "引用计数规则"
 
 
-#: src/reference/rc-heap.md:31
+#: src/reference/rc-heap.md:28
 msgid ""
 "The compiler knows the static type of every register, so ref-aware ops are emitted only where a reference can flow:"
 msgstr "编译器知道每个寄存器的静态类型，因此只在引用可能流动的地方发出引用感知的操作："
 
 
-#: src/reference/rc-heap.md:34
+#: src/reference/rc-heap.md:31
 msgid "Primitives and `fn` values move with a plain move — no counting."
 msgstr "基本类型与 `fn` 值以普通移动方式移动 —— 不计数。"
 
 
-#: src/reference/rc-heap.md:35
+#: src/reference/rc-heap.md:32
 msgid ""
 "References move with a ref move — retain the new, release the old; both steps are exact."
 msgstr "引用以引用移动方式移动 —— retain 新的，release 旧的；两步都是精确的。"
 
 
-#: src/reference/rc-heap.md:37
+#: src/reference/rc-heap.md:34
 msgid ""
 "Function boundaries pass references in registers; call/return sequences emit the paired inc/dec. A loop over a `Vec<f64>` does no per-element counting."
 msgstr "函数边界在寄存器中传递引用；call/return 序列发出成对的 inc/dec。对 `Vec<f64>` 的循环不做逐元素计数。"
 
 
-#: src/reference/rc-heap.md:40
+#: src/reference/rc-heap.md:37
 msgid ""
 "**Overflow**: an increment past `u32::MAX` _immortalizes_ the object — the count is pinned to the `0` sentinel (the same value interned literals use) — a deliberate, logged leak instead of unsoundness."
 msgstr ""
 "**溢出**：超过 `u32::MAX` 的递增会 _不朽化_ 该对象 —— 计数被钉在 `0` 哨兵值上（与驻留字面量使用的值相同）—— 这是刻意的、有日志的泄漏，而不是不健全。"
 
 
-#: src/reference/rc-heap.md:43
+#: src/reference/rc-heap.md:40
 msgid ""
 "Debug builds assert the full counter discipline: retain/release pairing, no underflow, no double destruction."
 msgstr "Debug 构建断言完整的计数器纪律：retain/release 配对，无下溢，无双重销毁。"
 
 
-#: src/reference/rc-heap.md:46
+#: src/reference/rc-heap.md:43
 msgid "Destruction — the `[disposal]` marker"
 msgstr "销毁——`[disposal]` 标记"
 
 
-#: src/reference/rc-heap.md:48
+#: src/reference/rc-heap.md:45
 msgid ""
 "A type opts into destructor code by marking an inherent member `[disposal]` (see [Rc, dispose, and identity](rc-dispose-identity.md) for the marker's surface — the name is free, the bracket designates):"
 msgstr ""
 
 
-#: src/reference/rc-heap.md:52
+#: src/reference/rc-heap.md:49
 msgid ""
 "```rut\n"
 "use core::{ DisposalContext };\n"
@@ -15480,149 +15463,149 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:28
+#: src/reference/rc-heap.md:77 src/reference/launched-futures.md:28
 msgid "Laws:"
 msgstr "法则："
 
 
-#: src/reference/rc-heap.md:82
+#: src/reference/rc-heap.md:79
 msgid ""
 "The engine calls `dispose(mut self, cx: DisposalContext)` exactly once per cell death — when the strong count reaches zero. Types without a `[disposal]` member release straight to the field walk."
 msgstr ""
 
 
-#: src/reference/rc-heap.md:85
+#: src/reference/rc-heap.md:82
 msgid ""
 "The call runs **at a call boundary**, not re-entrantly inside the release: death pins the cell and queues it, and the interpreter drains the queue at its call boundaries — the root call's end for sync code, each drive for the async weave — passing the pinned cell as `self` with a freshly minted `cx`."
 msgstr ""
 "调用**在调用边界**运行，不在释放内部重入：死亡把单元钉住并排入队列，解释器在它的调用边界排空队列——同步代码是根调用的结束，异步编织是每次驱动——把钉住的单元作为 `self` 传入，并配一个新铸造的 `cx`。"
 
 
-#: src/reference/rc-heap.md:90
+#: src/reference/rc-heap.md:87
 msgid ""
 "A dispose body may itself release references (a field walk that kills a child whose own `dispose` is next): the drain loops until the queue stays empty."
 msgstr ""
 "dispose 函数体自身可以释放引用（一次字段释放可能杀死一个子对象，而它自己的 `dispose` 排在下一个）：排空会不断循环，直到队列保持为空。"
 
 
-#: src/reference/rc-heap.md:93
+#: src/reference/rc-heap.md:90
 msgid ""
 "The context `cx` is engine-minted and empty today; it grows additively, never by touching the marker's signature."
 msgstr ""
 
 
-#: src/reference/rc-heap.md:95
+#: src/reference/rc-heap.md:92
 msgid ""
 "Cancellation drops locals at the suspension point through the same machinery ([launched futures](launched-futures.md)) — no special case."
 msgstr "取消在挂起点透过同一机制丢弃局部变量（[已启动的 future](launched-futures.md)）—— 没有特例。"
 
 
-#: src/reference/rc-heap.md:98
+#: src/reference/rc-heap.md:95
 msgid ""
 "Note the difference from finalizer-based runtimes: `dispose` always runs, exactly once, at a knowable point. There is no \"later or never\"."
 msgstr "注意这与基于 finalizer 的运行时的差别：`dispose` 总会运行，恰一次，在一个可知的时点。没有“稍后或永不”。"
 
 
-#: src/reference/rc-heap.md:101
+#: src/reference/rc-heap.md:98
 msgid "Destruction order"
 msgstr "销毁顺序"
 
 
-#: src/reference/rc-heap.md:103
+#: src/reference/rc-heap.md:100
 msgid "When a cell's strong count reaches zero:"
 msgstr "当单元的强计数归零："
 
 
-#: src/reference/rc-heap.md:105
+#: src/reference/rc-heap.md:102
 msgid ""
 "Every `Weak` box watching the cell is nulled **before any user code runs** — a dispose body that calls `upgrade()` sees `nil`, deterministically ([weak references](weak-refs.md))."
 msgstr ""
 "每个注视该单元的 `Weak` 盒都在**任何用户代码运行之前**被置空——调用 `upgrade()` 的 dispose 函数体确定性地看到 `nil`（[弱引用](weak-refs.md)）。"
 
 
-#: src/reference/rc-heap.md:108
+#: src/reference/rc-heap.md:105
 msgid ""
 "The type's queued `dispose` body runs for cells whose type carries a `[disposal]` member (pinned cell, then released)."
 msgstr ""
 
 
-#: src/reference/rc-heap.md:110
+#: src/reference/rc-heap.md:107
 msgid ""
 "Ref-typed children are released **recursively**: record fields in declaration order, sum payloads, array elements, `opaque` box inners, closure captures. The walk is driven by a per-type release plan built once from the type table."
 msgstr ""
 "引用类型的子节点**递归**释放：按声明顺序的记录字段、sum 载荷、数组元素、`opaque` 盒内层、闭包捕获。这一遍历由一个按类型构建一次的释放计划驱动，计划来自类型表。"
 
 
-#: src/reference/rc-heap.md:114
+#: src/reference/rc-heap.md:111
 msgid ""
 "Host box payloads run their Rust `Drop` at the same point — sockets, files, and textures die with the last handle, not \"sometime later\". An opt-in `finalize` hook (no-op default) runs _before_ the payload's `Drop`; a rut value the payload held releases through the same walk."
 msgstr ""
 "宿主盒载荷在同一个点运行它们的 Rust `Drop` —— 套接字、文件和纹理随最后一个句柄死亡，而不是“过段时间”。可选加入的 `finalize` 钩子（默认空操作）在载荷的 `Drop` _之前_ 运行；载荷持有的 rut 值透过同一遍历释放。"
 
 
-#: src/reference/rc-heap.md:118
+#: src/reference/rc-heap.md:115
 msgid ""
 "The block store frees the cell's variable-size payload; the slot returns to the arena free list and is reused by the next mint ([the VM heap](vm-heap.md))."
 msgstr "块存储释放单元的可变大小载荷；槽返回 arena 空闲列表，被下一次铸造复用（[VM 堆](vm-heap.md)）。"
 
 
-#: src/reference/rc-heap.md:122
+#: src/reference/rc-heap.md:119
 msgid "Buffers, strings, and views"
 msgstr "缓冲、字符串与视图"
 
 
-#: src/reference/rc-heap.md:124
+#: src/reference/rc-heap.md:121
 msgid ""
 "**Primitive-element `[T]` buffers stay flat**: a `[T]` over numeric or `bool` element types stores raw values inline behind the header. Element copies in and out are plain moves — no counting. This is the one place the everything-is-a-cell law does not reach."
 msgstr ""
 "**基本类型元素的 `[T]` 缓冲保持扁平**：数值或 `bool` 元素类型的 `[T]` 在头部之后内联存储原始值。元素的复制进出是普通移动 —— 不计数。这是“一切皆单元”法则唯一够不到的地方。"
 
 
-#: src/reference/rc-heap.md:128
+#: src/reference/rc-heap.md:125
 msgid ""
 "**`Vec<T>` is not flat**: its backing is `buf: [?T]`, so element traffic crosses nullable handles. `push`/`pop`/`set` emit the paired retain/release."
 msgstr ""
 "**`Vec<T>` 不是扁平的**：它的后备是 `buf: [?T]`，因此元素流量跨越可空句柄。`push`/`pop`/`set` 发出成对的 retain/release。"
 
 
-#: src/reference/rc-heap.md:131
+#: src/reference/rc-heap.md:128
 msgid ""
 "**Composite-element buffers store handles**: `[Point]` and `Vec<Point>` hold one cell pointer per element; the buffer itself is the counted unit."
 msgstr "**复合元素缓冲存储句柄**：`[Point]` 与 `Vec<Point>` 每个元素持有一个单元指针；缓冲本身是被计数的单位。"
 
 
-#: src/reference/rc-heap.md:134
+#: src/reference/rc-heap.md:131
 msgid ""
 "`[T]` is a fixed-length cell; `N` is a compile-time constant and part of the type's identity. Fixed-array literals that fold at compile time become immortal constant-pool cells."
 msgstr "`[T]` 是定长单元；`N` 是编译期常量，是类型同一性的一部分。在编译期折叠的定长数组字面量成为不朽的常量池单元。"
 
 
-#: src/reference/rc-heap.md:137
+#: src/reference/rc-heap.md:134
 msgid ""
 "**`Slice<T>` view cells** hold a handle to their owner plus `off`/`len` — never a pointer into the data block. Views dispatch through the owner, so growth keeps existing views valid; indexing bounds-checks against `len ∩ owner len` and **traps** out of range instead of reading garbage. Slices are born only from implicit widening at an argument site; they are not nameable or constructible in script."
 msgstr ""
 "**`Slice<T>` 视图单元**持有一个指向所有者的句柄加上 `off`/`len` —— 绝不是指向数据块的指针。视图透过所有者分派，因此增长保持现有视图有效；索引对 `len ∩ owner len` 做边界检查，越界时**陷阱**而不是读取垃圾。切片只在实参位置因隐式宽化而产生；在脚本中不可命名、不可构造。"
 
 
-#: src/reference/rc-heap.md:143
+#: src/reference/rc-heap.md:140
 msgid ""
 "**`str` is immutable**: interned literals live in the module's constant pool (immortal); runtime-built strings are ordinary cells whose buffers are internally copy-on-write — an implementation detail no program can observe, because `str` has no mutation API."
 msgstr ""
 "**`str` 不可变**：驻留字面量生活在模块的常量池中（不朽）；运行期构建的字符串是普通单元，其缓冲内部是写时复制 —— 这是任何程序都无法观察的实现细节，因为 `str` 没有修改 API。"
 
 
-#: src/reference/rc-heap.md:147
+#: src/reference/rc-heap.md:144
 msgid ""
 "**No interior pointers exist anywhere**, which is what keeps every heap walk a simple typed walk."
 msgstr "**任何地方都不存在内部指针**，这正是让每次堆遍历都是简单的类型化遍历的原因。"
 
 
-#: src/reference/rc-heap.md:150
+#: src/reference/rc-heap.md:147
 msgid "Internals"
 msgstr "内部结构"
 
 
-#: src/reference/rc-heap.md:152
+#: src/reference/rc-heap.md:149
 msgid ""
 "```text\n"
 "Header:  rc: u32        // strong count; u32::MAX = immortal sentinel\n"
@@ -15637,45 +15620,45 @@ msgstr ""
 "```"
 
 
-#: src/reference/rc-heap.md:158
+#: src/reference/rc-heap.md:155
 msgid ""
 "The weak lists (referent slot word → its `WeakBox` cells) and the disposal-armed markers (cells whose `dispose` is queued or has run) are arena side tables, not header words."
 msgstr ""
 "弱列表（被引用者的槽字 → 指向它的 `WeakBox` 单元）与处置武装标记（`dispose` 已入队或已运行的单元）是 arena 的旁侧表，不是头部字。"
 
 
-#: src/reference/rc-heap.md:162
+#: src/reference/rc-heap.md:159
 msgid ""
 "Cell kinds: string, vec (growable), array (fixed), slice view, record (every user struct/class — vtable + payload slots), enum (tag + payload slots; dataless variants are immortal singletons), opaque box, weak box, and the coroutine frames the async weave mints. Reified layouts are covered in [reified types and layout](reified-types.md)."
 msgstr ""
 "单元类别：string、vec（可增长）、array（定长）、slice 视图、record（每个用户 struct/class —— vtable + 载荷槽）、enum（标签 + 载荷槽；无数据变体是不朽单例）、opaque 盒、weak 盒，以及异步编织铸造的协程帧。具体化布局见[具体化类型与布局](reified-types.md)。"
 
 
-#: src/reference/rc-heap.md:168
+#: src/reference/rc-heap.md:165
 msgid "The engine's two counting ops are exact and total:"
 msgstr "引擎的两个计数操作是精确且全函数的："
 
 
-#: src/reference/rc-heap.md:171
+#: src/reference/rc-heap.md:168
 msgid "/* rc += 1 */"
 msgstr "/* rc += 1 */"
 
 
-#: src/reference/rc-heap.md:174
+#: src/reference/rc-heap.md:171
 msgid ""
 "// underflow is a bug: assert\n"
 msgstr ""
 "// underflow is a bug: assert\n"
 
 
-#: src/reference/rc-heap.md:176
+#: src/reference/rc-heap.md:173
 msgid ""
 "// order above; no suspect list\n"
 msgstr ""
 "// order above; no suspect list\n"
 
 
-#: src/reference/rc-heap.md:180
+#: src/reference/rc-heap.md:177
 msgid ""
 "Destruction is fully deterministic under the virtual clock, so a drop order reproduces exactly in tests. Identity and equality semantics for cell values are covered in [Rc, dispose, and identity](rc-dispose-identity.md)."
 msgstr ""
@@ -16209,12 +16192,6 @@ msgstr ""
 "// dropping `vm` frees every remaining slab\n"
 
 
-#: src/reference/vm-heap.md:103
-msgid ""
-"Worker heaps are per-VM and charged to the child's own budget ([workers and channels](workers-and-channels.md))."
-msgstr "worker 堆按 VM 隔离，记在子 VM 自己的预算上（[worker 与通道](workers-and-channels.md)）。"
-
-
 #: src/reference/resource-limits.md:3
 msgid ""
 "Two knobs make rut safe for third-party code: a **heap budget** and **fuel**. Both are enforced as **resumable traps**, both are set at construction, and both bind on the VM's own accounting ([the VM heap](vm-heap.md)) — not on the OS."
@@ -16506,18 +16483,11 @@ msgstr ""
 
 
 #: src/reference/resource-limits.md:89
-msgid "Workers"
-msgstr "worker"
+msgid "Fairness"
+msgstr "公平性"
 
 
 #: src/reference/resource-limits.md:91
-msgid ""
-"A worker VM is constructed with **its own `Limits`**; argument transfers are counted against the _child_ budget before the worker starts, so a worker cannot OOM its parent ([workers and channels](workers-and-channels.md))."
-msgstr ""
-"worker VM 以**自己的 `Limits`** 构造；实参转移在 worker 启动之前对照 _子_ 预算计数，因此 worker 无法让父 VM OOM（[worker 与通道](workers-and-channels.md)）。"
-
-
-#: src/reference/resource-limits.md:96
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future cannot starve the rest of a queue drain indefinitely — each frame runs to its next park or completion, and fuel bounds each of those runs."
 msgstr ""
@@ -17015,7 +16985,7 @@ msgstr ""
 
 #: src/reference/async.md:213
 msgid ""
-"See [launched futures](launched-futures.md) for receipts, cancellation, and the race/completer tier (`select2` / `select_all` / `completer`); [the host futures bridge](host-futures.md) for backing a host async fn with Rust; [workers and channels](workers-and-channels.md) for isolate parallelism."
+"See [launched futures](launched-futures.md) for receipts, cancellation, and the race/completer tier (`select2` / `select_all` / `completer`); [the host futures bridge](host-futures.md) for backing a host async fn with Rust."
 msgstr ""
 
 
@@ -17767,330 +17737,6 @@ msgid ""
 msgstr "普通的 `host fn` 行（同步的，在跨越内部一次运行到底）是边界的另一半——见[嵌入与原生模块](embedding.md)。"
 
 
-#: src/reference/workers-and-channels.md:3
-msgid ""
-"Workers are **separate VMs on separate threads** with separate heaps. There is no shared memory: everything that crosses is a value on a typed channel, moved or deep-copied under the rules below. Pure rut code inside one VM is always single-threaded, which is what keeps the RC heap lock-free ([the Rc heap](rc-heap.md))."
-msgstr ""
-"worker 是**独立线程上的独立 VM**，拥有独立的堆。没有共享内存：一切跨越的东西都是类型化通道上的一个值，按下述规则转移或深复制。单个 VM 内的纯 rut 代码永远是单线程的，这正是 RC 堆免锁的原因（[Rc 堆](rc-heap.md)）。"
-
-
-#: src/reference/workers-and-channels.md:9
-msgid ""
-"Status: this page specifies the isolate surface; it is not yet wired into the engine. The async surface it builds on — futures, launch, await — is live ([async and await](async.md))."
-msgstr ""
-"状态：本页规定的是隔离体表面；它尚未接入引擎。它所依托的异步表面——future、launch、await——已可用（[异步与 await](async.md)）。"
-
-
-#: src/reference/workers-and-channels.md:13
-msgid "Channels"
-msgstr "通道"
-
-
-#: src/reference/workers-and-channels.md:15
-msgid "`Channel<T>()` produces a channel value with two endpoints:"
-msgstr "`Channel<T>()` 产出一个带两个端点的通道值："
-
-
-#: src/reference/workers-and-channels.md:17
-msgid "Endpoint"
-msgstr "端点"
-
-
-#: src/reference/workers-and-channels.md:17
-msgid "Behavior"
-msgstr "行为"
-
-
-#: src/reference/workers-and-channels.md:19
-msgid "`sender.send(v)`"
-msgstr "`sender.send(v)`"
-
-
-#: src/reference/workers-and-channels.md:19
-msgid "sync"
-msgstr "同步"
-
-
-#: src/reference/workers-and-channels.md:19
-msgid "unbounded buffer; `send` never blocks and is cheap"
-msgstr "无界缓冲区；`send` 永不阻塞且开销很小"
-
-
-#: src/reference/workers-and-channels.md:20
-msgid "`receiver.recv()`"
-msgstr "`receiver.recv()`"
-
-
-#: src/reference/workers-and-channels.md:20
-msgid "`Future<?T>`"
-msgstr "`Future<?T>`"
-
-
-#: src/reference/workers-and-channels.md:20
-msgid ""
-"suspends until a message arrives; answers **`nil` once every sender is gone**"
-msgstr "挂起直到消息到达；**一旦所有发送端都消失就应答 `nil`**"
-
-
-#: src/reference/workers-and-channels.md:22
-msgid "Semantics:"
-msgstr "语义："
-
-
-#: src/reference/workers-and-channels.md:24
-msgid "Channels are **MPSC** (many senders, one receiver), unbounded."
-msgstr "通道是 **MPSC**（多发送端、单接收端）、无界的。"
-
-
-#: src/reference/workers-and-channels.md:25
-msgid ""
-"Endpoints are ordinary values and **transferable**: pass one to a worker through `spawn_worker` args, or through another channel."
-msgstr "端点是普通值且**可转移**：经由 `spawn_worker` 实参把一个端点传给 worker，或经由另一条通道传递。"
-
-
-#: src/reference/workers-and-channels.md:27
-msgid ""
-"Receiving `nil` is the shutdown signal — dropping the sender half is how a parent tells a worker to finish."
-msgstr "收到 `nil` 是关停信号——drop 掉发送端那一半，就是父方向 worker 发出收工指令的方式。"
-
-
-#: src/reference/workers-and-channels.md:29
-msgid ""
-"Closing semantics pair with the nullable answer, not an error type ([by-reference and nullable](by-reference-and-nullable.md))."
-msgstr "关闭语义与可空应答搭配，而不是错误类型（[按引用与可空](by-reference-and-nullable.md)）。"
-
-
-#: src/reference/workers-and-channels.md:32
-msgid "Typical shape:"
-msgstr "典型形状："
-
-
-#: src/reference/workers-and-channels.md:34
-msgid ""
-"```rut\n"
-"\n"
-"async fn worker(rx: Receiver<u32>, tx: Sender<u32>) -> nil {\n"
-"    while (true) {\n"
-"        let msg = await rx.recv();\n"
-"        if (msg == nil) { return; }       // all senders gone\n"
-"        tx.send(1);                       // acknowledge (send is sync)\n"
-"    }\n"
-"}\n"
-"```"
-msgstr ""
-
-
-#: src/reference/workers-and-channels.md:45
-msgid "What may cross an isolate boundary"
-msgstr "什么可以跨越隔离体边界"
-
-
-#: src/reference/workers-and-channels.md:47
-msgid "Crossing rule"
-msgstr "跨越规则"
-
-
-#: src/reference/workers-and-channels.md:49
-msgid "primitives (ints, floats, `bool`)"
-msgstr "基本类型（整数、浮点数、`bool`）"
-
-
-#: src/reference/workers-and-channels.md:49
-msgid "copy"
-msgstr "复制"
-
-
-#: src/reference/workers-and-channels.md:50
-msgid "copy (immutable)"
-msgstr "复制（不可变）"
-
-
-#: src/reference/workers-and-channels.md:51
-msgid ""
-"every other cell — `Vec<T>`, `[T]`, class/struct instances, enums, `?T` boxes"
-msgstr "其余每个单元——`Vec<T>`、`[T]`、类/struct 实例、枚举、`?T` 盒"
-
-
-#: src/reference/workers-and-channels.md:51
-msgid ""
-"**transfer** if `rc == 1`, else deep copy — the zero-copy fast path is the common case; every element/field must itself be crossable"
-msgstr "**转移**（`rc == 1` 时），否则深复制——零复制快速路径是常见情形；每个元素/字段自身必须可跨越"
-
-
-#: src/reference/workers-and-channels.md:52
-msgid "`Slice<T>` view"
-msgstr "`Slice<T>` 视图"
-
-
-#: src/reference/workers-and-channels.md:52
-msgid ""
-"same rule as its owner cell; provenance (which `Vec`/`[T]` it views) is invisible across the boundary"
-msgstr "与其属主单元适用同一规则；来源（它视图的是哪个 `Vec`/`[T]`）在边界之外不可见"
-
-
-#: src/reference/workers-and-channels.md:53
-msgid "`Sender` / `Receiver`"
-msgstr "`Sender` / `Receiver`"
-
-
-#: src/reference/workers-and-channels.md:53
-msgid "transfer"
-msgstr "转移"
-
-
-#: src/reference/workers-and-channels.md:54 src/reference/templates.md:20
-msgid "`Template`"
-msgstr "`Template`"
-
-
-#: src/reference/workers-and-channels.md:54
-msgid ""
-"copy — a builtin carrier; its `opaque` args must themselves be crossable ([templates](templates.md))"
-msgstr "复制——一个内置载体；其 `opaque` 实参自身必须可跨越（[模板](templates.md)）"
-
-
-#: src/reference/workers-and-channels.md:55
-msgid "host opaque types"
-msgstr "宿主 opaque 类型"
-
-
-#: src/reference/workers-and-channels.md:55
-msgid ""
-"transfer **only** if the host registered `send` for them — checked at the transfer, by type"
-msgstr "**仅当**宿主为它们注册了 `send` 才可转移——在转移时按类型检查"
-
-
-#: src/reference/workers-and-channels.md:56 src/reference/typed-bytecode.md:93
-msgid "closures"
-msgstr "闭包"
-
-
-#: src/reference/workers-and-channels.md:56
-msgid "**not transferable** — compile-time error at the `send`/`spawn_worker` site"
-msgstr "**不可转移**——在 `send`/`spawn_worker` 处是编译期错误"
-
-
-#: src/reference/workers-and-channels.md:57
-msgid "anything else (receipts, wakers)"
-msgstr "其余一切（回执、waker）"
-
-
-#: src/reference/workers-and-channels.md:57
-msgid "compile-time error at the call site"
-msgstr "在调用点是编译期错误"
-
-
-#: src/reference/workers-and-channels.md:59
-msgid "Enforcement is two-layered:"
-msgstr "强制检查分两层："
-
-
-#: src/reference/workers-and-channels.md:61
-msgid ""
-"**Static** at the send/spawn site — the checker knows `T` and rejects non-crossable types (closures, unregistered host types)."
-msgstr "发送/生成处的**静态**检查——检查器知道 `T`，会拒绝不可跨越的类型（闭包、未注册的宿主类型）。"
-
-
-#: src/reference/workers-and-channels.md:63
-msgid ""
-"**Runtime** on the receiving heap — `transfer_into` detects uniqueness: an `rc == 1` buffer is _adopted_ (the raw block moves, no copy); anything shared is deep-copied through a descriptor-driven walk."
-msgstr ""
-"接收堆上的**运行时**检查——`transfer_into` 检测唯一性：`rc == 1` 的缓冲区被_收养_（原始内存块直接移动，无复制）；任何被共享的东西都经由一次描述符驱动的遍历深复制。"
-
-
-#: src/reference/workers-and-channels.md:68
-msgid ""
-"Transfers move **accounting**, not just pointers: a moved buffer's bytes are charged to the child heap at the transfer ([the VM heap](vm-heap.md))."
-msgstr "转移移动的是**记账**，而不只是指针：被移动缓冲区的字节在转移时记入子堆的账（[VM 堆](vm-heap.md)）。"
-
-
-#: src/reference/workers-and-channels.md:72
-msgid "Worker lifecycle"
-msgstr "worker 生命周期"
-
-
-#: src/reference/workers-and-channels.md:74
-msgid ""
-"```rut\n"
-"let w = spawn_worker(\"workers/fetch\", (url, ch.sender()));\n"
-"```"
-msgstr ""
-"```rut\n"
-"let w = spawn_worker(\"workers/fetch\", (url, ch.sender()));\n"
-"```"
-
-
-#: src/reference/workers-and-channels.md:78
-msgid "`spawn_worker(module, args)` is a host hook:"
-msgstr "`spawn_worker(module, args)` 是一个宿主钩子："
-
-
-#: src/reference/workers-and-channels.md:80
-msgid ""
-"construct a child `Vm` sharing the **type table and loader — never the heap** ([the VM heap](vm-heap.md));"
-msgstr "构造一个共享**类型表与加载器——绝不共享堆**的子 `Vm`（[VM 堆](vm-heap.md)）；"
-
-
-#: src/reference/workers-and-channels.md:82
-msgid "load the module;"
-msgstr "加载模块；"
-
-
-#: src/reference/workers-and-channels.md:83
-msgid ""
-"transfer the args into the child heap — charged to the **child** budget before the worker starts, so a worker cannot OOM its parent ([resource limits](resource-limits.md));"
-msgstr ""
-"把实参转移进子堆——在 worker 启动之前记入**子**预算，因此 worker 不可能 OOM 它的父级（[资源限制](resource-limits.md)）；"
-
-
-#: src/reference/workers-and-channels.md:86
-msgid ""
-"run the worker's entry to completion on its own thread; entry parameters **are** the transferred args;"
-msgstr "在 worker 自己的线程上把入口运行到完成；入口参数**就是**被转移的实参；"
-
-
-#: src/reference/workers-and-channels.md:88
-msgid ""
-"return a `Worker` handle; `worker.join() -> Future<Result<(), Trap>>` completes when the entry returns."
-msgstr "返回一个 `Worker` 句柄；`worker.join() -> Future<Result<(), Trap>>` 在入口返回时完成。"
-
-
-#: src/reference/workers-and-channels.md:91
-msgid "Isolation laws"
-msgstr "隔离法则"
-
-
-#: src/reference/workers-and-channels.md:93
-msgid ""
-"**A trap inside a worker kills only that worker**: `join()` answers the trap and the host decides — restart it, surface it, ignore it. The parent VM and its other workers are untouched."
-msgstr ""
-"**worker 内部的陷阱只杀死该 worker**：`join()` 应答这个陷阱，由宿主决定——重启它、呈现它、忽略它。父 VM 与它的其他 worker 毫发无损。"
-
-
-#: src/reference/workers-and-channels.md:96
-msgid ""
-"**The main VM blocks on nothing**: `join()` is a future, channel receives are awaits; the parent's driving loop keeps running while workers compute."
-msgstr "**主 VM 不阻塞在任何东西上**：`join()` 是一个 future，通道接收是 await；worker 计算时，父方的驱动循环继续运行。"
-
-
-#: src/reference/workers-and-channels.md:99
-msgid ""
-"**No data races by construction**: nothing is shared, so there is nothing to lock. Two isolates communicate only through transferred values and channel messages."
-msgstr "**构造上就不存在数据竞争**：没有任何东西被共享，因此没有任何东西需要加锁。两个隔离体只经由被转移的值和通道消息通信。"
-
-
-#: src/reference/workers-and-channels.md:102
-msgid ""
-"A worker's exit does not close channels it received senders from — the shutdown signal is the _drop_ of the sender endpoints, which falls out of the worker's heap teardown."
-msgstr "worker 退出并不关闭它从中收到发送端的那些通道——关停信号是发送端端点的 _drop_，这会随 worker 堆的拆除自然发生。"
-
-
-#: src/reference/workers-and-channels.md:106
-msgid ""
-"Open surface: bounded channels and MPMC; cross-isolate sharing of immutable data; receive fairness across multiple awaiting receivers (FIFO per channel proposed)."
-msgstr "开放表面：有界通道与 MPMC；跨隔离体共享不可变数据；多个等待中的接收端之间的接收公平性（提议为每通道 FIFO）。"
-
-
 #: src/reference/embedding.md:3
 msgid ""
 "The host is a Rust program. It walks the program's packages off disk (or offers them by hand), composes **one run** fluently, binds native function **bodies** to declared **surfaces**, and drives rut entry points. One value flows end to end: **`Pkg` → `RutRun` → `Compiled` → `Vm`**. Compiling and type-checking rut code never requires any Rust: surfaces are declared in rut source ([host fns and declaration files](host-fns.md)), and the boot join proves every referenced native member has a bound, signature-equal implementation before the first instruction runs."
@@ -18212,7 +17858,7 @@ msgstr ""
 "// re-entrant rut calls are legal here (see \"Native fn rules\")\n"
 
 
-#: src/reference/embedding.md:88 src/reference/host-fns.md:170
+#: src/reference/embedding.md:88 src/reference/host-fns.md:167
 msgid "/* ..offers.. */"
 msgstr ""
 
@@ -19996,7 +19642,7 @@ msgid "bound at link against"
 msgstr "链接时对照什么绑定"
 
 
-#: src/reference/host-fns.md:7 src/reference/host-fns.md:145
+#: src/reference/host-fns.md:7 src/reference/host-fns.md:142
 msgid "`host fn` / `host struct`"
 msgstr "`host fn` / `host struct`"
 
@@ -20011,7 +19657,7 @@ msgid "the load-time contract (below)"
 msgstr "加载期契约（见下）"
 
 
-#: src/reference/host-fns.md:8 src/reference/host-fns.md:146
+#: src/reference/host-fns.md:8 src/reference/host-fns.md:143
 msgid "`prelude builtin` / `pub builtin` rows"
 msgstr "`prelude builtin` / `pub builtin` 行"
 
@@ -20200,232 +19846,225 @@ msgstr ""
 "**`opaque` 包装原生状态；没有宿主类。**rut 把句柄包装在自己的类里——包装类模式（[原生容器 API 表面](native-containers.md)）。析构器依然确定性地运行：当一个盒的 rc 降到 0，先运行载荷的 finalize 钩子，然后是 Rust `Drop`（[Rc 堆](rc-heap.md)）。"
 
 
-#: src/reference/host-fns.md:129
-msgid ""
-"**Workers**: an `opaque` box crosses isolates only if the host registered the boxed type as `send` — checked at the transfer, by type ([workers and channels](workers-and-channels.md))."
-msgstr ""
-"**worker**：`opaque` 盒只有在宿主把被装盒的类型注册为 `send` 时才能跨越隔离体——在转移时按类型检查（[worker 与通道](workers-and-channels.md)）。"
-
-
-#: src/reference/host-fns.md:133 src/reference/frontend.md:158
+#: src/reference/host-fns.md:130 src/reference/frontend.md:158
 #: src/reference/cli.md:161
 msgid "Declaration mode"
 msgstr "声明模式"
 
 
-#: src/reference/host-fns.md:135
+#: src/reference/host-fns.md:132
 msgid ""
 "A `.d.rut` is parsed in **declaration mode**: declarations only, each complete as a surface."
 msgstr "`.d.rut` 以**声明模式**解析：只有声明，每个声明都自身完整地成为一个表面。"
 
 
-#: src/reference/host-fns.md:138
+#: src/reference/host-fns.md:135
 msgid "allowed"
 msgstr "允许"
 
 
-#: src/reference/host-fns.md:138 src/reference/stdlib.md:86
+#: src/reference/host-fns.md:135 src/reference/stdlib.md:86
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr "说明"
 
 
-#: src/reference/host-fns.md:140
+#: src/reference/host-fns.md:137
 msgid "`use` / `pub`"
 msgstr "`use` / `pub`"
 
 
-#: src/reference/host-fns.md:140
+#: src/reference/host-fns.md:137
 msgid ""
 "visibility exactly as in a module; non-exported decls are known inside the file, nameable nowhere else"
 msgstr "可见性与模块中完全一致；未导出的声明在文件内可知，在其他任何地方都不可提名"
 
 
-#: src/reference/host-fns.md:141
+#: src/reference/host-fns.md:138
 msgid "with load-time constant initializers"
 msgstr "带加载期常量初始化器"
 
 
-#: src/reference/host-fns.md:142
+#: src/reference/host-fns.md:139
 msgid "the member list is the whole definition"
 msgstr "成员列表就是全部定义"
 
 
-#: src/reference/host-fns.md:143
+#: src/reference/host-fns.md:140
 msgid ""
 "member signatures are the whole definition — signatures-only fits the surface model"
 msgstr ""
 
 
-#: src/reference/host-fns.md:144
+#: src/reference/host-fns.md:141
 msgid "fields only, with load-time initializers"
 msgstr "只有字段，带加载期初始化器"
 
 
-#: src/reference/host-fns.md:145
+#: src/reference/host-fns.md:142
 msgid "signatures only, concrete over the crossing set"
 msgstr "只有签名，在跨越集上是具体的"
 
 
-#: src/reference/host-fns.md:146
+#: src/reference/host-fns.md:143
 msgid "toolchain decl files only — the two spellings above"
 msgstr "仅限工具链的声明文件——上面的两种拼写"
 
 
-#: src/reference/host-fns.md:148
+#: src/reference/host-fns.md:145
 msgid ""
 "Forbidden — the parser errors _\"implementation in a declaration file\"_: any fn/class body, statements. Symmetrically, a `.rut` file that spells `host` errors _\"belongs in a `.d.rut`\"_."
 msgstr ""
 "禁止——解析器报错 _\"implementation in a declaration file\"_：任何 fn/类函数体、语句都是。对称地，写出 `host` 的 `.rut` 文件会报错 _\"belongs in a `.d.rut`\"_。"
 
 
-#: src/reference/host-fns.md:152
+#: src/reference/host-fns.md:149
 msgid "Signatures are derived, not hand-written"
 msgstr "签名是推导的，不是手写的"
 
 
-#: src/reference/host-fns.md:154
+#: src/reference/host-fns.md:151
 msgid ""
 "The registered callable's Rust shape **is** the `.d.rut` row. The **installer lane** is a `HostPkg` builder per pkg — rows under bare names, the scope (the pkg's name) spelled once — handed to the chain with `.host_pkg(..)`:"
 msgstr ""
 "可调用者的 Rust 形状**就是** `.d.rut` 那一行。**安装车道**是每个包一个 `HostPkg` 构建器 —— 行用裸名，作用域（包名）只拼一次 —— 用 `.host_pkg(..)` 递给链："
 
 
-#: src/reference/host-fns.md:160
+#: src/reference/host-fns.md:157
 msgid ""
 "// one builder per host pkg; the scope string appears exactly once\n"
 msgstr ""
 
 
-#: src/reference/host-fns.md:162
+#: src/reference/host-fns.md:159
 msgid "\"make\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:166
+#: src/reference/host-fns.md:163
 msgid ""
 "// the built pkg rides the run chain; .compile() installs it against\n"
 "// the offered rows snapshot\n"
 msgstr ""
 
 
-#: src/reference/host-fns.md:176
+#: src/reference/host-fns.md:173
 msgid ""
 "`pkg_async_fn!` is the async twin: one row spelling emits the five-row family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap), the same expansion the ctx declares. The raw macros — `register!` / `register_async!` on the bare registry (see [embedding and native modules](embedding.md)) — remain the escape hatch (hand-spelled `<scope>::<name>` strings, the flat table's own responsibility); everything above them is the same derived-signature machinery:"
 msgstr ""
 "`pkg_async_fn!` 是异步孪生：一次行拼写发射五行家族（`__start`/`__yield`/`__take`/`__cancel` + 声明行陷阱），与 ctx 声明的展开相同。原生宏——裸注册表上的 `register!` / `register_async!`（见[嵌入与原生模块](embedding.md)）——仍是逃生口（手写 `<scope>::<name>` 字符串，扁平表自己负责）；它们之上的一切都是同一套派生签名机制："
 
 
-#: src/reference/host-fns.md:188
+#: src/reference/host-fns.md:185
 msgid "\"server::make\""
 msgstr "\"server::make\""
 
 
-#: src/reference/host-fns.md:192
+#: src/reference/host-fns.md:189
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's parameter and return types; a param type with no crossing impl is a **compile error at the register site**."
 msgstr "签名是从闭包的参数与返回类型推导出的一个固定类型 id 数组；没有跨越 impl 的参数类型是**注册点的编译错误**。"
 
 
-#: src/reference/host-fns.md:195
+#: src/reference/host-fns.md:192
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` (fallible). Errors travel an explicit trap channel — a trapped body propagates as `Err(Trap)` with a rut backtrace ([embedding and native modules](embedding.md))."
 msgstr ""
 "两种函数体形状都适用：`-> R`（不会失败）与 `-> Result<R, Trap>`（可能失败）。错误走一条显式的陷阱通道——被陷阱打断的函数体以 `Err(Trap)` 连同 rut 回溯传播（[嵌入与原生模块](embedding.md)）。"
 
 
-#: src/reference/host-fns.md:199
+#: src/reference/host-fns.md:196
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call ([value boundary](value-boundary.md))."
 msgstr "`&str` / `&[u8]` 参数是以恰好这一次调用为作用域的零复制借用（[值边界](value-boundary.md)）。"
 
 
-#: src/reference/host-fns.md:201
+#: src/reference/host-fns.md:198
 msgid ""
 "One installer per pkg: a duplicate row name inside a builder panics, a second `.host_pkg(..)` for the same scope panics (at the `.compile()` install), and a pkg cannot spell another pkg's rows — the scope comes solely from `HostPkg::new`."
 msgstr ""
 "每个包一个安装者：构建器内重复的行名会 panic，同一作用域的第二个 `.host_pkg(..)` 会 panic（在 `.compile()` 安装时），且一个包不能拼写别的包的行 —— 作用域只来自 `HostPkg::new`。"
 
 
-#: src/reference/host-fns.md:207
+#: src/reference/host-fns.md:204
 msgid "The load-time contract — asymmetric, by design"
 msgstr "加载期契约——非对称，有意为之"
 
 
-#: src/reference/host-fns.md:209
+#: src/reference/host-fns.md:206
 msgid ""
 "Offering a host pkg **declares**; the embedding Rust **binds**. The `.compile()` install checks the two sides against each other, per pkg, against the offered rows snapshot (`rut_driver::host_pkg_ctx(pkgs)` — the same snapshot exposed for hosts that bind outside the chain):"
 msgstr ""
 "offer 宿主包即是**声明**；嵌入的 Rust 负责**绑定**。`.compile()` 的安装按包、对着 offer 的行快照互相检查两侧（`rut_driver::host_pkg_ctx(pkgs)` —— 同一快照也暴露给在链外绑定的宿主）："
 
 
-#: src/reference/host-fns.md:215
+#: src/reference/host-fns.md:212
 msgid ""
 "**scope offered, a declared row never bound** — a panic naming the pkg (the installer left it out), and `.build()` refuses a boot naming it again when the installer never ran at all;"
 msgstr "**作用域已 offer，声明行从未绑定** —— panic 并指名包（安装者漏了它）；安装者压根没跑时，`.build()` 拒绝启动并再次指名；"
 
 
-#: src/reference/host-fns.md:218
+#: src/reference/host-fns.md:215
 msgid ""
 "**signature drift** on a declared row — a panic; this is the only drift gate on the boot path;"
 msgstr "**已声明行上的签名漂移**——panic；这是启动路径上唯一的漂移门；"
 
 
-#: src/reference/host-fns.md:220
+#: src/reference/host-fns.md:217
 msgid ""
 "**scope NOT offered** — the whole pkg merges **inert**: no panic, no gate. Blanket installs are legal (the CLI installs all of them; a program that offers a subset carries the rest as dead bindings), and rows the decl does not name ride as inert extras."
 msgstr ""
 "**作用域未 offer** —— 整个包**惰性**合并：不 panic、无门。全量安装合法（CLI 全都安装；只 offer 子集的程序把其余当作死绑定携带），decl 未点名的行作为惰性附加物搭载。"
 
 
-#: src/reference/host-fns.md:225
+#: src/reference/host-fns.md:222
 msgid ""
 "The raw lane's `verify_against(&rut_driver::declared_host_fns(&pkgs))` re-checks the whole flat table and panics on all three mismatch classes:"
 msgstr ""
 "裸车道的 `verify_against(&rut_driver::declared_host_fns(&pkgs))` 重查整张平表，对全部三类不匹配 panic："
 
 
-#: src/reference/host-fns.md:229
+#: src/reference/host-fns.md:226
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr "**已声明未绑定**——rut 调用会在运行中途触发陷阱；"
 
 
-#: src/reference/host-fns.md:230
+#: src/reference/host-fns.md:227
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr "**已绑定未声明**——没有任何表面声明宿主安装的东西；"
 
 
-#: src/reference/host-fns.md:231
+#: src/reference/host-fns.md:228
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding took `(opaque, i64, str)`."
 msgstr "**签名漂移**——声明写的是 `(opaque, str, str) -> nil`，绑定收的却是 `(opaque, i64, str)`。"
 
 
-#: src/reference/host-fns.md:234
+#: src/reference/host-fns.md:231
 msgid ""
 "The law follows the offer: **offer what you bind** — with the asymmetry the offer law needs: rut-declares-but-host-never-binds is loud; host-binds-but-rut-never-declares rides inert."
 msgstr ""
 "法则随 offer 而来：**绑定什么就 offer 什么** —— 带着 offer 法则需要的非对称性：rut 声明而宿主从不绑定是大声的；宿主绑定而 rut 从不声明则惰性搭载。"
 
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:235
 msgid "Slots, not strings"
 msgstr "槽位，而不是字符串"
 
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:237
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in declaration order; the module binary carries the slot table. Calls compile to `callnat { slot }` — names are binding-time labels, resolved once at boot, never dispatch keys, never in IR. A typo'd binding is a startup error, never a runtime one. IR cannot inline into native bodies; if a body should be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 "编译声明文件会按声明顺序给每个宿主函数分配一个**稳定槽位 id**；模块二进制携带槽位表。调用编译成 `callnat { slot }`——名字是绑定期的标签，启动时解析一次，绝不是分派键，也绝不出现在 IR 里。拼错的绑定是启动错误，绝不是运行时错误。IR 不能内联进原生函数体；如果某个函数体应当是可优化的，那它就该是 rut 源码——包装类正是那个地方。"
 
 
-#: src/reference/host-fns.md:248
+#: src/reference/host-fns.md:245
 msgid "Async host fns"
 msgstr "异步宿主函数"
 
 
-#: src/reference/host-fns.md:250
+#: src/reference/host-fns.md:247
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -20440,39 +20079,39 @@ msgstr ""
 "```"
 
 
-#: src/reference/host-fns.md:256
+#: src/reference/host-fns.md:253
 msgid ""
 "The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row names are bare and the scope prefixes at the install:"
 msgstr "嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上行名是裸名，作用域在安装时加前缀："
 
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:258
 msgid "\"http_host\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:262
+#: src/reference/host-fns.md:259
 msgid "\"http_send\""
 msgstr ""
 
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:273
 msgid "/* optional abort hook: */"
 msgstr "/* optional abort hook: */"
 
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:273
 msgid "/* best-effort cancel */"
 msgstr "/* best-effort cancel */"
 
 
-#: src/reference/host-fns.md:277
+#: src/reference/host-fns.md:274
 msgid ""
 "// the built pkg rides the chain: RutRun::new()...host_pkg(http.build())\n"
 msgstr ""
 
 
-#: src/reference/host-fns.md:279
+#: src/reference/host-fns.md:276
 msgid ""
 "// the raw lane (bare registry, full `scope::name` strings) — the\n"
 "// escape hatch, same emitter:\n"
@@ -20480,19 +20119,19 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/host-fns.md:285
+#: src/reference/host-fns.md:282
 msgid ""
 "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw twin `register_async!(hosts, …)`) emits the family the compiler's weave joins:"
 msgstr ""
 "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])`（及其原生孪生 `register_async!(hosts, …)`）发射编译器织入所连接的家族："
 
 
-#: src/reference/host-fns.md:289
+#: src/reference/host-fns.md:286
 msgid "emitted row"
 msgstr "生成行"
 
 
-#: src/reference/host-fns.md:289 src/reference/stdlib.md:36
+#: src/reference/host-fns.md:286 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:167 src/reference/stdlib.md:216
 #: src/reference/stdlib.md:383 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:43 src/reference/cli.md:172
@@ -20500,210 +20139,210 @@ msgid "meaning"
 msgstr "含义"
 
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:288
 msgid "`<name>`"
 msgstr "`<name>`"
 
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:288
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future at the call site"
 msgstr "声明行本身；直接调用它触发陷阱——织入在调用点铸造 future"
 
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:289
 msgid "`<name>__start(P…) -> opaque`"
 msgstr "`<name>__start(P…) -> opaque`"
 
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:289
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr "运行闭包，把 `Completer` 装盒作为 future 的状态单元"
 
 
-#: src/reference/host-fns.md:293
+#: src/reference/host-fns.md:290
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr "`<name>__yield(state, cx) -> i32`"
 
 
-#: src/reference/host-fns.md:293
+#: src/reference/host-fns.md:290
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr "恢复探针：`0` pending，`1` ready，`2` failed"
 
 
-#: src/reference/host-fns.md:294
+#: src/reference/host-fns.md:291
 msgid "`<name>__take(state) -> R`"
 msgstr "`<name>__take(state) -> R`"
 
 
-#: src/reference/host-fns.md:294
+#: src/reference/host-fns.md:291
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr "把答案编组到 VM 线程上；已失败的 completer 在这里触发陷阱"
 
 
-#: src/reference/host-fns.md:295
+#: src/reference/host-fns.md:292
 msgid "`<name>__cancel(state)`"
 msgstr "`<name>__cancel(state)`"
 
 
-#: src/reference/host-fns.md:295
+#: src/reference/host-fns.md:292
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr "给定了 abort 钩子时就是它；否则是明示的空操作"
 
 
-#: src/reference/host-fns.md:297
+#: src/reference/host-fns.md:294
 msgid "`Completer<T>` API"
 msgstr "`Completer<T>` API"
 
 
-#: src/reference/host-fns.md:299
+#: src/reference/host-fns.md:296
 msgid "`Completer::new()`"
 msgstr "`Completer::new()`"
 
 
-#: src/reference/host-fns.md:299
+#: src/reference/host-fns.md:296
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr "一个新单元；`clone()` 共享它（一个 `Arc`）"
 
 
-#: src/reference/host-fns.md:300
+#: src/reference/host-fns.md:297
 msgid "`complete(v)` / `fail(msg)`"
 msgstr "`complete(v)` / `fail(msg)`"
 
 
-#: src/reference/host-fns.md:300
+#: src/reference/host-fns.md:297
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr "从**任意线程**落定（只用原子量 + 互斥锁）"
 
 
-#: src/reference/host-fns.md:301
+#: src/reference/host-fns.md:298
 msgid "`poll() -> i32`"
 msgstr "`poll() -> i32`"
 
 
-#: src/reference/host-fns.md:301
+#: src/reference/host-fns.md:298
 msgid "the driving loop's probe"
 msgstr "驱动循环的探针"
 
 
-#: src/reference/host-fns.md:302
+#: src/reference/host-fns.md:299
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr "`take_result() -> Result<T, Trap>`"
 
 
-#: src/reference/host-fns.md:302
+#: src/reference/host-fns.md:299
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr "仅限 VM 线程；`fail` 消息成为 `await` 处的陷阱"
 
 
-#: src/reference/host-fns.md:304
+#: src/reference/host-fns.md:301
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. Cancellation is best-effort — a worker runs to its blocking completion and the late answer is discarded. See [the host futures bridge](host-futures.md) and [async and await](async.md)."
 msgstr ""
 "线程法则：VM 保持单线程；worker 只触碰 completer。取消是尽力而为的——worker 跑到它的阻塞式完成，迟到的答案被丢弃。见[宿主 future 桥](host-futures.md)与[异步与 await](async.md)。"
 
 
-#: src/reference/host-fns.md:309
+#: src/reference/host-fns.md:306
 msgid "Declaration files as artifacts"
 msgstr "作为产物的声明文件"
 
 
-#: src/reference/host-fns.md:311
+#: src/reference/host-fns.md:308
 msgid "A published package ships:"
 msgstr "已发布的包交付："
 
 
-#: src/reference/host-fns.md:313
+#: src/reference/host-fns.md:310
 msgid "artifact"
 msgstr "产物"
 
 
-#: src/reference/host-fns.md:313 src/reference/symbol-stripping.md:26
+#: src/reference/host-fns.md:310 src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr "角色"
 
 
-#: src/reference/host-fns.md:315
+#: src/reference/host-fns.md:312
 msgid "`mod.rutc`"
 msgstr "`mod.rutc`"
 
 
-#: src/reference/host-fns.md:315
+#: src/reference/host-fns.md:312
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module binary and verification](module-binary.md))"
 msgstr "编译好的模块二进制：函数体 + 表面，链接的真相（[模块二进制与验证](module-binary.md)）"
 
 
-#: src/reference/host-fns.md:316
+#: src/reference/host-fns.md:313
 msgid "`mod.d.rut`"
 msgstr "`mod.d.rut`"
 
 
-#: src/reference/host-fns.md:316
+#: src/reference/host-fns.md:313
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); documentation only, never the loader's source of truth"
 msgstr "表面文本——手写、可编辑、可发布（面向人类与 LSP）；仅作文档，绝不是加载器的真相来源"
 
 
-#: src/reference/host-fns.md:318
+#: src/reference/host-fns.md:315
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, interface-table indices, and namespace/host rows are not derivable from text without guesswork."
 msgstr ""
 
 
-#: src/reference/host-fns.md:322
+#: src/reference/host-fns.md:319
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table — a pure data compare. Drift is a load error naming both modules, never a runtime surprise."
 msgstr "链接把使用方绑定到的表面与二进制的导出表做比较——一次纯粹的数据比对。漂移是点出两个模块的加载错误，绝不会是运行时的惊吓。"
 
 
-#: src/reference/host-fns.md:325
+#: src/reference/host-fns.md:322
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are stripped (`--release` drops member-name strings), but code is recoverable with effort. What publishing guarantees is API discipline."
 msgstr "发布不是加密：函数体被编译、本地名字被剥离（`--release` 丢弃成员名字符串），但花力气仍可复原代码。发布所保证的是 API 纪律。"
 
 
-#: src/reference/host-fns.md:329
+#: src/reference/host-fns.md:326
 msgid "Surface resolution during compilation"
 msgstr "编译期间的表面解析"
 
 
-#: src/reference/host-fns.md:331
+#: src/reference/host-fns.md:328
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first hit wins:"
 msgstr "当模块 `M` 使用包 `p` 时，编译器解析 `p` 的表面，先命中者胜："
 
 
-#: src/reference/host-fns.md:334
+#: src/reference/host-fns.md:331
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr "**source**——源码路径上 `p` 的 rut 源码：正常编译它；"
 
 
-#: src/reference/host-fns.md:335
+#: src/reference/host-fns.md:332
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface on the wire) — or its bundled source for a splice-needed group; explicit mounts outrank stray sources, never dev source;"
 msgstr ""
 "**捆绑包**——一个已挂载的 `.rutbundle`：它编译好的 `.rutc`（函数体 + 线上的表面）——需要拼接的组则是它随包的源码；显式挂载压过散落的源码，但绝不压过开发源码；"
 
 
-#: src/reference/host-fns.md:338
+#: src/reference/host-fns.md:335
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside the registered implementation."
 msgstr "**host registry**——对宿主包而言，嵌入方随注册实现一起交付的那份 `.d.rut`。"
 
 
-#: src/reference/host-fns.md:341
+#: src/reference/host-fns.md:338
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose implementation is absent is legal and complete — checking passes; only running requires the bodies."
 msgstr "函数体只在链接/运行时解析。针对一个实现缺席的包编译 `M` 是合法且完整的——检查通过；只有运行才需要函数体。"
 
 
-#: src/reference/host-fns.md:345
+#: src/reference/host-fns.md:342
 msgid "End-to-end shape"
 msgstr "端到端形状"
 
 
-#: src/reference/host-fns.md:347
+#: src/reference/host-fns.md:344
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds `server::subscribe`/`server::emit` over its own `EventBus` box, the plugin subscribes rut export names per topic, and every `emit` re-enters rut to format the wire line — see [03 — Plugin](../examples/03-plugin.md). For a full application host with mounted std packages and an async entry, see [06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md)."
 msgstr ""
@@ -21021,6 +20660,11 @@ msgstr "普通的脱糖为拼接——热路径上零新增开销，输出与普
 
 
 #: src/reference/templates.md:20
+msgid "`Template`"
+msgstr "`Template`"
+
+
+#: src/reference/templates.md:20
 msgid ""
 "the literal compiles to a **template construction**: literal chunks and boxed values, not pre-rendered text"
 msgstr "字面量编译成一次**模板构建**：字面量块与装盒的值，而不是预先渲染好的文本"
@@ -21192,9 +20836,8 @@ msgstr "实参由模板的盒所保留；模板像任何单元一样让它的实
 
 #: src/reference/templates.md:100
 msgid ""
-"A `Template` crosses the host boundary, and crosses isolate channels like any builtin ([workers and channels](workers-and-channels.md)) — a worker may return one where the main VM expects `Template`."
-msgstr ""
-"`Template` 可以跨越宿主边界，也像任何内建类型一样跨越隔离体通道（[worker 与通道](workers-and-channels.md)）——在主 VM 期望 `Template` 的地方，worker 可以返回一个。"
+"A `Template` crosses the host boundary like any builtin — a host fn may return one where the VM expects `Template`."
+msgstr "`Template` 可以像任何内建类型一样跨越宿主边界——在 VM 期望 `Template` 的地方，宿主函数可以返回一个。"
 
 
 #: src/reference/stdlib.md:3
@@ -23936,6 +23579,11 @@ msgstr "两个读回 + 它们的守卫"
 
 
 #: src/reference/typed-bytecode.md:93
+msgid "closures"
+msgstr "闭包"
+
+
+#: src/reference/typed-bytecode.md:93
 msgid "`MakeClosure`"
 msgstr "`MakeClosure`"
 
@@ -25015,201 +24663,201 @@ msgstr ""
 
 #: src/reference/vm-core.md:26
 msgid ""
-"A `Vm` is single-threaded by construction: workers are separate VMs ([Workers and channels](workers-and-channels.md)). Saved frames are plain records `{ func, pc, regs, ret_dst }`; calls push, returns pop. Register files are recycled through a pool, and per-function side tables (reference-typed register indices, per-type field layouts, baked type representations) keep the hot loop free of type-table lookups."
+"A `Vm` is single-threaded by construction. Saved frames are plain records `{ func, pc, regs, ret_dst }`; calls push, returns pop. Register files are recycled through a pool, and per-function side tables (reference-typed register indices, per-type field layouts, baked type representations) keep the hot loop free of type-table lookups."
 msgstr ""
-"`Vm` 从构造上就是单线程的：worker 是独立的 VM（[worker 与通道](workers-and-channels.md)）。保存的帧是普通记录 `{ func, pc, regs, ret_dst }`；调用压入，返回弹出。寄存器文件经由一个池回收，而每函数旁表（引用型寄存器索引、每类型字段布局、烘焙好的类型表示）让热循环无需查询类型表。"
+"`Vm` 从构造上就是单线程的。保存的帧是普通记录 `{ func, pc, regs, ret_dst }`；调用压入，返回弹出。寄存器文件经由一个池回收，而每函数旁表（引用型寄存器索引、每类型字段布局、烘焙好的类型表示）让热循环无需查询类型表。"
 
 
-#: src/reference/vm-core.md:33
+#: src/reference/vm-core.md:32
 msgid "The interpreter loop"
 msgstr "解释器循环"
 
 
-#: src/reference/vm-core.md:35
+#: src/reference/vm-core.md:34
 msgid ""
 "The loop is a `match` over decoded ops — `decode` is a table index, not a byte scan. On native targets the default engine is a **threaded** dispatcher (`rut-vm-threaded`): every op ends by tail-calling the next op's handler, so dispatch is a jump and hot state stays in registers. A portable loop over the same handler methods backs wasm and other targets; behavior is identical, only the dispatch shape differs. Ops the threaded engine does not absorb _bail_ to the match interpreter with the pc pinned at the op."
 msgstr ""
 "循环是对解码后操作的 `match`——`decode` 是一次表索引，不是字节扫描。在原生目标上，默认引擎是一个**线程化**分派器（`rut-vm-threaded`）：每个操作以尾调用下一个操作的处理例程收尾，因此分派就是一次跳转，热状态留在寄存器里。一个对相同处理例程方法的可移植循环支撑 wasm 及其他目标；行为完全一致，只有分派形状不同。线程化引擎吸收不了的操作会_退回_ match 解释器，pc 钉在该操作上。"
 
 
-#: src/reference/vm-core.md:44
+#: src/reference/vm-core.md:43
 msgid ""
 "Direct calls are an index + jump; interface (itable) calls are two loads (itable row) + an indirect jump."
 msgstr ""
 
 
-#: src/reference/vm-core.md:46
+#: src/reference/vm-core.md:45
 msgid ""
 "Refcount retain/release are inline in the loop; a release to zero nulls the weak list, queues the type's `dispose` body (the `[disposal]` contract), and frees ([The Rc heap and destructors](rc-heap.md))."
 msgstr ""
 
 
-#: src/reference/vm-core.md:50
+#: src/reference/vm-core.md:49
 msgid ""
 "Fuel is accounted per op, with the fuller budget check amortized every `interrupt_every` ops."
 msgstr "燃料按操作记账，更完整的预算检查每 `interrupt_every` 个操作摊销一次。"
 
 
-#: src/reference/vm-core.md:55
+#: src/reference/vm-core.md:54
 msgid ""
 "The embedder's host-fn binding table (`HostRegistry`) is built **before** the `Vm` exists and is consumed at construction: every host thunk the program declares is resolved against the registry immediately, so a declared-but-unbound host fn is a _construction error_, never a mid-run trap. The join produces one dense dispatch row per function — an adapter code pointer, the body's state word, the declared return type, and its is-reference verdict — so calling a host fn costs one table copy, no name work, no allocation."
 msgstr ""
 "嵌入方的宿主函数绑定表（`HostRegistry`）在 `Vm` 存在**之前**构建，并在构造时被消费：程序声明的每个宿主 thunk 都立即对照注册表解析，因此声明了却未绑定的宿主函数是一个_构造错误_，绝不是运行中途的陷阱。这次 join 为每个函数产出一条稠密的分派行——一个适配器代码指针、函数体的状态字、声明的返回类型及其是否引用的判定——因此调用一个宿主函数的代价是一次表复制，没有名字工作，没有分配。"
 
 
-#: src/reference/vm-core.md:64
+#: src/reference/vm-core.md:63
 msgid ""
 "Host bodies are plain Rust functions over `&mut Vm` and slots; arity is capped at 8 (the boundary's tuple law), and signatures are derived from the body's Rust shape, not written by hand."
 msgstr ""
 "宿主函数体是架在 `&mut Vm` 与槽位之上的普通 Rust 函数；元数上限 8（边界的元组法则），签名从函数体的 Rust 形状推导，不是手写的。"
 
 
-#: src/reference/vm-core.md:67
+#: src/reference/vm-core.md:66
 msgid ""
 "A host body records a trap in a VM-side channel rather than returning `Result`; the trap fires before any destination register is written."
 msgstr "宿主函数体把陷阱记录在一个 VM 侧通道里，而不是返回 `Result`；陷阱在任何目的寄存器被写入之前触发。"
 
 
-#: src/reference/vm-core.md:69
+#: src/reference/vm-core.md:68
 msgid ""
 "**Re-entrant calls** (a host fn calling back into rut) run the callee on a fresh frame stack under the same budget. The outer cursor is stash/restore: on return or trap the outer frame is exactly as it was, so a propagated nested trap parks the outer frame _at the host op_ and `resume()` re-runs the host fn. A host fn that prefers to handle the situation itself can catch the trap, add fuel, and retry its nested call."
 msgstr ""
 "**重入调用**（宿主函数回调进 rut）在同一个预算下、用一摞全新的帧栈运行被调用者。外层游标是暂存/恢复式的：返回或陷阱时，外层帧与原先完全一致，因此传播上来的嵌套陷阱会把外层帧停放在_宿主操作处_，`resume()` 会重新运行宿主函数。愿意自行处置局面的宿主函数可以捕获陷阱、补充燃料，然后重试它的嵌套调用。"
 
 
-#: src/reference/vm-core.md:76
+#: src/reference/vm-core.md:75
 msgid ""
 "The async host-fn lane (`register_async!`) binds a Rust async body to the minted `{scope}::{name}__start/__yield/__take/__cancel` rows the compiler weaves for `host async fn` declarations ([The host futures bridge](host-futures.md))."
 msgstr ""
 "异步宿主函数链路（`register_async!`）把一个 Rust async 函数体绑定到编译器为 `host async fn` 声明织出的 `{scope}::{name}__start/__yield/__take/__cancel` 铸造行上（[宿主 future 桥](host-futures.md)）。"
 
 
-#: src/reference/vm-core.md:81
+#: src/reference/vm-core.md:80
 msgid "Traps"
 msgstr "陷阱"
 
 
-#: src/reference/vm-core.md:83
+#: src/reference/vm-core.md:82
 msgid ""
 "Bugs are traps, errors are values. Arithmetic overflow, division by zero, indexing out of bounds, nil dereference, `panic(...)`, a failed downcast guard, and budget exhaustion all unwind as `Err(Trap)` — never a Rust panic:"
 msgstr ""
 "bug 是陷阱，错误是值。算术溢出、除以零、越界索引、nil 解引用、`panic(...)`、失败的向下转型守卫以及预算耗尽，全都以 `Err(Trap)` 的形式展开——绝不是 Rust panic："
 
 
-#: src/reference/vm-core.md:98
+#: src/reference/vm-core.md:97
 msgid ""
 "**Traps are catchable only at the host boundary.** `vm.call(...)` returns `Result`; rut code never catches one — errors in rut are `(T, err)` tuples ([Errors and optionality](../tutorial/errors.md)). On the way out, frames are dropped and destructors run: `dispose` bodies fire, borrow guards release. The `Vm` itself survives a trap — the next call starts clean."
 msgstr ""
 "**陷阱只在宿主边界可捕获。**`vm.call(...)` 返回 `Result`；rut 代码从不捕获陷阱——rut 里的错误是 `(T, err)` 元组（[错误与可空性](../tutorial/errors.md)）。在出去的路上，帧被丢弃、析构器运行：`dispose` 函数体被触发，借用守卫释放。`Vm` 本身能在陷阱后幸存——下一次调用干净地开始。"
 
 
-#: src/reference/vm-core.md:109
+#: src/reference/vm-core.md:108
 msgid ""
 "// per-op countdown\n"
 msgstr ""
 "// per-op countdown\n"
 
 
-#: src/reference/vm-core.md:111
+#: src/reference/vm-core.md:110
 msgid ""
 "// default 1024\n"
 msgstr ""
 "// default 1024\n"
 
 
-#: src/reference/vm-core.md:115
+#: src/reference/vm-core.md:114
 msgid ""
 "**Fuel** counts ops down. Exhaustion parks the frame at its pc — the loop state _is_ the frame — so `add_fuel(n)` + `resume()` continues it; nothing is lost or restarted. Loop back-edges carry `LoopHead` markers so tight loops still park."
 msgstr ""
 "**燃料**按操作倒数。耗尽会把帧停放在它的 pc——循环状态_就是_帧——因此 `add_fuel(n)` + `resume()` 能继续它；没有任何东西丢失或重启。循环回边携带 `LoopHead` 标记，因此紧凑循环也能停放。"
 
 
-#: src/reference/vm-core.md:119
+#: src/reference/vm-core.md:118
 msgid ""
 "**Heap budget** is checked at every allocation; over-limit allocation traps `OutOfMemory` the same parkable way."
 msgstr "**堆预算**在每次分配时检查；超限的分配以同样可停放的方式触发 `OutOfMemory` 陷阱。"
 
 
-#: src/reference/vm-core.md:121
+#: src/reference/vm-core.md:120
 msgid ""
 "**Heap accounting** is live: `heap_usage()` reports current bytes, `fuel_used` accumulates across resumes."
 msgstr "**堆记账**是实时的：`heap_usage()` 报告当前字节数，`fuel_used` 跨恢复累计。"
 
 
-#: src/reference/vm-core.md:123
+#: src/reference/vm-core.md:122
 msgid ""
 "**Interrupts** are cooperative: the budget check cadence bounds how long any host-requested stop can take. Native (host) bodies run outside the fuel budget and are expected to be fast."
 msgstr "**中断**是协作式的：预算检查的节奏为任何宿主请求的停止所需的时间设了上界。原生（宿主）函数体在燃料预算之外运行，并被期望是快的。"
 
 
-#: src/reference/vm-core.md:126
+#: src/reference/vm-core.md:125
 msgid ""
 "`Vm::builder().compiled(c).limits(l).build()` takes the limits (`.limits(..)` on the builder, or the parts a `Compiled` hands over); unset limits mean unbounded fuel and heap — embedders that need budgets pass them explicitly ([Resource limits and fuel](resource-limits.md))."
 msgstr ""
 
 
-#: src/reference/vm-core.md:132
+#: src/reference/vm-core.md:131
 msgid "Coroutines and the driving loop"
 msgstr "协程与驱动循环"
 
 
-#: src/reference/vm-core.md:134
+#: src/reference/vm-core.md:133
 msgid ""
 "Every async entry runs as a root frame, parked when `await` returns pending. There is no microtask queue and no job executor — two queues and a virtual clock:"
 msgstr "每个异步入口都作为一个根帧运行，在 `await` 返回 pending 时停放。没有微任务队列，也没有作业执行器——只有两条队列和一个虚拟时钟："
 
 
-#: src/reference/vm-core.md:138
+#: src/reference/vm-core.md:137
 msgid ""
 "`ready: VecDeque<Slot>` — launched or woken frames; each entry owns one reference (retained on enqueue, released on pop)."
 msgstr "`ready: VecDeque<Slot>`——已启动或已唤醒的帧；每个条目持有一个引用（入队时保留，出队时释放）。"
 
 
-#: src/reference/vm-core.md:140
+#: src/reference/vm-core.md:139
 msgid ""
 "`timers: BTreeMap<u64, Vec<Slot>>` — sleep deadlines against the VM's **virtual clock** (`now_ms` / `set_now` — deterministic; the host advances it explicitly, or maps it to wall time)."
 msgstr ""
 "`timers: BTreeMap<u64, Vec<Slot>>`——对照 VM **虚拟时钟**的 sleep 期限（`now_ms` / `set_now`——确定性的；宿主显式推进它，或把它映射到墙上时间）。"
 
 
-#: src/reference/vm-core.md:143
+#: src/reference/vm-core.md:142
 msgid ""
 "`drive(fut)` — one drive step through the future's designated yield slot (the `Future<T>` class's engine ABI): a fresh engine context over the frame edge, answering `Done` or `Parked` off the frame's state field. Fuel accounting rides the per-op budget unchanged: an exhausted drive parks the frame at its pc, and a re-drive re-enters at the checkpoint state."
 msgstr ""
 
 
-#: src/reference/vm-core.md:149
+#: src/reference/vm-core.md:148
 msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` expires due timers into `ready` and answers the earliest remaining deadline; `pending_tasks()` is the idle test."
 msgstr ""
 "`run_ready()` 排空就绪队列，每个条目驱动一次；`next_deadline()` 把到期定时器过期进 `ready` 并应答剩余的最早期限；`pending_tasks()` 是空闲判据。"
 
 
-#: src/reference/vm-core.md:152
+#: src/reference/vm-core.md:151
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr "唤醒对（被 await 帧上的 awaiter 边、awaiter 上的 pending 边）是单向的，并在恢复时清除——不会成环。"
 
 
-#: src/reference/vm-core.md:154
+#: src/reference/vm-core.md:153
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame is simply not in `ready` until its wake edge or timer fires."
 msgstr "一次完成的驱动会重新入队帧的 awaiter 边。停放的异步帧就是不在 `ready` 里，直到它的唤醒边或定时器触发。"
 
 
-#: src/reference/vm-core.md:157
+#: src/reference/vm-core.md:156
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and tests virtualize time by advancing the clock — full determinism ([Async and await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 "引擎从不拥有墙上时钟：sleep 是虚拟时钟期限，测试通过推进时钟来虚拟化时间——完全确定性（[异步与 await](async.md)、[已启动的 future](launched-futures.md)）。"
 
 
-#: src/reference/vm-core.md:161
+#: src/reference/vm-core.md:160
 msgid "Heap integration"
 msgstr "堆集成"
 
 
-#: src/reference/vm-core.md:163
+#: src/reference/vm-core.md:162
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no collection pass at all**: destruction happens at release-to-zero, so nothing ever interrupts a frame. Strong reference cycles leak by design; the weak-reference machinery and the shutdown leak report are the diagnostic surface ([Weak references and the cycle collector](weak-refs.md), [The Rc heap and destructors](rc-heap.md)). Heap layout, cell formats, and the bump allocator are [The VM heap](vm-heap.md)."
 msgstr ""

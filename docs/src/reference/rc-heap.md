@@ -4,9 +4,8 @@ rut's heap is **reference-counted**. When an object's strong count reaches
 zero it is destroyed **immediately**, at a deterministic point in the
 program. There is no collector: strong cycles leak by design —
 [weak references](weak-refs.md) are the answer. Every VM owns one heap on
-one thread and nothing is shared between isolates
-([workers and channels](workers-and-channels.md)), so the counters are
-plain cells with no atomics and no locks.
+one thread, so the counters are plain cells with no atomics and no
+locks.
 
 ## The cell model
 
@@ -22,9 +21,7 @@ alias — reference semantics is the one default regime; there is no eager
 copy anywhere. `bytes.clone()` is the **only** copy escape hatch.
 
 There is no borrow syntax and no lifetimes: a handle simply keeps its
-referent alive, so nothing dangles. Uniqueness matters only when
-transferring buffers across isolates, where it is detected at runtime
-(`rc == 1`) — never proven statically.
+referent alive, so nothing dangles.
 
 ## Refcounting rules
 

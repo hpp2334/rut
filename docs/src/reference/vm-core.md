@@ -23,8 +23,7 @@ pub struct Vm {
 }
 ```
 
-A `Vm` is single-threaded by construction: workers are separate VMs
-([Workers and channels](workers-and-channels.md)). Saved frames are plain
+A `Vm` is single-threaded by construction. Saved frames are plain
 records `{ func, pc, regs, ret_dst }`; calls push, returns pop. Register
 files are recycled through a pool, and per-function side tables
 (reference-typed register indices, per-type field layouts, baked type

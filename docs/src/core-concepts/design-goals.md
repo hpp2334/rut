@@ -113,8 +113,7 @@ source ──► lexer/parser ──► typecheck ──► IR ──► typed b
 ```
 
 - **One thread per VM.** A `Vm` instance runs on one thread with one
-  heap and no atomics; workers are separate VMs communicating by typed
-  message passing.
+  heap and no atomics.
 - **The host owns time.** The VM exposes stepping verbs — drain the
   ready queue, expire timers, poll with a deadline — plus op budgets and
   interrupt callbacks. A UI host drives script between frames and stays

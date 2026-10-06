@@ -96,7 +96,7 @@ sugar over it.
   Scalars and simple buffers stay lowercase: `i32`, `u8`, `f32`, `bool`,
   `str`, `bytes`.
 - **Functions and methods are lower_snake_case** — `unwrap_or(d)`,
-  `push(v)`, `checked_add(y)`, `spawn_worker(..)`.
+  `push(v)`, `checked_add(y)`, `string_len(s)`.
 - **Construction is a method call; the call form binds by
   designation.** User classes construct through their own class
   methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` —

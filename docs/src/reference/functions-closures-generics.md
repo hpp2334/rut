@@ -72,8 +72,6 @@ add=3 area=3.1415927
   inside the closure, and the `for..of` loop variable all follow this
   one law). Refcounting keeps captures alive; a closure is itself a
   shared cell value.
-- Closures are not transferable across isolates (a worker boundary
-  transfers values, not closures).
 
 ## Generics
 

@@ -22,9 +22,8 @@ pub struct Vm {
 }
 ```
 
-A VM is single-threaded by construction (`!Send`); workers are separate
-VM instances communicating by messages. The host holds one and drives
-it with methods: `call` an entry point, `run_ready` to drain woken
+A VM is single-threaded by construction (`!Send`). The host holds one and
+drives it with methods: `call` an entry point, `run_ready` to drain woken
 frames, `next_deadline` for the timer wheel, `drive` for a single
 resumption. See [the host boundary](host-boundary.md) for the embed
 loop and [the async model](async-model.md) for the queues' role in

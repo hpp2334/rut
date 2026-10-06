@@ -72,7 +72,7 @@ msgid "Modules and packages"
 msgstr ""
 
 #: src/SUMMARY.md:22 src/tutorial/async.md:1
-msgid "Async: futures, workers, and channels"
+msgid "Async: futures and await"
 msgstr ""
 
 #: src/SUMMARY.md:23 src/tutorial/stdlib.md:1
@@ -109,7 +109,7 @@ msgid "Memory: the Rc heap, weak refs, and cycles"
 msgstr ""
 
 #: src/SUMMARY.md:33 src/core-concepts/host-boundary.md:1
-#: src/reference/vm-core.md:53
+#: src/reference/vm-core.md:52
 msgid "The host boundary"
 msgstr ""
 
@@ -257,98 +257,93 @@ msgstr ""
 msgid "The host futures bridge"
 msgstr ""
 
-#: src/SUMMARY.md:84 src/tutorial/async.md:173
-#: src/reference/workers-and-channels.md:1
-msgid "Workers and channels"
-msgstr ""
-
-#: src/SUMMARY.md:86
+#: src/SUMMARY.md:85
 msgid "Embedding and interop"
 msgstr ""
 
-#: src/SUMMARY.md:88 src/reference/embedding.md:1
+#: src/SUMMARY.md:87 src/reference/embedding.md:1
 msgid "Embedding and native modules"
 msgstr ""
 
-#: src/SUMMARY.md:89 src/reference/value-boundary.md:1
+#: src/SUMMARY.md:88 src/reference/value-boundary.md:1
 msgid "Value boundary and borrows"
 msgstr ""
 
-#: src/SUMMARY.md:90 src/reference/host-fns.md:1
+#: src/SUMMARY.md:89 src/reference/host-fns.md:1
 msgid "Host fns and declaration files"
 msgstr ""
 
-#: src/SUMMARY.md:91 src/reference/native-containers.md:1
+#: src/SUMMARY.md:90 src/reference/native-containers.md:1
 msgid "Native containers API surface"
 msgstr ""
 
-#: src/SUMMARY.md:92 src/reference/templates.md:1
+#: src/SUMMARY.md:91 src/reference/templates.md:1
 msgid "Templates — f\"...\" across the boundary"
 msgstr ""
 
-#: src/SUMMARY.md:94
+#: src/SUMMARY.md:93
 msgid "Standard library"
 msgstr ""
 
-#: src/SUMMARY.md:96 src/reference/stdlib.md:1
+#: src/SUMMARY.md:95 src/reference/stdlib.md:1
 msgid "core and the swappable packages"
 msgstr ""
 
-#: src/SUMMARY.md:98
+#: src/SUMMARY.md:97
 msgid "Toolchain"
 msgstr ""
 
-#: src/SUMMARY.md:100 src/reference/frontend.md:1
+#: src/SUMMARY.md:99 src/reference/frontend.md:1
 msgid "The frontend"
 msgstr ""
 
-#: src/SUMMARY.md:101 src/reference/compiler.md:1
+#: src/SUMMARY.md:100 src/reference/compiler.md:1
 msgid "The compiler pipeline"
 msgstr ""
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:101 src/core-concepts/the-vm.md:32
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr ""
 
-#: src/SUMMARY.md:103 src/reference/module-binary.md:1
+#: src/SUMMARY.md:102 src/reference/module-binary.md:1
 msgid "Module binary and verification"
 msgstr ""
 
-#: src/SUMMARY.md:104 src/reference/symbol-stripping.md:1
+#: src/SUMMARY.md:103 src/reference/symbol-stripping.md:1
 msgid "Symbol stripping and `.rutsym` sidecars"
 msgstr ""
 
-#: src/SUMMARY.md:105 src/reference/vm-core.md:1
+#: src/SUMMARY.md:104 src/reference/vm-core.md:1
 msgid "VM core"
 msgstr ""
 
-#: src/SUMMARY.md:106 src/reference/loading.md:1
+#: src/SUMMARY.md:105 src/reference/loading.md:1
 msgid "Loading and the embed loop"
 msgstr ""
 
-#: src/SUMMARY.md:107 src/reference/diagnostics.md:1
+#: src/SUMMARY.md:106 src/reference/diagnostics.md:1
 msgid "Diagnostics, traces, and symbolication"
 msgstr ""
 
-#: src/SUMMARY.md:108 src/reference/embedding.md:239 src/reference/bundles.md:1
+#: src/SUMMARY.md:107 src/reference/embedding.md:239 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr ""
 
-#: src/SUMMARY.md:110
+#: src/SUMMARY.md:109
 msgid "Packages and tooling"
 msgstr ""
 
-#: src/SUMMARY.md:112 src/reference/project-structure.md:1
+#: src/SUMMARY.md:111 src/reference/project-structure.md:1
 msgid "Project structure and rut.jsonc"
 msgstr ""
 
-#: src/SUMMARY.md:113 src/tutorial/modules.md:208
+#: src/SUMMARY.md:112 src/tutorial/modules.md:208
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr ""
 
-#: src/SUMMARY.md:114 src/reference/cli.md:1
+#: src/SUMMARY.md:113 src/reference/cli.md:1
 msgid "The rut CLI"
 msgstr ""
 
@@ -628,7 +623,7 @@ msgid "// 1. compile the module — the core prelude auto-rides\n"
 msgstr ""
 
 #: src/quick-start/installation.md:88 src/core-concepts/host-boundary.md:33
-#: src/reference/embedding.md:90 src/reference/host-fns.md:172
+#: src/reference/embedding.md:90 src/reference/host-fns.md:169
 msgid "\"app\""
 msgstr ""
 
@@ -1205,8 +1200,8 @@ msgstr ""
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:100
-#: src/reference/workers-and-channels.md:50 src/reference/value-boundary.md:36
-#: src/reference/value-boundary.md:37 src/reference/templates.md:19
+#: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
+#: src/reference/templates.md:19
 msgid "`str`"
 msgstr ""
 
@@ -1577,7 +1572,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
 #: src/tutorial/functions.md:242 src/tutorial/types.md:278
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:257 src/tutorial/async.md:185
+#: src/tutorial/modules.md:257 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr ""
@@ -2216,7 +2211,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:78
+#: src/reference/functions-closures-generics.md:76
 msgid "Generics"
 msgstr ""
 
@@ -3772,7 +3767,7 @@ msgstr ""
 #: src/reference/async.md:180 src/reference/host-futures.md:34
 #: src/reference/embedding.md:278 src/reference/embedding.md:296
 #: src/reference/embedding.md:326 src/reference/value-boundary.md:97
-#: src/reference/host-fns.md:297 src/reference/native-containers.md:103
+#: src/reference/host-fns.md:294 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
 msgstr ""
@@ -4066,7 +4061,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/modules.md:267
-msgid "Next: [async: futures, workers, and channels](async.md)."
+msgid "Next: [async: futures and await](async.md)."
 msgstr ""
 
 #: src/tutorial/async.md:3
@@ -4237,8 +4232,8 @@ msgstr ""
 
 #: src/tutorial/async.md:118
 msgid ""
-"A complete worker from the repository's GitHub-viewer example — send, then "
-"drain:"
+"A complete request handler from the repository's GitHub-viewer example — "
+"send, then drain:"
 msgstr ""
 
 #: src/tutorial/async.md:121
@@ -4308,20 +4303,19 @@ msgid ""
 "surfaces."
 msgstr ""
 
-#: src/tutorial/async.md:175
-msgid ""
-"For true parallelism, a host can spawn **workers** — separate VMs on "
-"separate threads with separate heaps. There is no shared memory: all data "
-"crosses typed channels, and what may cross is a checked rule — primitives "
-"and `str` copy; a cell (vec, record, class instance) transfers when "
-"exclusively held, else deep-copies; endpoints (`Sender`/`Receiver`) "
-"transfer; **closures do not cross**. A trap in a worker kills only that "
-"worker. The API is a host facility (`spawn_worker`, `Channel<T>`), so its "
-"shape depends on your embedder — see [workers and "
-"channels](../reference/workers-and-channels.md)."
+#: src/tutorial/async.md:173
+msgid "Parallelism"
 msgstr ""
 
-#: src/tutorial/async.md:187
+#: src/tutorial/async.md:175
+msgid ""
+"The language has none: a VM is single-threaded by construction (`!Send`, one "
+"heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency "
+"story. A host that wants parallelism runs separate VMs — rut defines no "
+"surface for sharing between them."
+msgstr ""
+
+#: src/tutorial/async.md:182
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4344,7 +4338,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:214
+#: src/tutorial/async.md:209
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -4842,7 +4836,7 @@ msgstr ""
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
-"— in [async: futures, workers, and channels](async.md)."
+"— in [async: futures and await](async.md)."
 msgstr ""
 
 #: src/tutorial/stdlib.md:403
@@ -5065,10 +5059,10 @@ msgstr ""
 #: src/core-concepts/design-goals.md:115
 msgid ""
 "**One thread per VM.** A `Vm` instance runs on one thread with one heap and "
-"no atomics; workers are separate VMs communicating by typed message passing."
+"no atomics."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:118
+#: src/core-concepts/design-goals.md:117
 msgid ""
 "**The host owns time.** The VM exposes stepping verbs — drain the ready "
 "queue, expire timers, poll with a deadline — plus op budgets and interrupt "
@@ -5076,20 +5070,20 @@ msgid ""
 "test host virtualizes the clock and gets fully deterministic schedules."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:123
+#: src/core-concepts/design-goals.md:122
 msgid ""
 "**Traps stop at the boundary.** A panic in script (overflow, nil deref) "
 "unwinds as a `Trap` value to the host call — rut code never catches one. "
 "Bugs become host-visible errors with a script backtrace, not corrupted state."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
+#: src/core-concepts/design-goals.md:127 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:288
 #: src/core-concepts/memory.md:208
 msgid "What this buys you"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:130
+#: src/core-concepts/design-goals.md:129
 msgid ""
 "If you are **writing scripts**: assignments never deep-copy; cleanup runs "
 "when the last reference dies; a miss is `nil`, a failure is a returned `err` "
@@ -5100,7 +5094,7 @@ msgid ""
 "boilerplate to maintain."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:138
+#: src/core-concepts/design-goals.md:137
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the "
 "day-to-day syntax, and the reference pins down exact rules."
@@ -6446,9 +6440,8 @@ msgid ""
 "Every non-primitive value — strings, byte buffers, arrays, records, enums, "
 "interface objects, erasure boxes, nullable boxes, coroutine frames — is a "
 "heap cell. Each cell starts with a header: a refcount, a type id, and a few "
-"flags. The counts are plain integers: a VM runs on one thread with one heap, "
-"workers are separate VMs, and nothing is ever shared between them, so there "
-"are no atomics anywhere in the heap."
+"flags. The counts are plain integers: a VM runs on one thread with one heap "
+"and nothing is ever shared, so there are no atomics anywhere in the heap."
 msgstr ""
 
 #: src/core-concepts/memory.md:20
@@ -7041,15 +7034,14 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:25
 msgid ""
-"A VM is single-threaded by construction (`!Send`); workers are separate VM "
-"instances communicating by messages. The host holds one and drives it with "
-"methods: `call` an entry point, `run_ready` to drain woken frames, "
-"`next_deadline` for the timer wheel, `drive` for a single resumption. See "
-"[the host boundary](host-boundary.md) for the embed loop and [the async "
-"model](async-model.md) for the queues' role in scheduling."
+"A VM is single-threaded by construction (`!Send`). The host holds one and "
+"drives it with methods: `call` an entry point, `run_ready` to drain woken "
+"frames, `next_deadline` for the timer wheel, `drive` for a single "
+"resumption. See [the host boundary](host-boundary.md) for the embed loop and "
+"[the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:35
+#: src/core-concepts/the-vm.md:34
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a "
 "per-frame slot file, and **every register has a static type recorded in the "
@@ -7059,56 +7051,56 @@ msgid ""
 "for references, with no runtime tag checks."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:42
+#: src/core-concepts/the-vm.md:41
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, "
 "branch tables) living in per-function pools. A representative sample:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:60
+#: src/core-concepts/the-vm.md:59
 msgid "The type system also decides what is _not_ an op:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:62
+#: src/core-concepts/the-vm.md:61
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a "
 "constant — no \"get type id\" instruction, no length load for a fixed-size "
 "array."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:65
+#: src/core-concepts/the-vm.md:64
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has "
 "exactly one op (the itable call); string concatenation is a native call, not "
 "an opcode."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:68
+#: src/core-concepts/the-vm.md:67
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only "
 "through compile-time-known layouts, plus the two reads reification needs: "
 "\"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:73
+#: src/core-concepts/the-vm.md:72
 msgid "The module binary"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:75
+#: src/core-concepts/the-vm.md:74
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, "
 "constants, functions (with their typed register signatures), imports, and a "
 "symbol table for backtraces. Its properties matter more than its layout:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:80
+#: src/core-concepts/the-vm.md:79
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions "
 "produce byte-identical binaries, so artifacts are cacheable by content hash "
 "and shippable instead of sources."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:83
+#: src/core-concepts/the-vm.md:82
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for "
 "traces by default; a release build can strip them, and a sidecar map file "
@@ -7116,7 +7108,7 @@ msgid ""
 "on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:88
+#: src/core-concepts/the-vm.md:87
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into "
 "the VM's global table at link, where the interface tables merge by name. "
@@ -7125,17 +7117,17 @@ msgid ""
 "dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:94
+#: src/core-concepts/the-vm.md:93
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts "
 "are platform-independent by construction rather than by luck."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:97
 msgid "Verification at load"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:100
+#: src/core-concepts/the-vm.md:99
 msgid ""
 "Loading re-checks each function before anything executes: register operands "
 "against the signature, operand pools and jump targets in range, type "
@@ -7146,7 +7138,7 @@ msgid ""
 "rejected before any script runs."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:108
+#: src/core-concepts/the-vm.md:107
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum "
 "members, constant expressions, and interned string literals become constants "
@@ -7155,11 +7147,11 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:114
+#: src/core-concepts/the-vm.md:113
 msgid "The interpreter loop and traps"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:116
+#: src/core-concepts/the-vm.md:115
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's "
 "code, a program counter, its typed register file, and (for async frames) the "
@@ -7168,7 +7160,7 @@ msgid ""
 "the itable."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:122
+#: src/core-concepts/the-vm.md:121
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer "
 "overflow on the plain operators, a `nil` deref, an out-of-bounds index, a "
@@ -7179,29 +7171,29 @@ msgid ""
 "boundary](host-boundary.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:104
 msgid "Budgets and interrupts"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:133
+#: src/core-concepts/the-vm.md:132
 msgid ""
 "Two knobs make it safe to run third-party code, both set at construction and "
 "mutable while running:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:136
 msgid "// one unit per op, counts down\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:138
+#: src/core-concepts/the-vm.md:137
 msgid "// checked at every allocation\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:139
+#: src/core-concepts/the-vm.md:138
 msgid "// default: check every 1024 ops\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:142
+#: src/core-concepts/the-vm.md:141
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — "
 "the frame _is_ the loop state — so the host can add fuel, raise the heap "
@@ -7210,24 +7202,24 @@ msgid ""
 "and gets a deterministic hang proof."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:147
+#: src/core-concepts/the-vm.md:146
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves "
 "the heap byte-identical (see [memory](memory.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:150
+#: src/core-concepts/the-vm.md:149
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
 "bug by contract — and the interrupt hook is the host's lever at native "
 "return points."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:154
+#: src/core-concepts/the-vm.md:153
 msgid "Why no JIT is viable"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:156
+#: src/core-concepts/the-vm.md:155
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about "
 "polymorphic property loads. rut has no polymorphic loads: field access is by "
@@ -7241,7 +7233,7 @@ msgid ""
 "bytecode alone."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:167
 msgid ""
 "The full tables and laws live in the reference: [typed "
 "bytecode](../reference/typed-bytecode.md), [the module binary and "
@@ -8454,12 +8446,12 @@ msgid ""
 msgstr ""
 
 #: src/examples/03-plugin.md:122 src/reference/embedding.md:80
-#: src/reference/host-fns.md:161
+#: src/reference/host-fns.md:158
 msgid "\"server\""
 msgstr ""
 
 #: src/examples/03-plugin.md:123 src/reference/embedding.md:81
-#: src/reference/host-fns.md:164
+#: src/reference/host-fns.md:161
 msgid "\"emit\""
 msgstr ""
 
@@ -9941,7 +9933,7 @@ msgstr ""
 msgid "`fn`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:141
+#: src/reference/lexical-structure.md:43 src/reference/host-fns.md:138
 msgid "`let`"
 msgstr ""
 
@@ -9969,11 +9961,11 @@ msgstr ""
 msgid "`of`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:142
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:139
 msgid "`enum`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:144
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:141
 msgid "`struct`"
 msgstr ""
 
@@ -9981,7 +9973,7 @@ msgstr ""
 msgid "`class`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:143
+#: src/reference/lexical-structure.md:45 src/reference/host-fns.md:140
 msgid "`interface`"
 msgstr ""
 
@@ -10213,7 +10205,7 @@ msgstr ""
 #: src/reference/lexical-structure.md:98
 msgid ""
 "**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, "
-"`checked_add(y)`, `spawn_worker(..)`."
+"`checked_add(y)`, `string_len(s)`."
 msgstr ""
 
 #: src/reference/lexical-structure.md:100
@@ -10855,8 +10847,6 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:54
 #: src/reference/literals-and-inference.md:136
 #: src/reference/by-reference-and-nullable.md:61
-#: src/reference/workers-and-channels.md:17
-#: src/reference/workers-and-channels.md:47
 msgid "Type"
 msgstr ""
 
@@ -13697,13 +13687,7 @@ msgid ""
 "closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:75
-msgid ""
-"Closures are not transferable across isolates (a worker boundary transfers "
-"values, not closures)."
-msgstr ""
-
-#: src/reference/functions-closures-generics.md:80
+#: src/reference/functions-closures-generics.md:78
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13723,44 +13707,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:100
+#: src/reference/functions-closures-generics.md:98
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:104
+#: src/reference/functions-closures-generics.md:102
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an "
 "interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:106
+#: src/reference/functions-closures-generics.md:104
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or "
 "spell the bound (`T requires I`)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:109
+#: src/reference/functions-closures-generics.md:107
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:112
+#: src/reference/functions-closures-generics.md:110
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:119
+#: src/reference/functions-closures-generics.md:117
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and interface generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:123
+#: src/reference/functions-closures-generics.md:121
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -13768,7 +13752,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:128
+#: src/reference/functions-closures-generics.md:126
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -13778,21 +13762,21 @@ msgid ""
 "interface bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:135
+#: src/reference/functions-closures-generics.md:133
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an "
 "interface type fails any bound — only a concrete type with the members "
 "admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:138
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains "
 "no method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:141
+#: src/reference/functions-closures-generics.md:139
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -13800,13 +13784,13 @@ msgid ""
 "instantiation still binds the concrete member's own method."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:146
+#: src/reference/functions-closures-generics.md:144
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:148
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "
@@ -14001,12 +13985,6 @@ msgid ""
 msgstr ""
 
 #: src/reference/opaque.md:139
-msgid ""
-"Crossing isolates is allowed iff the boxed value's type is crossable, "
-"checked at runtime via the type descriptor."
-msgstr ""
-
-#: src/reference/opaque.md:141
 msgid ""
 "An `opaque` box can do nothing until it is recovered — no methods, no "
 "fields, no format-string rendering. That is the difference from gradual "
@@ -14945,38 +14923,36 @@ msgid ""
 "zero it is destroyed **immediately**, at a deterministic point in the "
 "program. There is no collector: strong cycles leak by design — [weak "
 "references](weak-refs.md) are the answer. Every VM owns one heap on one "
-"thread and nothing is shared between isolates ([workers and "
-"channels](workers-and-channels.md)), so the counters are plain cells with no "
-"atomics and no locks."
+"thread, so the counters are plain cells with no atomics and no locks."
 msgstr ""
 
-#: src/reference/rc-heap.md:11
+#: src/reference/rc-heap.md:10
 msgid "The cell model"
 msgstr ""
 
-#: src/reference/rc-heap.md:13
+#: src/reference/rc-heap.md:12
 msgid "Everything except primitives and `fn` values is a heap cell:"
 msgstr ""
 
-#: src/reference/rc-heap.md:15
+#: src/reference/rc-heap.md:14
 msgid "Inline (moved by plain copy)"
 msgstr ""
 
-#: src/reference/rc-heap.md:15
+#: src/reference/rc-heap.md:14
 msgid "Heap cells (refcounted handles)"
 msgstr ""
 
-#: src/reference/rc-heap.md:17
+#: src/reference/rc-heap.md:16
 msgid "`u8..u64`, `i8..i64`, `u`/`isize`, `f32`, `f64`, `bool`, `nil`"
 msgstr ""
 
-#: src/reference/rc-heap.md:17
+#: src/reference/rc-heap.md:16
 msgid ""
 "`str`, `bytes`, `Vec<T>`, `[T]`, enums, structs, classes, interface objects, "
 "`opaque` boxes, host boxes, `?T` boxes, coroutine frames"
 msgstr ""
 
-#: src/reference/rc-heap.md:19
+#: src/reference/rc-heap.md:18
 msgid ""
 "Assignment, argument passing, and returning copy the **handle** (retain), "
 "never the bytes. Mutation through one alias is visible through every alias — "
@@ -14984,65 +14960,63 @@ msgid ""
 "anywhere. `bytes.clone()` is the **only** copy escape hatch."
 msgstr ""
 
-#: src/reference/rc-heap.md:24
+#: src/reference/rc-heap.md:23
 msgid ""
 "There is no borrow syntax and no lifetimes: a handle simply keeps its "
-"referent alive, so nothing dangles. Uniqueness matters only when "
-"transferring buffers across isolates, where it is detected at runtime (`rc "
-"== 1`) — never proven statically."
+"referent alive, so nothing dangles."
 msgstr ""
 
-#: src/reference/rc-heap.md:29
+#: src/reference/rc-heap.md:26
 msgid "Refcounting rules"
 msgstr ""
 
-#: src/reference/rc-heap.md:31
+#: src/reference/rc-heap.md:28
 msgid ""
 "The compiler knows the static type of every register, so ref-aware ops are "
 "emitted only where a reference can flow:"
 msgstr ""
 
-#: src/reference/rc-heap.md:34
+#: src/reference/rc-heap.md:31
 msgid "Primitives and `fn` values move with a plain move — no counting."
 msgstr ""
 
-#: src/reference/rc-heap.md:35
+#: src/reference/rc-heap.md:32
 msgid ""
 "References move with a ref move — retain the new, release the old; both "
 "steps are exact."
 msgstr ""
 
-#: src/reference/rc-heap.md:37
+#: src/reference/rc-heap.md:34
 msgid ""
 "Function boundaries pass references in registers; call/return sequences emit "
 "the paired inc/dec. A loop over a `Vec<f64>` does no per-element counting."
 msgstr ""
 
-#: src/reference/rc-heap.md:40
+#: src/reference/rc-heap.md:37
 msgid ""
 "**Overflow**: an increment past `u32::MAX` _immortalizes_ the object — the "
 "count is pinned to the `0` sentinel (the same value interned literals use) — "
 "a deliberate, logged leak instead of unsoundness."
 msgstr ""
 
-#: src/reference/rc-heap.md:43
+#: src/reference/rc-heap.md:40
 msgid ""
 "Debug builds assert the full counter discipline: retain/release pairing, no "
 "underflow, no double destruction."
 msgstr ""
 
-#: src/reference/rc-heap.md:46
+#: src/reference/rc-heap.md:43
 msgid "Destruction — the `[disposal]` marker"
 msgstr ""
 
-#: src/reference/rc-heap.md:48
+#: src/reference/rc-heap.md:45
 msgid ""
 "A type opts into destructor code by marking an inherent member `[disposal]` "
 "(see [Rc, dispose, and identity](rc-dispose-identity.md) for the marker's "
 "surface — the name is free, the bracket designates):"
 msgstr ""
 
-#: src/reference/rc-heap.md:52
+#: src/reference/rc-heap.md:49
 msgid ""
 "```rut\n"
 "use core::{ DisposalContext };\n"
@@ -15068,18 +15042,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/rc-heap.md:80 src/reference/launched-futures.md:28
+#: src/reference/rc-heap.md:77 src/reference/launched-futures.md:28
 msgid "Laws:"
 msgstr ""
 
-#: src/reference/rc-heap.md:82
+#: src/reference/rc-heap.md:79
 msgid ""
 "The engine calls `dispose(mut self, cx: DisposalContext)` exactly once per "
 "cell death — when the strong count reaches zero. Types without a "
 "`[disposal]` member release straight to the field walk."
 msgstr ""
 
-#: src/reference/rc-heap.md:85
+#: src/reference/rc-heap.md:82
 msgid ""
 "The call runs **at a call boundary**, not re-entrantly inside the release: "
 "death pins the cell and queues it, and the interpreter drains the queue at "
@@ -15087,53 +15061,53 @@ msgid ""
 "async weave — passing the pinned cell as `self` with a freshly minted `cx`."
 msgstr ""
 
-#: src/reference/rc-heap.md:90
+#: src/reference/rc-heap.md:87
 msgid ""
 "A dispose body may itself release references (a field walk that kills a "
 "child whose own `dispose` is next): the drain loops until the queue stays "
 "empty."
 msgstr ""
 
-#: src/reference/rc-heap.md:93
+#: src/reference/rc-heap.md:90
 msgid ""
 "The context `cx` is engine-minted and empty today; it grows additively, "
 "never by touching the marker's signature."
 msgstr ""
 
-#: src/reference/rc-heap.md:95
+#: src/reference/rc-heap.md:92
 msgid ""
 "Cancellation drops locals at the suspension point through the same machinery "
 "([launched futures](launched-futures.md)) — no special case."
 msgstr ""
 
-#: src/reference/rc-heap.md:98
+#: src/reference/rc-heap.md:95
 msgid ""
 "Note the difference from finalizer-based runtimes: `dispose` always runs, "
 "exactly once, at a knowable point. There is no \"later or never\"."
 msgstr ""
 
-#: src/reference/rc-heap.md:101
+#: src/reference/rc-heap.md:98
 msgid "Destruction order"
 msgstr ""
 
-#: src/reference/rc-heap.md:103
+#: src/reference/rc-heap.md:100
 msgid "When a cell's strong count reaches zero:"
 msgstr ""
 
-#: src/reference/rc-heap.md:105
+#: src/reference/rc-heap.md:102
 msgid ""
 "Every `Weak` box watching the cell is nulled **before any user code runs** — "
 "a dispose body that calls `upgrade()` sees `nil`, deterministically ([weak "
 "references](weak-refs.md))."
 msgstr ""
 
-#: src/reference/rc-heap.md:108
+#: src/reference/rc-heap.md:105
 msgid ""
 "The type's queued `dispose` body runs for cells whose type carries a "
 "`[disposal]` member (pinned cell, then released)."
 msgstr ""
 
-#: src/reference/rc-heap.md:110
+#: src/reference/rc-heap.md:107
 msgid ""
 "Ref-typed children are released **recursively**: record fields in "
 "declaration order, sum payloads, array elements, `opaque` box inners, "
@@ -15141,7 +15115,7 @@ msgid ""
 "from the type table."
 msgstr ""
 
-#: src/reference/rc-heap.md:114
+#: src/reference/rc-heap.md:111
 msgid ""
 "Host box payloads run their Rust `Drop` at the same point — sockets, files, "
 "and textures die with the last handle, not \"sometime later\". An opt-in "
@@ -15149,18 +15123,18 @@ msgid ""
 "value the payload held releases through the same walk."
 msgstr ""
 
-#: src/reference/rc-heap.md:118
+#: src/reference/rc-heap.md:115
 msgid ""
 "The block store frees the cell's variable-size payload; the slot returns to "
 "the arena free list and is reused by the next mint ([the VM "
 "heap](vm-heap.md))."
 msgstr ""
 
-#: src/reference/rc-heap.md:122
+#: src/reference/rc-heap.md:119
 msgid "Buffers, strings, and views"
 msgstr ""
 
-#: src/reference/rc-heap.md:124
+#: src/reference/rc-heap.md:121
 msgid ""
 "**Primitive-element `[T]` buffers stay flat**: a `[T]` over numeric or "
 "`bool` element types stores raw values inline behind the header. Element "
@@ -15168,26 +15142,26 @@ msgid ""
 "everything-is-a-cell law does not reach."
 msgstr ""
 
-#: src/reference/rc-heap.md:128
+#: src/reference/rc-heap.md:125
 msgid ""
 "**`Vec<T>` is not flat**: its backing is `buf: [?T]`, so element traffic "
 "crosses nullable handles. `push`/`pop`/`set` emit the paired retain/release."
 msgstr ""
 
-#: src/reference/rc-heap.md:131
+#: src/reference/rc-heap.md:128
 msgid ""
 "**Composite-element buffers store handles**: `[Point]` and `Vec<Point>` hold "
 "one cell pointer per element; the buffer itself is the counted unit."
 msgstr ""
 
-#: src/reference/rc-heap.md:134
+#: src/reference/rc-heap.md:131
 msgid ""
 "`[T]` is a fixed-length cell; `N` is a compile-time constant and part of the "
 "type's identity. Fixed-array literals that fold at compile time become "
 "immortal constant-pool cells."
 msgstr ""
 
-#: src/reference/rc-heap.md:137
+#: src/reference/rc-heap.md:134
 msgid ""
 "**`Slice<T>` view cells** hold a handle to their owner plus `off`/`len` — "
 "never a pointer into the data block. Views dispatch through the owner, so "
@@ -15197,7 +15171,7 @@ msgid ""
 "or constructible in script."
 msgstr ""
 
-#: src/reference/rc-heap.md:143
+#: src/reference/rc-heap.md:140
 msgid ""
 "**`str` is immutable**: interned literals live in the module's constant pool "
 "(immortal); runtime-built strings are ordinary cells whose buffers are "
@@ -15205,17 +15179,17 @@ msgid ""
 "because `str` has no mutation API."
 msgstr ""
 
-#: src/reference/rc-heap.md:147
+#: src/reference/rc-heap.md:144
 msgid ""
 "**No interior pointers exist anywhere**, which is what keeps every heap walk "
 "a simple typed walk."
 msgstr ""
 
-#: src/reference/rc-heap.md:150
+#: src/reference/rc-heap.md:147
 msgid "Internals"
 msgstr ""
 
-#: src/reference/rc-heap.md:152
+#: src/reference/rc-heap.md:149
 msgid ""
 "```text\n"
 "Header:  rc: u32        // strong count; u32::MAX = immortal sentinel\n"
@@ -15224,14 +15198,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/rc-heap.md:158
+#: src/reference/rc-heap.md:155
 msgid ""
 "The weak lists (referent slot word → its `WeakBox` cells) and the "
 "disposal-armed markers (cells whose `dispose` is queued or has run) are "
 "arena side tables, not header words."
 msgstr ""
 
-#: src/reference/rc-heap.md:162
+#: src/reference/rc-heap.md:159
 msgid ""
 "Cell kinds: string, vec (growable), array (fixed), slice view, record (every "
 "user struct/class — vtable + payload slots), enum (tag + payload slots; "
@@ -15240,23 +15214,23 @@ msgid ""
 "[reified types and layout](reified-types.md)."
 msgstr ""
 
-#: src/reference/rc-heap.md:168
+#: src/reference/rc-heap.md:165
 msgid "The engine's two counting ops are exact and total:"
 msgstr ""
 
-#: src/reference/rc-heap.md:171
+#: src/reference/rc-heap.md:168
 msgid "/* rc += 1 */"
 msgstr ""
 
-#: src/reference/rc-heap.md:174
+#: src/reference/rc-heap.md:171
 msgid "// underflow is a bug: assert\n"
 msgstr ""
 
-#: src/reference/rc-heap.md:176
+#: src/reference/rc-heap.md:173
 msgid "// order above; no suspect list\n"
 msgstr ""
 
-#: src/reference/rc-heap.md:180
+#: src/reference/rc-heap.md:177
 msgid ""
 "Destruction is fully deterministic under the virtual clock, so a drop order "
 "reproduces exactly in tests. Identity and equality semantics for cell values "
@@ -15758,12 +15732,6 @@ msgstr ""
 msgid "// dropping `vm` frees every remaining slab\n"
 msgstr ""
 
-#: src/reference/vm-heap.md:103
-msgid ""
-"Worker heaps are per-VM and charged to the child's own budget ([workers and "
-"channels](workers-and-channels.md))."
-msgstr ""
-
 #: src/reference/resource-limits.md:3
 msgid ""
 "Two knobs make rut safe for third-party code: a **heap budget** and "
@@ -16014,17 +15982,10 @@ msgid ""
 msgstr ""
 
 #: src/reference/resource-limits.md:89
-msgid "Workers"
+msgid "Fairness"
 msgstr ""
 
 #: src/reference/resource-limits.md:91
-msgid ""
-"A worker VM is constructed with **its own `Limits`**; argument transfers are "
-"counted against the _child_ budget before the worker starts, so a worker "
-"cannot OOM its parent ([workers and channels](workers-and-channels.md))."
-msgstr ""
-
-#: src/reference/resource-limits.md:96
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future "
 "cannot starve the rest of a queue drain indefinitely — each frame runs to "
@@ -16481,8 +16442,7 @@ msgstr ""
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and "
 "the race/completer tier (`select2` / `select_all` / `completer`); [the host "
-"futures bridge](host-futures.md) for backing a host async fn with Rust; "
-"[workers and channels](workers-and-channels.md) for isolate parallelism."
+"futures bridge](host-futures.md) for backing a host async fn with Rust."
 msgstr ""
 
 #: src/reference/launched-futures.md:3
@@ -17158,298 +17118,6 @@ msgid ""
 "modules](embedding.md)."
 msgstr ""
 
-#: src/reference/workers-and-channels.md:3
-msgid ""
-"Workers are **separate VMs on separate threads** with separate heaps. There "
-"is no shared memory: everything that crosses is a value on a typed channel, "
-"moved or deep-copied under the rules below. Pure rut code inside one VM is "
-"always single-threaded, which is what keeps the RC heap lock-free ([the Rc "
-"heap](rc-heap.md))."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:9
-msgid ""
-"Status: this page specifies the isolate surface; it is not yet wired into "
-"the engine. The async surface it builds on — futures, launch, await — is "
-"live ([async and await](async.md))."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:13
-msgid "Channels"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:15
-msgid "`Channel<T>()` produces a channel value with two endpoints:"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:17
-msgid "Endpoint"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:17
-msgid "Behavior"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:19
-msgid "`sender.send(v)`"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:19
-msgid "sync"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:19
-msgid "unbounded buffer; `send` never blocks and is cheap"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:20
-msgid "`receiver.recv()`"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:20
-msgid "`Future<?T>`"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:20
-msgid ""
-"suspends until a message arrives; answers **`nil` once every sender is gone**"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:22
-msgid "Semantics:"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:24
-msgid "Channels are **MPSC** (many senders, one receiver), unbounded."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:25
-msgid ""
-"Endpoints are ordinary values and **transferable**: pass one to a worker "
-"through `spawn_worker` args, or through another channel."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:27
-msgid ""
-"Receiving `nil` is the shutdown signal — dropping the sender half is how a "
-"parent tells a worker to finish."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:29
-msgid ""
-"Closing semantics pair with the nullable answer, not an error type "
-"([by-reference and nullable](by-reference-and-nullable.md))."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:32
-msgid "Typical shape:"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:34
-msgid ""
-"```rut\n"
-"\n"
-"async fn worker(rx: Receiver<u32>, tx: Sender<u32>) -> nil {\n"
-"    while (true) {\n"
-"        let msg = await rx.recv();\n"
-"        if (msg == nil) { return; }       // all senders gone\n"
-"        tx.send(1);                       // acknowledge (send is sync)\n"
-"    }\n"
-"}\n"
-"```"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:45
-msgid "What may cross an isolate boundary"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:47
-msgid "Crossing rule"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:49
-msgid "primitives (ints, floats, `bool`)"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:49
-msgid "copy"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:50
-msgid "copy (immutable)"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:51
-msgid ""
-"every other cell — `Vec<T>`, `[T]`, class/struct instances, enums, `?T` boxes"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:51
-msgid ""
-"**transfer** if `rc == 1`, else deep copy — the zero-copy fast path is the "
-"common case; every element/field must itself be crossable"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:52
-msgid "`Slice<T>` view"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:52
-msgid ""
-"same rule as its owner cell; provenance (which `Vec`/`[T]` it views) is "
-"invisible across the boundary"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:53
-msgid "`Sender` / `Receiver`"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:53
-msgid "transfer"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:54 src/reference/templates.md:20
-msgid "`Template`"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:54
-msgid ""
-"copy — a builtin carrier; its `opaque` args must themselves be crossable "
-"([templates](templates.md))"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:55
-msgid "host opaque types"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:55
-msgid ""
-"transfer **only** if the host registered `send` for them — checked at the "
-"transfer, by type"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:56 src/reference/typed-bytecode.md:93
-msgid "closures"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:56
-msgid ""
-"**not transferable** — compile-time error at the `send`/`spawn_worker` site"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:57
-msgid "anything else (receipts, wakers)"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:57
-msgid "compile-time error at the call site"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:59
-msgid "Enforcement is two-layered:"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:61
-msgid ""
-"**Static** at the send/spawn site — the checker knows `T` and rejects "
-"non-crossable types (closures, unregistered host types)."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:63
-msgid ""
-"**Runtime** on the receiving heap — `transfer_into` detects uniqueness: an "
-"`rc == 1` buffer is _adopted_ (the raw block moves, no copy); anything "
-"shared is deep-copied through a descriptor-driven walk."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:68
-msgid ""
-"Transfers move **accounting**, not just pointers: a moved buffer's bytes are "
-"charged to the child heap at the transfer ([the VM heap](vm-heap.md))."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:72
-msgid "Worker lifecycle"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:74
-msgid ""
-"```rut\n"
-"let w = spawn_worker(\"workers/fetch\", (url, ch.sender()));\n"
-"```"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:78
-msgid "`spawn_worker(module, args)` is a host hook:"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:80
-msgid ""
-"construct a child `Vm` sharing the **type table and loader — never the "
-"heap** ([the VM heap](vm-heap.md));"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:82
-msgid "load the module;"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:83
-msgid ""
-"transfer the args into the child heap — charged to the **child** budget "
-"before the worker starts, so a worker cannot OOM its parent ([resource "
-"limits](resource-limits.md));"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:86
-msgid ""
-"run the worker's entry to completion on its own thread; entry parameters "
-"**are** the transferred args;"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:88
-msgid ""
-"return a `Worker` handle; `worker.join() -> Future<Result<(), Trap>>` "
-"completes when the entry returns."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:91
-msgid "Isolation laws"
-msgstr ""
-
-#: src/reference/workers-and-channels.md:93
-msgid ""
-"**A trap inside a worker kills only that worker**: `join()` answers the trap "
-"and the host decides — restart it, surface it, ignore it. The parent VM and "
-"its other workers are untouched."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:96
-msgid ""
-"**The main VM blocks on nothing**: `join()` is a future, channel receives "
-"are awaits; the parent's driving loop keeps running while workers compute."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:99
-msgid ""
-"**No data races by construction**: nothing is shared, so there is nothing to "
-"lock. Two isolates communicate only through transferred values and channel "
-"messages."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:102
-msgid ""
-"A worker's exit does not close channels it received senders from — the "
-"shutdown signal is the _drop_ of the sender endpoints, which falls out of "
-"the worker's heap teardown."
-msgstr ""
-
-#: src/reference/workers-and-channels.md:106
-msgid ""
-"Open surface: bounded channels and MPMC; cross-isolate sharing of immutable "
-"data; receive fairness across multiple awaiting receivers (FIFO per channel "
-"proposed)."
-msgstr ""
-
 #: src/reference/embedding.md:3
 msgid ""
 "The host is a Rust program. It walks the program's packages off disk (or "
@@ -17567,7 +17235,7 @@ msgstr ""
 msgid "// re-entrant rut calls are legal here (see \"Native fn rules\")\n"
 msgstr ""
 
-#: src/reference/embedding.md:88 src/reference/host-fns.md:170
+#: src/reference/embedding.md:88 src/reference/host-fns.md:167
 msgid "/* ..offers.. */"
 msgstr ""
 
@@ -19139,7 +18807,7 @@ msgstr ""
 msgid "bound at link against"
 msgstr ""
 
-#: src/reference/host-fns.md:7 src/reference/host-fns.md:145
+#: src/reference/host-fns.md:7 src/reference/host-fns.md:142
 msgid "`host fn` / `host struct`"
 msgstr ""
 
@@ -19151,7 +18819,7 @@ msgstr ""
 msgid "the load-time contract (below)"
 msgstr ""
 
-#: src/reference/host-fns.md:8 src/reference/host-fns.md:146
+#: src/reference/host-fns.md:8 src/reference/host-fns.md:143
 msgid "`prelude builtin` / `pub builtin` rows"
 msgstr ""
 
@@ -19347,81 +19015,74 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:129
-msgid ""
-"**Workers**: an `opaque` box crosses isolates only if the host registered "
-"the boxed type as `send` — checked at the transfer, by type ([workers and "
-"channels](workers-and-channels.md))."
-msgstr ""
-
-#: src/reference/host-fns.md:133 src/reference/frontend.md:158
+#: src/reference/host-fns.md:130 src/reference/frontend.md:158
 #: src/reference/cli.md:161
 msgid "Declaration mode"
 msgstr ""
 
-#: src/reference/host-fns.md:135
+#: src/reference/host-fns.md:132
 msgid ""
 "A `.d.rut` is parsed in **declaration mode**: declarations only, each "
 "complete as a surface."
 msgstr ""
 
-#: src/reference/host-fns.md:138
+#: src/reference/host-fns.md:135
 msgid "allowed"
 msgstr ""
 
-#: src/reference/host-fns.md:138 src/reference/stdlib.md:86
+#: src/reference/host-fns.md:135 src/reference/stdlib.md:86
 #: src/reference/compiler.md:23 src/reference/typed-bytecode.md:74
 msgid "notes"
 msgstr ""
 
-#: src/reference/host-fns.md:140
+#: src/reference/host-fns.md:137
 msgid "`use` / `pub`"
 msgstr ""
 
-#: src/reference/host-fns.md:140
+#: src/reference/host-fns.md:137
 msgid ""
 "visibility exactly as in a module; non-exported decls are known inside the "
 "file, nameable nowhere else"
 msgstr ""
 
-#: src/reference/host-fns.md:141
+#: src/reference/host-fns.md:138
 msgid "with load-time constant initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:142
+#: src/reference/host-fns.md:139
 msgid "the member list is the whole definition"
 msgstr ""
 
-#: src/reference/host-fns.md:143
+#: src/reference/host-fns.md:140
 msgid ""
 "member signatures are the whole definition — signatures-only fits the "
 "surface model"
 msgstr ""
 
-#: src/reference/host-fns.md:144
+#: src/reference/host-fns.md:141
 msgid "fields only, with load-time initializers"
 msgstr ""
 
-#: src/reference/host-fns.md:145
+#: src/reference/host-fns.md:142
 msgid "signatures only, concrete over the crossing set"
 msgstr ""
 
-#: src/reference/host-fns.md:146
+#: src/reference/host-fns.md:143
 msgid "toolchain decl files only — the two spellings above"
 msgstr ""
 
-#: src/reference/host-fns.md:148
+#: src/reference/host-fns.md:145
 msgid ""
 "Forbidden — the parser errors _\"implementation in a declaration file\"_: "
 "any fn/class body, statements. Symmetrically, a `.rut` file that spells "
 "`host` errors _\"belongs in a `.d.rut`\"_."
 msgstr ""
 
-#: src/reference/host-fns.md:152
+#: src/reference/host-fns.md:149
 msgid "Signatures are derived, not hand-written"
 msgstr ""
 
-#: src/reference/host-fns.md:154
+#: src/reference/host-fns.md:151
 msgid ""
 "The registered callable's Rust shape **is** the `.d.rut` row. The "
 "**installer lane** is a `HostPkg` builder per pkg — rows under bare names, "
@@ -19429,21 +19090,21 @@ msgid ""
 "`.host_pkg(..)`:"
 msgstr ""
 
-#: src/reference/host-fns.md:160
+#: src/reference/host-fns.md:157
 msgid "// one builder per host pkg; the scope string appears exactly once\n"
 msgstr ""
 
-#: src/reference/host-fns.md:162
+#: src/reference/host-fns.md:159
 msgid "\"make\""
 msgstr ""
 
-#: src/reference/host-fns.md:166
+#: src/reference/host-fns.md:163
 msgid ""
 "// the built pkg rides the run chain; .compile() installs it against\n"
 "// the offered rows snapshot\n"
 msgstr ""
 
-#: src/reference/host-fns.md:176
+#: src/reference/host-fns.md:173
 msgid ""
 "`pkg_async_fn!` is the async twin: one row spelling emits the five-row "
 "family (`__start`/`__yield`/`__take`/`__cancel` + the decl-row trap), the "
@@ -19454,18 +19115,18 @@ msgid ""
 "above them is the same derived-signature machinery:"
 msgstr ""
 
-#: src/reference/host-fns.md:188
+#: src/reference/host-fns.md:185
 msgid "\"server::make\""
 msgstr ""
 
-#: src/reference/host-fns.md:192
+#: src/reference/host-fns.md:189
 msgid ""
 "The signature is a fixed array of type ids derived from the closure's "
 "parameter and return types; a param type with no crossing impl is a "
 "**compile error at the register site**."
 msgstr ""
 
-#: src/reference/host-fns.md:195
+#: src/reference/host-fns.md:192
 msgid ""
 "Both body shapes fit: `-> R` (infallible) and `-> Result<R, Trap>` "
 "(fallible). Errors travel an explicit trap channel — a trapped body "
@@ -19473,13 +19134,13 @@ msgid ""
 "modules](embedding.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:199
+#: src/reference/host-fns.md:196
 msgid ""
 "`&str` / `&[u8]` params are zero-copy borrows scoped to exactly the call "
 "([value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:201
+#: src/reference/host-fns.md:198
 msgid ""
 "One installer per pkg: a duplicate row name inside a builder panics, a "
 "second `.host_pkg(..)` for the same scope panics (at the `.compile()` "
@@ -19487,11 +19148,11 @@ msgid ""
 "from `HostPkg::new`."
 msgstr ""
 
-#: src/reference/host-fns.md:207
+#: src/reference/host-fns.md:204
 msgid "The load-time contract — asymmetric, by design"
 msgstr ""
 
-#: src/reference/host-fns.md:209
+#: src/reference/host-fns.md:206
 msgid ""
 "Offering a host pkg **declares**; the embedding Rust **binds**. The "
 "`.compile()` install checks the two sides against each other, per pkg, "
@@ -19499,20 +19160,20 @@ msgid ""
 "same snapshot exposed for hosts that bind outside the chain):"
 msgstr ""
 
-#: src/reference/host-fns.md:215
+#: src/reference/host-fns.md:212
 msgid ""
 "**scope offered, a declared row never bound** — a panic naming the pkg (the "
 "installer left it out), and `.build()` refuses a boot naming it again when "
 "the installer never ran at all;"
 msgstr ""
 
-#: src/reference/host-fns.md:218
+#: src/reference/host-fns.md:215
 msgid ""
 "**signature drift** on a declared row — a panic; this is the only drift gate "
 "on the boot path;"
 msgstr ""
 
-#: src/reference/host-fns.md:220
+#: src/reference/host-fns.md:217
 msgid ""
 "**scope NOT offered** — the whole pkg merges **inert**: no panic, no gate. "
 "Blanket installs are legal (the CLI installs all of them; a program that "
@@ -19520,38 +19181,38 @@ msgid ""
 "not name ride as inert extras."
 msgstr ""
 
-#: src/reference/host-fns.md:225
+#: src/reference/host-fns.md:222
 msgid ""
 "The raw lane's `verify_against(&rut_driver::declared_host_fns(&pkgs))` "
 "re-checks the whole flat table and panics on all three mismatch classes:"
 msgstr ""
 
-#: src/reference/host-fns.md:229
+#: src/reference/host-fns.md:226
 msgid "**declared but unbound** — a rut call would trap mid-run;"
 msgstr ""
 
-#: src/reference/host-fns.md:230
+#: src/reference/host-fns.md:227
 msgid "**bound but undeclared** — no surface declares what the host installed;"
 msgstr ""
 
-#: src/reference/host-fns.md:231
+#: src/reference/host-fns.md:228
 msgid ""
 "**signature drift** — the decl says `(opaque, str, str) -> nil`, the binding "
 "took `(opaque, i64, str)`."
 msgstr ""
 
-#: src/reference/host-fns.md:234
+#: src/reference/host-fns.md:231
 msgid ""
 "The law follows the offer: **offer what you bind** — with the asymmetry the "
 "offer law needs: rut-declares-but-host-never-binds is loud; "
 "host-binds-but-rut-never-declares rides inert."
 msgstr ""
 
-#: src/reference/host-fns.md:238
+#: src/reference/host-fns.md:235
 msgid "Slots, not strings"
 msgstr ""
 
-#: src/reference/host-fns.md:240
+#: src/reference/host-fns.md:237
 msgid ""
 "Compiling a declaration file assigns every host fn a **stable slot id** in "
 "declaration order; the module binary carries the slot table. Calls compile "
@@ -19561,11 +19222,11 @@ msgid ""
 "be optimizable, it is rut source — the wrapper class is exactly that place."
 msgstr ""
 
-#: src/reference/host-fns.md:248
+#: src/reference/host-fns.md:245
 msgid "Async host fns"
 msgstr ""
 
-#: src/reference/host-fns.md:250
+#: src/reference/host-fns.md:247
 msgid ""
 "```rut\n"
 "// http_host.d.rut — an async row expands into a five-row family\n"
@@ -19574,137 +19235,137 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-fns.md:256
+#: src/reference/host-fns.md:253
 msgid ""
 "The embedder binds the family with one spelling; the closure spawns the "
 "work, hands out a completer clone, and returns. On the installer lane the "
 "row names are bare and the scope prefixes at the install:"
 msgstr ""
 
-#: src/reference/host-fns.md:261
+#: src/reference/host-fns.md:258
 msgid "\"http_host\""
 msgstr ""
 
-#: src/reference/host-fns.md:262
+#: src/reference/host-fns.md:259
 msgid "\"http_send\""
 msgstr ""
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:273
 msgid "/* optional abort hook: */"
 msgstr ""
 
-#: src/reference/host-fns.md:276
+#: src/reference/host-fns.md:273
 msgid "/* best-effort cancel */"
 msgstr ""
 
-#: src/reference/host-fns.md:277
+#: src/reference/host-fns.md:274
 msgid ""
 "// the built pkg rides the chain: RutRun::new()...host_pkg(http.build())\n"
 msgstr ""
 
-#: src/reference/host-fns.md:279
+#: src/reference/host-fns.md:276
 msgid ""
 "// the raw lane (bare registry, full `scope::name` strings) — the\n"
 "// escape hatch, same emitter:\n"
 "// rut_vm::register_async!(hosts, \"http_host::http_send\", ...);\n"
 msgstr ""
 
-#: src/reference/host-fns.md:285
+#: src/reference/host-fns.md:282
 msgid ""
 "`pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw twin "
 "`register_async!(hosts, …)`) emits the family the compiler's weave joins:"
 msgstr ""
 
-#: src/reference/host-fns.md:289
+#: src/reference/host-fns.md:286
 msgid "emitted row"
 msgstr ""
 
-#: src/reference/host-fns.md:289 src/reference/stdlib.md:36
+#: src/reference/host-fns.md:286 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:167 src/reference/stdlib.md:216
 #: src/reference/stdlib.md:383 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:43 src/reference/cli.md:172
 msgid "meaning"
 msgstr ""
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:288
 msgid "`<name>`"
 msgstr ""
 
-#: src/reference/host-fns.md:291
+#: src/reference/host-fns.md:288
 msgid ""
 "the decl row itself; calling it directly traps — the weave mints the future "
 "at the call site"
 msgstr ""
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:289
 msgid "`<name>__start(P…) -> opaque`"
 msgstr ""
 
-#: src/reference/host-fns.md:292
+#: src/reference/host-fns.md:289
 msgid "runs the closure, boxes the `Completer` as the future's state cell"
 msgstr ""
 
-#: src/reference/host-fns.md:293
+#: src/reference/host-fns.md:290
 msgid "`<name>__yield(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:293
+#: src/reference/host-fns.md:290
 msgid "resumption probe: `0` pending, `1` ready, `2` failed"
 msgstr ""
 
-#: src/reference/host-fns.md:294
+#: src/reference/host-fns.md:291
 msgid "`<name>__take(state) -> R`"
 msgstr ""
 
-#: src/reference/host-fns.md:294
+#: src/reference/host-fns.md:291
 msgid "marshals the answer onto the VM thread; a failed completer traps here"
 msgstr ""
 
-#: src/reference/host-fns.md:295
+#: src/reference/host-fns.md:292
 msgid "`<name>__cancel(state)`"
 msgstr ""
 
-#: src/reference/host-fns.md:295
+#: src/reference/host-fns.md:292
 msgid "the abort hook when given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-fns.md:297
+#: src/reference/host-fns.md:294
 msgid "`Completer<T>` API"
 msgstr ""
 
-#: src/reference/host-fns.md:299
+#: src/reference/host-fns.md:296
 msgid "`Completer::new()`"
 msgstr ""
 
-#: src/reference/host-fns.md:299
+#: src/reference/host-fns.md:296
 msgid "a fresh cell; `clone()` shares it (one `Arc`)"
 msgstr ""
 
-#: src/reference/host-fns.md:300
+#: src/reference/host-fns.md:297
 msgid "`complete(v)` / `fail(msg)`"
 msgstr ""
 
-#: src/reference/host-fns.md:300
+#: src/reference/host-fns.md:297
 msgid "settle from **any thread** (atomics + mutex only)"
 msgstr ""
 
-#: src/reference/host-fns.md:301
+#: src/reference/host-fns.md:298
 msgid "`poll() -> i32`"
 msgstr ""
 
-#: src/reference/host-fns.md:301
+#: src/reference/host-fns.md:298
 msgid "the driving loop's probe"
 msgstr ""
 
-#: src/reference/host-fns.md:302
+#: src/reference/host-fns.md:299
 msgid "`take_result() -> Result<T, Trap>`"
 msgstr ""
 
-#: src/reference/host-fns.md:302
+#: src/reference/host-fns.md:299
 msgid "VM thread only; a `fail` message becomes the trap at the `await`"
 msgstr ""
 
-#: src/reference/host-fns.md:304
+#: src/reference/host-fns.md:301
 msgid ""
 "Thread law: the VM stays single-threaded; workers touch only the completer. "
 "Cancellation is best-effort — a worker runs to its blocking completion and "
@@ -19712,43 +19373,43 @@ msgid ""
 "and [async and await](async.md)."
 msgstr ""
 
-#: src/reference/host-fns.md:309
+#: src/reference/host-fns.md:306
 msgid "Declaration files as artifacts"
 msgstr ""
 
-#: src/reference/host-fns.md:311
+#: src/reference/host-fns.md:308
 msgid "A published package ships:"
 msgstr ""
 
-#: src/reference/host-fns.md:313
+#: src/reference/host-fns.md:310
 msgid "artifact"
 msgstr ""
 
-#: src/reference/host-fns.md:313 src/reference/symbol-stripping.md:26
+#: src/reference/host-fns.md:310 src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr ""
 
-#: src/reference/host-fns.md:315
+#: src/reference/host-fns.md:312
 msgid "`mod.rutc`"
 msgstr ""
 
-#: src/reference/host-fns.md:315
+#: src/reference/host-fns.md:312
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module "
 "binary and verification](module-binary.md))"
 msgstr ""
 
-#: src/reference/host-fns.md:316
+#: src/reference/host-fns.md:313
 msgid "`mod.d.rut`"
 msgstr ""
 
-#: src/reference/host-fns.md:316
+#: src/reference/host-fns.md:313
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); "
 "documentation only, never the loader's source of truth"
 msgstr ""
 
-#: src/reference/host-fns.md:318
+#: src/reference/host-fns.md:315
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, "
@@ -19756,59 +19417,59 @@ msgid ""
 "without guesswork."
 msgstr ""
 
-#: src/reference/host-fns.md:322
+#: src/reference/host-fns.md:319
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table "
 "— a pure data compare. Drift is a load error naming both modules, never a "
 "runtime surprise."
 msgstr ""
 
-#: src/reference/host-fns.md:325
+#: src/reference/host-fns.md:322
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are "
 "stripped (`--release` drops member-name strings), but code is recoverable "
 "with effort. What publishing guarantees is API discipline."
 msgstr ""
 
-#: src/reference/host-fns.md:329
+#: src/reference/host-fns.md:326
 msgid "Surface resolution during compilation"
 msgstr ""
 
-#: src/reference/host-fns.md:331
+#: src/reference/host-fns.md:328
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first "
 "hit wins:"
 msgstr ""
 
-#: src/reference/host-fns.md:334
+#: src/reference/host-fns.md:331
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr ""
 
-#: src/reference/host-fns.md:335
+#: src/reference/host-fns.md:332
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface "
 "on the wire) — or its bundled source for a splice-needed group; explicit "
 "mounts outrank stray sources, never dev source;"
 msgstr ""
 
-#: src/reference/host-fns.md:338
+#: src/reference/host-fns.md:335
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside "
 "the registered implementation."
 msgstr ""
 
-#: src/reference/host-fns.md:341
+#: src/reference/host-fns.md:338
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose "
 "implementation is absent is legal and complete — checking passes; only "
 "running requires the bodies."
 msgstr ""
 
-#: src/reference/host-fns.md:345
+#: src/reference/host-fns.md:342
 msgid "End-to-end shape"
 msgstr ""
 
-#: src/reference/host-fns.md:347
+#: src/reference/host-fns.md:344
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds "
 "`server::subscribe`/`server::emit` over its own `EventBus` box, the plugin "
@@ -20090,6 +19751,10 @@ msgid ""
 msgstr ""
 
 #: src/reference/templates.md:20
+msgid "`Template`"
+msgstr ""
+
+#: src/reference/templates.md:20
 msgid ""
 "the literal compiles to a **template construction**: literal chunks and "
 "boxed values, not pre-rendered text"
@@ -20229,9 +19894,8 @@ msgstr ""
 
 #: src/reference/templates.md:100
 msgid ""
-"A `Template` crosses the host boundary, and crosses isolate channels like "
-"any builtin ([workers and channels](workers-and-channels.md)) — a worker may "
-"return one where the main VM expects `Template`."
+"A `Template` crosses the host boundary like any builtin — a host fn may "
+"return one where the VM expects `Template`."
 msgstr ""
 
 #: src/reference/stdlib.md:3
@@ -22760,6 +22424,10 @@ msgid "the two readbacks + their guards"
 msgstr ""
 
 #: src/reference/typed-bytecode.md:93
+msgid "closures"
+msgstr ""
+
+#: src/reference/typed-bytecode.md:93
 msgid "`MakeClosure`"
 msgstr ""
 
@@ -23778,19 +23446,18 @@ msgstr ""
 
 #: src/reference/vm-core.md:26
 msgid ""
-"A `Vm` is single-threaded by construction: workers are separate VMs "
-"([Workers and channels](workers-and-channels.md)). Saved frames are plain "
-"records `{ func, pc, regs, ret_dst }`; calls push, returns pop. Register "
-"files are recycled through a pool, and per-function side tables "
-"(reference-typed register indices, per-type field layouts, baked type "
-"representations) keep the hot loop free of type-table lookups."
+"A `Vm` is single-threaded by construction. Saved frames are plain records `{ "
+"func, pc, regs, ret_dst }`; calls push, returns pop. Register files are "
+"recycled through a pool, and per-function side tables (reference-typed "
+"register indices, per-type field layouts, baked type representations) keep "
+"the hot loop free of type-table lookups."
 msgstr ""
 
-#: src/reference/vm-core.md:33
+#: src/reference/vm-core.md:32
 msgid "The interpreter loop"
 msgstr ""
 
-#: src/reference/vm-core.md:35
+#: src/reference/vm-core.md:34
 msgid ""
 "The loop is a `match` over decoded ops — `decode` is a table index, not a "
 "byte scan. On native targets the default engine is a **threaded** dispatcher "
@@ -23801,26 +23468,26 @@ msgid ""
 "absorb _bail_ to the match interpreter with the pc pinned at the op."
 msgstr ""
 
-#: src/reference/vm-core.md:44
+#: src/reference/vm-core.md:43
 msgid ""
 "Direct calls are an index + jump; interface (itable) calls are two loads "
 "(itable row) + an indirect jump."
 msgstr ""
 
-#: src/reference/vm-core.md:46
+#: src/reference/vm-core.md:45
 msgid ""
 "Refcount retain/release are inline in the loop; a release to zero nulls the "
 "weak list, queues the type's `dispose` body (the `[disposal]` contract), and "
 "frees ([The Rc heap and destructors](rc-heap.md))."
 msgstr ""
 
-#: src/reference/vm-core.md:50
+#: src/reference/vm-core.md:49
 msgid ""
 "Fuel is accounted per op, with the fuller budget check amortized every "
 "`interrupt_every` ops."
 msgstr ""
 
-#: src/reference/vm-core.md:55
+#: src/reference/vm-core.md:54
 msgid ""
 "The embedder's host-fn binding table (`HostRegistry`) is built **before** "
 "the `Vm` exists and is consumed at construction: every host thunk the "
@@ -23832,20 +23499,20 @@ msgid ""
 "work, no allocation."
 msgstr ""
 
-#: src/reference/vm-core.md:64
+#: src/reference/vm-core.md:63
 msgid ""
 "Host bodies are plain Rust functions over `&mut Vm` and slots; arity is "
 "capped at 8 (the boundary's tuple law), and signatures are derived from the "
 "body's Rust shape, not written by hand."
 msgstr ""
 
-#: src/reference/vm-core.md:67
+#: src/reference/vm-core.md:66
 msgid ""
 "A host body records a trap in a VM-side channel rather than returning "
 "`Result`; the trap fires before any destination register is written."
 msgstr ""
 
-#: src/reference/vm-core.md:69
+#: src/reference/vm-core.md:68
 msgid ""
 "**Re-entrant calls** (a host fn calling back into rut) run the callee on a "
 "fresh frame stack under the same budget. The outer cursor is stash/restore: "
@@ -23855,7 +23522,7 @@ msgid ""
 "the trap, add fuel, and retry its nested call."
 msgstr ""
 
-#: src/reference/vm-core.md:76
+#: src/reference/vm-core.md:75
 msgid ""
 "The async host-fn lane (`register_async!`) binds a Rust async body to the "
 "minted `{scope}::{name}__start/__yield/__take/__cancel` rows the compiler "
@@ -23863,18 +23530,18 @@ msgid ""
 "bridge](host-futures.md))."
 msgstr ""
 
-#: src/reference/vm-core.md:81
+#: src/reference/vm-core.md:80
 msgid "Traps"
 msgstr ""
 
-#: src/reference/vm-core.md:83
+#: src/reference/vm-core.md:82
 msgid ""
 "Bugs are traps, errors are values. Arithmetic overflow, division by zero, "
 "indexing out of bounds, nil dereference, `panic(...)`, a failed downcast "
 "guard, and budget exhaustion all unwind as `Err(Trap)` — never a Rust panic:"
 msgstr ""
 
-#: src/reference/vm-core.md:98
+#: src/reference/vm-core.md:97
 msgid ""
 "**Traps are catchable only at the host boundary.** `vm.call(...)` returns "
 "`Result`; rut code never catches one — errors in rut are `(T, err)` tuples "
@@ -23883,15 +23550,15 @@ msgid ""
 "release. The `Vm` itself survives a trap — the next call starts clean."
 msgstr ""
 
-#: src/reference/vm-core.md:109
+#: src/reference/vm-core.md:108
 msgid "// per-op countdown\n"
 msgstr ""
 
-#: src/reference/vm-core.md:111
+#: src/reference/vm-core.md:110
 msgid "// default 1024\n"
 msgstr ""
 
-#: src/reference/vm-core.md:115
+#: src/reference/vm-core.md:114
 msgid ""
 "**Fuel** counts ops down. Exhaustion parks the frame at its pc — the loop "
 "state _is_ the frame — so `add_fuel(n)` + `resume()` continues it; nothing "
@@ -23899,26 +23566,26 @@ msgid ""
 "loops still park."
 msgstr ""
 
-#: src/reference/vm-core.md:119
+#: src/reference/vm-core.md:118
 msgid ""
 "**Heap budget** is checked at every allocation; over-limit allocation traps "
 "`OutOfMemory` the same parkable way."
 msgstr ""
 
-#: src/reference/vm-core.md:121
+#: src/reference/vm-core.md:120
 msgid ""
 "**Heap accounting** is live: `heap_usage()` reports current bytes, "
 "`fuel_used` accumulates across resumes."
 msgstr ""
 
-#: src/reference/vm-core.md:123
+#: src/reference/vm-core.md:122
 msgid ""
 "**Interrupts** are cooperative: the budget check cadence bounds how long any "
 "host-requested stop can take. Native (host) bodies run outside the fuel "
 "budget and are expected to be fast."
 msgstr ""
 
-#: src/reference/vm-core.md:126
+#: src/reference/vm-core.md:125
 msgid ""
 "`Vm::builder().compiled(c).limits(l).build()` takes the limits "
 "(`.limits(..)` on the builder, or the parts a `Compiled` hands over); unset "
@@ -23926,31 +23593,31 @@ msgid ""
 "explicitly ([Resource limits and fuel](resource-limits.md))."
 msgstr ""
 
-#: src/reference/vm-core.md:132
+#: src/reference/vm-core.md:131
 msgid "Coroutines and the driving loop"
 msgstr ""
 
-#: src/reference/vm-core.md:134
+#: src/reference/vm-core.md:133
 msgid ""
 "Every async entry runs as a root frame, parked when `await` returns pending. "
 "There is no microtask queue and no job executor — two queues and a virtual "
 "clock:"
 msgstr ""
 
-#: src/reference/vm-core.md:138
+#: src/reference/vm-core.md:137
 msgid ""
 "`ready: VecDeque<Slot>` — launched or woken frames; each entry owns one "
 "reference (retained on enqueue, released on pop)."
 msgstr ""
 
-#: src/reference/vm-core.md:140
+#: src/reference/vm-core.md:139
 msgid ""
 "`timers: BTreeMap<u64, Vec<Slot>>` — sleep deadlines against the VM's "
 "**virtual clock** (`now_ms` / `set_now` — deterministic; the host advances "
 "it explicitly, or maps it to wall time)."
 msgstr ""
 
-#: src/reference/vm-core.md:143
+#: src/reference/vm-core.md:142
 msgid ""
 "`drive(fut)` — one drive step through the future's designated yield slot "
 "(the `Future<T>` class's engine ABI): a fresh engine context over the frame "
@@ -23959,37 +23626,37 @@ msgid ""
 "frame at its pc, and a re-drive re-enters at the checkpoint state."
 msgstr ""
 
-#: src/reference/vm-core.md:149
+#: src/reference/vm-core.md:148
 msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` "
 "expires due timers into `ready` and answers the earliest remaining deadline; "
 "`pending_tasks()` is the idle test."
 msgstr ""
 
-#: src/reference/vm-core.md:152
+#: src/reference/vm-core.md:151
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the "
 "awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr ""
 
-#: src/reference/vm-core.md:154
+#: src/reference/vm-core.md:153
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame "
 "is simply not in `ready` until its wake edge or timer fires."
 msgstr ""
 
-#: src/reference/vm-core.md:157
+#: src/reference/vm-core.md:156
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and "
 "tests virtualize time by advancing the clock — full determinism ([Async and "
 "await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 
-#: src/reference/vm-core.md:161
+#: src/reference/vm-core.md:160
 msgid "Heap integration"
 msgstr ""
 
-#: src/reference/vm-core.md:163
+#: src/reference/vm-core.md:162
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no "
 "collection pass at all**: destruction happens at release-to-zero, so nothing "

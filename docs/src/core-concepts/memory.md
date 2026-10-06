@@ -14,8 +14,8 @@ Every non-primitive value — strings, byte buffers, arrays, records,
 enums, interface objects, erasure boxes, nullable boxes, coroutine frames —
 is a heap cell. Each cell starts with a header: a refcount, a type id,
 and a few flags. The counts are plain integers: a VM runs on one thread
-with one heap, workers are separate VMs, and nothing is ever shared
-between them, so there are no atomics anywhere in the heap.
+with one heap and nothing is ever shared, so there are no atomics
+anywhere in the heap.
 
 Because assignments and passes copy *handles*, not payloads, the
 refcount traffic is exactly the aliasing the program performs:

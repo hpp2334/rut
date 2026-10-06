@@ -136,8 +136,6 @@ entry fn main() {
   `opaque.downcast<T>` answers `nil` for every `T` (the miss is checked,
   never a trap). The host borrows the payload back typed, call-scoped
   and borrow-guarded.
-- Crossing isolates is allowed iff the boxed value's type is crossable,
-  checked at runtime via the type descriptor.
 - An `opaque` box can do nothing until it is recovered — no methods, no
   fields, no format-string rendering. That is the difference from
   gradual typing: the erased-storage type for a hot loop is a smell;
