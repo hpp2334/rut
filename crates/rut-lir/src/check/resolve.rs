@@ -44,24 +44,64 @@ impl<'a> Ctx<'a> {
             .extern_trait(name)
             .map(|e| e.id)
             .unwrap_or(u32::MAX);
+        let base_text = self.interner.name(name).to_string();
+        self.mint_iface_inst_from_desc(base_id, &base_text, args, Some(name))
+    }
+
+    /// The mint core, keyed by the BASE DESCRIPTOR's table row (not a
+    /// name): the use-both gate leaves interfaces the consumer never
+    /// NAMED registered namelessly (`add_extern_iface_decl`'s `None`
+    /// binding) — a signature's interface-typed param still carries the
+    /// descriptor id, and the substitution re-mints from it directly.
+    /// `base_text` formats the applied name; `cache_name` (when the
+    /// name IS bound) keys the `iface_inst` dedup cache.
+    pub(crate) fn mint_iface_inst_from_desc(
+        &mut self,
+        base_id: u32,
+        base_text: &str,
+        args: Vec<TypeId>,
+        cache_name: Option<IdentId>,
+    ) -> u32 {
+        if let Some(name) = cache_name {
+            if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
+                return id;
+            }
+        }
         let id = self.ifaces.len() as u32;
         let tname = if args.is_empty() {
-            self.interner.name(name).to_string()
+            base_text.to_string()
         } else {
             format!(
                 "{}<{}>",
-                self.interner.name(name),
+                base_text,
                 args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
             )
         };
+        // a nameless mint (the consumer never bound the interface's
+        // name — the use-both gate) dedups by the APPLIED NAME text:
+        // repeated substitutions land on one descriptor
+        if cache_name.is_none() {
+            let wanted = &tname;
+            if let Some(existing) = self
+                .ifaces
+                .iter()
+                .enumerate()
+                .find(|(_, d)| self.interner.name(d.name) == wanted)
+                .map(|(i, _)| i as u32)
+            {
+                return existing;
+            }
+        }
         let tname = self.intern(&tname);
         self.ifaces.push(IfaceDesc { name: tname, methods: vec![] });
-        self.iface_inst.insert((name, args.clone()), id);
+        if let Some(name) = cache_name {
+            self.iface_inst.insert((name, args.clone()), id);
+        }
         let Some(base) = (base_id != u32::MAX)
             .then(|| self.ifaces.get(base_id as usize).cloned())
             .flatten()
         else {
-            return id; // unreachable — extern_trait guarantees the row
+            return id;
         };
         let leaves = self.carried_trait_leaves(&base);
         let mut env: std::collections::HashMap<String, TypeId> = std::collections::HashMap::new();
