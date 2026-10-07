@@ -395,7 +395,17 @@ impl<'a> Ctx<'a> {
 
     /// Instantiate a generic trait for concrete type arguments:
     /// one `IfaceDesc` (and trait id) per type-argument list, cached.
+    /// An IMPORTED generic interface routes to the carried-descriptor
+    /// mint (`mint_extern_iface_inst`) at this choke point — a local
+    /// `mk_iface_inst` run against an imported name would find no local
+    /// decl, allocate, and CACHE AN EMPTY DESCRIPTOR under the same
+    /// `(name, args)` key every later legit mint (an annotation, a
+    /// signature substitution) fetches — the emptiness then leaks into
+    /// the link's cross-module member check.
     pub fn mk_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if self.extern_trait(name).is_some() {
+            return self.mint_extern_iface_inst(name, args);
+        }
         if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
             return id;
         }
@@ -622,6 +632,80 @@ impl<'a> Ctx<'a> {
     /// rebuild per element; everything else (boot rows, registered
     /// block rows) passes through — the consumer-side law for the
     /// carried surface signatures of generic classes.
+    /// The interface-object row's substitution half. Two shapes:
+    /// — an APPLIED row spelling placeholder args (`Base<#T>`) re-mints
+    ///   at the substituted arguments;
+    /// — a BARE base row for a generic interface (`[interface] Readable`
+    ///   — the surface flattening drops the application; the arg link
+    ///   survives only as the name-colliding method generics) mints the
+    ///   applied inst when the interface's own generics are ALL bound
+    ///   in `env`. A well-formed signature's interface args are exactly
+    ///   the method's generics by name, so the by-name read is the
+    ///   link; an unbound generic (a concrete application flattened to
+    ///   base, or a foreign param) passes through untouched.
+    /// `None` — the pass-through — when nothing mints.
+    pub(crate) fn subst_iface_obj_row(
+        &mut self,
+        row_text: &str,
+        env: &std::collections::HashMap<String, TypeId>,
+    ) -> Option<TypeId> {
+        if row_text.contains('<') {
+            if !row_text.contains('#') {
+                return None;
+            }
+            let (base_text, rest) = row_text.split_once('<')?;
+            let args_text = rest.strip_suffix('>')?;
+            let base_id = self.intern(base_text);
+            let mut args = Vec::new();
+            let mut ok = true;
+            for a in split_top_commas(args_text) {
+                if let Some(&t) = env.get(a.as_str()) {
+                    args.push(t);
+                    continue;
+                }
+                match self
+                    .interner
+                    .lookup(&a)
+                    .and_then(|iid| self.types.dense_id_of_name(iid))
+                {
+                    Some(t) => args.push(t),
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok && !args.is_empty() {
+                let iid = self.mint_impl_iface_inst(base_id, args);
+                return Some(self.mk_iface_obj(iid));
+            }
+            return None;
+        }
+        // the bare-base shape: the carried descriptor's placeholder
+        // leaves name the interface's generics in signature walk order
+        // (the crossing template law — the k-th leaf is the k-th
+        // generic); ALL must be env-bound or the row passes through
+        let base_id = self.intern(row_text);
+        let ei = self.extern_trait(base_id).cloned()?;
+        if ei.generics == 0 {
+            return None;
+        }
+        let base = self.iface_by_id(ei.id).clone();
+        let leaves = self.carried_trait_leaves(&base);
+        if leaves.len() != ei.generics {
+            return None;
+        }
+        let mut args = Vec::with_capacity(leaves.len());
+        for leaf in &leaves {
+            let Some(&t) = env.get(leaf.as_str()) else {
+                return None;
+            };
+            args.push(t);
+        }
+        let iid = self.mint_impl_iface_inst(base_id, args);
+        Some(self.mk_iface_obj(iid))
+    }
+
     pub(crate) fn subst_template_ty(&mut self, id: TypeId, env: &std::collections::HashMap<String, TypeId>) -> TypeId {
         let text = self.types.type_at(id).name;
         let text = self.interner.name(text).to_string();
@@ -726,8 +810,20 @@ impl<'a> Ctx<'a> {
             }
             // a user trait object: the kind holds a unit-local
             // trait-table index with no structural element to
-            // substitute — passes through
-            TyKind::IfaceObj { .. } => None,
+            // substitute — passes through... UNLESS the descriptor
+            // spells APPLIED PLACEHOLDER args (`[interface]
+            // Readable<#T>` — an extern method's signature param): the
+            // un-minted row would leak the `#leaf` into the call's
+            // expected types, and a cross-module method-generic call
+            // would fail satisfaction against the dangling placeholder.
+            // Re-mint at the substituted args — the same extern
+            // instantiation the annotation path mints (the `iface_inst`
+            // cache dedups a spelling and an annotation onto one row).
+            TyKind::IfaceObj { iface_id } => {
+                let row_name = self.ifaces[iface_id as usize].name;
+                let row_text = self.interner.name(row_name).to_string();
+                self.subst_iface_obj_row(&row_text, env)
+            }
             // a TUPLE (record with numeric fields) mentioning a
             // placeholder (`(?#T, ?DecodeJsonError)` — the generic fns'
             // return shapes): rebuild with the substituted fields. A

@@ -209,13 +209,19 @@ impl<'a> Ctx<'a> {
                     crate::check::impls::MemberSrc::Extern { subst, data, .. } => {
                         // the exporter's compiled fn, mirrored: the stub's
                         // ledger row names the declaring package, link
-                        // redirects it onto the owner's copy
-                        self.mirror_inst(Inst {
+                        // redirects it onto the owner's copy. The fill
+                        // STILL lands (the vtable row binds the slot to
+                        // the mirror's fn id) — skipping the push left
+                        // every (concrete × iface) pair whose members
+                        // live in another module with an EMPTY slot,
+                        // and the first dispatch trapped.
+                        let inst = Inst {
                             key: FnKey::Method { data, name: tm.name },
                             subst,
                             iface_origins: vec![],
-                        });
-                        continue;
+                        };
+                        self.mirror_inst(inst.clone());
+                        inst
                     }
                 };
                 fills.push((concrete, slot, inst));
