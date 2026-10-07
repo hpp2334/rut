@@ -154,7 +154,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // structural unification binds the method's remaining generics
         for (i, tn) in param_nodes.iter().enumerate() {
             if let Some(tn) = tn {
-                self.unify_generic(*tn, arg_tys[i], &decl_generics, &mut subst, sp)?;
+                self.unify_generic_val(*tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
             }
         }
         for g in &decl_generics {
@@ -183,7 +183,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.self_ty = saved_self;
         self.subst = saved_subst;
         for (i, _) in args.iter().enumerate() {
-            if !self.widens(arg_tys[i], ptys[i]) {
+            if !self.widens_val(args[i], arg_tys[i], ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(args[i].id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])

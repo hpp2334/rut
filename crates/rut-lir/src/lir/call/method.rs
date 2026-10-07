@@ -506,7 +506,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let mut aregs = Vec::new();
                     for (i, a) in args.iter().enumerate() {
                         let t = self.compile_expr(*a, Some(ptys[i]))?;
-                        if !self.widens(t, ptys[i]) {
+                        if !self.widens_val(*a, t, ptys[i]) {
                             self.ctx.err(self.ctx.ast.span(a.id()), format!(
                                 "argument {} is `{}`, `{}` expected",
                                 i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])

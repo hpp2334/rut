@@ -91,6 +91,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         subst: &mut Vec<(IdentId, TypeId)>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
+        self.unify_generic_val(param_node, None, arg_ty, decl_generics, subst, sp)
+    }
+
+    /// [`Self::unify_generic`] with the argument's expression: the
+    /// value position reads the boxed passes (a boxed value whose
+    /// tracked origin names the compared concrete type answers there).
+    pub(crate) fn unify_generic_val(
+        &mut self,
+        param_node: NodeHandle<AnyTy>,
+        arg_node: Option<NodeHandle<AnyExpr>>,
+        arg_ty: TypeId,
+        decl_generics: &[IdentId],
+        subst: &mut Vec<(IdentId, TypeId)>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
         let bind = |name: IdentId, ty: TypeId, subst: &mut Vec<(IdentId, TypeId)>| {
             if let Some(e) = subst.iter_mut().find(|(n, _)| *n == name) {
                 e.1 = ty;
@@ -119,7 +134,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // non-generic: resolve and compare — a registered impl
                 // (nominal widening) counts as a match
                 let want = self.ctx.resolve_type(param_node, subst);
-                if !self.widens(arg_ty, want) {
+                let ok = match arg_node {
+                    Some(n) => self.widens_val(n, arg_ty, want),
+                    None => self.widens(arg_ty, want),
+                };
+                if !ok {
                     self.ctx.err(sp, format!(
                         "argument is `{}`, `{}` expected",
                         self.ctx.type_name(arg_ty), self.ctx.type_name(want)

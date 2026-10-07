@@ -138,6 +138,23 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
+        // an interface OBJECT row is never Carried: the box is not a
+        // requester's seed row, it is this unit's own spelling of a
+        // trait-typed value — and a trait object's member surface is
+        // EMPTY (only the boxed interface's own members reach it, and
+        // those are dispatches, not satisfaction proofs). Reading the
+        // head-law fallback here classified `[interface] Readable<f64>`
+        // as Carried, so a boxed value "satisfied" every other
+        // interface (the Writable-pass hole): the widening recorded a
+        // fill keyed on the BOX row — a row with no inherent members,
+        // which build_vtables can never land — while the dispatch read
+        // the PAYLOAD row. The honest answer: Own, an empty member
+        // set — `check_satisfies` refuses, and the origin-aware
+        // widening (the call sites) re-binds through the value's
+        // carried origin where a proof actually exists.
+        if matches!(self.types.kind(concrete), TyKind::IfaceObj { .. }) {
+            return SurfaceKind::Own;
+        }
         // no surface here. The HEAD law decides: a row whose head names
         // a type this unit declares is the unit's OWN instantiation —
         // the real body compiles here (owner-anchored;

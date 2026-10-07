@@ -154,13 +154,18 @@ pub struct InstRequest {
 /// one-field cell's handle and the body reads/writes through it; the
 /// FuncCode param list spells the CELL type (so `MakeClosure` retains
 /// the cell), while `ty` stays the value type the body is typed
-/// against.
-#[derive(Clone, Copy, Debug)]
+/// against. `origins` is the captured binding's origin set (origin
+/// counting): an interface-typed capture whose source local pins
+/// concrete origins carries them into the closure body, so the body's
+/// boxed passes re-bind through the same proof the enclosing frame
+/// had (the write slot is at most a pair — empty = untracked).
+#[derive(Clone, Debug)]
 pub struct Capture {
     pub name: IdentId,
     pub ty: TypeId,
     pub is_mut: bool,
     pub cell: Option<TypeId>,
+    pub origins: Vec<TypeId>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

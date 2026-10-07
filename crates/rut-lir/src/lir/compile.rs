@@ -420,14 +420,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         for (cap) in &caps {
-            let Capture { name: n, ty: t, is_mut: m, cell: by_cell } = *cap;
+            let Capture { name: n, ty: t, is_mut: m, cell: by_cell, origins: cap_origins } = cap;
             // a promoted capture's parameter carries the SHARED cell's
             // handle — the local re-binds cell-backed so both frames
             // route through one slot (stay-linked for the binding's scope)
-            let reg = c.new_reg(by_cell.unwrap_or(t));
-            c.locals.push(Local { name: n, reg, ty: t, is_mut: m, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: by_cell });
+            let reg = c.new_reg(by_cell.unwrap_or(*t));
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
             // captures are part of the fn's parameter list (after declared)
-            param_tys.push(by_cell.unwrap_or(t));
+            param_tys.push(by_cell.unwrap_or(*t));
         }
         let n_caps = caps.len() as u32;
         // body: block or single expression (arrows)
@@ -537,9 +537,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.locals.push(Local { name: var, reg: preg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: None });
         }
         for (cap) in &caps {
-            let Capture { name: n, ty: t, is_mut: m, cell: by_cell } = *cap;
-            let reg = c.new_reg(by_cell.unwrap_or(t));
-            c.locals.push(Local { name: n, reg, ty: t, is_mut: m, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: by_cell });
+            let Capture { name: n, ty: t, is_mut: m, cell: by_cell, origins: cap_origins } = cap;
+            let reg = c.new_reg(by_cell.unwrap_or(*t));
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {

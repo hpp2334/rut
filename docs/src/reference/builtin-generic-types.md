@@ -160,8 +160,9 @@ copy (the aliasing law).
   means "not found".
 - **Errors** are the answer channel: `(?T, err)` — see
   [Primitive types](primitive-types.md).
-- **Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see
-  [opaque — erasure and downcast](opaque.md).
+- **Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — the
+  checked lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse,
+  the bad-cast lane — see [opaque — erasure and downcast](opaque.md).
 
 A nullable/enum value is not compared structurally with `==` — test it
 with `when`, a `nil`/`!= nil` guard, or the payload.

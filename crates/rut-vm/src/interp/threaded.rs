@@ -782,12 +782,19 @@ impl Machine for Vm {
             crate::heap::store::OpaqueEntry::Host(_) => None,
         });
         let Some((val, val_ty)) = rut else {
-            return Err(Trap::new(TrapKind::BadUnbox, "unbox on non-opaque"));
+            return Err(Trap::new(
+                TrapKind::BadUnbox,
+                "unbox on a non-box slot — a host-payload box has no rut type to recover",
+            ));
         };
         if val_ty != *ty {
             return Err(Trap::new(
                 TrapKind::BadUnbox,
-                "unbox type mismatch (the compiler guards this; the trap is the safety net)",
+                format!(
+                    "unbox type mismatch: the box holds `{}`, `{}` was recovered — the erasure's inverse needs the sealed type",
+                    self.prog.type_name(val_ty),
+                    self.prog.type_name(*ty)
+                ),
             ));
         }
         self.move_sum_val(*dst, val, *ty);

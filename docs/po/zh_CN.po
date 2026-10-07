@@ -1,6 +1,7 @@
 msgid ""
 msgstr "Project-Id-Version: The rut Book\nPOT-Creation-Date: 1970-01-01 00:00:00+00:00\nPO-Revision-Date: \nLast-Translator: \nLanguage-Team: \nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: en\nPlural-Forms: nplurals=1; plural=0;\n"
 
+
 #: src/SUMMARY.md:1
 msgid "Summary"
 msgstr "目录"
@@ -11621,14 +11622,7 @@ msgid ""
 msgstr "**错误**走应答通道：`(?T, err)` —— 参见[基本类型](primitive-types.md)。"
 
 
-#: src/reference/builtin-generic-types.md:163
-msgid ""
-"**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — see [opaque — erasure and downcast](opaque.md)."
-msgstr ""
-"**类型擦除后的恢复**是 `opaque.downcast<T>(o) -> ?T` —— 参见[opaque —— 擦除与向下转型](opaque.md)。"
-
-
-#: src/reference/builtin-generic-types.md:166
+#: src/reference/builtin-generic-types.md:167
 msgid ""
 "A nullable/enum value is not compared structurally with `==` — test it with `when`, a `nil`/`!= nil` guard, or the payload."
 msgstr "可空值/枚举值不用 `==` 做结构化比较——用 `when`、`nil`/`!= nil` 守卫或其载荷来检验。"
@@ -12320,7 +12314,7 @@ msgid ""
 msgstr "不存在范围、解构、绑定模式和守卫（`x if cond`）；模式只有枚举成员、字面量、多选一和通配符。"
 
 
-#: src/reference/control-flow.md:81 src/reference/opaque.md:44
+#: src/reference/control-flow.md:81 src/reference/opaque.md:45
 msgid "The laws"
 msgstr "法则"
 
@@ -14256,17 +14250,17 @@ msgid "checked recovery: the box's inner cell on a match, `nil` on a mismatch"
 msgstr "受检恢复：匹配时返回盒的内层单元，不匹配时返回 `nil`"
 
 
-#: src/reference/opaque.md:18
+#: src/reference/opaque.md:19
 msgid "`x is opaque`"
 msgstr "`x is opaque`"
 
 
-#: src/reference/opaque.md:18
+#: src/reference/opaque.md:19
 msgid "the ordinary concrete test for the box type itself"
 msgstr "对盒类型本身进行的普通具体测试"
 
 
-#: src/reference/opaque.md:20
+#: src/reference/opaque.md:21
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14289,14 +14283,14 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/opaque.md:46
+#: src/reference/opaque.md:47
 msgid ""
 "**Construction is erasure.** Every value can become `opaque`. Under the all-cells regime, boxing is **zero-copy**: the box stores the payload's cell handle, so mutations through the original name are visible through the box (the alias law, see [By-reference and nullable](by-reference-and-nullable.md)). A primitive payload copies the bits — value semantics where aliasing is unobservable:"
 msgstr ""
 "**构造即擦除。** 每个值都能变成 `opaque`。在全单元体制下，装盒是**零复制**的：盒存储载荷的单元句柄，因此透过原始名称做出的修改透过盒可见（别名法则，参见[按引用与可空](by-reference-and-nullable.md)）。基本类型载荷复制位 —— 在别名不可观测的场合保持值语义："
 
 
-#: src/reference/opaque.md:54
+#: src/reference/opaque.md:55
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14312,33 +14306,33 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/opaque.md:70
+#: src/reference/opaque.md:71
 msgid ""
 "**A match is the box's own inner cell.** The recovered `?T` shares the box: writes through the recovery are the source's, in both directions, through every holder. A primitive payload reads the copied value."
 msgstr ""
 "**匹配返回的是盒自己的内层单元。** 恢复出的 `?T` 与盒共享：透过恢复值做出的写入就是源头的写入，双向成立，透过每个持有者皆然。基本类型载荷读到的是复制出的值。"
 
 
-#: src/reference/opaque.md:73
+#: src/reference/opaque.md:74
 msgid ""
 "**A mismatch is `nil`.** There is no flag and no zero value — the miss is the nullable's null; an unguarded dereference traps `NilDeref`, never a silent zero."
 msgstr ""
 "**不匹配即 `nil`。** 没有标志位，也没有零值 —— 未命中就是可空类型的空；未加守护的解引用触发 `NilDeref` 陷阱，绝不是无声的零。"
 
 
-#: src/reference/opaque.md:76
+#: src/reference/opaque.md:105
 msgid ""
 "**The type argument must be concrete.** An interface-typed type argument (`opaque.downcast<Drawable>`) is a compile error — interface-typed values have no recovery path by design."
 msgstr ""
 
 
-#: src/reference/opaque.md:79
+#: src/reference/opaque.md:108
 msgid ""
 "**The opaque-is law: `is` names the box, never the payload.** `o is T` and `o is I` answer **by the box** — false for every payload type, concrete and interface alike. The one check that names what it is — `o is opaque` — is `true`. Recovery is `downcast<T>` only. On a non-box receiver, `x is opaque` is the ordinary concrete test for the box type."
 msgstr ""
 
 
-#: src/reference/opaque.md:86
+#: src/reference/opaque.md:115
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14352,31 +14346,31 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/opaque.md:100
+#: src/reference/opaque.md:129
 msgid ""
 "**Boxes are never equal unless identical**: `opaque(v) == opaque(v)` is `false` — two boxes, two cells. Box once, compare boxes."
 msgstr "**盒永不相等，除非同一**：`opaque(v) == opaque(v)` 是 `false` —— 两个盒，两个单元。装一次盒，比较盒。"
 
 
-#: src/reference/opaque.md:102
+#: src/reference/opaque.md:131
 msgid ""
 "**Interface-typed values cannot be boxed**: erasure takes a concrete value. Fixed arrays box fine; their identity covers the element type."
 msgstr ""
 
 
-#: src/reference/opaque.md:105
+#: src/reference/opaque.md:134
 msgid "Composition and costs"
 msgstr "组合与成本"
 
 
-#: src/reference/opaque.md:107
+#: src/reference/opaque.md:136
 msgid ""
 "`opaque` is a concrete primitive, not a lattice node: it composes in every type position trivially — `Vec<opaque>`, `[opaque]`, fields, returns, parameters."
 msgstr ""
 "`opaque` 是具体基本类型，不是格上的节点：它在任何类型位置的组合都平凡 —— `Vec<opaque>`、`[opaque]`、字段、返回值、参数。"
 
 
-#: src/reference/opaque.md:111
+#: src/reference/opaque.md:140
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14394,21 +14388,21 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/opaque.md:129
+#: src/reference/opaque.md:158
 msgid ""
 "The rut-side box is one small cell: the erased value rides inline in the box, and cell churn is recycled by the heap arena. Heap accounting charges the box's cell, as always (see [Reified types and layout](reified-types.md))."
 msgstr ""
 "rut 一侧的盒是一个小单元：被擦除的值内联存放于盒中，单元的反复创建由堆 arena 回收。堆记账照常记在盒的单元上（参见[具体化类型与布局](reified-types.md)）。"
 
 
-#: src/reference/opaque.md:133
+#: src/reference/opaque.md:162
 msgid ""
 "The host side of the same surface: an embedder can mint the box over host data with no static rut shape. rut sees only the box — `o is opaque` is `true`, `o is T` misses for every rut `T`, and `opaque.downcast<T>` answers `nil` for every `T` (the miss is checked, never a trap). The host borrows the payload back typed, call-scoped and borrow-guarded."
 msgstr ""
 "同一接口面的宿主一侧：嵌入方可以在宿主数据上铸造盒，无需静态 rut 形状。rut 只看到盒 —— `o is opaque` 是 `true`，`o is T` 对每个 rut `T` 都未命中，`opaque.downcast<T>` 对每个 `T` 应答 `nil`（未命中是受检的，绝不是陷阱）。宿主以带类型的方式借回载荷，限定在调用作用域并受借用守卫保护。"
 
 
-#: src/reference/opaque.md:139
+#: src/reference/opaque.md:168
 msgid ""
 "An `opaque` box can do nothing until it is recovered — no methods, no fields, no format-string rendering. That is the difference from gradual typing: the erased-storage type for a hot loop is a smell; lints flag downcasts inside loop bodies and `opaque` parameters/returns on non-storage functions."
 msgstr ""
@@ -27367,3 +27361,59 @@ msgid ""
 msgstr ""
 "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
 
+
+#: src/reference/opaque.md:18
+msgid "`unopaque<T>(o) -> T`"
+msgstr "`unopaque<T>(o) -> T`"
+
+
+#: src/reference/opaque.md:18
+msgid ""
+"the erasure inverse: the typed value on a match, the bad-cast trap on a "
+"mismatch"
+msgstr "擦除的逆操作:匹配时给出带类型的值,不匹配时触发错误转换陷阱"
+
+
+#: src/reference/opaque.md:77
+msgid ""
+"**`unopaque<T>` is the inverse — the bad-cast lane.** Where `downcast<T>` "
+"reports a miss as `nil`, `unopaque<T>(b) -> T` demands the sealed type: a "
+"match moves the payload out (the same inner-cell alias law — a record's "
+"recovery writes through to the source), a mismatch is the `BadUnbox` trap "
+"naming both types:"
+msgstr "**`unopaque<T>` 是擦除的逆操作 —— 错误转换通道。** `downcast<T>` 把未命中报告为 `nil`,而 `unopaque<T>(b) -> T` 要求封存的类型:匹配时把载荷移出(同一条内层单元格别名法 —— 记录的恢复写穿回源头),不匹配则是点明双方类型的 `BadUnbox` 陷阱:"
+
+
+#: src/reference/opaque.md:83
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"t\");\n"
+"    let b = opaque(7);\n"
+"    let n: i32 = unopaque<i32>(b);\n"
+"    log.info(f\"{n}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/opaque.md:98
+msgid ""
+"The split is the language's cast discipline: a mismatch the compiler can "
+"know is a compile error — interface objects are never boxed, so "
+"`unopaque<Drawable>` diagnoses without a run (the ONE sealed `Future<T>` "
+"exception rides the async lane); every other mismatch is a runtime fact of "
+"the erased content and traps, never a silent zero. Reach for `downcast<T>` "
+"when `nil` is a meaningful miss; reach for `unopaque<T>` when only the exact "
+"type will do."
+msgstr "这条分界就是语言的转换纪律:编译器能知道的错配是编译错误 —— 接口对象永远不会入箱,因此 `unopaque<Drawable>` 无需运行即可诊断(唯一的封存例外 `Future<T>` 走 async 通道);其余一切错配都是被擦除内容的运行期事实,以陷阱告终,绝不是静默的零。当 `nil` 是有意义的未命中时选 `downcast<T>`;只接受确切类型时选 `unopaque<T>`。"
+
+
+#: src/reference/builtin-generic-types.md:163
+msgid ""
+"**Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — the checked "
+"lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse, the bad-cast "
+"lane — see [opaque — erasure and downcast](opaque.md)."
+msgstr "- **类型擦除的恢复**是 `opaque.downcast<T>(o) -> ?T` —— 受检通道,未命中为 `nil`;`unopaque<T>(o) -> T` 是擦除的逆操作,错误转换通道 —— 见 [opaque —— 擦除与向下转型](opaque.md)。"

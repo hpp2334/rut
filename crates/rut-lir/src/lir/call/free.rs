@@ -80,7 +80,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         for (i, _) in args.iter().enumerate() {
             if let Some(tn) = param_nodes[i] {
-                self.unify_generic(tn, arg_tys[i], &decl_generics, &mut subst, sp)?;
+                self.unify_generic_val(tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
             }
         }
         for g in &decl_generics {
@@ -103,7 +103,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             })
             .collect();
         for (i, a) in args.iter().enumerate() {
-            if !self.widens(arg_tys[i], ptys[i]) {
+            if !self.widens_val(*a, arg_tys[i], ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
@@ -121,13 +121,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // trait-typed parameters specialize per concrete argument (RFC
-        // 0012 §5): the Inst carries one origin per trait-obj param
+        // 0012 §5): the Inst carries one origin per trait-obj param. An
+        // argument that arrives ALREADY BOXED passes its binding's
+        // single tracked origin through — the callee's param binds the
+        // same concrete row statically (a merged/multi-origin box stays
+        // untracked: the vtable answers there).
         let mut iface_origins = Vec::new();
         for (i, _) in args.iter().enumerate() {
-            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. })
-                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. })
-            {
-                iface_origins.push(arg_tys[i]);
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. }) {
+                if !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. }) {
+                    iface_origins.push(arg_tys[i]);
+                } else {
+                    let origins = match self.ctx.ast.expr(args[i]) {
+                        ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+                        _ => Vec::new(),
+                    };
+                    if origins.len() == 1 {
+                        iface_origins.push(origins[0]);
+                    }
+                }
             }
         }
         let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
@@ -207,7 +219,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut arg_tys = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
-            if !self.widens(t, ptys[i]) {
+            if !self.widens_val(*a, t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
@@ -217,13 +229,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             arg_tys.push(t);
         }
         // trait-typed parameters specialize per concrete argument (RFC
-        // 0012 §5): the Inst carries one origin per trait-obj param
+        // 0012 §5): the Inst carries one origin per trait-obj param. An
+        // already-boxed argument passes its binding's single tracked
+        // origin through (see compile_free_call's note).
         let mut iface_origins = Vec::new();
         for (i, _) in args.iter().enumerate() {
-            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. })
-                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. })
-            {
-                iface_origins.push(arg_tys[i]);
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::IfaceObj { .. }) {
+                if !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. }) {
+                    iface_origins.push(arg_tys[i]);
+                } else {
+                    let origins = match self.ctx.ast.expr(args[i]) {
+                        ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+                        _ => Vec::new(),
+                    };
+                    if origins.len() == 1 {
+                        iface_origins.push(origins[0]);
+                    }
+                }
             }
         }
         let inst = crate::check::Inst {

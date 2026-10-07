@@ -15,6 +15,7 @@ it. Its entire API:
 |---|---|
 | `opaque(v)` | erasure: box any value; answers the `opaque` box |
 | `opaque.downcast<T>(o) -> ?T` | checked recovery: the box's inner cell on a match, `nil` on a mismatch |
+| `unopaque<T>(o) -> T` | the erasure inverse: the typed value on a match, the bad-cast trap on a mismatch |
 | `x is opaque` | the ordinary concrete test for the box type itself |
 
 ```rut
@@ -73,6 +74,34 @@ wrong == nil: true
 - **A mismatch is `nil`.** There is no flag and no zero value — the miss
   is the nullable's null; an unguarded dereference traps `NilDeref`,
   never a silent zero.
+- **`unopaque<T>` is the inverse — the bad-cast lane.** Where
+  `downcast<T>` reports a miss as `nil`, `unopaque<T>(b) -> T` demands
+  the sealed type: a match moves the payload out (the same inner-cell
+  alias law — a record's recovery writes through to the source), a
+  mismatch is the `BadUnbox` trap naming both types:
+
+  ```rut
+  use ink::{ Logger };
+
+  entry fn main() {
+      let log = Logger("t");
+      let b = opaque(7);
+      let n: i32 = unopaque<i32>(b);
+      log.info(f"{n}");
+  }
+  ```
+
+  ```text
+  7
+  ```
+
+  The split is the language's cast discipline: a mismatch the compiler
+  can know is a compile error — interface objects are never boxed, so
+  `unopaque<Drawable>` diagnoses without a run (the ONE sealed
+  `Future<T>` exception rides the async lane); every other mismatch is
+  a runtime fact of the erased content and traps, never a silent zero.
+  Reach for `downcast<T>` when `nil` is a meaningful miss; reach for
+  `unopaque<T>` when only the exact type will do.
 - **The type argument must be concrete.** An interface-typed type argument
   (`opaque.downcast<Drawable>`) is a compile error — interface-typed values
   have no recovery path by design.

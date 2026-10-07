@@ -33,6 +33,17 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
     n
 }
 
+/// Compile a module graph and return its diagnostics (the refusal lane).
+fn compile_expect_err(modules: &[(&str, &str)]) -> Vec<String> {
+    let mut chain = rut_driver::RutRun::new();
+    for (spec, src) in modules {
+        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
+    }
+    let (root, _) = modules.last().expect("root");
+    let g = chain.entrypoint(root).compile().expect("compile the graph");
+    g.graph.diags.iter().map(|d| d.msg.clone()).collect()
+}
+
 const SHAPES: &str = "\
 pub interface Shape { fn area(self) -> f64; }
 pub fn describe(s: Shape) -> f64 { return s.area(); }
@@ -284,6 +295,200 @@ entry fn main() -> i32 {
 // failure, or a runtime "no impl for interface slot N"). Every crossing
 // above proves satisfaction in the members' own unit; when the mirror
 // lands, a consumer-side box of a foreign type belongs here as a test.
+
+// ---- the fill/dispatch identity law ---------------------------------------
+//
+// The reactor shape (downstream tur): a kit defines per-kind source
+// classes over generic interfaces; a consumer boxes the concrete
+// sources at its own bindings and passes the BOXES back into the kit's
+// generic ctx methods (`ctx.set<f64>(src, v)` — the param is
+// `Writable<T>`, the value's static type is `Readable<T>`). The fill
+// the callee's dynamic dispatch reads must be keyed on the value's
+// carried ORIGIN row — the row the payload cell carries — never on the
+// box's own spelling. A fill recorded against the box row while the
+// dispatch reads the payload row is the trap shape: `no impl for
+// interface slot N on SourceF64`.
+
+const REACTOR_KIT: &str = "\
+pub interface Readable<T> { fn get(self) -> T; fn atom_id(self) -> u64; }
+pub interface Writable<T> { fn put(self, v: T) -> nil; }
+pub class SourceF64 {
+  v: f64;
+  atom: u64;
+}
+impl SourceF64 {
+  [constructor] pub fn of(v: f64) -> Self { return Self { v: v, atom: 7 }; }
+  pub fn get(self) -> f64 { return self.v; }
+  pub fn put(mut self, v: f64) -> nil { self.v = v; }
+  pub fn atom_id(self) -> u64 { return self.atom; }
+}
+pub class SourceStr {
+  v: str;
+  atom: u64;
+}
+impl SourceStr {
+  [constructor] pub fn of(v: str) -> Self { return Self { v: v, atom: 8 }; }
+  pub fn get(self) -> str { return self.v; }
+  pub fn put(mut self, v: str) -> nil { self.v = v; }
+  pub fn atom_id(self) -> u64 { return self.atom; }
+}
+pub class SourceBool {
+  v: bool;
+  atom: u64;
+}
+impl SourceBool {
+  [constructor] pub fn of(v: bool) -> Self { return Self { v: v, atom: 9 }; }
+  pub fn get(self) -> bool { return self.v; }
+  pub fn put(mut self, v: bool) -> nil { self.v = v; }
+  pub fn atom_id(self) -> u64 { return self.atom; }
+}
+// the read-only lane: satisfies Readable only — the write face refuses it
+pub class StaticValue {
+  v: f64;
+}
+impl StaticValue {
+  [constructor] pub fn of(v: f64) -> Self { return Self { v: v }; }
+  pub fn get(self) -> f64 { return self.v; }
+}
+pub class MutationCtx {
+  n: i32;
+}
+impl MutationCtx {
+  [constructor] pub fn over(n: i32) -> Self { return Self { n: n }; }
+  pub fn get<T>(self, r: Readable<T>) -> T { return r.get(); }
+  pub fn set<T>(self, s: Writable<T>, v: T) -> nil { s.put(v); }
+}
+pub fn source_f64(v: f64) -> SourceF64 { return SourceF64.of(v); }
+pub fn source_str(v: str) -> SourceStr { return SourceStr.of(v); }
+pub fn source_bool(v: bool) -> SourceBool { return SourceBool.of(v); }
+pub fn static_value(v: f64) -> StaticValue { return StaticValue.of(v); }
+pub fn mutate_ctx() -> MutationCtx { return MutationCtx.over(0); }
+";
+
+#[test]
+fn boxed_foreign_sources_dispatch_through_the_generic_ctx() {
+    // the boxed spell: the consumer widens at its OWN binding
+    // (`let src: Readable<f64> = source_f64(..)`) and passes the BOX
+    // back into the kit's generic set/get. The dispatch lands — and
+    // the write is observable through a fresh read (tick mutations
+    // land).
+    let out = run_graph(&[
+        ("kit", REACTOR_KIT),
+        ("app", "\
+use kit::{ Readable, source_f64, mutate_ctx };
+entry fn main() -> i32 {
+    let src: Readable<f64> = source_f64(60.0);
+    let ctx = mutate_ctx();
+    ctx.set<f64>(src, 2.5);
+    let after: f64 = ctx.get<f64>(src);
+    return after as i32;
+}
+"),
+    ]);
+    assert_eq!(out, 2, "the write through the boxed handle landed (60.0 -> 2.5)");
+}
+
+#[test]
+fn a_consumer_fn_over_boxed_params_rides_the_param_origins() {
+    // the sync_chrome shape: a consumer fn spells its params as the
+    // interfaces; inside, the boxed params flow into the generic ctx —
+    // the call's origins pin the params' concrete rows, the fills land
+    // there, and both the write and the read answer
+    let out = run_graph(&[
+        ("kit", REACTOR_KIT),
+        ("app", "\
+use kit::{ MutationCtx, Readable, source_f64, source_str, mutate_ctx };
+fn sync(ctx: MutationCtx, remaining: Readable<f64>, pill: Readable<str>) -> f64 {
+    ctx.set<f64>(remaining, 41.0);
+    ctx.set<str>(pill, \"Running\");
+    return ctx.get<f64>(remaining);
+}
+entry fn main() -> i32 {
+    let remaining: Readable<f64> = source_f64(60.0);
+    let pill: Readable<str> = source_str(\"Ready\");
+    let out = sync(mutate_ctx(), remaining, pill);
+    let probe = mutate_ctx();
+    let after: f64 = probe.get<f64>(remaining);
+    return (out + after) as i32;
+}
+"),
+    ]);
+    assert_eq!(out, 82, "the write landed inside the callee AND through the caller's box");
+}
+
+#[test]
+fn a_mutation_lambda_writes_through_its_captured_sources() {
+    // the b_start shape: a lambda captures the CONCRETE sources; the
+    // body's boxed passes re-bind through the captures' carried
+    // origins
+    let out = run_graph(&[
+        ("kit", REACTOR_KIT),
+        ("app", "\
+use kit::{ MutationCtx, source_f64, source_bool, mutate_ctx };
+entry fn main() -> i32 {
+    let remaining = source_f64(60.0);
+    let running = source_bool(false);
+    let f = fn (ctx: MutationCtx) {
+        ctx.set<bool>(running, true);
+        ctx.set<f64>(remaining, 5.0);
+    };
+    f(mutate_ctx());
+    let probe = mutate_ctx();
+    let r: f64 = probe.get<f64>(remaining);
+    let b: bool = probe.get<bool>(running);
+    return r as i32 + b as i32;
+}
+"),
+    ]);
+    assert_eq!(out, 6, "the captures' writes landed (5.0 + true)");
+}
+
+#[test]
+fn an_untracked_box_refuses_the_cross_interface_pass() {
+    // the origin law's edge: a box whose concrete origin is untracked
+    // (a fn RETURN — no binding pins a row) proves nothing; the pass
+    // refuses at compile time instead of recording a fill the
+    // dispatch can never find
+    let out = compile_expect_err(&[
+        ("kit", REACTOR_KIT),
+        ("app", "\
+use kit::{ MutationCtx, Readable, source_f64, mutate_ctx };
+fn fresh() -> Readable<f64> { return source_f64(1.0); }
+entry fn main() -> i32 {
+    let ctx = mutate_ctx();
+    ctx.set<f64>(fresh(), 2.0);
+    return 0;
+}
+"),
+    ]);
+    assert!(
+        out.iter().any(|d| d.contains("does not satisfy") && d.contains("no member set is visible")),
+        "the untracked pass diagnoses: {out:?}"
+    );
+}
+
+#[test]
+fn the_write_face_refuses_a_read_only_source() {
+    // the write-side law through the origin: StaticValue satisfies
+    // Readable only — spelling it into a write slot diagnoses with the
+    // missing member, never a silent dispatch
+    let out = compile_expect_err(&[
+        ("kit", REACTOR_KIT),
+        ("app", "\
+use kit::{ MutationCtx, Readable, static_value, mutate_ctx };
+entry fn main() -> i32 {
+    let lit: Readable<f64> = static_value(9.0);
+    let ctx = mutate_ctx();
+    ctx.set<f64>(lit, 1.0);
+    return 0;
+}
+"),
+    ]);
+    assert!(
+        out.iter().any(|d| d.contains("does not satisfy") && d.contains("no member `put`")),
+        "the read-only source refuses the write slot: {out:?}"
+    );
+}
 
 // the orphan-placement law is DEAD: `impl I for T` was the only thing
 // placement could gate, and structural satisfaction has no registration

@@ -47,7 +47,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
                 if let Some(e) = expected {
-                    if !self.widens(t, e) {
+                    if !self.widens_val(init, t, e) {
                         self.ctx.err(sp, format!(
                             "let `{}` is `{}` but the initializer is `{}`",
                             self.ctx.name(name), self.ctx.type_name(e), self.ctx.type_name(t)
@@ -211,7 +211,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some((dst, l_end)) = self.inline_ret {
                     if let Some(v) = value {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
-                        if !self.widens(t, self.ret_ty) {
+                        if !self.widens_val(v, t, self.ret_ty) {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` ({:?}) expected, `{}` ({:?}) returned",
                                 self.ctx.type_name(self.ret_ty), self.ret_ty, self.ctx.type_name(t), t
@@ -250,7 +250,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             // the final weave checks as usual
                             if self.async_infer {
                                 self.async_founds.push(t);
-                            } else if !self.widens(t, ans_ty) {
+                            } else if !self.widens_val(v, t, ans_ty) {
                                 self.ctx.err(sp, format!(
                                     "return type mismatch: `{}` expected, `{}` returned",
                                     self.ctx.type_name(ans_ty), self.ctx.type_name(t)
@@ -303,7 +303,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
                         // implicit widening at the return:
                         // a concrete value coerces to a trait-typed return
-                        if !self.widens(t, self.ret_ty) {
+                        if !self.widens_val(v, t, self.ret_ty) {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` ({:?}) expected, `{}` ({:?}) returned",
                                 self.ctx.type_name(self.ret_ty), self.ret_ty, self.ctx.type_name(t), t
@@ -654,14 +654,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if l.cell.is_some() {
                     // promoted: pool the SHARED CELL (not the value) —
                     // reads and writes on either side route through it
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell });
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell, origins: l.origins.clone() });
                     cap_regs.push(l.reg);
                 } else {
                     // copy the CURRENT value into a capture register
                     // (the immediate-slot copy: primitives copy, ref
                     // handles share their cell)
                     let cap_reg = self.read_local(&l, sp.lo);
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None });
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None, origins: l.origins.clone() });
                     cap_regs.push(cap_reg);
                 }
             }

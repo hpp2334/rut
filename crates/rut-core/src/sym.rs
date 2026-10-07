@@ -220,6 +220,11 @@ pub const WELL_KNOWN: &[&str] = &[
     // not an engine row). Appended — the ids are positional, never
     // renumbered.
     "constructor", // CONSTRUCTOR_MARKER
+    // the erasure box's inverse: `unopaque<T>(b) -> T` — the typed
+    // recovery whose mismatch is the bad-cast trap (downcast is the
+    // checked `?T` recovery). Appended — the ids are positional, never
+    // renumbered.
+    "unopaque", // UNOPAQUE
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -360,6 +365,8 @@ pub const ITERABLE_MARKER: IdentId = IdentId(88);
 pub const CX: IdentId = IdentId(89);
 // the third designated surface (append-only tail: fixed ids never move)
 pub const CONSTRUCTOR_MARKER: IdentId = IdentId(90);
+// the erasure box's inverse (append-only tail: fixed ids never move)
+pub const UNOPAQUE: IdentId = IdentId(91);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -490,6 +497,8 @@ mod tests {
             ("cx", CX),
             // the third designated surface
             ("constructor", CONSTRUCTOR_MARKER),
+            // the erasure box's inverse
+            ("unopaque", UNOPAQUE),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

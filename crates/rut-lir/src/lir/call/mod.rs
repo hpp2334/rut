@@ -97,7 +97,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
-            if !self.widens(t, ptys[i]) {
+            if !self.widens_val(*a, t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
@@ -178,6 +178,57 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let dst = self.new_reg(TY_OPAQUE);
                 self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
                 return Ok(TY_OPAQUE);
+            }
+            sym::UNOPAQUE => {
+                // `unopaque<T>(b)`: the erasure box's inverse — the
+                // typed recovery. Where `downcast<T>` is the checked
+                // `?T` (a mismatch is `nil`), `unopaque<T>` is the
+                // bad-cast lane: a box whose runtime type is not `T`
+                // traps `BadUnbox` naming both types (`Op::Unbox` is
+                // the runtime half; the compiler guards what it can
+                // know). The seal law is knowable at compile time and
+                // enforced HERE: an interface object can never sit in
+                // a box (the ONE Future exception rides the async
+                // lane), so `unopaque<Drawable>` diagnoses without a
+                // run. Every other mismatch is a runtime fact — the
+                // box's content is erased statically.
+                let (want_node, args) = match generics.as_slice() {
+                    [g] => (*g, args),
+                    _ => {
+                        self.ctx.err(sp, "unopaque<T>(b) takes one explicit type argument and one `opaque` value");
+                        return Err(());
+                    }
+                };
+                if args.len() != 1 {
+                    self.ctx.err(sp, "unopaque<T>(b) takes one explicit type argument and one `opaque` value");
+                    return Err(());
+                }
+                let want = self.resolve_type_now(want_node);
+                let recoverable = match self.ctx.types.kind(want) {
+                    TyKind::IfaceObj { iface_id } => {
+                        let tid = *iface_id;
+                        self.ctx
+                            .iface_inst
+                            .iter()
+                            .find(|(_, &id)| id == tid)
+                            .map(|((n, _), _)| *n == sym::FUTURE)
+                            .unwrap_or(false)
+                    }
+                    _ => true,
+                };
+                if !recoverable {
+                    self.ctx.err(sp, "unopaque needs a CONCRETE type — interface objects are never boxed, the recovery can never match");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
+                if t != TY_OPAQUE {
+                    self.ctx.err(sp, "unopaque takes an `opaque` box");
+                    return Err(());
+                }
+                let o = self.last_reg;
+                let dst = self.new_reg(want);
+                self.emit(Op::Unbox { dst, box_: o, ty: want }, sp.lo);
+                return Ok(want);
             }
             sym::PANIC if core_fn => {
                 if args.len() != 1 {
@@ -321,7 +372,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let mut aregs = Vec::new();
             for (i, a) in args.iter().enumerate() {
                 let t = self.compile_expr(*a, Some(ef.params[i]))?;
-                if !self.widens(t, ef.params[i]) {
+                if !self.widens_val(*a, t, ef.params[i]) {
                     self.ctx.err(self.ctx.ast.span(a.id()), format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
@@ -458,6 +509,102 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         false
+    }
+
+    /// The value-position widening: [`Self::widens`] plus the
+    /// BOXED-TO-BOXED pass. A trait-typed VALUE (`width: Readable<f64>`,
+    /// already boxed at its binding) flowing into a DIFFERENT trait's
+    /// slot (`set<T>(s: Writable<T>, ..)`) finds no inherent members on
+    /// the box — the plain check refuses — but the value is not
+    /// anonymous: origin counting pinned its concrete origin at the
+    /// boxing site. The pass re-binds through that origin: satisfaction
+    /// re-checks there (the write-side law answers with a span — an
+    /// origin whose member set lacks the target's members refuses), and
+    /// the itable fill demands at the ORIGIN's row — the row the
+    /// payload cell carries at runtime, exactly what the callee's
+    /// dynamic dispatch reads. This is the fill/dispatch identity law:
+    /// a fill recorded against one row (the box) while the dispatch
+    /// reads another (the payload) is the trap shape — the demand must
+    /// land on the dispatch's row. A value with no tracked origin (a
+    /// merge of boxes, an untracked arrival) proves nothing: the honest
+    /// structural refusal. `node` names the value expression; the bare
+    /// path carries its binding's origins.
+    pub(crate) fn widens_val(&mut self, node: NodeHandle<AnyExpr>, from: TypeId, to: TypeId) -> bool {
+        if from == to {
+            return true;
+        }
+        if self.ctx.same_instantiation(from, to) {
+            return true;
+        }
+        if matches!(self.ctx.types.kind(from), TyKind::IfaceObj { .. }) {
+            if matches!(self.ctx.types.kind(to), TyKind::IfaceObj { .. }) {
+                if let TyKind::IfaceObj { iface_id: from_if } = self.ctx.types.kind(from).clone() {
+                    if let TyKind::IfaceObj { iface_id: to_if } = self.ctx.types.kind(to).clone() {
+                        if from_if != to_if {
+                            return self.widen_boxed(node, from, to_if);
+                        }
+                        // same base, different rows: the member sets are
+                        // spelled per instantiation — the plain check's
+                        // structural answer
+                    }
+                }
+            } else {
+                // the origin-directed unbox: the value's tracked origin
+                // names the concrete target exactly — the slot already
+                // carries that row's cell (a box is representational),
+                // so the static bind through the origin answers. A
+                // merged origin set pins no single row: refuse.
+                let origins = self.origins_of_expr(node);
+                if origins.len() == 1 && origins[0] == to {
+                    return true;
+                }
+            }
+        }
+        self.widens(from, to)
+    }
+
+    /// The boxed pass behind [`Self::widens_val`].
+    fn widen_boxed(&mut self, node: NodeHandle<AnyExpr>, from: TypeId, to_if: u32) -> bool {
+        let origins = self.origins_of_expr(node);
+        let sp = rut_lexer::span::Span::new(self.span, self.span);
+        if origins.is_empty() {
+            self.ctx.err(sp, format!(
+                "`{}` does not satisfy `{}`: no member set is visible through the box — the value's concrete origin is untracked (the origin law)",
+                self.ctx.type_name(from),
+                self.ctx.iface_base_name(to_if),
+            ));
+            return false;
+        }
+        let mut first_err: Option<String> = None;
+        for &origin in &origins {
+            if let Err(detail) = self.ctx.check_satisfies(origin, to_if) {
+                if first_err.is_none() {
+                    first_err = Some(format!(
+                        "`{}` does not satisfy `{}`: {}",
+                        self.ctx.type_name(origin),
+                        self.ctx.iface_base_name(to_if),
+                        detail,
+                    ));
+                }
+            }
+        }
+        if let Some(msg) = first_err {
+            self.ctx.err(sp, msg);
+            return false;
+        }
+        for &origin in &origins {
+            self.ctx.demand_iface_fill(origin, to_if);
+        }
+        true
+    }
+
+    /// The origin set of a VALUE EXPRESSION (origin counting): a bare
+    /// path carries its binding's origins; anything else is untracked.
+    fn origins_of_expr(&self, node: NodeHandle<AnyExpr>) -> Vec<TypeId> {
+        match self.ctx.ast.expr(node) {
+            ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+            _ => Vec::new(),
+        }
     }
 
     /// Identity-sensitive type equality for the assignment checks: the

@@ -995,7 +995,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // parameter carries the cell handle, reads and
                     // writes route through it, both frames stay linked
                     // for the binding's whole scope
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell });
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell, origins: l.origins.clone() });
                     cap_regs.push(l.reg);
                 } else {
                     // the immediate-slot copy: primitives/nil/fn copy
@@ -1003,7 +1003,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // (the capture inherits the binding's mutability so
                     // writes through a captured `let mut` stay legal)
                     let cap_reg = self.read_local(&l, sp.lo);
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None });
+                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None, origins: l.origins.clone() });
                     cap_regs.push(cap_reg);
                 }
             }

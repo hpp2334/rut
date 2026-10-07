@@ -322,7 +322,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let t = self.compile_expr(value, Some(l.ty))?;
                         // implicit widening at the assignment:
                         // a concrete value coerces to a trait-typed binding
-                        if !self.widens(t, l.ty) {
+                        if !self.widens_val(value, t, l.ty) {
                             self.ctx.err(sp, format!(
                                 "assignment type mismatch: `{}` vs `{}`",
                                 self.ctx.type_name(l.ty), self.ctx.type_name(t)

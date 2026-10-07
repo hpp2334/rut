@@ -153,18 +153,31 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     let ret_ty = f.ret.map(|r| ctx.resolve_type(r, &[])).unwrap_or(TY_NIL);
     // the fn's parameters become the frame's first cell fields; the
     // yield's argv carries only (frame, cx) — the call site writes the
-    // params into the frame before it is ever driven
+    // params into the frame before it is ever driven. The trait-typed
+    // parameters carry the Inst's origins positionally (the same law
+    // the ordinary body compiler follows): the call site pinned the
+    // concrete arguments, and the body's boxed passes re-bind through
+    // them.
     let mut param_fields: Vec<(IdentId, TypeId)> = Vec::new();
+    let mut param_origins: Vec<Vec<TypeId>> = Vec::new();
+    let mut origin_iter = inst.iface_origins.iter();
     for p in &f.params {
         if let MemberKind::Param(ParamData { ty: Some(t), name, .. }) = ctx.ast.param(*p) {
-            param_fields.push((*name, ctx.resolve_type(*t, &[])));
+            let ty = ctx.resolve_type(*t, &[]);
+            let origins = if matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
+                origin_iter.next().cloned().into_iter().collect()
+            } else {
+                Vec::new()
+            };
+            param_origins.push(origins);
+            param_fields.push((*name, ty));
         } else {
             ctx.err(ctx.ast.span(p.id()), "parameter needs a type annotation");
             return Err(());
         }
     }
     let layout = ensure_layout(ctx, fid, name, ret_ty, param_fields.clone());
-    weave_async_body_infer(ctx, fid, name, layout, f.body, param_fields, false)
+    weave_async_body_infer(ctx, fid, name, layout, f.body, param_fields, param_origins, false)
 }
 
 /// The shared weave: dispatch + arms + the body, one FuncCode per
@@ -178,6 +191,7 @@ fn weave_async_body_infer(
     layout: Layout,
     body: NodeHandle<BlockNode>,
     param_fields: Vec<(IdentId, TypeId)>,
+    param_origins: Vec<Vec<TypeId>>,
     infer: bool,
 ) -> TcResult<()> {
     let cx_ty = ctx.run_context_ty();
@@ -259,13 +273,14 @@ fn weave_async_body_infer(
     for (i, (pname, pty)) in param_fields.iter().enumerate() {
         let reg = c.new_reg(*pty);
         let field = af::LOCALS_BASE + i as u32;
+        let origins = param_origins.get(i).cloned().unwrap_or_default();
         c.locals.push(Local {
             name: *pname,
             reg,
             ty: *pty,
             is_mut: true,
             loop_var: false,
-            origins: Vec::new(),
+            origins,
             field,
             cell: None,
         });
@@ -787,10 +802,55 @@ pub(crate) fn compile_async_call(
         c.ctx.err(sp, "generic async fns are not woven in this build");
         return Err(());
     }
+    if args.len() != fd.params.len() {
+        c.ctx.err(sp, format!(
+            "call arity: {} arg(s) for {} parameter(s)",
+            args.len(), fd.params.len()
+        ));
+        return Err(());
+    }
+    // compile the args against the declared parameter types. The
+    // trait-typed parameters' origins ride the Inst — the woven body's
+    // param bindings read them (origin counting), so a boxed argument
+    // with a single tracked origin re-binds statically inside the body;
+    // untracked boxes stay vtable-dispatched (their fills were proved
+    // at their boxing sites).
+    let mut aregs = Vec::new();
+    let mut atys = Vec::new();
+    let mut origins = Vec::new();
+    for (i, a) in args.iter().enumerate() {
+        let pt = match c.ctx.ast.param(fd.params[i]) {
+            MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
+            _ => TY_I32,
+        };
+        let t = c.compile_expr(*a, Some(pt))?;
+        if !c.widens_val(*a, t, pt) {
+            c.ctx.err(c.ctx.ast.span(a.id()), format!(
+                "argument {} is `{}`, `{}` expected",
+                i + 1, c.ctx.type_name(t), c.ctx.type_name(pt)
+            ));
+        }
+        c.widen_to_slot(t, pt, sp_lo);
+        aregs.push(c.last_reg);
+        atys.push(pt);
+        if matches!(c.ctx.types.kind(pt), TyKind::IfaceObj { .. }) {
+            if !matches!(c.ctx.types.kind(t), TyKind::IfaceObj { .. }) {
+                origins.push(t);
+            } else {
+                let tracked = match c.ctx.ast.expr(*a) {
+                    ExprKind::Path { segs } if segs.len() == 1 => c.origins_of(segs[0].name),
+                    _ => Vec::new(),
+                };
+                if tracked.len() == 1 {
+                    origins.push(tracked[0]);
+                }
+            }
+        }
+    }
     let inst = crate::check::Inst {
         key: crate::check::FnKey::Free(name),
         subst: vec![],
-        iface_origins: vec![],
+        iface_origins: origins,
     };
     let fid = c.ctx.ensure_inst(inst.clone());
     if !c.ctx.async_layout.contains_key(&fid) {
@@ -803,33 +863,7 @@ pub(crate) fn compile_async_call(
         .async_layout
         .get(&fid)
         .ok_or_else(|| ())?; // the weave failed (diagnostics recorded)
-    if args.len() != fd.params.len() {
-        c.ctx.err(sp, format!(
-            "call arity: {} arg(s) for {} parameter(s)",
-            args.len(), fd.params.len()
-        ));
-        return Err(());
-    }
     let ret_ty = answer_ty_of_layout(c.ctx, &layout);
-    // compile the args against the declared parameter types
-    let mut aregs = Vec::new();
-    let mut atys = Vec::new();
-    for (i, a) in args.iter().enumerate() {
-        let pt = match c.ctx.ast.param(fd.params[i]) {
-            MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
-            _ => TY_I32,
-        };
-        let t = c.compile_expr(*a, Some(pt))?;
-        if !c.widens(t, pt) {
-            c.ctx.err(c.ctx.ast.span(a.id()), format!(
-                "argument {} is `{}`, `{}` expected",
-                i + 1, c.ctx.type_name(t), c.ctx.type_name(pt)
-            ));
-        }
-        c.widen_to_slot(t, pt, sp_lo);
-        aregs.push(c.last_reg);
-        atys.push(pt);
-    }
     mint_frame(c, layout, &aregs, &atys, sp_lo);
     // the call's type IS the closed `Future<ret>` class — generic
     // inference (`launch_future(work())` binding `T := nil`) unifies
@@ -950,7 +984,7 @@ pub(crate) fn compile_async_block_fn(ctx: &mut Ctx, fid: u32, node: NodeId) -> T
     };
     let name = ctx.intern(&format!("#async@{}", node.0));
     let layout = ensure_layout(ctx, fid, name, sig.ret, sig.caps.clone());
-    weave_async_body_infer(ctx, fid, name, layout, sig.body, sig.caps, sig.infer)
+    weave_async_body_infer(ctx, fid, name, layout, sig.body, sig.caps, Vec::new(), sig.infer)
 }
 
 /// The shared mint: a zeroed frame cell, the producer's values into the
