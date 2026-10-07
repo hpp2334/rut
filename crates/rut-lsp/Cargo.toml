@@ -53,3 +53,6 @@ tokio = { version = "1", features = ["macros", "rt", "io-std", "io-util", "time"
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 serde_json = "1"
+# the dep-walk fixture computes the url pin + cache filename the same
+# way the server does (the pin is law at the mount door)
+sha2 = "0.10"

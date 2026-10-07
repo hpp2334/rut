@@ -5,21 +5,50 @@
 //! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs / Sublime
 //! configs in `integrations/README.md`). Hover/completion resolve against
 //! the open document first, then the embedded std surface
-//! (`std_surface`), then the workspace's rut files. The
-//! wasm shim (`rut-lsp-wasm`) drives the same queries without this
-//! process.
+//! (`std_surface`), then the workspace's rut files, then the manifest
+//! deps (see below). The wasm shim (`rut-lsp-wasm`) drives the same
+//! queries without this process.
+//!
+//! # Deps — cache-only by law
+//!
+//! After the workspace scan (initialize's `root_uri` walk) the server
+//! reads the workspace root's `rut.jsonc` via `rut_lsp::deps::dep_table`
+//! — the SAME pure engine the wasm face and the extension ride, so the
+//! rules can't drift: path deps resolve against the manifest dir
+//! (outside-workspace dirs included — the server has fs) and recurse
+//! cycle-safe under the depth/file caps, `deps` at any depth, the root's
+//! `dev-deps` too, `peer-deps` only when locally resolvable. Every dep
+//! source indexes through `rut_lsp::deps::index_dep` into the same defs
+//! store the scan fills.
+//!
+//! Url deps are CACHE-ONLY here: the bytes are read from the dep table's
+//! Rust-computed `.rut/cache/<sha256(url)>.rutbundle` path with the
+//! sha256 pin verified at the mount door; a miss or an unpinned row is
+//! ONE `window/showMessage` (info) naming the dep and the fetch
+//! alternative. This server face NEVER touches the network — fetching is
+//! the extension's job (`rut fetch` / the VS Code extension warm the
+//! same shared cache). The asymmetry with the extension is deliberate.
+//!
+//! The server registers no file watchers today. When a client wires
+//! `workspace/didChangeWatchedFiles` for `**/rut.jsonc` +
+//! `.rut/cache/**`, its handler should re-run
+//! [`walk_workspace_deps`] over the root — re-indexing is
+//! replace-by-origin, so the re-walk is idempotent. No new server state
+//! machine rides here.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use ls_types::request::{GotoTypeDefinitionParams, GotoTypeDefinitionResponse};
 use ls_types::*;
+use rut_driver::bundle::files::MANIFEST_NAME;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::{Client, LanguageServer};
 
 use crate::analysis::{self, Analysis};
+use crate::deps::{self, DepSource};
 use crate::hover::DefIndex;
 use crate::semantic::TokenType;
 use crate::std_surface;
@@ -73,6 +102,272 @@ fn index_file(path: &Path) -> Option<DefIndex> {
     Some(analysis::index_at(uri, &src))
 }
 
+// ---- the dep walk (the server face of `rut_lsp::deps`) ----
+
+/// the dep walk's budget beside the 500-file workspace cap — the same
+/// numbers the extension rides
+const MAX_DEP_DEPTH: usize = 8;
+const MAX_DEP_FILES: usize = 200;
+
+/// one user-facing hint the walk produced — surfaced as
+/// `window/showMessage`, never silent, never spammy (once per reason per
+/// walk)
+type DepHint = (MessageType, String);
+
+/// walk the workspace root's manifest deps into `defs`: path deps
+/// recurse against the manifest dir, url deps mount from `.rut/cache/`
+/// (cache-only — see the module doc). Returns the hints to show.
+fn walk_workspace_deps(root: &Path, defs: &mut Vec<DefIndex>) -> Vec<DepHint> {
+    let mut w = Walk {
+        root: root.to_path_buf(),
+        defs,
+        seen: HashSet::new(),
+        files: MAX_DEP_FILES,
+        hints: Vec::new(),
+        hint_keys: HashSet::new(),
+    };
+    w.manifest(root, 1);
+    w.hints
+}
+
+struct Walk<'a> {
+    /// the workspace root — `.rut/cache/` resolves against it
+    root: PathBuf,
+    defs: &'a mut Vec<DefIndex>,
+    /// resolved manifest dirs — the cycle break
+    seen: HashSet<PathBuf>,
+    /// remaining dep-source-file budget
+    files: usize,
+    hints: Vec<DepHint>,
+    /// keys already hinted — once per reason per walk
+    hint_keys: HashSet<String>,
+}
+
+impl<'a> Walk<'a> {
+    fn hint_once(&mut self, key: String, ty: MessageType, msg: String) {
+        if self.hint_keys.insert(key) {
+            self.hints.push((ty, msg));
+        }
+    }
+
+    /// replace-by-origin — the same store discipline every face rides
+    fn insert(&mut self, idx: DefIndex) {
+        match self.defs.iter().position(|d| d.origin == idx.origin) {
+            Some(slot) => self.defs[slot] = idx,
+            None => self.defs.push(idx),
+        }
+    }
+
+    /// one manifest: its own entry sources index under the module name
+    /// (the uri is the file's real path so F12 jumps land), then its dep
+    /// rows walk — `deps` at any depth, `dev-deps` only at the root (the
+    /// loader's law: a dep's dev table never enters a consumer's world),
+    /// `peer-deps` only when locally resolvable (the consumer supplies
+    /// them; an unresolvable peer is the normal state, not a failure).
+    fn manifest(&mut self, dir: &Path, depth: usize) {
+        if depth > MAX_DEP_DEPTH || self.files == 0 {
+            return;
+        }
+        let dir = normalize_path(dir);
+        if !self.seen.insert(dir.clone()) {
+            return;
+        }
+        let Ok(text) = std::fs::read_to_string(dir.join(MANIFEST_NAME)) else {
+            return; // no manifest here — nothing to parse, nothing to hint
+        };
+        let table = match deps::dep_table(&text) {
+            Ok(t) => t,
+            Err(e) => {
+                self.hint_once(
+                    format!("manifest:{}", dir.display()),
+                    MessageType::ERROR,
+                    format!("rut: {MANIFEST_NAME} — {e}"),
+                );
+                return;
+            }
+        };
+        let module = table.name.clone().unwrap_or_else(|| {
+            dir.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        });
+        for e in &table.entries {
+            if self.files == 0 {
+                return;
+            }
+            let src_path = dir.join(&e.path);
+            let Ok(src) = std::fs::read_to_string(&src_path) else {
+                continue; // a manifest naming a missing entry — index what exists
+            };
+            self.files -= 1;
+            let uri = src_path.to_string_lossy().into_owned();
+            // namespace/consts have no voice on a path-dep surface (the
+            // same rule `rut_add_def_named` speaks) — a dep needing them
+            // mounts through a bundle
+            let idx = deps::index_dep(&module, &uri, &src, e.mode, None, &[]);
+            self.insert(idx);
+        }
+        let at_root = depth == 1;
+        let rows = table
+            .deps
+            .iter()
+            .map(|r| (r, false))
+            .chain(table.dev_deps.iter().filter(|_| at_root).map(|r| (r, false)))
+            .chain(table.peer_deps.iter().map(|r| (r, true)));
+        for (row, peer) in rows {
+            if self.files == 0 {
+                return;
+            }
+            match &row.source {
+                DepSource::Url { url, sha256, cache_path } => {
+                    self.mount_url(&row.name, url, sha256.as_deref(), cache_path);
+                }
+                DepSource::Path { dir: rel } => {
+                    let dep_dir = normalize_path(&dir.join(rel));
+                    let dep_manifest = dep_dir.join(MANIFEST_NAME);
+                    if !dep_manifest.is_file() {
+                        if !peer {
+                            self.hint_once(
+                                format!("path:{}:{}", dir.display(), row.name),
+                                MessageType::ERROR,
+                                format!(
+                                    "rut: dep '{}' — {rel} has no {MANIFEST_NAME}; \
+                                     a path dep is a module directory (one manifest per module)",
+                                    row.name
+                                ),
+                            );
+                        }
+                        continue;
+                    }
+                    // the optional peer's integration group (`lib` — an
+                    // impl-only source in the OWNER's directory) is the
+                    // owner's surface gated on the peer's presence: index
+                    // it under the owner's module name, only when the
+                    // peer resolved
+                    if peer && row.optional {
+                        if let Some(lib) = &row.lib {
+                            let lib_path = dir.join(lib);
+                            if let Ok(src) = std::fs::read_to_string(&lib_path) {
+                                if self.files > 0 {
+                                    self.files -= 1;
+                                    let uri = lib_path.to_string_lossy().into_owned();
+                                    let idx = deps::index_dep(
+                                        &module,
+                                        &uri,
+                                        &src,
+                                        analysis::mode_of(&uri),
+                                        None,
+                                        &[],
+                                    );
+                                    self.insert(idx);
+                                }
+                            }
+                        }
+                    }
+                    self.manifest(&dep_dir, depth + 1);
+                }
+            }
+        }
+    }
+
+    /// one url row — the CACHE-ONLY mount door. The pin is law: only
+    /// pinned rows are even considered, only pin-verified bytes mount.
+    /// The server cannot fetch (the deliberate asymmetry — the
+    /// extension's job), so a miss/poisoned cache is ONE info hint
+    /// naming the CLI/extension alternative, never silent, never network.
+    fn mount_url(&mut self, name: &str, url: &str, pin: Option<&str>, cache_path: &str) {
+        let Some(pin) = pin else {
+            self.hint_once(
+                format!("unpinned:{url}"),
+                MessageType::INFO,
+                format!(
+                    "rut: dep '{name}' has no sha256 pin — the editor never mounts unpinned \
+                     url bytes; pin the bundle's hash beside its url in {MANIFEST_NAME}"
+                ),
+            );
+            return;
+        };
+        let bytes = match std::fs::read(self.root.join(cache_path)) {
+            Ok(bytes) => {
+                if hex_sha256(&bytes) != pin {
+                    // poisoned entry: the pin is checked at the mount door
+                    // on every load — the cache-only face cannot refetch to
+                    // heal, so the bytes stay out and the hint names the
+                    // re-warm
+                    self.hint_once(
+                        format!("pin:{url}"),
+                        MessageType::INFO,
+                        format!(
+                            "rut: dep '{name}' — sha256 pin mismatch in .rut/cache for {url}: \
+                             delete the cached file and run `rut fetch` to re-warm the cache"
+                        ),
+                    );
+                    return;
+                }
+                bytes
+            }
+            Err(_) => {
+                self.hint_once(
+                    format!("fetch:{url}"),
+                    MessageType::INFO,
+                    format!(
+                        "rut: dep '{name}' ({url}) is not in the local .rut/cache — the \
+                         language server never touches the network; run `rut fetch` in the \
+                         project (or let the extension fetch it), then reload"
+                    ),
+                );
+                return;
+            }
+        };
+        match deps::bundle_sources(&bytes) {
+            Ok(b) => {
+                for f in &b.files {
+                    let uri = format!("bundle:{}/{}", b.module, f.path);
+                    let idx = deps::index_dep(
+                        &b.module,
+                        &uri,
+                        &f.src,
+                        f.mode,
+                        b.namespace.as_deref(),
+                        &b.consts,
+                    );
+                    self.insert(idx);
+                }
+            }
+            Err(e) => {
+                self.hint_once(
+                    format!("bundle:{url}"),
+                    MessageType::ERROR,
+                    format!("rut: dep '{name}' — the bundle did not mount: {e}"),
+                );
+            }
+        }
+    }
+}
+
+/// lexical `..`/`.` resolution for dep paths — the seen-set's keys and
+/// entry uris compare consistently without touching the fs
+fn normalize_path(p: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            _ => out.push(c.as_os_str()),
+        }
+    }
+    out
+}
+
+fn hex_sha256(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(bytes);
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
 impl Backend {
     pub fn new(client: Client) -> Self {
         Backend {
@@ -109,23 +404,35 @@ impl Backend {
 
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        // workspace scan off the hot initialize path — hover may briefly
-        // resolve against std + open docs only
+        // workspace scan + dep walk off the hot initialize path — hover
+        // may briefly resolve against std + open docs only. The walk's
+        // hints surface as window/showMessage once it lands.
         let defs = self.defs.clone();
         let root_slot = self.root.clone();
+        let client = self.client.clone();
         #[allow(deprecated)] // root_uri: VS Code still sends it first
         let root = params.root_uri.as_ref().map(|u| u.as_str().to_string());
-        tokio::task::spawn_blocking(move || {
-            let Some(root) = root else { return };
-            let Ok(u) = Uri::from_str(&root) else { return };
-            let Some(cow) = u.to_file_path() else { return };
-            let path = cow.into_owned();
-            *root_slot.write().unwrap() = Some(path.clone());
-            let mut guard = defs.write().unwrap();
-            for f in collect_rut_files(&path) {
-                if let Some(idx) = index_file(&f) {
-                    guard.push(idx);
+        tokio::spawn(async move {
+            let hints = tokio::task::spawn_blocking(move || {
+                let Some(root) = root else { return Vec::new() };
+                let Ok(u) = Uri::from_str(&root) else { return Vec::new() };
+                let Some(cow) = u.to_file_path() else { return Vec::new() };
+                let path = cow.into_owned();
+                *root_slot.write().unwrap() = Some(path.clone());
+                let mut guard = defs.write().unwrap();
+                for f in collect_rut_files(&path) {
+                    if let Some(idx) = index_file(&f) {
+                        guard.push(idx);
+                    }
                 }
+                // the dep walk — the manifest's deps ride the SAME defs
+                // store the scan fills (cache-only; see the module doc)
+                walk_workspace_deps(&path, &mut guard)
+            })
+            .await
+            .unwrap_or_default();
+            for (ty, msg) in hints {
+                client.show_message(ty, msg).await;
             }
         });
         Ok(InitializeResult {

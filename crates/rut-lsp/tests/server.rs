@@ -663,3 +663,254 @@ entry fn main() -> i32 {
 fn remove_ws(ws: std::path::PathBuf) -> std::io::Result<()> {
     std::fs::remove_dir_all(ws)
 }
+
+// ---- the dep walk over the wire (server-side manifest deps, cache-only) ----
+//
+// Mirrors the wasm e2e's fixture workspace: a path dep OUTSIDE the
+// workspace root (the scan never reaches it — only the manifest walk
+// can), a url dep primed into `.rut/cache/` from the committed dist/std
+// bundle (the offline pattern), a url dep whose cache is a MISS, and an
+// unpinned url row — the two showMessage lanes.
+
+const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
+
+/// the same digest the server's mount door checks (the pin is law)
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+struct DepFixture {
+    base: std::path::PathBuf,
+    /// the workspace root — initialize's rootUri
+    ws: std::path::PathBuf,
+    main_src: String,
+    main_uri: String,
+}
+
+fn write_dep_fixture(name: &str) -> DepFixture {
+    let base = std::env::temp_dir().join(format!("rut-lsp-deps-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let ws = base.join("ws");
+    let dep = base.join("outside"); // a SIBLING of ws — outside the scan root
+    std::fs::create_dir_all(ws.join(".rut/cache")).unwrap();
+    std::fs::create_dir_all(&dep).unwrap();
+
+    // the path dep — a module directory with its own manifest
+    std::fs::write(
+        dep.join("rut.jsonc"),
+        r#"{ "name": "gadgets", "entry": { "lib": "./lib.rut" } }"#,
+    )
+    .unwrap();
+    let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n";
+    std::fs::write(dep.join("lib.rut"), lib_src).unwrap();
+
+    // the url rows: pouch pinned + PRIMED from the committed bundle,
+    // ghost pinned but primed nowhere (the miss), bare unpinned
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle";
+    const GHOST_URL: &str = "https://example.invalid/ghost.rutbundle";
+    const BARE_URL: &str = "https://example.invalid/bare.rutbundle";
+    let pouch_cache = rut_lsp::deps::cache_path(POUCH_URL); // .rut/cache/<sha256(url)>.rutbundle
+    std::fs::write(ws.join(&pouch_cache), POUCH_BUNDLE).unwrap();
+    let manifest = format!(
+        r#"{{
+  // the editor rides the same grammar the CLI parses
+  "name": "wsapp",
+  "entry": {{ "lib": "./main.rut" }},
+  "deps": {{
+    "gadgets": {{ "path": "../outside" }},
+    "pouch": {{ "url": "{POUCH_URL}", "sha256": "{}" }},
+    "ghost": {{ "url": "{GHOST_URL}", "sha256": "{}" }},
+    "bare": {{ "url": "{BARE_URL}" }}
+  }}
+}}"#,
+        sha256_hex(POUCH_BUNDLE),
+        "0".repeat(64),
+    );
+    std::fs::write(ws.join("rut.jsonc"), manifest).unwrap();
+
+    let main_src = "\
+use gadgets::{ Widget };
+use pouch::{ Vec };
+fn main() -> nil {
+    let w = Widget.new();
+    let v: Vec<i32> = Vec.new();
+    v.push(1);
+}
+";
+    std::fs::write(ws.join("main.rut"), main_src).unwrap();
+    let main_uri = format!("file://{}/main.rut", ws.display());
+    DepFixture { base, ws, main_src: main_src.to_string(), main_uri }
+}
+
+/// the pouch bundle's own source, only reachable through the CACHE mount
+/// — the std surface's pouch index carries the relative `rut/pouch.rut`
+/// origin instead, so this uri on the wire PROVES the cached bytes
+/// mounted
+const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/pouch.rut";
+
+#[tokio::test]
+async fn dep_walk_resolves_path_and_cached_url_deps() {
+    let fx = write_dep_fixture("resolve");
+    let ws_uri = format!("file://{}", fx.ws.display());
+    let mut editor = spawn_at(&ws_uri).await;
+    // the scan + dep walk run off the hot initialize path — give them a
+    // beat before the first cross-dep query
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let mut notes = Vec::new();
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": fx.main_uri, "languageId": "rut", "version": 1, "text": fx.main_src
+            }}),
+        )
+        .await;
+
+    // the path dep OUTSIDE the scan root: go-to-definition from the
+    // `Widget.new()` use site lands in the dep's own file
+    let (l, c) = pos_of(&fx.main_src, "Widget", 1);
+    let resp = editor
+        .request(
+            "textDocument/definition",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("definition locations");
+    assert!(
+        locs.iter().any(|l| l["uri"].as_str().unwrap().ends_with("/outside/lib.rut")),
+        "the outside path dep answers F12: {resp}"
+    );
+
+    // the CACHED url dep: the use-line `Vec` jumps to the bundle's own
+    // origin — minted only by mounting the pinned cache bytes
+    let (l, c) = pos_of(&fx.main_src, "Vec", 0);
+    let resp = editor
+        .request(
+            "textDocument/definition",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("use-path definition");
+    let uris: Vec<&str> = locs.iter().map(|l| l["uri"].as_str().unwrap()).collect();
+    assert!(
+        uris.contains(&BUNDLE_POUCH_ORIGIN),
+        "the cached bundle's surface answers the use graph: {uris:?}"
+    );
+
+    // and the bundle's member surface hovers (v.push)
+    let (l, c) = pos_of(&fx.main_src, "push", 0);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    assert!(md.contains("push"), "the bundle member surface: {md}");
+
+    // the path dep completes: `use gadgets::⏐` offers its public names
+    let scratch = "use gadgets::\nfn main() -> nil {\n}\n";
+    let scratch_uri = format!("file://{}/scratch.rut", fx.ws.display());
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": scratch_uri, "languageId": "rut", "version": 1, "text": scratch
+            }}),
+        )
+        .await;
+    let comp = editor
+        .request(
+            "textDocument/completion",
+            json!({"textDocument": {"uri": scratch_uri}, "position": {"line": 0, "character": 13}}),
+            &mut notes,
+        )
+        .await;
+    let items = comp["result"].as_array().expect("completion items");
+    let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
+    assert!(labels.contains(&"Widget"), "the dep type completes: {labels:?}");
+    assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
+    let _ = remove_ws(fx.base);
+}
+
+#[tokio::test]
+async fn dep_walk_hint_once_for_cache_miss_and_unpinned() {
+    let fx = write_dep_fixture("hints");
+    let ws_uri = format!("file://{}", fx.ws.display());
+    let mut editor = spawn_at(&ws_uri).await;
+    editor.notify("initialized", json!({})).await;
+
+    // the walk's two url-dep hints trail the initialize response: the
+    // MISS (ghost) and the UNPINNED row (bare) — each ONE info message
+    // naming the dep and the `rut fetch` alternative, then the wire goes
+    // quiet (no spam, no third hint)
+    let mut hints = Vec::new();
+    for _ in 0..50 {
+        match tokio::time::timeout(std::time::Duration::from_millis(100), editor.recv()).await {
+            Ok(msg) if msg["method"] == "window/showMessage" => hints.push(msg),
+            Ok(_) => continue,
+            Err(_) => break, // the walk finished — quiet wire
+        }
+    }
+    assert_eq!(hints.len(), 2, "miss + unpinned, once each: {hints:?}");
+    assert!(hints.iter().all(|h| h["params"]["type"] == 3), "info severity: {hints:?}");
+    let ghost = hints
+        .iter()
+        .find(|h| h["params"]["message"].as_str().unwrap().contains("ghost"))
+        .expect("the cache-miss hint names the dep");
+    assert!(ghost["params"]["message"].as_str().unwrap().contains("rut fetch"), "{ghost}");
+    let bare = hints
+        .iter()
+        .find(|h| h["params"]["message"].as_str().unwrap().contains("bare"))
+        .expect("the unpinned hint names the dep");
+    assert!(bare["params"]["message"].as_str().unwrap().contains("sha256"), "{bare}");
+    let _ = remove_ws(fx.base);
+}
+
+#[tokio::test]
+async fn completion_parity_sort_text_and_additional_edits_on_the_wire() {
+    let fx = write_dep_fixture("parity");
+    let ws_uri = format!("file://{}", fx.ws.display());
+    let mut editor = spawn_at(&ws_uri).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // `gadgets` is only visible through the dep walk (it lives OUTSIDE
+    // the scan root) — the auto-import tier must offer Widget with the
+    // use-insert riding additionalTextEdits, exactly the wasm face's wire
+    let src = "fn main() -> nil {\n    let w = Wid;\n}\n";
+    let uri = format!("file://{}/parity.rut", fx.ws.display());
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": uri, "languageId": "rut", "version": 1, "text": src
+            }}),
+        )
+        .await;
+    let mut notes = Vec::new();
+    let (l, c) = pos_of(src, "Wid", 0);
+    let comp = editor
+        .request(
+            "textDocument/completion",
+            json!({"textDocument": {"uri": uri}, "position": {"line": l, "character": c + 3}}),
+            &mut notes,
+        )
+        .await;
+    let items = comp["result"].as_array().expect("completion items");
+    let imp = items
+        .iter()
+        .find(|i| i["label"] == "Widget" && i["additionalTextEdits"].is_array())
+        .expect("the auto-import offer for the dep's type");
+    assert_eq!(imp["detail"], "gadgets::Widget — import");
+    assert_eq!(imp["sortText"], "~Widget", "the tier sorts after the locals");
+    let edits = imp["additionalTextEdits"].as_array().unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["newText"], "use gadgets::Widget;\n");
+    // no leading use in this doc — the insert lands at the body top
+    assert_eq!(edits[0]["range"]["start"]["line"], 0);
+    assert_eq!(edits[0]["range"]["start"]["character"], 0);
+    let _ = remove_ws(fx.base);
+}
