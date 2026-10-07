@@ -24,7 +24,7 @@ impl Circle {
     }
 }
 
-trait Drawable {
+interface Drawable {
     fn draw(self) -> nil;
 }
 

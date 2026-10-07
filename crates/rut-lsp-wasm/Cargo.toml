@@ -11,8 +11,14 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 # The pure language core only — the stdio face (tower-lsp-server + tokio)
-# stays out of the module.
+# stays out of the module. The manifest/bundle machinery (`rut_lsp::deps`)
+# rides inside rut-lsp, so rut-driver is already in this graph (it added
+# the dep in the same change that landed `deps`) — wasm32-clean, proven by
+# rut-wasm.
 [dependencies]
 rut-lsp = { path = "../rut-lsp", default-features = false }
+# the entry-source Mode (`Decl`/`Impl`) the envelope spells as a string —
+# named directly so the match is explicit, not a Debug-format wire value
+rut-parser = { path = "../rut-parser" }
 ls-types = "0.0.6"
 serde_json = "1" # user-approved: serializes the ls-types values over the ABI

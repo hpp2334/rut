@@ -22,9 +22,26 @@
 //!   rut_references(uri, line, ch, incl) -> ptr LSP Location array or null
 //!   rut_signature_help(uri, line, ch) -> ptr   LSP SignatureHelp or null
 //!   rut_add_def(uri, src)                      index a workspace file
+//!   rut_parse_manifest(ptr, len) -> ptr        rut.jsonc bytes -> the
+//!                                              dep-table JSON (or the
+//!                                              error envelope)
+//!   rut_add_def_named(uri, name, src)          index a dep source file
+//!                                              under its module NAME
+//!   rut_add_bundle(ptr, len) -> ptr            .rutbundle bytes -> index
+//!                                              the bundle's own sources;
+//!                                              envelope names module +
+//!                                              entry paths (or the error)
 //!
 //! Every result is `[u32 little-endian length][bytes]` at the returned
 //! ptr; every string argument is `(ptr, len)` written via `rut_alloc`.
+//!
+//! The last three are the deps face: the manifest/bundle plumbing runs
+//! through `rut_lsp::deps` (pure — bytes in, values out) into the SAME
+//! `state.defs` store `rut_add_def` writes, so a dep's surface resolves
+//! in hover/completion/definition exactly like a workspace file — one
+//! index, no drift. `rut_parse_manifest`/`rut_add_bundle` answer with an
+//! error envelope (`{"error": …}`) on bad bytes; the host surfaces it as
+//! a hint, never silent unparsed state.
 //!
 //! One deviation from `rut-wasm`'s one-shot model: an LSP serves a
 //! long-lived editing session, so a monotonic arena would exhaust 16 MB
@@ -326,9 +343,275 @@ pub extern "C" fn rut_add_def(uri_ptr: *const u8, uri_len: usize, src_ptr: *cons
     }
 }
 
+// ---- the deps face (rut_lsp::deps — one engine, two faces) ----
+
+/// the entry-source mode as the envelope spells it (the variant name —
+/// the manifest's entry key decided it, `entry.type` → Decl)
+fn mode_str(m: rut_parser::Mode) -> &'static str {
+    match m {
+        rut_parser::Mode::Decl => "Decl",
+        rut_parser::Mode::Impl => "Impl",
+    }
+}
+
+/// one dep row's source: a `path` directory or a pinned `url` bundle
+/// with the cache path rut-lsp already computed (`.rut/cache/
+/// <sha256(url)>.rutbundle`) — the host never hashes URLs
+fn dep_source_json(s: &rut_lsp::deps::DepSource) -> serde_json::Value {
+    match s {
+        rut_lsp::deps::DepSource::Path { dir } => serde_json::json!({ "kind": "path", "dir": dir }),
+        rut_lsp::deps::DepSource::Url { url, sha256, cache_path } => serde_json::json!({
+            "kind": "url",
+            "url": url,
+            "sha256": sha256,
+            "cache_path": cache_path,
+        }),
+    }
+}
+
+fn dep_row_json(r: &rut_lsp::deps::DepRow) -> serde_json::Value {
+    serde_json::json!({
+        "name": r.name,
+        "source": dep_source_json(&r.source),
+        "optional": r.optional,
+        "lib": r.lib,
+    })
+}
+
+/// the DepTable as the envelope JSON — the struct's own field spellings
+/// (`DefLocation`-style: the shim spells the wire, rut-lsp stays
+/// serde-free here)
+fn dep_table_json(t: &rut_lsp::deps::DepTable) -> serde_json::Value {
+    serde_json::json!({
+        "name": t.name,
+        "entries": t
+            .entries
+            .iter()
+            .map(|e| serde_json::json!({ "path": e.path, "mode": mode_str(e.mode) }))
+            .collect::<Vec<_>>(),
+        "namespace": t.namespace,
+        "consts": t.consts,
+        "deps": t.deps.iter().map(dep_row_json).collect::<Vec<_>>(),
+        "dev_deps": t.dev_deps.iter().map(dep_row_json).collect::<Vec<_>>(),
+        "peer_deps": t.peer_deps.iter().map(dep_row_json).collect::<Vec<_>>(),
+    })
+}
+
+/// parse one `rut.jsonc` — the dep-table JSON out (the module's identity,
+/// its entry sources with the mode each indexes in, and its dep rows
+/// with the url rows' cache paths). A malformed manifest is the error
+/// envelope — the host surfaces it as a hint.
+#[no_mangle]
+pub extern "C" fn rut_parse_manifest(ptr: *const u8, len: usize) -> *mut u8 {
+    let text = unsafe { read_str(ptr, len) };
+    match rut_lsp::deps::dep_table(text) {
+        Ok(t) => json_envelope(dep_table_json(&t)),
+        Err(e) => json_envelope(serde_json::json!({ "error": e })),
+    }
+}
+
+/// index one dep source file under its module NAME — `deps::index_dep`
+/// into the same store `rut_add_def` writes (re-indexing an origin
+/// replaces its entry), so `use <name>::` resolves it like any index.
+/// The mode rides the URI convention (`mode_of`, identical to
+/// `rut_add_def`); namespace/consts have no ABI voice here — a dep
+/// needing them indexes through `rut_add_bundle`, whose manifest is in
+/// the bytes.
+#[no_mangle]
+pub extern "C" fn rut_add_def_named(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    name_ptr: *const u8,
+    name_len: usize,
+    src_ptr: *const u8,
+    src_len: usize,
+) {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let name = unsafe { read_str(name_ptr, name_len) };
+    let src = unsafe { read_str(src_ptr, src_len) };
+    let idx = rut_lsp::deps::index_dep(name, uri, src, rut_lsp::analysis::mode_of(uri), None, &[]);
+    let defs = &mut state().defs;
+    match defs.iter().position(|d| d.origin == uri) {
+        Some(slot) => defs[slot] = idx,
+        None => defs.push(idx),
+    }
+}
+
+/// binary (ptr, len) reader — the bundle bytes are a zip, not text
+unsafe fn read_bytes<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+    core::slice::from_raw_parts(ptr, len)
+}
+
+/// unpack one `.rutbundle` — `deps::bundle_sources` reads the archive's
+/// own manifest, then each entry source indexes under the module NAME
+/// the bundle carries (origin `bundle:<module>/<path>`, replace-by-origin
+/// like every index). The envelope names the module + the entry paths
+/// indexed, or the error — a corrupt/foreign archive never lands bytes.
+#[no_mangle]
+pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
+    let bytes = unsafe { read_bytes(ptr, len) };
+    let b = match rut_lsp::deps::bundle_sources(bytes) {
+        Ok(b) => b,
+        Err(e) => return json_envelope(serde_json::json!({ "error": e })),
+    };
+    let mut paths = Vec::with_capacity(b.files.len());
+    let defs = &mut state().defs;
+    for f in &b.files {
+        let uri = format!("bundle:{}/{}", b.module, f.path);
+        let idx = rut_lsp::deps::index_dep(
+            &b.module,
+            &uri,
+            &f.src,
+            f.mode,
+            b.namespace.as_deref(),
+            &b.consts,
+        );
+        match defs.iter().position(|d| d.origin == uri) {
+            Some(slot) => defs[slot] = idx,
+            None => defs.push(idx),
+        }
+        paths.push(f.path.clone());
+    }
+    json_envelope(serde_json::json!({
+        "module": b.module,
+        "namespace": b.namespace,
+        "consts": b.consts,
+        "files": paths,
+    }))
+}
+
 /// an open doc's stored text — the smoke test's round-trip check
 #[no_mangle]
 pub extern "C" fn rut_doc_len(uri_ptr: *const u8, uri_len: usize) -> usize {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     state().docs.get(uri).map(|s| s.len()).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// STATE is one process-global — the exports assume the host's
+    /// single-threaded JS; the test harness runs parallel threads, so
+    /// every state-touching test holds this for its whole body
+    static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    const PLUGIN_MANIFEST: &str = include_str!("../../../examples/03-plugin/plugin/rut.jsonc");
+    const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
+    /// the CDN url's own sha256 — the cache filename rut-lsp computes
+    /// (the URL STRING is hashed, never the bytes)
+    const POUCH_CACHE: &str =
+        ".rut/cache/683a9cb219067e36be3ebf79fc895ff0930c10a47c058e386a226e428971a74f.rutbundle";
+
+    /// read an export's result envelope — `[u32 le length][json]`. The
+    /// heap is a byte array (align 1), so the length reads byte-wise —
+    /// the same read the extension's DataView does
+    fn take(ptr: *mut u8) -> serde_json::Value {
+        assert!(!ptr.is_null(), "arena overflow");
+        unsafe {
+            let len =
+                u32::from_le_bytes([*ptr, *ptr.add(1), *ptr.add(2), *ptr.add(3)]) as usize;
+            let bytes = core::slice::from_raw_parts(ptr.add(4), len);
+            serde_json::from_slice(bytes).expect("the envelope is valid JSON")
+        }
+    }
+
+    #[test]
+    fn manifest_envelope_spells_the_dep_table() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let out = take(rut_parse_manifest(PLUGIN_MANIFEST.as_ptr(), PLUGIN_MANIFEST.len()));
+        assert_eq!(out["name"], "plugin");
+        assert_eq!(
+            out["entries"],
+            serde_json::json!([{ "path": "plugin.rut", "mode": "Impl" }]),
+            "the entry carries its mode: {}",
+            out["entries"]
+        );
+        let rows = out["deps"].as_array().unwrap();
+        let server = rows.iter().find(|r| r["name"] == "server").unwrap();
+        assert_eq!(server["source"], serde_json::json!({ "kind": "path", "dir": "../server" }));
+        assert_eq!(server["optional"], false);
+        let pouch = rows.iter().find(|r| r["name"] == "pouch").unwrap();
+        assert_eq!(pouch["source"]["kind"], "url");
+        assert_eq!(pouch["source"]["cache_path"], POUCH_CACHE);
+        assert!(pouch["source"]["sha256"].as_str().unwrap().len() == 64);
+    }
+
+    #[test]
+    fn a_decl_entry_and_the_error_envelope() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let src = r#"{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }"#;
+        let out = take(rut_parse_manifest(src.as_ptr(), src.len()));
+        assert_eq!(
+            out["entries"],
+            serde_json::json!([{ "path": "surface.d.rut", "mode": "Decl" }]),
+            "entry.type indexes in Decl mode"
+        );
+        // a malformed manifest is the error envelope — the host's hint
+        rut_begin();
+        let bad = take(rut_parse_manifest(b"{\"name\": six}".as_ptr(), b"{\"name\": six}".len()));
+        assert!(bad["error"].as_str().unwrap().starts_with("line 1: "), "{bad}");
+    }
+
+    #[test]
+    fn add_def_named_feeds_the_use_path_tier() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let (u, n, s) = (
+            b"file:///ws/gadgets/lib.rut".as_slice(),
+            b"gadgets".as_slice(),
+            &b"pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n"[..],
+        );
+        rut_add_def_named(u.as_ptr(), u.len(), n.as_ptr(), n.len(), s.as_ptr(), s.len());
+        let doc = "use gadgets::\nfn main() -> nil {\n}\n";
+        let uri = "file:///ws/main.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        // `use gadgets::⏐` — the dep's public names
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 13));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"Widget"), "the dep type completes: {labels:?}");
+        assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
+        // `use ⏐` — the module-name tier sees the named index
+        rut_begin();
+        let mods = take(rut_complete(uri.as_ptr(), uri.len(), 0, 4));
+        let names: Vec<&str> = mods.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(names.contains(&"gadgets"), "the module name completes: {names:?}");
+    }
+
+    #[test]
+    fn add_bundle_indexes_the_pouch_surface() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let out = take(rut_add_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()));
+        assert_eq!(out["module"], "pouch");
+        assert_eq!(out["files"], serde_json::json!(["pouch.rut"]));
+        // a corrupt archive is the error envelope, never silent state
+        rut_begin();
+        let junk = b"definitely not a zip";
+        let err = take(rut_add_bundle(junk.as_ptr(), junk.len()));
+        assert!(err["error"].as_str().unwrap().contains("not a zip"), "{err}");
+
+        // the indexed surface resolves: the use name jumps to BOTH pouch
+        // indexes — the std surface's true source path AND the bundle's
+        let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n";
+        let uri = "file:///ws/uses-pouch.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        rut_begin();
+        let locs = take(rut_definition(uri.as_ptr(), uri.len(), 0, 13)); // the use-line `Vec`
+        let uris: Vec<&str> = locs.as_array().unwrap().iter().map(|l| l["uri"].as_str().unwrap()).collect();
+        assert!(
+            uris.contains(&"bundle:pouch/pouch.rut"),
+            "the bundle index answers go-to-definition: {uris:?}"
+        );
+        // and the member surface hovers through the named module
+        let push_ch = doc.lines().nth(3).unwrap().find("push").unwrap() as u32;
+        rut_begin();
+        let h = take(rut_hover(uri.as_ptr(), uri.len(), 3, push_ch));
+        assert!(h["contents"]["value"].as_str().unwrap().contains("push"), "{h}");
+    }
 }

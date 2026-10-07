@@ -38,6 +38,15 @@
 // (verbatim signature + active parameter correct at first/middle/
 // nested positions; an arity mismatch -> no help).
 //
+// Phase 5 (manifest-deps) adds the DEP ABI: rut_parse_manifest (the
+// repo's own path+url fixture manifest through the envelope — names,
+// entry modes, the Rust-computed cache path), rut_add_def_named (a
+// named dep feeding the `use <name>::` tier), and rut_add_bundle (the
+// committed dist/std/pouch.rutbundle — the offline url-dep fixture the
+// CLI tests use — landing pouch's surface in hover + go-to-definition).
+// These exports ride the RAW ABI (the smoke.js protocol): the extension
+// binding learns them in the next lane, the ABI gate ships first.
+//
 // Runs headless in plain node — no `code` needed; the Extension Host
 // suite (test:host) stays the loud-skip lane on machines without VS Code.
 'use strict';
@@ -109,9 +118,10 @@ async function main() {
   const bad = [];
   let smokes = 0;
 
-  // ---- the semantic-token legend (14 types, the extension's map) ----
+  // ---- the semantic-token legend (15 types, the extension's map —
+  // comments joined the classes) ----
   const legend = rut.legend();
-  if (!(legend.length === 14 && legend.includes('enumMember') && legend.includes('keyword'))) {
+  if (!(legend.length === 15 && legend.includes('enumMember') && legend.includes('keyword') && legend.includes('comment'))) {
     bad.push(`legend drifted: ${JSON.stringify(legend)}`);
   }
   smokes++;
@@ -178,7 +188,7 @@ async function main() {
     }
     const [hline, hch] = posOf(src, 'area', 2); // the call site, not the decl
     const h = rut.hover(uri, hline, hch);
-    if (!h || !h.contents.value.includes('fn area(self) -> f64') || !h.contents.value.includes('in `impl Circle`')) {
+    if (!h || !h.contents.value.includes('fn area(self) -> f64') || !h.contents.value.includes('in `Circle`')) {
       bad.push(`?Circle member hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`);
     }
     const [cline, cch] = posOf(src, 'c.');
@@ -215,7 +225,10 @@ async function main() {
     for (const absent of ['PrimMapI64', 'PrimMapU64', 'PrimMapF64']) {
       if (labels.includes(absent)) bad.push(`bare completion still offers the internal '${absent}'`);
     }
-    if (!labels.includes('map_hput_i')) bad.push(`bare completion lacks nmap_host's 'map_hput_i' (${labels.length} items)`);
+    // nmap-host: the width moved INTO the name (no overloading) — the
+    // keyed-lane fn is `map_hput` now (the `_i` spelling is gone with
+    // the integer-suffix plan)
+    if (!labels.includes('map_hput')) bad.push(`bare completion lacks nmap_host's 'map_hput' (${labels.length} items)`);
     // nmap-hostvals P4: the probing core's lanes left the surface — the
     // round-1 opaque-keyed `map_entry` must not come back
     if (labels.includes('map_entry')) bad.push(`bare completion still offers nmap_host's 'map_entry' (deleted at P4)`);
@@ -894,6 +907,137 @@ async function main() {
     smokes++;
   }
 
+  // ---- phase 5 (manifest-deps): the DEP ABI — rut_parse_manifest /
+  // rut_add_def_named / rut_add_bundle — through the SHIPPED artifact's
+  // raw exports. Separate instance: its state.defs is the std surface
+  // plus whatever this lane indexes, so the bundle assertions read
+  // exactly what the ABI landed (the binding lane above keeps its own
+  // instance unpolluted for the corpus walk). ----
+  {
+    const bytes = fs.readFileSync(WASM_PATH);
+    const { instance } = await WebAssembly.instantiate(bytes, {});
+    const e = instance.exports;
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    const put = (s) => {
+      const b = enc.encode(s);
+      const p = e.rut_alloc(b.length);
+      assert.notStrictEqual(p, 0, 'dep lane: arena overflow');
+      new Uint8Array(e.memory.buffer, p, b.length).set(b);
+      return [p, b.length];
+    };
+    // binary (ptr, len) — the bundle bytes are a zip, not text
+    const putBytes = (b) => {
+      const p = e.rut_alloc(b.length);
+      assert.notStrictEqual(p, 0, 'dep lane: arena overflow');
+      new Uint8Array(e.memory.buffer, p, b.length).set(b);
+      return [p, b.length];
+    };
+    const take = (ptr) => {
+      assert.notStrictEqual(ptr, 0, 'dep lane: arena overflow');
+      const len = new DataView(e.memory.buffer, ptr, 4).getUint32(0, true);
+      return JSON.parse(dec.decode(new Uint8Array(e.memory.buffer, ptr + 4, len)));
+    };
+
+    // the manifest: the repo's own path+url fixture (03-plugin) — the
+    // same bytes rut-lsp's dep_table unit test pins
+    const manifest = fs.readFileSync(path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc'), 'utf8');
+    e.rut_begin();
+    const table = take(e.rut_parse_manifest(...put(manifest)));
+    assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
+    assert.deepStrictEqual(table.entries, [{ path: 'plugin.rut', mode: 'Impl' }],
+      `entry modes: ${JSON.stringify(table.entries)}`);
+    const row = (name) => table.deps.find((r) => r.name === name);
+    assert.deepStrictEqual(row('server'), {
+      name: 'server',
+      source: { kind: 'path', dir: '../server' },
+      optional: false,
+      lib: null,
+    }, `path row: ${JSON.stringify(row('server'))}`);
+    const pouchRow = row('pouch');
+    assert.strictEqual(pouchRow.source.kind, 'url');
+    assert.strictEqual(pouchRow.source.url,
+      'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle');
+    assert.match(pouchRow.source.sha256, /^[0-9a-f]{64}$/, 'the pin rides');
+    // the cache path is computed RUST-side — sha256 of the URL string;
+    // JS never hashes (this constant is the pinned expectation)
+    assert.strictEqual(pouchRow.source.cache_path,
+      '.rut/cache/683a9cb219067e36be3ebf79fc895ff0930c10a47c058e386a226e428971a74f.rutbundle');
+    assert.deepStrictEqual(table.dev_deps, []);
+    assert.deepStrictEqual(table.peer_deps, []);
+    smokes++;
+
+    // entry.type indexes in Decl mode (the envelope spells the variant)
+    const hostManifest = '{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }';
+    e.rut_begin();
+    const host = take(e.rut_parse_manifest(...put(hostManifest)));
+    assert.deepStrictEqual(host.entries, [{ path: 'surface.d.rut', mode: 'Decl' }],
+      `decl entry: ${JSON.stringify(host.entries)}`);
+    // a malformed manifest is the ERROR envelope — the host's hint
+    e.rut_begin();
+    const bad = take(e.rut_parse_manifest(...put('{"name": six}')));
+    assert.ok(bad.error && bad.error.startsWith('line 1: '), `error envelope: ${JSON.stringify(bad)}`);
+    smokes++;
+
+    // rut_add_def_named: a dep indexed under its module NAME feeds the
+    // `use <name>::` tier — the module tier lists the name, the names
+    // tier lists the dep's public surface
+    const gUri = 'file:///ws/gadgets/lib.rut';
+    const gSrc = 'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n';
+    e.rut_begin();
+    e.rut_add_def_named(...put(gUri), ...put('gadgets'), ...put(gSrc));
+    const depDoc = 'use gadgets::\nfn main() -> nil {\n}\n';
+    const depUri = 'file:///ws/e2e-dep.rut';
+    e.rut_begin();
+    take(e.rut_analyze(...put(depUri), ...put(depDoc)));
+    e.rut_begin();
+    const namesTier = take(e.rut_complete(...put(depUri), 0, depDoc.indexOf('::') + 2));
+    const depLabels = namesTier.map((i) => i.label);
+    for (const want of ['Widget', 'tag']) {
+      if (!depLabels.includes(want)) bad.push(`named dep 'gadgets' lacks '${want}' in use completion (got ${depLabels.join(', ')})`);
+    }
+    e.rut_begin();
+    const modTier = take(e.rut_complete(...put(depUri), 0, 4)); // right after `use `
+    if (!modTier.map((i) => i.label).includes('gadgets')) {
+      bad.push(`module tier lacks 'gadgets' (got ${modTier.map((i) => i.label).join(', ')})`);
+    }
+    smokes++;
+
+    // rut_add_bundle: the COMMITTED pouch bundle (the CLI tests'
+    // offline url-dep fixture) — the envelope names module + entry
+    // paths, the surface lands in hover and go-to-definition
+    const bundleBytes = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
+    e.rut_begin();
+    const bundle = take(e.rut_add_bundle(...putBytes(bundleBytes)));
+    assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
+    assert.deepStrictEqual(bundle.files, ['pouch.rut']);
+    e.rut_begin();
+    const junk = Buffer.from('definitely not a zip');
+    const bundleErr = take(e.rut_add_bundle(...putBytes(junk)));
+    assert.ok(bundleErr.error && bundleErr.error.includes('not a zip'),
+      `bundle error envelope: ${JSON.stringify(bundleErr)}`);
+    // the indexed surface resolves: the use name jumps to BOTH pouch
+    // indexes — the std surface's true source path AND the bundle's —
+    // and a member hover answers through the named module
+    const pouchDoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n';
+    const pouchUri = 'file:///ws/e2e-bundle.rut';
+    e.rut_begin();
+    take(e.rut_analyze(...put(pouchUri), ...put(pouchDoc)));
+    e.rut_begin();
+    const vecLocs = take(e.rut_definition(...put(pouchUri), 0, pouchDoc.indexOf('Vec')));
+    const targetUris = vecLocs.map((l) => l.uri);
+    if (!targetUris.includes('rut/pouch/pouch.rut') || !targetUris.includes('bundle:pouch/pouch.rut')) {
+      bad.push(`bundle go-to-definition targets: ${JSON.stringify(targetUris)}`);
+    }
+    const pushCh = pouchDoc.split('\n')[3].indexOf('push');
+    e.rut_begin();
+    const pushHover = take(e.rut_hover(...put(pouchUri), 3, pushCh));
+    if (!pushHover || !pushHover.contents.value.includes('push')) {
+      bad.push(`bundle member hover missed: ${pushHover && JSON.stringify(pushHover.contents.value.slice(0, 60))}`);
+    }
+    smokes++;
+  }
+
   // ---- the corpus: zero false diagnostics through the SHIPPED wasm ----
   // (the pre-align artifact flagged 15 of 53 files with 1,796 false
   // diagnostics — every ?T site read `expected a type name`)
@@ -936,7 +1080,8 @@ async function main() {
     `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
     `def-within/def-cross/def-std/typeDefinition/` +
     `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
-    `refs-shadow/refs-cross/sighelp) ` +
+    `refs-shadow/refs-cross/sighelp/` +
+    `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface) ` +
     `through bin/rut-lsp.wasm`);
 }
 

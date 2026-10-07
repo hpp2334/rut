@@ -1155,6 +1155,7 @@ version = "0.1.0"
 dependencies = [
  "ls-types",
  "rut-lsp",
+ "rut-parser",
  "serde_json",
 ]
 
