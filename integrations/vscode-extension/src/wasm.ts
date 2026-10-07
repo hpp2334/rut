@@ -61,6 +61,11 @@ export interface LspCompletionItem {
   kind?: number;
   detail?: string;
   documentation?: { kind: string; value: string };
+  /// the auto-import tier sorts after every local item (`~` prefix)
+  sortText?: string;
+  /// the auto-import insert (`use mod::Name;`) — a fresh line after the
+  /// last leading `use` (or at the body top)
+  additionalTextEdits?: Array<{ range: LspRange; newText: string }>;
 }
 
 /// an LSP InlayHint — the server supplies position + label (with the
@@ -94,6 +99,55 @@ export interface LspSignatureHelp {
   activeParameter?: number;
 }
 
+// ---- the deps face (rut_parse_manifest / rut_add_def_named /
+// rut_add_bundle) — the envelope spellings mirror the Rust side's own
+// field names (wire truth, `null` for the absent Options) ----
+
+/// where a dep row's bytes live: a directory beside the manifest, or a
+/// remote `.rutbundle` with its sha256 pin and the Rust-computed cache
+/// path (`.rut/cache/<sha256(url)>.rutbundle` — JS never hashes URLs)
+export type DepSource =
+  | { kind: 'path'; dir: string }
+  | { kind: 'url'; url: string; sha256: string | null; cache_path: string };
+
+/// one dep row (`deps` / `dev-deps` / `peer-deps`); `optional`/`lib`
+/// are the peer descriptor's bits
+export interface DepRow {
+  name: string;
+  source: DepSource;
+  optional: boolean;
+  lib: string | null;
+}
+
+/// one parsed manifest, editor-shaped: the module's identity (name,
+/// entry sources with the mode each indexes in, namespace, consts)
+/// plus its dep rows
+export interface DepTable {
+  name: string | null;
+  entries: Array<{ path: string; mode: 'Decl' | 'Impl' }>;
+  namespace: string | null;
+  consts: Array<[string, number]>;
+  deps: DepRow[];
+  dev_deps: DepRow[];
+  peer_deps: DepRow[];
+}
+
+/// `rut_parse_manifest` / `rut_add_bundle` answer the error envelope on
+/// bad bytes — the host hints, never silent unparsed state
+export type Envelope = { error: string };
+
+export function isEnvelope(e: unknown): e is Envelope {
+  return typeof (e as Envelope).error === 'string';
+}
+
+/// `rut_add_bundle`'s success envelope — the module + entry paths indexed
+export interface BundleIndexed {
+  module: string;
+  namespace: string | null;
+  consts: Array<[string, number]>;
+  files: string[];
+}
+
 interface RutExports {
   memory: WebAssembly.Memory;
   rut_begin(): void;
@@ -116,6 +170,16 @@ interface RutExports {
   rut_references(uriPtr: number, uriLen: number, line: number, ch: number, includeDecl: number): number;
   rut_signature_help(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
+  rut_parse_manifest(ptr: number, len: number): number;
+  rut_add_def_named(
+    uriPtr: number,
+    uriLen: number,
+    namePtr: number,
+    nameLen: number,
+    srcPtr: number,
+    srcLen: number
+  ): void;
+  rut_add_bundle(ptr: number, len: number): number;
 }
 
 /// everything the module exports (the ABI surface + its linear memory)
@@ -221,12 +285,48 @@ export class RutWasm {
     });
   }
 
+  /// parse one `rut.jsonc` — the dep-table JSON out, or the error
+  /// envelope (the host surfaces it as a hint). The wasm parses; JS
+  /// moves bytes.
+  parseManifest(text: string): DepTable | Envelope {
+    return this.call(() => {
+      const [p, l] = this.put(text);
+      return this.e.rut_parse_manifest(p, l);
+    });
+  }
+
+  /// index one dep source file under its module NAME (the dep walk's
+  /// per-file move) — `uri` is the file's real on-disk URI so F12
+  /// jumps land. The mode rides the URI convention (`.d.rut` → Decl),
+  /// same as `addDef`.
+  addDefNamed(uri: string, name: string, src: string): void {
+    this.exec(() => {
+      const [u, ul] = this.put(uri);
+      const [n, nl] = this.put(name);
+      const [s, sl] = this.put(src);
+      this.e.rut_add_def_named(u, ul, n, nl, s, sl);
+    });
+  }
+
+  /// index one `.rutbundle` (the archive's own manifest names the
+  /// module; its entry sources index under it) — the indexed envelope,
+  /// or the error one
+  addBundle(bytes: Uint8Array): BundleIndexed | Envelope {
+    return this.call(() => {
+      const [p, l] = this.putBytes(bytes);
+      return this.e.rut_add_bundle(p, l);
+    });
+  }
+
   // ---- the raw protocol ----
 
   /// every (ptr, len) pair lands in the per-request arena; results are
   /// read before the next request resets it
   private put(s: string): [number, number] {
-    const bytes = this.enc.encode(s);
+    return this.putBytes(this.enc.encode(s));
+  }
+
+  private putBytes(bytes: Uint8Array): [number, number] {
     const ptr = this.e.rut_alloc(bytes.length);
     if (ptr === 0) {
       throw new Error('rut wasm: arena overflow');

@@ -1,0 +1,16 @@
+{
+  // the dep-walk fixture manifest — RENDERED by the host test
+  // (test/runTest.js): the placeholder below becomes the localhost
+  // fixture server's row, first with a deliberately WRONG pin (the
+  // refusal scenario), then with the real one. The comments ride the
+  // JSONC front stage — the walk parses comments from the same bytes
+  // the editor's validation schema describes.
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "app",
+  "entry": { "lib": "./app.rut" },
+  "deps": {
+    "gadgets": { "path": "../outside/gadgets" },
+__POUCH_ROW__
+  }
+}

@@ -1,0 +1,9 @@
+// gadgets — one public class + one free fn: the completion and
+// auto-import surface the dep-walk host test asserts on
+pub class Widget {
+    id: i32;
+}
+
+pub fn tag() -> i32 {
+    return 1;
+}

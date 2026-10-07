@@ -1,0 +1,12 @@
+// app — the dep-walk fixture consumer. The host test renders
+// rut.jsonc beside this file: gadgets points OUTSIDE the workspace
+// folder (the walk's whole point), pouch is the localhost fixture
+// server's bundle, pinned by the served bytes' sha256. The bare `Wi`
+// below is the auto-import probe: completing it must offer Widget with
+// the `use gadgets::Widget;` insert after the last leading `use`.
+use gadgets::{ tag };
+
+fn main() -> nil {
+    let t = tag();
+    let w = Wi;
+}

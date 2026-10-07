@@ -1,0 +1,8 @@
+{
+  // gadgets — the dep-walk fixture's OUT-OF-FOLDER path dep: the host
+  // test adds only the workspace/ folder, so this module is invisible
+  // to workspace.findFiles and mounts only through the manifest walk
+  // (resolve against the manifest dir, not the folder boundary).
+  "name": "gadgets",
+  "entry": { "lib": "./gadgets.rut" }
+}

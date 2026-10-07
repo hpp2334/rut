@@ -40,6 +40,12 @@
         "path": "./syntaxes/rut.tmLanguage.json"
       }
     ],
+    "jsonValidation": [
+      {
+        "fileMatch": "rut.jsonc",
+        "url": "./schemas/rut.manifest.schema.json"
+      }
+    ],
     "semanticTokenScopes": [
       {
         "language": "rut",

@@ -6,10 +6,11 @@
 // bin/rut-lsp.wasm the TextMate grammar still colors the basics and an
 // info message points at `npm run build:wasm`.
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm } from './wasm';
+import { Analysis, DepRow, isEnvelope, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -20,6 +21,17 @@ const ANALYSIS_DEBOUNCE_MS = 200;
 // mirrors the native server's workspace-scan cap — an LSP is a guest,
 // not an indexer daemon
 const MAX_WORKSPACE_FILES = 500;
+
+// the manifest's one name — one directory is one module
+const MANIFEST_NAME = 'rut.jsonc';
+
+// the dep walk's budget beside the 500-file workspace cap: depth for
+// the recursion, files for everything the walk indexes
+const MAX_DEP_DEPTH = 8;
+const MAX_DEP_FILES = 200;
+
+// the fetch cap — the same bytes ceiling the CLI's remote enforces
+const MAX_FETCH_BYTES = 256 * 1024 * 1024;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const wasmPath = path.join(context.extensionPath, 'bin', 'rut-lsp.wasm');
@@ -97,8 +109,313 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
   );
 
   // workspace index off the hot activation path — hover/completion may
-  // briefly resolve against the std surface + open docs only
-  void indexWorkspace(rut);
+  // briefly resolve against the std surface + open docs only. The dep
+  // walk rides after it: the root `rut.jsonc`'s rows mount the deps
+  // (path dirs, pinned url bundles) into the same index.
+  watchDeps(context, rut);
+  void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
+}
+
+// ---- deps: the manifest walk ----
+//
+// After the workspace scan each workspace folder's root `rut.jsonc` is
+// handed to the wasm (`rut_parse_manifest` — JS moves bytes, the wasm
+// parses; law: no JS-side rut parsing). Path deps resolve against the
+// manifest dir — OUTSIDE the workspace folder is the point — and
+// recurse cycle-safe under a depth/file budget. Url deps ride the
+// shared `.rut/cache/` (the Rust-computed cache_path, the same dir the
+// CLI fills): cache-first, a hit verified against the sha256 pin (a
+// poisoned entry evicts and re-fetches — the CLI's healing law), a
+// miss GETs, pins the bytes BEFORE they land anywhere, and writes the
+// cache atomically (tmp + rename). No pin, no bytes — one error hint.
+// Every failure is ONE hint per dep naming the CLI alternative: never
+// spam, never silent wrong results.
+
+interface WalkCtx {
+  rut: RutWasm;
+  /// the anchoring workspace folder — where `.rut/cache/` lives
+  folder: vscode.Uri;
+  /// resolved manifest dirs — the cycle break
+  seen: Set<string>;
+  /// remaining dep-file budget
+  files: number;
+}
+
+// hints are once-per-reason per session: a watcher re-walk fires
+// dozens of times while the network is down — the first hint names the
+// fix, the rest would be spam
+const depHintsShown = new Set<string>();
+
+function hintOnce(key: string, message: string, error: boolean): void {
+  if (depHintsShown.has(key)) {
+    return;
+  }
+  depHintsShown.add(key);
+  const shown = error
+    ? vscode.window.showErrorMessage(message)
+    : vscode.window.showInformationMessage(message);
+  void Promise.resolve(shown).catch(() => undefined);
+}
+
+// the dep walk is debounced like the analysis (watchers fire in
+// bursts), serialized (a walk in flight outlives its trigger), and
+// re-run once when triggers arrived mid-walk
+let walkTimer: ReturnType<typeof setTimeout> | undefined;
+let walking = false;
+let walkRerun = false;
+
+function scheduleDepWalk(rut: RutWasm): void {
+  if (walkTimer !== undefined) {
+    clearTimeout(walkTimer);
+  }
+  walkTimer = setTimeout(() => {
+    walkTimer = undefined;
+    void runDepWalk(rut);
+  }, ANALYSIS_DEBOUNCE_MS);
+}
+
+async function runDepWalk(rut: RutWasm): Promise<void> {
+  if (walking) {
+    walkRerun = true;
+    return;
+  }
+  walking = true;
+  try {
+    await walkDeps(rut);
+  } finally {
+    walking = false;
+    if (walkRerun) {
+      walkRerun = false;
+      scheduleDepWalk(rut);
+    }
+  }
+}
+
+// `**/rut.jsonc` + `.rut/cache/**` re-run the walk; a workspace-folder
+// change restarts the whole index (watchers re-arm over the new folder
+// set, the scan + walk re-run — re-indexing is replace-by-origin, so
+// this is idempotent)
+function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
+  const watchers: vscode.Disposable[] = [];
+  const watchFolder = (folder: vscode.WorkspaceFolder): void => {
+    for (const pattern of [`**/${MANIFEST_NAME}`, '.rut/cache/**']) {
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, pattern));
+      watchers.push(
+        watcher,
+        watcher.onDidChange(() => scheduleDepWalk(rut)),
+        watcher.onDidCreate(() => scheduleDepWalk(rut)),
+        watcher.onDidDelete(() => scheduleDepWalk(rut))
+      );
+    }
+  };
+  const rearm = (): void => {
+    for (const w of watchers) {
+      w.dispose();
+    }
+    watchers.length = 0;
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      watchFolder(folder);
+    }
+  };
+  rearm();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      rearm();
+      void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
+    }),
+    { dispose: () => watchers.forEach((w) => w.dispose()) }
+  );
+}
+
+async function walkDeps(rut: RutWasm): Promise<void> {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const ctx: WalkCtx = { rut, folder: folder.uri, seen: new Set(), files: MAX_DEP_FILES };
+    await walkManifest(ctx, vscode.Uri.joinPath(folder.uri, MANIFEST_NAME), 1);
+  }
+}
+
+// one manifest: its own entry sources index under the module name (the
+// uri is the file's real on-disk URI so F12 jumps land), then its dep
+// rows walk — `deps` at any depth, `dev-deps` only at the root (the
+// loader's law: a dep's dev table never enters a consumer's world),
+// `peer-deps` only when locally resolvable (the consumer supplies
+// them; an unresolvable peer is the normal state, not a failure).
+// Namespaced/const-carrying path deps (calc's `Math`) index their
+// surface only — namespace/consts have no voice in `rut_add_def_named`;
+// a dep needing them mounts through a bundle.
+async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number): Promise<void> {
+  if (depth > MAX_DEP_DEPTH || ctx.files <= 0) {
+    return;
+  }
+  const dir = vscode.Uri.joinPath(manifestUri, '..');
+  const dirKey = dir.fsPath;
+  if (ctx.seen.has(dirKey)) {
+    return;
+  }
+  ctx.seen.add(dirKey);
+  const bytes = await readFileNullable(manifestUri);
+  if (bytes === null) {
+    return; // no manifest here — nothing to parse, nothing to hint
+  }
+  const table = ctx.rut.parseManifest(new TextDecoder().decode(bytes));
+  if (isEnvelope(table)) {
+    hintOnce(
+      `manifest:${dirKey}:${table.error}`,
+      `rut: ${path.basename(manifestUri.fsPath)} — ${table.error}`,
+      true
+    );
+    return;
+  }
+  const module = table.name ?? path.basename(dirKey);
+  for (const entry of table.entries) {
+    if (ctx.files <= 0) {
+      return;
+    }
+    const srcUri = vscode.Uri.joinPath(dir, entry.path);
+    const src = await readFileNullable(srcUri);
+    if (src === null) {
+      continue; // a manifest naming a missing entry — index what exists
+    }
+    ctx.files--;
+    ctx.rut.addDefNamed(srcUri.toString(), module, new TextDecoder().decode(src));
+  }
+  const rows: Array<{ row: DepRow; peer: boolean }> = [
+    ...table.deps.map((row) => ({ row, peer: false })),
+    ...(depth === 1 ? table.dev_deps : []).map((row) => ({ row, peer: false })),
+    ...table.peer_deps.map((row) => ({ row, peer: true })),
+  ];
+  for (const { row, peer } of rows) {
+    if (ctx.files <= 0) {
+      return;
+    }
+    if (row.source.kind === 'url') {
+      await mountUrlDep(ctx, row);
+      continue;
+    }
+    const depDir = path.resolve(dirKey, row.source.dir);
+    const depManifestUri = vscode.Uri.file(path.join(depDir, MANIFEST_NAME));
+    if (!fs.existsSync(depManifestUri.fsPath)) {
+      if (!peer) {
+        hintOnce(
+          `path:${dirKey}:${row.name}`,
+          `rut: dep '${row.name}' — ${row.source.dir} has no ${MANIFEST_NAME}; ` +
+            `a path dep is a module directory (one manifest per module)`,
+          true
+        );
+      }
+      continue;
+    }
+    // the optional peer's integration group (`lib` — an impl-only
+    // source in the OWNER's directory) is the owner's surface gated on
+    // the peer's presence: index it under the owner's module name,
+    // only when the peer resolved
+    if (peer && row.optional && row.lib !== null) {
+      const libUri = vscode.Uri.file(path.resolve(dirKey, row.lib));
+      const libSrc = await readFileNullable(libUri);
+      if (libSrc !== null && ctx.files > 0) {
+        ctx.files--;
+        ctx.rut.addDefNamed(libUri.toString(), module, new TextDecoder().decode(libSrc));
+      }
+    }
+    await walkManifest(ctx, depManifestUri, depth + 1);
+  }
+}
+
+// one url row — the mount door. `sha256`/`cache_path` are Rust-computed
+// (the row's envelope carries them; JS never hashes URLs).
+async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
+  const source = row.source;
+  if (source.kind !== 'url') {
+    return;
+  }
+  const { url, sha256, cache_path } = source;
+  if (sha256 === null) {
+    hintOnce(
+      `unpinned:${url}`,
+      `rut: dep '${row.name}' has no sha256 pin — the editor never mounts unpinned url ` +
+        `bytes; pin the bundle's hash beside its url in ${MANIFEST_NAME}`,
+      true
+    );
+    return;
+  }
+  const cacheUri = vscode.Uri.joinPath(ctx.folder, cache_path);
+  let bytes = await readFileNullable(cacheUri);
+  if (bytes !== null && (await sha256Hex(bytes)) !== sha256) {
+    // poisoned entry: the pin is checked at the mount door on every
+    // load — evict so the refetch below heals it (the CLI's law)
+    try {
+      await vscode.workspace.fs.delete(cacheUri);
+    } catch {
+      // already gone — the refetch decides
+    }
+    bytes = null;
+  }
+  if (bytes === null) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const buf = new Uint8Array(await resp.arrayBuffer());
+      if (buf.byteLength > MAX_FETCH_BYTES) {
+        throw new Error(`${buf.byteLength} bytes exceeds the fetch cap (${MAX_FETCH_BYTES})`);
+      }
+      if ((await sha256Hex(buf)) !== sha256) {
+        hintOnce(
+          `pin:${url}`,
+          `rut: dep '${row.name}' — sha256 pin mismatch for ${url}: the manifest pins ` +
+            `${sha256}, the fetched bytes hash differently — refusing to mount`,
+          true
+        );
+        return;
+      }
+      await atomicCacheWrite(cacheUri, buf);
+      bytes = buf;
+    } catch (e) {
+      hintOnce(
+        `fetch:${url}`,
+        `rut: dep '${row.name}' (${url}) could not be fetched ` +
+          `(${e instanceof Error ? e.message : String(e)}) — run \`rut fetch\` in the ` +
+          `project to warm .rut/cache, then reload the window`,
+        false
+      );
+      return;
+    }
+  }
+  const bundle = ctx.rut.addBundle(bytes);
+  if (isEnvelope(bundle)) {
+    hintOnce(
+      `bundle:${url}`,
+      `rut: dep '${row.name}' — the bundle did not mount: ${bundle.error}`,
+      true
+    );
+  }
+}
+
+// the sha256 pin check — Node's webcrypto, hex-lowercase like the
+// manifest's normalized pin
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.webcrypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// the CLI's atomic entry write: tmp beside the target, then rename —
+// a reader never sees a partial entry
+async function atomicCacheWrite(target: vscode.Uri, bytes: Uint8Array): Promise<void> {
+  await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(target, '..'));
+  const tmp = target.with({ path: target.path.replace(/\.rutbundle$/, '.part') });
+  await vscode.workspace.fs.writeFile(tmp, bytes);
+  await vscode.workspace.fs.rename(tmp, target, { overwrite: true });
+}
+
+// a missing or unreadable file is a null, not a failure — callers
+// decide whether that's a miss (cache), a skip (peer), or a hint (dep)
+async function readFileNullable(file: vscode.Uri): Promise<Uint8Array | null> {
+  try {
+    return await vscode.workspace.fs.readFile(file);
+  } catch {
+    return null;
+  }
 }
 
 // ---- providers ----
@@ -346,6 +663,15 @@ function toCompletionItem(c: LspCompletionItem): vscode.CompletionItem {
   }
   if (c.documentation) {
     item.documentation = new vscode.MarkdownString(c.documentation.value);
+  }
+  // the auto-import tier: sorts after the locals, and accepting the
+  // item inserts `use mod::Name;` as a fresh line (the engine computed
+  // both over the normalized source — the extension only maps them)
+  if (c.sortText) {
+    item.sortText = c.sortText;
+  }
+  if (c.additionalTextEdits) {
+    item.additionalTextEdits = c.additionalTextEdits.map((e) => new vscode.TextEdit(toRange(e.range), e.newText));
   }
   return item;
 }

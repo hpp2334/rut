@@ -2,11 +2,14 @@
 
 VS Code support for the [rut](../../README.md) language: grammar
 highlighting (TextMate + semantic tokens), diagnostics, the
-document-symbol outline, hover, completions, go-to-definition (plus
-type definition), references, inlay hints, and signature help — powered
-by the language core running **as an in-process wasm module**. No server
-process, no per-platform binaries: one `rut-lsp.wasm` serves every
-platform.
+document-symbol outline, hover, completions (with auto-import),
+go-to-definition (plus type definition), references, inlay hints, and
+signature help — powered by the language core running **as an
+in-process wasm module**. No server process, no per-platform binaries:
+one `rut-lsp.wasm` serves every platform. The extension also reads your
+project's `rut.jsonc`: path deps mount from anywhere on disk, pinned
+url deps fetch with their `sha256` verified, and the manifest gets
+schema-validated hovers.
 
 ## Try it
 
@@ -41,6 +44,48 @@ The **native `rut-lsp` binary remains the face for other editors**
 (Neovim / Helix / Zed / Emacs / Sublime — see
 [`../README.md`](../README.md)); both faces run the same queries from
 `crates/rut-lsp`, so they cannot drift.
+
+## Deps — the extension reads rut.jsonc
+
+After the workspace scan the extension hands each workspace folder's
+root `rut.jsonc` to the wasm (`rut_parse_manifest` — the wasm parses
+manifests, JS only moves bytes) and walks its dependency rows:
+
+- **Path deps** (`"gadgets": { "path": "../gadgets" }`) resolve
+  against the manifest's directory — **a dep outside the workspace
+  folder mounts like any other** (the real gap a plain workspace scan
+  can never close). The walk recurses transitively, cycle-safe, under
+  a depth/file budget; every indexed source keeps its real on-disk
+  URI, so F12 jumps land in the dep's file.
+- **Url deps** (`"pouch": { "url": "…", "sha256": "…" }`) are
+  **cache-first**: the entry under `.rut/cache/` (the same directory
+  the CLI fills — the cache filename is the Rust-computed
+  `sha256` of the url) is read before any network, and a hit is
+  verified against the pin. On a miss the extension fetches
+  in-extension, hashes the bytes (`crypto.webcrypto`), and mounts them
+  only when the hash matches; the entry then lands in the cache
+  atomically (tmp + rename). A poisoned entry evicts and re-fetches,
+  like the CLI's healing loop.
+- **The pin is law at the mount door**: fetched or cached, bytes mount
+  only with their `sha256` verified. An unpinned url row never mounts
+  from the editor — one error hint, no silent unpinned bytes.
+- **Offline / failure** shows one info hint per dep naming the CLI
+  alternative (`rut fetch` warms the cache) — never spam, never silent
+  wrong results.
+- The manifest and its dep tables re-walk on change
+  (`**/rut.jsonc` and `.rut/cache/**` watchers, debounced), and a
+  workspace-folder change restarts the whole index.
+- **One engine, two faces** — the native server is deliberately
+  cache-only for url deps (a miss is a `window/showMessage` hint); the
+  extension is the face that fetches. Same dep tables
+  (`crates/rut-lsp/src/deps.rs`), no drift.
+- Auto-import completions offer foreign public names with the
+  `use mod::Name;` insert (`additionalTextEdits`) and sort after the
+  locals (`sortText`) — accepting an item never ungates members, the
+  engine's law; the extension only maps the edits through.
+- `rut.jsonc` is schema-validated (`schemas/rut.manifest.schema.json`,
+  contributed via `jsonValidation`): every field's `description` is the
+  hover in the jsonc editor.
 
 ## Packaging
 
@@ -97,6 +142,13 @@ primitive `str`/`bytes`, an
 [opaque](../../docs/src/reference/opaque.md)): the e2e gate analyzes it
 through the shipped wasm and hovers its alias; the host suite reads the
 same symbols and semantic tokens on machines with `code`.
+
+`test/fixtures/dep-walk/` is the manifest-deps fixture the host suite
+renders: a workspace whose path dep (`outside/gadgets`) lives OUTSIDE
+the folder boundary, plus a url dep served by a localhost fixture
+server — the pin refusal, the pinned fetch + atomic cache write, the
+auto-import insert, and the offline hint all assert there (needs
+`code`; the lane skips loudly without it).
 
 The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`
 (`node crates/rut-lsp-wasm/smoke.js` from the repo root after

@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "rut manifest (rut.jsonc)",
+  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_]+$",
+      "description": "The package name — what a `use` path spells (`use pouch::{ Vec }`). A bare package name: [a-zA-Z0-9_]+."
+    },
+    "type": {
+      "enum": ["lib", "host"],
+      "description": "The package kind. `lib` is the ordinary rut package (a source body, deps allowed, no host rows). `host` is a pure declaration surface the embedding Rust binds at run time — no body, no deps of any kind. Absent means `lib`; a host package spells itself."
+    },
+    "format": {
+      "const": "rutbundle",
+      "description": "Marks a bundle-shaped manifest (`rut pack` needs the bundle keys; directory loading ignores them)."
+    },
+    "format_version": {
+      "type": "integer",
+      "description": "The bundle layout version (10 today). Refused on load when unknown."
+    },
+    "entry": {
+      "type": "object",
+      "description": "Where the module's surface and body live — relative to this manifest's directory.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The `.d.rut` declaration surface — the type half. Indexes in Decl mode."
+        },
+        "lib": {
+          "type": "string",
+          "description": "The body source (a `.rut` file)."
+        },
+        "libs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional body files, spliced after `lib` in listed order — one module, one namespace."
+        }
+      },
+      "additionalProperties": false
+    },
+    "deps": {
+      "$ref": "#/definitions/depTable",
+      "description": "Transitively mounted dependencies: exact specifier → descriptor. Each descriptor names exactly ONE source — `path` (a module directory) or `url` (a remote `.rutbundle`) plus, only beside `url`, the `sha256` pin. The pin is law at the mount door: the bytes mount only when their sha256 matches.",
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_]+$",
+        "description": "A bare package name — the specifier a `use` path spells."
+      }
+    },
+    "peer-deps": {
+      "$ref": "#/definitions/peerTable",
+      "description": "Dependencies required of the consumer — never pulled transitively. Required by default; `optional: true` marks the presence-mounted kind whose integration group is the descriptor's `lib` file."
+    },
+    "dev-deps": {
+      "$ref": "#/definitions/peerTable",
+      "description": "Dependencies mounted only while building/testing this package itself — never in a consumer's world. Same descriptor shape as peer-deps."
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "The package's formatter knobs — flat `\"key\": \"value\"` rows (e.g. `\"indent\": \"2\"`). Keys and values are validated by the `rut fmt` tool, never the loader; unknown keys ride."
+    },
+    "namespace": {
+      "type": "string",
+      "description": "The qualified-access head (calc's `Math`): `use calc::{ Math }` binds it and member access routes qualified (`Math.sqrt`, `Math.PI`). The surface grammar has no spelling for this — the manifest is its only form."
+    },
+    "consts": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "number", "description": "The constant's f64 value." },
+          { "enum": ["inf", "+inf", "-inf", "nan"], "description": "The non-finite pair has no JSON spelling — the string names it." }
+        ]
+      },
+      "description": "The host body's compiler-materialized constants (name → f64; calc's `Math.PI` family). The surface grammar has no `static` field form, so the manifest is their only spelling."
+    }
+  },
+  "definitions": {
+    "depTable": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/depDescriptor" }
+    },
+    "peerTable": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/peerDescriptor" }
+    },
+    "depDescriptor": {
+      "description": "Exactly one source: a `path` directory or a pinned `url` bundle — never both, never neither.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The dependency's module directory, relative to this manifest's directory (may reach outside the workspace folder)."
+            }
+          },
+          "required": ["path"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The packed `.rutbundle` url (http/https)."
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{64}$",
+              "description": "The pin: 64 hex digits of the bundle's sha256 (lowercase-normalized). The pin is law at the mount door — fetched or cached bytes mount only when their hash matches; an unpinned url never mounts from the editor."
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "peerDescriptor": {
+      "type": "object",
+      "description": "A peer descriptor: `path` and `lib` are strings, `optional` is the one bool.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The peer's module directory, relative to this manifest's directory. The consumer supplies the peer — the editor indexes it only when it resolves locally."
+        },
+        "lib": {
+          "type": "string",
+          "description": "The integration group — an impl-only `.rut` source in THIS package's directory wrapping the optional peer's types. Mounted under this package's name when the peer is present. A `.d.rut` decl surface does not gate."
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "`true` marks the presence-mounted kind: the peer mounts only when the consumer's closure supplies it. Peers are required by default."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
