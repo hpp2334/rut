@@ -145,8 +145,10 @@ install law), `rut-native` beside the driver (it depends on the
 driver, never the reverse — the driver is provably pure: no fs, no
 net, no `std::path`), hosts
 (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those.
-`rut-lsp` sits on the frontend crates only — tokens, diagnostics, and
-symbols need no VM. Its classifier is `rut-semantic` (re-exported as
+`rut-lsp` sits on the frontend crates — tokens, diagnostics, and
+symbols need no VM — plus the driver's pure core for manifest and
+bundle parsing (the dep tables behind the editor's dep walk). Its
+classifier is `rut-semantic` (re-exported as
 `rut_lsp::semantic`), which sits on the frontend crates for the same
 reason — embedders take it without the server.
 

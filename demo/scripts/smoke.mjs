@@ -381,8 +381,8 @@ if (!existsSync(LSP_ARTIFACT)) {
   // -> tok-<name>), never on a hardcoded order
   const legend = lsp.legend;
   check(
-    legend.length === 14,
-    'the legend carries the ABI-reported 14 token types',
+    legend.length === 15,
+    'the legend carries the ABI-reported 15 token types',
     JSON.stringify(legend),
   );
   for (const want of ['keyword', 'number', 'string', 'type', 'function', 'method', 'enumMember']) {
