@@ -23,6 +23,11 @@ pub enum TyForm {
     HostStruct,
     /// `type X = A;` — a transparent alias
     Alias,
+    /// a dep manifest's `namespace` head (`calc`'s `Math`) — no surface
+    /// decl spells it, the mint in `deps::index_dep` records it so the
+    /// qualified shape (`Math.sqrt`, `Math.PI`) resolves like the
+    /// engine's bound namespace
+    Namespace,
 }
 
 impl TyForm {
@@ -36,6 +41,7 @@ impl TyForm {
             TyForm::Primitive => "primitive",
             TyForm::HostStruct => "host struct",
             TyForm::Alias => "type",
+            TyForm::Namespace => "namespace",
         }
     }
 }
@@ -170,6 +176,12 @@ pub struct DefIndex {
     /// only when the document's `use` names them, the same ambient
     /// split the compiler binds by
     pub pub_gated: Vec<String>,
+    /// the module's explicit manifest name (`pouch` — what a `use`
+    /// path spells). Named indexes answer the use graph FIRST: a
+    /// `Some` here is the whole match; `None` (today's workspace
+    /// files) falls back to the origin path-segment / file-stem
+    /// derivation, byte-for-byte the old behavior
+    pub module: Option<String>,
 }
 
 impl DefIndex {

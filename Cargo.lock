@@ -1138,10 +1138,12 @@ version = "0.1.0"
 dependencies = [
  "ls-types",
  "rut-ast",
+ "rut-driver",
  "rut-lexer",
  "rut-parser",
  "rut-semantic",
  "serde_json",
+ "sha2",
  "tokio",
  "tower",
  "tower-lsp-server",

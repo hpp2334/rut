@@ -214,7 +214,7 @@ pub fn complete_at(
 ) -> Vec<CompletionItem> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch))
+    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch), &normalized)
         .into_iter()
         .map(completion::lsp_item)
         .collect()

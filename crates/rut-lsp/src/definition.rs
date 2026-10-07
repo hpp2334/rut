@@ -8,9 +8,11 @@
 //!    recovered name spans, module lets, fns/types/impl methods (token-
 //!    recovered name idents), all recorded by the phase-0/1 index;
 //! 3. **cross-file through the use graph** — a name the document imports
-//!    (`use pouch::Vec;`) resolves only inside indexes whose origin
-//!    matches the named pkg (path segment or file stem — how `rut.jsonc`
-//!    `name` works, without re-implementing the manifest loader);
+//!    (`use pouch::Vec;`) resolves only inside indexes whose explicit
+//!    module name matches the named pkg, or — for the unnamed
+//!    (workspace) indexes — whose origin does (path segment or file
+//!    stem — how `rut.jsonc` `name` works, without re-implementing the
+//!    manifest loader);
 //!    un-imported names keep hover's flat-chain semantics;
 //! 4. **stdlib** through the embedded surface — the `include_str!`
 //!    origins carry the true `rut/...` path (`DefIndex::src_path`), so a
@@ -104,10 +106,15 @@ fn origin_uri(origin: &str) -> String {
     }
 }
 
-/// does this index speak for `pkg`? — exact origin (the std surface's
+/// does this index speak for `pkg`? — the explicit manifest module
+/// name FIRST (`DefIndex::module`, the dep/std surface's `Some`); on
+/// `None` the old derivation verbatim: exact origin (the std surface's
 /// label), a path segment named `pkg` (…/pouch/pouch.rut), or the file
 /// stem (…/gadgets/lib.rut for pkg `gadgets`)
 pub(crate) fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
+    if let Some(m) = &i.module {
+        return m == pkg;
+    }
     let hay = i.src_path.as_deref().unwrap_or(&i.origin);
     if hay == pkg {
         return true;
@@ -696,6 +703,46 @@ mod tests {
         let hits = def(&d, at(&d.src, "= Widget.new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].uri, WIDGET_URI);
+    }
+
+    // ---- the module matcher (the explicit name, then the fallback) ----
+
+    #[test]
+    fn the_explicit_module_name_beats_the_path_derivation() {
+        // a dep index named `pouch` whose paths spell something else:
+        // the explicit module is the WHOLE match
+        let src = "class Widget {\n    id: i32;\n}\n";
+        let s = normalize(src);
+        let (toks, _) = lex(&s);
+        let (ast, _) = parse(&s, Mode::Impl);
+        let mut idx = crate::hover::index(&s, &ast, &toks);
+        idx.origin = "file:///ws/gadgets/lib.rut".to_string();
+        idx.src_path = Some("somewhere/else/lib.rut".to_string());
+        idx.module = Some("pouch".to_string());
+        assert!(matches_pkg(&idx, "pouch"));
+        assert!(!matches_pkg(&idx, "gadgets"), "the path stem must NOT match once the module is named");
+        assert!(!matches_pkg(&idx, "else"));
+    }
+
+    #[test]
+    fn the_unnamed_fallback_stays_verbatim() {
+        // module None → today's derivation, byte-for-byte: the
+        // src_path segment, then the origin's file stem
+        let src = "class Widget {\n    id: i32;\n}\n";
+        let s = normalize(src);
+        let (toks, _) = lex(&s);
+        let (ast, _) = parse(&s, Mode::Impl);
+        let mut idx = crate::hover::index(&s, &ast, &toks);
+        idx.origin = "file:///ws/gadgets/lib.rut".to_string();
+        assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
+        idx.src_path = Some("rut/pouch/pouch.rut".to_string());
+        assert!(matches_pkg(&idx, "pouch"), "the path segment still resolves");
+        assert!(!matches_pkg(&idx, "pouch.rut"), "the segment law strips `.rut` before comparing");
+        assert!(!matches_pkg(&idx, "gadgets"), "src_path replaces origin as the hay");
+        // the std surface's exact-origin lane
+        idx.origin = "core".to_string();
+        idx.src_path = None;
+        assert!(matches_pkg(&idx, "core"));
     }
 
     // ---- layer 4: the stdlib surface ----

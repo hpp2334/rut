@@ -12,7 +12,9 @@
 //! over a document → LSP values, plus the document-level hover /
 //! completion / definition / inlay / references / signature-help
 //! queries shared by both faces),
-//! `std_surface` (the embedded std + its index), `hover` (the
+//! `std_surface` (the embedded std + its index), `deps` (the
+//! manifest/bundle bridge — `rut.jsonc` dep tables, `.rutbundle`
+//! sources, dep indexes named by module), `hover` (the
 //! definition index + lookup — `types`, `build`, `lookup`, `infer`,
 //! `render`), `completion` (the same index, member + bare completion),
 //! `definition` (go-to-def + go-to-type-def — the survey §3.3 layers),
@@ -33,6 +35,7 @@
 pub mod analysis;
 pub mod completion;
 pub mod definition;
+pub mod deps;
 pub mod hover;
 pub mod inlay;
 pub mod line_index;

@@ -69,6 +69,10 @@ pub fn indexes() -> Vec<DefIndex> {
         }
         idx.origin = origin.to_string();
         idx.src_path = Some(src_path.to_string());
+        // the manifest name rides EVERY surface index — the use-path
+        // completion reads the same named set as any dep (std is not
+        // special), and the use-graph matcher consults it first
+        idx.module = Some(origin.to_string());
         idx
     })
     .collect()
@@ -88,6 +92,16 @@ mod tests {
         let origins: Vec<&str> = idxs.iter().map(|i| i.origin.as_str()).collect();
         for want in ["core", "calc", "nmap_host", "ink_host", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild"] {
             assert!(origins.contains(&want), "missing pkg `{want}`: {origins:?}");
+        }
+    }
+
+    #[test]
+    fn every_surface_index_names_its_module() {
+        // the named-module law: each std index carries the SAME constant
+        // as `module` — the use-path completion reads it like any dep's
+        let idxs = indexes();
+        for i in &idxs {
+            assert_eq!(i.module.as_deref(), Some(i.origin.as_str()), "{}: unnamed", i.origin);
         }
     }
 
