@@ -62,11 +62,6 @@ impl<'a> Ctx<'a> {
         args: Vec<TypeId>,
         cache_name: Option<IdentId>,
     ) -> u32 {
-        if let Some(name) = cache_name {
-            if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
-                return id;
-            }
-        }
         let id = self.ifaces.len() as u32;
         let tname = if args.is_empty() {
             base_text.to_string()
@@ -77,10 +72,12 @@ impl<'a> Ctx<'a> {
                 args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
             )
         };
-        // a nameless mint (the consumer never bound the interface's
-        // name — the use-both gate) dedups by the APPLIED NAME text:
-        // repeated substitutions land on one descriptor
-        if cache_name.is_none() {
+        // the applied-NAME dedup runs FIRST for EVERY caller: the
+        // nameless lane (the use-both gate — the consumer never bound
+        // the interface's name) and the name-keyed lane must land on
+        // ONE descriptor, or a fill demanded through one spelling
+        // dispatches empty through the other
+        {
             let wanted = &tname;
             if let Some(existing) = self
                 .ifaces
@@ -90,6 +87,11 @@ impl<'a> Ctx<'a> {
                 .map(|(i, _)| i as u32)
             {
                 return existing;
+            }
+        }
+        if let Some(name) = cache_name {
+            if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
+                return id;
             }
         }
         let tname = self.intern(&tname);
