@@ -321,7 +321,7 @@ pub enum ItemKind {
     /// repealed — one name, one decl)
     Alias(AliasData),
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
-    Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },
+    Enum { vis: Vis, name: IdentId, members: Vec<IdentId> },
     Struct {
         vis: Vis,
         name: IdentId,

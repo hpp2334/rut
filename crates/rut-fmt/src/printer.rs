@@ -694,10 +694,7 @@ impl<'a> P<'a> {
                 self.text(" {");
                 let names: Vec<String> = members
                     .iter()
-                    .map(|(m, v)| match v {
-                        None => self.a.name(*m).to_string(),
-                        Some(x) => format!("{} = {}", self.a.name(*m), x),
-                    })
+                    .map(|m| self.a.name(*m).to_string())
                     .collect();
                 if !names.is_empty() {
                     self.sp();

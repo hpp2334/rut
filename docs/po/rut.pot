@@ -2,8 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00
-"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -2427,7 +2426,7 @@ msgstr ""
 
 #: src/tutorial/types.md:20
 msgid ""
-"An enum is a distinct named type over integer constants. No payloads and no "
+"An enum is a distinct named type over plain symbols. No payloads and no "
 "computed members — where another language would use a union of literal "
 "strings, rut uses an enum:"
 msgstr ""
@@ -2439,7 +2438,7 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4\n"
+"enum Direction { Up, Down, Left, Right }\n"
 "\n"
 "entry fn main() {\n"
 "    let log = Logger(\"enums\");\n"
@@ -2450,9 +2449,8 @@ msgstr ""
 
 #: src/tutorial/types.md:41
 msgid ""
-"Members are the enum's values and are spelled qualified: `Light.Green`. "
-"Explicit initializers set where the numbering starts; the rest continue from "
-"there."
+"Members are the enum's values and are spelled qualified: `Light.Green`. A "
+"member is a symbol — there is no integer value under it to read or spell."
 msgstr ""
 
 #: src/tutorial/types.md:45
@@ -11171,7 +11169,7 @@ msgstr ""
 
 #: src/reference/enums.md:3
 msgid ""
-"`enum` — simple named integer sets. This is the entire feature: rut has **no "
+"`enum` — simple named symbol sets. This is the entire feature: rut has **no "
 "data-carrying enums**. Heterogeneous data goes through interfaces (see "
 "[Interfaces and dispatch](interfaces.md)); absence goes through `?T` (see "
 "[Builtin generic types](builtin-generic-types.md))."
@@ -11186,8 +11184,8 @@ msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "\n"
-"enum Color { Red, Green, Blue }              // 0, 1, 2\n"
-"enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4\n"
+"enum Color { Red, Green, Blue }\n"
+"enum Direction { Up, Down, Left, Right }\n"
 "\n"
 "entry fn main() {\n"
 "    let log = Logger(\"t\");\n"
@@ -11198,27 +11196,26 @@ msgstr ""
 
 #: src/reference/enums.md:31
 msgid ""
-"An enum is a distinct named type over fixed-width integer constants. Members "
-"are the enum's values: implicit numbering continues from the last value "
-"(starting at 0); an explicit initializer (a possibly negative integer "
-"literal) resets the counter."
+"An enum is a distinct named type; its members are its values — plain "
+"symbols, nothing more. There is no integer under a member to read, set, or "
+"spell."
 msgstr ""
 
-#: src/reference/enums.md:35
+#: src/reference/enums.md:34
 msgid ""
 "No data payloads and no computed members — ever. Methods are an `impl` block "
 "away (see [Impl blocks](#impl-blocks))."
 msgstr ""
 
-#: src/reference/enums.md:38
+#: src/reference/enums.md:37
 msgid "Using members"
 msgstr ""
 
-#: src/reference/enums.md:40
+#: src/reference/enums.md:39
 msgid "Members are named through the enum and compare as equal singletons:"
 msgstr ""
 
-#: src/reference/enums.md:42
+#: src/reference/enums.md:41
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11234,28 +11231,28 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:58
+#: src/reference/enums.md:57
 msgid ""
 "An enum value renders as its member name in format strings: "
 "`f\"{Color.Red}\"` is `\"Red\"`."
 msgstr ""
 
-#: src/reference/enums.md:60
+#: src/reference/enums.md:59
 msgid "Enums are ordinary shared values: binding shares the singleton."
 msgstr ""
 
-#: src/reference/enums.md:62
+#: src/reference/enums.md:61
 msgid "Exhaustive `when`"
 msgstr ""
 
-#: src/reference/enums.md:64
+#: src/reference/enums.md:63
 msgid ""
 "`when` over an enum must be **exhaustive**: cover every member (then `else` "
 "is optional) or add an explicit `else` arm — a partial `when` is a compile "
 "error. See [Control flow and when](control-flow.md)."
 msgstr ""
 
-#: src/reference/enums.md:68
+#: src/reference/enums.md:67
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11277,18 +11274,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:91
+#: src/reference/enums.md:90
 msgid "Impl blocks"
 msgstr ""
 
-#: src/reference/enums.md:93
+#: src/reference/enums.md:92
 msgid ""
 "Enums take `impl` blocks — the same two forms a struct or class takes: "
 "non-self methods (called on the enum's name) and `self` methods (called on a "
 "value). A marked `[iterable]` member makes the enum a `for..of` target."
 msgstr ""
 
-#: src/reference/enums.md:98
+#: src/reference/enums.md:97
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11316,31 +11313,31 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:127
+#: src/reference/enums.md:126
 msgid ""
 "A non-self method is a namespaced function: `Dial.default()`. `Self` spells "
 "the enum, so `-> Self` is the return type and `Dial.Low` mints the member."
 msgstr ""
 
-#: src/reference/enums.md:130
+#: src/reference/enums.md:129
 msgid ""
 "A `self` method dispatches on the value: `d.flipped()` — the receiver "
 "crosses as the singleton cell it already is."
 msgstr ""
 
-#: src/reference/enums.md:132
+#: src/reference/enums.md:131
 msgid ""
 "Method visibility is real: `pub fn` exports cross-module, plain `fn` is "
 "module-private (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/enums.md:136
+#: src/reference/enums.md:135
 msgid ""
 "A marked member makes enum values iterable — `for (let v of c)` rides the "
 "same desugar as a class's (see [The iteration protocol](interfaces.md)):"
 msgstr ""
 
-#: src/reference/enums.md:140
+#: src/reference/enums.md:139
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11370,31 +11367,31 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/enums.md:173
+#: src/reference/enums.md:172
 msgid ""
 "One limit stays: `[disposal]` is for structs and classes only — the engine "
 "disposes a record's cell, and an enum member is immortal."
 msgstr ""
 
-#: src/reference/enums.md:176
+#: src/reference/enums.md:175
 msgid "Boundaries"
 msgstr ""
 
-#: src/reference/enums.md:178
+#: src/reference/enums.md:177
 msgid ""
 "Where another language would use a union of literals (`\"left\" | "
 "\"right\"`), rut uses an enum; where it would use a union of _shapes_, rut "
 "uses an interface-typed value (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/enums.md:182
+#: src/reference/enums.md:181
 msgid ""
 "The `|` spelling exists only for bound-only union aliases and `requires` "
 "bounds (see [Type aliases and union bounds](type-aliases.md)) — a "
 "compile-time admission gate, never a runtime union value."
 msgstr ""
 
-#: src/reference/enums.md:185
+#: src/reference/enums.md:184
 msgid ""
 "There is no enum↔int cast: `as` is the numeric cast only. Enum values cross "
 "the host boundary as their runtime identity plus the integer value."
@@ -22089,7 +22086,7 @@ msgstr ""
 #: src/reference/compiler.md:170
 msgid ""
 "**Pattern lowering** — downcast chains become one type-id load plus a jump "
-"table; `when` on enums lowers to `brtable` over the member value."
+"table; `when` on enums lowers to `brtable` over the member slot."
 msgstr ""
 
 #: src/reference/compiler.md:173

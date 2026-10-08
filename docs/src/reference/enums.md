@@ -1,6 +1,6 @@
 # Enums
 
-`enum` — simple named integer sets. This is the entire feature: rut has
+`enum` — simple named symbol sets. This is the entire feature: rut has
 **no data-carrying enums**. Heterogeneous data goes through interfaces
 (see [Interfaces and dispatch](interfaces.md)); absence goes through
 `?T` (see [Builtin generic types](builtin-generic-types.md)).
@@ -9,14 +9,14 @@
 
 ```text
 enum := 'pub'? 'enum' Ident '{' member (',' member)* ','? '}'
-member := Ident ('=' int)?
+member := Ident
 ```
 
 ```rut
 use ink::{ Logger };
 
-enum Color { Red, Green, Blue }              // 0, 1, 2
-enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4
+enum Color { Red, Green, Blue }
+enum Direction { Up, Down, Left, Right }
 
 entry fn main() {
     let log = Logger("t");
@@ -28,10 +28,9 @@ entry fn main() {
 Blue Right
 ```
 
-- An enum is a distinct named type over fixed-width integer constants.
-  Members are the enum's values: implicit numbering continues from the
-  last value (starting at 0); an explicit initializer (a possibly
-  negative integer literal) resets the counter.
+- An enum is a distinct named type; its members are its values —
+  plain symbols, nothing more. There is no integer under a member to
+  read, set, or spell.
 - No data payloads and no computed members — ever. Methods are an
   `impl` block away (see [Impl blocks](#impl-blocks)).
 

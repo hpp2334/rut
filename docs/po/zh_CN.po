@@ -2598,8 +2598,8 @@ msgstr ""
 
 #: src/tutorial/types.md:20
 msgid ""
-"An enum is a distinct named type over integer constants. No payloads and no computed members — where another language would use a union of literal strings, rut uses an enum:"
-msgstr "枚举是建立在整型常量之上的一个独立命名类型。没有载荷，也没有计算型成员——换作别的语言会在字面量字符串的并集上做文章的地方，rut 用枚举："
+"An enum is a distinct named type over plain symbols. No payloads and no computed members — where another language would use a union of literal strings, rut uses an enum:"
+msgstr "枚举是建立在纯粹符号之上的一个独立命名类型。没有载荷，也没有计算型成员——换作别的语言会在字面量字符串的并集上做文章的地方，rut 用枚举："
 
 
 #: src/tutorial/types.md:24
@@ -2609,7 +2609,7 @@ msgid ""
 "\n"
 "enum Light { Green, Yellow, Red }\n"
 "\n"
-"enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4\n"
+"enum Direction { Up, Down, Left, Right }\n"
 "\n"
 "entry fn main() {\n"
 "    let log = Logger(\"enums\");\n"
@@ -2621,8 +2621,8 @@ msgstr ""
 
 #: src/tutorial/types.md:41
 msgid ""
-"Members are the enum's values and are spelled qualified: `Light.Green`. Explicit initializers set where the numbering starts; the rest continue from there."
-msgstr "成员就是枚举的值，书写时带限定：`Light.Green`。显式初始化器设定编号从哪里开始；其余成员从那里继续。"
+"Members are the enum's values and are spelled qualified: `Light.Green`. A member is a symbol — there is no integer value under it to read or spell."
+msgstr "成员就是枚举的值，书写时带限定：`Light.Green`。成员是符号——其下没有可供读取或书写的整数值。"
 
 
 #: src/tutorial/types.md:45
@@ -11636,7 +11636,7 @@ msgstr "可空值/枚举值不用 `==` 做结构化比较——用 `when`、`nil
 
 #: src/reference/enums.md:3
 msgid ""
-"`enum` — simple named integer sets. This is the entire feature: rut has **no data-carrying enums**. Heterogeneous data goes through interfaces (see [Interfaces and dispatch](interfaces.md)); absence goes through `?T` (see [Builtin generic types](builtin-generic-types.md))."
+"`enum` — simple named symbol sets. This is the entire feature: rut has **no data-carrying enums**. Heterogeneous data goes through interfaces (see [Interfaces and dispatch](interfaces.md)); absence goes through `?T` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
 
 
@@ -11650,8 +11650,8 @@ msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
 "\n"
-"enum Color { Red, Green, Blue }              // 0, 1, 2\n"
-"enum Direction { Up = 1, Down, Left, Right } // 1, 2, 3, 4\n"
+"enum Color { Red, Green, Blue }\n"
+"enum Direction { Up, Down, Left, Right }\n"
 "\n"
 "entry fn main() {\n"
 "    let log = Logger(\"t\");\n"
@@ -11663,28 +11663,28 @@ msgstr ""
 
 #: src/reference/enums.md:31
 msgid ""
-"An enum is a distinct named type over fixed-width integer constants. Members are the enum's values: implicit numbering continues from the last value (starting at 0); an explicit initializer (a possibly negative integer literal) resets the counter."
+"An enum is a distinct named type; its members are its values — plain symbols, nothing more. There is no integer under a member to read, set, or spell."
 msgstr ""
-"枚举是定义在定宽整数常量之上的独立命名类型。成员就是枚举的值：隐式编号从上一个值继续（从 0 开始）；显式初始化式（一个可带负号的整数字面量）会重置计数器。"
+"枚举是一个独立命名的类型；其成员就是它的值——纯粹是符号，仅此而已。成员之下没有可供读取、设置或书写的整数。"
 
 
-#: src/reference/enums.md:35
+#: src/reference/enums.md:34
 msgid ""
 "No data payloads and no computed members — ever. Methods are an `impl` block away (see [Impl blocks](#impl-blocks))."
 msgstr "没有数据载荷，也没有计算型成员——永远如此。方法就在一个 `impl` 块之外（参见[impl 块](#impl-blocks)）。"
 
 
-#: src/reference/enums.md:38
+#: src/reference/enums.md:37
 msgid "Using members"
 msgstr "使用成员"
 
 
-#: src/reference/enums.md:40
+#: src/reference/enums.md:39
 msgid "Members are named through the enum and compare as equal singletons:"
 msgstr "成员通过枚举来命名，并作为相等的单例进行比较："
 
 
-#: src/reference/enums.md:42
+#: src/reference/enums.md:41
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11700,30 +11700,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/enums.md:58
+#: src/reference/enums.md:57
 msgid ""
 "An enum value renders as its member name in format strings: `f\"{Color.Red}\"` is `\"Red\"`."
 msgstr "枚举值在格式化字符串中渲染为它的成员名：`f\"{Color.Red}\"` 是 `\"Red\"`。"
 
 
-#: src/reference/enums.md:60
+#: src/reference/enums.md:59
 msgid "Enums are ordinary shared values: binding shares the singleton."
 msgstr "枚举是普通的共享值：绑定即共享该单例。"
 
 
-#: src/reference/enums.md:62
+#: src/reference/enums.md:61
 msgid "Exhaustive `when`"
 msgstr "穷尽的 `when`"
 
 
-#: src/reference/enums.md:64
+#: src/reference/enums.md:63
 msgid ""
 "`when` over an enum must be **exhaustive**: cover every member (then `else` is optional) or add an explicit `else` arm — a partial `when` is a compile error. See [Control flow and when](control-flow.md)."
 msgstr ""
 "对枚举的 `when` 必须**穷尽**：覆盖每个成员（此时 `else` 可省略）或添加显式的 `else` 分支 —— 不完整的 `when` 是编译错误。参见[控制流与 when](control-flow.md)。"
 
 
-#: src/reference/enums.md:68
+#: src/reference/enums.md:67
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11746,18 +11746,18 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/enums.md:91
+#: src/reference/enums.md:90
 msgid "Impl blocks"
 msgstr "impl 块"
 
 
-#: src/reference/enums.md:93
+#: src/reference/enums.md:92
 msgid ""
 "Enums take `impl` blocks — the same two forms a struct or class takes: non-self methods (called on the enum's name) and `self` methods (called on a value). A marked `[iterable]` member makes the enum a `for..of` target."
 msgstr ""
 
 
-#: src/reference/enums.md:98
+#: src/reference/enums.md:97
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11786,33 +11786,33 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/enums.md:127
+#: src/reference/enums.md:126
 msgid ""
 "A non-self method is a namespaced function: `Dial.default()`. `Self` spells the enum, so `-> Self` is the return type and `Dial.Low` mints the member."
 msgstr ""
 "非 self 方法是一个带命名空间前缀的函数：`Dial.default()`。`Self` 拼写的就是这个枚举，所以 `-> Self` 是返回类型，`Dial.Low` 铸造出成员。"
 
 
-#: src/reference/enums.md:130
+#: src/reference/enums.md:129
 msgid ""
 "A `self` method dispatches on the value: `d.flipped()` — the receiver crosses as the singleton cell it already is."
 msgstr "`self` 方法在值上分派：`d.flipped()`——接收者本来就是单例单元，按原样跨越。"
 
 
-#: src/reference/enums.md:132
+#: src/reference/enums.md:131
 msgid ""
 "Method visibility is real: `pub fn` exports cross-module, plain `fn` is module-private (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 "方法可见性是真实的：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见（参见[模块与可见性](modules-and-visibility.md)）。"
 
 
-#: src/reference/enums.md:136
+#: src/reference/enums.md:135
 msgid ""
 "A marked member makes enum values iterable — `for (let v of c)` rides the same desugar as a class's (see [The iteration protocol](interfaces.md)):"
 msgstr ""
 
 
-#: src/reference/enums.md:140
+#: src/reference/enums.md:139
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -11843,31 +11843,31 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/enums.md:173
+#: src/reference/enums.md:172
 msgid ""
 "One limit stays: `[disposal]` is for structs and classes only — the engine disposes a record's cell, and an enum member is immortal."
 msgstr ""
 
 
-#: src/reference/enums.md:176
+#: src/reference/enums.md:175
 msgid "Boundaries"
 msgstr "边界"
 
 
-#: src/reference/enums.md:178
+#: src/reference/enums.md:177
 msgid ""
 "Where another language would use a union of literals (`\"left\" | \"right\"`), rut uses an enum; where it would use a union of _shapes_, rut uses an interface-typed value (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/enums.md:182
+#: src/reference/enums.md:181
 msgid ""
 "The `|` spelling exists only for bound-only union aliases and `requires` bounds (see [Type aliases and union bounds](type-aliases.md)) — a compile-time admission gate, never a runtime union value."
 msgstr ""
 "`|` 写法只用于仅约束的联合别名和 `requires` 约束（参见[类型别名与联合约束](type-aliases.md)）—— 它是编译期的准入门槛，绝不是运行期的联合值。"
 
 
-#: src/reference/enums.md:185
+#: src/reference/enums.md:184
 msgid ""
 "There is no enum↔int cast: `as` is the numeric cast only. Enum values cross the host boundary as their runtime identity plus the integer value."
 msgstr "没有枚举↔整数转换：`as` 只是数值类型转换。枚举值跨越宿主边界时，以运行时同一性加上整数值的形式跨越。"
@@ -23175,8 +23175,8 @@ msgstr ""
 
 #: src/reference/compiler.md:170
 msgid ""
-"**Pattern lowering** — downcast chains become one type-id load plus a jump table; `when` on enums lowers to `brtable` over the member value."
-msgstr "**模式下降**——向下转型链变成一次类型 id 加载加一张跳转表；枚举上的 `when` 下降为对成员值的 `brtable`。"
+"**Pattern lowering** — downcast chains become one type-id load plus a jump table; `when` on enums lowers to `brtable` over the member slot."
+msgstr "**模式下降**——向下转型链变成一次类型 id 加载加一张跳转表；枚举上的 `when` 下降为对成员槽位的 `brtable`。"
 
 
 #: src/reference/compiler.md:173

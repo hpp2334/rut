@@ -81,7 +81,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
         ItemKind::Enum { name, members, .. } => {
             let children = members
                 .iter()
-                .map(|(m, _)| {
+                .map(|m| {
                     let text = ast.name(*m);
                     sym(text, SymKind::EnumMember, find_name(toks, span, text, false), vec![])
                 })

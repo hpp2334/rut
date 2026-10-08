@@ -17,7 +17,7 @@ The reference pages are
 
 ## Enums
 
-An enum is a distinct named type over integer constants. No payloads
+An enum is a distinct named type over plain symbols. No payloads
 and no computed members — where another language would use a
 union of literal strings, rut uses an enum:
 
@@ -26,7 +26,7 @@ use ink::{ Logger };
 
 enum Light { Green, Yellow, Red }
 
-enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4
+enum Direction { Up, Down, Left, Right }
 
 entry fn main() {
     let log = Logger("enums");
@@ -39,8 +39,8 @@ Green Left Right
 ```
 
 Members are the enum's values and are spelled qualified:
-`Light.Green`. Explicit initializers set where the numbering starts;
-the rest continue from there.
+`Light.Green`. A member is a symbol — there is no integer value
+under it to read or spell.
 
 `when` over an enum must be exhaustive — every member, or an `else`
 arm (see [control flow and when](control-flow.md)). Enums render as

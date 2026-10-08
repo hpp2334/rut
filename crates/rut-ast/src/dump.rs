@@ -28,7 +28,6 @@ pub struct DumpSeg {
 }
 pub struct DumpMember {
     pub ident: String,
-    pub int: Option<i64>,
 }
 pub struct DumpStructField {
     pub ident: String,
@@ -121,7 +120,7 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                     DumpVal::Members(
                         members
                             .iter()
-                            .map(|(m, v)| DumpMember { ident: a.name(*m).to_string(), int: *v })
+                            .map(|m| DumpMember { ident: a.name(*m).to_string() })
                             .collect(),
                     ),
                 ));
@@ -657,9 +656,6 @@ fn val_json(v: &DumpVal, out: &mut String) {
                 json_escape("ident", out);
                 out.push(':');
                 json_escape(&m.ident, out);
-                if let Some(v) = m.int {
-                    out.push_str(&format!(",\"int\":{v}"));
-                }
                 out.push('}');
             }
             out.push(']');
@@ -850,10 +846,7 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
         DumpVal::Members(ms) => {
             out.push_str(&format!("{i}{label}:\n"));
             for m in ms {
-                match m.int {
-                    Some(v) => out.push_str(&format!("{}- {} = {v}\n", ind(d + 1), m.ident)),
-                    None => out.push_str(&format!("{}- {}\n", ind(d + 1), m.ident)),
-                }
+                out.push_str(&format!("{}- {}\n", ind(d + 1), m.ident));
             }
         }
         DumpVal::StructFields(fs) => {

@@ -121,25 +121,19 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[(IdentId, Option<i64>)]) {
+    pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[IdentId]) {
         let sp = self.ast.node(node).span;
         if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
-        // member values: sequential from 0 or explicit
-        let mut vals: Vec<(IdentId, i64)> = Vec::new();
-        let mut next = 0i64;
-        for (m, v) in members {
-            let val = v.unwrap_or(next);
-            next = val + 1;
-            vals.push((*m, val));
-        }
+        // member values: sequential from 0
+        let vals: Vec<(IdentId, i64)> = members.iter().enumerate().map(|(i, m)| (*m, i as i64)).collect();
         let ty = self.types.intern(RutType {
             name,
             kind: TyKind::Enum { members: vals },
         });
-        let member_ids: Vec<IdentId> = members.iter().map(|(m, _)| *m).collect();
+        let member_ids: Vec<IdentId> = members.to_vec();
         self.enums.push((name, EnumDecl { ty, members: member_ids, methods: Vec::new() }));
     }
 

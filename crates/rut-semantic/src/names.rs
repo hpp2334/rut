@@ -49,7 +49,7 @@ fn classify_item(
         }
         ItemKind::Enum { name, members, .. } => {
             // first plain ident is the name; the declared members follow,
-            // matched by text in order (discriminants are Int tokens)
+            // matched by text in order
             let mut name_done = false;
             for t in toks_in(toks, span) {
                 if let Tok::Ident(s) = &t.tok {
@@ -59,7 +59,7 @@ fn classify_item(
                     if !name_done && s == ast.name(*name) {
                         out.push((t.span, TokenType::Enum));
                         name_done = true;
-                    } else if members.iter().any(|(m, _)| ast.name(*m) == s) {
+                    } else if members.iter().any(|m| ast.name(*m) == s) {
                         out.push((t.span, TokenType::EnumMember));
                     }
                 }

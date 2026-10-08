@@ -168,7 +168,7 @@ A fixed pipeline with no flags:
    class carries a `[disposal]` member: the cell's death is observable (it runs
    runs at refcount zero), so its mint is never deleted.
 5. **Pattern lowering** — downcast chains become one type-id load plus a
-   jump table; `when` on enums lowers to `brtable` over the member value.
+   jump table; `when` on enums lowers to `brtable` over the member slot.
 
 The pipeline is honest by construction: there is no tier-2 to fall back
 on, so the emitted code must be right the first time. Every gate measures

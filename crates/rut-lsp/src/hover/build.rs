@@ -172,9 +172,9 @@ fn enum_members(
     ast: &Ast,
     toks: &[Token],
     span: Span,
-    members: &[(IdentId, Option<i64>)],
+    members: &[IdentId],
 ) -> Vec<MemberSrc> {
-    let expected: Vec<&str> = members.iter().map(|(m, _)| ast.name(*m)).collect();
+    let expected: Vec<&str> = members.iter().map(|m| ast.name(*m)).collect();
     let mut spans: Vec<Option<Span>> = vec![None; expected.len()];
     let mut k = 0usize;
     for t in toks {

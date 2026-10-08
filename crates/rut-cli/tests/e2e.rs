@@ -693,20 +693,20 @@ fn dump_is_labeled_and_spanned() {
     // the CLI text dump and the demo JSON tree render from one mapping:
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
-    let src = r#"enum Flavor { Sweet, Sour = 5 }
+    let src = r#"enum Flavor { Sweet, Sour }
 entry fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
 "#;
     // the AST dumps ride CompileOutput (the demo envelope lane)
     let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
-    assert!(text.contains("@0 Enum Flavor [0,37)"), "header: {text}");
+    assert!(text.contains("@0 Enum Flavor [0,33)"), "header: {text}");
     assert!(text.contains("vis: pub(self)"), "vis label: {text}");
-    assert!(text.contains("- Sour = 5"), "member bullet: {text}");
+    assert!(text.contains("- Sour"), "member bullet: {text}");
     let json = &out.ast_json;
     let root = serde_hint_parse(json);
     assert_eq!(root.kind, "Module");
-    assert!(json.contains("\"span\":[0,37]"), "span on the wire: {json}");
+    assert!(json.contains("\"span\":[0,33]"), "span on the wire: {json}");
     for banned in ["\"text\"", "\"label\"", "\"fields\"", "\"summary\""] {
         assert!(!json.contains(banned), "banned key {banned} on the wire");
     }

@@ -311,7 +311,7 @@ pub(crate) struct EnumFrame {
     vis: Vis,
     lo: u32,
     name: IdentId,
-    members: Vec<(IdentId, Option<i64>)>,
+    members: Vec<IdentId>,
 }
 
 impl EnumFrame {
@@ -334,20 +334,20 @@ impl EnumFrame {
                 p.sync_stmt();
                 return Step::Pop(Done::Failed);
             };
-            let mut val = None;
-            if p.eat_punct(Tok::Eq) {
-                let neg = p.eat_punct(Tok::Minus);
-                match p.tok().clone() {
-                    Tok::Int(v, _) => {
-                        p.bump();
-                        val = Some(v as i64 * if neg { -1 } else { 1 });
-                    }
-                    _ => p.err_here("expected an integer after `=` in an enum member"),
-                }
-            }
-            self.members.push((m, val));
+            self.members.push(m);
             if !p.eat_punct(Tok::Comma) {
-                p.expect(Tok::RBrace);
+                if !p.eat_punct(Tok::RBrace) {
+                    let found = p.peek(0).describe();
+                    p.err_here(format!("expected `,` or `}}`, found {found}"));
+                    // skip the stray tokens so the member list's tail
+                    // (`, B }`) still parses — one diag, full recovery
+                    while !matches!(p.tok(), Tok::Comma | Tok::RBrace | Tok::Eof) {
+                        p.bump();
+                    }
+                    if p.eat_punct(Tok::Comma) {
+                        continue;
+                    }
+                }
                 break;
             }
         }
