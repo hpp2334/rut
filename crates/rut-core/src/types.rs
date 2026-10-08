@@ -496,6 +496,25 @@ impl TypeTable {
     /// RESEED registers append after the unit's own rows already exist
     /// (the roots have compiled), so the own block's base must stay
     /// where it is — the owner's own ids spell through it.
+    ///
+    /// A seed block also never moves a base another block ALREADY
+    /// registered. A reseed's seeds name the requester's rows, and a
+    /// requester's scope often names a block this unit already carries
+    /// whole (a dependency both units `use` — the requester's args spell
+    /// the dep's `(scope, local)` rows). The carried block is the FULL
+    /// surface copy, laid out at the exporter's own locals; the seed run
+    /// is the SPARSE closure of the requested arguments (padding shells
+    /// in the gaps, nothing above the highest requested local). Moving
+    /// the base onto the sparse run re-spells every id of that scope
+    /// through it: locals past the run's end densify out of bounds (the
+    /// compile dies mid-reseed), locals inside it land on a padding
+    /// shell — a silent wrong-row dispatch. Both spellings resolve to
+    /// the same rows anyway — a scope number is ONE unit per walk, so
+    /// every block carried under it re-ships that unit's surface
+    /// verbatim — which is exactly why the sparse run is never needed
+    /// where a full block stands: keep the first registration, let the
+    /// seed rows append (the carried-type markers read the region) but
+    /// leave the base alone.
     pub fn use_seed_rows(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
         if !self.packed {
             return;
@@ -506,6 +525,13 @@ impl TypeTable {
             let need = *s as usize + 1;
             if self.scope_base.len() < need {
                 self.scope_base.resize(need, 0);
+            }
+            // an unregistered scope sits at the vec's 0 default (a
+            // registered block always starts at or above the boot line);
+            // those are the requester's own rows this unit never
+            // imported — the one shape the seed registration exists for
+            if self.scope_base[*s as usize] >= self.boot_len && self.boot_len > 0 {
+                continue;
             }
             self.scope_base[*s as usize] = start + *off;
         }

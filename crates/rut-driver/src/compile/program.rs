@@ -959,9 +959,13 @@ pub fn compile_program_resolved(
         // (two requesters' rows share no scope, but one attach serves
         // several), and an off-0 for every scope would point the
         // second-and-later scopes' ids at the FIRST run's rows.
-        // `use_seed_rows` then sets scope_base[s] = attach-start + off,
-        // so this table's dense of a requester's packed id `(s, L)`
-        // hits the row exactly (the two sides spell every argument the
+        // `use_seed_rows` then sets scope_base[s] = attach-start + off
+        // for every scope THIS TABLE does not already carry a block
+        // under (a scope both units use is already registered with the
+        // exporter's FULL surface copy — the sparse run never moves it;
+        // the seed-scope-collision law lives on `use_seed_rows`), so
+        // this table's dense of a requester's packed id `(s, L)` hits
+        // the row exactly (the two sides spell every argument the
         // same way — the owner anchor's whole point). Absent locals ride
         // Nil shells.
         let mut types: Vec<rut_core::types::RutType> = Vec::new();
