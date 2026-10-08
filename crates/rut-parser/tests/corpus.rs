@@ -66,20 +66,23 @@ fn depth_budget_is_a_diag_not_a_crash() {
 #[test]
 fn enum_member_values_are_gone() {
     // `= int` after a member no longer parses: one "expected `,` or `}`"
-    // diag pointing at the `=`, and the enum still collects its members
-    let src = "enum E { A = 1, B }";
-    let (ast, diags) = parse(&src, Mode::Impl);
-    assert!(
-        diags.iter().any(|d| d.msg.contains("expected `,` or `}`, found `=`")),
-        "want the member-value diag, got: {diags:?}"
-    );
-    let items = ast.module_items(ast.root);
-    let Some(ItemKind::Enum { members, .. }) =
-        items.iter().map(|it| ast.item(*it)).find(|k| matches!(k, ItemKind::Enum { .. }))
-    else {
-        panic!("enum item still parses: {diags:?}")
-    };
-    assert_eq!(members.len(), 2, "both members collected: {members:?}");
+    // diag pointing at the `=`, no cascade, and the enum still collects
+    // its members — the stray run skips to `,` or the closing `}`
+    for (src, want_members) in [("enum T { a = 1 }", 1), ("enum E { A = 1, B }", 2)] {
+        let (ast, diags) = parse(src, Mode::Impl);
+        assert_eq!(diags.len(), 1, "one diag, no cascade: {src} -> {diags:?}");
+        assert!(
+            diags[0].msg.contains("expected `,` or `}`, found `=`"),
+            "want the member-value diag, got: {diags:?}"
+        );
+        let items = ast.module_items(ast.root);
+        let Some(ItemKind::Enum { members, .. }) =
+            items.iter().map(|it| ast.item(*it)).find(|k| matches!(k, ItemKind::Enum { .. }))
+        else {
+            panic!("enum item still parses: {diags:?}")
+        };
+        assert_eq!(members.len(), want_members, "{src}: members: {members:?}");
+    }
 }
 
 #[test]

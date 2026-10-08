@@ -347,6 +347,8 @@ impl EnumFrame {
                     if p.eat_punct(Tok::Comma) {
                         continue;
                     }
+                    // the stray run may end at the enum's own `}` — take it
+                    p.eat_punct(Tok::RBrace);
                 }
                 break;
             }
