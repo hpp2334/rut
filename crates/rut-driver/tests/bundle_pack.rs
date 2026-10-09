@@ -47,7 +47,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
     )
     .unwrap();
     let mut out = Vec::new();
-    collect_source_group("json", &manifest, "json/", &map_read(&files), &mut out).unwrap();
+    collect_source_group("json", &manifest, &Default::default(), "json/", &map_read(&files), &mut out).unwrap();
     let names: Vec<&str> = out.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
@@ -71,7 +71,7 @@ fn a_manifest_named_file_the_map_lacks_is_a_read_error() {
     );
     let manifest = parse_manifest(r#"{"name": "mod", "entry": {"lib": "./mod.rut"}}"#).unwrap();
     let mut out = Vec::new();
-    let err = collect_source_group("mod", &manifest, "", &map_read(&files), &mut out).unwrap_err();
+    let err = collect_source_group("mod", &manifest, &Default::default(), "", &map_read(&files), &mut out).unwrap_err();
     assert!(err.contains("cannot read"), "{err}");
 }
 

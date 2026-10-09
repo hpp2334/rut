@@ -348,20 +348,35 @@ impl RutRun {
         let mounted: Vec<(String, Pkg)> =
             session.modules().map(|(s, m)| (s.clone(), m.clone())).collect();
         for (_, pkg) in &mounted {
-            let (text, mode) = match &pkg.body {
-                PkgBody::Source { text, is_decl } => (
-                    text,
-                    if *is_decl { Mode::Decl } else { Mode::Impl },
-                ),
-                _ => continue,
-            };
-            let (ast, diags) = rut_parser::parse(text, mode);
-            if !diags.is_empty() {
-                continue;
+            // the root's own uses — a source body's parse (compiled
+            // bodies carry no source; the flat shape is exactly
+            // today's check)
+            if let PkgBody::Source { text, is_decl } = &pkg.body {
+                let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
+                let (ast, diags) = rut_parser::parse(text, mode);
+                if diags.is_empty() {
+                    for name in crate::graph::uses_of(&ast) {
+                        if let Err(e) = session.resolve(&name) {
+                            return Err(RunError::law(e.to_string()));
+                        }
+                    }
+                }
             }
-            for name in crate::graph::uses_of(&ast) {
-                if let Err(e) = session.resolve(&name) {
-                    return Err(RunError::law(e.to_string()));
+            // the mounted mod tree's files are units too: their `use`
+            // statements join the same closure check — whatever the
+            // body kind (a compiled root's children still ride source)
+            for m in pkg.mods.values() {
+                let (ast, diags) = rut_parser::parse(&m.text, Mode::Impl);
+                if !diags.is_empty() {
+                    continue; // the compile reports the syntax
+                }
+                for name in crate::graph::uses_of(&ast) {
+                    if let Err(e) = session.resolve(&name) {
+                        return Err(RunError::law(format!(
+                            "`{}` ({}): {e}",
+                            pkg.spec, m.path
+                        )));
+                    }
                 }
             }
         }

@@ -49,6 +49,7 @@ use std::rc::Rc;
 
 use crate::bundle::{bundle_key, write_bundle, Manifest, MANIFEST_NAME};
 use crate::graph::compile_units;
+use crate::mods::{rows_json, ROWS_NAME};
 use crate::run::Loaded;
 use crate::session::{PkgBody, Session};
 
@@ -106,6 +107,21 @@ pub struct PackWorld {
 #[derive(Clone, Debug, Default)]
 pub struct PackOpts {
     pub strip: bool,
+}
+
+/// The pkg's own source text as the rows' `""` spelling: a source
+/// body's text, else a compiled unit's ridden root source (the rows
+/// lane's `""`, riding as the generic-source marker), else empty. A
+/// pkg with mounted mod children always answers the first or second.
+fn rows_root_text(pkg: &crate::session::Pkg) -> String {
+    match &pkg.body {
+        PkgBody::Source { text, .. } => text.clone(),
+        _ => pkg
+            .gen_source
+            .as_ref()
+            .map(|g| g.text.clone())
+            .unwrap_or_default(),
+    }
 }
 
 /// Pack the walked world: compile the closure (auto core rides; every
@@ -238,6 +254,16 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         ride_generic_source(&w.manifest, "", &mut entries, &|rel| (w.read)(&w.root_dir, rel))
             .map_err(PackError::law)?;
     }
+    // the module rows (the additive envelope section): a pkg with
+    // mounted mod children rides its tree as path-keyed source rows —
+    // `""` = the pkg's own source, `<path>` = each child — so a load
+    // mounts the tree exactly as the directory would. A flat pkg
+    // writes no rows entry: byte-identical output (the freshness gate
+    // over the committed std bundles proves it).
+    let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
+    if !root_pkg.mods.is_empty() {
+        entries.push((ROWS_NAME.into(), rows_json(&rows_root_text(root_pkg), &root_pkg.mods).into_bytes()));
+    }
     // the dep groups, name order: source pkgs → compiled, host/decl
     // pkgs and declared-but-unused pkgs → the declaration file set
     for (spec, source) in &w.sources {
@@ -271,11 +297,33 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 })
                 .map_err(PackError::law)?;
             }
+            // the module rows, group flavor (see the root arm above)
+            if let Ok(m) = session.resolve(spec) {
+                if !m.mods.is_empty() {
+                    entries.push((
+                        bundle_key(&format!("{prefix}{ROWS_NAME}")).map_err(PackError::law)?,
+                        rows_json(&rows_root_text(m), &m.mods).into_bytes(),
+                    ));
+                }
+            }
         } else {
             match source {
                 PkgSource::Dir(gdir) => {
-                    collect_source_group(gdir, &dm, &prefix, &w.read, &mut entries)
+                    let mods = session.resolve(spec).map(|m| m.mods.clone()).unwrap_or_default();
+                    collect_source_group(gdir, &dm, &mods, &prefix, &w.read, &mut entries)
                         .map_err(PackError::law)?;
+                    // the module rows, group flavor (see the root arm
+                    // above): the tree rides beside the file set
+                    if !mods.is_empty() {
+                        let text = session
+                            .resolve(spec)
+                            .map(rows_root_text)
+                            .unwrap_or_default();
+                        entries.push((
+                            bundle_key(&format!("{prefix}{ROWS_NAME}")).map_err(PackError::law)?,
+                            rows_json(&text, &mods).into_bytes(),
+                        ));
+                    }
                 }
                 PkgSource::Archive { slot, prefix: old } => {
                     // copy the archive group's file set under the new

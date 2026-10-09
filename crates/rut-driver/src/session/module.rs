@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use crate::bundle::Entry;
+use crate::mods::ModSource;
 
 /// What a mounted pkg's body IS. The graph dispatches on this:
 /// a source body compiles (and may splice), a compiled body pushes as
@@ -113,6 +114,14 @@ pub struct Pkg {
     /// source), so the binary's foreign scan sees none of these. Empty
     /// for source, host, and decl-root mounts.
     pub bundle_scopes: Vec<(rut_core::id::ScopeId, String)>,
+    /// The pkg's mounted file modules (the `mod` tree's children),
+    /// keyed by mod path (`"layout"`, `"layout/grid"`) — the loader
+    /// mounts them by DECLARATION (`mod NAME;` resolves against
+    /// `NAME/mod.rut` beside the declaring file), never a directory
+    /// listing. The root file itself is the body's text, never a row
+    /// here. Empty for flat packages: every manifest-spelled source
+    /// set stays byte-stable, and a flat pkg's compile is untouched.
+    pub mods: BTreeMap<String, ModSource>,
     /// The pkg's own `[deps]` table as the walk found it — the parsed
     /// manifest's dep rows (spec → descriptor). Pub data: an embedder
     /// can inspect what the closure declares.

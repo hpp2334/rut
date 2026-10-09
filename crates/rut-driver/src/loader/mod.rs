@@ -15,6 +15,7 @@ use crate::bundle::{
     bundle_key, entry_rel, parse_manifest, read_entry, Bundle, GroupKind, Layout, Manifest,
     PkgType,
 };
+use crate::mods::{mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME};
 use crate::run::{Loaded, RunError};
 use crate::session::{Pkg, PkgBody, PeerDecl};
 
@@ -126,6 +127,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     // on-demand recompile's input (generic-source riding); the riding
     // law refuses a generic-owning unit that carries none
     let gen_source = riding_source(&root_spec, &root, entries, "", &manifest).map_err(err)?;
+    let mods = rows_mods(entries, "").map_err(err)?;
     let libs = archive_peer_libs(entries, "", &manifest).map_err(err)?;
     pkgs.insert(
         root_spec.clone(),
@@ -134,6 +136,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
+            mods,
             peers: manifest_peers(&manifest),
             peer_libs: libs,
             bundle_scopes: scopes.clone(),
@@ -194,6 +197,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
+                    mods: rows_mods(entries, &format!("{prefix}/")).map_err(err)?,
                     peers: manifest_peers(&dm),
                     peer_libs: libs,
                     ..Default::default()
@@ -279,6 +283,67 @@ pub(crate) fn fold_peers(
     pkg
 }
 
+/// The rows lane: the archive's `rut.mods` entry at `prefix` — the
+/// additive envelope section carrying a package's module set as
+/// path-keyed source rows (`""` = the root source, `<path>` = each
+/// child). `Ok(None)` when the archive carries no rows entry — the old
+/// flat envelope (every published bundle to date), which loads
+/// unchanged. The mounted children ride the same declaration-driven
+/// mount a directory would; a carried-but-undeclared row is refused.
+fn rows_body(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+) -> Result<Option<(String, BTreeMap<String, ModSource>)>, String> {
+    let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
+    let text = match read_entry(entries, &key) {
+        Ok(t) => t,
+        Err(_) => return Ok(None),
+    };
+    let (root, rows) = parse_rows(&text)?;
+    let mods = mount_rows(&root, &rows)?;
+    Ok(Some((root, mods)))
+}
+
+/// The rows entry's mounted children only (the compiled arms' share —
+/// their body is the binary; the tree still mounts beside it).
+pub fn rows_mods(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+) -> Result<BTreeMap<String, ModSource>, String> {
+    Ok(rows_body(entries, prefix)?.map(|(_, mods)| mods).unwrap_or_default())
+}
+
+/// The archive-entries child lookup for the mod mount — the same
+/// three-case law the FS lane answers, over entry keys: `NAME/mod.rut`
+/// present, a same-named FILE entry (`NAME.rut`), a `NAME/` prefix
+/// without its `mod.rut`, or nothing. Entries are archive-relative and
+/// canonical — the cycle guard keys on the key itself.
+fn entry_child_lookup<'a>(
+    entries: &'a [(String, Vec<u8>)],
+    prefix: &'a str,
+) -> impl FnMut(&str, &str) -> Result<ChildLookup, String> + 'a {
+    move |parent: &str, name: &str| {
+        let base = if parent.is_empty() {
+            prefix.to_string()
+        } else {
+            format!("{prefix}{parent}/")
+        };
+        let key = bundle_key(&format!("{base}{name}/mod.rut"))?;
+        if let Ok(text) = read_entry(entries, &key) {
+            return Ok(ChildLookup::Found { text, canon: key });
+        }
+        let file = bundle_key(&format!("{base}{name}.rut"))?;
+        if entries.iter().any(|(n, _)| *n == file) {
+            return Ok(ChildLookup::NotADir);
+        }
+        let dir = bundle_key(&format!("{base}{name}/"))?;
+        if entries.iter().any(|(n, _)| n.starts_with(&dir)) {
+            return Ok(ChildLookup::NoModRut);
+        }
+        Ok(ChildLookup::Missing)
+    }
+}
+
 /// Build a package's entry [`Pkg`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
 /// in-archive counterpart of a directory mount: the declared kind
@@ -296,6 +361,17 @@ pub fn bundle_entry_pkg(
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
+    // the rows lane first: a new-format module set mounts whole (the
+    // `""` row is the root source; children mount by declaration) —
+    // regardless of the entry keys the manifest spells
+    if let Some((root, mods)) = rows_body(entries, prefix)? {
+        return Ok(Pkg {
+            body: PkgBody::Source { text: root, is_decl: false },
+            entry: manifest.entry.clone(),
+            mods,
+            ..Default::default()
+        });
+    }
     let pkg = match manifest.pkg_type {
         PkgType::Host => {
             let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
@@ -321,13 +397,19 @@ pub fn bundle_entry_pkg(
                 let src = read(rel)?;
                 crate::decl::refuse_host_rows(&src, &origin)?;
                 if manifest.entry.lib.is_none() {
-                    // the surface-only dev state: a decl unit — no host
-                    // rows, nothing exported (use sites resolve-miss,
+                    // TRANSITIONAL dual-read: no `entry.lib` — the root
+                    // module is the `mod.rut` entry beside the manifest
+                    // when it exists; without one, today's surface-only
+                    // dev state stands (a decl unit — no host rows,
+                    // nothing exported; use sites resolve-miss,
                     // correctly)
-                    Pkg {
-                        body: PkgBody::Source { text: src, is_decl: true },
-                        entry: manifest.entry.clone(),
-                        ..Default::default()
+                    match read("mod.rut") {
+                        Ok(root) => plain_source_pkg(entries, prefix, manifest, root)?,
+                        Err(_) => Pkg {
+                            body: PkgBody::Source { text: src, is_decl: true },
+                            entry: manifest.entry.clone(),
+                            ..Default::default()
+                        },
                     }
                 } else {
                     plain_entry_pkg(entries, prefix, manifest)?
@@ -340,8 +422,12 @@ pub fn bundle_entry_pkg(
     Ok(pkg)
 }
 
-/// The plain (non-decl) entry pkg: the entry lib + `entry.libs`
-/// spliced — ONE source string.
+/// The plain (non-decl) entry pkg. TRANSITIONAL dual-read: an
+/// `entry.lib` manifest splices `entry.libs` exactly as always; a
+/// manifest with no `entry.lib` takes the `mod.rut` ENTRY beside the
+/// manifest as the root (the new default — the loud repeal of the
+/// key is phase 5). Either way the source's `mod` declarations mount
+/// the child tree from the archive, recursively, cycle-guarded.
 fn plain_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -352,18 +438,50 @@ fn plain_entry_pkg(
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
-    let rel = entry_rel(manifest)
-        .ok_or_else(|| format!("module at bundle prefix `{prefix}` has no entry"))?;
-    let mut src = read(rel)?;
-    // the multi-lib splice, the directory-side twin: base first, then
-    // `libs` in manifest order, '\n'-joined — ONE source string
-    for lib in &manifest.entry.libs {
-        src.push('\n');
-        src.push_str(&read(lib)?);
+    let (mut src, has_lib) = match &manifest.entry.lib {
+        Some(rel) => (read(rel)?, true),
+        // the transitional default: the root module is `mod.rut`
+        None => match read("mod.rut") {
+            Ok(root) => (root, false),
+            Err(_) => {
+                let rel = entry_rel(manifest).ok_or_else(|| {
+                    format!(
+                        "module at bundle prefix `{prefix}` has no entry — the root module is \
+                         `mod.rut` beside the manifest (or, transitional, spell `entry.lib`)"
+                    )
+                })?;
+                (read(rel)?, false)
+            }
+        },
+    };
+    // the multi-lib splice — ONLY on the `entry.lib` lane (the
+    // transitional law: the splice survives only for manifests that
+    // spell it): base first, then `libs` in manifest order,
+    // '\n'-joined — ONE source string
+    if has_lib {
+        for lib in &manifest.entry.libs {
+            src.push('\n');
+            src.push_str(&read(lib)?);
+        }
     }
+    plain_source_pkg(entries, prefix, manifest, src)
+}
+
+/// A source pkg from its assembled root text: the `mod` declarations
+/// mount the child tree from the archive — exactly what a directory
+/// mount would read back.
+fn plain_source_pkg(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    manifest: &Manifest,
+    src: String,
+) -> Result<Pkg, String> {
+    let mut lookup = entry_child_lookup(entries, prefix);
+    let mods = mount_mod_children(&src, &format!("\u{0}{prefix}"), &mut lookup)?;
     Ok(Pkg {
         body: PkgBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
+        mods,
         ..Default::default()
     })
 }
@@ -388,6 +506,19 @@ pub fn riding_gen_source(
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
+    // the rows lane first: a mod-rooted compiled pkg carries no
+    // `entry.lib` — its root source rides as the `""` row (the
+    // children ride beside it and mount by declaration at the pkg's
+    // own mount). The rows' presence is that pkg's dispatch marker.
+    if let Some((root, _)) = rows_body(entries, prefix)? {
+        let mut peers = Vec::new();
+        for (peer, desc) in &manifest.peer_deps {
+            if let Some(lib) = desc.get("lib") {
+                peers.push((peer.clone(), read(lib)?));
+            }
+        }
+        return Ok(Some(crate::session::GenSource { text: root, peers }));
+    }
     let Some(base) = &manifest.entry.lib else {
         return Ok(None); // no body — nothing could ride
     };

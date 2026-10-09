@@ -381,6 +381,19 @@ impl<'a> GraphCompiler<'a> {
             self.diags.extend(d);
             return None;
         }
+        // phase-2 plumbing: collect the pkg's mounted module set —
+        // every file (root + children) parses to its own
+        // `ItemKind::Module` root, declarations gathered with the mod
+        // path attached (phase 3 gates resolution/visibility on this).
+        // Here the collection runs for its LOUD half: a declared child
+        // with no mounted module, a mounted module nothing declares, a
+        // child that fails to parse — each named, never guessed around.
+        if !module.mods.is_empty() {
+            let (_, problems) = crate::mods::collect_module_set(spec, module);
+            for p in problems {
+                self.diags.push(Diag::new(Span::new(0, 0), p));
+            }
+        }
         let uses = uses_of(&ast);
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays

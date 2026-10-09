@@ -9,6 +9,8 @@ use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
 use crate::session::PkgBody;
 
+use std::collections::BTreeMap;
+
 /// Emit a generic-owning compiled pkg's riding source under `prefix`
 /// (empty for the root, `<pkg>/` for a group): the entry lib, each
 /// `entry.libs` file in manifest order, then each `[peer-deps]`
@@ -97,15 +99,19 @@ pub(super) fn group_file(
 /// Collect a package's SOURCE file set — the group shape — under
 /// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.jsonc`
 /// byte-for-byte, its entry file, each `entry.libs` file beside the
-/// entry, and each `[peer-deps]` descriptor's `lib` group file.
-/// Descriptor order is the manifest's (BTreeMap), so the archive stays
-/// deterministic. A compiled group does not take this shape (its
-/// `.rutc` is the linking truth); splice-needed deps and host pkgs ride
-/// the bundle exactly like this. Dir reads go through the world's
-/// reader; same input ⇒ same bytes.
+/// entry, and each `[peer-deps]` descriptor's `lib` group file. A pkg
+/// with mounted mod children rides its module rows too (`rut.mods` —
+/// the additive envelope section; its root source is the `""` row, so
+/// a mod-rooted pkg needs no entry file here). Descriptor order is the
+/// manifest's (BTreeMap), so the archive stays deterministic. A
+/// compiled group does not take this shape (its `.rutc` is the linking
+/// truth); splice-needed deps and host pkgs ride the bundle exactly
+/// like this. Dir reads go through the world's reader; same input ⇒
+/// same bytes.
 pub fn collect_source_group(
     dir_key: &str,
     manifest: &crate::bundle::Manifest,
+    mods: &BTreeMap<String, crate::mods::ModSource>,
     prefix: &str,
     read: &PackRead,
     out: &mut Vec<(String, Vec<u8>)>,
@@ -113,21 +119,27 @@ pub fn collect_source_group(
     let name = crate::bundle::files::MANIFEST_NAME;
     let text = read(dir_key, name)?;
     out.push((format!("{prefix}{name}"), text));
-    let rel = entry_rel(manifest)
-        .ok_or_else(|| format!("module at {dir_key} has no entry"))?;
-    // normalize the entry's `./` prefix before the group prefix joins it
-    let rel = rel.strip_prefix("./").unwrap_or(rel);
-    let key = bundle_key(&format!("{prefix}{rel}"))?;
-    let body = read(dir_key, rel)?;
-    out.push((key, body));
-    // each pkg's `entry.libs` files ride beside the entry, in manifest
-    // order — the array IS the order the walk splices back, so the
-    // archive stays deterministic
-    for lib in &manifest.entry.libs {
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let body = read(dir_key, rel)?;
-        out.push((key, body));
+    match entry_rel(manifest) {
+        Some(rel) => {
+            // normalize the entry's `./` prefix before the group prefix joins it
+            let rel = rel.strip_prefix("./").unwrap_or(rel);
+            let key = bundle_key(&format!("{prefix}{rel}"))?;
+            let body = read(dir_key, rel)?;
+            out.push((key, body));
+            // each pkg's `entry.libs` files ride beside the entry, in manifest
+            // order — the array IS the order the walk splices back, so the
+            // archive stays deterministic
+            for lib in &manifest.entry.libs {
+                let rel = lib.strip_prefix("./").unwrap_or(lib);
+                let key = bundle_key(&format!("{prefix}{rel}"))?;
+                let body = read(dir_key, rel)?;
+                out.push((key, body));
+            }
+        }
+        // a mod-rooted pkg (no entry keys): the tree rides the rows
+        // entry the caller writes beside this file set
+        None if !mods.is_empty() => {}
+        None => return Err(format!("module at {dir_key} has no entry")),
     }
     for desc in manifest.peer_deps.values() {
         let Some(lib) = desc.get("lib") else {

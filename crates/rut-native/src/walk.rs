@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 
 use rut_core::id::ScopeId;
 
-use rut_driver::bundle::{bundle_key, parse_manifest, read_entry, Entry, Manifest, PkgType, MANIFEST_NAME};
+use rut_driver::bundle::{bundle_key, parse_manifest, read_entry, Manifest, PkgType, MANIFEST_NAME};
 use rut_driver::loader::peer_gate;
+use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
 use rut_driver::{Loaded, Pkg, PkgBody, PeerDecl, RunError};
 
 use crate::error::LoadError;
@@ -395,6 +396,89 @@ fn archive_peer_libs(
     Ok(out)
 }
 
+/// The transitional dual-read probe: `mod.rut` beside the manifest —
+/// `Ok(Some(text))` when the directory carries one (it is the root
+/// module), `Ok(None)` when absent. A `mod.rut` that exists but cannot
+/// be read is the loud read error, never a silent fallback.
+fn read_root_module(dir: &str) -> Result<Option<String>, LoadError> {
+    let path = PathBuf::from(dir).join("mod.rut");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if path.is_file() => Err(LoadError::law(format!(
+            "cannot read {}: {e}",
+            path.display()
+        ))),
+        Err(_) => Ok(None),
+    }
+}
+
+/// The dir lane's child lookup for the mod mount — the same three-case
+/// law the archive rows lane answers: `NAME/mod.rut` reads (with its
+/// canonical identity — the cycle guard's key, so a symlinked alias
+/// repeats it), a same-named FILE sibling (`NAME.rut`), a `NAME/`
+/// directory without its `mod.rut`, or nothing there at all.
+fn dir_child_lookup(dir: &Path, parent: &str, name: &str) -> Result<ChildLookup, String> {
+    let base = if parent.is_empty() {
+        dir.to_path_buf()
+    } else {
+        dir.join(parent)
+    };
+    let mod_rs = base.join(name).join("mod.rut");
+    match std::fs::read_to_string(&mod_rs) {
+        Ok(text) => {
+            let canon = std::fs::canonicalize(&mod_rs)
+                .unwrap_or_else(|_| mod_rs.clone())
+                .to_string_lossy()
+                .into_owned();
+            Ok(ChildLookup::Found { text, canon })
+        }
+        Err(e) if mod_rs.is_file() => {
+            Err(format!("cannot read {}: {e}", mod_rs.display()))
+        }
+        Err(_) => {
+            let file = base.join(format!("{name}.rut"));
+            if file.is_file() {
+                Ok(ChildLookup::NotADir)
+            } else if base.join(name).is_dir() {
+                Ok(ChildLookup::NoModRut)
+            } else {
+                Ok(ChildLookup::Missing)
+            }
+        }
+    }
+}
+
+/// Assemble a lib pkg from its assembled root text: the root's `mod`
+/// declarations mount the child tree from the directory —
+/// `NAME/mod.rut` beside the declaring file, recursively,
+/// cycle-guarded by canonical file identity. The root's own file
+/// identity (`root_file`) opens the guard's chain.
+fn lib_pkg(
+    dir: &str,
+    root_text: String,
+    root_file: &str,
+    manifest: &Manifest,
+) -> Result<Pkg, LoadError> {
+    let root_canon = std::fs::canonicalize(root_file)
+        .unwrap_or_else(|_| PathBuf::from(root_file))
+        .to_string_lossy()
+        .into_owned();
+    let mut lookup = |parent: &str, name: &str| dir_child_lookup(Path::new(dir), parent, name);
+    let mods: BTreeMap<String, ModSource> =
+        mount_mod_children(&root_text, &root_canon, &mut lookup)
+            .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
+    Ok(fold_peers(
+        Pkg {
+            body: PkgBody::Source { text: root_text, is_decl: false },
+            entry: manifest.entry.clone(),
+            mods,
+            ..Default::default()
+        },
+        manifest,
+        dir_peer_libs(&PathBuf::from(dir), manifest),
+    ))
+}
+
 /// Build a directory's entry [`Pkg`] from its manifest:
 ///
 /// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
@@ -404,6 +488,14 @@ fn archive_peer_libs(
 ///   compiles; the surface derives from its exports. A declared
 ///   surface with no body is the surface-only dev state (a decl unit);
 ///   `host fn` text is refused in either file — the lib-surface law.
+///
+/// The body lane is the TRANSITIONAL dual-read (the phase-2 clause,
+/// recorded in the run log): an `entry.lib` manifest splices
+/// `entry.libs` exactly as always; a manifest with NO `entry.lib`
+/// takes `mod.rut` beside the manifest as the root module (the loud
+/// repeal of the keys is phase 5). Either way the root's `mod`
+/// declarations mount the child tree — the module set replaces the
+/// splice as the primary lane.
 ///
 /// The manifest's `namespace` row (when present) rides the pkg as the
 /// qualified-access head (`calc`'s `Math`), and its `consts` rows ride
@@ -435,50 +527,78 @@ fn load_entry_module(
             return Ok(fold_peers(m, manifest, dir_peer_libs(&PathBuf::from(dir), manifest)));
         }
         PkgType::Lib => {
+            // the surface read + the lib-surface law (kept from today)
+            let mut surface_only: Option<String> = None;
             if let Some(rel) = &manifest.entry.type_path {
                 let key = src.resolve(dir, rel).map_err(LoadError::law)?;
                 let src_text = read_source_text(src, &key)?;
                 rut_driver::decl::refuse_host_rows(&src_text, &key).map_err(LoadError::law)?;
                 if manifest.entry.lib.is_none() {
-                    // the surface-only dev state: a decl unit — no host
-                    // rows, nothing exported (use sites resolve-miss,
-                    // correctly)
-                    return Ok(fold_peers(
+                    surface_only = Some(src_text);
+                }
+            }
+            if let Some(surface) = surface_only {
+                // TRANSITIONAL dual-read: no `entry.lib` — the root
+                // module is `mod.rut` beside the manifest when it
+                // exists; without one, today's surface-only dev state
+                // stands (a decl unit — no host rows, nothing
+                // exported; use sites resolve-miss, correctly). The
+                // loud repeal of the key is phase 5.
+                return match read_root_module(dir)? {
+                    Some(root) => {
+                        let root_file = PathBuf::from(dir).join("mod.rut");
+                        lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
+                    }
+                    None => Ok(fold_peers(
                         Pkg {
-                            body: PkgBody::Source { text: src_text, is_decl: true },
+                            body: PkgBody::Source { text: surface, is_decl: true },
                             entry: manifest.entry.clone(),
                             ..Default::default()
                         },
                         manifest,
                         dir_peer_libs(&PathBuf::from(dir), manifest),
-                    ));
+                    )),
+                };
+            }
+            // the body: `entry.lib` (transitional) or `mod.rut` (the
+            // new default when the key is absent)
+            let (mut src_text, root_file) = match &manifest.entry.lib {
+                Some(rel) => {
+                    let key = src.resolve(dir, rel).map_err(LoadError::law)?;
+                    (read_source_text(src, &key)?, key)
+                }
+                None => {
+                    let path = PathBuf::from(dir).join("mod.rut");
+                    (
+                        read_root_module(dir)?.ok_or_else(|| {
+                            LoadError::law(format!(
+                                "module in {dir} has no entry — the root module is `mod.rut` \
+                                 beside the manifest (or, transitional, spell `entry.lib`)"
+                            ))
+                        })?,
+                        path.to_string_lossy().into_owned(),
+                    )
+                }
+            };
+            // The multi-lib splice — ONLY on the `entry.lib` lane (the
+            // transitional law: the splice survives only for manifests
+            // that spell it): the base `lib` first, then `libs` in
+            // manifest order, '\n'-joined exactly like the peer-group
+            // append — the combined text stays ONE source string. The
+            // manifest's array order is the canonical order: the splice
+            // never reads a directory listing, so same manifest ⇒ same
+            // module (the determinism law).
+            if manifest.entry.lib.is_some() {
+                for rel in &manifest.entry.libs {
+                    let key = src.resolve(dir, rel).map_err(LoadError::law)?;
+                    let text = read_source_text(src, &key)?;
+                    src_text.push('\n');
+                    src_text.push_str(&text);
                 }
             }
+            return lib_pkg(dir, src_text, &root_file, manifest);
         }
     }
-    let mut src_text = load_entry(src, dir, &manifest.entry)?;
-    // The multi-lib splice: the base `lib` first, then
-    // `libs` in manifest order, '\n'-joined exactly like the
-    // peer-group append — the combined text stays ONE source string,
-    // so every downstream consumer of the source body (the graph
-    // splice, the wasm mounts) is untouched. The manifest's array
-    // order is the canonical order: the splice never reads a directory
-    // listing, so same manifest ⇒ same module (the determinism law).
-    for rel in &manifest.entry.libs {
-        let key = src.resolve(dir, rel).map_err(LoadError::law)?;
-        let text = read_source_text(src, &key)?;
-        src_text.push('\n');
-        src_text.push_str(&text);
-    }
-    Ok(fold_peers(
-        Pkg {
-            body: PkgBody::Source { text: src_text, is_decl: false },
-            entry: manifest.entry.clone(),
-            ..Default::default()
-        },
-        manifest,
-        dir_peer_libs(&PathBuf::from(dir), manifest),
-    ))
 }
 
 /// The manifest's `consts` rows as the host body's constant table:
@@ -489,16 +609,6 @@ fn manifest_consts(manifest: &Manifest) -> Vec<(String, rut_core::types::TypeId,
         .iter()
         .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
         .collect()
-}
-
-fn load_entry(src: &dyn Source, dir: &str, entry: &Entry) -> Result<String, LoadError> {
-    let rel = entry
-        .lib
-        .as_ref()
-        .or(entry.type_path.as_ref())
-        .ok_or_else(|| LoadError::law(format!("module in {dir} has no entry")))?;
-    let key = src.resolve(dir, rel).map_err(LoadError::law)?;
-    read_source_text(src, &key)
 }
 
 // ---------------------------------------------------------------------
@@ -890,6 +1000,8 @@ fn mount_url_dep(
     // and the riding law refuses a generic-owning unit that carries none
     let gen_source = rut_driver::loader::riding_source(&root_spec, &root, &entries, "", &manifest)
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+    let mods = rut_driver::loader::rows_mods(&entries, "")
+        .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     let libs = archive_peer_libs(&entries, "", url, &manifest)?;
     world.register(
         &root_spec,
@@ -897,6 +1009,7 @@ fn mount_url_dep(
             body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
             gen_source,
+            mods,
             peers: manifest_peers(&manifest),
             peer_libs: libs,
             // the archive's rows ride ITS ROOT — the run chain's
@@ -960,6 +1073,8 @@ fn mount_url_dep(
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
+                    mods: rut_driver::loader::rows_mods(&entries, &format!("{prefix}/"))
+                        .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
                     peers: manifest_peers(&dm),
                     peer_libs: libs,
                     ..Default::default()
