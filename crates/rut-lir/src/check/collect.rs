@@ -16,6 +16,9 @@ impl<'a> Ctx<'a> {
         // aliases) so every name is in scope before any field/signature
         // is resolved
         for it in &items {
+            // each file's decls resolve in THEIR module (phase 3): the
+            // item's span names its file
+            self.cur_mod = self.mod_of(it.id()).to_string();
             match self.ast.item(*it) {
             ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
             ItemKind::Struct { vis, name, generics, methods, .. } => {
@@ -38,10 +41,12 @@ impl<'a> Ctx<'a> {
         // shapes)
         for it in &items {
             if let ItemKind::Alias(d) = self.ast.item(*it) {
+                self.cur_mod = self.mod_of(it.id()).to_string();
                 self.validate_alias(d.name);
             }
         }
         for it in &items {
+            self.cur_mod = self.mod_of(it.id()).to_string();
             match self.ast.item(*it) {
                 ItemKind::Struct { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
                     // generic records instantiate on use (mk_data_inst), so
@@ -67,6 +72,7 @@ impl<'a> Ctx<'a> {
         }
         // pass 2: impls, fns, lets
         for it in &items {
+            self.cur_mod = self.mod_of(it.id()).to_string();
             match self.ast.item(*it) {
                 // the one impl form: inherent
                 ItemKind::Impl { generics, target, methods, .. } => {
@@ -77,7 +83,19 @@ impl<'a> Ctx<'a> {
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
                     if self.fn_index.contains(&f.name) {
-                        self.err(self.ast.span(it.id()), format!("duplicate fn `{}`", self.name(f.name)));
+                        let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name) {
+                            Some((_, node)) if self.mod_of(node.id()) != self.cur_mod => {
+                                let home = self.mod_of(node.id()).to_string();
+                                format!(
+                                    "duplicate fn `{}` — already declared in module `{}` ({})",
+                                    self.name(f.name),
+                                    home,
+                                    ModInputs::display(&home)
+                                )
+                            }
+                            _ => format!("duplicate fn `{}`", self.name(f.name)),
+                        };
+                        self.err(self.ast.span(it.id()), msg);
                     }
                     self.fn_index.push(f.name);
                     self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
@@ -91,14 +109,21 @@ impl<'a> Ctx<'a> {
                         self.exports.push((f.name, u32::MAX));
                     }
                 }
-                ItemKind::ModuleLet { name, ty, init, .. } => {
-                    self.lets.push((*name, *ty, *init));
+                ItemKind::ModuleLet { name, ty, init, vis, .. } => {
+                    self.lets.push((*name, *ty, *init, *vis));
                 }
                 ItemKind::Use { names, .. } => {
                     // record what the module wrote — the binding gate for
-                    // used surfaces (used, never ambient)
+                    // used surfaces (used, never ambient). Phase 3: the
+                    // binding is per FILE — each name records the module
+                    // whose file bound it (a flat package records one
+                    // module, `""`, and gates exactly as before).
                     for n in names {
                         self.used.insert(*n);
+                        let sites = self.use_sites.entry(*n).or_default();
+                        if !sites.contains(&self.cur_mod) {
+                            sites.push(self.cur_mod.clone());
+                        }
                     }
                     // module loading is resolved by the driver before body
                     // compilation; without it, use statements
@@ -124,7 +149,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[IdentId]) {
         let sp = self.ast.node(node).span;
         if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
-            self.err(sp, format!("duplicate type name `{}`", self.name(name)));
+            self.err(sp, self.dup_type_msg(name));
             return;
         }
         // member values: sequential from 0
@@ -134,7 +159,7 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Enum { members: vals },
         });
         let member_ids: Vec<IdentId> = members.to_vec();
-        self.enums.push((name, EnumDecl { ty, members: member_ids, methods: Vec::new() }));
+        self.enums.push((name, EnumDecl { ty, members: member_ids, methods: Vec::new(), node, vis: _vis }));
     }
 
     /// Pass 1a — intern a struct/class placeholder and register its name.
@@ -152,7 +177,7 @@ impl<'a> Ctx<'a> {
     ) {
         let sp = self.ast.span(node);
         if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
-            self.err(sp, format!("duplicate type name `{}`", self.name(name)));
+            self.err(sp, self.dup_type_msg(name));
             return;
         }
         // the positional spelling rides the decl — the call
@@ -187,6 +212,7 @@ impl<'a> Ctx<'a> {
                 generics: generics.to_vec(),
                 requires: requires.to_vec(),
                 newtype,
+                vis: _vis,
             },
         ));
     }
@@ -280,7 +306,7 @@ impl<'a> Ctx<'a> {
             || self.find_enum(d.name).is_some()
             || self.find_iface(d.name).is_some()
         {
-            self.err(sp, format!("duplicate type name `{}`", self.name(d.name)));
+            self.err(sp, self.dup_type_msg(d.name));
             return;
         }
         self.aliases.push(AliasDecl {
@@ -288,6 +314,7 @@ impl<'a> Ctx<'a> {
             node,
             target: d.target,
             resolved: None,
+            vis: d.vis,
         });
     }
 
@@ -303,7 +330,7 @@ impl<'a> Ctx<'a> {
     ) {
         let sp = self.ast.span(node);
         if self.find_iface(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_alias(name).is_some() {
-            self.err(sp, format!("duplicate type name `{}`", self.name(name)));
+            self.err(sp, self.dup_type_msg(name));
             return;
         }
         let id = if generics.is_empty() {
@@ -319,8 +346,8 @@ impl<'a> Ctx<'a> {
             id,
             node,
             generics: generics.to_vec(),
+            vis,
         }));
-        let _ = vis;
     }
 
     /// Pass 1b — resolve a declared trait's method signatures.
@@ -526,12 +553,17 @@ impl<'a> Ctx<'a> {
             decl.generics.iter().cloned().zip(args.iter().cloned()).collect();
         // inline bounds gate the completed substitution —
         // the cache insert above keeps a bound-triggering instantiation of
-        // the same record from recursing
+        // the same record from recursing. The decl's fields and bounds
+        // resolve in the DECL's module (phase 3) — a call site in any
+        // other module substitutes into the declaration's own scope.
+        let saved_mod = self.cur_mod.clone();
+        self.cur_mod = self.mod_of(decl.node.id()).to_string();
         self.admit_bounds(&decl.requires, &env, sp);
         let field_nodes: Vec<NodeHandle<FieldDeclNode>> = match self.ast.item(decl.node) {
             ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
             _ => Vec::new(),
         };
+
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in &field_nodes {
             let fd = self.ast.field_decl(*f);
@@ -547,6 +579,7 @@ impl<'a> Ctx<'a> {
                 ty: fty,
             });
         }
+        self.cur_mod = saved_mod;
         let pi = self.types.dense(ty) as usize;
         self.types.types[pi].kind = TyKind::Data { fields: resolved };
         // the owner-anchored ledger row: wherever this unit's copy of the

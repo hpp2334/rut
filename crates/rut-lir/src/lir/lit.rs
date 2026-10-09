@@ -646,12 +646,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
                     let saved_self = self.self_ty;
                     self.self_ty = Some(sty);
+                    // the field types resolve in the DECL's module (phase 3)
+                    let saved_mod = self.ctx.cur_mod.clone();
+                    self.ctx.cur_mod = self.ctx.mod_of(d.node.id()).to_string();
                     let mut list = Vec::new();
                     for f in &field_nodes {
                         let fd = self.ctx.ast.field_decl(*f);
                         let fty = self.resolve_type_now(fd.ty);
                         list.push((fd.name, fty, fd.init));
                     }
+                    self.ctx.cur_mod = saved_mod;
                     self.subst = saved_subst;
                     self.self_ty = saved_self;
                     (dname, d.kind, list, class_subst)
@@ -721,11 +725,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         continue;
                     }
                     Some(init) => {
-                        // initializers are class code: resolve under the class subst
+                        // initializers are class code: resolve under the class subst,
+                        // in the decl's module (phase 3)
                         let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
                         let saved_self = self.self_ty;
+                        let saved_mod = self.ctx.cur_mod.clone();
+                        if let Some((_, d)) = self.ctx.datas.iter().find(|(n, _)| *n == dname) {
+                            self.ctx.cur_mod = self.ctx.mod_of(d.node.id()).to_string();
+                        }
                         self.self_ty = Some(sty);
                         let t = self.compile_expr(*init, Some(*fty));
+                        self.ctx.cur_mod = saved_mod;
                         self.subst = saved_subst;
                         self.self_ty = saved_self;
                         let t = t?;

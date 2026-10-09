@@ -958,16 +958,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let ename = segs[0].name;
                     let mname = segs[1].name;
                     // a LOCAL enum's decl or a USED enum's binding — the
-                    // same members the member-path expression reads
+                    // same members the member-path expression reads; the
+                    // local half resolves in the CURRENT module (phase 3)
                     let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
-                        if let Some(e) = self.ctx.find_enum(ename).cloned() {
+                        if let Some(e) = self.ctx.enum_here(ename) {
                             let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
                                 TyKind::Enum { members } => members.clone(),
                                 _ => vec![],
                             };
                             Some((e.ty, members))
-                        } else {
+                        } else if self.ctx.use_bound_here(ename) {
                             self.ctx.extern_enum(ename)
+                        } else {
+                            None
                         };
                     if let Some((ety, members)) = enum_hit {
                         if ety == scrut_ty {

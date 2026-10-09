@@ -24,6 +24,9 @@ pub use compile::{
 };
 pub use decl::lower_decl_module;
 pub use graph::GraphOutput;
+/// The file-module compile inputs (phase 3) — re-exported for the
+/// tests and embedders that spell a unit's module layout directly.
+pub use rut_lir::check::{ModInputs, ModScope};
 pub use loader::{
     bundle_entry_pkg, bundle_walk_bytes, riding_gen_source, sha256_hex,
 };

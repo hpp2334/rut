@@ -6,6 +6,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Compile one instantiation into `ctx.funcs[fid]`.
     pub fn compile(ctx: &mut Ctx<'a>, inst: &Inst, fid: u32) -> TcResult<()> {
+        // every body resolves in its DECL's module (phase 3): the key's
+        // node names the file, the span names the module. Bare names
+        // and qualified heads from here on walk that module's scope.
+        match &inst.key {
+            FnKey::Lambda(n) | FnKey::AsyncBlock(n) => ctx.cur_mod = ctx.mod_of(*n).to_string(),
+            FnKey::ForOfEmit { body, .. } => ctx.cur_mod = ctx.mod_of(*body).to_string(),
+            FnKey::HostThunk(_) => {}
+            FnKey::Free(name) => {
+                if let Some((_, node)) = ctx.fn_nodes.iter().find(|(n, _)| *n == *name) {
+                    ctx.cur_mod = ctx.mod_of(node.id()).to_string();
+                }
+            }
+            FnKey::Method { data, .. } => {
+                // methods live in the type's file (the placement law),
+                // so the type decl's module is the body's
+                let dn = ctx
+                    .datas
+                    .iter()
+                    .find(|(n, _)| *n == *data)
+                    .map(|(_, d)| d.node.id())
+                    .or_else(|| ctx.enums.iter().find(|(n, _)| *n == *data).map(|(_, e)| e.node));
+                if let Some(dn) = dn {
+                    ctx.cur_mod = ctx.mod_of(dn).to_string();
+                }
+            }
+        }
         // lambdas carry their capture list in ctx.lambda_info
         if let FnKey::Lambda(lambda_node) = inst.key {
             return Self::compile_lambda_fn(ctx, inst, fid, lambda_node);

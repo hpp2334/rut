@@ -118,14 +118,72 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         if segs.len() == 2 {
+            // the qualified call (`layout.mk(..)`) rides FIRST: the
+            // head names a child mod of the current module or of an
+            // ancestor. `None` falls to the static-call form
+            // (`Type.member(..)`) — today's arm, unchanged.
+            if let Some(r) =
+                self.compile_qualified_call(&segs[..1], segs[1].name, &segs[1].generics, &args, expected, sp)
+            {
+                return r;
+            }
             let base = segs[0].name;
             let member = segs[1].name;
+            // a used package's name as the head: uses are the only
+            // cross-package door — the diagnostic names the use fix
+            if self.ctx.used_pkgs.contains(self.ctx.name(base)) {
+                self.package_head_error(&segs[..1], segs[1].name, sp);
+                return Err(());
+            }
+            // the static head is a bare type name: it resolves in the
+            // current module (phase 3). A type of another module names
+            // its qualified spelling.
+            if let Some(home) = self.ctx.type_home(base) {
+                if home != self.ctx.cur_mod {
+                    let q = home.replace('/', ".");
+                    let prefix = if q.is_empty() { String::new() } else { format!("{q}.") };
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}.{}`(..)",
+                            self.ctx.name(base),
+                            crate::check::ModInputs::display(&home),
+                            prefix,
+                            self.ctx.name(base),
+                            self.ctx.name(member),
+                        ),
+                    );
+                    return Err(());
+                }
+            }
             let base_generics = segs[0].generics.clone();
             let member_generics = segs[1].generics.clone();
             return self.compile_static_call(base, base_generics, member, member_generics, args, expected, sp);
         }
-        if segs.len() != 1 {
-            self.ctx.err(sp, "unsupported call path (module loading is not available in this build)");
+        if segs.len() >= 3 {
+            // `pkg.a.Type.member(..)` — the unified mod walk, then the
+            // leaf or the static form on the walked module's type
+            if let Some(r) = self.compile_qualified_call(
+                &segs[..segs.len() - 1],
+                segs[segs.len() - 1].name,
+                &segs[segs.len() - 1].generics,
+                &args,
+                expected,
+                sp,
+            ) {
+                return r;
+            }
+            if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
+                self.package_head_error(&segs[..segs.len() - 1], segs[segs.len() - 1].name, sp);
+                return Err(());
+            }
+            self.ctx.err(
+                sp,
+                format!(
+                    "unknown call path `{}` — calls go through a module (`mod.fn(..)`) or a type (`Type.member(..)`)",
+                    segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
+                ),
+            );
             return Err(());
         }
         let name = segs[0].name;
@@ -304,12 +362,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {}
         }
-        // user free fn (monomorphized instantiation)
-        if self.ctx.find_free_fn(name) {
+        // user free fn (monomorphized instantiation) — single names
+        // resolve in the CURRENT module (phase 3; flat packages gate
+        // identically: every fn is the root's)
+        if self.ctx.fn_is_here(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
         // used function: signature from the surface, a direct call to the
-        // exporter's scope-qualified id
+        // exporter's scope-qualified id. The binding gate is per file
+        // (phase 3): the name binds in the module whose file used it.
+        if self.ctx.use_bound_here(name) {
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {            // the host future lane (phase 4): an async host fn's call
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
@@ -384,12 +446,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
             return Ok(ef.ret);
         }
+        }
         // a used GENERIC fn (the linkable-classes phase): the body
         // lives per argument list in the owner — infer the type
         // arguments against the placeholder signature, mint the mirror
         // instantiation, and request the body
+        if self.ctx.use_bound_here(name) {
         if let Some(gf) = self.ctx.extern_generic_fn(name).cloned() {
             return self.compile_extern_generic_fn_call(name, &gf, generics, args, expected, sp);
+        }
         }
         // builtin bytes type-call: `bytes(n)` zeroed
         if name == sym::BYTES {
@@ -406,7 +471,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
             return Err(());
         }
-        if let Some(d) = self.ctx.find_data(name).cloned() {
+        // the local type-call (`JsonI64(64)`, the designated `Point(..)`)
+        // resolves in the CURRENT module (phase 3)
+        if let Some(d) = self.ctx.data_here(name) {
             // the newtype decl's call construction — `JsonI64(64)`: the
             // spelled constructor, the manufacture mechanism. The arm
             // stays FIRST (Law: the newtype's call surface already IS
@@ -453,6 +520,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // class's construction is a (designated) class method, a used
         // struct's a literal. An unknown name keeps the ordinary miss
         // below.
+        if self.ctx.use_bound_here(name) {
         if let Some(&t) = self.ctx.extern_types.get(&name) {
             if self.ctx.extern_classes.contains(&t) {
                 self.ctx.err(sp, format!(
@@ -467,12 +535,240 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             return Err(());
         }
+        }
         let msg = self
             .ctx
             .not_in_core_scope(name)
+            .or_else(|| self.ctx.use_elsewhere_hint(name))
+            .or_else(|| self.ctx.elsewhere_hint(name, "fn"))
             .unwrap_or_else(|| format!("unknown function `{}`", self.ctx.name(name)));
         self.ctx.err(sp, msg);
         Err(())
+    }
+
+    /// The qualified CALL (`layout.column(..)`, two segments): the
+    /// head names a child `mod` of the current module or of an
+    /// ancestor; the leaf is that module's fn (the ordinary free-fn
+    /// call) or its type-call (newtype / designated constructor),
+    /// gated by the crossing predicate. `None` = the head is not a
+    /// module — the caller's static-call form carries on.
+    /// The cross-package head's refusal (positions, phase 3): a used
+    /// package's name may head neither a value nor a type position —
+    /// uses are the only cross-package door, and the diagnostic spells
+    /// the exact `use` that opens it. `segs` is the receiver chain,
+    /// `leaf` the trailing name (the method's, or the path's last).
+    pub(crate) fn package_head_error(
+        &mut self,
+        segs: &[PathSeg],
+        leaf: IdentId,
+        sp: rut_lexer::span::Span,
+    ) {
+        let mut fix = String::new();
+        for s in segs {
+            fix.push_str(self.ctx.name(s.name));
+            fix.push_str("::");
+        }
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` is a package, not a module — uses are the only cross-package door: `use {}{{ {} }}` first",
+                self.ctx.name(segs[0].name),
+                fix,
+                self.ctx.name(leaf)
+            ),
+        );
+    }
+
+    /// The unified qualified CALL (`layout.mk(3)`, `pkg.a.five()`,
+    /// `a.c.Circle.area(..)`): `segs` is the receiver path, `name` the
+    /// trailing member. The head names a child `mod` of the current
+    /// module or of an ancestor (nearest scope wins; the unit's own
+    /// pkg name names the root); each further segment walks child mods
+    /// until one names a TYPE of the walked module — the static form
+    /// (`Type.member(..)`) — or the walk exhausts and `name` is the
+    /// leaf (a fn, or the module's type-call). Every crossing runs the
+    /// visibility predicate. `None` = the head is not a module — the
+    /// caller's ordinary arms carry on.
+    pub(crate) fn compile_qualified_call(
+        &mut self,
+        segs: &[PathSeg],
+        name: IdentId,
+        generics: &[NodeHandle<AnyTy>],
+        args: &[NodeHandle<AnyExpr>],
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> Option<TcResult<TypeId>> {
+        if segs.is_empty() || !segs[0].generics.is_empty() {
+            return None; // generics on a non-module segment: not a mod path
+        }
+        let from = self.ctx.cur_mod.clone();
+        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
+            if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
+                self.package_head_error(segs, name, sp);
+                return Some(Err(()));
+            }
+            return None;
+        };
+        for (i, seg) in segs.iter().enumerate().skip(1) {
+            // a child mod extends the walk
+            if let Some((path, _vis)) = self
+                .ctx
+                .mods
+                .scopes
+                .get(&m)
+                .and_then(|s| s.children.get(self.ctx.name(seg.name)))
+            {
+                m = path.clone();
+                continue;
+            }
+            // a non-mod segment ends the chain — only as the LAST
+            // receiver segment, the walked module's static form
+            // (`Type.member(..)`)
+            if i != segs.len() - 1 {
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` is not a module under `{}` — only `mod` children extend a qualified path",
+                        self.ctx.name(seg.name),
+                        m
+                    ),
+                );
+                return Some(Err(()));
+            }
+            let vis = if let Some(d) = self.ctx.data_in(&m, seg.name) {
+                d.vis
+            } else if let Some(e) = self.ctx.enum_in(&m, seg.name) {
+                e.vis
+            } else {
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` is not declared in module `{m}` ({})",
+                        self.ctx.name(seg.name),
+                        crate::check::ModInputs::display(&m),
+                    ),
+                );
+                return Some(Err(()));
+            };
+            if !self.ctx.vis_crosses(&from, &m, vis) {
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{m}.{}(..)` — {}",
+                        self.ctx.name(seg.name),
+                        self.ctx.vis_hint(seg.name, &from, &m, vis)
+                    ),
+                );
+                return Some(Err(()));
+            }
+            return Some(self.compile_static_call(
+                seg.name,
+                seg.generics.clone(),
+                name,
+                generics.to_vec(),
+                args.to_vec(),
+                expected,
+                sp,
+            ));
+        }
+        // the whole receiver walked as mods: `name` is the leaf
+        let found = self.ctx.fn_in(&m, name).is_some()
+            || self.ctx.data_in(&m, name).is_some()
+            || self.ctx.enum_in(&m, name).is_some()
+            || self.ctx.let_in(&m, name).is_some();
+        if !found {
+            let msg = match self.ctx.decl_home(name) {
+                Some(home) => format!(
+                    "`{}` is not declared in module `{m}` ({}) — it lives in module `{home}`",
+                    self.ctx.name(name),
+                    crate::check::ModInputs::display(&m),
+                ),
+                None => format!(
+                    "`{}` is not declared in module `{m}` ({})",
+                    self.ctx.name(name),
+                    crate::check::ModInputs::display(&m),
+                ),
+            };
+            self.ctx.err(sp, msg);
+            return Some(Err(()));
+        }
+        let vis_gate = |ctx: &Ctx, name: IdentId, vis: Vis| -> Option<String> {
+            if ctx.vis_crosses(&from, &m, vis) {
+                None
+            } else {
+                Some(format!("`{m}. {}` — {}", ctx.name(name), ctx.vis_hint(name, &from, &m, vis)))
+            }
+        };
+        if let Some(fnode) = self.ctx.fn_in(&m, name) {
+            if let Some(msg) = vis_gate(&self.ctx, name, self.ctx.ast.fn_decl(fnode).vis) {
+                self.ctx.err(sp, msg);
+                return Some(Err(()));
+            }
+            // names are package-unique: the ordinary free-fn call
+            let g = generics.to_vec();
+            return Some(self.compile_free_fn_call(name, g, args.to_vec(), expected, sp));
+        }
+        if let Some(d) = self.ctx.data_in(&m, name) {
+            if let Some(msg) = vis_gate(&self.ctx, name, d.vis) {
+                self.ctx.err(sp, msg);
+                return Some(Err(()));
+            }
+            // the type-call arms, exactly like the bare spelling
+            if d.newtype {
+                let g = generics.to_vec();
+                return Some(self.compile_newtype_ctor(name, &d, g, args.to_vec(), expected, sp));
+            }
+            if let Some(&ctor) = self.ctx.class_ctors.get(&name) {
+                return Some(self.compile_static_call(
+                    name,
+                    generics.to_vec(),
+                    ctor,
+                    vec![],
+                    args.to_vec(),
+                    expected,
+                    sp,
+                ));
+            }
+            if d.kind == crate::check::DataKind::Class {
+                self.ctx.err(sp, format!(
+                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    self.ctx.name(name)
+                ));
+            } else {
+                self.ctx.err(sp, format!(
+                    "construction is a method call, never a type-call — use a struct literal `{} {{ .. }}`",
+                    self.ctx.name(name)
+                ));
+            }
+            return Some(Err(()));
+        }
+        if let Some(e) = self.ctx.enum_in(&m, name) {
+            if let Some(msg) = vis_gate(&self.ctx, name, e.vis) {
+                self.ctx.err(sp, msg);
+                return Some(Err(()));
+            }
+            self.ctx.err(sp, format!(
+                "`{}` is an enum — construct a member: `{}.Member`",
+                self.ctx.name(name),
+                self.ctx.name(name)
+            ));
+            return Some(Err(()));
+        }
+        // a module let is a constant, not a callable
+        if self.ctx.let_in(&m, name).is_some() {
+            if let Some((_, _, _, lvis)) = self.ctx.let_in(&m, name) {
+                if let Some(msg) = vis_gate(&self.ctx, name, lvis) {
+                    self.ctx.err(sp, msg);
+                    return Some(Err(()));
+                }
+            }
+            self.ctx.err(
+                sp,
+                format!("`{}` is a constant — it takes no arguments", self.ctx.name(name)),
+            );
+            return Some(Err(()));
+        }
+        None
     }
 
 

@@ -31,6 +31,11 @@ pub struct EnumDecl {
     /// inherent methods (`impl Color { .. }`): statics and self
     /// methods alike, exactly the struct decl's slot
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    /// the `enum` item's node — the declaration's module is read off
+    /// its span (file modules, phase 3)
+    pub node: NodeId,
+    /// the declared visibility — the crossing predicate's input
+    pub vis: Vis,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +65,8 @@ pub struct DataDecl {
     /// that arms the call construction `JsonI64(64)` — the spelled
     /// constructor. A braced class never gets one (the seal holds).
     pub newtype: bool,
+    /// the declared visibility — the crossing predicate's input
+    pub vis: Vis,
 }
 
 #[derive(Clone, Debug)]
@@ -68,6 +75,8 @@ pub struct IfaceDeclInfo {
     pub node: NodeId,
     /// generic parameters (`trait Foo<T>`) — empty for non-generic ones
     pub generics: Vec<IdentId>,
+    /// the declared visibility — the crossing predicate's input
+    pub vis: Vis,
 }
 
 /// What a validated type alias resolves to. A single target
@@ -92,6 +101,8 @@ pub struct AliasDecl {
     /// the target as written
     pub target: NodeHandle<AnyTy>,
     pub resolved: Option<AliasTarget>,
+    /// the declared visibility — the crossing predicate's input
+    pub vis: Vis,
 }
 
 /// A generic type bound from a used module's surface: the declaring
@@ -229,6 +240,90 @@ pub struct Inst {
     pub iface_origins: Vec<TypeId>,
 }
 
+// ---- file modules: the resolution inputs (phase 3) ----
+
+/// One file module's scope in the package's module tree. `""` is the
+/// pkg root (its `mod.rut`); every mounted child carries the parent
+/// path it nests under and the `mod NAME;` edges it declares. A flat
+/// package carries no scopes at all — every lookup degrades to the
+/// flat behavior (the fast path stays flat).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModScope {
+    /// the parent mod path (`""` for the root itself)
+    pub parent: String,
+    /// `mod NAME;` edges declared by this file: the child's name →
+    /// (its mod path, the edge's visibility)
+    pub children: std::collections::BTreeMap<String, (String, Vis)>,
+}
+
+/// The module inputs one compilation resolves against: the concatenated
+/// text's file layout (byte range → mod path) and the scope tree the
+/// loader mounted. The driver assembles it from the pkg's mounted
+/// module set; the Ctx reads it for every mod-aware lookup.
+#[derive(Clone, Debug, Default)]
+pub struct ModInputs {
+    /// `(byte offset where the file's text starts, its mod path)` —
+    /// ascending; the root starts at 0. A declaration's module is read
+    /// off its span: the offset falls in exactly one file's range.
+    pub files: Vec<(u32, String)>,
+    /// one scope per mounted file, keyed by mod path (the root's `""`
+    /// row is present only when children exist)
+    pub scopes: std::collections::BTreeMap<String, ModScope>,
+}
+
+impl ModInputs {
+    /// A flat package's inputs: no files, no scopes — every
+    /// module-aware lookup answers the root module `""`.
+    pub fn flat() -> ModInputs {
+        ModInputs::default()
+    }
+
+    /// True when the compilation has no module structure — every decl
+    /// lives in the root module and resolution takes today's flat path.
+    pub fn is_flat(&self) -> bool {
+        self.scopes.is_empty()
+    }
+
+    /// The file module a byte offset belongs to: the last file whose
+    /// range contains it (peer-group splices past the last mod row
+    /// attribute to the root — the driver lays a `""` sentinel row
+    /// there). No layout = the flat root.
+    pub fn file_of(&self, offset: u32) -> &str {
+        match self.files.binary_search_by_key(&offset, |(s, _)| *s) {
+            Ok(i) => self.files[i].1.as_str(),
+            Err(0) => "",
+            Err(i) => self.files[i - 1].1.as_str(),
+        }
+    }
+
+    /// The declaring file's display path: `""` is `mod.rut`, a child
+    /// `<parent>/mod.rut` — the exact spelling the diagnostics name.
+    pub fn display(path: &str) -> String {
+        if path.is_empty() {
+            "mod.rut".to_string()
+        } else {
+            format!("{path}/mod.rut")
+        }
+    }
+}
+
+/// Segment-aware subtree test: is `from` `anc` itself or one of its
+/// descendants? Plain `starts_with` would read `ab` under `a`.
+pub(crate) fn under(from: &str, anc: &str) -> bool {
+    if anc.is_empty() {
+        return true;
+    }
+    from == anc || from.starts_with(&format!("{anc}/"))
+}
+
+/// A mod path's parent (`"a/b"` → `"a"`, `""`/`"a"` → `""`).
+pub(crate) fn parent_of(path: &str) -> &str {
+    match path.rsplit_once('/') {
+        Some((p, _)) => p,
+        None => "",
+    }
+}
+
 pub struct Ctx<'a> {
     pub ast: &'a Ast,
     /// the module's interner: a clone of the AST's at construction (so all
@@ -281,7 +376,7 @@ pub struct Ctx<'a> {
     /// carried-type law: the mirror's ledger row names the type's HOME
     /// unit, so link unifies it with the real body)
     pub pending_mirror_owner: Option<String>,
-    pub lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)>,
+    pub lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)>,
     // name → index maps
     pub fn_index: Vec<IdentId>,
     /// free fn decl nodes: (name, Fn node)
@@ -425,6 +520,24 @@ pub struct Ctx<'a> {
     /// inputs are this spec and the bound names' exporters
     /// ([`Ctx::extern_origins`]).
     pub own_spec: String,
+    /// The module inputs (phase 3): the file layout + scope tree this
+    /// compilation resolves against. Flat by default — a single-file
+    /// package resolves exactly as before.
+    pub mods: ModInputs,
+    /// The module currently being resolved/compiled: set per collected
+    /// item (its declaring file), per compiled fn/method body (its
+    /// decl's file), and around every on-behalf-of-a-decl resolution
+    /// (fields, signatures, surfaces). `""` = the pkg root.
+    pub cur_mod: String,
+    /// Every `use`-bound name → the mod paths whose files bound it
+    /// (uses are per file: the binding gate for used surfaces from
+    /// other packages). Empty = flat (the unit's own uses gate
+    /// everything, exactly as before).
+    pub use_sites: std::collections::HashMap<IdentId, Vec<String>>,
+    /// The packages this unit's `use` statements name — a qualified
+    /// head that names one of these is the cross-package spelling the
+    /// position grammar refuses, and the diagnostic names the use fix.
+    pub used_pkgs: std::collections::HashSet<String>,
     /// the origin pkg of every bound (used) name: a used
     /// type's or trait's DECLARING pkg, recorded beside the binding —
     /// the origin map covers only spliced text, a linked dep contributes
@@ -641,6 +754,10 @@ impl<'a> Ctx<'a> {
             async_fns: std::collections::HashSet::new(),
             allow_uses: false,
             own_spec: String::new(),
+            mods: ModInputs::flat(),
+            cur_mod: String::new(),
+            use_sites: std::collections::HashMap::new(),
+            used_pkgs: std::collections::HashSet::new(),
             extern_origins: std::collections::HashMap::new(),
             pub_core,
             inst_map: std::collections::HashMap::new(),
@@ -675,6 +792,285 @@ impl<'a> Ctx<'a> {
             )
         })
     }
+
+    // ---- file-module resolution helpers (phase 3) ----
+
+    /// The file module a node belongs to: its span's byte start falls
+    /// in exactly one mounted file's range (flat inputs answer `""`).
+    pub fn mod_of(&self, node: NodeId) -> &str {
+        self.mods.file_of(self.ast.span(node).lo)
+    }
+
+    /// The visibility predicate (the flat `is_pub = vis == Vis::Pub`
+    /// grown up): may `from` see a decl declared in `def_mod` with
+    /// visibility `vis`? Paths are pkg-relative, `""` is the root.
+    /// `Pub` and `Pkg` pass within the package by construction (`pub`
+    /// alone crosses packages — the use-binding gate checks that
+    /// separately); `Super` reaches the parent module's subtree;
+    /// `Self_` reaches the declaring module and its descendants.
+    pub(crate) fn vis_crosses(&self, from: &str, def_mod: &str, vis: Vis) -> bool {
+        match vis {
+            Vis::Pub | Vis::Pkg => true,
+            Vis::Super => under(from, parent_of(def_mod)),
+            Vis::Self_ => under(from, def_mod),
+        }
+    }
+
+    /// The qualified-head walk: `name` must be a `mod` child of the
+    /// current module or of one of its ancestors, nearest scope wins.
+    /// Answers the child's mod path. One extra law: the unit's OWN pkg
+    /// name names the root module (the only spelling that reaches the
+    /// root's decls from a child — `pkg::helper` from `pkg/grid`).
+    pub(crate) fn resolve_mod_head(&self, from: &str, name: IdentId) -> Option<String> {
+        let mut cur = from.to_string();
+        loop {
+            if let Some(scope) = self.mods.scopes.get(&cur) {
+                if let Some((path, _vis)) = scope.children.get(self.name(name)) {
+                    return Some(path.clone());
+                }
+                if scope.parent == cur {
+                    break;
+                }
+                cur = scope.parent.clone();
+            } else {
+                break;
+            }
+        }
+        // the own-package head: the root module (a flat package has no
+        // children, so this only fires where it can mean something —
+        // and never in a flat package, where `pkg.name` was never a
+        // legal spelling)
+        if !self.mods.is_flat() && !self.own_spec.is_empty() && self.name(name) == self.own_spec {
+            return Some(String::new());
+        }
+        None
+    }
+
+    /// Walk a qualified path's INTERIOR segments as child mods: each
+    /// must be a `mod` child of the module the previous segment
+    /// resolved to. Answers the final module; `Err` names the first
+    /// segment that is not a module there, with the path walked so far
+    /// (the error's "under" spelling).
+    pub(crate) fn walk_mod_path(&self, start: &str, segs: &[PathSeg]) -> Result<String, (IdentId, String)> {
+        let mut cur = start.to_string();
+        for seg in segs {
+            let Some(scope) = self.mods.scopes.get(&cur) else {
+                return Err((seg.name, cur.clone()));
+            };
+            match scope.children.get(self.name(seg.name)) {
+                Some((path, _vis)) => cur = path.clone(),
+                None => return Err((seg.name, cur.clone())),
+            }
+        }
+        Ok(cur)
+    }
+
+    /// Is the name use-bound by the CURRENT module's file? Uses bind
+    /// per file; a flat package (no per-file records) gates exactly as
+    /// before — every binding counts.
+    pub(crate) fn use_bound_here(&self, name: IdentId) -> bool {
+        match self.use_sites.get(&name) {
+            None => true,
+            Some(sites) => sites.iter().any(|m| *m == self.cur_mod),
+        }
+    }
+
+    /// A free fn declared in the CURRENT module (single-seg call /
+    /// fn-value resolution). The flat path is unchanged: no layout,
+    /// every fn answers.
+    pub(crate) fn fn_is_here(&self, name: IdentId) -> bool {
+        match self.fn_nodes.iter().find(|(n, _)| *n == name) {
+            Some((_, node)) => self.mod_of(node.id()) == self.cur_mod,
+            None => false,
+        }
+    }
+
+    /// An enum declared in module `m` (the mod-gated lookup family the
+    /// resolution ladders read — `m` is the module a qualified path
+    /// resolved to, or the current module for single-seg names).
+    pub(crate) fn enum_in(&self, m: &str, name: IdentId) -> Option<EnumDecl> {
+        self.enums
+            .iter()
+            .find(|(n, d)| *n == name && self.mod_of(d.node) == m)
+            .map(|(_, d)| d.clone())
+    }
+
+    /// The current module's enum (single-seg resolution).
+    pub(crate) fn enum_here(&self, name: IdentId) -> Option<EnumDecl> {
+        self.enum_in(&self.cur_mod.clone(), name)
+    }
+
+    /// The current module's struct/class (single-seg resolution).
+    pub(crate) fn data_here(&self, name: IdentId) -> Option<DataDecl> {
+        self.data_in(&self.cur_mod.clone(), name)
+    }
+
+    /// The current module's interface (single-seg resolution).
+    pub(crate) fn iface_here(&self, name: IdentId) -> Option<IfaceDeclInfo> {
+        self.iface_in(&self.cur_mod.clone(), name)
+    }
+
+    /// The current module's type alias (single-seg resolution).
+    pub(crate) fn alias_here(&self, name: IdentId) -> Option<AliasDecl> {
+        self.alias_in(&self.cur_mod.clone(), name)
+    }
+
+    /// The "declared elsewhere" hint for a bare name that missed the
+    /// current module: name the module and the qualified spelling.
+    pub(crate) fn elsewhere_hint(&self, name: IdentId, kind: &str) -> Option<String> {
+        let home = self.decl_home(name)?;
+        if home == self.cur_mod {
+            return None;
+        }
+        let q = home.replace('/', ".");
+        let prefix = if q.is_empty() { String::new() } else { format!("{q}.") };
+        Some(format!(
+            "`{}` is declared in module `{}` ({}) — qualify it: `{}{}` (a bare {} name resolves in the current module only)",
+            self.name(name),
+            home,
+            ModInputs::display(&home),
+            prefix,
+            self.name(name),
+            kind,
+        ))
+    }
+
+    /// The "bound elsewhere" hint: the name rides another file's
+    /// `use` — this module needs its own.
+    pub(crate) fn use_elsewhere_hint(&self, name: IdentId) -> Option<String> {
+        let sites = self.use_sites.get(&name)?;
+        let other = sites.iter().find(|m| **m != self.cur_mod)?;
+        let where_ = if other.is_empty() {
+            "the root module".to_string()
+        } else {
+            format!("module `{other}`")
+        };
+        Some(format!(
+            "`{}` is use-bound in {} — this module needs its own `use` to bind it",
+            self.name(name),
+            where_
+        ))
+    }
+
+    /// A struct/class declared in module `m`.
+    pub(crate) fn data_in(&self, m: &str, name: IdentId) -> Option<DataDecl> {
+        self.datas
+            .iter()
+            .find(|(n, d)| *n == name && self.mod_of(d.node.id()) == m)
+            .map(|(_, d)| d.clone())
+    }
+
+    /// An interface declared in module `m`.
+    pub(crate) fn iface_in(&self, m: &str, name: IdentId) -> Option<IfaceDeclInfo> {
+        self.iface_decls
+            .iter()
+            .find(|(n, d)| *n == name && self.mod_of(d.node) == m)
+            .map(|(_, d)| d.clone())
+    }
+
+    /// A type alias declared in module `m`.
+    pub(crate) fn alias_in(&self, m: &str, name: IdentId) -> Option<AliasDecl> {
+        self.aliases
+            .iter()
+            .find(|a| a.name == name && self.mod_of(a.node) == m)
+            .cloned()
+    }
+
+    /// A free fn declared in module `m` — its AST node.
+    pub(crate) fn fn_in(&self, m: &str, name: IdentId) -> Option<NodeHandle<FnNode>> {
+        self.fn_nodes
+            .iter()
+            .find(|(n, node)| *n == name && self.mod_of(node.id()) == m)
+            .map(|(_, node)| *node)
+    }
+
+    /// A module `let` declared in module `m`.
+    pub(crate) fn let_in(
+        &self,
+        m: &str,
+        name: IdentId,
+    ) -> Option<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
+        self.lets
+            .iter()
+            .find(|(n, _, init, _)| *n == name && self.mod_of(init.id()) == m)
+            .cloned()
+    }
+
+    /// Where does `name` live, if anywhere? The "declared elsewhere"
+    /// hint's lookup: the first module whose tables declare it. `None`
+    /// when the name is genuinely unknown (the caller keeps its plain
+    /// unknown-name diagnostic).
+    pub(crate) fn decl_home(&self, name: IdentId) -> Option<String> {
+        if let Some((_, d)) = self.datas.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node.id()).to_string());
+        }
+        if let Some((_, d)) = self.enums.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node).to_string());
+        }
+        if let Some((_, d)) = self.iface_decls.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node).to_string());
+        }
+        if let Some(a) = self.aliases.iter().find(|a| a.name == name) {
+            return Some(self.mod_of(a.node).to_string());
+        }
+        if let Some((_, node)) = self.fn_nodes.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(node.id()).to_string());
+        }
+        if let Some((_, _, init, _)) = self.lets.iter().find(|(n, ..)| *n == name) {
+            return Some(self.mod_of(init.id()).to_string());
+        }
+        None
+    }
+    /// The type-table home (enum/data/iface/alias only) — the
+    /// cross-module duplicate message's lookup.
+    pub(crate) fn type_home(&self, name: IdentId) -> Option<String> {
+        if let Some((_, d)) = self.datas.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node.id()).to_string());
+        }
+        if let Some((_, d)) = self.enums.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node).to_string());
+        }
+        if let Some((_, d)) = self.iface_decls.iter().find(|(n, _)| *n == name) {
+            return Some(self.mod_of(d.node).to_string());
+        }
+        if let Some(a) = self.aliases.iter().find(|a| a.name == name) {
+            return Some(self.mod_of(a.node).to_string());
+        }
+        None
+    }
+
+    /// The duplicate-type-name diagnostic: same module keeps the plain
+    /// message (today's text, byte for byte); across modules it names
+    /// where the name already lives.
+    pub(crate) fn dup_type_msg(&self, name: IdentId) -> String {
+        match self.type_home(name) {
+            Some(home) if home != self.cur_mod => format!(
+                "duplicate type name `{}` — already declared in module `{}` ({})",
+                self.name(name),
+                home,
+                ModInputs::display(&home)
+            ),
+            _ => format!("duplicate type name `{}`", self.name(name)),
+        }
+    }
+
+    /// The visibility-fix hint for a decl in `def_mod` with `vis`,
+    /// seen from `from`. The loud half of the crossing gate: each tier
+    /// names what would widen it.
+    pub(crate) fn vis_hint(&self, name: IdentId, from: &str, def_mod: &str, vis: Vis) -> String {
+        let n = self.name(name);
+        match vis {
+            Vis::Super => format!(
+                "`{n}` is `pub(super)` — visible only in `{}`'s subtree, and `{from}` is outside it",
+                parent_of(def_mod)
+            ),
+            _ => format!(
+                "`{n}` is private to module `{def_mod}` — visible only inside it and its submodules; \
+                 declare it `pub` (or `pub(pkg)`) to widen"
+            ),
+        }
+    }
+
 
     /// Use another module's type descriptors so `(scope, local)` ids
     /// resolve for typechecking and layout. Descriptor and
@@ -799,6 +1195,8 @@ impl<'a> Ctx<'a> {
             let Some((_, node)) = self.fn_nodes.iter().find(|(n, _)| *n == name).cloned() else {
                 continue;
             };
+            // the entry's signature resolves in its own module
+            self.cur_mod = self.mod_of(node.id()).to_string();
             let fd = self.ast.fn_decl(node).clone();
             let fname = self.name(name).to_string();
             if !fd.generics.is_empty() {
@@ -1145,8 +1543,8 @@ impl<'a> Ctx<'a> {
             .collect()
     }
 
-    pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> {
-        self.lets.iter().find(|(n, _, _)| *n == name)
+    pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
+        self.lets.iter().find(|(n, ..)| *n == name)
     }
     pub fn find_free_fn(&self, name: IdentId) -> bool {
         self.fn_index.contains(&name)

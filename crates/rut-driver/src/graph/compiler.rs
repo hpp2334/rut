@@ -9,7 +9,7 @@ use rut_lexer::span::Span;
 use rut_core::binary::Program;
 use rut_parser::{parse, Mode};
 
-use rut_ast::ast::{Ast, ItemKind};
+use rut_ast::ast::{Ast, ItemKind, Vis};
 
 use super::build_seed_groups;
 use crate::session::{PkgBody, Session};
@@ -60,6 +60,9 @@ pub(super) struct GraphCompiler<'a> {
     /// owners that received at least one NEW seed this round — the only
     /// units a resolution round re-resolves
     pub(super) fresh_owners: HashSet<String>,
+    /// deps' per-module decl rows (phase 3): the use validation's
+    /// table, parsed once per spec and shared across consumers
+    pub(super) dep_decls: HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
 }
 
 /// A linked source unit's compile inputs, recorded for the owner-side
@@ -68,6 +71,9 @@ pub(super) struct UnitSrc {
     text: String,
     is_decl: bool,
     bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)>,
+    /// the file-module layout the unit compiled with (phase 3) — the
+    /// replay must reassemble the same module tree
+    layout: rut_lir::check::ModInputs,
 }
 
 impl<'a> GraphCompiler<'a> {
@@ -365,16 +371,41 @@ impl<'a> GraphCompiler<'a> {
         is_decl: bool,
         scope: rut_core::ScopeId,
     ) -> Option<Unit> {
-        // the unit's text: this module's source, then the presence-gated
-        // peer groups (the "\n" seams are the old append shape). The
-        // parse runs over the COMBINED text — the groups' `use`
-        // statements join the unit's use list through the ordinary scan.
+        // the unit's text: this module's source, then the mounted mod
+        // files (phase 3 — each file keeps its own module scope; the
+        // concatenation is the compilation's byte layout, the file
+        // ranges attribute every decl to its module), then the
+        // presence-gated peer groups (the "\n" seams are the old append
+        // shape; peers splice into the ROOT module — integration text).
         let mut combined = src.to_string();
+        let mut files: Vec<(u32, String)> = vec![(0, String::new())];
+        for (path, m) in &module.mods {
+            combined.push('\n');
+            files.push((combined.len() as u32, path.clone()));
+            combined.push_str(&m.text);
+        }
         if !is_decl {
             for group in self.session.resolve(spec).map(|m| m.peer_groups.as_slice()).unwrap_or_default() {
                 combined.push('\n');
+                // the peer splices attribute to the root module: a
+                // `""` sentinel row past the last child
+                files.push((combined.len() as u32, String::new()));
                 combined.push_str(&group);
             }
+        }
+        // a declaration-mode pkg (a `.d.rut` surface) is body-free — a
+        // mod tree under it is incoherent (the children are bodies);
+        // refuse loudly, compile flat
+        if is_decl && !module.mods.is_empty() {
+            self.diags.push(Diag::new(
+                Span::new(0, 0),
+                format!(
+                    "`{spec}` is a declaration-mode pkg (`.d.rut`) and mounts {} file module(s) — \
+                     surface files are body-free; move the `mod` tree under an implementation pkg",
+                    module.mods.len()
+                ),
+            ));
+            return None;
         }
         let (ast, d) = parse(&combined, if is_decl { Mode::Decl } else { Mode::Impl });
         if !d.is_empty() {
@@ -384,16 +415,24 @@ impl<'a> GraphCompiler<'a> {
         // phase-2 plumbing: collect the pkg's mounted module set —
         // every file (root + children) parses to its own
         // `ItemKind::Module` root, declarations gathered with the mod
-        // path attached (phase 3 gates resolution/visibility on this).
-        // Here the collection runs for its LOUD half: a declared child
-        // with no mounted module, a mounted module nothing declares, a
-        // child that fails to parse — each named, never guessed around.
+        // path attached. Here the collection runs for its LOUD half: a
+        // declared child with no mounted module, a mounted module
+        // nothing declares, a child that fails to parse — each named,
+        // never guessed around.
         if !module.mods.is_empty() {
             let (_, problems) = crate::mods::collect_module_set(spec, module);
             for p in problems {
                 self.diags.push(Diag::new(Span::new(0, 0), p));
             }
         }
+        // phase 3: the use statements' mod paths validate against the
+        // DEPS' mounted trees (uses are the cross-package door — each
+        // segment must be a `pub mod` of the dep, the leaf names a
+        // `pub` decl of the walked module). Flat uses skip the walk.
+        if !self.validate_qualified_uses(spec, &ast, &files) {
+            return None;
+        }
+        let layout = mod_inputs_of(module, files);
         let uses = uses_of(&ast);
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
@@ -425,6 +464,7 @@ impl<'a> GraphCompiler<'a> {
             &bound,
             true,
             &Seeds::none(),
+            &layout,
         );
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
@@ -447,10 +487,10 @@ impl<'a> GraphCompiler<'a> {
         // host-pkgs plan, where calc becomes a declared package.
         // the exact compile inputs, for the owner-side recompile a
         // consumer request triggers (seeds aside, the replay is verbatim
-        // — same surface bindings, same text)
+        // — same surface bindings, same text, same module layout)
         self.unit_src.insert(
             spec.to_string(),
-            UnitSrc { text: combined, is_decl, bound },
+            UnitSrc { text: combined, is_decl, bound, layout },
         );
         let idx = self.programs.len();
         self.programs.push(program);
@@ -641,6 +681,7 @@ impl<'a> GraphCompiler<'a> {
             return;
         };
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
+        let layout = src.layout.clone();
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
         let out = compile_program_resolved(
             &text,
@@ -650,6 +691,7 @@ impl<'a> GraphCompiler<'a> {
             &bound,
             true,
             &Seeds { groups: &groups },
+            &layout,
         );
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
@@ -689,14 +731,25 @@ impl<'a> GraphCompiler<'a> {
             self.check_compiled_owner(owner, seeds);
             return;
         };
-        // the unit's text: the ridden source, then the peers' group
-        // files whose peers are in this program's closure (the presence
-        // law, peer-name order — the exact splice a directory owner's
-        // gate performs)
+        // the unit's text: the ridden source, then the mounted mod
+        // files (phase 3 — a mod-rooted pkg's children ride the rows and
+        // mount beside it; the recompile must reassemble the SAME tree
+        // the pack-time unit compiled), then the peers' group files
+        // whose peers are in this program's closure (the presence law,
+        // peer-name order — the exact splice a directory owner's gate
+        // performs)
         let mut text = gen.text.clone();
+        let mut files: Vec<(u32, String)> = vec![(0, String::new())];
+        let module = self.session.resolve(owner).ok();
+        for (path, m) in module.iter().flat_map(|m| m.mods.iter()) {
+            text.push('\n');
+            files.push((text.len() as u32, path.clone()));
+            text.push_str(&m.text);
+        }
         for (peer, group) in &gen.peers {
             if self.session.resolve(peer).is_ok() {
                 text.push('\n');
+                files.push((text.len() as u32, String::new()));
                 text.push_str(group);
             }
         }
@@ -723,6 +776,10 @@ impl<'a> GraphCompiler<'a> {
             }
         }
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
+        let layout = module
+            .as_ref()
+            .map(|m| mod_inputs_of(m, files))
+            .unwrap_or_else(|| rut_lir::check::ModInputs::flat());
         let out = compile_program_resolved(
             &text,
             Mode::Impl,
@@ -731,6 +788,7 @@ impl<'a> GraphCompiler<'a> {
             &bound,
             true,
             &Seeds { groups: &groups },
+            &layout,
         );
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
@@ -806,3 +864,170 @@ pub(crate) fn uses_of(ast: &Ast) -> Vec<String> {
     out
 }
 
+/// The file-module inputs a compilation resolves against (phase 3):
+/// the concatenated text's file ranges plus the scope tree built from
+/// the pkg's mounted module set (each child's parent segment implies
+/// the edge; `mod` vs `pub mod` rides the edge's vis).
+pub(crate) fn mod_inputs_of(
+    module: &crate::session::Pkg,
+    files: Vec<(u32, String)>,
+) -> rut_lir::check::ModInputs {
+    let mut inputs =
+        rut_lir::check::ModInputs { files, scopes: std::collections::BTreeMap::new() };
+    for (path, m) in &module.mods {
+        let (parent, name) = match path.rsplit_once('/') {
+            Some((p, n)) => (p.to_string(), n.to_string()),
+            None => (String::new(), path.clone()),
+        };
+        inputs
+            .scopes
+            .entry(parent.clone())
+            .or_default()
+            .children
+            .insert(name, (path.clone(), m.vis));
+        inputs.scopes.entry(path.clone()).or_default().parent = parent;
+    }
+    inputs
+}
+
+impl GraphCompiler<'_> {
+    /// The use statements' qualified paths validate against the DEPS'
+    /// mounted trees (phase 3): `use dep::a::b::{C}` walks `a::b` —
+    /// each segment must be a `pub mod` of the dep (a plain `mod` is
+    /// invisible from outside the package), and each leaf name must be
+    /// a `pub` decl of the walked module. Flat use (`use dep::{A,B}`)
+    /// is today's shape and skips the walk. `false` = diagnosed, the
+    /// unit fails.
+    fn validate_qualified_uses(&mut self, _spec: &str, ast: &Ast, files: &[(u32, String)]) -> bool {
+        let mut ok = true;
+        let session = self.session;
+        for it in ast.module_items(ast.root).to_vec() {
+            let ItemKind::Use { path, names } = ast.item(it) else {
+                continue;
+            };
+            if path.len() < 2 {
+                continue; // the flat spelling — today's shape
+            }
+            let dep_name = ast.name(path[0]).to_string();
+            // the using file's module (its span names the file) — kept
+            // for the diagnostics' "from" spelling
+            let from_at = match files.binary_search_by_key(&ast.span(it.id()).lo, |(s, _)| *s) {
+                Ok(i) => files[i].1.clone(),
+                Err(0) => String::new(),
+                Err(i) => files[i - 1].1.clone(),
+            };
+            let _ = &from_at;
+            let Ok(pkg) = session.resolve(&dep_name) else {
+                // an unknown dep: today's lanes name it; nothing to walk
+                continue;
+            };
+            // walk the mod path, one `pub mod` edge per segment
+            let mut at = String::new();
+            let mut walked = true;
+            for &seg in &path[1..] {
+                let seg_text = ast.name(seg);
+                let child = if at.is_empty() {
+                    seg_text.to_string()
+                } else {
+                    format!("{at}/{seg_text}")
+                };
+                let Some(edge) = pkg.mods.get(&child) else {
+                    if pkg.mods.is_empty() {
+                        self.diags.push(Diag::new(
+                            Span::new(0, 0),
+                            format!(
+                                "`{seg_text}` is not a module of `{dep_name}` — `{dep_name}` is a flat package; \
+                                 its names bind flat: `use {dep_name}::{{ .. }}`"
+                            ),
+                        ));
+                    } else {
+                        self.diags.push(Diag::new(
+                            Span::new(0, 0),
+                            format!(
+                                "`{seg_text}` is not a module of `{dep_name}` — no `mod {seg_text};` under {} \
+                                 (`use {dep_name}::..` walks the dep's mounted `mod` tree)",
+                                rut_lir::check::ModInputs::display(&at),
+                            ),
+                        ));
+                    }
+                    walked = false;
+                    break;
+                };
+                if edge.vis != Vis::Pub {
+                    self.diags.push(Diag::new(
+                        Span::new(0, 0),
+                        format!(
+                            "`{seg_text}` is not visible from outside the package (`mod`, not `pub mod`) — \
+                             spell `pub mod {seg_text};` in `{dep_name}`'s {} to widen it",
+                            rut_lir::check::ModInputs::display(&at),
+                        ),
+                    ));
+                    walked = false;
+                    break;
+                }
+                at = child;
+            }
+            if !walked {
+                ok = false;
+                continue;
+            }
+            // the leaf names: each must be a `pub` decl of the walked
+            // module (when the dep's rows are readable — a compiled
+            // root's decls ride its binary; the binding gate answers)
+            let is_source = self.dep_is_source(&dep_name);
+            // the verdicts compute under the table borrow, then diagnose
+            let verdicts: Vec<Option<String>> = {
+                let Some(table) = self.dep_mod_table(&dep_name) else { continue };
+                let Some(rows) = table.get(&at) else { continue };
+                if rows.is_empty() && !is_source {
+                    continue; // a compiled unit's decls are its binary's
+                }
+                names
+                    .iter()
+                    .map(|&n| {
+                        let text = ast.name(n);
+                        match rows.iter().find(|d| d.name == text) {
+                            None => Some(format!(
+                                "`{text}` is not declared in `{dep_name}`'s module `{at}` ({})",
+                                rut_lir::check::ModInputs::display(&at),
+                            )),
+                            Some(d) if d.vis != Vis::Pub => Some(format!(
+                                "`{text}` in `{dep_name}::{}` is not `pub` — only `pub` names cross packages",
+                                at.replace('/', "::"),
+                            )),
+                            _ => None,
+                        }
+                    })
+                    .collect()
+            };
+            for msg in verdicts.into_iter().flatten() {
+                self.diags.push(Diag::new(Span::new(0, 0), msg));
+                ok = false;
+            }
+        }
+        ok
+    }
+
+    /// The dep's per-module decl rows (parsed once per spec — the
+    /// consumers share it).
+    fn dep_mod_table(
+        &mut self,
+        spec: &str,
+    ) -> Option<&std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>> {
+        if !self.dep_decls.contains_key(spec) {
+            let pkg = self.session.resolve(spec).ok()?;
+            let (set, _) = crate::mods::collect_module_set(spec, pkg);
+            let table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
+                set.units.into_iter().map(|u| (u.path, u.decls)).collect();
+            self.dep_decls.insert(spec.to_string(), table);
+        }
+        self.dep_decls.get(spec)
+    }
+
+    fn dep_is_source(&self, spec: &str) -> bool {
+        self.session
+            .resolve(spec)
+            .map(|m| matches!(m.body, crate::session::PkgBody::Source { .. }))
+            .unwrap_or(false)
+    }
+}

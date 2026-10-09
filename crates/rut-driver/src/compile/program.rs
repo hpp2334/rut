@@ -84,7 +84,16 @@ pub fn compile_program(
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
 ) -> ProgramOutput {
-    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty(), &Seeds::none())
+    compile_program_resolved(
+        src,
+        mode,
+        module_name,
+        scope,
+        uses,
+        !uses.is_empty(),
+        &Seeds::none(),
+        &rut_lir::check::ModInputs::flat(),
+    )
 }
 
 /// As [`compile_program`] but with an explicit `allow_uses` flag — the
@@ -92,6 +101,9 @@ pub fn compile_program(
 /// carrying the owner side of consumer instantiation requests: the
 /// requesters' type descriptors (one sparse block per requester scope)
 /// and the instantiations to materialize before the compile roots.
+/// `mods` carries the file-module inputs (phase 3): the concatenated
+/// text's file layout and the scope tree — flat for single-file
+/// packages.
 pub fn compile_program_resolved(
     src: &str,
     mode: Mode,
@@ -100,6 +112,7 @@ pub fn compile_program_resolved(
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
     allow_uses: bool,
     seeds: &Seeds<'_>,
+    mods: &rut_lir::check::ModInputs,
 ) -> ProgramOutput {
     let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
         diags,
@@ -134,6 +147,19 @@ pub fn compile_program_resolved(
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_uses = allow_uses;
+    // the file-module inputs (phase 3): the file layout + scope tree
+    // this unit resolves against (flat for single-file packages)
+    ctx.mods = mods.clone();
+    // the pkg names this unit's use statements name — a qualified head
+    // spelling one of these is the cross-package door the position
+    // grammar refuses; the diagnostic names the use fix
+    for it in ast.module_items(ast.root).to_vec() {
+        if let rut_ast::ast::ItemKind::Use { path, .. } = ast.item(it) {
+            if let Some(&head) = path.first() {
+                ctx.used_pkgs.insert(ast.name(head).to_string());
+            }
+        }
+    }
     // the orphan rule's locality input: this unit's own
     // pkg spec. Every decl's origin IS its module — no source crosses
     // a boundary, the origin map is gone.
@@ -554,6 +580,9 @@ pub fn compile_program_resolved(
         if d.methods.is_empty() {
             continue;
         }
+        // the surface signatures resolve in the TYPE's module (phase 3)
+        let saved_mod = ctx.cur_mod.clone();
+        ctx.cur_mod = ctx.mod_of(d.node.id()).to_string();
         // the class's template substitution: each generic parameter
         // spells its `#<param>` placeholder row, `Self` — for a
         // GENERIC class — its own `#Self` placeholder (the
@@ -646,6 +675,7 @@ pub fn compile_program_resolved(
             target: d.ty,
             methods,
         });
+        ctx.cur_mod = saved_mod;
     }
     // enum inherent rows: the pub law again — the row's target is the
     // enum's type id (its descriptor crosses in the carried type
@@ -655,6 +685,9 @@ pub fn compile_program_resolved(
         if e.methods.is_empty() {
             continue;
         }
+        // the surface signatures resolve in the ENUM's module (phase 3)
+        let saved_mod = ctx.cur_mod.clone();
+        ctx.cur_mod = ctx.mod_of(e.node).to_string();
         let mut methods = Vec::new();
         for (mname, mnode) in &e.methods {
             let md = ctx.ast.method_decl(*mnode);
@@ -705,6 +738,7 @@ pub fn compile_program_resolved(
             target: e.ty,
             methods,
         });
+        ctx.cur_mod = saved_mod;
     }
 
     // exported GENERIC fns (the linkable-classes phase): names +
@@ -720,6 +754,9 @@ pub fn compile_program_resolved(
         if fd.generics.is_empty() || fd.is_async {
             continue;
         }
+        // the placeholder signature resolves in the fn's module (phase 3)
+        let saved_mod = ctx.cur_mod.clone();
+        ctx.cur_mod = ctx.mod_of(node.id()).to_string();
         // the placeholder substitution: each generic parameter spells
         // its `#<param>` row (interned BEFORE the type snapshot below
         // carries it)
@@ -745,6 +782,7 @@ pub fn compile_program_resolved(
             args,
             ret,
         });
+        ctx.cur_mod = saved_mod;
     }
 
     // the GENERIC ifaces' declaration descriptors: the placeholder
@@ -754,18 +792,22 @@ pub fn compile_program_resolved(
     // surface reads these ids.
     let mut generic_trait_rows: Vec<(IdentId, u32, usize)> = Vec::new();
     {
-        let decls: Vec<(IdentId, u32, Vec<IdentId>)> = ctx
+        let decls: Vec<(IdentId, u32, Vec<IdentId>, rut_ast::ast::NodeId)> = ctx
             .iface_decls
             .iter()
-            .map(|(n, i)| (*n, i.id, i.generics.clone()))
+            .map(|(n, i)| (*n, i.id, i.generics.clone(), i.node))
             .collect();
-        for (name, id, generics) in decls {
+        for (name, id, generics, inode) in decls {
             if id != u32::MAX {
                 continue;
             }
+            // the trait's signatures resolve in ITS module (phase 3)
+            let saved_mod = ctx.cur_mod.clone();
+            ctx.cur_mod = ctx.mod_of(inode).to_string();
             let ph_args: Vec<TypeId> =
                 generics.iter().map(|&g| ctx.param_placeholder(g)).collect();
             let ph_id = ctx.mk_iface_inst(name, ph_args);
+            ctx.cur_mod = saved_mod;
             generic_trait_rows.push((name, ph_id, generics.len()));
         }
     }

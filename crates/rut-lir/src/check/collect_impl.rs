@@ -63,6 +63,36 @@ impl<'a> Ctx<'a> {
         for m in methods {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
+        // the placement law (phase 3): an inherent impl lives in the
+        // type's module — literally, by path now. A flat package has
+        // one module, so every impl is where the type is, exactly as
+        // before.
+        let type_home = self
+            .datas
+            .iter()
+            .find(|(n, _)| *n == spell)
+            .map(|(_, d)| self.mod_of(d.node.id()).to_string())
+            .or_else(|| {
+                self.enums
+                    .iter()
+                    .find(|(n, _)| *n == spell)
+                    .map(|(_, e)| self.mod_of(e.node).to_string())
+            });
+        if let Some(home) = type_home {
+            if home != self.cur_mod {
+                self.err(
+                    sp,
+                    format!(
+                        "an inherent impl for `{}` must live in `{}`'s module ({}) — this impl is in {}",
+                        self.name(spell),
+                        self.name(spell),
+                        ModInputs::display(&home),
+                        ModInputs::display(&self.cur_mod),
+                    ),
+                );
+                return;
+            }
+        }
         // the impl block's owner — the instantiation ledger's owner
         // anchor for its monomorphized methods. Every impl in the unit
         // is the unit's own (no splicing), so this is the unit's spec.

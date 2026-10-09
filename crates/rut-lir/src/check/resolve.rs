@@ -311,8 +311,7 @@ impl<'a> Ctx<'a> {
             }
             TypeKind::TyPath { segs, .. } => {
                 if segs.len() > 1 {
-                    self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
-                    return TY_I32;
+                    return self.resolve_qualified_ty(&segs, sp, env);
                 }
                 let seg = &segs[0];
                 let name = seg.name;
@@ -340,8 +339,16 @@ impl<'a> Ctx<'a> {
                 // a used core builtin container: the
                 // prelude is used, never ambient — `Opaque`
                 // resolves only when the name was bound from the core
-                // surface (`[T]` never reaches here — it is `TyArray`)
-                let core_ty = self.extern_native_types.get(&name).copied();
+                // surface (`[T]` never reaches here — it is `TyArray`).
+                // The import-GATED rows (`pub builtin` — `Weak`,
+                // `DisposalContext`, …) bind in the module whose file
+                // used them (phase 3); the ambient prelude rows bind
+                // everywhere.
+                let core_ty = self
+                    .extern_native_types
+                    .get(&name)
+                    .copied()
+                    .filter(|_| !self.pub_core.contains_key(&name) || self.use_bound_here(name));
                 // a declared or used type shadows a builtin name (RFC
                 // 0005: `pouch`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
@@ -400,14 +407,16 @@ impl<'a> Ctx<'a> {
                     };
                 }
                 {
-                    // user types
-                        if let Some(e) = self.find_enum(name).cloned() {
+                    // user types — LOCAL decls resolve in the current
+                    // module only (a bare name from another module falls
+                    // through and diagnoses with the qualified spelling)
+                        if let Some(e) = self.enum_here(name) {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("enum `{}` takes no generic arguments", self.name(name)));
                             }
                             return e.ty;
                         }
-                        if let Some(d) = self.find_data(name).cloned() {
+                        if let Some(d) = self.data_here(name) {
                             if d.generics.is_empty() {
                                 if !seg.generics.is_empty() {
                                     self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
@@ -441,7 +450,7 @@ impl<'a> Ctx<'a> {
                         return TY_I32;
                     }
                 }
-                        if let Some(t) = self.find_iface(name).cloned() {
+                        if let Some(t) = self.iface_here(name) {
                             // an interface name in type position IS the
                             // object type — the bare name spells it
                             if seg.generics.is_empty() {
@@ -476,7 +485,10 @@ impl<'a> Ctx<'a> {
                         // placeholder descriptor — the interface's shape
                         // crosses the surface, so the spelling dispatches
                         // by the existing law (single concrete origin ⇒
-                        // static, merged origins ⇒ vtable).
+                        // static, merged origins ⇒ vtable). The binding
+                        // gate is per file (phase 3): the name binds in
+                        // the module whose file used it.
+                        if self.use_bound_here(name) {
                         if let Some(ext) = self.extern_trait(name).cloned() {
                             if seg.generics.is_empty() && ext.generics == 0 {
                                 return self.mk_iface_obj(ext.id);
@@ -504,8 +516,10 @@ impl<'a> Ctx<'a> {
                             let id = self.mint_extern_iface_inst(name, args);
                             return self.mk_iface_obj(id);
                         }
+                        }
                         // used type: the exporter's
                         // scope-qualified id; link rebases it
+                        if self.use_bound_here(name) {
                         if let Some(g) = self.extern_generics.get(&name).cloned() {
                             // a linked generic: the consumer spells the
                             // instantiation, the declaring package owns
@@ -527,18 +541,21 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
+                        }
+                        if self.use_bound_here(name) {
                         if let Some(&t) = self.extern_types.get(&name) {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));
                             }
                             return t;
                         }
+                        }
                         // a local type alias: transparent — the
                         // name binds the target's id. A union alias errors
                         // here: unions are bound-only.
-                        if self.find_alias(name).is_some() {
+                        if self.alias_here(name).is_some() {
                             self.validate_alias(name);
-                            let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
+                            let idx = self.aliases.iter().position(|x| x.name == name).unwrap();
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
                             }
@@ -560,6 +577,8 @@ impl<'a> Ctx<'a> {
                         }
                         let msg = self
                             .not_in_core_scope(name)
+                            .or_else(|| self.use_elsewhere_hint(name))
+                            .or_else(|| self.elsewhere_hint(name, "type"))
                             .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
                         self.err(sp, msg);
                         TY_I32
@@ -568,4 +587,209 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    // ---- qualified type paths (file modules, phase 3) ----
+
+    /// A multi-seg type path (`layout::Column`, `pkg::grid::Cell`):
+    /// the mod walk first — the head names a child `mod` of the
+    /// current module or of an ancestor (nearest scope wins; the
+    /// unit's OWN pkg name names the root module), the interior
+    /// segments walk child mods, and the leaf must be a decl of the
+    /// resolved module, visible under the crossing predicate. The
+    /// fallbacks keep today's order AFTER the walk: a head naming a
+    /// used package is the cross-package spelling positions refuse
+    /// (the diagnostic names the use fix); anything else is the plain
+    /// unknown type.
+    fn resolve_qualified_ty(
+        &mut self,
+        segs: &[PathSeg],
+        sp: Span,
+        env: &[(IdentId, TypeId)],
+    ) -> TypeId {
+        let head = segs[0].name;
+        if segs[..segs.len() - 1].iter().any(|s| !s.generics.is_empty()) {
+            self.err(sp, "generic arguments are not valid on a module segment");
+            return TY_I32;
+        }
+        let from = self.cur_mod.clone();
+        if let Some(head_mod) = self.resolve_mod_head(&from, head) {
+            let leaf = segs.last().expect("path has segments");
+            let interior = &segs[1..segs.len() - 1];
+            match self.walk_mod_path(&head_mod, interior) {
+                Ok(m) => return self.resolve_qualified_leaf_ty(&from, &m, leaf, sp, env),
+                Err((bad, walked)) => {
+                    let at = if walked.is_empty() {
+                        self.name(head).to_string()
+                    } else {
+                        walked
+                    };
+                    self.err(
+                        sp,
+                        format!(
+                            "`{}` is not a module under `{}` — only `mod` children extend a qualified path",
+                            self.name(bad),
+                            at
+                        ),
+                    );
+                    return TY_I32;
+                }
+            }
+        }
+        // a used package's name as the head: the cross-package spelling
+        // positions refuse — uses are the only cross-package door
+        if self.used_pkgs.contains(self.name(head)) {
+            let mut fix = String::new();
+            for s in &segs[..segs.len() - 1] {
+                fix.push_str(self.name(s.name));
+                fix.push_str("::");
+            }
+            let leaf = self.name(segs.last().expect("path has segments").name);
+            self.err(
+                sp,
+                format!(
+                    "`{}` is a package, not a module — uses are the only cross-package door: `use {}{{ {} }}` first",
+                    self.name(head),
+                    fix,
+                    leaf
+                ),
+            );
+            return TY_I32;
+        }
+        self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
+        TY_I32
+    }
+
+    /// The leaf of a qualified type path: a decl of module `m` (the
+    /// path the segments walked), visible from `from` under the
+    /// crossing predicate. Resolves exactly like the same decl would
+    /// bare in its own module — generics and aliases included.
+    fn resolve_qualified_leaf_ty(
+        &mut self,
+        from: &str,
+        m: &str,
+        leaf: &PathSeg,
+        sp: Span,
+        env: &[(IdentId, TypeId)],
+    ) -> TypeId {
+        let name = leaf.name;
+        let generics = &leaf.generics;
+        // the decl must live in `m` — else the leaf-not-found error
+        // naming the module (and where the name does live, if anywhere)
+        let found = self.enum_in(m, name).is_some()
+            || self.data_in(m, name).is_some()
+            || self.iface_in(m, name).is_some()
+            || self.alias_in(m, name).is_some();
+        if !found {
+            let msg = match self.type_home(name) {
+                Some(home) => format!(
+                    "`{}` is not declared in module `{}` ({}) — it lives in module `{}`",
+                    self.name(name),
+                    m,
+                    ModInputs::display(m),
+                    home
+                ),
+                None => format!(
+                    "`{}` is not declared in module `{}` ({})",
+                    self.name(name),
+                    m,
+                    ModInputs::display(m)
+                ),
+            };
+            self.err(sp, msg);
+            return TY_I32;
+        }
+        // the crossing predicate: the decl's tier vs the requester
+        let (vis, home) = if let Some(e) = self.enum_in(m, name) {
+            (e.vis, m.to_string())
+        } else if let Some(d) = self.data_in(m, name) {
+            (d.vis, m.to_string())
+        } else if let Some(i) = self.iface_in(m, name) {
+            (i.vis, m.to_string())
+        } else {
+            (self.alias_in(m, name).expect("found above").vis, m.to_string())
+        };
+        if !self.vis_crosses(from, &home, vis) {
+            let n = self.name(name);
+            let hint = self.vis_hint(name, from, &home, vis);
+            self.err(
+                sp,
+                format!("`{m}::{n}` — {hint}"),
+            );
+            return TY_I32;
+        }
+        // resolve per kind — the same arms the bare ladder runs
+        if let Some(e) = self.enum_in(m, name) {
+            if !generics.is_empty() {
+                self.err(sp, format!("enum `{}` takes no generic arguments", self.name(name)));
+            }
+            return e.ty;
+        }
+        if let Some(d) = self.data_in(m, name) {
+            if d.generics.is_empty() {
+                if !generics.is_empty() {
+                    self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                }
+                return d.ty;
+            }
+            if generics.len() != d.generics.len() {
+                self.err(sp, format!(
+                    "`{}` takes {} generic argument(s), {} given",
+                    self.name(name),
+                    d.generics.len(),
+                    generics.len()
+                ));
+                return TY_I32;
+            }
+            let args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type(*g, env)).collect();
+            return self.mk_data_inst(name, args, sp);
+        }
+        if let Some(t) = self.iface_in(m, name) {
+            // an interface name in type position IS the object type
+            if generics.is_empty() {
+                if t.id == u32::MAX {
+                    self.err(sp, format!(
+                        "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
+                        self.name(name),
+                        self.name(name)
+                    ));
+                    return TY_I32;
+                }
+                return self.mk_iface_obj(t.id);
+            }
+            if generics.len() != t.generics.len() {
+                self.err(sp, format!(
+                    "`{}` takes {} type argument(s), {} given",
+                    self.name(name),
+                    t.generics.len(),
+                    generics.len()
+                ));
+                return TY_I32;
+            }
+            let args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type(*g, env)).collect();
+            // the trait's signatures re-resolve from ITS module's AST
+            let saved_mod = self.cur_mod.clone();
+            self.cur_mod = m.to_string();
+            let id = self.mk_iface_inst(name, args);
+            self.cur_mod = saved_mod;
+            return self.mk_iface_obj(id);
+        }
+        if self.alias_in(m, name).is_some() {
+            self.validate_alias(name);
+            let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
+            if !generics.is_empty() {
+                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
+            }
+            return match self.aliases[idx].resolved {
+                Some(AliasTarget::Ty(t)) => t,
+                Some(AliasTarget::Union) => {
+                    self.err(sp, format!(
+                        "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds",
+                        self.name(name)
+                    ));
+                    TY_I32
+                }
+                _ => TY_I32,
+            };
+        }
+        unreachable!("leaf found above but no arm took it")
+    }
 }

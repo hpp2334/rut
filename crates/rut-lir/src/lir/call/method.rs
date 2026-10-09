@@ -22,8 +22,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // The head may carry generic args (`Vec<u32>.from(..)`) — they go
         // along; compile_static_call decides which statics can use them.
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
-            if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
-                let base = segs[0].name;
+            if self.lookup(segs[0].name).is_none() {
+                // the qualified call (phase 3): the receiver path names
+                // a child mod of the current module or of an ancestor —
+                // `layout.mk(3)`, `pkg.a.five()`, `a.c.Circle.area(..)`.
+                // `None` falls through to the ordinary arms.
+                if segs[0].generics.is_empty() {
+                    if let Some(r) =
+                        self.compile_qualified_call(&segs, name, &generics, &args, expected, sp)
+                    {
+                        return r;
+                    }
+                }
+                if segs.len() == 1 {
+                    let base = segs[0].name;
                 // `Vec` is an ordinary class (pouch), so it routes
                 // here through `find_data`, like any other class; the
                 // core statics (`opaque`) route only
@@ -36,6 +48,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     || self.ctx.extern_types.contains_key(&base)
                     || self.ctx.extern_generics.contains_key(&base);
                 if is_type {
+                    // the static head is a bare type name: it resolves
+                    // in the CURRENT module (phase 3) — a type of
+                    // another module names its qualified spelling
+                    if let Some(home) = self.ctx.type_home(base) {
+                        if home != self.ctx.cur_mod {
+                            let q = home.replace('/', ".");
+                            let prefix =
+                                if q.is_empty() { String::new() } else { format!("{q}.") };
+                            self.ctx.err(sp, format!(
+                                "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}.{}`(..)",
+                                self.ctx.name(base),
+                                crate::check::ModInputs::display(&home),
+                                prefix,
+                                self.ctx.name(base),
+                                self.ctx.name(name),
+                            ));
+                            return Err(());
+                        }
+                    }
                     return self.compile_static_call(base, segs[0].generics.clone(), name, generics, args, expected, sp);
                 }
                 // an in-scope TYPE PARAMETER as the static receiver (the
@@ -49,6 +80,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let ifaces = self.iface_bounds.get(&base).cloned();
                         return self.compile_bound_param_static_call(concrete, ifaces, name, args, expected, sp);
                     }
+                }
                 }
             }
         }

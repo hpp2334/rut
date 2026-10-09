@@ -309,8 +309,8 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn compile_module_lets(&mut self) {
-        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> = self.lets.clone();
-        for (_, ty, init) in entries {
+        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> = self.lets.clone();
+        for (_, ty, init, _) in entries {
             let sp = self.ast.span(init.id());
             match self.ast.expr(init) {
                 ExprKind::Lit(Lit::Int(v, sfx)) => {

@@ -513,7 +513,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             // module let (load-time, M1: literals only)
-            if let Some((_, ty_node, init)) = self.ctx.find_let(name).cloned() {
+            if let Some((_, ty_node, init, lvis)) = self.ctx.find_let(name).cloned() {
+                // a module let of ANOTHER module is not in scope bare
+                // (single names resolve in the current module only)
+                if self.ctx.mod_of(init.id()) != self.ctx.cur_mod {
+                    self.ctx.err(sp, format!(
+                        "`{}` is declared in module `{}` — qualify it: `{}::{}`",
+                        self.ctx.name(name),
+                        self.ctx.mod_of(init.id()),
+                        self.ctx.mod_of(init.id()),
+                        self.ctx.name(name)
+                    ));
+                    return Err(());
+                }
+                let _ = lvis;
                 let ty = ty_node.map(|t| self.resolve_type_now(t)).unwrap_or(TY_I32);
                 let _reg = self.load_const_let(init, ty, expected, sp)?;
                 return Ok(ty);
@@ -605,10 +618,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // a LOCAL enum (the decl's member list) or a USED enum (the
             // carried descriptor row — the member values ride it)
             let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
-                if let Some(e) = self.ctx.find_enum(base).cloned() {
+                if let Some(e) = self.ctx.enum_here(base) {
                     Some((e.ty, e.members.iter().map(|m| (*m, 0)).collect()))
-                } else {
+                } else if self.ctx.use_bound_here(base) {
                     self.ctx.extern_enum(base)
+                } else {
+                    None
                 };
             if let Some((ty, members)) = enum_hit {
                 if let Some(i) = members.iter().position(|(m, _)| *m == member) {
@@ -620,14 +635,185 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
+        // qualified value path (`mod.CONST`, `mod.Enum.Member`) —
+        // the mod walk (phase 3); `None` falls through when the head
+        // is not a module of the current scope or its ancestors
+        if let Some(r) = self.compile_qualified_value(&segs, expected, sp) {
+            return r;
+        }
+        // a used package's head: uses are the only cross-package door
+        if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
+            self.package_head_error(&segs, segs[segs.len() - 1].name, sp);
+            return Err(());
+        }
         self.ctx.err(
             sp,
             format!(
-                "unknown name `{}` —module paths need use statements, which are not available in this build",
+                "unknown name `{}`",
                 segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
             ),
         );
         Err(())
+    }
+
+    /// The qualified VALUE path (`layout.LIMIT`, `mod.Color.Red`):
+    /// the head names a child `mod` of the current module or of an
+    /// ancestor; further segments walk child mods until one names an
+    /// ENUM of the walked module (the trailing `Enum.Member` pair), or
+    /// the leaf resolves among that module's decls (a fn value, a
+    /// module let, a type — which is no value). Gated by the crossing
+    /// predicate. `None` = the head is not a module — the caller's
+    /// ladder carries on (namespace constants, plain unknown-name).
+    pub(crate) fn compile_qualified_value(
+        &mut self,
+        segs: &[PathSeg],
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> Option<TcResult<TypeId>> {
+        if segs.len() < 2 || !segs[0].generics.is_empty() {
+            return None;
+        }
+        let from = self.ctx.cur_mod.clone();
+        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
+            return None; // the caller's pkg-head check diagnoses
+        };
+        for (i, seg) in segs.iter().enumerate().skip(1) {
+            // a child mod extends the walk
+            if let Some((path, _vis)) = self
+                .ctx
+                .mods
+                .scopes
+                .get(&m)
+                .and_then(|s| s.children.get(self.ctx.name(seg.name)))
+            {
+                m = path.clone();
+                continue;
+            }
+            // a non-mod segment: the trailing `Enum.Member` pair, or
+            // the leaf
+            if i != segs.len() - 1 {
+                if i == segs.len() - 2 {
+                    let member = segs[segs.len() - 1].name;
+                    if let Some(e) = self.ctx.enum_in(&m, seg.name) {
+                        if !self.ctx.vis_crosses(&from, &m, e.vis) {
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "{m}.{} — {}",
+                                    self.ctx.name(seg.name),
+                                    self.ctx.vis_hint(seg.name, &from, &m, e.vis)
+                                ),
+                            );
+                            return Some(Err(()));
+                        }
+                        let members: Vec<IdentId> = e.members.clone();
+                        if let Some(idx) = members.iter().position(|&mm| mm == member) {
+                            let _ = idx;
+                            let reg = self.new_reg(e.ty);
+                            let mi = members.iter().position(|&mm| mm == member).unwrap();
+                            self.emit(Op::EnumNew { dst: reg, ty: e.ty, member: mi as u32 }, sp.lo);
+                            return Some(Ok(e.ty));
+                        }
+                        self.ctx.err(sp, format!(
+                            "`{}` is not a member of enum {}",
+                            self.ctx.name(member),
+                            self.ctx.name(seg.name)
+                        ));
+                        return Some(Err(()));
+                    }
+                }
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` is not a module under `{}` — only `mod` children extend a qualified path",
+                        self.ctx.name(seg.name),
+                        m
+                    ),
+                );
+                return Some(Err(()));
+            }
+            // the leaf: a fn value, a module let, or a type (not a value)
+            let name = seg.name;
+            if !seg.generics.is_empty() {
+                self.ctx.err(sp, "generic arguments are not valid in a value path");
+                return Some(Err(()));
+            }
+            if let Some(fnode) = self.ctx.fn_in(&m, name) {
+                if !self.ctx.vis_crosses(&from, &m, self.ctx.ast.fn_decl(fnode).vis) {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "{m}.{} — {}",
+                            self.ctx.name(name),
+                            self.ctx.vis_hint(name, &from, &m, self.ctx.ast.fn_decl(fnode).vis)
+                        ),
+                    );
+                    return Some(Err(()));
+                }
+                // names are package-unique: the fn-value lane resolves
+                // the same fn the bare spelling would in its own module
+                return Some(
+                    self.compile_fn_path_value(name, sp)
+                        .expect("the module's fn resolves in the fn-value lane"),
+                );
+            }
+            if let Some((_, ty_node, init, lvis)) = self.ctx.let_in(&m, name) {
+                if !self.ctx.vis_crosses(&from, &m, lvis) {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "{m}.{} — {}",
+                            self.ctx.name(name),
+                            self.ctx.vis_hint(name, &from, &m, lvis)
+                        ),
+                    );
+                    return Some(Err(()));
+                }
+                let ty = ty_node.map(|t| self.resolve_type_now(t)).unwrap_or(TY_I32);
+                match self.load_const_let(init, ty, expected, sp) {
+                    Ok(_) => return Some(Ok(ty)),
+                    Err(()) => return Some(Err(())),
+                }
+            }
+            if let Some(e) = self.ctx.enum_in(&m, name) {
+                if !self.ctx.vis_crosses(&from, &m, e.vis) {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "{m}.{} — {}",
+                            self.ctx.name(name),
+                            self.ctx.vis_hint(name, &from, &m, e.vis)
+                        ),
+                    );
+                    return Some(Err(()));
+                }
+                self.ctx.err(sp, format!(
+                    "`{}` is an enum — construct a member: `{}.Member`",
+                    self.ctx.name(name),
+                    self.ctx.name(name)
+                ));
+                return Some(Err(()));
+            }
+            if self.ctx.data_in(&m, name).is_some() {
+                self.ctx.err(sp, format!(
+                    "`{}` is a type — construct it (a literal, a class method, a newtype call), never name it bare",
+                    self.ctx.name(name)
+                ));
+                return Some(Err(()));
+            }
+            self.ctx.err(sp, format!(
+                "`{}` is not declared in module `{m}` ({})",
+                self.ctx.name(name),
+                crate::check::ModInputs::display(&m),
+            ));
+            return Some(Err(()));
+        }
+        // the receiver was ALL mods — a module is not a value
+        self.ctx.err(
+            sp,
+            format!("`{}` is a module — modules are not values", self.ctx.name(segs[segs.len() - 1].name)),
+        );
+        Some(Err(()))
     }
 
     // ---- the bare fn-path lane ----
@@ -642,8 +828,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         name: IdentId,
         sp: rut_lexer::span::Span,
     ) -> Option<TcResult<TypeId>> {
-        // the enclosing unit's fn (compile_free_fn_call's own lookup)
-        if let Some(fnode) = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n) {
+        // the enclosing unit's fn (compile_free_fn_call's own lookup) —
+        // single names resolve in the CURRENT module (phase 3; flat
+        // packages gate identically: every fn is the root's)
+        if self.ctx.fn_is_here(name) {
+            let fnode = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n).unwrap();
             let fd = self.ctx.ast.fn_decl(fnode).clone();
             if fd.is_async {
                 self.ctx.err(sp, format!(

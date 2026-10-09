@@ -107,7 +107,7 @@ fn t10_the_collision_was_real() {
     let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/pouch.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
-    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &Seeds::none());
+    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &Seeds::none(), &rut_driver::ModInputs::flat());
     assert!(
         out.program.is_none()
             && out.diags.iter().any(|d| d.msg.contains("duplicate")),

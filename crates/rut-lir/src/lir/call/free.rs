@@ -43,7 +43,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.resolve_type_now(*node);
             subst.push((*g, t));
         }
-        // compile args under best-effort expected types; unify generics
+        // compile args under best-effort expected types; unify generics.
+        // The callee's param ANNOTATIONS resolve in the CALLEE's module
+        // (phase 3); the argument expressions are the caller's code and
+        // stay under the caller's module.
+        let saved_mod = self.ctx.cur_mod.clone();
+        let callee_mod = self.ctx.mod_of(fnode.id()).to_string();
         let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
             .iter()
             .map(|p| match self.ctx.ast.param(*p) {
@@ -60,7 +65,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let expected = match param_nodes[i] {
                 Some(tn) if self.free_generics(tn, &decl_generics, &subst).is_empty() => {
-                    Some(self.ctx.resolve_type(tn, &subst))
+                    let saved = self.ctx.cur_mod.clone();
+                    self.ctx.cur_mod = callee_mod.clone();
+                    let t = self.ctx.resolve_type(tn, &subst);
+                    self.ctx.cur_mod = saved;
+                    Some(t)
                 }
                 // the shape hint (the phase-2 placeholder env): a
                 // best-effort expected type whose unbound generics ride
@@ -68,7 +77,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // (`fn (ctx) -> str { .. }`) takes its parameter
                 // annotations from the BOUND part (`ctx: DeriveCtx`);
                 // unification below binds the real values
-                Some(tn) => Some(self.hint_with_placeholders(tn, &decl_generics, &subst)),
+                Some(tn) => {
+                    let saved = self.ctx.cur_mod.clone();
+                    self.ctx.cur_mod = callee_mod.clone();
+                    let t = self.hint_with_placeholders(tn, &decl_generics, &subst);
+                    self.ctx.cur_mod = saved;
+                    Some(t)
+                }
                 _ => None,
             };
             let t = self.compile_expr(*a, expected)?;
@@ -78,11 +93,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             arg_tys.push(t);
             aregs.push(self.last_reg);
         }
+        // the unification re-reads the callee's annotations — under the
+        // callee's module (phase 3)
+        self.ctx.cur_mod = callee_mod.clone();
         for (i, _) in args.iter().enumerate() {
             if let Some(tn) = param_nodes[i] {
                 self.unify_generic_val(tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
             }
         }
+        self.ctx.cur_mod = saved_mod.clone();
         for g in &decl_generics {
             if !subst.iter().any(|(n, _)| n == g) {
                 self.ctx.err(sp, format!(
@@ -92,7 +111,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
-        // inline bounds gate the completed substitution (admission-only)
+        // inline bounds gate the completed substitution (admission-only).
+        // The callee's bounds (and its final signature) resolve in the
+        // CALLEE's module (phase 3) — the declaration's own scope.
+        self.ctx.cur_mod = callee_mod.clone();
         self.ctx.admit_bounds(&fd.bounds, &subst, sp);
         // final param types under the completed substitution
         let ptys: Vec<TypeId> = params
@@ -146,9 +168,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a small, non-recursive body inlines at the call site (P1.3):
         // `mix64`-shaped helpers flatten into the caller, every hash pays
         // no frame. Runs after all checks, so diagnostics stay put.
+        // The inline compiles the CALLEE's body — under the callee's
+        // module (phase 3); the restore lands after, either way out.
         if self.try_inline_free_fn(name, fnode, &subst, &aregs, &ptys, ret_ty, sp) {
+            self.ctx.cur_mod = saved_mod;
             return Ok(ret_ty);
         }
+        self.ctx.cur_mod = saved_mod;
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
@@ -187,7 +213,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
-        // inline bounds gate the completed substitution
+        // inline bounds gate the completed substitution. The callee
+        // method's bounds and signature resolve in the TYPE's module
+        // (the placement law puts the impl there — phase 3).
+        let saved_mod = self.ctx.cur_mod.clone();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
         self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
         let mut ptys = Vec::new();
         // the callee's signature may spell `Self`/`T` — resolve under the
@@ -204,6 +234,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         self.self_ty = saved_self;
         self.subst = saved_subst;
+        self.ctx.cur_mod = saved_mod;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!(
                 "call arity: `{}.{}` takes {} parameter{}, {} given",

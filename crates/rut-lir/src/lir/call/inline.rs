@@ -119,7 +119,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // hint — unification binds the generic from the argument;
         // otherwise the hint resolves under the CALLEE's instantiation
         // (the swap above) — and the shape hint (the phase-2 placeholder
-        // env) rides fresh placeholder types for the unbound rest
+        // env) rides fresh placeholder types for the unbound rest.
+        // The annotations resolve in the TYPE's module (phase 3).
+        let saved_hint_mod = self.ctx.cur_mod.clone();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
         let hints: Vec<Option<TypeId>> = param_nodes
             .iter()
             .map(|tn| match tn {
@@ -130,6 +133,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 None => None,
             })
             .collect();
+        self.ctx.cur_mod = saved_hint_mod;
         // the arguments compile under the CALLER's substitution — a
         // lambda argument may spell the CALLER's generics
         // (`Vec.from_flow`'s `fn (x: T) ..` inside the sink's own
@@ -151,12 +155,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // re-arm the callee's instantiation for the unification and the
         // signature resolution below
         self.subst = subst.clone();
-        // structural unification binds the method's remaining generics
+        // structural unification binds the method's remaining generics —
+        // the annotations read in the TYPE's module (phase 3)
+        let saved_unify_mod = self.ctx.cur_mod.clone();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
         for (i, tn) in param_nodes.iter().enumerate() {
             if let Some(tn) = tn {
                 self.unify_generic_val(*tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
             }
         }
+        self.ctx.cur_mod = saved_unify_mod;
         for g in &decl_generics {
             if !subst.iter().any(|(n, _)| n == g) {
                 self.ctx.err(sp, format!(
@@ -166,7 +174,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
-        // inline bounds gate the completed substitution
+        // inline bounds gate the completed substitution. The callee
+        // method's bounds and signature resolve in the TYPE's module
+        // (the placement law puts the impl there — phase 3).
+        let saved_mod = self.ctx.cur_mod.clone();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
         self.ctx.admit_bounds(&md.bounds, &subst, sp);
         // final param/ret types under the completed substitution —
         // through the FnCompiler resolver, so `Self` in the method's
@@ -182,6 +194,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         self.self_ty = saved_self;
         self.subst = saved_subst;
+        self.ctx.cur_mod = saved_mod;
         for (i, _) in args.iter().enumerate() {
             if !self.widens_val(args[i], arg_tys[i], ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(args[i].id()), format!(

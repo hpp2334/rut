@@ -471,3 +471,442 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["layout", "layout/grid"]);
 }
+
+// =====================================================================
+// phase 3 — lir/resolution: visibility tiers, qualified positions,
+// use-through-mods
+//
+// Spelling note: positions qualify with `.` (`a.Pair`, `layout.mk(3)`,
+// `a.c.sup()`); `use` statements qualify with `::`. Positions never
+// take a package head — uses are the only cross-package door.
+// =====================================================================
+
+/// A mod pkg offered by hand (the run lane's pure mount — the walker's
+/// shape, no filesystem).
+fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::Pkg {
+    rut_driver::Pkg {
+        spec: spec.to_string(),
+        body: rut_driver::PkgBody::Source { text: root.to_string(), is_decl: false },
+        mods: mods
+            .into_iter()
+            .map(|(p, v, t)| {
+                (
+                    p.to_string(),
+                    ModSource { path: p.to_string(), vis: v, text: t.to_string() },
+                )
+            })
+            .collect(),
+        ..Default::default()
+    }
+}
+
+/// Compile the offered pkgs (entrypoint `spec`), handing back the
+/// diagnostic messages.
+fn compile_with_diags(pkgs: &[rut_driver::Pkg], entry: &str) -> Vec<String> {
+    let mut run = rut_driver::RutRun::new();
+    for p in pkgs {
+        run = run.pkg(p.clone());
+    }
+    let c = run.entrypoint(entry).compile().expect("compile carries the diags");
+    c.graph.diags.iter().map(|d| d.msg.clone()).collect()
+}
+
+fn run_main_pkgs(pkgs: &[rut_driver::Pkg], entry: &str) -> i64 {
+    let mut run = rut_driver::RutRun::new();
+    for p in pkgs {
+        run = run.pkg(p.clone());
+    }
+    let c = run.entrypoint(entry).compile().expect("compile the walk");
+    assert!(c.graph.diags.is_empty(), "{:?}", c.graph.diags);
+    let flat = rut_core::link::flatten(c.graph.program.expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(rut_vm::interp::Limits {
+            fuel: Some(2_000_000),
+            heap_limit_bytes: Some(16 * 1024 * 1024),
+            interrupt_every: 1024,
+        })
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    vm.call::<_, i32>("main", ()).expect("run main").into()
+}
+
+#[test]
+fn qualified_positions_resolve_type_and_value() {
+    // the consumer's root: a's fn by qualified call, a's type by
+    // qualified annotation — the field ride proves the type crossed
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 {\n    let r: a.Pair = a.pair(3);\n    return r.x + r.y;\n}\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "pub struct Pair { x: i32, y: i32 }\npub fn pair(v: i32) -> Pair { return Pair { x: v, y: v + 1 }; }\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 7);
+}
+
+#[test]
+fn qualified_calls_walk_ancestors_and_siblings() {
+    // from a/c/c2: the root's fn via the pkg head (the ancestor walk's
+    // root spelling), a's fn via the walked chain — and the root calls
+    // the deep `a.c.c2.seven()` by qualified path
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\npub fn root_side() -> i32 { return 30; }\nentry fn main() -> i32 { return a.c.c2.seven(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub fn five() -> i32 { return 5; }\n"),
+                ("a/c", Vis::Pub, "pub mod c2;\n"),
+                (
+                    "a/c/c2",
+                    Vis::Pub,
+                    "pub fn seven() -> i32 {\n    return pkg.root_side() + pkg.a.five() + 7;\n}\n",
+                ),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 30 + 5 + 7);
+}
+
+#[test]
+fn leaf_not_found_names_the_module() {
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.ghost(); }\n",
+            vec![("a", Vis::Self_, "pub fn five() -> i32 { return 5; }\n")],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`ghost` is not declared in module `a` (a/mod.rut)")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn visibility_matrix_private_pub_super_pub_pkg_pub() {
+    // private-in-mod: a's private fn is invisible from the root
+    // (qualified or not) but visible inside a's own subtree
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.inner(); }\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "fn inner() -> i32 { return 1; }\npub fn uses_inner() -> i32 { return inner(); }\n",
+            )],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("private to module `a`")),
+        "{diags:?}"
+    );
+    // the same decl inside its module: fine
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.uses_inner(); }\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "fn inner() -> i32 { return 1; }\npub fn uses_inner() -> i32 { return inner(); }\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 1);
+
+    // pub(super) one level: a/c's pub(super) fn is visible in a's
+    // subtree (a, a/c) and NOWHERE else (not the root, not the sibling)
+    // visible from a (the parent's subtree): a calls c.sup()
+    let world = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.go(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub fn go() -> i32 { return c.sup(); }\n"),
+                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&world, "pkg"), 11);
+    // invisible from the root directly
+    let world = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.c.sup(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\n"),
+                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&world, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`pub(super)` — visible only in `a`'s subtree")),
+        "{diags:?}"
+    );
+    // visible from the SIBLING subtree: pub(super) on a/c's decl is
+    // the parent module's (a's) whole subtree — a/d reaches it through
+    // the qualified path, exactly like Rust's pub(super)
+    let d_world = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.go(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub mod d;\npub fn go() -> i32 { return d.reach(); }\n"),
+                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
+                ("a/d", Vis::Pub, "pub fn reach() -> i32 { return a.c.sup(); }\n"),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&d_world, "pkg"), 11);
+}
+
+#[test]
+fn pub_pkg_stays_inside_its_package() {
+    // dep's alpha declares pub(pkg) fn inside(): visible THROUGHOUT
+    // dep (the root file, via the pkg head), never across the use door
+    let dep = modpkg(
+        "dep",
+        "pub mod alpha;\nentry fn main() -> i32 { return dep.alpha.inside(); }\n",
+        vec![("alpha", Vis::Pub, "pub(pkg) fn inside() -> i32 { return 44; }\n")],
+    );
+    assert_eq!(run_main_pkgs(&[dep.clone()], "dep"), 44);
+    // across the use door: refused — pub(pkg) does not cross packages
+    let consumer = modpkg(
+        "pkg",
+        "use dep::alpha::{inside};\nentry fn main() -> i32 { return inside(); }\n",
+        vec![],
+    );
+    let diags = compile_with_diags(&[dep, consumer], "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("is not `pub` — only `pub` names cross packages")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn use_through_pub_mod_chain_two_levels() {
+    // `use dep::alpha::beta::{cell}` — the two-level pub mod walk,
+    // then the leaf binds and the bare call resolves
+    let dep = modpkg(
+        "dep",
+        "pub mod alpha;\n",
+        vec![
+            ("alpha", Vis::Pub, "pub mod beta;\npub fn top() -> i32 { return 10; }\n"),
+            ("alpha/beta", Vis::Pub, "pub fn cell() -> i32 { return 2; }\n"),
+        ],
+    );
+    let consumer = modpkg(
+        "pkg",
+        "use dep::alpha::beta::{cell};\nuse dep::alpha::{top};\nentry fn main() -> i32 { return cell() + top(); }\n",
+        vec![],
+    );
+    assert_eq!(run_main_pkgs(&[dep, consumer], "pkg"), 12);
+}
+
+#[test]
+fn use_of_a_non_pub_mod_is_rejected() {
+    let diags = compile_with_diags(
+        &[
+            modpkg(
+                "dep",
+                "pub mod alpha;\nmod secret;\n",
+                vec![
+                    ("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n"),
+                    ("secret", Vis::Self_, "pub fn whisper() -> i32 { return 1; }\n"),
+                ],
+            ),
+            modpkg(
+                "pkg",
+                "use dep::secret::{whisper};\nentry fn main() -> i32 { return whisper(); }\n",
+                vec![],
+            ),
+        ],
+        "pkg",
+    );
+    assert!(
+        diags.iter().any(|d| d.contains(
+            "`secret` is not visible from outside the package (`mod`, not `pub mod`)"
+        )),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn an_inherent_impl_in_the_wrong_module_is_rejected() {
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nimpl Counter { pub fn bump(self) -> i32 { return self.n + 1; } }\nentry fn main() -> i32 { return 0; }\n",
+            vec![("a", Vis::Self_, "pub struct Counter { n: i32 }\n")],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains(
+            "an inherent impl for `Counter` must live in `Counter`'s module (a/mod.rut)"
+        )),
+        "{diags:?}"
+    );
+    // the impl in ITS module compiles and runs
+    let ok = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a.bumped(); }\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "pub struct Counter { n: i32 }\nimpl Counter { pub fn bump(self) -> i32 { return self.n + 1; } }\npub fn bumped() -> i32 { let c = Counter { n: 41 }; return c.bump(); }\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&ok, "pkg"), 42);
+}
+
+#[test]
+fn a_package_head_in_a_position_names_the_use_fix() {
+    // dep is use-bound in pkg; `dep.alpha.top()` written directly in a
+    // position refuses — uses are the only cross-package door
+    let pkgs = vec![
+        modpkg(
+            "dep",
+            "pub mod alpha;\n",
+            vec![("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n")],
+        ),
+        modpkg(
+            "pkg",
+            "use dep::{};\nentry fn main() -> i32 { return dep.alpha.top(); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("uses are the only cross-package door")
+            && d.contains("use dep::alpha::{ top }")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn use_bindings_are_per_file() {
+    // the root binds `cell` from dep; a's file does NOT — its bare
+    // `cell()` stays unknown, naming where the binding lives
+    let pkgs = vec![
+        modpkg(
+            "dep",
+            "pub mod alpha;\n",
+            vec![("alpha", Vis::Pub, "pub fn cell() -> i32 { return 2; }\n")],
+        ),
+        modpkg(
+            "pkg",
+            "use dep::alpha::{cell};\nmod a;\nentry fn main() -> i32 { return cell() + a.go(); }\n",
+            vec![("a", Vis::Self_, "pub fn go() -> i32 { return cell(); }\n")],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`cell` is use-bound in the root module")
+            && d.contains("needs its own `use`")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn cross_file_methods_and_members_collect() {
+    // a's class carries its methods; the ROOT constructs and calls
+    // them through the qualified path — the type's module owns the
+    // surface, the compiling file is just the entry
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let c: a.Acc = a.mk(40); return c.bump2(); }\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "pub struct Acc { n: i32 }\nimpl Acc {\n    pub fn bump2(self) -> i32 { return self.n + 2; }\n}\npub fn mk(n: i32) -> Acc { return Acc { n: n }; }\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+}
+
+#[test]
+fn duplicate_names_across_modules_are_loud() {
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nmod b;\nentry fn main() -> i32 { return 0; }\n",
+            vec![
+                ("a", Vis::Self_, "pub struct Thing { v: i32 }\n"),
+                ("b", Vis::Self_, "pub struct Thing { v: i32 }\n"),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("duplicate type name `Thing`")
+            && d.contains("already declared in module `a`")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn qualified_iface_and_generic_types_resolve() {
+    // a's interface as a qualified param type; a's generic class
+    // instantiated through the qualified spelling
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 {\n    let b: a.Box<i32> = a.mkbox(40);\n    return a.widen(b) + 2;\n}\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "pub interface Sized { fn size(self) -> i32; }\npub class Box<T> { item: T }\npub fn mkbox(v: i32) -> Box<i32> { return Box { item: v }; }\npub fn widen(b: Box<i32>) -> i32 { return b.item; }\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+}
+
+#[test]
+fn qualified_static_call_through_the_mod_path() {
+    // `a.Counter.make(41).bump()` — the static form on the walked
+    // module's type (`a.Counter`), then the instance call
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let c = a.Counter.make(41); return c.bump(); }\n",
+            vec![(
+                "a",
+                Vis::Self_,
+                "pub struct Counter { n: i32 }\nimpl Counter {\n    pub fn make(n: i32) -> Counter { return Counter { n: n }; }\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+}
