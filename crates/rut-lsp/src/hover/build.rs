@@ -12,7 +12,7 @@ use rut_lexer::token::{Tok, Token};
 
 use super::bindings::ident_span;
 use super::infer;
-use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, TyDef, TyForm, UseDef};
+use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef};
 use crate::line_index::LineIndex;
 
 /// `line` of a byte offset, 1-based
@@ -222,6 +222,7 @@ fn ty_def(
         name: name.to_string(),
         name_span: ident_span(toks, span, name),
         form,
+        vis,
         is_pub: vis == Vis::Pub,
         generics,
         fields,
@@ -255,7 +256,7 @@ fn param_names(ast: &Ast, params: &[NodeHandle<AnyParam>]) -> Vec<String> {
 /// no parser changes).
 pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
     let mut idx = DefIndex::default();
-    let mut pending_lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Span)> = Vec::new();
+    let mut pending_lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis, Span)> = Vec::new();
     for h in ast.module_items(ast.root) {
         let span = ast.span(h.id());
         match ast.item(*h) {
@@ -338,6 +339,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                         ret: d.ret.map(|r| ty_src(ast, r)),
                         params: param_names(ast, &d.params),
                         doc: doc_before(src, sp.lo),
+                        vis: d.vis.unwrap_or(Vis::Pub),
                         owner: Some(target_head.clone()),
                         span: sp,
                         line: line_of(src, sp.lo),
@@ -352,12 +354,13 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     ret: d.ret.map(|r| ty_src(ast, r)),
                     params: param_names(ast, &d.params),
                     doc: doc_before(src, span.lo),
+                    vis: d.vis,
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceFn { name, params, linkage, .. } => {
+            ItemKind::SurfaceFn { vis, name, params, linkage, .. } => {
                 // the import-gated builtin linkage (`pub builtin`) — the
                 // name completes only through the document's `use`
                 if matches!(linkage, Linkage::Builtin { ambient: false }) {
@@ -370,6 +373,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     ret: None,
                     params: param_names(ast, params),
                     doc: doc_before(src, span.lo),
+                    vis: *vis,
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
@@ -435,6 +439,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     name: name.to_string(),
                     name_span: ident_span(toks, span, name),
                     form: TyForm::Alias,
+                    vis: d.vis,
                     is_pub: d.vis == Vis::Pub,
                     generics: Vec::new(),
                     fields: Vec::new(),
@@ -445,17 +450,20 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     alias_target: Some(ty_src(ast, d.target)),
                 });
             }
-            ItemKind::ModuleLet { name, ty, init, .. } => {
+            ItemKind::ModuleLet { vis, name, ty, init, .. } => {
                 // processed after the main walk: the initializer's
                 // inference may name THIS document's types
-                pending_lets.push((*name, *ty, *init, span));
+                pending_lets.push((*name, *ty, *init, *vis, span));
             }
             ItemKind::Use { path, names } => {
                 // `use pouch::{ Vec, Vec2 };` /
                 // `use pouch::layout::{ Vec, Vec2 };` — the path idents
                 // (package, then modules) match positionally first, then
-                // the imported names in order
-                let pkg_text = ast.name(path[0]).to_string();
+                // the imported names in order. The full spelled path and
+                // its per-segment spans ride the row (the mod-aware
+                // completion walk and the segment hovers key on them)
+                let use_path: Vec<String> = path.iter().map(|p| ast.name(*p).to_string()).collect();
+                let mut path_spans: Vec<Option<Span>> = vec![None; path.len()];
                 let expected: Vec<&str> = names.iter().map(|n| ast.name(*n)).collect();
                 let mut spans: Vec<Option<Span>> = vec![None; expected.len()];
                 let (mut segs_left, mut k) = (path.len(), 0usize);
@@ -469,6 +477,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     }
                     if segs_left > 0 {
                         if *text == ast.name(path[path.len() - segs_left]) {
+                            path_spans[path.len() - segs_left] = Some(t.span);
                             segs_left -= 1;
                         }
                         continue;
@@ -482,13 +491,25 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     idx.uses.push(UseDef {
                         name: name.to_string(),
                         name_span,
-                        pkg: pkg_text.clone(),
+                        pkg: use_path[0].clone(),
+                        path: use_path.clone(),
+                        path_spans: path_spans.clone(),
                     });
                 }
             }
-            ItemKind::ModDecl { .. } => {
-                // `pub? mod NAME;` — the namespace rides the mounted
-                // file's own index (a later phase); nothing to record here
+            ItemKind::ModDecl { vis, name } => {
+                // `pub? mod NAME;` — the namespace edge. The row carries
+                // the ident span (decl-site hover/definition target) and
+                // the edge vis; the mounted `NAME/mod.rut` lives in its
+                // own index, found through the chain by mod path
+                idx.mods.push(ModDef {
+                    name: ast.name(*name).to_string(),
+                    name_span: ident_span(toks, span, ast.name(*name)),
+                    vis: *vis,
+                    doc: doc_before(src, span.lo),
+                    span,
+                    line: line_of(src, span.lo),
+                });
             }
             ItemKind::Module { .. } => {}
         }
@@ -496,7 +517,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
     // module lets — with the index's types/fns in place so a
     // `let c = Circle.new(..)` at module scope infers its type
     let lets = std::mem::take(&mut pending_lets);
-    for (name, ty, init, span) in lets {
+    for (name, ty, init, vis, span) in lets {
         let text = ast.name(name).to_string();
         let ty_text = ty.map(|t| ty_src(ast, t)).or_else(|| {
             let done: [&DefIndex; 1] = [&idx];
@@ -517,6 +538,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 .trim_end()
                 .to_string(),
             doc: doc_before(src, span.lo),
+            vis,
             span,
             line: line_of(src, span.lo),
         });

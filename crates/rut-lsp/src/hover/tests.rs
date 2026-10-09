@@ -684,3 +684,76 @@ return rr;
     let md = hover_at(src, "rr").unwrap();
     assert!(md.contains("let rr: f64"), "{md}");
 }
+
+// ---- file modules: the namespace edges (phase 4) ----
+
+/// a parsed+stamped index the way the dep faces lay them down
+fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
+    let s = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
+    let mut idx = index(&s, &ast, &toks);
+    idx.module = Some(pkg.to_string());
+    idx.mod_path = Some(mod_path.to_string());
+    idx
+}
+
+/// hover `name` (n-th ident) in `doc` over the gadget dep chain
+fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
+    let doc2 = rut_lexer::lexer::normalize(doc);
+    let (toks, _) = rut_lexer::lexer::lex(&doc2);
+    let (ast, _) = rut_parser::parse(&doc2, rut_parser::Mode::Impl);
+    let idx = index(&doc2, &ast, &toks);
+    let dep = vec![
+        dep_index("gadgets", "", "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"),
+        dep_index("gadgets", "layout", "pub mod grid;\npub struct Column {\n    w: i32;\n}\n"),
+        dep_index("gadgets", "layout/grid", "pub struct Cell {\n    x: i32;\n}\n"),
+        dep_index("gadgets", "secret", "pub fn open() -> i32 { return 1; }\n"),
+    ];
+    let mut idxs: Vec<&DefIndex> = vec![&idx];
+    idxs.extend(dep.iter());
+    let pos = find_ident_pos(&toks, name, n)?;
+    hover(&idxs, &toks, &ast, pos).map(|h| h.markdown)
+}
+
+#[test]
+fn mod_decl_hover_shows_kind_mount_and_children() {
+    // `pub mod layout;` in the doc — kind, the mounted file, the
+    // child count read off the mounted index in the chain
+    let doc = "pub mod layout;\nmod secret;\nentry fn main() -> nil { }\n";
+    let md = hover_over_dep(doc, "layout", 0).unwrap();
+    assert!(md.contains("pub mod layout;"), "{md}");
+    assert!(md.contains("file module — `layout/mod.rut`"), "{md}");
+    assert!(md.contains("1 child module"), "{md}");
+    // the private edge spells `mod`, the mounted twin has no children
+    let md = hover_over_dep(doc, "secret", 0).unwrap();
+    assert!(md.contains("\nmod secret;"), "{md}");
+    assert!(md.contains("file module — `secret/mod.rut`"), "{md}");
+    assert!(md.contains("no child modules"), "{md}");
+}
+
+#[test]
+fn use_segment_hover_resolves_through_the_dep_tree() {
+    // `layout` inside `use gadgets::layout::{ Column };` — the
+    // resolved module (kind, mounted file, child count)
+    let doc = "use gadgets::layout::{ Column };\nentry fn main() -> nil {\n    let c: Column<i32> = Column { w: 1 };\n}\n";
+    let md = hover_over_dep(doc, "layout", 0).unwrap();
+    assert!(md.contains("layout/mod.rut"), "{md}");
+    assert!(md.contains("file module"), "{md}");
+    assert!(md.contains("1 child module"), "{md}");
+    // the pkg head resolves the dep's root module
+    let md = hover_over_dep(doc, "gadgets", 0).unwrap();
+    assert!(md.contains("mod.rut") && md.contains("file module"), "{md}");
+    assert!(md.contains("2 child modules"), "the root mounts layout + secret: {md}");
+    // a use the chain cannot walk: no hover, never wrong text
+    let doc2 = "use gadgets::secret::open;\nentry fn main() -> nil { }\n";
+    assert!(hover_over_dep(doc2, "secret", 0).is_none(), "a non-pub edge resolves to no hover");
+}
+
+#[test]
+fn use_leaf_through_mods_hovers_and_the_mod_name_is_a_keyword_free_ident() {
+    // the leaf name still hovers its type through the use graph
+    let doc = "use gadgets::layout::{ Column };\nentry fn main() -> nil {\n    let c: Column<i32> = Column { w: 1 };\n}\n";
+    let md = hover_over_dep(doc, "Column", 1).unwrap();
+    assert!(md.contains("struct Column"), "{md}");
+}

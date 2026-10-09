@@ -191,14 +191,15 @@ async function runDepWalk(rut: RutWasm): Promise<void> {
   }
 }
 
-// `**/rut.jsonc` + `.rut/cache/**` re-run the walk; a workspace-folder
-// change restarts the whole index (watchers re-arm over the new folder
-// set, the scan + walk re-run — re-indexing is replace-by-origin, so
-// this is idempotent)
+// `**/rut.jsonc` + `**/mod.rut` + `.rut/cache/**` re-run the walk (a
+// mod tree landing or moving re-mounts it); a workspace-folder change
+// restarts the whole index (watchers re-arm over the new folder set,
+// the scan + walk re-run — re-indexing is replace-by-origin, so this
+// is idempotent)
 function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
   const watchers: vscode.Disposable[] = [];
   const watchFolder = (folder: vscode.WorkspaceFolder): void => {
-    for (const pattern of [`**/${MANIFEST_NAME}`, '.rut/cache/**']) {
+    for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut', '.rut/cache/**']) {
       const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, pattern));
       watchers.push(
         watcher,
@@ -279,6 +280,14 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     ctx.files--;
     ctx.rut.addDefNamed(srcUri.toString(), module, new TextDecoder().decode(src));
   }
+  // the mod tree (file modules): the root module's `mod NAME;` edges
+  // mount `NAME/mod.rut` recursively — the wasm parses every file
+  // (`addDefMod` answers the declared children), JS only moves bytes.
+  // The lib lane roots at the entry lib while the transitional key
+  // stands; a manifest-less package roots at its `mod.rut` (indexed
+  // here at mod path '')
+  const entryPaths = table.entries.filter((e) => e.mode === 'Impl').map((e) => e.path);
+  await mountModTree(ctx, dir, module, entryPaths, depth);
   const rows: Array<{ row: DepRow; peer: boolean }> = [
     ...table.deps.map((row) => ({ row, peer: false })),
     ...(depth === 1 ? table.dev_deps : []).map((row) => ({ row, peer: false })),
@@ -318,6 +327,65 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
       }
     }
     await walkManifest(ctx, depManifestUri, depth + 1);
+  }
+}
+
+// one package's mod tree: `mod NAME;` declarations are the graph, so
+// the walk follows the wasm-parsed decls (`addDefMod` returns them) —
+// `NAME/mod.rut` beside the declaring file, recursively, depth- and
+// file-budget-capped. A read miss names the dep once (the loader's
+// loud diagnostics, mirrored — never silent missing modules).
+async function mountModTree(
+  ctx: WalkCtx,
+  pkgDir: vscode.Uri,
+  module: string,
+  entryPaths: string[],
+  depth: number
+): Promise<void> {
+  if (depth > MAX_DEP_DEPTH || ctx.files <= 0) {
+    return;
+  }
+  let rootUri: vscode.Uri;
+  let text: string;
+  let decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
+  if (entryPaths.length > 0) {
+    // the lib lane: the entry lib is the root module (already indexed
+    // by the entries loop — its text is re-read for the walk; the
+    // re-stamp at mod path '' is the same answer `None` spelled)
+    rootUri = vscode.Uri.joinPath(pkgDir, entryPaths[0]);
+    const bytes = await readFileNullable(rootUri);
+    if (bytes === null) {
+      return;
+    }
+    text = new TextDecoder().decode(bytes);
+    const stamped = ctx.rut.addDefMod(rootUri.toString(), module, '', text);
+    if (isEnvelope(stamped)) {
+      hintOnce(`mods:${pkgDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
+      return;
+    }
+    decls = stamped.decls;
+  } else {
+    // the manifest-less lane: `mod.rut` beside the manifest IS the lib
+    rootUri = vscode.Uri.joinPath(pkgDir, 'mod.rut');
+    const bytes = await readFileNullable(rootUri);
+    if (bytes === null) {
+      return; // no root module — nothing mounts (surface-only dev state)
+    }
+    text = new TextDecoder().decode(bytes);
+    ctx.files--;
+    const stamped = ctx.rut.addDefMod(rootUri.toString(), module, '', text);
+    if (isEnvelope(stamped)) {
+      hintOnce(`mods:${pkgDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
+      return;
+    }
+    decls = stamped.decls;
+  }
+  for (const decl of decls) {
+    if (ctx.files <= 0) {
+      return;
+    }
+    const childDir = vscode.Uri.joinPath(pkgDir, decl.name);
+    await mountModTree(ctx, childDir, module, [], depth + 1);
   }
 }
 
@@ -563,6 +631,36 @@ function registerSignatureHelp(rut: RutWasm): vscode.Disposable {
 
 // ---- workspace index (the wasm stand-in for the server's fs walk) ----
 
+// the folder-level package's name (its manifest parses in the wasm) —
+// `null` when the folder has no manifest or a broken one
+async function folderPkgName(rut: RutWasm, folder: vscode.Uri): Promise<string | null> {
+  const bytes = await readFileNullable(vscode.Uri.joinPath(folder, MANIFEST_NAME));
+  if (bytes === null) {
+    return null;
+  }
+  const table = rut.parseManifest(new TextDecoder().decode(bytes));
+  return isEnvelope(table) ? null : table.name;
+}
+
+// is there a `rut.jsonc` between the file's dir and the folder root
+// (inclusive of the file's dir, exclusive of the folder)? Then the
+// file belongs to a NESTED package — its own manifest walk owns its
+// mod paths, the folder stamp would lie
+function nestedManifest(folderFs: string, fileFs: string): boolean {
+  let dir = path.dirname(fileFs);
+  while (dir.length > folderFs.length) {
+    if (fs.existsSync(path.join(dir, MANIFEST_NAME))) {
+      return true;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return false;
+}
+
 async function indexWorkspace(rut: RutWasm): Promise<void> {
   const files = await vscode.workspace.findFiles(
     '**/*.rut',
@@ -570,8 +668,29 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
     MAX_WORKSPACE_FILES
   );
   const dec = new TextDecoder();
+  const pkgs = new Map<string, string | null>();
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    pkgs.set(folder.uri.fsPath, await folderPkgName(rut, folder.uri));
+  }
   for (const file of files) {
     const bytes = await vscode.workspace.fs.readFile(file);
+    const folder = vscode.workspace.getWorkspaceFolder(file)?.uri;
+    const pkg = folder ? pkgs.get(folder.fsPath) ?? null : null;
+    // a `mod.rut` under a folder-level package stamps its mod path
+    // (the dir relative to the folder; the folder root is '') — the
+    // position-path tier's data. Anything else keeps today's plain
+    // shape (the dep walk re-stamps the deps it mounts anyway)
+    if (
+      pkg &&
+      folder &&
+      path.basename(file.fsPath) === 'mod.rut' &&
+      !nestedManifest(folder.fsPath, file.fsPath)
+    ) {
+      const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
+      const modPath = rel === '' ? '' : rel.split(path.sep).join('/');
+      rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
+      continue;
+    }
     rut.addDef(file.toString(), dec.decode(bytes));
   }
 }

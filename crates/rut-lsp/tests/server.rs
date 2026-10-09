@@ -696,14 +696,22 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     std::fs::create_dir_all(ws.join(".rut/cache")).unwrap();
     std::fs::create_dir_all(&dep).unwrap();
 
-    // the path dep — a module directory with its own manifest
+    // the path dep — a module directory with its own manifest. The
+    // lib spells a `pub mod layout;` edge and the child dir carries
+    // its `mod.rut` — the editor walk mounts the tree like the loader
     std::fs::write(
         dep.join("rut.jsonc"),
         r#"{ "name": "gadgets", "entry": { "lib": "./lib.rut" } }"#,
     )
     .unwrap();
-    let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n";
+    let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\npub mod layout;\n";
     std::fs::write(dep.join("lib.rut"), lib_src).unwrap();
+    std::fs::create_dir_all(dep.join("layout")).unwrap();
+    std::fs::write(
+        dep.join("layout/mod.rut"),
+        "pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n",
+    )
+    .unwrap();
 
     // the url rows: pouch pinned + PRIMED from the committed bundle,
     // ghost pinned but primed nowhere (the miss), bare unpinned
@@ -731,14 +739,24 @@ fn write_dep_fixture(name: &str) -> DepFixture {
 
     let main_src = "\
 use gadgets::{ Widget };
+use gadgets::layout::{ Column };
 use pouch::{ Vec };
+mod helpers;
 fn main() -> nil {
     let w = Widget.new();
     let v: Vec<i32> = Vec.new();
+    let c: Column = Column { w: 1 };
+    let a: helpers.Slot = helpers.mk(1);
     v.push(1);
 }
 ";
     std::fs::write(ws.join("main.rut"), main_src).unwrap();
+    std::fs::create_dir_all(ws.join("helpers")).unwrap();
+    std::fs::write(
+        ws.join("helpers/mod.rut"),
+        "pub struct Slot {\n    n: i32;\n}\npub fn mk(n: i32) -> Slot { return Slot { n: n }; }\n",
+    )
+    .unwrap();
     let main_uri = format!("file://{}/main.rut", ws.display());
     DepFixture { base, ws, main_src: main_src.to_string(), main_uri }
 }
@@ -834,6 +852,96 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
     let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
     assert!(labels.contains(&"Widget"), "the dep type completes: {labels:?}");
     assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
+    let _ = remove_ws(fx.base);
+}
+
+/// the dep walk's mod dimension: the path dep's `pub mod layout;`
+/// mounts `layout/mod.rut`, the root package's own `mod helpers;`
+/// mounts `helpers/mod.rut` — use-through-mods completion, the
+/// segment hover, the `mod` decl hover, and the position-path tier
+/// all answer on the wire
+#[tokio::test]
+async fn mod_walk_completion_and_hover_on_the_wire() {
+    let fx = write_dep_fixture("modwalk");
+    let ws_uri = format!("file://{}", fx.ws.display());
+    let mut editor = spawn_at(&ws_uri).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let mut notes = Vec::new();
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": fx.main_uri, "languageId": "rut", "version": 1, "text": fx.main_src
+            }}),
+        )
+        .await;
+
+    // use-through-mods completion: `use gadgets::layout::⏐` (a fresh
+    // doc, the typed prefix empty) offers the mounted child's exports
+    let scratch = "use gadgets::layout::\nfn main() -> nil {\n}\n";
+    let scratch_uri = format!("file://{}/modscratch.rut", fx.ws.display());
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": scratch_uri, "languageId": "rut", "version": 1, "text": scratch
+            }}),
+        )
+        .await;
+    let comp = editor
+        .request(
+            "textDocument/completion",
+            json!({"textDocument": {"uri": scratch_uri}, "position": {"line": 0, "character": 20}}),
+            &mut notes,
+        )
+        .await;
+    let items = comp["result"].as_array().expect("completion items");
+    let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
+    assert!(labels.contains(&"Column"), "the walked module's type completes: {labels:?}");
+    assert!(labels.contains(&"mk"), "the walked module's fn completes: {labels:?}");
+
+    // the segment hover: `layout` inside `use gadgets::layout::..`
+    // renders the resolved module (mounted file + child count)
+    let (l, c) = pos_of(&fx.main_src, "layout", 0);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("segment hover markdown");
+    assert!(md.contains("file module"), "{md}");
+    assert!(md.contains("layout/mod.rut"), "{md}");
+
+    // the `mod helpers;` decl hover: kind + mounted file (no children)
+    let (l, c) = pos_of(&fx.main_src, "helpers", 0);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("mod decl hover markdown");
+    assert!(md.contains("\nmod helpers;"), "{md}");
+    assert!(md.contains("file module — `helpers/mod.rut`"), "{md}");
+    assert!(md.contains("no child modules"), "{md}");
+
+    // position-path completion: after `helpers::` in the package's own
+    // file, the module's members visible to the root
+    let (l, c) = pos_of(&fx.main_src, "Slot", 0);
+    let comp = editor
+        .request(
+            "textDocument/completion",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let items = comp["result"].as_array().expect("position completion items");
+    let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
+    assert!(labels.contains(&"Slot"), "the module's type completes: {labels:?}");
+    assert!(labels.contains(&"mk"), "the module's fn completes: {labels:?}");
     let _ = remove_ws(fx.base);
 }
 

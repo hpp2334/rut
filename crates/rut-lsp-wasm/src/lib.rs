@@ -27,6 +27,13 @@
 //!                                              error envelope)
 //!   rut_add_def_named(uri, name, src)          index a dep source file
 //!                                              under its module NAME
+//!   rut_add_def_mod(uri, name, path, src)
+//!                                   -> ptr     index a dep source at a
+//!                                              MOD PATH; the envelope
+//!                                              names the file's own mod
+//!                                              decls (the host's mount
+//!                                              walk reads its next hop
+//!                                              from them)
 //!   rut_add_bundle(ptr, len) -> ptr            .rutbundle bytes -> index
 //!                                              the bundle's own sources;
 //!                                              envelope names module +
@@ -192,7 +199,9 @@ pub extern "C" fn rut_hover(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u
     json_envelope(serde_json::json!(out))
 }
 
-/// completions at an LSP position (member after `.`, else bare)
+/// completions at an LSP position (member after `.`, the use-path and
+/// qualified-position tiers) — the doc's file-module context rides
+/// from its stamped twin (see `doc_mods_of`)
 #[no_mangle]
 pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
@@ -201,7 +210,8 @@ pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch
     };
     let items = {
         let defs = &state().defs;
-        rut_lsp::analysis::complete_at(uri, &src, defs, line, ch)
+        let doc = doc_mods_of(uri, defs);
+        rut_lsp::analysis::complete_at(uri, &src, defs, line, ch, &doc)
     };
     json_envelope(serde_json::json!(items))
 }
@@ -437,6 +447,73 @@ pub extern "C" fn rut_add_def_named(
     }
 }
 
+/// index one dep source file under its module NAME at a MOD PATH —
+/// the mod-aware twin of `rut_add_def_named` (the dep walk's per-file
+/// move for a mod-carrying package: the root at `""`, each child at
+/// its path). Returns the parsed file's own `mod` declarations —
+/// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
+/// reads its next hop from the wasm's parse (JS moves bytes, the
+/// module parses; no JS-side rut parsing).
+#[no_mangle]
+pub extern "C" fn rut_add_def_mod(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    name_ptr: *const u8,
+    name_len: usize,
+    mod_path_ptr: *const u8,
+    mod_path_len: usize,
+    src_ptr: *const u8,
+    src_len: usize,
+) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let name = unsafe { read_str(name_ptr, name_len) };
+    let mod_path = unsafe { read_str(mod_path_ptr, mod_path_len) };
+    let src = unsafe { read_str(src_ptr, src_len) };
+    let idx = rut_lsp::deps::index_dep_mod(
+        name,
+        uri,
+        mod_path,
+        src,
+        rut_lsp::analysis::mode_of(uri),
+        None,
+        &[],
+    );
+    let decls: Vec<serde_json::Value> = idx
+        .mods
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "name": m.name,
+                "vis": if matches!(m.vis, rut_ast::ast::Vis::Pub) { "pub" } else { "mod" },
+            })
+        })
+        .collect();
+    let defs = &mut state().defs;
+    match defs.iter().position(|d| d.origin == uri) {
+        Some(slot) => defs[slot] = idx,
+        None => defs.push(idx),
+    }
+    json_envelope(serde_json::json!({ "decls": decls }))
+}
+
+/// the open document's file-module context, read off the STAMPED
+/// twin: whichever face indexed the file under its real uri (the
+/// extension's dep walk / workspace indexer) laid down the (module,
+/// mod_path) pair — the fresh per-query doc index borrows it.
+/// Unstamped files answer the default (position-path completion off;
+/// nothing else reads this).
+fn doc_mods_of(uri: &str, defs: &[DefIndex]) -> rut_lsp::mods::DocMods {
+    for d in defs {
+        if d.origin == uri {
+            return rut_lsp::mods::DocMods {
+                mod_path: d.mod_path.clone(),
+                pkg: d.module.clone(),
+            };
+        }
+    }
+    rut_lsp::mods::DocMods::default()
+}
+
 /// binary (ptr, len) reader — the bundle bytes are a zip, not text
 unsafe fn read_bytes<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
     core::slice::from_raw_parts(ptr, len)
@@ -458,14 +535,28 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
     let defs = &mut state().defs;
     for f in &b.files {
         let uri = format!("bundle:{}/{}", b.module, f.path);
-        let idx = rut_lsp::deps::index_dep(
-            &b.module,
-            &uri,
-            &f.src,
-            f.mode,
-            b.namespace.as_deref(),
-            &b.consts,
-        );
+        // a mounted mod child rides as `<path>/mod.rut` (the rows
+        // lane's root as `mod.rut`) — its mod path stamps the index;
+        // flat files keep today's shape
+        let idx = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
+            Some(p) => rut_lsp::deps::index_dep_mod(
+                &b.module,
+                &uri,
+                &p,
+                &f.src,
+                rut_parser::Mode::Impl,
+                b.namespace.as_deref(),
+                &b.consts,
+            ),
+            None => rut_lsp::deps::index_dep(
+                &b.module,
+                &uri,
+                &f.src,
+                f.mode,
+                b.namespace.as_deref(),
+                &b.consts,
+            ),
+        };
         match defs.iter().position(|d| d.origin == uri) {
             Some(slot) => defs[slot] = idx,
             None => defs.push(idx),
@@ -613,5 +704,121 @@ mod tests {
         rut_begin();
         let h = take(rut_hover(uri.as_ptr(), uri.len(), 3, push_ch));
         assert!(h["contents"]["value"].as_str().unwrap().contains("push"), "{h}");
+    }
+
+    #[test]
+    fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        // the root: `pub mod layout;` rides back as the mount walk's
+        // next hop (the host reads its children from the envelope)
+        let root_src = &b"pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"[..];
+        let uri_root = b"file:///ws/gadgets/mod.rut";
+        let name = b"gadgets";
+        let out = take(rut_add_def_mod(
+            uri_root.as_ptr(),
+            uri_root.len(),
+            name.as_ptr(),
+            name.len(),
+            b"".as_ptr(),
+            0,
+            root_src.as_ptr(),
+            root_src.len(),
+        ));
+        assert_eq!(
+            out["decls"],
+            serde_json::json!([{ "name": "layout", "vis": "pub" }, { "name": "secret", "vis": "mod" }]),
+            "{}",
+            out["decls"]
+        );
+        // the child, stamped at its mod path
+        rut_begin();
+        let layout_src = &b"pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n"[..];
+        let uri_layout = b"file:///ws/gadgets/layout/mod.rut";
+        let out = take(rut_add_def_mod(
+            uri_layout.as_ptr(),
+            uri_layout.len(),
+            name.as_ptr(),
+            name.len(),
+            b"layout".as_ptr(),
+            6,
+            layout_src.as_ptr(),
+            layout_src.len(),
+        ));
+        assert!(out["decls"].as_array().unwrap().is_empty(), "{}", out["decls"]);
+
+        // `use gadgets::layout::⏐` — the walked module's exports (the
+        // private `secret` edge walked would be empty)
+        let doc = "use gadgets::layout::\nfn main() -> nil {\n}\n";
+        let uri = "file:///ws/main.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 21));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"Column"), "{labels:?}");
+        assert!(labels.contains(&"mk"), "{labels:?}");
+        // the root tier offers the pub mod child, never the private one
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 13));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"layout"), "{labels:?}");
+        assert!(!labels.contains(&"secret"), "a bare `mod` edge never crosses: {labels:?}");
+        assert!(!labels.contains(&"Column"), "child members stay under their path: {labels:?}");
+    }
+
+    /// a mod-carrying bundle in the pack writer's shape — the wasm
+    /// face mounts the rows tree additively
+    fn kit_bundle() -> Vec<u8> {
+        use std::collections::BTreeMap;
+        let mods = BTreeMap::from([
+            (
+                "layout".to_string(),
+                rut_driver::ModSource {
+                    path: "layout".into(),
+                    vis: rut_ast::ast::Vis::Pub,
+                    text: "pub struct Column {\n    w: i32;\n}\n".into(),
+                },
+            ),
+        ]);
+        let rows = rut_driver::mods::rows_json("pub mod layout;\n", &mods);
+        rut_driver::bundle::write_bundle(&[
+            (
+                rut_driver::bundle::files::MANIFEST_NAME.into(),
+                br#"{ "name": "kit" }"#.to_vec(),
+            ),
+            (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn add_bundle_mounts_a_mod_tree() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let bytes = kit_bundle();
+        let out = take(rut_add_bundle(bytes.as_ptr(), bytes.len()));
+        assert_eq!(out["module"], "kit");
+        assert_eq!(
+            out["files"],
+            serde_json::json!(["mod.rut", "layout/mod.rut"]),
+            "the tree rides the file list: {}",
+            out["files"]
+        );
+        // `use kit::layout::⏐` — the mounted child's exports
+        let doc = "use kit::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n";
+        let uri = "file:///ws/uses-kit.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 16));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"Column"), "{labels:?}");
+        // and the segment hover resolves through the dep tree
+        rut_begin();
+        let h = take(rut_hover(uri.as_ptr(), uri.len(), 0, 12)); // the `layout` segment
+        let md = h["contents"]["value"].as_str().unwrap();
+        assert!(md.contains("file module"), "{md}");
+        assert!(md.contains("layout/mod.rut"), "{md}");
     }
 }

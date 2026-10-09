@@ -192,19 +192,14 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }];
     }
 
-    // 2. use-statement names — the survey's use-graph edge: ctrl+click
-    //    on `Vec` inside `use pouch::Vec;` jumps to the exporting
-    //    module's decl, strictly inside the named pkg
-    if let Some(u) = ctx
-        .doc()
-        .uses
-        .iter()
-        .find(|u| u.name == *name && u.name_span == Some(t.span))
-    {
-        return use_graph_targets(&idxs, &u.pkg, name)
-            .into_iter()
-            .map(|(i, sp)| loc_at(ctx.doc_uri, i, sp))
-            .collect();
+    // 2. use-statement names and path segments — the survey's
+    //    use-graph edge: ctrl+click on `Vec` inside `use pouch::Vec;`
+    //    jumps to the exporting module's decl (strictly inside the
+    //    named pkg, now strictly inside the walked mod path too), and
+    //    a MOD PATH segment jumps to the `mod NAME;` edge that mounts
+    //    it
+    if let Some(locs) = use_site_targets(ctx, t.span, name) {
+        return locs;
     }
 
     let binds = bindings::collect(ctx.ast, ctx.toks, &idxs);
@@ -365,14 +360,33 @@ fn ty_name_locations(
 }
 
 /// where an imported name declares — strictly inside the named pkg's
-/// indexes: types, then module lets, then free fns
+/// indexes AND inside the walked mod path (`use pouch::a::b::{ C }`
+/// resolves C only in pouch's module `a/b`; a walk the chain cannot
+/// satisfy falls back to the flat pkg — better a broad answer than
+/// none, the `chain_for` law)
 fn use_graph_targets<'a>(
     idxs: &[&'a DefIndex],
     pkg: &str,
+    mod_path: Option<&str>,
     name: &str,
 ) -> Vec<(&'a DefIndex, Span)> {
+    let in_scope: Vec<&DefIndex> = match mod_path {
+        Some(p) => {
+            let scoped: Vec<&DefIndex> = idxs
+                .iter()
+                .copied()
+                .filter(|i| matches_pkg(i, pkg) && crate::mods::mod_path_of(i) == p)
+                .collect();
+            if scoped.is_empty() {
+                idxs.iter().copied().filter(|i| matches_pkg(i, pkg)).collect()
+            } else {
+                scoped
+            }
+        }
+        None => idxs.iter().copied().filter(|i| matches_pkg(i, pkg)).collect(),
+    };
     let mut out: Vec<(&DefIndex, Span)> = Vec::new();
-    for i in idxs.iter().filter(|i| matches_pkg(i, pkg)) {
+    for i in in_scope {
         if let Some(t) = i.ty(name) {
             out.push((i, ty_span(t)));
         }
@@ -384,6 +398,42 @@ fn use_graph_targets<'a>(
         }
     }
     out
+}
+
+/// the use-statement layer: the hovered ident is a leaf name (jump to
+/// the exporting decl through the walked mod path) or a path segment
+/// (jump to the `mod NAME;` edge that mounts it)
+fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation>> {
+    let doc = ctx.doc();
+    for u in &doc.uses {
+        // the leaf name
+        if u.name == name && u.name_span == Some(span) {
+            let pkg = &u.path[0];
+            let walked = if u.path.len() == 1 {
+                Some(String::new())
+            } else {
+                crate::mods::walk_use_mods(ctx.idxs, pkg, &u.path[1..])
+            };
+            return Some(
+                use_graph_targets(ctx.idxs, pkg, walked.as_deref(), name)
+                    .into_iter()
+                    .map(|(i, sp)| loc_at(ctx.doc_uri, i, sp))
+                    .collect(),
+            );
+        }
+        // a mod path segment
+        for (k, sp) in u.path_spans.iter().enumerate() {
+            if k == 0 || *sp != Some(span) {
+                continue; // the pkg head has no edge to jump to
+            }
+            let pkg = &u.path[0];
+            let walked = crate::mods::walk_use_mods(ctx.idxs, pkg, &u.path[1..=k])?;
+            let parent = crate::mods::find_mod(ctx.idxs, Some(pkg), crate::mods::parent_of(&walked))?;
+            let edge = parent.mods.iter().find(|m| m.name == u.path[k])?;
+            return Some(vec![loc_at(ctx.doc_uri, parent, edge.name_span.unwrap_or(edge.span))]);
+        }
+    }
+    None
 }
 
 fn decl_site(doc: &DefIndex, span: Span, name: &str) -> bool {

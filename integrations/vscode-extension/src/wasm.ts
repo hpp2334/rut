@@ -140,6 +140,12 @@ export function isEnvelope(e: unknown): e is Envelope {
   return typeof (e as Envelope).error === 'string';
 }
 
+/// `rut_add_def_mod`'s success envelope — the indexed file's own `mod`
+/// declarations, the mount walk's next hops (name + edge vis)
+export interface ModDecls {
+  decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
+}
+
 /// `rut_add_bundle`'s success envelope — the module + entry paths indexed
 export interface BundleIndexed {
   module: string;
@@ -179,6 +185,16 @@ interface RutExports {
     srcPtr: number,
     srcLen: number
   ): void;
+  rut_add_def_mod(
+    uriPtr: number,
+    uriLen: number,
+    namePtr: number,
+    nameLen: number,
+    modPathPtr: number,
+    modPathLen: number,
+    srcPtr: number,
+    srcLen: number
+  ): number;
   rut_add_bundle(ptr: number, len: number): number;
 }
 
@@ -305,6 +321,22 @@ export class RutWasm {
       const [n, nl] = this.put(name);
       const [s, sl] = this.put(src);
       this.e.rut_add_def_named(u, ul, n, nl, s, sl);
+    });
+  }
+
+  /// index one dep source file under its module NAME at a MOD PATH —
+  /// the mod-aware twin of `addDefNamed` (the dep walk's per-file move
+  /// for a mod-carrying package: the root at `''`, each child at its
+  /// path). Returns the parsed file's own `mod` declarations — the
+  /// host's mount walk reads its next hop from them (the module
+  /// parses; JS moves bytes).
+  addDefMod(uri: string, name: string, modPath: string, src: string): ModDecls | Envelope {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      const [n, nl] = this.put(name);
+      const [p, pl] = this.put(modPath);
+      const [s, sl] = this.put(src);
+      return this.e.rut_add_def_mod(u, ul, n, nl, p, pl, s, sl);
     });
   }
 

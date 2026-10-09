@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "rut manifest (rut.jsonc)",
-  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card.",
+  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `mod.rut` beside the manifest (file modules: `mod NAME;` in the root declares each `NAME/mod.rut` child); the `entry.lib`/`entry.libs` keys still load but are transitional.",
   "type": "object",
   "properties": {
     "name": {
@@ -23,7 +23,7 @@
     },
     "entry": {
       "type": "object",
-      "description": "Where the module's surface and body live — relative to this manifest's directory.",
+      "description": "Where the module's surface and body live — relative to this manifest's directory. TRANSITIONAL: the root module is `mod.rut` beside the manifest — a manifest with no `entry.lib` takes it (file modules: `mod NAME;` declares each `NAME/mod.rut` child). The `entry.lib`/`entry.libs` keys still load but are on their way out.",
       "properties": {
         "type": {
           "type": "string",
@@ -31,12 +31,12 @@
         },
         "lib": {
           "type": "string",
-          "description": "The body source (a `.rut` file)."
+          "description": "The body source (a `.rut` file). TRANSITIONAL: still valid, but the root module is `mod.rut` — rename the file and drop this key (file modules mount the `mod` tree beside it)."
         },
         "libs": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Additional body files, spliced after `lib` in listed order — one module, one namespace."
+          "description": "DEPRECATED — additional body files, spliced after `lib` in listed order. File modules replace the multi-lib splice: split each file into its own `NAME/mod.rut` directory and declare `mod NAME;` in the root."
         }
       },
       "additionalProperties": false

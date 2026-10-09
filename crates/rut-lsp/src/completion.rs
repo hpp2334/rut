@@ -26,6 +26,7 @@ use rut_lexer::token::{Tok, Token};
 use crate::hover::lookup::used_ifaces;
 use crate::hover::types::{DefIndex, TyDef, TyForm};
 use crate::line_index::LineIndex;
+use crate::mods::{self, DocMods};
 
 /// One completion item — plain data; the server maps it to LSP types.
 #[derive(Debug, Clone)]
@@ -64,14 +65,32 @@ pub enum CompletionKind {
     Field,
 }
 
-/// Completions at `pos`: use-path tiers inside a `use` statement,
-/// member items after `recv.` (filtered by the typed prefix), otherwise
-/// the keyword table plus the visible decls plus the auto-import tier.
-/// `src` is the NORMALIZED source — the auto-import edits' coordinates
-/// ride the same text the tokens were lexed from.
-pub fn complete(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32, src: &str) -> Vec<CompletionOut> {
-    if let Some((module, prefix)) = use_path_before(toks, pos) {
-        return use_path_completions(idxs, module.as_deref(), &prefix);
+/// Completions at `pos`: use-path tiers inside a `use` statement
+/// (walking a package's mod namespaces), qualified-position tiers
+/// after `modname::` in the package's own files, member items after
+/// `recv.` (filtered by the typed prefix), otherwise the keyword table
+/// plus the visible decls plus the auto-import tier. `src` is the
+/// NORMALIZED source — the auto-import edits' coordinates ride the
+/// same text the tokens were lexed from. `doc` is the open document's
+/// file-module context (the face's knowledge; the default keeps
+/// position-path completion off).
+pub fn complete(
+    idxs: &[&DefIndex],
+    toks: &[Token],
+    ast: &Ast,
+    pos: u32,
+    src: &str,
+    doc: &DocMods,
+) -> Vec<CompletionOut> {
+    if let Some((segs, prefix)) = use_path_before(toks, pos) {
+        return use_path_completions(idxs, &segs, &prefix);
+    }
+    if let Some((segs, prefix)) = qualified_path_before(toks, pos) {
+        if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
+            return out;
+        }
+        // the head did not resolve to a module — `::` in a non-mod
+        // context falls through to the tiers below
     }
     let Some((recv, prefix)) = recv_before(toks, pos) else {
         let used = used_ifaces(ast);
@@ -79,6 +98,14 @@ pub fn complete(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32, src: &s
         out.extend(auto_import_completions(idxs, ast, toks, pos, src));
         return out;
     };
+    // the qualified-position spelling: positions qualify with `.` —
+    // `helpers.mk(`, `let c: layout.Column` — so a receiver that
+    // resolves as a MOD HEAD offers the module's members (the same
+    // tier the `::` form rides). A resolved head is final; an unknown
+    // one falls through to the member tier
+    if let Some(out) = position_path_completions(idxs, doc, std::slice::from_ref(&recv), &prefix) {
+        return out;
+    }
     // the binding pass — member completion shares hover's receiver
     // inference (field reads, chained calls, loop variables)
     let binds = crate::hover::bindings::collect(ast, toks, idxs);
@@ -228,13 +255,14 @@ fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<Completio
 
 // ---- the use-path tiers ----
 
-/// the use-path context at `pos`: `(module, prefix)` when the tokens
-/// before the cursor run back to a `use` keyword — `use ⏐` /
-/// `use po⏐` (module `None`, the module-name tier) or
-/// `use pouch::⏐` / `use pouch::V⏐` / `use pouch::{V⏐` (module
-/// `Some("pouch")`, the names tier). The walk crosses idents, `::`,
-/// braces, and commas only — any other token ends the path.
-fn use_path_before(toks: &[Token], pos: u32) -> Option<(Option<String>, String)> {
+/// the use-path context at `pos`: the spelled path segments plus the
+/// typed prefix when the tokens before the cursor run back to a `use`
+/// keyword — `use ⏐` (no segments, the module-name tier), `use
+/// pouch::⏐` / `use pouch::V⏐` / `use pouch::layout::V⏐` /
+/// `use pouch::{V⏐` (segments `["pouch"]` / `["pouch", "layout"]`, the
+/// names tier). The walk crosses idents, `::`, braces, and commas
+/// only — any other token ends the path.
+fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     let i = toks.iter().rposition(|t| t.span.lo < pos)?;
     let mut seg: Vec<&Token> = Vec::new();
     let mut j = i;
@@ -256,16 +284,20 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Option<String>, String)>
         }
         j -= 1;
     }
-    // a `::` anywhere turns the path into the names tier, pkg = first
-    // ident; the prefix is a trailing partial ident
-    let module = seg.iter().any(|t| t.tok == Tok::Colon).then(|| {
+    // no `::` typed yet — still the module-NAME tier (the partial
+    // ident is the prefix, the segments stay empty); a `::` anywhere
+    // switches to the names tier of the spelled path
+    let has_sep = seg.iter().any(|t| t.tok == Tok::Colon);
+    let segments: Vec<String> = if has_sep {
         seg.iter()
-            .find_map(|t| match &t.tok {
-                Tok::Ident(s) => Some(s.clone()),
+            .filter_map(|t| match &t.tok {
+                Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => Some(s.clone()),
                 _ => None,
             })
-            .unwrap_or_default()
-    });
+            .collect()
+    } else {
+        Vec::new()
+    };
     let prefix = match seg.last() {
         Some(Token { tok: Tok::Ident(s), span }) if !rut_parser::is_reserved_kw(s) => {
             let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
@@ -273,14 +305,25 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Option<String>, String)>
         }
         _ => String::new(),
     };
-    Some((module, prefix))
+    Some((segments, prefix))
 }
 
 /// `use <cursor>`: the chain's module names — every NAMED index, the
 /// std surface included (std is not special; the names come from the
 /// uniform index set, no hardcoded table).
-fn use_path_completions(idxs: &[&DefIndex], module: Option<&str>, prefix: &str) -> Vec<CompletionOut> {
-    let Some(module) = module else {
+///
+/// `use pkg::<cursor>`: the module's exported public names — pub
+/// types, free fns, module lets — PLUS its `pub mod` children as
+/// walkable path segments. Deeper paths (`use pkg::a::b::<cursor>`)
+/// walk the pub edges first (a bare `mod`/`pub(pkg)` child is never
+/// offered cross-package) and answer the resolved module's exports —
+/// now with the `pub` gate on fns/lets too, the gate the compiler's
+/// qualified-use check applies. The std surface is NOT special-cased:
+/// std packages carry no mod children, so the walk answers their flat
+/// exports exactly as before (the deps-batch law stands — a flat
+/// package's chain and gates are today's, byte for byte).
+fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Vec<CompletionOut> {
+    let Some(pkg) = segs.first() else {
         let mut out: Vec<CompletionOut> = Vec::new();
         for i in idxs {
             let Some(m) = &i.module else { continue };
@@ -293,13 +336,54 @@ fn use_path_completions(idxs: &[&DefIndex], module: Option<&str>, prefix: &str) 
         out.sort_by(|a, b| a.label.cmp(&b.label));
         return out;
     };
-    // `use mod::<cursor>`: the module's exported public names — pub
-    // types, free fns, module lets. The import is the gate-opener, so
-    // the `pub builtin` gate does not bind here (this IS the use that
-    // names them)
-    let chain: Vec<&DefIndex> = idxs.iter().copied().filter(|i| crate::definition::matches_pkg(i, module)).collect();
+    // the import is the gate-opener, so the `pub builtin` gate does
+    // not bind here (this IS the use that names them)
+    let chain: Vec<&DefIndex> = idxs.iter().copied().filter(|i| crate::definition::matches_pkg(i, pkg)).collect();
+    if chain.is_empty() {
+        return Vec::new();
+    }
+    // resolve the walked module: the flat spelling answers the root —
+    // for a mod-carrying package that is the ROOT index only (members
+    // live under their module path), for a flat package today's whole
+    // chain; deeper segments walk the pub edges. The typed prefix is a
+    // trailing PARTIAL ident — never a segment to walk (`use pkg::V⏐`
+    // offers the root; `use pkg::layout::Co⏐` walks `layout` only)
+    let carrying = chain.iter().any(|i| i.mod_path.is_some());
+    let interior: &[String] = if prefix.is_empty() {
+        &segs[1..]
+    } else {
+        &segs[1..segs.len() - 1]
+    };
+    let walked = if interior.is_empty() {
+        Some(String::new())
+    } else {
+        mods::walk_use_mods(idxs, pkg, interior)
+    };
+    let Some(path) = walked else { return Vec::new() };
+    let scope: Vec<&DefIndex> = if carrying {
+        chain.iter().copied().filter(|i| mods::mod_path_of(i) == path).collect()
+    } else {
+        chain
+    };
+    let crossed = !interior.is_empty();
     let mut out: Vec<CompletionOut> = Vec::new();
-    for i in &chain {
+    for i in &scope {
+        // the walkable children — pub edges only (cross-package law)
+        for m in &i.mods {
+            if m.vis != rut_ast::ast::Vis::Pub {
+                continue;
+            }
+            let child = mods::child_path(&path, &m.name);
+            push_item(
+                &mut out,
+                CompletionOut::plain(
+                    m.name.clone(),
+                    format!("file module — {}", mods::display(&child)),
+                    m.doc.clone(),
+                    CompletionKind::Module,
+                ),
+            );
+        }
         for t in &i.types {
             if !t.is_pub {
                 continue;
@@ -322,12 +406,21 @@ fn use_path_completions(idxs: &[&DefIndex], module: Option<&str>, prefix: &str) 
             if f.owner.is_some() {
                 continue;
             }
+            // a walked path binds through the compiler's qualified-use
+            // gate: only `pub` names cross. The flat spelling keeps
+            // today's ungated shape (the deps-batch law)
+            if crossed && f.vis != rut_ast::ast::Vis::Pub {
+                continue;
+            }
             push_item(
                 &mut out,
                 CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
             );
         }
         for l in &i.lets {
+            if crossed && l.vis != rut_ast::ast::Vis::Pub {
+                continue;
+            }
             push_item(
                 &mut out,
                 CompletionOut::plain(l.name.clone(), l.src.clone(), l.doc.clone(), CompletionKind::Const),
@@ -337,6 +430,173 @@ fn use_path_completions(idxs: &[&DefIndex], module: Option<&str>, prefix: &str) 
     out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
     out.sort_by(|a, b| a.label.cmp(&b.label));
     out
+}
+
+// ---- the qualified-position tier (intra-package) ----
+
+/// the qualified-position context at `pos`: the path segments plus the
+/// typed prefix when the tokens before the cursor end a `a::b::` run
+/// OUTSIDE a `use` — type positions spell `::` (`let c: layout::Co⏐`,
+/// `Vec<layout::⏐`). The walk-back accepts non-reserved idents and
+/// colons only; a `::` separator is exactly TWO colons (a single `:` —
+/// an annotation — ends the path, and two idents without a separator
+/// are not a path run).
+fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
+    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
+    let mut run: Vec<&Token> = Vec::new();
+    let mut j = i;
+    loop {
+        match &toks[j].tok {
+            Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => run.insert(0, &toks[j]),
+            Tok::Colon => run.insert(0, &toks[j]),
+            // the anchor — anything else (including reserved keywords)
+            _ => break,
+        }
+        if j == 0 {
+            break;
+        }
+        j -= 1;
+    }
+    let mut segs: Vec<String> = Vec::new();
+    let mut pending: Option<String> = None;
+    let mut colons = 0usize;
+    let mut ended_on_ident = false;
+    for t in &run {
+        match &t.tok {
+            Tok::Colon => colons += 1,
+            Tok::Ident(s) => {
+                match colons {
+                    0 => {}
+                    // exactly two = the separator; ONE before an ident
+                    // is the annotation boundary (`let c: layout::`) —
+                    // the path STARTS at that ident, the run before it
+                    // is the anchor's side
+                    2 => segs.push(pending.take()?), // `::` with no head is not a path
+                    _ => {
+                        segs.clear();
+                    }
+                }
+                pending = Some(s.clone());
+                colons = 0;
+                ended_on_ident = true;
+            }
+            _ => unreachable!("the run collected idents and colons only"),
+        }
+    }
+    // a trailing separator: exactly `::` completes the head (a single
+    // trailing `:` is an annotation, not a path)
+    if colons > 0 {
+        if colons != 2 {
+            return None;
+        }
+        segs.push(pending.take()?);
+    }
+    if segs.is_empty() {
+        return None; // no `::` — the bare tiers answer
+    }
+    let prefix = if ended_on_ident {
+        pending.take().unwrap_or_default()
+    } else {
+        String::new()
+    };
+    Some((segs, prefix))
+}
+
+/// the leaf scope for a resolved mod path — the open document itself
+/// when the path IS its own module (the pkg head resolving to the
+/// root from the root), else the chain index stamped for it
+fn scope_index<'a>(
+    idxs: &[&'a DefIndex],
+    doc: &DocMods,
+    pkg: Option<&str>,
+    path: &str,
+) -> Option<&'a DefIndex> {
+    if doc.mod_path.as_deref() == Some(path) {
+        return Some(idxs[0]);
+    }
+    mods::find_mod(idxs, pkg, path)
+}
+
+/// Position-path completions: after `modname::` in a package's own
+/// file, the resolved module's members VISIBLE to the current file —
+/// the phase-3 tier predicate (`private` reaches the declaring module
+/// and descendants, `pub(super)` the parent's subtree, `pub(pkg)` the
+/// whole package, `pub` everywhere) applied to every row. Declared
+/// children of any edge vis ride as walkable segments (the
+/// intra-package walk gates leaves, not heads). `None` = the head did
+/// not resolve to a module (the caller falls through).
+fn position_path_completions(
+    idxs: &[&DefIndex],
+    doc: &DocMods,
+    segs: &[String],
+    prefix: &str,
+) -> Option<Vec<CompletionOut>> {
+    let (head, rest) = segs.split_first()?;
+    let pkg = doc.pkg.as_deref();
+    let doc_index = idxs[0];
+    let Some(start) = mods::resolve_position_head(doc, doc_index, idxs, head) else {
+        return None;
+    };
+    let Some(path) = mods::walk_position_mods(idxs, pkg, &start, rest) else {
+        return None;
+    };
+    let from = doc.mod_path.as_deref().unwrap_or("");
+    let Some(scope) = scope_index(idxs, doc, pkg, &path) else {
+        return Some(Vec::new());
+    };
+    let mut out: Vec<CompletionOut> = Vec::new();
+    // the walkable children — any declared edge (intra-package)
+    for m in &scope.mods {
+        let child = mods::child_path(&path, &m.name);
+        push_item(
+            &mut out,
+            CompletionOut::plain(
+                m.name.clone(),
+                format!("file module — {}", mods::display(&child)),
+                m.doc.clone(),
+                CompletionKind::Module,
+            ),
+        );
+    }
+    for t in &scope.types {
+        if !mods::vis_allows(from, &path, t.vis) {
+            continue;
+        }
+        push_item(
+            &mut out,
+            CompletionOut::plain(
+                t.name.clone(),
+                format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                t.doc.clone(),
+                match t.form {
+                    TyForm::Interface => CompletionKind::Interface,
+                    TyForm::Namespace => CompletionKind::Module,
+                    _ => CompletionKind::Type,
+                },
+            ),
+        );
+    }
+    for f in &scope.fns {
+        if f.owner.is_some() || !mods::vis_allows(from, &path, f.vis) {
+            continue;
+        }
+        push_item(
+            &mut out,
+            CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+        );
+    }
+    for l in &scope.lets {
+        if !mods::vis_allows(from, &path, l.vis) {
+            continue;
+        }
+        push_item(
+            &mut out,
+            CompletionOut::plain(l.name.clone(), l.src.clone(), l.doc.clone(), CompletionKind::Const),
+        );
+    }
+    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    Some(out)
 }
 
 // ---- the auto-import tier ----
@@ -573,7 +833,7 @@ mod tests {
         let idx = crate::hover::index(&s, &ast, &toks);
         let idxs = [&idx];
         let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-        complete(&idxs, &toks, &ast, pos, &s)
+        complete(&idxs, &toks, &ast, pos, &s, &DocMods::default())
     }
 
     fn labels(items: &[CompletionOut]) -> Vec<&str> {
@@ -618,7 +878,7 @@ return c.;
             let di = crate::hover::index(&d2, &ast, &toks);
             let idxs = [&di, &surf];
             let pos = d2.rfind("g.").unwrap() as u32 + 2;
-            complete(&idxs, &toks, &ast, pos, &d2)
+            complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
         };
 
         let gated = "fn go(g: Greeter) -> nil { g. }\n";
@@ -635,7 +895,7 @@ return c.;
         let di = crate::hover::index(&d2, &ast, &toks);
         let idxs = [&di];
         let pos = d2.rfind("l.").unwrap() as u32 + 2;
-        assert!(labels(&complete(&idxs, &toks, &ast, pos, &d2)).contains(&"hi"), "own interface completes");
+        assert!(labels(&complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())).contains(&"hi"), "own interface completes");
     }
 
     #[test]
@@ -683,7 +943,7 @@ return c.;
             let di = crate::hover::index(&d2, &ast, &toks);
             let idxs = [&di, &core];
             let pos = d2.len() as u32;
-            complete(&idxs, &toks, &ast, pos, &d2)
+            complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
         };
 
         let bare = "entry fn main() -> nil { }\n";
@@ -721,7 +981,7 @@ return c.;
         let di = crate::hover::index(&d2, &ast, &toks);
         let idxs = [&di, &core];
         let pos = d2.rfind("s.").unwrap() as u32 + 2;
-        let items = complete(&idxs, &toks, &ast, pos, &d2);
+        let items = complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default());
         assert!(labels(&items).contains(&"len"), "{:?}", labels(&items));
     }
 
@@ -738,7 +998,7 @@ return c.;
         let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
         chain.extend(std.iter());
         let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-        complete(&chain, &toks, &ast, pos, &s)
+        complete(&chain, &toks, &ast, pos, &s, &DocMods::default())
     }
 
     #[test]
@@ -798,7 +1058,7 @@ return c.;
         let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
         let di = crate::hover::index(&s, &ast, &toks);
         let idxs = [&di, &calc];
-        let items = complete(&idxs, &toks, &ast, s.len() as u32, &s);
+        let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
         let ls = labels(&items);
         assert!(ls.contains(&"Math"), "the namespace head completes: {ls:?}");
         assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
@@ -807,6 +1067,170 @@ return c.;
         assert!(matches!(math.kind, CompletionKind::Module), "{:?}", math.kind);
         let pi = items.iter().find(|c| c.label == "PI").unwrap();
         assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
+    }
+
+    // ---- the file-module walk (use-path + position tiers) ----
+
+    /// a mod-carrying dep, parsed and STAMPED the way the faces do:
+    /// `gadgets` — root (`""`) declaring `pub mod layout;` +
+    /// `mod secret;`; `layout` a `pub mod grid;` child with a pub
+    /// struct, a private fn, and a `pub(super)` fn; `layout/grid` and
+    /// `secret` leaves
+    fn gadget_dep() -> Vec<DefIndex> {
+        let mk = |mod_path: &str, src: &str| {
+            let s = rut_lexer::lexer::normalize(src);
+            let (toks, _) = rut_lexer::lexer::lex(&s);
+            let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
+            let mut idx = crate::hover::index(&s, &ast, &toks);
+            idx.module = Some("gadgets".to_string());
+            idx.mod_path = Some(mod_path.to_string());
+            idx
+        };
+        vec![
+            mk("", "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"),
+            mk(
+                "layout",
+                "pub mod grid;\npub struct Column {\n    w: i32;\n}\nfn internal() -> i32 { return 2; }\npub(super) fn for_parent() -> i32 { return 3; }\n",
+            ),
+            mk("layout/grid", "pub struct Cell {\n    x: i32;\n}\npub fn mk() -> Cell { return Cell { x: 1 }; }\n"),
+            mk("secret", "pub fn open() -> i32 { return 4; }\nfn hidden() -> i32 { return 5; }\n"),
+        ]
+    }
+
+    /// completions over the gadget dep with the cursor after `needle`
+    fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<CompletionOut> {
+        let s = rut_lexer::lexer::normalize(doc);
+        let (toks, _) = rut_lexer::lexer::lex(&s);
+        let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
+        let di = crate::hover::index(&s, &ast, &toks);
+        let dep = gadget_dep();
+        let mut chain: Vec<&DefIndex> = vec![&di];
+        chain.extend(dep.iter());
+        let pos = s
+            .rfind(needle)
+            .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
+            + needle.len() as u32;
+        complete(&chain, &toks, &ast, pos, &s, &doc_mods)
+    }
+
+    #[test]
+    fn use_path_completion_walks_the_dep_mod_tree() {
+        // `use gadgets::⏐` — the root's exports PLUS its pub mod
+        // children; the private `secret` edge never offers, and the
+        // child's members live under their path (no Column leak)
+        let items = complete_over_gadgets("use gadgets::", "use gadgets::", DocMods::default());
+        let ls = labels(&items);
+        assert!(ls.contains(&"layout"), "the pub mod child completes: {ls:?}");
+        assert!(ls.contains(&"tag"), "the root's fn completes: {ls:?}");
+        assert!(!ls.contains(&"secret"), "a bare `mod` edge never crosses: {ls:?}");
+        assert!(!ls.contains(&"Column"), "child members stay under their path: {ls:?}");
+        let layout = ls.iter().find(|l| **l == "layout").unwrap();
+        let items = complete_over_gadgets("use gadgets::", "use gadgets::", DocMods::default());
+        let item = items.iter().find(|c| c.label == "layout").unwrap();
+        assert!(matches!(item.kind, CompletionKind::Module), "{:?}", item.kind);
+        assert!(item.detail.contains("layout/mod.rut"), "{:?}", item.detail);
+        let _ = layout;
+
+        // the prefix filters the tier
+        let items = complete_over_gadgets("use gadgets::la", "use gadgets::la", DocMods::default());
+        let ls = labels(&items);
+        assert!(ls.contains(&"layout"), "{ls:?}");
+        assert!(!ls.contains(&"tag"), "{ls:?}");
+
+        // `use gadgets::layout::⏐` — the walked module's exports, the
+        // pub gate on fns now binding (crossed), plus its pub mod
+        // children
+        let items = complete_over_gadgets(
+            "use gadgets::layout::",
+            "use gadgets::layout::",
+            DocMods::default(),
+        );
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "{ls:?}");
+        assert!(ls.contains(&"grid"), "the nested pub mod completes: {ls:?}");
+        assert!(!ls.contains(&"for_parent"), "only `pub` leaf names cross packages: {ls:?}");
+        assert!(!ls.contains(&"internal"), "a private fn never crosses: {ls:?}");
+
+        // deeper: `use gadgets::layout::grid::⏐`
+        let items = complete_over_gadgets(
+            "use gadgets::layout::grid::",
+            "use gadgets::layout::grid::",
+            DocMods::default(),
+        );
+        let ls = labels(&items);
+        assert!(ls.contains(&"Cell"), "{ls:?}");
+        assert!(ls.contains(&"mk"), "{ls:?}");
+
+        // the brace form rides the same walk
+        let items = complete_over_gadgets(
+            "use gadgets::layout::{C",
+            "use gadgets::layout::{C",
+            DocMods::default(),
+        );
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "{ls:?}");
+
+        // a private edge is a dead end; a ghost is a miss — both empty
+        assert!(complete_over_gadgets("use gadgets::secret::", "use gadgets::secret::", DocMods::default()).is_empty());
+        assert!(complete_over_gadgets("use gadgets::ghost::", "use gadgets::ghost::", DocMods::default()).is_empty());
+    }
+
+    #[test]
+    fn position_path_completion_offers_the_module_members_by_tier() {
+        // the open document IS the gadgets root: `mod layout;` +
+        // `mod secret;` declared in it; the doc mods say so. Positions
+        // qualify with `.` (`let c: layout.Column`) — the real spelling
+        let doc = DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) };
+        let doc_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout.\n}\n";
+        let items = complete_over_gadgets(doc_src, "let c: layout.", doc.clone());
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "the pub type completes: {ls:?}");
+        assert!(ls.contains(&"grid"), "any declared edge walks intra-package: {ls:?}");
+        assert!(ls.contains(&"for_parent"), "pub(super) reaches the parent (the root): {ls:?}");
+        assert!(!ls.contains(&"internal"), "a private fn of a child stays hidden: {ls:?}");
+
+        // the `::` spelling rides the same tier (the plan's letter)
+        let doc_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout::\n}\n";
+        let items = complete_over_gadgets(doc_src, "let c: layout::", doc.clone());
+        assert!(labels(&items).contains(&"Column"), "{:?}", labels(&items));
+
+        // a child module's own file: `secret`'s members from the root —
+        // pub yes, private no
+        let doc_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let f: secret.\n}\n";
+        let items = complete_over_gadgets(doc_src, "let f: secret.", doc.clone());
+        let ls = labels(&items);
+        assert!(ls.contains(&"open"), "{ls:?}");
+        assert!(!ls.contains(&"hidden"), "a private fn of a sibling is not visible: {ls:?}");
+
+        // the own-pkg head names the root module: `gadgets.` from the
+        // root offers the root's own surface + children
+        let doc_src = "mod layout;\nmod secret;\npub fn root_fn() -> i32 { return 9; }\nentry fn main() -> nil {\n    let t: gadgets.\n}\n";
+        let items = complete_over_gadgets(doc_src, "let t: gadgets.", doc.clone());
+        let ls = labels(&items);
+        assert!(ls.contains(&"root_fn"), "{ls:?}");
+        assert!(ls.contains(&"layout"), "{ls:?}");
+
+        // a deeper doc (layout/grid): a sibling via the parent scope,
+        // and the pkg head reaching the root's decls
+        let grid_doc = DocMods { mod_path: Some("layout/grid".into()), pkg: Some("gadgets".to_string()) };
+        let grid_src = "pub struct Cell {\n    x: i32;\n}\nentry fn main() -> nil {\n    let c: layout.Column\n}\n";
+        let items = complete_over_gadgets(grid_src, "let c: layout.", grid_doc.clone());
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "the sibling-of-parent resolves: {ls:?}");
+        // grid is a descendant of layout: layout's PRIVATES are visible
+        // (the declaring module + descendants law)
+        let grid_src2 = "pub struct Cell {\n    x: i32;\n}\nentry fn main() -> nil {\n    let f: layout.internal\n}\n";
+        let items = complete_over_gadgets(grid_src2, "let f: layout.", grid_doc);
+        let ls = labels(&items);
+        assert!(ls.contains(&"internal"), "a descendant reads the parent's privates: {ls:?}");
+
+        // no doc mods (unknown provenance): the position tier stays off
+        // — a plain type receiver falls through to the member tier
+        // (empty for an unknown receiver — never wrong names)
+        let flat_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout.\n}\n";
+        let items = complete_over_gadgets(flat_src, "let c: layout.", DocMods::default());
+        let ls = labels(&items);
+        assert!(!ls.contains(&"Column"), "no doc mods, no mod tier: {ls:?}");
     }
 
     // ---- the auto-import tier ----
@@ -830,7 +1254,7 @@ return c.;
         let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
         chain.extend(std.iter());
         let pos = s.rfind("Ve").unwrap() as u32 + 2;
-        let items = complete(&chain, &toks, &ast, pos, &s);
+        let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
         let imp = import_item(&items, "Vec").expect("Vec auto-imports from pouch");
         assert_eq!(imp.detail, "pouch::Vec — import");
         assert_eq!(imp.sort_text.as_deref(), Some("~Vec"), "the tier sorts after the locals");
@@ -854,7 +1278,7 @@ return c.;
         let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
         chain.extend(std.iter());
         let pos = s.rfind("Ve").unwrap() as u32 + 2;
-        let items = complete(&chain, &toks, &ast, pos, &s);
+        let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
         let imp = import_item(&items, "Vec").expect("Vec auto-imports");
         let (range, text) = &imp.additional_text_edits[0];
         // right after the leading use's `;` — column 18 of line 0 —
@@ -874,7 +1298,7 @@ return c.;
         let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
         chain.extend(std.iter());
         let pos = s.rfind("Ve").unwrap() as u32 + 2;
-        let items = complete(&chain, &toks, &ast, pos, &s);
+        let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
         let imp = import_item(&items, "Vec").expect("Vec auto-imports");
         let (range, text) = &imp.additional_text_edits[0];
         // top of the file BODY — after the comment block and the blank
@@ -893,7 +1317,7 @@ return c.;
         let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
         chain.extend(std.iter());
         let pos = s.rfind("Ve").unwrap() as u32 + 2;
-        let items = complete(&chain, &toks, &ast, pos, &s);
+        let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
         // the name still completes (the bare tier), but NO import edit
         // rides it — the document already imports it
         assert!(

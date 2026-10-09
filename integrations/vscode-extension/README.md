@@ -45,6 +45,27 @@ The **native `rut-lsp` binary remains the face for other editors**
 [`../README.md`](../README.md)); both faces run the same queries from
 `crates/rut-lsp`, so they cannot drift.
 
+## File modules — mod.rut
+
+A rut package is a module tree: `mod.rut` beside the manifest is the
+root module, and each `mod NAME;` it declares mounts `NAME/mod.rut`
+beside it (`pub mod` marks the edge visible across packages). The
+extension rides the same model:
+
+- The **workspace scan** stamps every `mod.rut` under a folder-level
+  package with its mod path (the wasm indexes it via `rut_add_def_mod`)
+  — a nested package's own manifest keeps it out of the parent's tree.
+- The **dep walk** mounts each path dep's tree from its root module's
+  declarations (the wasm parses; the walk only reads the files the
+  decls name), so hover/completion see mod-carrying deps.
+- **Completion** walks the tree: after `pkg::` the dep's `pub mod`
+  children ride along (never a bare `mod`), deeper `::` segments walk
+  the pub edges, and — inside a package's own file — `modname::` /
+  `modname.` offers that module's members by visibility tier
+  (`pub`/`pub(pkg)`/`pub(super)`/private, the compiler's predicate).
+- **Hover** renders `pub? mod NAME;` decls (kind, mounted file, child
+  count) and resolves use-path segments to their mounted modules.
+
 ## Deps — the extension reads rut.jsonc
 
 After the workspace scan the extension hands each workspace folder's
@@ -69,6 +90,17 @@ manifests, JS only moves bytes) and walks its dependency rows:
 - **The pin is law at the mount door**: fetched or cached, bytes mount
   only with their `sha256` verified. An unpinned url row never mounts
   from the editor — one error hint, no silent unpinned bytes.
+- **File modules mount like the loader runs**: a dep package's root
+  module (`mod.rut` beside the manifest; the entry lib while the
+  transitional key stands) mounts its `mod NAME;` tree recursively —
+  `NAME/mod.rut` beside the declaring file — so `use
+  gadgets::layout::{ Column }` completes, hovers its segments
+  (`layout` shows the mounted file and child count), and jumps; a
+  `pub? mod NAME;` decl hovers its kind, mounted file, and child
+  count; and after `modname::` / `modname.` in a package's own file
+  the module's members complete by visibility tier. The wasm parses
+  every file (`rut_add_def_mod` answers the declared children) — JS
+  only moves bytes. `**/mod.rut` watchers re-mount a moved tree.
 - **Offline / failure** shows one info hint per dep naming the CLI
   alternative (`rut fetch` warms the cache) — never spam, never silent
   wrong results.

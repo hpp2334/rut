@@ -32,7 +32,7 @@ pub use build::index;
 pub use bindings::{Binding, BindKind};
 pub use lookup::{hover, HoverOut};
 pub(crate) use render::{binding_markdown, render_let};
-pub use types::{DefIndex, FnDef, ImplDef, LetDef, MemberSrc, TyDef, TyForm, UseDef};
+pub use types::{DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef};
 
 #[cfg(test)]
 mod tests;

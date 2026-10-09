@@ -1,7 +1,7 @@
 //! The index data — one entry per type, fn, or impl declaration:
 //! verbatim signature slices, doc lines, and spans for rendering.
 
-use rut_ast::ast::*;
+use rut_ast::ast::{AnyTy, Ast, NodeHandle, TypeKind, Vis};
 use rut_lexer::span::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,18 +80,29 @@ pub struct LetDef {
     /// verbatim decl slice, through the initializer
     pub src: String,
     pub doc: Vec<String>,
+    /// the declared visibility — the position-path completion's tier
+    /// gate reads it (`pub(pkg)`/`pub(super)` are not `pub`)
+    pub vis: Vis,
     pub span: Span,
     pub line: u32,
 }
 
-/// a `use pkg::{ Name, .. }` import edge — the name's span is a
+/// a `use pkg::A::B::{ Name, .. }` import edge — the name's span is a
 /// definition target (phase 2: ctrl+click on `Vec` in the use jumps
-/// to the pouch decl)
+/// to the pouch decl). The full path rides since the file-module phase:
+/// `path[0]` is the package, the rest name modules — the use-path
+/// completion walk and the segment hovers/definition targets key on
+/// them (the flat spelling degenerates to `path = [pkg]`).
 #[derive(Debug, Clone)]
 pub struct UseDef {
     pub name: String,
     pub name_span: Option<Span>,
     pub pkg: String,
+    /// the spelled path, pkg head included (`["pouch", "layout"]`)
+    pub path: Vec<String>,
+    /// token-recovered spans per path segment, same order — the use
+    /// segment hover/definition targets (`None` when recovery failed)
+    pub path_spans: Vec<Option<Span>>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +113,9 @@ pub struct TyDef {
     /// not the whole decl)
     pub name_span: Option<Span>,
     pub form: TyForm,
+    /// the declared visibility — the completion/hover tier gate reads
+    /// it (`pub(pkg)`/`pub(super)` are not `pub`)
+    pub vis: Vis,
     /// `pub` on the declaration — the std surface offers pub rows only
     /// (the hashmap-surface batch: nmapset's internal lane classes
     /// leave the bare-project surface)
@@ -127,12 +141,11 @@ pub struct FnDef {
     /// the declared return as written (`None` = unwritten);
     /// inferred-type hovers read it for call initializers
     pub ret: Option<String>,
-    /// declared parameter NAMES in order, `self` excluded — recorded
-    /// from the AST at index time (no re-parsing of the verbatim
-    /// `src`); the call-site parameter-name hints price exact-arity
-    /// matches against it
     pub params: Vec<String>,
     pub doc: Vec<String>,
+    /// the declared visibility — the position-path completion's tier
+    /// gate reads it (free fns; impl methods carry their member vis)
+    pub vis: Vis,
     /// the owning inherent impl's target type (`Circle` — inherent
     /// impls own their methods, so an impl method renders like the
     /// type's own surface), `None` for a free fn
@@ -149,6 +162,25 @@ pub struct ImplDef {
     pub target_name: String,
 }
 
+/// a `pub? mod NAME;` declaration — the file-module namespace edge.
+/// The namespace itself is the mounted `NAME/mod.rut`'s own index
+/// (found through the chain by its mod path); this row carries the
+/// edge: the declaring ident span (hover/definition target), the
+/// edge's visibility (`mod` vs `pub mod` — the crossing gates read
+/// it), and the doc comment.
+#[derive(Debug, Clone)]
+pub struct ModDef {
+    pub name: String,
+    /// byte span of the name identifier — the decl-site hover /
+    /// definition target (`None` only on a degenerate parse)
+    pub name_span: Option<Span>,
+    /// the edge's declared visibility (`Vis::Self_` = bare `mod`)
+    pub vis: Vis,
+    pub doc: Vec<String>,
+    pub span: Span,
+    pub line: u32,
+}
+
 #[derive(Debug, Default)]
 pub struct DefIndex {
     pub types: Vec<TyDef>,
@@ -158,6 +190,9 @@ pub struct DefIndex {
     pub lets: Vec<LetDef>,
     /// use-imported names (the decl layer)
     pub uses: Vec<UseDef>,
+    /// `pub? mod NAME;` declarations — the file-module namespace edges
+    /// this file declares (the mounted child lives in its own index)
+    pub mods: Vec<ModDef>,
     /// label for provenance lines — the file's path, or `core`
     pub origin: String,
     /// the normalized source this index was built over — cross-file
@@ -182,6 +217,16 @@ pub struct DefIndex {
     /// files) falls back to the origin path-segment / file-stem
     /// derivation, byte-for-byte the old behavior
     pub module: Option<String>,
+    /// which of the package's file modules THIS index is — the full
+    /// mod path (`""` = the pkg root's `mod.rut`, `"layout/grid"` =
+    /// that child). The (module, mod_path) pair is the whole key the
+    /// mod-aware queries walk: `module` alone stays the bare pkg name
+    /// (the `matches_pkg` fallback laws ride unchanged), `None` here
+    /// answers the root — today's single-file shapes — so flat
+    /// packages resolve exactly as before. Stamped by the faces that
+    /// mount a package's mod tree (the dep walk, the bundle loader);
+    /// never derived from text.
+    pub mod_path: Option<String>,
 }
 
 impl DefIndex {

@@ -1154,6 +1154,8 @@ name = "rut-lsp-wasm"
 version = "0.1.0"
 dependencies = [
  "ls-types",
+ "rut-ast",
+ "rut-driver",
  "rut-lsp",
  "rut-parser",
  "serde_json",

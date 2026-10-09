@@ -1036,6 +1036,55 @@ async function main() {
       bad.push(`bundle member hover missed: ${pushHover && JSON.stringify(pushHover.contents.value.slice(0, 60))}`);
     }
     smokes++;
+
+    // ---- file modules (the mod walk): rut_add_def_mod stamps the
+    // tree — the root's `pub mod layout;` rides back as the mount
+    // walk's next hop, `use tools::layout::` completes the walked
+    // module's exports (never the private edge), and the use-path
+    // segment hover names the mounted file. A fresh package name: the
+    // lane's earlier flat `gadgets` index stays the transitional shape
+    // it was indexed as. ----
+    e.rut_begin();
+    const mRoot = 'pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n';
+    const rootOut = take(e.rut_add_def_mod(
+      ...put('file:///ws/tools/mod.rut'), ...put('tools'), ...put(''), ...put(mRoot)
+    ));
+    assert.deepStrictEqual(rootOut.decls, [
+      { name: 'layout', vis: 'pub' },
+      { name: 'secret', vis: 'mod' },
+    ], `root mod decls: ${JSON.stringify(rootOut.decls)}`);
+    e.rut_begin();
+    const mChild = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
+    const childOut = take(e.rut_add_def_mod(
+      ...put('file:///ws/tools/layout/mod.rut'), ...put('tools'), ...put('layout'), ...put(mChild)
+    ));
+    assert.deepStrictEqual(childOut.decls, [], `leaf mod decls: ${JSON.stringify(childOut.decls)}`);
+
+    const modDoc = 'use tools::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
+    const modUri = 'file:///ws/e2e-mods.rut';
+    e.rut_begin();
+    take(e.rut_analyze(...put(modUri), ...put(modDoc)));
+    // the walked tier: the resolved module's exports
+    e.rut_begin();
+    const walkTier = take(e.rut_complete(...put(modUri), 0, 'use tools::layout::'.length));
+    const walkLabels = walkTier.map((i) => i.label);
+    for (const want of ['Column', 'mk']) {
+      assert.ok(walkLabels.includes(want), `mod walk lacks '${want}' (got ${walkLabels.join(', ')})`);
+    }
+    // the root tier: the pub mod child offers, the private edge and
+    // the child's members never leak
+    e.rut_begin();
+    const rootTier = take(e.rut_complete(...put(modUri), 0, 'use tools::'.length));
+    const rootLabels = rootTier.map((i) => i.label);
+    assert.ok(rootLabels.includes('layout'), `root tier mod edges: ${JSON.stringify(rootLabels)}`);
+    assert.ok(!rootLabels.includes('secret'), `a bare \`mod\` edge never crosses: ${JSON.stringify(rootLabels)}`);
+    assert.ok(!rootLabels.includes('Column'), `child members stay under their path: ${JSON.stringify(rootLabels)}`);
+    // the segment hover resolves the mounted module
+    e.rut_begin();
+    const segHover = take(e.rut_hover(...put(modUri), 0, 'use tools::layout::'.length - 3));
+    assert.ok(segHover && segHover.contents.value.includes('layout/mod.rut'),
+      `segment hover missed: ${segHover && JSON.stringify(segHover.contents.value.slice(0, 80))}`);
+    smokes++;
   }
 
   // ---- the corpus: zero false diagnostics through the SHIPPED wasm ----

@@ -4,7 +4,7 @@
 //! primitive blurbs, and the module-let decl render.
 
 use super::bindings::Binding;
-use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
+use super::types::{DefIndex, FnDef, LetDef, MemberSrc, ModDef, TyDef, TyForm};
 
 fn code_block(body: &str) -> String {
     format!("```rut\n{body}\n```")
@@ -217,6 +217,48 @@ pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
         out.push_str(&format!("\n{}", provenance(&i.origin, l.line)));
     }
     for d in &l.doc {
+        out.push_str(&format!("\n\n{}", d));
+    }
+    out
+}
+
+/// the resolved file-module render — a use-path segment's target (or
+/// any resolved module): the mounted file as the subject, the child
+/// count, provenance
+pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
+    let mut out = code_block(&crate::mods::display(path));
+    out.push_str("\nfile module");
+    match i.mods.len() {
+        0 => out.push_str("\nno child modules"),
+        1 => out.push_str("\n1 child module"),
+        n => out.push_str(&format!("\n{n} child modules")),
+    }
+    if !i.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.origin, 1)));
+    }
+    out
+}
+
+/// the `pub? mod NAME;` decl render — the edge as spelled, the kind,
+/// the mounted file the namespace resolves to, and the child's own
+/// `mod` count (the walkable path segments beneath it). `children` is
+/// `None` when the mounted index is not in the chain (an honest dash,
+/// never a wrong count).
+pub(crate) fn render_mod(i: &DefIndex, m: &ModDef, mounted: &str, children: Option<usize>) -> String {
+    let edge = if m.vis == rut_ast::ast::Vis::Pub { "pub mod".to_string() } else { "mod".to_string() };
+    let mut out = code_block(&format!("{edge} {};", m.name));
+    out.push_str(&format!("\nfile module — `{}`", mounted));
+    if let Some(n) = children {
+        out.push_str(&match n {
+            0 => "\nno child modules".to_string(),
+            1 => "\n1 child module".to_string(),
+            n => format!("\n{n} child modules"),
+        });
+    }
+    if !i.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.origin, m.line)));
+    }
+    for d in &m.doc {
         out.push_str(&format!("\n\n{}", d));
     }
     out

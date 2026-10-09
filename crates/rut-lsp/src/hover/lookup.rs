@@ -11,7 +11,10 @@ use rut_lexer::token::{Tok, Token};
 
 use super::bindings::{self, Binding};
 use super::infer::is_cap;
-use super::render::{binding_markdown, render_candidates, render_fn_hits, render_member, render_primitive, render_ty, render_let};
+use super::render::{
+    binding_markdown, render_candidates, render_fn_hits, render_member, render_mod,
+    render_module_target, render_primitive, render_ty, render_let,
+};
 use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
 use crate::semantic::is_keyword;
 
@@ -39,9 +42,17 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<
     }
 
     // decl sites — the hovered span EXACTLY equals a recorded name span:
-    // a field decl, an enum-member decl, or a module let (the decl
-    // layer's token-recovered spans; a use site never matches)
+    // a field decl, an enum-member decl, a module let, or a `mod NAME;`
+    // namespace edge (the decl layer's token-recovered spans; a use
+    // site never matches)
     if let Some(md) = decl_site_hover(idxs, t.span, name) {
+        return Some(HoverOut { markdown: md, span: t.span });
+    }
+
+    // use-path segments — the hovered ident is a path segment of one
+    // of the document's `use pkg::a::b::{ .. }` edges: hover the
+    // resolved module through the dep tree (a miss is no hover)
+    if let Some(md) = use_segment_hover(idxs, t.span) {
         return Some(HoverOut { markdown: md, span: t.span });
     }
 
@@ -130,7 +141,9 @@ pub(crate) fn used_ifaces(ast: &Ast) -> HashSet<String> {
 
 /// decl-site hover: the exact name-span match in the decl layer —
 /// fields (the owning type's member render), enum members (the enum's
-/// block, matching what `Color.Red` shows), and module lets
+/// block, matching what `Color.Red` shows), module lets, and `mod
+/// NAME;` namespace edges (the kind, the mounted file, the child
+/// count)
 fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String> {
     for i in idxs {
         for t in &i.types {
@@ -147,6 +160,55 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
             if l.name == name && l.name_span == Some(span) {
                 return Some(render_let(i, l));
             }
+        }
+        for m in &i.mods {
+            if m.name == name && m.name_span == Some(span) {
+                let child = crate::mods::child_path(&crate::mods::mod_path_of(i), &m.name);
+                let mounted = mounted_child(idxs, i, &child);
+                return Some(render_mod(
+                    i,
+                    m,
+                    &crate::mods::display(&child),
+                    mounted.map(|c| c.mods.len()),
+                ));
+            }
+        }
+    }
+    None
+}
+
+/// the chain index a mod edge's child resolves to — the (module,
+/// mod_path) pair when the owner is named; an unnamed owner (an open
+/// workspace file) answers any index stamped at the child's mod path
+/// (the dep walk's twins — display only: the child count)
+fn mounted_child<'a>(idxs: &[&'a DefIndex], owner: &DefIndex, child: &str) -> Option<&'a DefIndex> {
+    match crate::mods::find_mod(idxs, owner.module.as_deref(), child) {
+        Some(c) => Some(c),
+        None if owner.module.is_none() => idxs.iter().copied().find(|i| crate::mods::mod_path_of(i) == child),
+        None => None,
+    }
+}
+
+/// a use-path SEGMENT hover: the span matches one of the document's
+/// path segments — the resolved module (walked through the pub edges;
+/// the pkg head answers the root module) renders kind + mounted file
+/// + child count. A non-walking path is no hover, never wrong text.
+fn use_segment_hover(idxs: &[&DefIndex], span: Span) -> Option<String> {
+    let doc = idxs[0];
+    for u in &doc.uses {
+        for (k, sp) in u.path_spans.iter().enumerate() {
+            if *sp != Some(span) {
+                continue;
+            }
+            let pkg = &u.path[0];
+            let walked = if k == 0 {
+                Some(String::new())
+            } else {
+                crate::mods::walk_use_mods(idxs, pkg, &u.path[1..=k])
+            };
+            let path = walked?;
+            let target = crate::mods::find_mod(idxs, Some(pkg), &path)?;
+            return Some(render_module_target(target, &path));
         }
     }
     None

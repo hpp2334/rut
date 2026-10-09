@@ -44,12 +44,14 @@ use std::sync::{Arc, RwLock};
 use ls_types::request::{GotoTypeDefinitionParams, GotoTypeDefinitionResponse};
 use ls_types::*;
 use rut_driver::bundle::files::MANIFEST_NAME;
+use rut_parser::Mode;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::{Client, LanguageServer};
 
 use crate::analysis::{self, Analysis};
 use crate::deps::{self, DepSource};
 use crate::hover::DefIndex;
+use crate::mods::DocMods;
 use crate::semantic::TokenType;
 use crate::std_surface;
 
@@ -63,6 +65,10 @@ pub struct Backend {
     /// definition targets (the std surface's true `rut/...` paths)
     /// resolve against it
     root: Arc<RwLock<Option<PathBuf>>>,
+    /// per-file file-module context (the nearest manifest dir, the
+    /// mod path relative to it) — the position-path completion's doc
+    /// side, resolved on the fs once per file
+    doc_mods: Arc<RwLock<HashMap<PathBuf, DocMods>>>,
 }
 
 /// walk `root` for rut files; skip build/dependency trees and dot-dirs,
@@ -159,11 +165,13 @@ impl<'a> Walk<'a> {
     }
 
     /// one manifest: its own entry sources index under the module name
-    /// (the uri is the file's real path so F12 jumps land), then its dep
-    /// rows walk — `deps` at any depth, `dev-deps` only at the root (the
-    /// loader's law: a dep's dev table never enters a consumer's world),
-    /// `peer-deps` only when locally resolvable (the consumer supplies
-    /// them; an unresolvable peer is the normal state, not a failure).
+    /// (the uri is the file's real path so F12 jumps land), then its
+    /// mod tree mounts (see [`Walk::mount_mod_tree`]), then its dep
+    /// rows walk — `deps` at any depth, `dev-deps` only at the root
+    /// (the loader's law: a dep's dev table never enters a consumer's
+    /// world), `peer-deps` only when locally resolvable (the consumer
+    /// supplies them; an unresolvable peer is the normal state, not a
+    /// failure).
     fn manifest(&mut self, dir: &Path, depth: usize) {
         if depth > MAX_DEP_DEPTH || self.files == 0 {
             return;
@@ -207,6 +215,16 @@ impl<'a> Walk<'a> {
             let idx = deps::index_dep(&module, &uri, &src, e.mode, None, &[]);
             self.insert(idx);
         }
+        // the mod tree — the pkg's file modules index under the same
+        // name with their mod paths stamped (the editor face of the
+        // loader's mount)
+        let impl_entries: Vec<String> = table
+            .entries
+            .iter()
+            .filter(|e| e.mode == Mode::Impl)
+            .map(|e| e.path.clone())
+            .collect();
+        self.mount_mod_tree(&dir, &module, &impl_entries);
         let at_root = depth == 1;
         let rows = table
             .deps
@@ -323,14 +341,28 @@ impl<'a> Walk<'a> {
             Ok(b) => {
                 for f in &b.files {
                     let uri = format!("bundle:{}/{}", b.module, f.path);
-                    let idx = deps::index_dep(
-                        &b.module,
-                        &uri,
-                        &f.src,
-                        f.mode,
-                        b.namespace.as_deref(),
-                        &b.consts,
-                    );
+                    // a mounted mod child rides as `<path>/mod.rut` (the
+                    // rows lane's root as `mod.rut`) — its mod path
+                    // stamps the index; flat files keep today's shape
+                    let idx = match deps::bundle_file_mod_path(&f.path) {
+                        Some(p) => deps::index_dep_mod(
+                            &b.module,
+                            &uri,
+                            &p,
+                            &f.src,
+                            rut_parser::Mode::Impl,
+                            b.namespace.as_deref(),
+                            &b.consts,
+                        ),
+                        None => deps::index_dep(
+                            &b.module,
+                            &uri,
+                            &f.src,
+                            f.mode,
+                            b.namespace.as_deref(),
+                            &b.consts,
+                        ),
+                    };
                     self.insert(idx);
                 }
             }
@@ -342,6 +374,92 @@ impl<'a> Walk<'a> {
                 );
             }
         }
+    }
+
+    /// the pkg's mod tree (the editor face of the loader's mount): the
+    /// root module is `mod.rut` beside the manifest while no
+    /// `entry.lib` stands (the transitional dual-read), else the entry
+    /// lib spliced with `entry.libs` exactly as the loader does — and
+    /// either way the root text's `mod` declarations mount the child
+    /// tree from the directory, recursively, cycle-guarded. The root
+    /// (when it is the mod.rut lane — the entries loop had nothing to
+    /// index) and every child index under the pkg name with their mod
+    /// paths stamped. A mount failure is ONE loud error hint (the
+    /// loader's diagnostics, mirrored), never silent bytes.
+    fn mount_mod_tree(&mut self, dir: &Path, module: &str, impl_entries: &[String]) {
+        let (root_text, root_path, lib_lane) = if impl_entries.is_empty() {
+            let p = dir.join("mod.rut");
+            match std::fs::read_to_string(&p) {
+                Ok(text) => (text, p, false),
+                // an entry-less manifest with no mod.rut — the loader's
+                // surface-only dev state; nothing mounts
+                Err(_) => return,
+            }
+        } else {
+            // the entry-lib lane: lib first, then libs, '\n'-joined —
+            // the loader's splice, so the mount reads the same text
+            let mut text = String::new();
+            let mut last: Option<PathBuf> = None;
+            for rel in impl_entries {
+                let p = dir.join(rel.trim_start_matches("./"));
+                match std::fs::read_to_string(&p) {
+                    Ok(t) => {
+                        if !text.is_empty() {
+                            text.push('\n');
+                        }
+                        text.push_str(&t);
+                        last = Some(p);
+                    }
+                    Err(_) => continue,
+                }
+            }
+            match last {
+                Some(p) => (text, p, true),
+                None => return,
+            }
+        };
+        if !lib_lane && self.files > 0 {
+            self.files -= 1;
+            let uri = root_path.to_string_lossy().into_owned();
+            let idx = deps::index_dep_mod(module, &uri, "", &root_text, Mode::Impl, None, &[]);
+            self.insert(idx);
+        }
+        let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+            Ok(fs_child_lookup(dir, parent, name))
+        };
+        let canon = root_path.to_string_lossy().into_owned();
+        match rut_driver::mount_mod_children(&root_text, &canon, &mut read) {
+            Ok(mods) => {
+                for (path, m) in mods {
+                    if self.files == 0 {
+                        break;
+                    }
+                    self.files -= 1;
+                    let child_file = dir.join(format!("{path}/mod.rut"));
+                    let uri = child_file.to_string_lossy().into_owned();
+                    let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
+                    self.insert(idx);
+                }
+            }
+            Err(e) => {
+                self.hint_once(
+                    format!("mods:{}", dir.display()),
+                    MessageType::ERROR,
+                    format!("rut: {e}"),
+                );
+            }
+        }
+    }
+}
+
+/// a bundle file's mod path: the rows lane's root rides as `mod.rut`
+/// (`Some("")`), a mounted child as `<path>/mod.rut` (`Some(path)`);
+/// anything else is today's flat shape (`None`)
+fn mod_path_of_bundle_file(path: &str) -> Option<String> {
+    match path.strip_suffix("/mod.rut") {
+        Some(p) => Some(p.to_string()),
+        None if path == "mod.rut" => Some(String::new()),
+        None => None,
     }
 }
 
@@ -368,6 +486,69 @@ fn hex_sha256(bytes: &[u8]) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// the fs walk behind `Backend::doc_mods`: the nearest ancestor
+/// `rut.jsonc` names the package; the file's dir relative to it is
+/// the mod path — the manifest dir's own files are the root module,
+/// a `NAME/mod.rut` below it the `NAME` module (any other file shape
+/// is not a module file — the default). Bounded like every walk here.
+fn resolve_doc_mods(file: &Path) -> DocMods {
+    let file_dir = match file.parent() {
+        Some(d) => d.to_path_buf(),
+        None => return DocMods::default(),
+    };
+    let is_mod_rut = file.file_name().map(|n| n == "mod.rut").unwrap_or(false);
+    let mut dir: &Path = &file_dir;
+    for _ in 0..MAX_DEP_DEPTH * 2 {
+        if dir.join(MANIFEST_NAME).is_file() {
+            if let Ok(text) = std::fs::read_to_string(dir.join(MANIFEST_NAME)) {
+                if let Ok(t) = deps::dep_table(&text) {
+                    if let Some(name) = t.name {
+                        if !is_mod_rut && file_dir != dir {
+                            return DocMods::default(); // a stray file in a child dir
+                        }
+                        let rel = file_dir.strip_prefix(dir).unwrap_or(&file_dir);
+                        let mod_path = rel
+                            .components()
+                            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        return DocMods { mod_path: Some(mod_path), pkg: Some(name) };
+                    }
+                }
+            }
+        }
+        match dir.parent() {
+            Some(p) => dir = p,
+            None => break,
+        }
+    }
+    DocMods::default()
+}
+
+/// the fs lane's child lookup — the loader's three-case law over the
+/// directory: `NAME/mod.rut`, a same-named FILE sibling, a dir
+/// without its `mod.rut`, or nothing. The canonical identity (the
+/// cycle guard's key) is the resolved path.
+fn fs_child_lookup(dir: &Path, parent: &str, name: &str) -> rut_driver::ChildLookup {
+    let base = if parent.is_empty() { dir.to_path_buf() } else { dir.join(parent) };
+    let mod_rut = base.join(name).join("mod.rut");
+    if mod_rut.is_file() {
+        let text = std::fs::read_to_string(&mod_rut).unwrap_or_default();
+        let canon = mod_rut
+            .canonicalize()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| mod_rut.to_string_lossy().into_owned());
+        return rut_driver::ChildLookup::Found { text, canon };
+    }
+    if base.join(format!("{name}.rut")).is_file() {
+        return rut_driver::ChildLookup::NotADir;
+    }
+    if base.join(name).is_dir() {
+        return rut_driver::ChildLookup::NoModRut;
+    }
+    rut_driver::ChildLookup::Missing
+}
+
 impl Backend {
     pub fn new(client: Client) -> Self {
         Backend {
@@ -375,7 +556,28 @@ impl Backend {
             documents: Arc::new(RwLock::new(HashMap::new())),
             defs: Arc::new(RwLock::new(std_surface::indexes())),
             root: Arc::new(RwLock::new(None)),
+            doc_mods: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// the open document's file-module context: the nearest manifest
+    /// dir above the file (an fs walk, cached per file) names the
+    /// package and roots the mod path — the manifest dir's own files
+    /// are the root module (`""`), a `NAME/mod.rut` below it the
+    /// `NAME` module. Files under no manifest (workspace strays)
+    /// resolve to the default — position-path completion stays off
+    /// for them; nothing else reads this.
+    fn doc_mods(&self, uri: &Uri) -> DocMods {
+        let path = match uri.to_file_path() {
+            Some(cow) => cow.into_owned(),
+            None => return DocMods::default(),
+        };
+        if let Some(d) = self.doc_mods.read().unwrap().get(&path) {
+            return d.clone();
+        }
+        let d = resolve_doc_mods(&path);
+        self.doc_mods.write().unwrap().insert(path, d.clone());
+        d
     }
 
     fn get(&self, uri: &Uri) -> Option<String> {
@@ -547,9 +749,10 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
         let p = params.text_document_position.position;
+        let doc = self.doc_mods(&uri);
         let items = {
             let defs = self.defs.read().unwrap();
-            analysis::complete_at(uri.as_str(), &text, &defs, p.line, p.character)
+            analysis::complete_at(uri.as_str(), &text, &defs, p.line, p.character, &doc)
         };
         Ok(Some(CompletionResponse::Array(items)))
     }

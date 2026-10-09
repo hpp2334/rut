@@ -204,17 +204,22 @@ pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: 
 }
 
 /// completions at an LSP position: the document's index first, then
-/// `extra`. Returns full LSP items.
+/// `extra`. Returns full LSP items. `doc` is the open document's
+/// file-module context (`crate::mods::DocMods`) — the face's knowledge
+/// of where the file sits in its package's mod tree; the default
+/// (unknown) keeps the position-path tier off and changes nothing
+/// else.
 pub fn complete_at(
     uri: &str,
     src: &str,
     extra: &[hover::DefIndex],
     line: u32,
     ch: u32,
+    doc: &crate::mods::DocMods,
 ) -> Vec<CompletionItem> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
-    let idxs = doc_idxs(&doc, extra);
-    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch), &normalized)
+    let (normalized, toks, ast, doc_index) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc_index, extra);
+    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch), &normalized, doc)
         .into_iter()
         .map(completion::lsp_item)
         .collect()

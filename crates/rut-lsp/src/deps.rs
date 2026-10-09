@@ -22,6 +22,7 @@
 //!   access, and the member machinery resolves both through the minted
 //!   row).
 
+use rut_ast::ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::parse_manifest;
 use rut_driver::bundle::{parse_bundle, Manifest};
@@ -147,6 +148,7 @@ pub fn dep_table(manifest_text: &str) -> Result<DepTable, String> {
 /// One source file unpacked from a `.rutbundle`: archive-relative
 /// path, text, and the mode it indexes in (the manifest's entry key
 /// decided — the authoritative spelling, not the `.d.rut` convention).
+/// A mounted mod child rides as `<mod path>/mod.rut`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleFile {
     pub path: String,
@@ -166,13 +168,63 @@ pub struct BundleIndex {
     pub files: Vec<BundleFile>,
 }
 
+/// The archive's own `rut.mods` rows, when the bundle carries the
+/// additive envelope section: the root text (`""`) mounted with its
+/// child tree through rut-driver's rows codec (the same declaration-
+/// driven mount a directory runs). `Ok(None)` = no rows entry — the
+/// old flat envelope, which keeps loading byte-for-byte.
+fn bundle_rows(
+    entries: &[(String, Vec<u8>)],
+) -> Result<Option<(String, std::collections::BTreeMap<String, rut_driver::ModSource>)>, String> {
+    let text = match read_entry(entries, rut_driver::mods::ROWS_NAME) {
+        Ok(t) => t,
+        Err(_) => return Ok(None),
+    };
+    let (root, rows) = rut_driver::mods::parse_rows(&text)?;
+    let mods = rut_driver::mods::mount_rows(&root, &rows)?;
+    Ok(Some((root, mods)))
+}
+
+/// The archive-entries child lookup for the source lane's mod mount —
+/// the loader's `entry_child_lookup` three-case law mirrored over the
+/// editor's decoded entries: `NAME/mod.rut` present, a same-named
+/// FILE entry (`NAME.rut`), a `NAME/` prefix without its `mod.rut`,
+/// or nothing. Keys are bundle-normalized exactly like the loader's.
+fn entry_child_lookup(
+    entries: &[(String, Vec<u8>)],
+) -> impl FnMut(&str, &str) -> Result<rut_driver::ChildLookup, String> + '_ {
+    move |parent: &str, name: &str| {
+        let base = if parent.is_empty() {
+            String::new()
+        } else {
+            format!("{parent}/")
+        };
+        let mod_key = bundle_key(&format!("{base}{name}/mod.rut"))?;
+        if let Ok(text) = read_entry(entries, &mod_key) {
+            return Ok(rut_driver::ChildLookup::Found { text, canon: mod_key });
+        }
+        if read_entry(entries, &bundle_key(&format!("{base}{name}.rut"))?).is_ok() {
+            return Ok(rut_driver::ChildLookup::NotADir);
+        }
+        if entries.iter().any(|(k, _)| k.starts_with(&format!("{base}{name}/"))) {
+            return Ok(rut_driver::ChildLookup::NoModRut);
+        }
+        Ok(rut_driver::ChildLookup::Missing)
+    }
+}
+
 /// Unpack a `.rutbundle`'s OWN sources: CRC-verified entries, the
-/// archive's `rut.jsonc` naming the module, then each manifest-named
-/// entry file read out in the table's indexing order. Rode-along dep
-/// groups (`<pkg>/…` prefixes) never ride — they are the loader's
+/// archive's `rut.jsonc` naming the module, then the root module —
+/// the `entry.lib` file while the transitional key stands, else the
+/// `mod.rut` entry beside the manifest (the loader's dual-read
+/// mirrored) — plus the `rut.mods` rows entry when the bundle carries
+/// one (the additive envelope section: the tree as path-keyed rows),
+/// else the file-entry mount the loader's source lane runs. Rode-along
+/// dep groups (`<pkg>/…` prefixes) never ride — they are the loader's
 /// business. A missing entry file (a compiled-only bundle whose source
 /// did not ride) is skipped, not an error: the editor indexes what
-/// exists.
+/// exists. A declared child whose file is missing is the loud mount
+/// error — declarations are the graph.
 pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = parse_bundle(bytes).map_err(|e| e.to_string())?;
     let manifest_text = read_entry(&entries, MANIFEST_NAME)
@@ -183,12 +235,91 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         .clone()
         .ok_or_else(|| format!("`{MANIFEST_NAME}` has no `name`"))?;
     let mut files = Vec::new();
-    for e in &table.entries {
+    // the decl surface first (entry.type — Decl mode), verbatim
+    if let Some(e) = table.entries.iter().find(|e| e.mode == Mode::Decl) {
         if let Ok(src) = read_entry(&entries, &e.path) {
             files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
         }
     }
+    // the tree: rows entry first (the additive envelope — the pack
+    // writer's shape), else the file-entry mount over the root module
+    let tree: Option<(BundleFile, Vec<BundleFile>)> = match bundle_rows(&entries)? {
+        Some((root_text, mods)) => {
+            let children = mods
+                .into_iter()
+                .map(|(path, m)| BundleFile {
+                    path: format!("{path}/mod.rut"),
+                    src: m.text,
+                    mode: Mode::Impl,
+                })
+                .collect();
+            Some((
+                BundleFile { path: "mod.rut".to_string(), src: root_text, mode: Mode::Impl },
+                children,
+            ))
+        }
+        None => {
+            // the source lane: root = entry.lib while the transitional
+            // key stands, else the `mod.rut` entry beside the manifest
+            let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
+                Some(e) => match read_entry(&entries, &e.path) {
+                    Ok(src) => Some(BundleFile { path: e.path.clone(), src, mode: e.mode }),
+                    Err(_) => None,
+                },
+                None => match read_entry(&entries, "mod.rut") {
+                    Ok(src) => Some(BundleFile { path: "mod.rut".to_string(), src, mode: Mode::Impl }),
+                    Err(_) => None,
+                },
+            };
+            match root {
+                Some(root) => {
+                    let mounted = rut_driver::mount_mod_children(
+                        &root.src,
+                        &format!("\u{0}{module}"),
+                        &mut entry_child_lookup(&entries),
+                    )?;
+                    let children = mounted
+                        .into_iter()
+                        .map(|(path, m)| BundleFile {
+                            path: format!("{path}/mod.rut"),
+                            src: m.text,
+                            mode: Mode::Impl,
+                        })
+                        .collect();
+                    Some((root, children))
+                }
+                None => None,
+            }
+        }
+    };
+    if let Some((root, children)) = tree {
+        files.push(root);
+        files.extend(children);
+    } else {
+        // no body rode (a compiled-only or surface-only bundle) — the
+        // remaining entry files still index, exactly as before
+        for e in &table.entries {
+            if e.mode != Mode::Impl {
+                continue;
+            }
+            if let Ok(src) = read_entry(&entries, &e.path) {
+                files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+            }
+        }
+    }
     Ok(BundleIndex { module, namespace: table.namespace, consts: table.consts, files })
+}
+
+/// a bundle file's mod path: the rows lane's root rides as `mod.rut`
+/// (`Some("")`), a mounted child as `<path>/mod.rut` (`Some(path)`);
+/// anything else is today's flat shape (`None`) — shared by both
+/// faces (the stdio walk and the wasm shim index identically)
+pub fn bundle_file_mod_path(path: &str) -> Option<String> {
+    match path.strip_suffix("/mod.rut") {
+        Some(p) => Some(p.to_string()),
+        None if path == "mod.rut" => Some(String::new()),
+        None => None,
+    }
 }
 
 /// Index one dep source file: the ordinary [`analysis::index_at`] pass
@@ -248,6 +379,7 @@ pub fn index_dep(
             name: head.to_string(),
             name_span: None,
             form: TyForm::Namespace,
+            vis: Vis::Pub,
             is_pub: true,
             generics: Vec::new(),
             fields,
@@ -268,10 +400,28 @@ pub fn index_dep(
             ty: Some("f64".to_string()),
             src: format!("let {n} = {:?}", v),
             doc: vec!["manifest const — compiler-materialized".to_string()],
+            vis: Vis::Pub,
             span: Span::new(0, 0),
             line: 1,
         });
     }
+    idx
+}
+
+/// [`index_dep`] with the file's mod path stamped — one mounted
+/// module of a mod-carrying dep (the dep walk / bundle loader call
+/// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
+pub fn index_dep_mod(
+    name: &str,
+    uri: &str,
+    mod_path: &str,
+    src: &str,
+    mode: Mode,
+    namespace: Option<&str>,
+    consts: &[(String, f64)],
+) -> DefIndex {
+    let mut idx = index_dep(name, uri, src, mode, namespace, consts);
+    idx.mod_path = Some(mod_path.to_string());
     idx
 }
 
@@ -420,5 +570,94 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(idx.module.as_deref(), Some("pouch"));
         assert!(idx.ty("Math").is_none());
         assert!(idx.lets.is_empty());
+    }
+
+    #[test]
+    fn index_dep_mod_stamps_the_mod_path() {
+        let idx = index_dep_mod(
+            "gadgets",
+            "file:///deps/gadgets/layout/mod.rut",
+            "layout",
+            "pub struct Column {\n    w: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        assert_eq!(idx.module.as_deref(), Some("gadgets"));
+        assert_eq!(idx.mod_path.as_deref(), Some("layout"));
+        // the recorded mod edges ride the parsed rows too
+        let root = index_dep_mod("gadgets", "file:///deps/gadgets/mod.rut", "", "pub mod layout;\n", Mode::Impl, None, &[]);
+        assert_eq!(root.mod_path.as_deref(), Some(""));
+        assert_eq!(root.mods.len(), 1);
+        assert_eq!(root.mods[0].name, "layout");
+    }
+
+    /// a mod-carrying bundle in the pack writer's shape: manifest + the
+    /// additive `rut.mods` rows entry (the tree as path-keyed rows)
+    fn kit_rows_bundle() -> Vec<u8> {
+        use std::collections::BTreeMap;
+        let mods = BTreeMap::from([
+            (
+                "layout".to_string(),
+                rut_driver::ModSource {
+                    path: "layout".into(),
+                    vis: rut_ast::ast::Vis::Pub,
+                    text: "pub mod grid;\npub struct Column {\n    w: i32;\n}\n".into(),
+                },
+            ),
+            (
+                "layout/grid".to_string(),
+                rut_driver::ModSource {
+                    path: "layout/grid".into(),
+                    vis: rut_ast::ast::Vis::Pub,
+                    text: "pub struct Cell {\n    x: i32;\n}\n".into(),
+                },
+            ),
+        ]);
+        let rows = rut_driver::mods::rows_json("pub mod layout;\npub fn tag() -> i32 { return 1; }\n", &mods);
+        rut_driver::bundle::write_bundle(&[
+            (MANIFEST_NAME.into(), br#"{ "name": "kit" }"#.to_vec()),
+            (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn a_mod_bundle_unpacks_the_rows_tree() {
+        let bytes = kit_rows_bundle();
+        let b = bundle_sources(&bytes).expect("the kit bundle unpacks");
+        assert_eq!(b.module, "kit");
+        assert_eq!(b.namespace, None);
+        // the root + each child, path-keyed
+        let paths: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["mod.rut", "layout/mod.rut", "layout/grid/mod.rut"]);
+        assert!(b.files[0].src.contains("pub mod layout;"));
+        assert!(b.files[1].src.contains("struct Column"));
+        assert!(b.files[2].src.contains("struct Cell"));
+        assert!(b.files.iter().all(|f| f.mode == Mode::Impl));
+    }
+
+    #[test]
+    fn a_source_lane_bundle_mounts_the_file_entries() {
+        // no rows entry — the loader's source lane: the `mod.rut` entry
+        // beside the manifest is the root, its decls mount the children
+        let bytes = rut_driver::bundle::write_bundle(&[
+            (MANIFEST_NAME.into(), br#"{ "name": "kit" }"#.to_vec()),
+            ("mod.rut".into(), b"pub mod layout;\n".to_vec()),
+            ("layout/mod.rut".into(), b"pub fn span() -> i32 { return 1; }\n".to_vec()),
+        ])
+        .unwrap();
+        let b = bundle_sources(&bytes).expect("the source-lane bundle unpacks");
+        let paths: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["mod.rut", "layout/mod.rut"]);
+        assert!(b.files[1].src.contains("fn span"));
+    }
+
+    #[test]
+    fn bundle_file_mod_paths_spell_the_tree() {
+        assert_eq!(bundle_file_mod_path("mod.rut").as_deref(), Some(""));
+        assert_eq!(bundle_file_mod_path("layout/mod.rut").as_deref(), Some("layout"));
+        assert_eq!(bundle_file_mod_path("layout/grid/mod.rut").as_deref(), Some("layout/grid"));
+        assert_eq!(bundle_file_mod_path("pouch.rut"), None);
     }
 }

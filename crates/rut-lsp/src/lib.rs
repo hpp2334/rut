@@ -39,6 +39,7 @@ pub mod deps;
 pub mod hover;
 pub mod inlay;
 pub mod line_index;
+pub mod mods;
 pub mod references;
 pub mod semantic;
 pub mod signature_help;
