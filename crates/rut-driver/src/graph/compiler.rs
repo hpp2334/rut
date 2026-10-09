@@ -778,11 +778,13 @@ impl<'a> GraphCompiler<'a> {
 
 
 /// The exact package names a module uses, in source order, deduped.
+/// `path[0]` is the package — the same strings the flat grammar
+/// produced (the mod-path segments behind it are phase 2+'s business).
 pub(crate) fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        if let ItemKind::Use { pkg, .. } = ast.item(it) {
-            let name = ast.name(*pkg).to_string();
+        if let ItemKind::Use { path, .. } = ast.item(it) {
+            let name = ast.name(path[0]).to_string();
             if !out.contains(&name) {
                 out.push(name);
             }

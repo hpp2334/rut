@@ -39,6 +39,27 @@ fn file_header_comments_survive() {
     );
 }
 
+// ---- file modules: mod decls, use paths ----
+
+#[test]
+fn mod_decls_print_with_their_vis() {
+    assert_eq!(
+        fmt("mod layout;\npub mod widget;\npub(pkg) mod ui;\npub(super) mod w;\n"),
+        "mod layout;\npub mod widget;\npub(pkg) mod ui;\npub(super) mod w;\n"
+    );
+}
+
+#[test]
+fn use_paths_print_all_segments_then_the_leaf() {
+    // the mod path spells out in full; the leaf names ride the brace
+    // form (the single-leaf spelling canonicalizes to it)
+    assert_eq!(fmt("use pkg::A::B::{C, D};\n"), "use pkg::A::B::{ C, D };\n");
+    assert_eq!(fmt("use pkg::A::B::C;\n"), "use pkg::A::B::{ C };\n");
+    // the flat degenerate shapes are byte-stable
+    assert_eq!(fmt("use ink::{ Logger };\n"), "use ink::{ Logger };\n");
+    assert_eq!(fmt("use ink::Logger;\n"), "use ink::{ Logger };\n");
+}
+
 #[test]
 fn file_tail_comments_survive() {
     assert_eq!(

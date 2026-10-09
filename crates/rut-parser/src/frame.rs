@@ -12,7 +12,7 @@ use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame};
 use crate::item::{
-    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, TypeAliasFrame, UseFrame,
+    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ModDeclFrame, TypeAliasFrame, UseFrame,
     InterfaceFrame, MethodFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TyDeclFrame, TypeBodyFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
@@ -49,6 +49,7 @@ pub(crate) enum Frame {
     Module(ModuleFrame),
     Pub(PubFrame),
     Use(UseFrame),
+    ModDecl(ModDeclFrame),
     Alias(TypeAliasFrame),
     ModuleLet(ModuleLetFrame),
     Enum(EnumFrame),
@@ -80,6 +81,7 @@ impl Frame {
                 Frame::Module(f) => f.step(p),
                 Frame::Pub(f) => f.step(p),
                 Frame::Use(f) => f.step(p),
+                Frame::ModDecl(f) => f.step(p),
                 Frame::Alias(f) => f.step(p),
                 Frame::ModuleLet(f) => f.step(p),
                 Frame::Enum(f) => f.step(p),
@@ -107,6 +109,7 @@ impl Frame {
                 Frame::Module(f) => f.absorb(p, d),
                 Frame::Pub(f) => f.absorb(p, d),
                 Frame::Use(f) => f.absorb(p, d),
+                Frame::ModDecl(f) => f.absorb(p, d),
                 Frame::Alias(f) => f.absorb(p, d),
                 Frame::ModuleLet(f) => f.absorb(p, d),
                 Frame::Enum(f) => f.absorb(p, d),
@@ -230,17 +233,23 @@ impl PubFrame {
     }
 }
 
-/// The optional scope after `pub`: nothing = public,
-/// `(mod|super|self)` = the package/parent/module scopes. Shared by
-/// module items and class members.
+/// The optional scope after `pub`: nothing = public, `(super|pkg)` =
+/// the parent-module / package scopes. Shared by module items and
+/// class members. The old `pub(mod)`/`pub(self)` spellings are gone —
+/// unannotated is already module-private, so they only added noise.
 pub(crate) fn pub_scope(p: &mut Parser) -> Vis {
     if p.eat_punct(Tok::LParen) {
         let v = match p.tok().clone() {
-            Tok::Ident(m) if m == "mod" => Vis::Mod,
             Tok::Ident(m) if m == "super" => Vis::Super,
-            Tok::Ident(m) if m == "self" => Vis::Self_,
+            Tok::Ident(m) if m == "pkg" => Vis::Pkg,
+            Tok::Ident(m) if m == "mod" || m == "self" => {
+                p.err_here(
+                    "`pub(mod)`/`pub(self)` are gone — bare private is the default; widen with `pub(super)`, `pub(pkg)`, or `pub`",
+                );
+                Vis::Self_
+            }
             _ => {
-                p.err_here("expected `mod`, `super`, or `self` in pub(..)");
+                p.err_here("expected `super` or `pkg` in pub(..)");
                 p.bump();
                 p.expect(Tok::RParen);
                 return Vis::Self_;

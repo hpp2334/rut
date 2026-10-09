@@ -122,8 +122,8 @@ fn assign_str(op: Option<BinOp>) -> &'static str {
 fn vis_str(v: Vis) -> &'static str {
     match v {
         Vis::Pub => "pub",
-        Vis::Mod => "pub(mod)",
         Vis::Super => "pub(super)",
+        Vis::Pkg => "pub(pkg)",
         Vis::Self_ => "",
     }
 }
@@ -644,9 +644,25 @@ impl<'a> P<'a> {
                     self.item(it);
                 }
             }
-            ItemKind::Use { pkg, names } => {
+            ItemKind::ModDecl { vis, name } => {
+                if let Some(v) = vis_opt(vis) {
+                    self.text(v);
+                    self.sp();
+                }
+                self.text("mod ");
+                self.text(self.a.name(name));
+                self.text(";");
+            }
+            ItemKind::Use { path, names } => {
+                // the full path — package, modules, in order — then the
+                // leaf names in braces
                 self.text("use ");
-                self.text(self.a.name(pkg));
+                for (i, seg) in path.iter().enumerate() {
+                    if i > 0 {
+                        self.text("::");
+                    }
+                    self.text(self.a.name(*seg));
+                }
                 if names.is_empty() {
                     self.text(";");
                 } else {

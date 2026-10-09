@@ -21,6 +21,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
             "use" => Some(Frame::Use(UseFrame::new())),
+            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(Vis::Self_))),
             "pub" => Some(Frame::Pub(PubFrame::new())),
             "type" => Some(Frame::Alias(TypeAliasFrame::new(Vis::Self_))),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
@@ -95,6 +96,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
+            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(vis))),
             "type" => Some(Frame::Alias(TypeAliasFrame::new(vis))),
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
             "struct" => Some(Frame::Struct(TyDeclFrame::new(false, vis))),
@@ -132,19 +134,23 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 
 // ---- use ----
 
-/// `use <pkg>::{A, B};` / `use <pkg>::A;`: the package is
-/// one bare identifier, the names are one or more idents. There is no
-/// string specifier and no `from` clause — resolution is the driver's
-/// exact-match against mounted module names.
+/// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — the path walks
+/// `ident (:: ident)*` (`path[0]` is the package, the middle segments
+/// name modules), then the leaf is a brace list or a single name (the
+/// LAST path segment pops into names). The flat forms —
+/// `use pkg::{A, B};` / `use pkg::A;` — degenerate to `path = [pkg]`.
+/// The one illegal shape is `use pkg::A::B;` (a mod path with nothing
+/// at the leaf — mods are not values): one diagnostic, and the item
+/// still parses for recovery.
 pub(crate) struct UseFrame {
     lo: u32,
-    pkg: IdentId,
+    path: Vec<IdentId>,
     names: Vec<IdentId>,
 }
 
 impl UseFrame {
     pub(crate) fn new() -> Self {
-        UseFrame { lo: 0, pkg: IdentId(0), names: Vec::new() }
+        UseFrame { lo: 0, path: Vec::new(), names: Vec::new() }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -153,7 +159,7 @@ impl UseFrame {
             p.sync_stmt();
             return Step::Pop(Done::Failed);
         };
-        self.pkg = pkg;
+        self.path.push(pkg);
         if !p.eat_punct(Tok::Colon) {
             p.err_here("expected `::` after the package name — use paths spell `use <pkg>::{A, B};`");
             p.sync_stmt();
@@ -161,38 +167,131 @@ impl UseFrame {
         }
         p.expect(Tok::Colon);
         if p.eat_punct(Tok::LBrace) {
+            if !self.brace_names(p) {
+                p.sync_stmt();
+                return Step::Pop(Done::Failed);
+            }
+        } else {
+            // the module path: `ident (:: ident)*`, then either the
+            // brace leaf or the `::ident` single-name leaf
             loop {
-                if p.eat_punct(Tok::RBrace) {
-                    break;
-                }
-                let Some(n) = p.expect_ident("a used name") else {
+                let Some(seg) = p.expect_ident("a path segment") else {
                     p.sync_stmt();
                     return Step::Pop(Done::Failed);
                 };
-                self.names.push(n);
-                if !p.eat_punct(Tok::Comma) {
-                    p.expect(Tok::RBrace);
+                self.path.push(seg);
+                if !p.eat_punct(Tok::Colon) {
+                    break;
+                }
+                p.expect(Tok::Colon);
+                if p.eat_punct(Tok::LBrace) {
+                    if !self.brace_names(p) {
+                        p.sync_stmt();
+                        return Step::Pop(Done::Failed);
+                    }
                     break;
                 }
             }
-        } else {
-            // the single-name form: `use <pkg>::A;`
-            let Some(n) = p.expect_ident("a used name") else {
-                p.sync_stmt();
-                return Step::Pop(Done::Failed);
-            };
-            self.names.push(n);
+        }
+        if self.names.is_empty() {
+            // no brace leaf: the single-name leaf is the LAST path
+            // segment — `use pkg::A;` (the flat form) and
+            // `use pkg::A::B::C;` pop it; `use pkg::A::B;` spells a mod
+            // path with nothing at the leaf
+            match self.path.len() {
+                0 | 1 => {} // `use pkg::{};` — names stay empty, as today
+                3 => p.err_here(
+                    "`use pkg::A::B;` imports nothing — spell a name at the leaf (`::{ C }` or `::C`)",
+                ),
+                _ => {
+                    let leaf = self.path.pop().expect("path depth checked above");
+                    self.names.push(leaf);
+                }
+            }
         }
         p.expect(Tok::Semi);
-        let names = std::mem::take(&mut self.names);
+        let (path, names) = (std::mem::take(&mut self.path), std::mem::take(&mut self.names));
         Step::Pop(Done::Item(p.item(
-            ItemKind::Use { pkg: self.pkg, names },
+            ItemKind::Use { path, names },
             Span::new(self.lo, p.span().hi),
         )))
     }
 
+    /// the brace leaf — `::{A, B}` — one or more idents. `false` when
+    /// the list failed to parse (the caller resyncs).
+    fn brace_names(&mut self, p: &mut Parser) -> bool {
+        loop {
+            if p.eat_punct(Tok::RBrace) {
+                return true;
+            }
+            let Some(n) = p.expect_ident("a used name") else {
+                return false;
+            };
+            self.names.push(n);
+            if !p.eat_punct(Tok::Comma) {
+                p.expect(Tok::RBrace);
+                return true;
+            }
+        }
+    }
+
     pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
         unreachable!("use frame pushes no children")
+    }
+}
+
+// ---- mod decl ----
+
+/// `pub? mod NAME;` — a file-module DECLARATION: the body lives in the
+/// sibling `NAME/mod.rut`; the loader mounts it. The inline
+/// `mod NAME { .. }` block form is gone — one mechanism, files only —
+/// and diagnosing it still produces the decl (the stray block is
+/// skipped so the tail keeps parsing).
+pub(crate) struct ModDeclFrame {
+    vis: Vis,
+    lo: u32,
+    name: IdentId,
+}
+
+impl ModDeclFrame {
+    pub(crate) fn new(vis: Vis) -> Self {
+        ModDeclFrame { vis, lo: 0, name: IdentId(0) }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        self.lo = p.bump().span.lo; // mod
+        let Some(name) = p.expect_ident("a module name") else {
+            return Step::Pop(Done::Failed);
+        };
+        self.name = name;
+        if p.eat_punct(Tok::LBrace) {
+            p.err_here(
+                "inline `mod { }` blocks are gone — the body lives in `NAME/mod.rut` beside this file",
+            );
+            // skip the stray block so the module's tail still parses —
+            // one diag, and the declaration itself survives
+            let mut depth = 1usize;
+            while depth > 0 && !p.at_eof() {
+                if p.eat_punct(Tok::LBrace) {
+                    depth += 1;
+                } else if p.eat_punct(Tok::RBrace) {
+                    depth -= 1;
+                } else {
+                    p.bump();
+                }
+            }
+        } else {
+            p.expect(Tok::Semi);
+        }
+        let node = p.item(
+            ItemKind::ModDecl { vis: self.vis, name: self.name },
+            Span::new(self.lo, p.span().hi),
+        );
+        Step::Pop(Done::Item(node))
+    }
+
+    pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
+        unreachable!("mod decl frame pushes no children")
     }
 }
 

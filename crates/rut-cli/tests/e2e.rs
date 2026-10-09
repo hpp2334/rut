@@ -701,7 +701,7 @@ entry fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
     assert!(text.contains("@0 Enum Flavor [0,33)"), "header: {text}");
-    assert!(text.contains("vis: pub(self)"), "vis label: {text}");
+    assert!(text.contains("vis: private"), "vis label: {text}");
     assert!(text.contains("- Sour"), "member bullet: {text}");
     let json = &out.ast_json;
     let root = serde_hint_parse(json);
@@ -1187,8 +1187,8 @@ pub class Gauge {
 }
 impl Gauge {
     pub fn new() -> Self { return Self { n: 0, w: 3 }; }
-    pub(mod) fn bump(mut self) -> nil { self.n += self.w; }
-    pub(self) fn raw(self) -> i32 { return self.n; }
+    pub(super) fn bump(mut self) -> nil { self.n += self.w; }
+    fn raw(self) -> i32 { return self.n; }
     fn secret(self) -> i32 { return self.n * 100; }
 }
 entry fn main() -> nil {
@@ -1202,7 +1202,7 @@ entry fn main() -> nil {
     // the AST dumps ride CompileOutput (the demo envelope lane)
     let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
-    assert!(out.ast_dump.contains("vis: pub(mod)"), "member vis label: {}", out.ast_dump);
+    assert!(out.ast_dump.contains("vis: pub(super)"), "member vis label: {}", out.ast_dump);
     assert!(!out.ast_dump.contains("vis: pub\n      name: n"), "unannotated stays quiet: {}", out.ast_dump);
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);

@@ -1,8 +1,9 @@
 //! `pub` visibility on members: the scoped forms parse on
-//! class fields and on inherent impl methods, structs
-//! reject the dial, and the dropped `private` keyword is a
-//! lexer hard error naming its replacement. Type bodies
-//! are FIELDS ONLY — methods live in `impl` blocks.
+//! class fields and on inherent impl methods (`pub(super)`,
+//! `pub(pkg)`), the repealed `pub(mod)`/`pub(self)` spellings
+//! diagnose naming the fix, structs reject the dial, and the dropped
+//! `private` keyword is a lexer hard error naming its replacement.
+//! Type bodies are FIELDS ONLY — methods live in `impl` blocks.
 
 use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
@@ -12,17 +13,16 @@ fn member_pub_scopes_parse() {
     let src = "\
 class Widget {
     pub w: f32;
-    pub(mod) h: f32;
-    pub(self) inner: i32;
+    pub(pkg) g: f32;
     pub(super) spare: i32;
     plain: i32;                       // unannotated = the module-private default
 }
 
 impl Widget {
-    pub fn new() -> Self { return Self { w: 0, h: 0, inner: 0, spare: 0, plain: 0 }; }
-    pub fn size(self) -> f32 { return self.w * self.h; }
-    pub(mod) fn reset(mut self) -> nil { self.inner = 0; }
-    pub(self) fn helper(self) -> i32 { return self.inner; }
+    pub fn new() -> Self { return Self { w: 0, g: 0, spare: 0, plain: 0 }; }
+    pub fn size(self) -> f32 { return self.w * self.g; }
+    pub(super) fn reset(mut self) -> nil { self.plain = 0; }
+    pub(pkg) fn tint(self) -> i32 { return self.spare; }
     fn secret(self) -> i32 { return self.plain; }
 }
 ";
@@ -39,16 +39,29 @@ impl Widget {
         assert_eq!(ast.field_decl(h).vis, want);
     };
     expect(fields[0], Some(Vis::Pub));
-    expect(fields[1], Some(Vis::Mod));
-    expect(fields[2], Some(Vis::Self_));
-    expect(fields[3], Some(Vis::Super));
-    expect(fields[4], None);
+    expect(fields[1], Some(Vis::Pkg));
+    expect(fields[2], Some(Vis::Super));
+    expect(fields[3], None);
     let m = |i: usize| ast.method_decl(methods[i]).vis;
     assert_eq!(m(0), Some(Vis::Pub));
     assert_eq!(m(1), Some(Vis::Pub));
-    assert_eq!(m(2), Some(Vis::Mod));
-    assert_eq!(m(3), Some(Vis::Self_));
+    assert_eq!(m(2), Some(Vis::Super));
+    assert_eq!(m(3), Some(Vis::Pkg));
     assert_eq!(m(4), None);
+}
+
+#[test]
+fn member_pub_mod_self_are_gone() {
+    // the paren spellings are repealed — one diag naming the fix, and
+    // the member still parses (the default) so the tail stays sane
+    let (_, diags) = parse(
+        "class C { pub(mod) n: i32; pub(self) m: i32; }",
+        Mode::Impl,
+    );
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`pub(mod)`/`pub(self)` are gone") && d.msg.contains("bare private is the default")),
+        "the repealed spellings must name the fix: {diags:?}"
+    );
 }
 
 #[test]
@@ -107,7 +120,7 @@ fn pub_scope_rejects_unknown_scope() {
     // diagnostic still fires first (methods live in impls)
     let (_, diags) = parse("class C { pub(crate) fn m(self) -> nil { } }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected `mod`, `super`, or `self` in pub")),
+        diags.iter().any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "unknown scope must be diagnosed: {diags:?}"
     );
 }

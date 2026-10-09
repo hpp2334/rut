@@ -92,8 +92,13 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 ));
                 "Module"
             }
-            ItemKind::Use { pkg, names } => {
-                fields.push(field("pkg", DumpVal::Str(a.name(*pkg).to_string())));
+            ItemKind::ModDecl { vis, name } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                "ModDecl"
+            }
+            ItemKind::Use { path, names } => {
+                fields.push(field("path", DumpVal::Idents(path.iter().map(|&x| a.name(x).to_string()).collect())));
                 fields.push(field("names", DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect())));
                 "Use"
             }
@@ -604,8 +609,8 @@ fn json_escape(s: &str, out: &mut String) {
 fn vis_tag(v: Vis) -> &'static str {
     match v {
         Vis::Pub => "pub",
-        Vis::Mod => "mod",
         Vis::Super => "super",
+        Vis::Pkg => "pkg",
         Vis::Self_ => "self",
     }
 }
@@ -770,9 +775,10 @@ pub fn render_json(root: &DumpNode) -> String {
 fn vis_str(v: Vis) -> &'static str {
     match v {
         Vis::Pub => "pub",
-        Vis::Mod => "pub(mod)",
         Vis::Super => "pub(super)",
-        Vis::Self_ => "pub(self)",
+        Vis::Pkg => "pub(pkg)",
+        // the unannotated default — the `pub(self)` spelling is gone
+        Vis::Self_ => "private",
     }
 }
 

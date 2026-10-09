@@ -228,9 +228,8 @@ fn dumper_renders_alias_bounds_and_union() {
 fn pub_scopes_parse_on_type_alias() {
     let src = "\
 pub type A = i64;
-pub(mod) type B = i64;
 pub(super) type C = i64;
-pub(self) type D = i64;
+pub(pkg) type P = i64;
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
@@ -240,9 +239,27 @@ pub(self) type D = i64;
         _ => panic!("expected an alias"),
     };
     assert_eq!(expect(0), Vis::Pub);
-    assert_eq!(expect(1), Vis::Mod);
-    assert_eq!(expect(2), Vis::Super);
-    assert_eq!(expect(3), Vis::Self_);
+    assert_eq!(expect(1), Vis::Super);
+    assert_eq!(expect(2), Vis::Pkg);
+}
+
+#[test]
+fn pub_mod_self_scopes_are_gone_on_type_alias() {
+    // the repealed paren spellings diagnose (one diag each) but the
+    // aliases still parse at the default
+    let (ast, diags) = parse("pub(mod) type B = i64;\npub(self) type D = i64;\n", Mode::Impl);
+    assert_eq!(diags.len(), 2, "one diag per repealed spelling: {diags:?}");
+    assert!(
+        diags.iter().all(|d| d.msg.contains("are gone")),
+        "each diag names the fix: {diags:?}"
+    );
+    let items = ast.module_items(ast.root);
+    for i in 0..2 {
+        match ast.item(items[i]) {
+            ItemKind::Alias(d) => assert_eq!(d.vis, Vis::Self_, "the default survives recovery"),
+            _ => panic!("expected an alias"),
+        }
+    }
 }
 
 #[test]

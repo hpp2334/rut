@@ -55,15 +55,25 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(d.name), false),
             vec![],
         )),
-        // `use pkg::{A, B};` — an import is a document symbol: a
-        // module-shaped outline entry named for the package. Matters
-        // for multi-lib bases: a base file can be the
+        // `use pkg::A::B::{C, D};` — an import is a document symbol: a
+        // module-shaped outline entry named for the package (path[0]).
+        // Matters for multi-lib bases: a base file can be the
         // law header + the use set alone, and an outline that ignored
-        // imports would show it empty.
-        ItemKind::Use { pkg, .. } => Some(sym(
-            ast.name(*pkg),
+        // imports would show it empty. The FULL path rides the item
+        // for classification.
+        ItemKind::Use { path, .. } => Some(sym(
+            ast.name(path[0]),
             SymKind::Module,
-            find_name(toks, span, ast.name(*pkg), false),
+            find_name(toks, span, ast.name(path[0]), false),
+            vec![],
+        )),
+        // `pub? mod NAME;` — a file-module declaration: a namespace
+        // outline entry (the closest existing kind; the body lives in
+        // the mounted file)
+        ItemKind::ModDecl { name, .. } => Some(sym(
+            ast.name(*name),
+            SymKind::Module,
+            find_name(toks, span, ast.name(*name), false),
             vec![],
         )),
         ItemKind::Alias(d) => Some(sym(

@@ -224,12 +224,12 @@ pub use rut_core::Interner;
 pub enum Vis {
     /// `pub` — usable from anywhere
     Pub,
-    /// `pub(mod)`
-    Mod,
-    /// `pub(super)`
+    /// `pub(super)` — the parent module's subtree
     Super,
-    /// `pub(self)` / unannotated module items **and members** — module-private
-    /// (the default)
+    /// `pub(pkg)` — package-wide, no further
+    Pkg,
+    /// unannotated module items **and members** — module-private
+    /// (the default; the `pub(self)` spelling is gone)
     Self_,
 }
 
@@ -313,9 +313,16 @@ pub struct AliasData {
 #[derive(Clone, Debug)]
 pub enum ItemKind {
     Module { items: Vec<NodeHandle<AnyItem>> },
-    /// `use <pkg>::{A, B};` / `use <pkg>::A;` — the package is a single
-    /// bare `[a-zA-Z0-9_]+` name, resolved by the driver.
-    Use { pkg: IdentId, names: Vec<IdentId> },
+    /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in
+    /// the sibling `NAME/mod.rut` (the loader mounts it — declarations
+    /// are the graph). There is no inline `mod NAME { .. }` block —
+    /// one mechanism, files only.
+    ModDecl { vis: Vis, name: IdentId },
+    /// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
+    /// the package, the middle segments name modules, and the leaf
+    /// names are the imports. The flat forms (`use pkg::{A, B};` /
+    /// `use pkg::A;`) degenerate to `path = [pkg]`.
+    Use { path: Vec<IdentId>, names: Vec<IdentId> },
     /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
     /// union alias; aliases are non-generic (the row form is
     /// repealed — one name, one decl)

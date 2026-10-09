@@ -349,3 +349,152 @@ fn the_array_name_is_gone_from_the_grammar() {
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
 }
+
+// ---- file modules: mod decls, use paths, vis forms ----
+
+#[test]
+fn mod_decls_parse_with_vis_variants() {
+    // `pub? mod NAME;` — a declaration only; the body lives in the
+    // sibling `NAME/mod.rut`
+    let src = "\
+mod layout;
+pub mod widget;
+pub(pkg) mod ui;
+pub(super) mod internal;
+";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 4, "one decl per line: {items:?}");
+    let decl = |i: usize| match ast.item(items[i]) {
+        ItemKind::ModDecl { vis, name } => (*vis, ast.name(*name).to_string()),
+        k => panic!("expected a mod decl at {i}, got {k:?}"),
+    };
+    assert_eq!(decl(0), (Vis::Self_, "layout".to_string()));
+    assert_eq!(decl(1), (Vis::Pub, "widget".to_string()));
+    assert_eq!(decl(2), (Vis::Pkg, "ui".to_string()));
+    assert_eq!(decl(3), (Vis::Super, "internal".to_string()));
+}
+
+#[test]
+fn use_paths_split_path_and_names() {
+    // the leaf brace list / single name split off the mod path;
+    // path[0] is always the package
+    let (ast, diags) = parse("use pkg::A::B::{C, D};\n", Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let items = ast.module_items(ast.root);
+    match ast.item(items[0]) {
+        ItemKind::Use { path, names } => {
+            let segs: Vec<&str> = path.iter().map(|&s| ast.name(s)).collect();
+            let nms: Vec<&str> = names.iter().map(|&n| ast.name(n)).collect();
+            assert_eq!(segs, vec!["pkg", "A", "B"], "the mod path");
+            assert_eq!(nms, vec!["C", "D"], "the leaf names");
+        }
+        k => panic!("expected a use item, got {k:?}"),
+    }
+    // the single-name leaf: the LAST segment pops into names
+    let (ast, diags) = parse("use pkg::A::B::C;\n", Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let items = ast.module_items(ast.root);
+    match ast.item(items[0]) {
+        ItemKind::Use { path, names } => {
+            let segs: Vec<&str> = path.iter().map(|&s| ast.name(s)).collect();
+            assert_eq!(segs, vec!["pkg", "A", "B"]);
+            assert_eq!(names.len(), 1);
+            assert_eq!(ast.name(names[0]), "C");
+        }
+        k => panic!("expected a use item, got {k:?}"),
+    }
+}
+
+#[test]
+fn flat_uses_degenerate_to_the_package_path() {
+    // `use pkg::{A, B};` / `use pkg::A;` — behavior identical to the
+    // flat grammar: path = [pkg]
+    for (src, want_names) in [
+        ("use pkg::{A, B};\n", vec!["A", "B"]),
+        ("use pkg::A;\n", vec!["A"]),
+    ] {
+        let (ast, diags) = parse(src, Mode::Impl);
+        assert!(diags.is_empty(), "{src}: {diags:?}");
+        let items = ast.module_items(ast.root);
+        match ast.item(items[0]) {
+            ItemKind::Use { path, names } => {
+                assert_eq!(path.len(), 1, "{src}: the degenerate path");
+                assert_eq!(ast.name(path[0]), "pkg");
+                let nms: Vec<&str> = names.iter().map(|&n| ast.name(n)).collect();
+                assert_eq!(nms, want_names, "{src}");
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
+        }
+    }
+}
+
+#[test]
+fn use_with_an_empty_leaf_diagnoses() {
+    // `use pkg::A::B;` imports nothing — mods are not values. One diag
+    // naming the fix; the item still parses (recovery).
+    let (ast, diags) = parse("use pkg::A::B;\n", Mode::Impl);
+    assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
+    assert!(
+        diags[0].msg.contains("imports nothing") && diags[0].msg.contains("spell a name at the leaf"),
+        "the empty-leaf diag names the fix: {diags:?}"
+    );
+    let items = ast.module_items(ast.root);
+    match ast.item(items[0]) {
+        ItemKind::Use { path, names } => {
+            let segs: Vec<&str> = path.iter().map(|&s| ast.name(s)).collect();
+            assert_eq!(segs, vec!["pkg", "A", "B"], "the spelled path survives");
+            assert!(names.is_empty(), "nothing was imported");
+        }
+        k => panic!("expected a use item, got {k:?}"),
+    }
+}
+
+#[test]
+fn inline_mod_blocks_are_gone() {
+    // no inline `mod { }` blocks — the body lives in `NAME/mod.rut`.
+    // One diag naming the file location; the declaration survives and
+    // the tail keeps parsing.
+    let src = "mod W { fn f() -> nil { } }\nfn g() -> nil { }\n";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
+    assert!(
+        diags[0].msg.contains("inline `mod { }` blocks are gone") && diags[0].msg.contains("NAME/mod.rut"),
+        "the inline-block diag names the fix: {diags:?}"
+    );
+    let items = ast.module_items(ast.root);
+    assert!(matches!(ast.item(items[0]), ItemKind::ModDecl { .. }), "the decl survives");
+    assert!(matches!(ast.item(items[1]), ItemKind::Fn(_)), "the tail still parses");
+}
+
+#[test]
+fn pub_mod_and_pub_self_are_gone_everywhere() {
+    // the paren spellings diagnose at module scope too; the bare
+    // default and the widened forms keep parsing
+    let (ast, diags) = parse("pub(mod) type T = i64;\n", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("are gone")),
+        "{diags:?}"
+    );
+    assert!(matches!(ast.item(ast.module_items(ast.root)[0]), ItemKind::Alias(_)));
+    let (_, diags) = parse("pub(self) mod m;", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("are gone")),
+        "{diags:?}"
+    );
+    // the surviving set: `pub(super)`, `pub(pkg)`, `pub`
+    let (ast, diags) = parse(
+        "pub(super) mod a;\npub(pkg) mod b;\npub mod c;\n",
+        Mode::Impl,
+    );
+    assert!(diags.is_empty(), "{diags:?}");
+    let items = ast.module_items(ast.root);
+    let vis = |i: usize| match ast.item(items[i]) {
+        ItemKind::ModDecl { vis, .. } => *vis,
+        _ => panic!("expected a mod decl"),
+    };
+    assert_eq!(vis(0), Vis::Super);
+    assert_eq!(vis(1), Vis::Pkg);
+    assert_eq!(vis(2), Vis::Pub);
+}

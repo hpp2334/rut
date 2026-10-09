@@ -103,9 +103,11 @@ fn members_of(src: &str, ast: &Ast, toks: &[Token], methods: &[NodeHandle<Method
 fn member_vis_str(v: Vis) -> String {
     match v {
         Vis::Pub => "pub".to_string(),
-        Vis::Mod => "pub(mod)".to_string(),
         Vis::Super => "pub(super)".to_string(),
-        Vis::Self_ => "pub(self)".to_string(),
+        Vis::Pkg => "pub(pkg)".to_string(),
+        // unreachable from the parser today (the `pub(self)` spelling
+        // is gone) — the default renders bare
+        Vis::Self_ => "private".to_string(),
     }
 }
 
@@ -448,13 +450,15 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 // inference may name THIS document's types
                 pending_lets.push((*name, *ty, *init, span));
             }
-            ItemKind::Use { pkg, names } => {
-                // `use pouch::{ Vec, Vec2 };` / `use pouch::Vec;` — the
-                // pkg ident first, then the imported names in order
-                let pkg_text = ast.name(*pkg).to_string();
+            ItemKind::Use { path, names } => {
+                // `use pouch::{ Vec, Vec2 };` /
+                // `use pouch::layout::{ Vec, Vec2 };` — the path idents
+                // (package, then modules) match positionally first, then
+                // the imported names in order
+                let pkg_text = ast.name(path[0]).to_string();
                 let expected: Vec<&str> = names.iter().map(|n| ast.name(*n)).collect();
                 let mut spans: Vec<Option<Span>> = vec![None; expected.len()];
-                let (mut seen_pkg, mut k) = (false, 0usize);
+                let (mut segs_left, mut k) = (path.len(), 0usize);
                 for t in toks {
                     if t.span.lo < span.lo || t.span.hi > span.hi {
                         continue;
@@ -463,8 +467,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     if rut_parser::is_reserved_kw(text) {
                         continue;
                     }
-                    if !seen_pkg {
-                        seen_pkg = *text == pkg_text;
+                    if segs_left > 0 {
+                        if *text == ast.name(path[path.len() - segs_left]) {
+                            segs_left -= 1;
+                        }
                         continue;
                     }
                     if k < expected.len() && text == expected[k] {
@@ -479,6 +485,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                         pkg: pkg_text.clone(),
                     });
                 }
+            }
+            ItemKind::ModDecl { .. } => {
+                // `pub? mod NAME;` — the namespace rides the mounted
+                // file's own index (a later phase); nothing to record here
             }
             ItemKind::Module { .. } => {}
         }
