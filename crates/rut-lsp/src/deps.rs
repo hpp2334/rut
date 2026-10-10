@@ -24,7 +24,7 @@
 
 use rut_ast::ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
-use rut_driver::bundle::manifest::parse_manifest;
+use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
 use rut_lexer::span::Span;
 use rut_parser::Mode;
@@ -70,8 +70,11 @@ pub struct DepTable {
     /// the manifest's `name` — what a `use` path spells
     pub name: Option<String>,
     /// the entry sources, in indexing order: the decl surface first
-    /// (`entry.type`, Decl mode), then the body (`entry.lib`, then
-    /// `entry.libs` in listed order, Impl mode)
+    /// (`entry.type`, Decl mode), then the body — the root module
+    /// `mod.rut` (Impl mode; the convention, not a key). An OLD
+    /// published bundle's manifest (parsed through
+    /// [`dep_table_compat`]) carries the repealed keys instead, mapped
+    /// exactly as the loader's reader-compat law does.
     pub entries: Vec<EntrySource>,
     /// the qualified-access head (`calc`'s `Math`)
     pub namespace: Option<String>,
@@ -116,20 +119,50 @@ fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> Dep
 
 /// Parse one `rut.jsonc` (JSONC: comments + trailing commas legal)
 /// into the editor's dep table. A malformed manifest is the error —
-/// the faces surface it as a hint, never silent bytes.
+/// the faces surface it as a hint, never silent bytes. STRICT: the
+/// repealed `entry.lib`/`entry.libs` keys refuse, and the body rides
+/// the `mod.rut` convention. The bundle face parses OLD published
+/// manifests through [`dep_table_compat`].
 pub fn dep_table(manifest_text: &str) -> Result<DepTable, String> {
     let m: Manifest = parse_manifest(manifest_text).map_err(|e| e.to_string())?;
+    dep_table_of(m)
+}
+
+/// [`dep_table`] over the bundle reader's compat lane: an archive's
+/// own manifest may be OLD (a published bundle is forever old — the
+/// pinned CDN tags), so the repealed keys map onto Impl entries
+/// exactly as the loader's reader mounts them (the lib, then the
+/// `libs` splice, in listed order), REPLACING the `mod.rut`
+/// convention row an old archive cannot answer.
+pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
+    let m: Manifest = parse_manifest_compat(manifest_text).map_err(|e| e.to_string())?;
+    let mut t = dep_table_of(m.clone())?;
+    if m.legacy_entry.lib.is_some() || !m.legacy_entry.libs.is_empty() {
+        t.entries.retain(|e| e.mode != Mode::Impl);
+        if let Some(lib) = &m.legacy_entry.lib {
+            t.entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
+        }
+        for lib in &m.legacy_entry.libs {
+            t.entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
+        }
+    }
+    Ok(t)
+}
+
+fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     let mut entries = Vec::new();
     // the decl surface indexes in Decl mode; the body in Impl mode —
     // the same split `analysis::mode_of` speaks for open documents
     if let Some(ty) = &m.entry.type_path {
         entries.push(EntrySource { path: bundle_key(ty)?, mode: Mode::Decl });
     }
-    if let Some(lib) = &m.entry.lib {
-        entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
-    }
-    for lib in &m.entry.libs {
-        entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
+    // the body is the ROOT MODULE — `mod.rut` beside the manifest, the
+    // convention every lane reads. A surface-only dev state (or a host
+    // pkg) names no body: a Lib pkg with an entry.type spelled has its
+    // mod.rut probed by the callers, and an unreadable row simply
+    // indexes nothing (what exists is what mounts).
+    if m.pkg_type == rut_driver::bundle::PkgType::Lib {
+        entries.push(EntrySource { path: "mod.rut".to_string(), mode: Mode::Impl });
     }
     let rows = |table: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>| {
         table.iter().map(|(name, desc)| dep_row(name, desc)).collect()
@@ -215,9 +248,10 @@ fn entry_child_lookup(
 
 /// Unpack a `.rutbundle`'s OWN sources: CRC-verified entries, the
 /// archive's `rut.jsonc` naming the module, then the root module —
-/// the `entry.lib` file while the transitional key stands, else the
-/// `mod.rut` entry beside the manifest (the loader's dual-read
-/// mirrored) — plus the `rut.mods` rows entry when the bundle carries
+/// the `mod.rut` entry beside the manifest (an OLD published bundle
+/// rides at its legacy `entry.lib` spelling, mapped by
+/// [`dep_table_compat`] — the loader's reader-compat law mirrored) —
+/// plus the `rut.mods` rows entry when the bundle carries
 /// one (the additive envelope section: the tree as path-keyed rows),
 /// else the file-entry mount the loader's source lane runs. Rode-along
 /// dep groups (`<pkg>/…` prefixes) never ride — they are the loader's
@@ -229,7 +263,7 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = parse_bundle(bytes).map_err(|e| e.to_string())?;
     let manifest_text = read_entry(&entries, MANIFEST_NAME)
         .map_err(|_| format!("no `{MANIFEST_NAME}` entry — not a rut bundle"))?;
-    let table = dep_table(&manifest_text)?;
+    let table = dep_table_compat(&manifest_text)?;
     let module = table
         .name
         .clone()
@@ -259,8 +293,9 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
             ))
         }
         None => {
-            // the source lane: root = entry.lib while the transitional
-            // key stands, else the `mod.rut` entry beside the manifest
+            // the source lane: root = the `mod.rut` entry (the
+            // post-repeal convention), or the OLD envelope's legacy
+            // lib — dep_table_compat mapped it onto the Impl entries
             let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
                 Some(e) => match read_entry(&entries, &e.path) {
                     Ok(src) => Some(BundleFile { path: e.path.clone(), src, mode: e.mode }),
@@ -438,7 +473,11 @@ mod tests {
         let t = dep_table(PLUGIN_MANIFEST).expect("the real plugin manifest parses");
         assert_eq!(t.name.as_deref(), Some("plugin"));
         // the entry: one lib source, Impl mode
-        assert_eq!(t.entries, vec![EntrySource { path: "plugin.rut".into(), mode: Mode::Impl }]);
+        // the body rides the mod.rut convention (the entry keys are repealed)
+        assert_eq!(
+            t.entries,
+            vec![EntrySource { path: "mod.rut".into(), mode: Mode::Impl }]
+        );
         // deps: the path row …
         let server = t.deps.iter().find(|r| r.name == "server").expect("server row");
         assert_eq!(server.source, DepSource::Path { dir: "../server".into() });
@@ -485,7 +524,6 @@ mod tests {
         let t = dep_table(
             r#"{
   "name": "json",
-  "entry": { "lib": "./json.rut" },
   "peer-deps": {
     "pouch": { "path": "../pouch", "optional": true, "lib": "./serde_pouch.rut" }
   },
@@ -524,10 +562,10 @@ mod tests {
         assert_eq!(b.module, "pouch");
         assert_eq!(b.namespace, None);
         assert!(b.consts.is_empty());
-        // the manifest's entry.lib — the ONLY own source; `.rutc` and
-        // the scope ledger never ride, neither do dep groups
+        // the root module — the ONLY own source; `.rutc` and the scope
+        // ledger never ride, neither do dep groups
         assert_eq!(b.files.len(), 1, "files: {:?}", b.files.iter().map(|f| &f.path));
-        assert_eq!(b.files[0].path, "pouch.rut");
+        assert_eq!(b.files[0].path, "mod.rut");
         assert_eq!(b.files[0].mode, Mode::Impl);
         assert!(b.files[0].src.contains("class Vec"), "the real pouch source rides");
     }

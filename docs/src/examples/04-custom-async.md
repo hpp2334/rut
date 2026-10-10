@@ -1,6 +1,6 @@
 # 04 — Custom async
 
-A **parse-only** example: `examples/04-custom-async/custom_async.rut`
+A **parse-only** example: `examples/04-custom-async/mod.rut`
 is a single rut file with no Cargo harness — you cannot run it today,
 and that is a deliberate disclosure, not an oversight. What it shows
 is the async vocabulary from the *user* side: `async { }` blocks and

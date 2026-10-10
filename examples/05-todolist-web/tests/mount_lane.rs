@@ -24,9 +24,9 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     let mirror = mount::mirror_pkgs().expect("the mirror mounts");
 
     // same offered-name set. The mirror holds every package BUT the
-    // root — the app's source crosses the ABI (loader.js fetches
-    // rut/app/app.rut), which is the one thing an in-memory offer
-    // cannot fetch.
+    // root — the app's tree crosses the ABI (loader.js fetches the
+    // module rows), which is the one thing an in-memory offer cannot
+    // fetch.
     let mut manifest_names: BTreeSet<String> =
         manifest.pkgs.iter().map(|p| p.spec.clone()).collect();
     let mut mirror_names: BTreeSet<String> =
@@ -51,14 +51,13 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     );
 
     // and the strongest form: the same compiled binary. Both lanes
-    // compile the same closure from the same root source — identical
+    // compile the same closure from the same module tree — identical
     // programs is what "the manifest is the truth, the mirror is its
     // mirror" means when it is TRUE.
     let from_manifest = mount::verified(&mount::compile_walk(&manifest).expect("the manifest lane compiles"))
         .expect("the manifest lane's binary verifies");
-    let src = mount::biz_source();
     let from_mirror = mount::verified(
-        &mount::compile_app(mount::mirror_run().expect("the mirror mounts"), &src)
+        &mount::compile_app(mount::mirror_run().expect("the mirror mounts"))
             .expect("the mirror lane compiles"),
     )
     .expect("the mirror lane's binary verifies");

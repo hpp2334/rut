@@ -10,10 +10,7 @@
   // 2198604 — the disclosed gate is parity, and no new expected.json
   // line is added (the .js twin is the twin's materialized computation).
   "name": "kmer_view",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

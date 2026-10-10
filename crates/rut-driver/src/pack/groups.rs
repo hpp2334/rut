@@ -4,7 +4,7 @@
 //! index the walked archives' entries.
 
 
-use crate::bundle::{bundle_key, entry_rel, parse_manifest, read_entry};
+use crate::bundle::{bundle_key, parse_manifest, parse_manifest_compat, read_entry};
 use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
 use crate::session::PkgBody;
@@ -12,34 +12,39 @@ use crate::session::PkgBody;
 use std::collections::BTreeMap;
 
 /// Emit a generic-owning compiled pkg's riding source under `prefix`
-/// (empty for the root, `<pkg>/` for a group): the entry lib, each
-/// `entry.libs` file in manifest order, then each `[peer-deps]`
-/// descriptor's `lib` group file in peer-name order (the manifest's
-/// BTreeMap order — deterministic). Verbatim bytes, one entry per
-/// manifest-named path — the same file set a source group rides, minus
-/// the manifest (this pkg's manifest already rode).
+/// (empty for the root, `<pkg>/` for a group): the root module's
+/// source (`mod.rut` — the post-repeal envelope), then each
+/// `[peer-deps]` descriptor's `lib` group file in peer-name order (the
+/// manifest's BTreeMap order — deterministic). Verbatim bytes, one
+/// entry per path. An OLD published archive being re-packed (its
+/// manifest rides the compat lane) rides at the legacy `entry.lib` +
+/// `libs` spelling instead — the reader-compat law's writer twin.
 pub(super) fn ride_generic_source(
     manifest: &crate::bundle::Manifest,
     prefix: &str,
     entries: &mut Vec<(String, Vec<u8>)>,
     read: &impl Fn(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(), String> {
-    let Some(base) = manifest.entry.lib.clone() else {
-        return Ok(()); // nothing rides — no body, nothing to recompile from
-    };
     let mut push = |rel: &str, entries: &mut Vec<(String, Vec<u8>)>| -> Result<bool, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         if entries.iter().any(|(n, _)| *n == key) {
-            return Ok(false); // already riding (an entry.libs overlap) — one entry, one copy
+            return Ok(false); // already riding (a legacy libs overlap) — one entry, one copy
         }
         let text = read(rel)?;
         entries.push((key, text));
         Ok(true)
     };
-    push(&base, entries)?;
-    for lib in &manifest.entry.libs {
-        push(lib, entries)?;
+    // the body: `mod.rut` (the root module), or the old envelope's
+    // legacy keys. Nothing rides when neither names a body — no body,
+    // nothing to recompile from.
+    if let Some(base) = &manifest.legacy_entry.lib {
+        push(base, entries)?;
+        for lib in &manifest.legacy_entry.libs {
+            push(lib, entries)?;
+        }
+    } else {
+        push("mod.rut", entries)?;
     }
     for desc in manifest.peer_deps.values() {
         if let Some(lib) = desc.get("lib") {
@@ -49,7 +54,10 @@ pub(super) fn ride_generic_source(
     Ok(())
 }
 
-/// A group's parsed manifest, read from wherever its files live.
+/// A group's parsed manifest, read from wherever its files live. A
+/// DIRECTORY group parses strict (the post-repeal grammar — the body
+/// keys refuse); an ARCHIVE group parses compat (a published bundle's
+/// manifest is forever old — the reader-compat law).
 pub(super) fn group_manifest(
     source: &PkgSource,
     archives: &[Archive],
@@ -67,7 +75,8 @@ pub(super) fn group_manifest(
             let name = crate::bundle::files::MANIFEST_NAME;
             let text = read_entry(&archive.entries, &format!("{prefix}{name}"))
                 .map_err(|e| format!("{}: {e}", archive.origin))?;
-            parse_manifest(&text).map_err(|e| format!("{}: {prefix}{name}: {e}", archive.origin))
+            parse_manifest_compat(&text)
+                .map_err(|e| format!("{}: {prefix}{name}: {e}", archive.origin))
         }
     }
 }
@@ -98,16 +107,18 @@ pub(super) fn group_file(
 
 /// Collect a package's SOURCE file set — the group shape — under
 /// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.jsonc`
-/// byte-for-byte, its entry file, each `entry.libs` file beside the
-/// entry, and each `[peer-deps]` descriptor's `lib` group file. A pkg
-/// with mounted mod children rides its module rows too (`rut.mods` —
-/// the additive envelope section; its root source is the `""` row, so
-/// a mod-rooted pkg needs no entry file here). Descriptor order is the
+/// byte-for-byte, its root module (`mod.rut`) when the pkg is flat, and
+/// each `[peer-deps]` descriptor's `lib` group file. A pkg with mounted
+/// mod children rides its module rows too (`rut.mods` — the additive
+/// envelope section; its root source is the `""` row, so the tree needs
+/// no standalone file). An OLD published archive being re-packed rides
+/// at the legacy `entry.lib` + `libs` spelling instead (the
+/// reader-compat law's writer twin). Descriptor order is the
 /// manifest's (BTreeMap), so the archive stays deterministic. A
 /// compiled group does not take this shape (its `.rutc` is the linking
-/// truth); splice-needed deps and host pkgs ride the bundle exactly
-/// like this. Dir reads go through the world's reader; same input ⇒
-/// same bytes.
+/// truth); host pkgs and declared-but-unused pkgs ride the bundle
+/// exactly like this. Dir reads go through the world's reader; same
+/// input ⇒ same bytes.
 pub fn collect_source_group(
     dir_key: &str,
     manifest: &crate::bundle::Manifest,
@@ -119,27 +130,45 @@ pub fn collect_source_group(
     let name = crate::bundle::files::MANIFEST_NAME;
     let text = read(dir_key, name)?;
     out.push((format!("{prefix}{name}"), text));
-    match entry_rel(manifest) {
-        Some(rel) => {
-            // normalize the entry's `./` prefix before the group prefix joins it
+    // the body: the old envelope's legacy keys, else the root module —
+    // the rows entry carries the tree when children mount (the root
+    // text is the `""` row), so the standalone file is a FLAT pkg's
+    // shape. A bodyless pkg (a host group — the surface is the whole
+    // pkg) rides its `entry.type` surface instead, as always.
+    if let Some(base) = &manifest.legacy_entry.lib {
+        let rel = base.strip_prefix("./").unwrap_or(base);
+        let key = bundle_key(&format!("{prefix}{rel}"))?;
+        let body = read(dir_key, rel)?;
+        out.push((key, body));
+        // each legacy `libs` file rides beside the base, in manifest
+        // order — the array IS the order the reader splices back, so
+        // the archive stays deterministic
+        for lib in &manifest.legacy_entry.libs {
+            let rel = lib.strip_prefix("./").unwrap_or(lib);
+            let key = bundle_key(&format!("{prefix}{rel}"))?;
+            let body = read(dir_key, rel)?;
+            out.push((key, body));
+        }
+    } else if !mods.is_empty() {
+        // a mod-rooted pkg: the tree rides the rows entry the caller
+        // writes beside this file set
+    } else {
+        // a flat pkg's root module — unless there is none (a host
+        // group: the surface IS the whole pkg), which rides the
+        // `entry.type` surface
+        if let Ok(body) = read(dir_key, "mod.rut") {
+            let key = bundle_key(&format!("{prefix}mod.rut"))?;
+            out.push((key, body));
+        } else if let Some(rel) = &manifest.entry.type_path {
             let rel = rel.strip_prefix("./").unwrap_or(rel);
             let key = bundle_key(&format!("{prefix}{rel}"))?;
             let body = read(dir_key, rel)?;
             out.push((key, body));
-            // each pkg's `entry.libs` files ride beside the entry, in manifest
-            // order — the array IS the order the walk splices back, so the
-            // archive stays deterministic
-            for lib in &manifest.entry.libs {
-                let rel = lib.strip_prefix("./").unwrap_or(lib);
-                let key = bundle_key(&format!("{prefix}{rel}"))?;
-                let body = read(dir_key, rel)?;
-                out.push((key, body));
-            }
+        } else {
+            return Err(format!(
+                "module at {dir_key} has no entry — the root module is `mod.rut` beside the manifest"
+            ));
         }
-        // a mod-rooted pkg (no entry keys): the tree rides the rows
-        // entry the caller writes beside this file set
-        None if !mods.is_empty() => {}
-        None => return Err(format!("module at {dir_key} has no entry")),
     }
     for desc in manifest.peer_deps.values() {
         let Some(lib) = desc.get("lib") else {

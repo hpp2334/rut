@@ -69,7 +69,7 @@ the same logging surface the std packages use
 
 ### A classic, whole
 
-`demo/src/examples/quicksort.rut` is the archetype — imports, one
+`demo/src/examples/quicksort/mod.rut` is the archetype — imports, one
 algorithm, one log line — and the shared-handle mutation law in
 action (the sort writes through the caller's vec). Verbatim, so what
 runs here is exactly what the playground edits:

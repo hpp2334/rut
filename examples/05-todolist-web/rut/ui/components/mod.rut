@@ -1,0 +1,78 @@
+// =====================================================================
+// §5 THE COMPONENT VOCABULARY (the old components/* — one section now;
+// the free constructors are the layer biz composes: plain fns over the
+// widget type. The variant IS the styling contract — the lowering maps
+// each to its t1-*-- token.)
+// =====================================================================
+//
+// A CHILD module of the ui root (`pub mod components;`): the
+// constructors cross to biz (`pub`), and the widget/store types they
+// compose are the sibling modules' — spelled through the `widget.`
+// and `store.` qualified positions.
+
+pub fn col() -> widget.Widget {
+    return widget.of_kind(widget.WKind.Column);
+}
+
+pub fn row() -> widget.Widget {
+    return widget.of_kind(widget.WKind.Row);
+}
+
+pub fn card() -> widget.Widget {
+    return widget.of_kind(widget.WKind.Card);
+}
+
+pub fn spacer(size: i32) -> widget.Widget {
+    return widget.of_kind(widget.WKind.Spacer).size(size);
+}
+
+/// The Field constructor. The value is EVENT-CARRIED: the lowering
+/// wires the "input" event, and the fired row's detail carries the
+/// text — there is no read-back crossing to name here.
+pub fn field() -> widget.Widget {
+    return widget.of_kind(widget.WKind.Field);
+}
+
+pub fn check(on: bool) -> widget.Widget {
+    return widget.of_check(on);
+}
+
+// the TEXT constructors: the five TVariants
+pub fn text(t: str) -> widget.Widget {
+    return widget.of_text(widget.TVariant.Body, t);
+}
+
+pub fn done(t: str) -> widget.Widget {
+    return widget.of_text(widget.TVariant.Done, t);
+}
+
+pub fn title(t: str) -> widget.Widget {
+    return widget.of_text(widget.TVariant.Title, t);
+}
+
+pub fn pending(t: str) -> widget.Widget {
+    return widget.of_text(widget.TVariant.Pending, t);
+}
+
+pub fn muted(t: str) -> widget.Widget {
+    return widget.of_text(widget.TVariant.Muted, t);
+}
+
+/// tur's `Each`/`Condition` shape, package-sized: a REACTIVE SUBTREE —
+/// the derived computes the whole branch (a list card, a conditional
+/// shell) from the atoms it reads; `t1_render` resolves it at the
+/// render door and the keyed diff patches the materialized tree. The
+/// node itself is a transparent splice point: it never reaches the
+/// lowering.
+pub fn live(d: store.Derived<widget.Widget>) -> widget.Widget {
+    return widget.of_kind(widget.WKind.Text).live(d);
+}
+
+// the BUTTON constructors: primary and quiet
+pub fn btn(label: str) -> widget.Widget {
+    return widget.of_button(widget.BVariant.Primary, label);
+}
+
+pub fn quiet(label: str) -> widget.Widget {
+    return widget.of_button(widget.BVariant.Quiet, label);
+}

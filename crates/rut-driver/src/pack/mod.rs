@@ -246,9 +246,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     }
     // the generic-source riding law (v7, additive): a compiled pkg whose
     // surface exports generics ALSO rides the source that serves
-    // consumer-spelled shapes — the entry lib + `entry.libs` + the
-    // `[peer-deps]` group files, verbatim, beside the binary. The entry
-    // lib's presence is the loader's dispatch marker; non-generic pkgs
+    // consumer-spelled shapes — the root module + the
+    // `[peer-deps]` group files, verbatim, beside the binary. The
+    // riding source's presence is the loader's dispatch marker; non-generic pkgs
     // stay source-free. (`--strip` refuses the combination above.)
     if has_open_generic_surface(&units.programs[root_idx]) {
         ride_generic_source(&w.manifest, "", &mut entries, &|rel| (w.read)(&w.root_dir, rel))

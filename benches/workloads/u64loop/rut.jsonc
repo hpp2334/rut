@@ -4,10 +4,7 @@
   // (intloop is the i32 sibling). A module dir like the rest of the
   // workloads; no JS twin — the row runs rut-only.
   "name": "u64loop",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

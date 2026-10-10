@@ -10,10 +10,7 @@
   // computed first on rut, cross-verified on qjs/node, then ADDED to
   // expected.json as ONE disclosed line (the nmap-primmap precedent).
   "name": "strview",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

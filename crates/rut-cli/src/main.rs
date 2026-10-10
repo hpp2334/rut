@@ -324,7 +324,7 @@ fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<Str
         eprintln!("verify: {e}");
         std::process::exit(1);
     }
-    // the invocation designation: the entry-fn set of the entry lib.
+    // the invocation designation: the entry-fn set of the root module.
     // Exactly one `entry fn` runs the program; several require
     // `--entry <name>`; none is nothing to run. `main` is an ordinary
     // NAME — the compiler has no main convention to fall back to.

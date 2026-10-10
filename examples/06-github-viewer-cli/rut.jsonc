@@ -1,5 +1,5 @@
 {
-  // 06-github-viewer-cli — the project root: the brain (`rgh.rut`) is the
+  // 06-github-viewer-cli — the project root: the brain (`mod.rut`) is the
   // entry module, and the std closure mixes the two dep kinds the engine
   // allows over a CDN artifact.
   //
@@ -24,10 +24,7 @@
   // registry carries no rgh_host bodies by design — the embedder binds
   // them (`install_host_pkg` over the mounted rows).
   "name": "rgh",
-  "entry": {
-    "lib": "./rgh.rut"
-  },
-  "deps": {
+    "deps": {
     "rgh_host": {
       "path": "./rgh_host"
     },

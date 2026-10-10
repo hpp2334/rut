@@ -6,10 +6,7 @@
   // its `strbuild_host` decl pkg along (`[deps]`), whose rows are the
   // only host surface this closure declares.
   "name": "strbuildpkg",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "strbuild": {
       "path": "../../../../../rut/strbuild"
     }

@@ -6,8 +6,8 @@ the page's brain is a **rut project of TWO packages** (`rut/`): `ui`
 (the framework — the atom store machinery, the t1 widget framework,
 the component vocabulary, one module) and `biz` (the domain-as-
 mutations and the app shell, one module), with the `web` crossing in
-its own host-pkg dir (`web/`, `rut.json` + `web.d.rut` — it rides no
-deps row; the embedder registers it). Three `rut.json` total, two of
+its own host-pkg dir (`web/`, `rut.jsonc` + `web.d.rut` — it rides no
+deps row; the embedder registers it). Three `rut.jsonc` total, two of
 them consumer packages.
 Pure rut: no `main` loop on the rut side, no event loop, no async
 keywords. The host (web-sys on wasm32, a fake-DOM twin on native) owns
@@ -271,7 +271,7 @@ that remains is enforced by type visibility, not just by grep:
 examples/05-todolist-web/
 ├── index.html  loader.js  gen/     the page shell (gitignored gen/)
 ├── web/                            the `web` host DECL surface as a pkg
-│   ├── rut.json                     dir (rides no deps row): the embedder
+│   ├── rut.jsonc                    dir (rides no deps row): the embedder
 │   └── web.d.rut                    registers it in both lanes
 ├── src/                            the Rust host: state/pump, hosts,
 │                                   backends (web + fake twin), mount
@@ -281,45 +281,44 @@ examples/05-todolist-web/
 │   │                               ABI stays main + the doors)
 └── rut/                            TWO packages, TWO manifests
     ├── ui/                         THE FRAMEWORK package
-    │   ├── rut.json                name = "ui"; inline = true (generic
-    │   │                           exports splice by law); `deps` pouch
-    │   │                           + nmapset; entry.libs = the five
-    │   │                           section files
-    │   ├── ui.rut                  the base: the law header + the use
-    │   │                           set — then the libs splice in array
-    │   │                           order, ONE module
-    │   ├── store.rut               §1 the atom store kernel (Store,
-    │   │                           Source/Derived/Mutation + the shared
-    │   │                           plumbing members)
-    │   ├── widget.rut              §2 the Widget type + builders
-    │   ├── lowering.rut            §3 the lowering table (pure)
-    │   ├── diff.rut                §4 T1Root + the keyed diff
-    │   └── components.rut          §5 the component vocabulary
+    │   ├── rut.jsonc               name = "ui"; `deps` pouch +
+    │   │                           nmapset; no entry keys — mod.rut IS
+    │   │                           the lib
+    │   ├── mod.rut                 the root module: the law header +
+    │   │                           the five `mod` declarations
+    │   ├── store/mod.rut           §1 the atom store kernel (Store,
+    │   │                           Source/Derived/Mutation; the plumbing
+    │   │                           private to the file)
+    │   ├── widget/mod.rut          §2 the Widget type + builders
+    │   ├── lowering/mod.rut        §3 the lowering table (pure)
+    │   ├── diff/mod.rut            §4 T1Root + the keyed diff
+    │   └── components/mod.rut      §5 the component vocabulary
     └── biz/                        THE DOMAIN package AND the project
         │                           root (the ABI spec stays `app`)
-        ├── rut.json                name = "app"; `deps` ui + pouch +
-        │                           nmapset; entry.libs = the three
-        │                           section files
-        ├── biz.rut                 the base: the law header + the use
-        │                           set — ONE module once spliced
-        ├── domain.rut              Todo/Req + the machine's pure scans
-        ├── world.rut               World (the handles bundle) + boot
-        └── app.rut                 the app shell + the two view
+        ├── rut.jsonc               name = "app"; `deps` ui + pouch +
+        │                           nmapset; no entry keys
+        ├── mod.rut                 the root module: the law header +
+        │                           the three `mod` declarations
+        ├── domain/mod.rut          Todo/Req + the machine's pure scans
+        ├── world/mod.rut           World (the handles bundle) + boot
+        └── app/mod.rut             the app shell + the two view
                                     builders
 ```
 
-* **one module, several files** (the multi-lib
-  entry, [project structure](../../docs/src/reference/project-structure.md)):
-  each package's body is authored as section files named by
-  `entry.libs` — the loader splices base-first, then the array order,
-  `'\n'`-joined, into ONE module. One namespace, one visibility scope:
-  a name private to `store.rut` is visible to `components.rut` and to
-  nothing outside `ui` — exactly the single-file privacy law, kept by
-  the splice. The manifest's array IS the canonical order (same
-  manifest ⇒ same module); the mirror (`src/mount.rs`) and the wasm
-  lane (`loader.js`'s `BIZ_LIBS`) spell the same list by hand, and
-  `tests/mount_lane.rs` pins manifest-lane and mirror-lane binaries
-  byte-identical through the splice.
+* **one module, a file tree** (file
+  modules, [project structure](../../docs/src/reference/project-structure.md)):
+  each package's body is a module TREE — the root module is `mod.rut`
+  beside the manifest, and `mod NAME;` declarations mount the children
+  (`NAME/mod.rut`). Cross-file references are qualified positions
+  (`domain.Todo`, `store.Source` — intra-package only, spelled with the
+  dot), `use` statements are the cross-package door, and the visibility
+  tiers keep the framework's privates private for real: `pub` crosses
+  packages, `pub(pkg)` shares inside the package, plain private stays
+  in the declaring file — a name private to `store/mod.rut` is visible
+  to nothing outside it, not even ui's own `components`. The mirror
+  (`src/mount.rs`) and the wasm lane (`loader.js`'s rows wire) spell
+  the same tree by hand, and `tests/mount_lane.rs` pins manifest-lane
+  and mirror-lane binaries byte-identical through the tree.
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
   the Loader over `rut/biz` reads `rut/biz/rut.jsonc` and runs the
@@ -428,11 +427,11 @@ retired; freshness is the read's job now.
 
 | path | what |
 |---|---|
-| `rut/biz/rut.json` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
-| `rut/ui/rut.json` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
+| `rut/biz/rut.jsonc` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module tree the native lane walks (no entry keys — `mod.rut` is the lib) |
+| `rut/ui/rut.jsonc` | the framework manifest — name `ui`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface ([host fns](../../docs/src/reference/host-fns.md), scope = the pkg name) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
-| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, [project structure](../../docs/src/reference/project-structure.md)): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` interfaces, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff; `components.rut` §5 the component vocabulary |
-| `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
+| `rut/ui/mod.rut` + `ui/*/mod.rut` | the framework, one module TREE ([project structure](../../docs/src/reference/project-structure.md)): the root (law header + the five `mod` decls); `store/` §1 the store kernel (the `Readable`/`Writable` interfaces, the handles, `Store` — the plumbing private to the file); `widget/` §2 the `Widget` type + fluent builders + the raw constructors; `lowering/` §3 the lowering table; `diff/` §4 `T1Root` + the keyed diff; `components/` §5 the component vocabulary |
+| `rut/biz/mod.rut` + `biz/*/mod.rut` | the domain + app, one module TREE: the root (law header + the three `mod` decls); `domain/` `Todo`/`Req` + the pure scans; `world/` `World` + boot; `app/` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |
 | `src/backend.rs` | the `DomBackend` seam both lanes implement |
@@ -440,12 +439,12 @@ retired; freshness is the read's job now.
 | `src/fake_dom.rs` | the host twin: a HashMap element tree with the same semantics (appendChild moves) + a virtual timer clock |
 | `src/host.rs` | the native page owner (boot/fire/advance/pump) |
 | `src/mount.rs` | the session mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
-| `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's files (`BIZ_LIBS`, the manifest's mirror) and hand over the spliced source; the stylesheet keys ONLY lowered tokens |
+| `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's tree and hand over the ROWS WIRE (the `rut.mods` codec — the manifest's `mod` declarations, mirrored); the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
 | `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe/` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |
 | `tests/todolist_app.rs` | the twin gate: 18 scripted sessions asserting the tree AND the turn order on the lowered DOM |
 | `tests/t1_lowering.rs` / `tests/t1_diff.rs` | the framework's bed: 14 lowering snapshots + 18 diff/lifecycle/trap tests (32) |
-| `tests/app_law.rs` | **the grep gate**: reads the biz module (base + libs, spliced) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
+| `tests/app_law.rs` | **the grep gate**: reads the biz module TREE (every mounted file) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
 | `tests/host_surface.rs` | the crossing + trap matrix (22 tests) |
 | `tests/mount_lane.rs` | the P3 proof: manifest lane == mirror lane, byte-identical (1 test) |
 | `tests/e2e-browser.mjs` | the through-the-artifact gate (see Gates) — plain node tier + real-browser tier |
@@ -527,8 +526,7 @@ real):
   an upstream-only recompute still refreshes downstream; a discovered
   cycle dies loud.
 * **the grep gate (4)** — `tests/app_law.rs` reads the biz module
-  (base + libs, spliced the manifest's way)
-  and fails LOUD: the import set is exactly the two-package
+  TREE (every mounted file, whole-text) and fails LOUD: the import set is exactly the two-package
   vocabulary (the store's public names + the widget type +
   `t1_mount`/`t1_render`/`t1_event` + `capture` + the component constructors +
   `web`'s ONE crossing `tim_after`) with per-name pins; no `Node`, no

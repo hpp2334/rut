@@ -70,9 +70,10 @@ impl Default for PkgBody {
 }
 
 /// The generic-bearing source a compiled bundle unit rides beside its
-/// binary (generic-source riding): the pkg's own source text (the entry
-/// lib + `entry.libs`, spliced — the exact text a directory mount
-/// compiles) and the `[peer-deps]` group files keyed by peer spec, in
+/// binary (generic-source riding): the pkg's own source text (the root
+/// module's source — the exact text a directory mount
+/// compiles; an OLD published bundle's spliced legacy keys ride the
+/// reader-compat shape) and the `[peer-deps]` group files keyed by peer spec, in
 /// manifest (peer-name) order. A compiled pkg whose surface exports
 /// generics rides this so consumer-spelled shapes stay servable; the
 /// graph lowers it in the CONSUMER's session only when a request misses
@@ -82,8 +83,9 @@ impl Default for PkgBody {
 /// without the riding refuses at the mount seam).
 #[derive(Clone, Debug)]
 pub struct GenSource {
-    /// the pkg's own source: `entry.lib` + `entry.libs`, '\n'-joined —
-    /// the same splice shape a source mount reads back
+    /// the pkg's own source: the root module's text (an old bundle's
+    /// legacy-lib splice is the compat shape) — what a source mount
+    /// recompiles from
     pub text: String,
     /// `(peer spec, group file text)` — the `[peer-deps]` `lib` files;
     /// the recompile splices exactly the rows whose peer is in the

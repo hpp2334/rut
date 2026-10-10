@@ -9,10 +9,7 @@
   // it mounts `nmapset`, which pulls the `nmap_host` host pkg through its
   // own `[deps]`. `ink` is declared for the logger.
   "name": "refvals",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

@@ -10,10 +10,7 @@
   // pkg; binding its launcher rows (and running) rides in with the
   // harness.
   "name": "custom_async",
-  "entry": {
-    "lib": "./custom_async.rut"
-  },
-  "deps": {
+    "deps": {
     "async_host": {
       "path": "../../rut/async_host"
     }

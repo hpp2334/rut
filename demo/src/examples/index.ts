@@ -10,23 +10,23 @@
 
 import type { RutCase } from "../cases";
 
-import sieveSrc from "./sieve/main.rut";
-import quicksortSrc from "./quicksort/main.rut";
-import matrixMulSrc from "./matrix-mul/main.rut";
-import classesSrc from "./classes/main.rut";
-import closuresGenericsSrc from "./closures-generics/main.rut";
-import structsSrc from "./structs/main.rut";
-import literalsSrc from "./literals/main.rut";
-import checkedArithSrc from "./checked-arith/main.rut";
-import strViewsSrc from "./str-views/main.rut";
-import bytesSrc from "./bytes/main.rut";
-import opaqueSrc from "./opaque/main.rut";
-import whenSrc from "./when/main.rut";
-import mapsSrc from "./maps/main.rut";
-import nodeCycleSrc from "./node-cycle/main.rut";
-import treeSrc from "./tree/main.rut";
-import weakCacheSrc from "./weak-cache/main.rut";
-import typeAliasesSrc from "./type-aliases/main.rut";
+import sieveSrc from "./sieve/mod.rut";
+import quicksortSrc from "./quicksort/mod.rut";
+import matrixMulSrc from "./matrix-mul/mod.rut";
+import classesSrc from "./classes/mod.rut";
+import closuresGenericsSrc from "./closures-generics/mod.rut";
+import structsSrc from "./structs/mod.rut";
+import literalsSrc from "./literals/mod.rut";
+import checkedArithSrc from "./checked-arith/mod.rut";
+import strViewsSrc from "./str-views/mod.rut";
+import bytesSrc from "./bytes/mod.rut";
+import opaqueSrc from "./opaque/mod.rut";
+import whenSrc from "./when/mod.rut";
+import mapsSrc from "./maps/mod.rut";
+import nodeCycleSrc from "./node-cycle/mod.rut";
+import treeSrc from "./tree/mod.rut";
+import weakCacheSrc from "./weak-cache/mod.rut";
+import typeAliasesSrc from "./type-aliases/mod.rut";
 
 export const EXAMPLES: RutCase[] = [
   {

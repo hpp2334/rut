@@ -4,8 +4,4 @@
   // purpose: the only `use` names `web`, and `web` is the HOST DECL
   // surface — the embedder registers it in both lanes (src/mount.rs), so
   // it rides no manifest path here, the same shape the rut/ packages ride.
-  "name": "harness",
-  "entry": {
-    "lib": "./harness.rut"
-  }
-}
+  "name": "harness"}

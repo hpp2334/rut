@@ -9,7 +9,7 @@
 //! session.
 
 use super::container::{parse_bundle, BundleError};
-use super::manifest::{parse_manifest, Manifest};
+use super::manifest::{parse_manifest_compat, Manifest};
 use super::files::read_entry;
 use rut_core::binary::{decode, Program};
 
@@ -101,7 +101,7 @@ impl Layout {
             Ok(text) => text,
             Err(_) => return Err("no `rut.jsonc` entry — not a rut bundle".to_string()),
         };
-        let manifest = parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
+        let manifest = parse_manifest_compat(&manifest_text).map_err(|e| e.to_string())?;
         if manifest.format.as_deref() != Some("rutbundle") {
             return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
@@ -184,7 +184,7 @@ impl Layout {
                 .map_err(|_| {
                     format!("bundle group `{p}/` has no `{}`", super::files::MANIFEST_NAME)
                 })?;
-            let dm = parse_manifest(&manifest_text)
+            let dm = parse_manifest_compat(&manifest_text)
                 .map_err(|e| format!("{p}/{}: {e}", super::files::MANIFEST_NAME))?;
             let gname = dm.name.clone().ok_or_else(|| {
                 format!("{p}/{} has no `name`", super::files::MANIFEST_NAME)

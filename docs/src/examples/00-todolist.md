@@ -3,7 +3,7 @@
 The first runnable host example, and the template for the rest of the
 chapter: a Rust program embeds rut, compiles a rut **library** (there
 is no `main` in it), and drives the library through its `entry fn`
-surface. The split is two files — `todolist.rut` owns the data and the
+surface. The split is two sides — `mod.rut` (the rut module) owns the data and the
 logic as a `TodoList` class with full CRUD; `src/main.rs` owns the
 session: compile, verify, then a scripted conversation of `vm.call`s.
 The one-sentence design rule: **the host owns the session, rut owns
@@ -36,7 +36,7 @@ fuel used: 680 of Some(1000000)
 
 ### The data: a class with a fields-only body
 
-`examples/00-todolist/todolist.rut` — the type body is fields only;
+`examples/00-todolist/mod.rut` — the type body is fields only;
 methods live in an inherent `impl` block
 ([Structs](../reference/structs.md),
 [Classes and constructors](../reference/classes.md)). Unannotated

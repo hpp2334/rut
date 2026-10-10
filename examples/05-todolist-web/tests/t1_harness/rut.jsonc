@@ -3,10 +3,7 @@
   // probe), its own module dir like every rut program: the manifest names
   // the two-package imports, the load mounts the closure.
   "name": "t1_harness",
-  "entry": {
-    "lib": "./t1_harness.rut"
-  },
-  "deps": {
+    "deps": {
     "ui": {
       "path": "../../rut/ui"
     },

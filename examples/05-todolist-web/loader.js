@@ -45,23 +45,23 @@ await glue.default(); // instantiate the module (the glue's init)
 
 const w = glue.initSync();
 const enc = new TextEncoder();
-// The app source is the biz MODULE: the base plus its `entry.libs`
-// tail, fetched and concatenated in rut/biz/rut.jsonc's array order —
-// the loader's splice law, restated for the wasm lane
-// (the browser has no manifest reader; this list IS the manifest's
-// mirror, the same duty src/mount.rs's mirror lane carries natively).
-const BIZ_LIBS = [
-  "./rut/biz/biz.rut",
-  "./rut/biz/domain.rut",
-  "./rut/biz/world.rut",
-  "./rut/biz/app.rut",
-];
-let text = "";
-for (const rel of BIZ_LIBS) {
-  const part = await (await fetch(new URL(rel, import.meta.url))).text();
-  text += (text === "" ? "" : "\n") + part;
+// The app source is the biz MODULE TREE: the root module plus its
+// mounted children, fetched and packed into the ROWS WIRE — the same
+// `rut.mods` codec a packed bundle rides (`""` = the root, one row per
+// mounted child). The browser has no manifest reader; this list IS the
+// manifest's `mod` declarations, the same duty src/mount.rs's mirror
+// lane carries natively.
+const BIZ_TREE = {
+  "": "./rut/biz/mod.rut",
+  domain: "./rut/biz/domain/mod.rut",
+  world: "./rut/biz/world/mod.rut",
+  app: "./rut/biz/app/mod.rut",
+};
+const rows = {};
+for (const [path, rel] of Object.entries(BIZ_TREE)) {
+  rows[path] = await (await fetch(new URL(rel, import.meta.url))).text();
 }
-const source = enc.encode(text);
+const source = enc.encode(JSON.stringify(rows));
 
 const ptr = w.rut_web_alloc(source.length);
 new Uint8Array(w.memory.buffer, ptr, source.length).set(source);

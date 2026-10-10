@@ -49,7 +49,7 @@ protocol:
 ```text
 RUST biz (main / tests)      ->  typed Plugin methods, no vm.call
 RUST adapter (src/lib.rs)    ->  the ONLY vm.call sites
-RUT adapter (plugin/plugin.rut) ->  the ONLY entry fns; one-line forwards
+RUT adapter (plugin/mod.rut) ->  the ONLY entry fns; one-line forwards
 RUT biz (Moderator)          ->  pure logic + emit, no entry fn
 ```
 
@@ -173,7 +173,6 @@ plus its deps, loadable as-is and packable unchanged
   "format": "rutbundle",
   "format_version": 10,
   "name": "plugin",
-  "entry": { "lib": "./plugin.rut" },
 
   "deps": {
     "server": { "path": "../server" }

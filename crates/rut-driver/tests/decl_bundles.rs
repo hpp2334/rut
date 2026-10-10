@@ -179,12 +179,12 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
         &app,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{pin}"}}}}}}"#
+            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}", "sha256": "{pin}"}}}}}}"#
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use logger_host::{log};\n\nentry fn main() -> nil {\n    log(\"hello from the CDN surface\");\n}\n",
     );
 
@@ -269,8 +269,8 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     let base = scratch("onewire");
     let lib = base.join("util");
     write(&lib, "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "util", "entry": {"lib": "./util.rut"}}"#);
-    write(&lib, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+        r#"{"format": "rutbundle", "format_version": 10, "name": "util"}"#);
+    write(&lib, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
         &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
@@ -377,10 +377,10 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         &app,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}", "sha256": "{wrong}"}}}}}}"#
+            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}", "sha256": "{wrong}"}}}}}}"#
         ),
     );
-    write(&app, "app.rut", "entry fn main() -> nil {}\n");
+    write(&app, "mod.rut", "entry fn main() -> nil {}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     let err = block_on(load_dir_with(&app, &common::Table::from(table.clone())))
@@ -394,10 +394,10 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
         &app2,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app2", "entry": {{"lib": "./app2.rut"}}, "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#
+            r#"{{"name": "app2", "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#
         ),
     );
-    write(&app2, "app2.rut", "entry fn main() -> nil {}\n");
+    write(&app2, "mod.rut", "entry fn main() -> nil {}\n");
     let err = block_on(load_dir_with(&app2, &common::Table::from(table)))
         .unwrap_err()
         .to_string();
@@ -420,16 +420,16 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
         &app,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"pouch": {{"path": "../pouch"}}, "logger_host": {{"url": "{url}"}}}}}}"#
+            r#"{{"name": "app", "deps": {{"pouch": {{"path": "../pouch"}}, "logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
-    write(&app, "app.rut", "entry fn main() -> nil {}\n");
+    write(&app, "mod.rut", "entry fn main() -> nil {}\n");
     // the path dep needs its dir to exist (never fetched — only the
     // url row goes through the fetcher)
     let pouch = root_dir.join("pouch");
     std::fs::create_dir_all(&pouch).unwrap();
-    write(&pouch, "rut.jsonc", r#"{"name": "pouch", "entry": {"lib": "./pouch.rut"}}"#);
-    write(&pouch, "pouch.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
+    write(&pouch, "rut.jsonc", r#"{"name": "pouch"}"#);
+    write(&pouch, "mod.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
 
     struct Counting(BTreeMap<String, Vec<u8>>);
     impl DepRemote for Counting {
@@ -475,12 +475,12 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
         &app,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
+            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use logger_host::{log};\n\nentry fn main() -> i32 {\n    log(\"hi\");\n    return 7;\n}\n",
     );
     let mut table = BTreeMap::new();

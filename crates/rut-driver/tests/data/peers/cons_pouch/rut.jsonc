@@ -7,10 +7,7 @@
   "format": "rutbundle",
   "format_version": 4,
   "name": "cons_pouch",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../json"
     },

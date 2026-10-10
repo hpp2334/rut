@@ -27,7 +27,7 @@ msgstr "你的第一个 rut 程序"
 
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:174
+#: src/reference/project-structure.md:195
 msgid "The playground"
 msgstr "Playground"
 
@@ -407,7 +407,7 @@ msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:112 src/tutorial/modules.md:208
+#: src/SUMMARY.md:112 src/tutorial/modules.md:210
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
@@ -815,7 +815,6 @@ msgid ""
 "// hello/rut.jsonc — the manifest IS the program's door\n"
 "{\n"
 "  \"name\": \"hello\",\n"
-"  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "  \"deps\": {\n"
 "    // ink — the toolchain's logger package, served by jsDelivr at the\n"
 "    // std-v8 tag, pinned by sha256\n"
@@ -823,7 +822,7 @@ msgid ""
 "  }\n"
 "}\n"
 "EOF\n"
-"cat > hello/main.rut <<'EOF'\n"
+"cat > hello/mod.rut <<'EOF'\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
@@ -835,55 +834,55 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/installation.md:187
+#: src/quick-start/installation.md:186
 msgid ""
 "The first run fetched `ink` from jsDelivr into `hello/.rut/cache`; `rut fetch hello` pre-warms that cache without running anything."
 msgstr ""
 "第一次运行把 `ink` 从 jsDelivr 拉取进 `hello/.rut/cache`；`rut fetch hello` 可以在不运行任何东西的情况下预热该缓存。"
 
 
-#: src/quick-start/installation.md:190
+#: src/quick-start/installation.md:189
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（`run`、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 
-#: src/quick-start/installation.md:197
+#: src/quick-start/installation.md:196
 msgid "Optional: the wasm playground"
 msgstr "可选：wasm Playground"
 
 
-#: src/quick-start/installation.md:199
+#: src/quick-start/installation.md:198
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to WebAssembly. Building it needs one extra target:"
 msgstr "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要一个额外的 target："
 
 
-#: src/quick-start/installation.md:207
+#: src/quick-start/installation.md:206
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifact into place:"
 msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 
-#: src/quick-start/installation.md:214
+#: src/quick-start/installation.md:213
 msgid "Optional: build this book"
 msgstr "可选：构建本书"
 
 
-#: src/quick-start/installation.md:216
+#: src/quick-start/installation.md:215
 msgid "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 
-#: src/quick-start/installation.md:221
+#: src/quick-start/installation.md:220
 msgid ""
 "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 "# live-reload preview at http://localhost:3000\n"
 
 
-#: src/quick-start/installation.md:222
+#: src/quick-start/installation.md:221
 msgid ""
 "# static site in docs/book/\n"
 msgstr ""
@@ -925,8 +924,9 @@ msgstr ""
 
 #: src/quick-start/first-program.md:26
 msgid ""
-"Every rut program is a **module directory**: a `rut.jsonc` naming the package and its dependencies, plus the source file the manifest points at. Create it and run the directory:"
-msgstr "每个 rut 程序都是一个**模块目录**：一个 `rut.jsonc` 指名包与它的依赖，外加清单指向的那个源文件。创建它并运行这个目录："
+"Every rut program is a **module directory**: a `rut.jsonc` naming the package and its dependencies, plus the root module — `mod.rut`, the file the loader mounts. Create it and run the directory:"
+msgstr ""
+"每个 rut 程序都是一个**模块目录**：一份 `rut.jsonc` 命名包及其依赖，外加根模块 —— `mod.rut`，即加载器挂载的文件。创建它并运行该目录："
 
 
 #: src/quick-start/first-program.md:32
@@ -935,7 +935,6 @@ msgid ""
 "// hello/rut.jsonc — the manifest IS the program's door\n"
 "{\n"
 "  \"name\": \"hello\",\n"
-"  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "  \"deps\": {\n"
 "    // ink — the toolchain's logger package, served by jsDelivr at the\n"
 "    // std-v8 tag, pinned by sha256\n"
@@ -943,66 +942,66 @@ msgid ""
 "  }\n"
 "}\n"
 "EOF\n"
-"# save the program above as hello/main.rut, then:\n"
+"# save the program above as hello/mod.rut, then:\n"
 "rut run hello\n"
 msgstr ""
 
 
-#: src/quick-start/first-program.md:52
+#: src/quick-start/first-program.md:51
 msgid ""
 "The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; the CLI fetches it once into the project's cache (`.rut/cache`), every later run is a pure cache hit, and `rut fetch hello` pre-warms the cache without running anything."
 msgstr ""
 "这一运行在任何目录下都能工作——它不假设你克隆了工具链的仓库。url 行写明包在 jsDelivr 上的位置；CLI 把它拉取一次进项目缓存（`.rut/cache`），之后的每次运行都是纯缓存命中，而 `rut fetch hello` 可以在不运行任何东西的情况下预热缓存。"
 
 
-#: src/quick-start/first-program.md:58
+#: src/quick-start/first-program.md:57
 msgid "Three things to notice:"
 msgstr "三个值得注意的点："
 
 
-#: src/quick-start/first-program.md:60
+#: src/quick-start/first-program.md:59
 msgid ""
 "**One directory with a `rut.jsonc` is one program.** The manifest is the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the only run lane. Inside the package, one file is one module; cross-module code is reached through `use` paths (see the [modules tutorial](../tutorial/modules.md))."
 msgstr ""
 "**一个带 `rut.jsonc` 的目录就是一个程序。**清单是可运行单元——`rut run <dir>`（或打包好的 `.rutbundle`）是唯一的车道。在包内，一个文件就是一个模块；跨模块代码经由 `use` 路径到达（参见[模块教程](../tutorial/modules.md)）。"
 
 
-#: src/quick-start/first-program.md:65
+#: src/quick-start/first-program.md:64
 msgid ""
 "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package — and the manifest's `deps` row is what mounts it: a `use` line says _which_ names the program wants, the manifest says _where_ the package lives ([project structure](../reference/project-structure.md))."
 msgstr ""
 "**`use ink::{ Logger };`** 把 `Logger` 从 `ink` 包里取出来——而真正挂载它的是清单的 `deps` 行：一行 `use` 说明程序要_哪些_名字，清单说明包住在_哪里_（[项目结构](../reference/project-structure.md)）。"
 
 
-#: src/quick-start/first-program.md:69
+#: src/quick-start/first-program.md:68
 msgid ""
 "**`Logger(\"hello\")`** constructs the logger through the class's `[constructor]` member — the call form spells the construction ([classes](../reference/classes.md))."
 msgstr ""
 "**`Logger(\"hello\")`** 经由类的 `[constructor]` 成员构造 logger——调用形式拼写的就是构造（[类与构造器](../reference/classes.md)）。"
 
 
-#: src/quick-start/first-program.md:72
+#: src/quick-start/first-program.md:71
 msgid ""
 "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any expression, rendered through the value's display contract."
 msgstr "**`f\"hello, {name}!\"`** 是格式化字面量：`{expr}` 插值任意表达式，并经由该值的 display 契约渲染。"
 
 
-#: src/quick-start/first-program.md:75
+#: src/quick-start/first-program.md:74
 msgid "`entry fn main()` is the entry the CLI calls."
 msgstr "`entry fn main()` 是 CLI 调用的入口。"
 
 
-#: src/quick-start/first-program.md:77
+#: src/quick-start/first-program.md:76
 msgid "Values, briefly"
 msgstr "值：速览"
 
 
-#: src/quick-start/first-program.md:79
+#: src/quick-start/first-program.md:78
 msgid "Extend the file — rut infers, and every type is known at compile time:"
 msgstr "扩展这个文件——rut 会推断，且每个类型在编译期都已知："
 
 
-#: src/quick-start/first-program.md:81
+#: src/quick-start/first-program.md:80
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1023,104 +1022,104 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/first-program.md:102
+#: src/quick-start/first-program.md:101
 msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values and variables](../tutorial/values-and-variables.md) tutorial, and the exact rules live in [literals and inference](../reference/literals-and-inference.md)."
 msgstr ""
 "完整的巡礼——后缀、类型转换、字符串、`bytes`、结构体——在[值与变量](../tutorial/values-and-variables.md)教程里，确切的规则则在[字面量与推断](../reference/literals-and-inference.md)。"
 
 
-#: src/quick-start/first-program.md:107
+#: src/quick-start/first-program.md:106
 msgid "Format"
 msgstr "格式化"
 
 
-#: src/quick-start/first-program.md:109
+#: src/quick-start/first-program.md:108
 msgid "The formatter is the style — there is no configuration:"
 msgstr "格式化器就是风格——没有任何配置："
 
 
-#: src/quick-start/first-program.md:112 src/reference/cli.md:75
+#: src/quick-start/first-program.md:111 src/reference/cli.md:75
 msgid ""
 "# rewrite in place\n"
 msgstr ""
 "# rewrite in place\n"
+
+
+#: src/quick-start/first-program.md:112
+msgid ""
+"# verify only (note: --check goes AFTER the path)\n"
+msgstr ""
+"# verify only (note: --check goes AFTER the path)\n"
 
 
 #: src/quick-start/first-program.md:113
 msgid ""
-"# verify only (note: --check goes AFTER the path)\n"
-msgstr ""
-"# verify only (note: --check goes AFTER the path)\n"
-
-
-#: src/quick-start/first-program.md:114
-msgid ""
 "# walk a directory tree, every *.rut file\n"
 msgstr ""
 "# walk a directory tree, every *.rut file\n"
 
 
-#: src/quick-start/first-program.md:117
+#: src/quick-start/first-program.md:116
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs changes, which makes it a clean CI gate. A file that does not parse is refused loudly rather than half-formatted."
 msgstr ""
 "`--check` 会在文件需要修改时打印 `unformatted: <file>` 并以 `1` 退出，这让它成为一道干净的 CI 门禁。解析不了的文件会被响亮地拒绝，而不是被格式化一半。"
 
 
-#: src/quick-start/first-program.md:121
+#: src/quick-start/first-program.md:120
 msgid "Inspect"
 msgstr "检视"
 
 
-#: src/quick-start/first-program.md:123
+#: src/quick-start/first-program.md:122
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a snippet behaves differently than you expect:"
 msgstr "`dump` 编译单个模块并打印它的结构——当代码片段的表现与你预期不同时很有用："
 
 
-#: src/quick-start/first-program.md:130
+#: src/quick-start/first-program.md:129
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the packages, so it is the tool for surface questions (\"what does this lower to?\") rather than whole-program runs. The playground's **AST** and **IR** panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 "`dump` 让这个孤立的模块走过前端，_不_挂载那些包，因此它是回答“表面问题”（“这段代码被 lower 成了什么？”）的工具，而不是运行整个程序的工具。Playground 的 **AST** 和 **IR** 面板实时展示同样的两个视图——参见 [Playground](playground.md)。"
 
 
-#: src/quick-start/first-program.md:136
+#: src/quick-start/first-program.md:135
 msgid "Budget it"
 msgstr "设定预算"
 
 
-#: src/quick-start/first-program.md:138
+#: src/quick-start/first-program.md:137
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr "每次 `rut run` 默认不设上限——燃料通过 `--fuel N` 显式开启："
 
 
-#: src/quick-start/first-program.md:144
+#: src/quick-start/first-program.md:143
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — the same contract the VM enforces for embedded hosts, along with heap ceilings and depth limits ([resource limits](../reference/resource-limits.md))."
 msgstr ""
 "耗尽燃料的程序会停下，并给出一条写明预算的诊断——这与 VM 为嵌入式宿主执行的契约相同，还有堆上限与深度限制（[资源限制](../reference/resource-limits.md)）。"
 
 
-#: src/quick-start/first-program.md:149
+#: src/quick-start/first-program.md:148
 msgid "Where next"
 msgstr "下一步"
 
 
-#: src/quick-start/first-program.md:151
+#: src/quick-start/first-program.md:150
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language hands-on, one concept per chapter."
 msgstr "[教程](../tutorial/values-and-variables.md)动手实地讲授这门语言，一章一个概念。"
 
 
-#: src/quick-start/first-program.md:153
+#: src/quick-start/first-program.md:152
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run today."
 msgstr "[示例](../examples/index.md)是七个今天就能运行的完整项目。"
 
 
-#: src/quick-start/first-program.md:155
+#: src/quick-start/first-program.md:154
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the language is shaped the way it is."
 msgstr "[核心概念](../core-concepts/design-goals.md)解释这门语言_为何_被塑造成如今的形状。"
@@ -1733,7 +1732,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
 #: src/tutorial/functions.md:242 src/tutorial/types.md:278
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:257 src/tutorial/async.md:180
+#: src/tutorial/modules.md:259 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr "综合运用"
@@ -3947,7 +3946,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:108
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:153
 msgid "Visibility"
 msgstr "可见性"
 
@@ -3958,13 +3957,13 @@ msgid ""
 msgstr "每个声明都有一个可见性，不标注即**模块私有**——这是安全的默认。除非写明 `pub`，任何东西都不会外泄："
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:114
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:159
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr "形式"
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:114
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:159
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -3978,7 +3977,7 @@ msgid "Meaning"
 msgstr "含义"
 
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:116
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:161
 msgid "`pub fn ..`"
 msgstr "`pub fn ..`"
 
@@ -3988,7 +3987,7 @@ msgid "public — importable by any module, other packages included"
 msgstr "公开——任何模块都可导入，其他包也不例外"
 
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:117
+#: src/tutorial/modules.md:55
 msgid "`pub(mod) fn ..`"
 msgstr "`pub(mod) fn ..`"
 
@@ -3998,7 +3997,7 @@ msgid "visible everywhere in this package's module tree"
 msgstr "在本包的模块树内处处可见"
 
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:118
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:163
 msgid "`pub(super) fn ..`"
 msgstr "`pub(super) fn ..`"
 
@@ -4064,7 +4063,6 @@ msgid ""
 "// greet/pkg/rut.jsonc\n"
 "{\n"
 "  \"name\": \"greet\",\n"
-"  \"entry\": { \"lib\": \"./greet.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
 "    // the toolchain's pouch package, from jsDelivr — pinned by sha256\n"
@@ -4075,10 +4073,10 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:113
+#: src/tutorial/modules.md:112
 msgid ""
 "```rut\n"
-"// greet/pkg/greet.rut\n"
+"// greet/pkg/mod.rut\n"
 "use pouch::{ Vec };\n"
 "\n"
 "pub struct Greeting {\n"
@@ -4109,53 +4107,21 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
-"```rut\n"
-"// greet/pkg/greet.rut\n"
-"use pouch::{ Vec };\n"
-"\n"
-"pub struct Greeting {\n"
-"    to: str;\n"
-"    lines: Vec<str>;\n"
-"}\n"
-"\n"
-"impl Greeting {\n"
-"    pub fn new(to: str) -> Self {\n"
-"        return Self { to: to, lines: Vec.new() };\n"
-"    }\n"
-"\n"
-"    pub fn add(mut self, line: str) {\n"
-"        self.lines.push(line);\n"
-"    }\n"
-"\n"
-"    pub fn render(self) -> str {\n"
-"        let mut out = f\"dear {self.to},\";\n"
-"        for (let line of self.lines) {\n"
-"            out = f\"{out} {line}\";\n"
-"        }\n"
-"        return out;\n"
-"    }\n"
-"}\n"
-"\n"
-"fn shout(msg: str) -> str {   // module-private: no `pub`, never importable\n"
-"    return f\"{msg}!\";\n"
-"}\n"
-"```"
 
 
-#: src/tutorial/modules.md:145
+#: src/tutorial/modules.md:144
 msgid ""
 "The app names its dependencies in `deps`, by url or path — each package pulls its own dependencies along (`ink` brings the host surface `ink_host`; you never spell it):"
 msgstr ""
 "应用在 `deps` 里写明依赖，按 url 或路径——每个包把自己的依赖一并带入（`ink` 会带上宿主面 `ink_host`；你永远不用手写它）："
 
 
-#: src/tutorial/modules.md:149
+#: src/tutorial/modules.md:148
 msgid ""
 "```jsonc\n"
 "// greet/app/rut.jsonc\n"
 "{\n"
 "  \"name\": \"app\",\n"
-"  \"entry\": { \"lib\": \"./main.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
 "    // your own package: a sibling directory\n"
@@ -4168,10 +4134,10 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:164
+#: src/tutorial/modules.md:162
 msgid ""
 "```rut\n"
-"// greet/app/main.rut\n"
+"// greet/app/mod.rut\n"
 "use greet::{ Greeting };\n"
 "use ink::{ Logger };\n"
 "\n"
@@ -4186,65 +4152,68 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:178
+#: src/tutorial/modules.md:176
 msgid "Run the app from its directory:"
 msgstr "在应用的目录里运行："
 
 
-#: src/tutorial/modules.md:188
+#: src/tutorial/modules.md:186
 msgid ""
 "Resolution walks `deps` recursively (a dep's own `deps` mount with it), with a cycle guard and first-mount-wins."
 msgstr "解析沿 `deps` 递归进行（依赖自己的 `deps` 随之一起挂载），带有环守卫与先挂载者优先。"
 
 
-#: src/tutorial/modules.md:191
+#: src/tutorial/modules.md:189
 msgid "One package, several files"
 msgstr "一个包，多个文件"
 
 
-#: src/tutorial/modules.md:193
+#: src/tutorial/modules.md:191
 msgid ""
-"A package's body can be split across files. The manifest splices them, base first, in listed order — into **one module**: one namespace, one visibility scope. A name private to one file is visible to every other file of the same package:"
+"A package's body can be split across files — **file modules**. The root module is `mod.rut` beside the manifest, and a `mod NAME;` declaration in it mounts the sibling `NAME/mod.rut` as a child module:"
 msgstr ""
-"包的主体可以拆分到多个文件。清单把它们拼接起来——基文件在前，按列出的顺序——拼成**一个模块**：一个命名空间，一个可见性作用域。对其中一个文件私有的名字，对同一个包的每个其他文件都可见："
+"包的代码体可以拆分到多个文件中 —— **文件模块**。根模块是清单旁边的 `mod.rut`，其中的 `mod NAME;` 声明把同级的 `NAME/mod.rut` 挂载为子模块："
 
 
-#: src/tutorial/modules.md:198
+#: src/tutorial/modules.md:195
 msgid ""
-"```jsonc\n"
-"{\n"
-"  \"name\": \"app\",\n"
-"  \"entry\": { \"lib\": \"./biz.rut\", \"libs\": [\"./domain.rut\", \"./world.rut\", \"./app.rut\"] }\n"
-"}\n"
+"```text\n"
+"app/\n"
+"├── rut.jsonc        # { \"name\": \"app\" } — no entry keys\n"
+"├── mod.rut          # the root module: `mod domain; pub mod world;`\n"
+"├── domain/mod.rut   # app's `domain` module\n"
+"├── world/mod.rut    # app's `world` module\n"
+"└── app/mod.rut      # the shell\n"
 "```"
 msgstr ""
 
 
-#: src/tutorial/modules.md:205
+#: src/tutorial/modules.md:204
 msgid ""
-"This is assembly, not an include form — cross-package references still go through `use` paths."
-msgstr "这是组装，不是 include 形式——跨包的引用仍然经由 `use` 路径。"
+"Each file is its own module: cross-file references are qualified (`domain.Todo`, `world.boot(..)`), and visibility is per module — private to the declaring module, `pub(pkg)` to share inside the package, `pub` to cross packages. Cross-package references still go through `use` paths (`use app::world::{ World }`)."
+msgstr ""
+"每个文件都是独立的模块：跨文件引用使用限定位置（`domain.Todo`、`world.boot(..)`），可见性按模块划分 —— 对声明模块私有，`pub(pkg)` 在包内共享，`pub` 跨包可见。跨包引用仍然走 `use` 路径（`use app::world::{ World }`）。"
 
 
-#: src/tutorial/modules.md:210
+#: src/tutorial/modules.md:212
 msgid "Beyond `deps`, a manifest can declare two other relations:"
 msgstr "除 `deps` 之外，清单还能声明另外两种关系："
 
 
-#: src/tutorial/modules.md:212
+#: src/tutorial/modules.md:214
 msgid ""
 "**`peer-deps`** — a package this one _integrates with_ but never pulls: the consumer supplies it, or (with `optional = true`) the integration mounts only if the peer is already in the program's closure. The standard library's `json` package uses this to attach its `Vec`/map serialization impls only for programs that carry the container packages."
 msgstr ""
 "**`peer-deps`**——本包_与之集成_但从不拉取的包：由消费方提供，或者（当 `optional = true` 时）仅当该 peer 已经在程序的闭包里才挂载集成。标准库的 `json` 包正是用它来只为携带容器包的程序附加自己的 `Vec`/map 序列化 impl。"
 
 
-#: src/tutorial/modules.md:218
+#: src/tutorial/modules.md:220
 msgid ""
 "**`dev-deps`** — mounted only when building/testing the package itself, never for a consumer."
 msgstr "**`dev-deps`**——只在构建/测试该包自身时挂载，对消费方从不挂载。"
 
 
-#: src/tutorial/modules.md:221
+#: src/tutorial/modules.md:223
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -4260,58 +4229,58 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:233
+#: src/tutorial/modules.md:235
 msgid "`entry fn` — the host-facing surface"
 msgstr "`entry fn`——面向宿主的表面"
 
 
-#: src/tutorial/modules.md:235
+#: src/tutorial/modules.md:237
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function to the _embedding host_, with its signature checked against the boundary's crossing rules at compile time:"
 msgstr "`pub` 把名字发布给其他 _rut_ 模块。`entry` 把函数发布给_嵌入宿主_，其签名在编译期按边界的穿越规则检查："
 
 
-#: src/tutorial/modules.md:243
+#: src/tutorial/modules.md:245
 msgid ""
 "An embedded application drives these entries; `rut run` executes the program's entry designation — exactly one `entry fn` runs it, several take `--entry <name>`. See [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
 "嵌入式应用驱动这些入口；`rut run` 执行程序的入口指派——恰好一个 `entry fn` 时运行它，多个时用 `--entry <name>` 指定。参见[宿主边界](../core-concepts/host-boundary.md)。"
 
 
-#: src/tutorial/modules.md:248
+#: src/tutorial/modules.md:250
 msgid "Tooling"
 msgstr "工具"
 
 
-#: src/tutorial/modules.md:251
-msgid ""
-"# compile + run\n"
-msgstr ""
-"# compile + run\n"
-
-
-#: src/tutorial/modules.md:252
-msgid ""
-"# format in place\n"
-msgstr ""
-"# format in place\n"
-
-
 #: src/tutorial/modules.md:253
 msgid ""
+"# compile + run\n"
+msgstr ""
+"# compile + run\n"
+
+
+#: src/tutorial/modules.md:254
+msgid ""
+"# format in place\n"
+msgstr ""
+"# format in place\n"
+
+
+#: src/tutorial/modules.md:255
+msgid ""
 "# a self-contained bundle\n"
 msgstr ""
 "# a self-contained bundle\n"
 
 
-#: src/tutorial/modules.md:259
+#: src/tutorial/modules.md:261
 msgid ""
 "The `greet` project above is complete as shown — two directories, two manifests, two sources. Copy the trees into files and `rut run .` from `greet/app` to see:"
 msgstr ""
 "上面的 `greet` 项目如所示般完整——两个目录、两份清单、两个源文件。把这些目录树抄进文件，从 `greet/app` 运行 `rut run .`，就会看到："
 
 
-#: src/tutorial/modules.md:267
+#: src/tutorial/modules.md:269
 msgid "Next: [async: futures and await](async.md)."
 msgstr "下一章：[异步：future 与 await](async.md)。"
 
@@ -7603,9 +7572,8 @@ msgstr ""
 
 #: src/examples/00-todolist.md:3
 msgid ""
-"The first runnable host example, and the template for the rest of the chapter: a Rust program embeds rut, compiles a rut **library** (there is no `main` in it), and drives the library through its `entry fn` surface. The split is two files — `todolist.rut` owns the data and the logic as a `TodoList` class with full CRUD; `src/main.rs` owns the session: compile, verify, then a scripted conversation of `vm.call`s. The one-sentence design rule: **the host owns the session, rut owns the data.**"
+"The first runnable host example, and the template for the rest of the chapter: a Rust program embeds rut, compiles a rut **library** (there is no `main` in it), and drives the library through its `entry fn` surface. The split is two sides — `mod.rut` (the rut module) owns the data and the logic as a `TodoList` class with full CRUD; `src/main.rs` owns the session: compile, verify, then a scripted conversation of `vm.call`s. The one-sentence design rule: **the host owns the session, rut owns the data.**"
 msgstr ""
-"第一个可运行的宿主示例，也是本章其余部分的模板：一个 Rust 程序嵌入 rut，编译一个 rut **库**（其中没有 `main`），并经由其 `entry fn` 接口驱动这个库。划分是两个文件——`todolist.rut` 作为一个带完整 CRUD 的 `TodoList` 类，掌管数据与逻辑；`src/main.rs` 掌管会话：编译、校验，然后是一段按脚本进行的 `vm.call` 对话。一句话设计规则：**宿主拥有会话，rut 拥有数据。**"
 
 
 #: src/examples/00-todolist.md:12 src/examples/01-sort.md:11
@@ -7682,9 +7650,8 @@ msgstr "数据：一个只有字段体的类"
 
 #: src/examples/00-todolist.md:39
 msgid ""
-"`examples/00-todolist/todolist.rut` — the type body is fields only; methods live in an inherent `impl` block ([Structs](../reference/structs.md), [Classes and constructors](../reference/classes.md)). Unannotated members are module-private. The block below is the class verbatim — `new`, `add`, and `remove` — closed with a `main` so it runs on its own; the example file itself has no `main` — it is a library the host drives through its `entry fn` surface:"
+"`examples/00-todolist/mod.rut` — the type body is fields only; methods live in an inherent `impl` block ([Structs](../reference/structs.md), [Classes and constructors](../reference/classes.md)). Unannotated members are module-private. The block below is the class verbatim — `new`, `add`, and `remove` — closed with a `main` so it runs on its own; the example file itself has no `main` — it is a library the host drives through its `entry fn` surface:"
 msgstr ""
-"`examples/00-todolist/todolist.rut` —— 类型体只有字段；方法住在固有 `impl` 块里（[结构体](../reference/structs.md)、[类与构造器](../reference/classes.md)）。未加注解的成员是模块私有的。下面的代码块是原封不动的类——`new`、`add` 与 `remove`——补了一个 `main` 收尾让它能独立运行；示例文件本身没有 `main`——它是一个由宿主经 `entry fn` 接口驱动的库："
 
 
 #: src/examples/00-todolist.md:48
@@ -7874,8 +7841,8 @@ msgstr ""
 
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
-#: src/examples/02-digest.md:199 src/examples/03-plugin.md:214
-#: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:240
+#: src/examples/02-digest.md:199 src/examples/03-plugin.md:213
+#: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:244
 #: src/examples/06-github-viewer-cli.md:212
 #: src/examples/playground-corpus.md:187
 msgid "Takeaways"
@@ -8256,9 +8223,9 @@ msgstr ""
 
 #: src/examples/02-digest.md:3
 msgid ""
-"The byte-level example, in the shape of [00 — Todolist](00-todolist.md) and [01 — Sort](01-sort.md) — with a twist: this time the embedder is also the **oracle**. `digest.rut` is a byte-level library written in pure rut:"
+"The byte-level example, in the shape of [00 — Todolist](00-todolist.md) and [01 — Sort](01-sort.md) — with a twist: this time the embedder is also the **oracle**. `mod.rut` is a byte-level library written in pure rut:"
 msgstr ""
-"字节级示例，形状同[00 — 待办清单](00-todolist.md)和[01 — 排序](01-sort.md)——带一个转折：这一次嵌入方同时还是 **oracle**。`digest.rut` 是一个纯 rut 写成的字节级库："
+"字节级示例，形态取自 [00 — Todolist](00-todolist.md) 与 [01 — Sort](01-sort.md) —— 加一点变化：这次的嵌入方同时兼任**仲裁者**。`mod.rut` 是一个用纯 rut 写成的字节级库："
 
 
 #: src/examples/02-digest.md:8
@@ -8286,9 +8253,9 @@ msgstr "**JSON**——解码为 `opaque` 树、编码回去、往返一致，数
 
 #: src/examples/02-digest.md:16
 msgid ""
-"Nothing in the rut file trusts itself: the Rust host cross-checks every algorithm against independent crates (the RustCrypto hash family, `base64`, `crc32fast`, `serde_json`) on canonical test vectors _and_ on deterministic pseudo-random inputs at every padding-edge length, plus a 64 KiB stress blob. `digest.rut` knows nothing about the crates; only the host compares."
+"Nothing in the rut file trusts itself: the Rust host cross-checks every algorithm against independent crates (the RustCrypto hash family, `base64`, `crc32fast`, `serde_json`) on canonical test vectors _and_ on deterministic pseudo-random inputs at every padding-edge length, plus a 64 KiB stress blob. `mod.rut` knows nothing about the crates; only the host compares."
 msgstr ""
-"rut 文件里没有任何东西信任自己：Rust 宿主把每个算法与独立的 crate（RustCrypto 哈希家族、`base64`、`crc32fast`、`serde_json`）交叉验证，既对规范测试向量，也对每一个填充边缘长度上的确定性伪随机输入，外加一个 64 KiB 的压力数据块。`digest.rut` 对那些 crate 一无所知；做比较的只有宿主。"
+"rut 文件里的任何算法都不自信用自己：Rust 宿主用独立的 crate（RustCrypto 哈希家族、`base64`、`crc32fast`、`serde_json`）在每个填充边界长度上对照规范测试向量_以及_确定性伪随机输入逐一交叉校验，另加一个 64 KiB 压力数据块。`mod.rut` 对这些 crate 一无所知；比较只发生在宿主一侧。"
 
 
 #: src/examples/02-digest.md:27
@@ -8351,9 +8318,9 @@ msgstr "整数表面足以支撑真实算法"
 
 #: src/examples/02-digest.md:55
 msgid ""
-"`digest.rut` runs on hex literals, `u32`/`u64`, the wrapping family, and signedness-correct shifts. CRC-32 is the compact showcase — table-free, bitwise, and exactly the textbook loop. The entry is pure rut — no host, no manifest — so it runs on its own, here checked against the algorithm's canonical test value:"
+"`mod.rut` runs on hex literals, `u32`/`u64`, the wrapping family, and signedness-correct shifts. CRC-32 is the compact showcase — table-free, bitwise, and exactly the textbook loop. The entry is pure rut — no host, no manifest — so it runs on its own, here checked against the algorithm's canonical test value:"
 msgstr ""
-"`digest.rut` 跑在十六进制字面量、`u32`/`u64`、回绕家族和符号正确的移位上。CRC-32 是紧凑的展示品——无表、逐位、与教科书循环一模一样。入口是纯 rut——没有宿主、没有清单——所以它能独立运行，这里对照该算法的规范测试值："
+"`mod.rut` 运行在十六进制字面量、`u32`/`u64`、回绕算术家族与符号正确的移位之上。CRC-32 是最紧凑的展示 —— 无查表、纯位运算、与教科书循环完全一致。入口是纯 rut —— 无宿主、无清单 —— 因而可以独立运行，这里对照该算法的规范测试值校验："
 
 
 #: src/examples/02-digest.md:61
@@ -8798,7 +8765,6 @@ msgid ""
 "  \"format\": \"rutbundle\",\n"
 "  \"format_version\": 10,\n"
 "  \"name\": \"plugin\",\n"
-"  \"entry\": { \"lib\": \"./plugin.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
 "    \"server\": { \"path\": \"../server\" }\n"
@@ -8808,79 +8774,79 @@ msgid ""
 msgstr ""
 
 
-#: src/examples/03-plugin.md:184
+#: src/examples/03-plugin.md:183
 msgid ""
 "`server/` is the interesting dependency: a **pure declaration surface** — a host package whose manifest points at a `.d.rut` decl file, with the Rust embedder binding the bodies ([Host fns and declaration files](../reference/host-fns.md)):"
 msgstr ""
 "`server/` 是有意思的那个依赖：一个**纯声明表面**——一个宿主包，其清单指向一个 `.d.rut` 声明文件，函数体由 Rust 嵌入方绑定（[宿主 fn 与声明文件](../reference/host-fns.md)）："
 
 
-#: src/examples/03-plugin.md:195
+#: src/examples/03-plugin.md:194
 msgid ""
 "`main.rs` packs the same directory with `rut_native::pack_dir_opts_with` — a **compiled** bundle: the plugin rides as a `.rutc` binary, its host pkg `server` as a source group — writes `plugin.rutbundle` to temp, and loads it back through the identical `Plugin::load`. The transcript equality print is the proof. The CLI drives the same loader for any self-contained module:"
 msgstr ""
 "`main.rs` 用 `rut_native::pack_dir_opts_with` 打包同一目录——一个**编译**捆绑包：插件以 `.rutc` 二进制承载，其宿主包 `server` 作为源码组——把 `plugin.rutbundle` 写到临时位置，再经同一个 `Plugin::load` 载回。转录相等的打印就是证明。CLI 用同一个加载器驱动任何自包含的模块："
 
 
-#: src/examples/03-plugin.md:203
+#: src/examples/03-plugin.md:202
 msgid ""
 "# a module directory (rut.jsonc)\n"
 msgstr ""
 "# 一个模块目录（rut.jsonc）\n"
 
 
-#: src/examples/03-plugin.md:204
+#: src/examples/03-plugin.md:203
 msgid ""
 "# -> mod.rutbundle\n"
 msgstr ""
 "# -> mod.rutbundle\n"
 
 
-#: src/examples/03-plugin.md:205
+#: src/examples/03-plugin.md:204
 msgid ""
 "# the packed form\n"
 msgstr ""
 "# 打包形态\n"
 
 
-#: src/examples/03-plugin.md:208
+#: src/examples/03-plugin.md:207
 msgid ""
 "The Rust side mirrors the rut layering: business code calls typed methods (`p.join(\"ada\")`, `p.msg(...)`), and `vm.call` happens in exactly one dispatcher that looks up the subscribed export name per topic — unknown topics are dropped, not trapped, so a server keeps running when a plugin didn't subscribe."
 msgstr ""
 "Rust 一侧镜像 rut 的分层：业务代码调用带类型的方法（`p.join(\"ada\")`、`p.msg(...)`），而 `vm.call` 只发生在一个分派器里，它按 topic 查订阅的导出名——未知 topic 被丢弃而不是触发陷阱，所以插件没订阅时服务器照常运转。"
 
 
-#: src/examples/03-plugin.md:216
+#: src/examples/03-plugin.md:215
 msgid ""
 "**One directory is one module**; the manifest names the entry and the deps, and the same directory packs to a `.rutbundle` unchanged."
 msgstr "**一个目录就是一个模块**；清单写明入口与依赖，同一目录原样打包成 `.rutbundle`。"
 
 
-#: src/examples/03-plugin.md:218
+#: src/examples/03-plugin.md:217
 msgid ""
 "**Registration by name, not by closure** — callbacks never cross the boundary as values, in either direction."
 msgstr "**按名注册，而非按闭包**——回调永不作为值跨越边界，任一方向都不例外。"
 
 
-#: src/examples/03-plugin.md:220
+#: src/examples/03-plugin.md:219
 msgid ""
 "**Re-entrancy is sound by construction**: a host fn can call back into rut mid-op, and the borrow guard turns a would-be data race into a loud trap."
 msgstr "**重入在构造上就是健全的**：宿主 fn 可以在操作中途回调进 rut，而借用守卫把本会成为数据竞争的东西变成一声响亮的陷阱。"
 
 
-#: src/examples/03-plugin.md:223
+#: src/examples/03-plugin.md:222
 msgid ""
 "**Both `opaque` directions** compose: rut-state-out, host-state-in, and neither side can inspect what the other erased."
 msgstr "**`opaque` 两个方向**可组合：rut 状态出、宿主状态进，双方都无法窥视对方擦除了什么。"
 
 
-#: src/examples/03-plugin.md:225
+#: src/examples/03-plugin.md:224
 msgid ""
 "The layering discipline — adapters own the crossing protocol, business logic stays pure — is what keeps a plugin auditable."
 msgstr "分层纪律——适配器独占跨越协议，业务逻辑保持纯粹——正是插件可审计的缘由。"
 
 
-#: src/examples/03-plugin.md:228
+#: src/examples/03-plugin.md:227
 msgid ""
 "The crossing rules this example lives on are in [the host boundary](../core-concepts/host-boundary.md); the load forms are specified in [Module bundles](../reference/bundles.md)."
 msgstr ""
@@ -8889,7 +8855,7 @@ msgstr ""
 
 #: src/examples/04-custom-async.md:3
 msgid ""
-"A **parse-only** example: `examples/04-custom-async/custom_async.rut` is a single rut file with no Cargo harness — you cannot run it today, and that is a deliberate disclosure, not an oversight. What it shows is the async vocabulary from the _user_ side: `async { }` blocks and `async fn`s as the producers (the engine mints their frames; a user type cannot BE a future — `Future<T>` is a closed class), the injected `cx` read as data inside the async bodies, and a **user-written launcher** with per-checkpoint stats and cancellation audits. The runnable harness that would drive it end to end is the follow-up work; the file is kept in the repo now because the parser's conformance suite compiles every example, so this vocabulary is checked to stay parseable ([Async and await](../reference/async.md))."
+"A **parse-only** example: `examples/04-custom-async/mod.rut` is a single rut file with no Cargo harness — you cannot run it today, and that is a deliberate disclosure, not an oversight. What it shows is the async vocabulary from the _user_ side: `async { }` blocks and `async fn`s as the producers (the engine mints their frames; a user type cannot BE a future — `Future<T>` is a closed class), the injected `cx` read as data inside the async bodies, and a **user-written launcher** with per-checkpoint stats and cancellation audits. The runnable harness that would drive it end to end is the follow-up work; the file is kept in the repo now because the parser's conformance suite compiles every example, so this vocabulary is checked to stay parseable ([Async and await](../reference/async.md))."
 msgstr ""
 
 
@@ -9117,9 +9083,9 @@ msgstr "ABI 就是页面：`main` 加各扇门"
 
 #: src/examples/05-todolist-web.md:53
 msgid ""
-"`rut/biz/app.rut` — the boot turn builds the app container and returns it as an `opaque` (rut has no mutable module state, so the host holds the state and re-passes it every turn — the [00 — Todolist](00-todolist.md) pattern at page scale):"
+"`rut/biz/app/mod.rut` — the boot turn builds the app container and returns it as an `opaque` (rut has no mutable module state, so the host holds the state and re-passes it every turn — the [00 — Todolist](00-todolist.md) pattern at page scale):"
 msgstr ""
-"`rut/biz/app.rut` ——启动回合构建应用容器并把它作为 `opaque` 返回（rut 没有可变的模块状态，所以宿主持有状态并每回合回传——[00 — 待办清单](00-todolist.md)模式在页面尺度上的应用）："
+"`rut/biz/app/mod.rut` —— 启动回合构建应用容器并以 `opaque` 返回（rut 没有可变模块状态，因此状态由宿主持有并在每个回合重新传入 —— [00 — Todolist](00-todolist.md) 的模式放大到页面规模）："
 
 
 #: src/examples/05-todolist-web.md:58
@@ -9216,7 +9182,7 @@ msgstr ""
 
 #: src/examples/05-todolist-web.md:122
 msgid ""
-"`rut/ui/store.rut` is the kernel. Handles are keys, not objects — `Source<T>`, `Derived<T>`, `Mutation<A, R>` carry ids and have no logic of their own beyond routing through their store. The machinery interfaces are **module-private** — the domain package cannot name them even to import them — and satisfaction is structural: each handle carries the members on its own inherent impl, and the member-set match at the store's boundary is the whole admission ([Interfaces and dispatch](../core-concepts/interfaces-and-dispatch.md)):"
+"`rut/ui/store/mod.rut` is the kernel. Handles are keys, not objects — `Source<T>`, `Derived<T>`, `Mutation<A, R>` carry ids and have no logic of their own beyond routing through their store. The machinery interfaces are **module-private** — the domain package cannot name them even to import them — and satisfaction is structural: each handle carries the members on its own inherent impl, and the member-set match at the store's boundary is the whole admission ([Interfaces and dispatch](../core-concepts/interfaces-and-dispatch.md)):"
 msgstr ""
 
 
@@ -9243,9 +9209,8 @@ msgstr ""
 
 #: src/examples/05-todolist-web.md:150
 msgid ""
-"Freshness is **pull-on-read**: a write bumps a generation, and a `get` recomputes a stale derived at most once per write-set. There is no flush step anywhere. Dependencies are **discovered, never declared** — the `ctx.get` calls inside a derive closure ARE the dependency list, re-recorded on every recompute. The domain's counts line is the worked example (`rut/biz/world.rut`):"
+"Freshness is **pull-on-read**: a write bumps a generation, and a `get` recomputes a stale derived at most once per write-set. There is no flush step anywhere. Dependencies are **discovered, never declared** — the `ctx.get` calls inside a derive closure ARE the dependency list, re-recorded on every recompute. The domain's counts line is the worked example (`rut/biz/world/mod.rut`):"
 msgstr ""
-"新鲜度是**读时拉取**：一次写入 bumps 一个代数，`get` 至多在每个写集内把过期的派生重算一次。任何地方都没有冲刷步骤。依赖是**发现的，不是声明的**——derive 闭包内部的 `ctx.get` 调用就是依赖列表，每次重算都重新记录。领域的计数行就是完整的示范（`rut/biz/world.rut`）："
 
 
 #: src/examples/05-todolist-web.md:157
@@ -9350,7 +9315,6 @@ msgid ""
 "// rut/biz/rut.jsonc — the project root\n"
 "{\n"
 "  \"name\": \"app\",\n"
-"  \"entry\": { \"lib\": \"./biz.rut\", \"libs\": [\"./domain.rut\", \"./world.rut\", \"./app.rut\"] },\n"
 "\n"
 "  \"deps\": {\n"
 "    // the sibling package — the consumer's own local package\n"
@@ -9365,44 +9329,43 @@ msgid ""
 msgstr ""
 
 
-#: src/examples/05-todolist-web.md:228
+#: src/examples/05-todolist-web.md:227
 msgid ""
-"`entry.libs` splices several files into ONE module (base first, array order), so a name private to `store.rut` is visible to `components.rut` and to nothing outside `ui` — single-file privacy, kept at package scale. `ui` is marked `inline = true` (its generic exports splice by law), and the native lane mounts the _directory_ — the manifest, not a Rust fn, is the module list. The `path` row is for the project's own sibling package; the toolchain's packages ride in as pinned url deps from the std tree's jsDelivr CDN ([dependency kinds](../reference/dependency-kinds.md)). The wasm lane mounts the same packages by hand as a mirror, and a test pins both lanes to byte-identical binaries."
+"Each package's body is a **file module tree**: the root module is `mod.rut` beside the manifest, `mod NAME;` declarations mount the children (`biz/` is `mod.rut` + `domain/` + `world/` + `app/`; `ui/` is `mod.rut` + five framework modules). The privacy tiers are honest now: the store's plumbing stays private to `store/mod.rut` (not even ui's own components can spell it), `pub(pkg)` shares inside the package, `pub` crosses to biz — and the grep gate pins that biz's import set stays exactly the two-package vocabulary. The native lane mounts the _directory_ — the manifest, not a Rust fn, is the module list. The `path` row is for the project's own sibling package; the toolchain's packages ride in as pinned url deps from the std tree's jsDelivr CDN ([dependency kinds](../reference/dependency-kinds.md)). The wasm lane mounts the same packages by hand as a mirror (the app's own tree crossing the ABI as the module-rows wire), and a test pins both lanes to byte-identical binaries."
 msgstr ""
-"`entry.libs` 把多个文件拼接成一个模块（基文件在前，按数组顺序），所以 `store.rut` 私有的名字对 `components.rut` 可见，对 `ui` 之外的一切不可见——单文件隐私，保持在包尺度。`ui` 被标为 `inline = true`（它的泛型导出依法拼接），原生通道挂载_目录_——清单就是模块列表，而不是某个 Rust fn。`path` 行用于项目自己的兄弟包；工具链的包作为固定的 url 依赖从 std 树的 jsDelivr CDN 进入（[依赖种类](../reference/dependency-kinds.md)）。wasm 通道作为镜像手工挂载同样的包，并且有一个测试把两条通道钉在逐字节相同的二进制上。"
 
 
-#: src/examples/05-todolist-web.md:242
+#: src/examples/05-todolist-web.md:246
 msgid ""
 "The page ABI is `main` plus doors named for their events; state lives in the container the host re-passes every turn."
 msgstr "页面 ABI 就是 `main` 加各扇以其事件命名的门；状态活在宿主每回合回传的容器里。"
 
 
-#: src/examples/05-todolist-web.md:244
+#: src/examples/05-todolist-web.md:248
 msgid ""
 "Ten thin crossings carried an entire reactive framework — the host stayed generic and never learned the word \"todo\"."
 msgstr "十条薄跨越扛起了整个响应式框架——宿主保持通用，从未学会\"todo\"这个词。"
 
 
-#: src/examples/05-todolist-web.md:246
+#: src/examples/05-todolist-web.md:250
 msgid ""
 "The store is jotai's shape in rut: discovered deps, pull-on-read freshness, mutations as the write lane, and non-writability by shape — the derive ctx has no write verb to reach."
 msgstr ""
 
 
-#: src/examples/05-todolist-web.md:249
+#: src/examples/05-todolist-web.md:253
 msgid ""
 "Widgets are values; the keyed diff is the only thing that speaks DOM, and patch-in-place is what makes the UI animatable."
 msgstr "部件是值；键控 diff 是唯一会讲 DOM 的东西，而就地打补丁正是 UI 可动画的原因。"
 
 
-#: src/examples/05-todolist-web.md:251
+#: src/examples/05-todolist-web.md:255
 msgid ""
 "Soft failures are data (`(nil, why)` and the pump keeps draining); a panic alone kills the page, loud."
 msgstr "软失败是数据（`(nil, why)`，泵继续排空）；只有 panic 才杀死页面，而且死得响亮。"
 
 
-#: src/examples/05-todolist-web.md:254
+#: src/examples/05-todolist-web.md:258
 msgid ""
 "The async shape this page _simulates_ (the request table + timers) is the real thing in [06 — GitHub viewer CLI](06-github-viewer-cli.md); the store's building blocks are in [the swappable packages](../reference/stdlib.md)."
 msgstr ""
@@ -9450,9 +9413,9 @@ msgstr "大脑是异步的；宿主启动并泵送"
 
 #: src/examples/06-github-viewer-cli.md:43
 msgid ""
-"`rgh.rut` — the entry point is one `boot` fn: the host crosses argv in as a single `\\n`\\-joined string (no arg lists in the crossing set), and `boot` launches the brain with the standard launcher ([launched futures](../reference/launched-futures.md)):"
+"`mod.rut` — the entry point is one `boot` fn: the host crosses argv in as a single `\\n`\\-joined string (no arg lists in the crossing set), and `boot` launches the brain with the standard launcher ([launched futures](../reference/launched-futures.md)):"
 msgstr ""
-"`rgh.rut` ——入口是一个 `boot` fn：宿主把 argv 以单个 `\\n`\\-连接的字符串跨越进来（可跨越集合里没有参数列表），`boot` 用标准启动器启动大脑（[已启动的 future](../reference/launched-futures.md)）："
+"`mod.rut` —— 入口只有一个 `boot` 函数：宿主把 argv 以 `\\n` 连接成单个字符串送过边界（跨边界集合里没有参数列表），`boot` 用标准启动器发射大脑（[已启动的 future](../reference/launched-futures.md)）："
 
 
 #: src/examples/06-github-viewer-cli.md:54
@@ -10048,9 +10011,9 @@ msgstr "一个经典案例，完整版"
 
 #: src/examples/playground-corpus.md:72
 msgid ""
-"`demo/src/examples/quicksort.rut` is the archetype — imports, one algorithm, one log line — and the shared-handle mutation law in action (the sort writes through the caller's vec). Verbatim, so what runs here is exactly what the playground edits:"
+"`demo/src/examples/quicksort/mod.rut` is the archetype — imports, one algorithm, one log line — and the shared-handle mutation law in action (the sort writes through the caller's vec). Verbatim, so what runs here is exactly what the playground edits:"
 msgstr ""
-"`demo/src/examples/quicksort.rut` 是原型——导入、一个算法、一行日志——也是共享句柄变更法则的实战（排序透过调用方的 vec 写入）。原样照录，所以这里运行的正是 Playground 编辑的东西："
+"`demo/src/examples/quicksort/mod.rut` 是原型 —— 导入、一个算法、一行日志 —— 也是共享句柄可变法则的现场演示（排序写穿调用方的 vec）。原样内嵌，因此这里运行的与演练场里编辑的完全是同一份代码："
 
 
 #: src/examples/playground-corpus.md:77
@@ -10425,7 +10388,7 @@ msgid "Special meaning"
 msgstr "特殊含义"
 
 
-#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:48
+#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:47
 msgid "`type`"
 msgstr "`type`"
 
@@ -10661,89 +10624,110 @@ msgstr "导入"
 
 
 #: src/reference/modules-and-visibility.md:13
-msgid "`use pkg::{ A, B };` / `use pkg::A;`"
-msgstr "`use pkg::{ A, B };` / `use pkg::A;`"
+msgid "`use pkg::{ A, B };` / `use pkg::A;` / `use pkg::a::b::{ C };` (see below)"
+msgstr "`use pkg::{ A, B };` / `use pkg::A;` / `use pkg::a::b::{ C };`（见下文）"
 
 
 #: src/reference/modules-and-visibility.md:14
+msgid "child module"
+msgstr "子模块"
+
+
+#: src/reference/modules-and-visibility.md:14
+msgid "`mod name;` / `pub mod name;` — declares a **file module**"
+msgstr "`mod name;` / `pub mod name;` —— 声明一个**文件模块**"
+
+
+#: src/reference/modules-and-visibility.md:15
 msgid "binding"
 msgstr "绑定"
 
 
-#: src/reference/modules-and-visibility.md:14
+#: src/reference/modules-and-visibility.md:15
 msgid "`let name: T = expr;` (also under `pub`)"
 msgstr "`let name: T = expr;`（也可置于 `pub` 之下）"
 
 
-#: src/reference/modules-and-visibility.md:15
+#: src/reference/modules-and-visibility.md:16
 msgid "enum / struct / class / interface"
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:15
+#: src/reference/modules-and-visibility.md:16
 msgid "`enum E { .. }`, `struct S { .. }`, `class C { .. }`, `interface I { .. }`"
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:16
+#: src/reference/modules-and-visibility.md:17
 msgid "impl block"
 msgstr "impl 块"
 
 
-#: src/reference/modules-and-visibility.md:16
+#: src/reference/modules-and-visibility.md:17
 msgid "`impl T { .. }` — inherent, the type's module only"
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:17
+#: src/reference/modules-and-visibility.md:18
 msgid "function"
 msgstr "函数"
 
 
-#: src/reference/modules-and-visibility.md:17
+#: src/reference/modules-and-visibility.md:18
 msgid "`fn f(..) { .. }`, `async fn f(..) { .. }`"
 msgstr "`fn f(..) { .. }`, `async fn f(..) { .. }`"
 
 
-#: src/reference/modules-and-visibility.md:18
+#: src/reference/modules-and-visibility.md:19
 msgid "entry point"
 msgstr "入口点"
 
 
-#: src/reference/modules-and-visibility.md:18
+#: src/reference/modules-and-visibility.md:19
 msgid "`entry fn f(..) { .. }`"
 msgstr "`entry fn f(..) { .. }`"
 
 
-#: src/reference/modules-and-visibility.md:19
+#: src/reference/modules-and-visibility.md:20
 msgid "alias"
 msgstr "别名"
 
 
-#: src/reference/modules-and-visibility.md:19
+#: src/reference/modules-and-visibility.md:20
 msgid "`type X = A;` (see [Type aliases and union bounds](type-aliases.md))"
 msgstr "`type X = A;`（参见[类型别名与联合约束](type-aliases.md)）"
 
 
-#: src/reference/modules-and-visibility.md:21
+#: src/reference/modules-and-visibility.md:22
 msgid ""
 "Anything else — calls, any statement — is a compile error: _statements are not allowed at module scope — modules contain declarations only_."
 msgstr "其他任何内容 —— 调用、任何语句 —— 都是编译错误：_模块作用域不允许出现语句 —— 模块只包含声明_。"
 
 
-#: src/reference/modules-and-visibility.md:25
+#: src/reference/modules-and-visibility.md:26
 msgid ""
 "`host fn` / `host struct` and `builtin` declarations are signature-only native surfaces: `host` rows live in declaration files (`.d.rut`) and `builtin` rows in the engine's own `core` surface, never as executable bodies in `.rut`."
 msgstr ""
 "`host fn` / `host struct` 与 `builtin` 声明是只有签名的原生接口面：`host` 条目位于声明文件（`.d.rut`）中，`builtin` 条目位于引擎自身的 `core` 接口中，绝不会以可执行体的形式出现在 `.rut` 里。"
 
 
-#: src/reference/modules-and-visibility.md:30
+#: src/reference/modules-and-visibility.md:31
+msgid "File modules (`mod`)"
+msgstr "文件模块（`mod`）"
+
+
+#: src/reference/modules-and-visibility.md:33
+msgid ""
+"A `mod NAME;` declaration mounts a **file module**: the sibling `NAME/mod.rut` directory beside the declaring file. There are no inline `mod X { .. }` blocks — files are the one mechanism. The package's root module is `mod.rut` beside its manifest ([Project structure](project-structure.md)); a child's own declarations may declare grandchildren (`layout/mod.rut` declaring `pub mod grid;` mounts `layout/grid/mod.rut`), recursively. Mounting follows declarations in source order, cycle-guarded by file identity; a repeated name mounts once. A missing child, a `NAME.rut` file where a module directory is expected, or a directory without its `mod.rut` is a loud error naming both spellings. `mod` versus `pub mod` feeds the same visibility law every declaration follows (below): a `pub mod` child's `pub` members cross packages; a plain `mod` child is the package's own."
+msgstr ""
+
+
+#: src/reference/modules-and-visibility.md:48
 msgid "Uses"
 msgstr "use 的用法"
 
 
-#: src/reference/modules-and-visibility.md:32
+#: src/reference/modules-and-visibility.md:50
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -10758,131 +10742,222 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:47
+#: src/reference/modules-and-visibility.md:65
 msgid ""
-"The package is **one bare identifier**; the names are one or more idents. rut is fully statically typed: the compiler resolves every used name and knows from usage whether it lands in type position (`Vec` in an annotation) or value position (`Logger(..)`), so there is nothing for the user to annotate. An unreferenced use name is a lint, not an error."
+"The use path is **`pkg::` followed by module segments**: the head is the mounted package's bare `[a-zA-Z0-9_]+` name, then zero or more **module segments** walking the package's file modules, then the leaf — a brace list of one or more names, or a single name:"
 msgstr ""
-"包名是**单个裸标识符**；名称则是一个或多个标识符。rut 是完全静态类型的：编译器会解析每个被使用的名称，并根据用法判断它处于类型位置（注解中的 `Vec`）还是值位置（`Logger(..)`），因此用户无需编写任何注解。未被引用的 use 名称只是一条 lint，不是错误。"
+"use 路径是 **`pkg::` 后跟模块段**：开头是已挂载包的裸 `[a-zA-Z0-9_]+` 名，随后是零个或多个走在包内文件模块之间的**模块段**，最后是叶子 —— 一个含一个或多个名字的花括号列表，或者单个名字："
 
 
-#: src/reference/modules-and-visibility.md:54
+#: src/reference/modules-and-visibility.md:70
+msgid ""
+"```text\n"
+"use tur_kit::layout::grid::Cell;       // one name from a nested module\n"
+"use tur_kit::layout::{ Column, Span }  // several names from a module\n"
+"use ink::Logger;                       // the degenerate root path\n"
+"```"
+msgstr ""
+
+
+#: src/reference/modules-and-visibility.md:76
+msgid ""
+"Importing a _module itself_ (`use tur_kit::layout;`) is an error — modules are namespaces, not values; the diagnostic names the fix (spell a name at the leaf). rut is fully statically typed: the compiler resolves every used name and knows from usage whether it lands in type position (`Column` in an annotation) or value position (`Logger(..)`), so there is nothing for the user to annotate. An unreferenced use name is a lint, not an error."
+msgstr ""
+"导入_模块本身_（`use tur_kit::layout;`）是一个错误 —— 模块是命名空间，不是值；诊断会给出修复方法（在叶子处写出一个名字）。rut 是完全静态类型的：编译器解析每一个用到的名字，并根据用法判断它落在类型位置（注解中的 `Column`）还是值位置（`Logger(..)`），因此用户无需任何标注。未被引用的 use 名是一个 lint，不是错误。"
+
+
+#: src/reference/modules-and-visibility.md:84
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The gated names resolve only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave never needs the import, only source that spells one of the names does. The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — the marker word is the designation, not a name ([Host fns and declaration files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through `use`."
 msgstr ""
 "引擎的内建名字——各基本类型、`opaque`、`panic`、`type_id<T>()`、`str(x)`——是**环境性的**：使用它们无需 `use`。被把守的名字只能经 `use core::{ .. }` 解析：常量 `NAN`、disposal 上下文 `DisposalContext`、弱引用 `Weak<T>`，以及封闭的 async 对（`Future<T>`、`RunContext`）——引擎的编织从不需要导入，需要导入的只是拼写了其中某个名字的源代码。括号标记（`[disposal]`/`[iterable]`/`[constructor]`）无需导入——标记词就是指定，不是名字（[宿主 fn 与声明文件](host-fns.md)）。包代码（`pouch`、`ink`、`nmapset`、...）只经 `use` 挂载。"
 
 
-#: src/reference/modules-and-visibility.md:68
+#: src/reference/modules-and-visibility.md:98
+msgid "Qualified positions"
+msgstr "限定位置"
+
+
+#: src/reference/modules-and-visibility.md:100
+msgid ""
+"Inside one package, a declaration of another module is nameable where a path is legal — a type annotation, a call, a field read — by **dot-qualified position**: `layout.Column`, `store.Source<str>`, `widget.mk(3)`. The head resolves against the current module's scope, then the module's ancestors up to the package root; positions never take a package head — `use` statements are the only cross-package door. Two spellings, two doors:"
+msgstr ""
+"在同一个包内，另一个模块的声明在路径合法之处 —— 类型注解、调用、字段读取 —— 都可以通过**点号限定位置**命名：`layout.Column`、`store.Source<str>`、`widget.mk(3)`。路径头先在当前模块作用域中解析，再沿模块祖先上溯到包根；位置永远不带包头 —— `use` 语句是唯一的跨包之门。两种拼法，两扇门："
+
+
+#: src/reference/modules-and-visibility.md:108
+msgid "form"
+msgstr "形式"
+
+
+#: src/reference/modules-and-visibility.md:108 src/reference/stdlib.md:86
+#: src/reference/typed-bytecode.md:114
+msgid "spelling"
+msgstr "拼写"
+
+
+#: src/reference/modules-and-visibility.md:108
+msgid "door"
+msgstr "门"
+
+
+#: src/reference/modules-and-visibility.md:110
+msgid "use path"
+msgstr "use 路径"
+
+
+#: src/reference/modules-and-visibility.md:110
+msgid "`use pkg::a::b::{ C }`"
+msgstr ""
+
+
+#: src/reference/modules-and-visibility.md:110
+msgid "`::` — cross-package, the import"
+msgstr "`::` —— 跨包，导入语句"
+
+
+#: src/reference/modules-and-visibility.md:111
+msgid "qualified position"
+msgstr "限定位置"
+
+
+#: src/reference/modules-and-visibility.md:111
+msgid "`a.b.C` / `a.b.f(..)`"
+msgstr "`a.b.C` / `a.b.f(..)`"
+
+
+#: src/reference/modules-and-visibility.md:111
+msgid "`.` — intra-package, at the use site"
+msgstr "`.` —— 包内，在使用处"
+
+
+#: src/reference/modules-and-visibility.md:113
 msgid "Module-level `let`"
 msgstr "模块级 `let`"
 
 
-#: src/reference/modules-and-visibility.md:70
+#: src/reference/modules-and-visibility.md:115
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, builtin operators over load-time expressions, struct literals whose fields are load-time expressions, fixed-array literals whose elements are, `type_id<T>()`, and builtin zero allocations (`[nil; n]` with a const `n`). Calls to user functions are not load-time expressions."
 msgstr ""
 "初始化式必须是**加载期表达式**：字面量、枚举成员、作用于加载期表达式的内置运算符、字段均为加载期表达式的结构体字面量、元素均为加载期表达式的定长数组字面量、`type_id<T>()`，以及内置的零值分配（`[nil; n]`，其中 `n` 为常量）。对用户函数的调用不是加载期表达式。"
 
 
-#: src/reference/modules-and-visibility.md:81
+#: src/reference/modules-and-visibility.md:126
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or held by the embedder and passed across the boundary. **No user code runs at load.**"
 msgstr "不存在可变的模块状态：程序状态在 `main` 中构造，或由嵌入方持有并跨边界传入。**加载期间不会运行任何用户代码。**"
 
 
-#: src/reference/modules-and-visibility.md:85
+#: src/reference/modules-and-visibility.md:130
 msgid "Entry points"
 msgstr "入口点"
 
 
-#: src/reference/modules-and-visibility.md:87
+#: src/reference/modules-and-visibility.md:132
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — `entry fn main` for a script, sync or async. `entry fn` publishes a function to the _embedder_; `entry` is orthogonal to visibility and does not combine with `pub`. Consequences of declarations-only loading: no use side-effect ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 "嵌入方加载模块后会显式调用一个入口函数 —— 脚本就是 `entry fn main`，同步或异步均可。`entry fn` 把函数发布给 _嵌入方_；`entry` 与可见性正交，且不与 `pub` 组合。只含声明的加载带来的结果：不存在 use 副作用的顺序问题，不存在加载顺序 bug，加载行为确定且开销低。"
 
 
-#: src/reference/modules-and-visibility.md:94
+#: src/reference/modules-and-visibility.md:139
 msgid "Bindings: `let` vs `let mut`"
 msgstr "绑定：`let` 与 `let mut`"
 
 
-#: src/reference/modules-and-visibility.md:96
+#: src/reference/modules-and-visibility.md:141
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through `x`, and no `mut self` method calls on it. It is a **read-only view of the shared object**."
 msgstr ""
 "`let x = e;` 以不可变方式绑定 —— 不能重新赋值，不能通过 `x` 给字段赋值，也不能对它调用 `mut self` 方法。它是**共享对象的只读视图**。"
 
 
-#: src/reference/modules-and-visibility.md:99
+#: src/reference/modules-and-visibility.md:144
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object it holds**. Every non-primitive is a shared cell (see [By-reference and nullable](by-reference-and-nullable.md)), so that write is visible through every other handle: `mut` is _permission_, never a copy. Every assignment path must run through a `mut` binding."
 msgstr ""
 "`let mut x = e;` 可以重新赋值，并授予**对其所持有对象**的写访问权。每个非基本类型值都是共享单元（参见[按引用与可空](by-reference-and-nullable.md)），因此这一写入会透过其他所有句柄可见：`mut` 是 _权限_，绝不是复制。每条赋值路径都必须经过 `mut` 绑定。"
 
 
-#: src/reference/modules-and-visibility.md:104
+#: src/reference/modules-and-visibility.md:149
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn area(p: Point)` promises not to."
 msgstr ""
 "参数可以声明 `mut name` —— 这是被调用方**改动调用方对象**的许可：`fn step(mut p: Point)` 会移动调用方的点；`fn area(p: Point)` 则承诺不这样做。"
 
 
-#: src/reference/modules-and-visibility.md:110
+#: src/reference/modules-and-visibility.md:155
 msgid ""
-"Modules form a tree per package (files in directories; the package root is the root module). Every declaration — and every class member — carries a visibility:"
-msgstr "每个包内的模块构成一棵树（文件存放于目录中；包根即根模块）。每个声明 —— 以及每个类成员 —— 都带有一种可见性："
+"Modules form a tree per package (the package root is the root module `mod.rut`; each declared child is a module file). Every declaration — and every class member — carries a visibility:"
+msgstr ""
+"每个包的模块构成一棵树（包根就是根模块 `mod.rut`；每个被声明的子模块都是一个模块文件）。每个声明 —— 以及每个类成员 —— 都带有一个可见性："
 
 
-#: src/reference/modules-and-visibility.md:116
+#: src/reference/modules-and-visibility.md:161
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr "**public** —— 可被任何 rut 模块命名（包括其他包）"
 
 
-#: src/reference/modules-and-visibility.md:117
-msgid "visible everywhere inside this **package's module tree**"
-msgstr "在本**包的模块树**内随处可见"
+#: src/reference/modules-and-visibility.md:162
+msgid "`pub(pkg) fn ..`"
+msgstr "`pub(pkg) fn ..`"
 
 
-#: src/reference/modules-and-visibility.md:118
-msgid "visible to the **parent module** only"
-msgstr "仅对**父模块**可见"
+#: src/reference/modules-and-visibility.md:162
+msgid "visible everywhere inside this **package** (its whole module tree)"
+msgstr "在整个**包**内可见（整棵模块树）"
 
 
-#: src/reference/modules-and-visibility.md:119
-msgid "`pub(self) fn ..`"
-msgstr "`pub(self) fn ..`"
+#: src/reference/modules-and-visibility.md:163
+msgid "visible to the **parent module's subtree** only"
+msgstr "仅对**父模块的子树**可见"
 
 
-#: src/reference/modules-and-visibility.md:119
-msgid "module-private — **the default**"
-msgstr "模块私有 —— **默认值**"
+#: src/reference/modules-and-visibility.md:164
+msgid "_(unannotated)_"
+msgstr "_（无标注）_"
 
 
-#: src/reference/modules-and-visibility.md:121
-msgid "Unannotated = `pub(self)`: nothing leaks unless it says `pub`."
-msgstr "未加注解即等同 `pub(self)`：除非显式写明 `pub`，否则任何东西都不会泄漏。"
-
-
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:164
 msgid ""
-"Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an impl exports with its target type), `fn`, `type` aliases. On a `class` declaration it means the _type name_ is visible."
+"module-private — visible in this module and its descendants; **the default**"
+msgstr "模块私有 —— 在本模块及其后代中可见；**默认值**"
+
+
+#: src/reference/modules-and-visibility.md:166
+msgid ""
+"Unannotated = private to the declaring module _and its descendants_ (a child module sees its ancestors' privates, never a sibling's)."
+msgstr "无标注 = 对声明模块_及其后代_私有（子模块能看到祖先的私有项，永远看不到兄弟的）。"
+
+
+#: src/reference/modules-and-visibility.md:168
+msgid ""
+"The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed but gated nothing; the parser refuses them with the fix (bare private, or `pub(super)`/`pub(pkg)`/`pub`)."
 msgstr ""
+"括号形式 `pub(mod)` / `pub(self)` 已废除 —— 它们能解析但什么也不约束；解析器会大声拒绝并给出修复方法（裸私有，或 `pub(super)`/`pub(pkg)`/`pub`）。"
 
 
-#: src/reference/modules-and-visibility.md:125
+#: src/reference/modules-and-visibility.md:171
+msgid ""
+"Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an impl exports with its target type), `fn`, `type` aliases, and the `mod` edge itself (`pub mod` opens the child's `pub` members to other packages; a plain `mod` keeps the child package-internal). On a `class` declaration it means the _type name_ is visible."
+msgstr ""
+"统一适用于：`let`、`enum`、`struct`、`class`、`interface`、`impl`（impl 随其目标类型一起导出）、`fn`、`type` 别名，以及 `mod` 边本身（`pub mod` 把子模块的 `pub` 成员开放给其他包；裸 `mod` 让子模块保持包内）。在 `class` 声明上，它指_类型名_可见。"
+
+
+#: src/reference/modules-and-visibility.md:176
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is module-private; `pub` (optionally scoped) exposes it. See [Classes and constructors](classes.md)."
 msgstr "**类成员采用同样的形式**：未加注解的字段或方法是模块私有的；`pub`（可带作用域）将其公开。参见[类与构造器](classes.md)。"
 
 
-#: src/reference/modules-and-visibility.md:128
+#: src/reference/modules-and-visibility.md:179
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see [Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub fn` exports cross-module, plain `fn` is module-private — the same law a class's methods follow, enums included (see [Structs](structs.md) and [Enums](enums.md)). Interface members take no `pub` at all — they are as visible as their interface; satisfaction reads a type's **public** inherent members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:136
+#: src/reference/modules-and-visibility.md:187
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones."
 msgstr ""
@@ -11664,8 +11739,7 @@ msgstr ""
 #: src/reference/enums.md:31
 msgid ""
 "An enum is a distinct named type; its members are its values — plain symbols, nothing more. There is no integer under a member to read, set, or spell."
-msgstr ""
-"枚举是一个独立命名的类型；其成员就是它的值——纯粹是符号，仅此而已。成员之下没有可供读取、设置或书写的整数。"
+msgstr "枚举是一个独立命名的类型；其成员就是它的值——纯粹是符号，仅此而已。成员之下没有可供读取、设置或书写的整数。"
 
 
 #: src/reference/enums.md:34
@@ -18278,7 +18352,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/embedding.md:246 src/reference/bundles.md:343
+#: src/reference/embedding.md:246 src/reference/bundles.md:355
 msgid "\"vendor/plugin.rutbundle\""
 msgstr "\"vendor/plugin.rutbundle\""
 
@@ -21080,11 +21154,6 @@ msgid "contract"
 msgstr "契约"
 
 
-#: src/reference/stdlib.md:86 src/reference/typed-bytecode.md:114
-msgid "spelling"
-msgstr "拼写"
-
-
 #: src/reference/stdlib.md:88
 msgid "`fn <free>(self, emit: fn(E) -> bool)` on an inherent impl"
 msgstr "固有 impl 上的 `fn <自由名>(self, emit: fn(E) -> bool)`"
@@ -21185,7 +21254,7 @@ msgid "The swappable set"
 msgstr "可换集合"
 
 
-#: src/reference/stdlib.md:117 src/reference/project-structure.md:160
+#: src/reference/stdlib.md:117 src/reference/project-structure.md:181
 msgid "package"
 msgstr "包"
 
@@ -21228,7 +21297,7 @@ msgid "the `Logger` class over `ink_host`"
 msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:166
+#: src/reference/stdlib.md:121 src/reference/project-structure.md:187
 msgid "`pouch`"
 msgstr "`pouch`"
 
@@ -21254,7 +21323,7 @@ msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:123 src/reference/project-structure.md:167
+#: src/reference/stdlib.md:123 src/reference/project-structure.md:188
 msgid "`json`"
 msgstr "`json`"
 
@@ -21280,7 +21349,7 @@ msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:125 src/reference/project-structure.md:163
+#: src/reference/stdlib.md:125 src/reference/project-structure.md:184
 msgid "`calc`"
 msgstr "`calc`"
 
@@ -24236,7 +24305,7 @@ msgid ""
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
 
-#: src/reference/module-binary.md:168 src/reference/bundles.md:270
+#: src/reference/module-binary.md:168 src/reference/bundles.md:282
 msgid "check"
 msgstr "检查"
 
@@ -24550,7 +24619,7 @@ msgid ""
 msgstr "宿主与声明的叶子组没有编译依赖，平凡地通过。被拒绝的世界不加 `--strip` 照样打包。"
 
 
-#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:357
+#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:369
 msgid "CLI"
 msgstr "CLI"
 
@@ -24946,9 +25015,8 @@ msgstr ""
 
 #: src/reference/loading.md:21
 msgid ""
-"A **directory is one module**: its `rut.jsonc` names the package (`name`), its entry (`entry.lib` / `entry.type` / `entry.libs`), and its `deps`/`peer-deps`/`dev-deps` ([Project structure and rut.jsonc](project-structure.md)). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
+"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type`), its body is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
 msgstr ""
-"**一个目录是一个模块**：它的 `rut.jsonc` 写明包名（`name`）、入口（`entry.lib` / `entry.type` / `entry.libs`）以及 `deps`/`peer-deps`/`dev-deps`（[项目结构与 rut.jsonc](project-structure.md)）。`rut_native::load_dir` 沿 `deps` 递归遍历 —— 环守卫、先挂载者优先、名字不符即错误 —— 在挂载门处验证每个 url 依赖的 `sha256` 钉，执行仅根的 `[dev-deps]` pass，然后对闭合集合跑一次对等门（[依赖种类](dependency-kinds.md)）。`.rutbundle` 从 zip 闭合加载（[模块捆绑包](bundles.md)）。产出是 `rut_driver::Loaded { pkgs, root }`。"
 
 
 #: src/reference/loading.md:22
@@ -25606,71 +25674,78 @@ msgid ""
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", \"format_version\": 10\n"
 "rut.scopes               the pack-time scope ledger (scope = \"spec\" rows)\n"
 "<pkg>.rutc               the root's compiled binary — bodies + surface\n"
-"<pkg>.rut                the root's generic-bearing source, when its surface\n"
+"mod.rut                  the root's generic-bearing source, when its surface\n"
 "                           exports generics (the riding law, below)\n"
+"rut.mods                 the root's module rows, when it has mod children\n"
 "<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one\n"
 "<dep>/rut.jsonc          per dep group, mixed kinds:\n"
 "<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.jsonc rides too);\n"
 "                           generic exports ride compiled — the binary carries\n"
 "                           the closure's instantiations in its ledger\n"
-"<dep>/<dep>.rut            the group's generic-bearing source, when its surface\n"
-"<dep>/group-*.rut …        exports generics (the entry + the peer-deps group\n"
-"                           files, verbatim — the riding law, below)\n"
+"<dep>/mod.rut              the group's generic-bearing source, when its surface\n"
+"<dep>/group-*.rut …        exports generics (the root module + the peer-deps\n"
+"                           group files, verbatim — the riding law, below)\n"
+"<dep>/rut.mods             its module rows, when it has mod children\n"
 "<dep>/<dep>.d.rut          its surface text, when it declares one\n"
 "<leaf>/rut.jsonc           splice-needed dep (the `inline` flag) or a host\n"
-"<leaf>/<leaf>.rut           pkg → a source group: the source file set\n"
-"<leaf>/<leaf>.rut …         (entry, libs, peer groups)\n"
+"<leaf>/mod.rut             pkg → a source group: the source file set\n"
+"<leaf>/group-*.rut …       (the root module + peer groups)\n"
 "```"
 msgstr ""
 
 
-#: src/reference/bundles.md:47
+#: src/reference/bundles.md:49
 msgid ""
 "The **`.rutc` binaries are the linking truth**: bodies plus the surface on the wire ([module binary and verification](module-binary.md)). A consumer binds a compiled group's exports from the binary alone — nothing is rebuilt from `.d.rut` text. The `.d.rut` files ride for humans and tooling; the loader never reads them."
 msgstr ""
 "**`.rutc` 二进制是链接的真相**：函数体加线上的表面（[模块二进制与验证](module-binary.md)）。使用方仅凭二进制就绑定编译组的导出——没有任何东西从 `.d.rut` 文本重建。`.d.rut` 文件为人类与工具随行；加载器从不读它们。"
 
 
-#: src/reference/bundles.md:53
+#: src/reference/bundles.md:55
 msgid ""
 "The **scope ledger** names the pack-time scope of every linked module in the closure (engine mounts included). A decoded program's ids spell its pack-time scopes; the loader resolves each through the ledger to the module to ensure and rebases the ids onto its own numbering — pack-time and load-time numbering never have to agree. A reference with no ledger row is refused."
 msgstr ""
 "**作用域台账**记下闭包里每个被链接模块的打包期作用域（连引擎挂载也在内）。解码程序的 id 写明它的打包期作用域；加载器经台账把每个作用域解析到要确保的模块，并把 id 重定基到自己的编号上——打包期与加载期的编号从不需要一致。台账里没有对应行的引用会被拒绝。"
 
 
-#: src/reference/bundles.md:59
+#: src/reference/bundles.md:61
+msgid ""
+"**The module rows are the tree's wire form** (`rut.mods` — `<dep>/rut.mods` for a group): one JSON object, mod path → source text, `\"\"` = the root module, one row per mounted child. A package with no mod children writes no rows entry — a flat package packs exactly as before, byte-stable. The section is **additive**: the reader accepts both envelopes, so a bundle packed before file modules (the published std tags among them) keeps loading — that is a loading law, not a transition; a NEW directory whose manifest spells the repealed `entry.lib`/`entry.libs` keys refuses loudly at the manifest walk."
+msgstr ""
+
+
+#: src/reference/bundles.md:71
 msgid ""
 "**Mixed groups, one classifier**: the same splice law that rules the graph (the `inline` flag — [modules and visibility](modules-and-visibility.md)) decides each package's kind. Refuse, never guess: the packer calls the graph's own classifier, there is no second implementation."
 msgstr ""
 "**混合的组，一个分类器**：统治模块图的同一条拼接法则（`inline` 旗标——[模块与可见性](modules-and-visibility.md)）裁定每个包的种类。拒绝，绝不猜测：打包器调用的就是图自己的分类器，没有第二份实现。"
 
 
-#: src/reference/bundles.md:64
+#: src/reference/bundles.md:76
 msgid ""
-"**Generics ride compiled — and their source rides beside them** (the generic-source riding law): instantiation is owned by the declaring package, and the pack walk seeds each generic dep with the instantiations its consumers spell — the binary's instantiation ledger names every `(owner, decl, arguments)` row. A compiled pkg whose surface exports an OPEN generic surface (generic fns, generic type exports, generic methods, generic-target impls) ALSO rides the source that serves consumer-spelled shapes: the entry lib, each `entry.libs` file, and each `peer-deps` group file, verbatim, beside the binary. The entry lib's presence is the loader's dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay source-free by law. At the consumer's link, a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body with owner = the pkg's spec — one row program-wide, indistinguishable from a pack-time one, nothing persisted. The law binds both sides: a pkg that owns an open generic surface but whose bundle carries no riding source refuses at the mount (`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory), never mislinks. `--strip` refuses the combination: the ridden text would recompile clean-named beside mangled binaries."
+"**Generics ride compiled — and their source rides beside them** (the generic-source riding law): instantiation is owned by the declaring package, and the pack walk seeds each generic dep with the instantiations its consumers spell — the binary's instantiation ledger names every `(owner, decl, arguments)` row. A compiled pkg whose surface exports an OPEN generic surface (generic fns, generic type exports, generic methods, generic-target impls) ALSO rides the source that serves consumer-spelled shapes: the root module (`mod.rut`) and each `peer-deps` group file, verbatim, beside the binary. The riding source's presence is the loader's dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay source-free by law. At the consumer's link, a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body with owner = the pkg's spec — one row program-wide, indistinguishable from a pack-time one, nothing persisted. The law binds both sides: a pkg that owns an open generic surface but whose bundle carries no riding source refuses at the mount (`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory), never mislinks. `--strip` refuses the combination: the ridden text would recompile clean-named beside mangled binaries."
 msgstr ""
-"**泛型编译承载——其源码在二进制旁承载**（泛型源码承载法则）：实例化归声明包所有，打包遍历以消费者拼写的实例化为每个泛型依赖播种——二进制的实例化台账命名每一行 `(owner, decl, arguments)`。表面导出开放泛型表面（泛型 fn、泛型类型导出、泛型方法、泛型目标的 impl）的编译 pkg **还会**在二进制旁逐字节承载服务消费者拼写形状的源码：入口 lib、每个 `entry.libs` 文件、每个 `peer-deps` 组文件。入口 lib 的存在是加载器的分派标记；非泛型包（`http`、`ink`、`strbuild`）依法保持无源码。在消费者的链接处，台账没有的请求会降低消费者会话中被承载的文本，并以 owner = 该包的 spec 编译单态化代码体——全程序一行，与打包期的行无从区分，不持久化。法则约束两侧：拥有开放泛型表面却不带承载源码的包在挂载时拒绝（`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory），绝不错链。`--strip` 拒绝这一组合：被承载的文本会在改名后的二进制旁以干净名字重编译。"
 
 
-#: src/reference/bundles.md:85
+#: src/reference/bundles.md:97
 msgid ""
 "**The root must be linkable** — else `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`. A root that has nothing to compile is not this refusal: a `type = \"host\"` pkg packs as the decl root, below."
 msgstr ""
 "**根必须可链接**——否则 `pack: <pkg> is inline — its source is its interface and it cannot be published compiled; share the directory instead`。没有东西可编译的根不是这条拒绝：`type = \"host\"` 包按声明根打包，见下。"
 
 
-#: src/reference/bundles.md:90
+#: src/reference/bundles.md:102
 msgid "The decl root (host)"
 msgstr "声明根（host）"
 
 
-#: src/reference/bundles.md:92
+#: src/reference/bundles.md:104
 msgid ""
 "A `type = \"host\"` pkg's root IS its declaration surface, so a host bundle is the manifest plus that surface, riding as source — single-package, no ledger, no groups, nothing to decode:"
 msgstr "`type = \"host\"` 包的根**就是**它的声明面，所以宿主捆绑包 = 清单 + 该面，以源码承载——单包，无台账，无组，无可解码之物："
 
 
-#: src/reference/bundles.md:96
+#: src/reference/bundles.md:108
 msgid ""
 "```text\n"
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", \"format_version\": 10\n"
@@ -25679,26 +25754,26 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:101
+#: src/reference/bundles.md:113
 msgid ""
 "`rut pack <host-dir>` works (the surface verifies by parsing and lowering once — the exact lane a mount runs — then rides as source), `--strip` refuses on a host root (`no symbols to strip` — no programs, no sidecar), and `rut run <host.rutbundle>` refuses with intent: a host bundle carries a declaration surface — nothing to run; bind its rows from the embedder ([host fns](host-fns.md)). The mount is the same lane a host group rides inside a compiled bundle: the surface lowers into the pkg's host rows."
 msgstr ""
 "`rut pack <host-dir>` 可行（表面经解析与降低各一次来验证——挂载运行的同一条车道——然后以源码承载），`--strip` 在宿主根上拒绝（`no symbols to strip`——没有程序，没有旁车），`rut run <host.rutbundle>` 带着意图拒绝：宿主捆绑包携带的是声明表面——没有可运行的东西；从嵌入方绑定它的行（[宿主函数](host-fns.md)）。挂载与编译捆绑包内的宿主组走的是同一条车道：表面降低为该包的宿主行。"
 
 
-#: src/reference/bundles.md:110
+#: src/reference/bundles.md:122
 msgid "The manifest — `rut.jsonc`"
 msgstr "清单——`rut.jsonc`"
 
 
-#: src/reference/bundles.md:112
+#: src/reference/bundles.md:124
 msgid ""
 "First entry in the zip; JSONC (the directory grammar: `//` and `/* */` comments and trailing commas are legal); the same manifest grammar the directory form uses, byte-for-byte the directory's manifest — which is what makes a bundle-shaped directory pack unchanged:"
 msgstr ""
 "zip 中的第一个条目；JSONC（目录文法：`//` 与 `/* */` 注释以及尾随逗号都合法）；与目录形态使用同一份清单文法，逐字节就是目录的清单——这正是让捆绑包形态的目录原样打包的原因："
 
 
-#: src/reference/bundles.md:117
+#: src/reference/bundles.md:129
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25720,30 +25795,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:135
+#: src/reference/bundles.md:147
 msgid ""
 "Directory loading **ignores** `format`/`format_version` — a directory is not a bundle — which is why the keys are safe to write into every module manifest today: `examples/03-plugin/plugin` is a working directory that also packs unchanged."
 msgstr ""
 "目录加载**忽略** `format`/`format_version`——目录不是捆绑包——这正是今天把这些键安全写进每个模块清单的原因：`examples/03-plugin/plugin` 是一个工作目录，同时也能原封不动地打包。"
 
 
-#: src/reference/bundles.md:140
+#: src/reference/bundles.md:152
 msgid ""
 "The rest of the manifest grammar — deps tables, `inline`, `style` — is defined in [Project structure and rut.jsonc](project-structure.md); the dependency semantics are [Dependency kinds](dependency-kinds.md)."
 msgstr ""
 
 
-#: src/reference/bundles.md:145
+#: src/reference/bundles.md:157
 msgid "Url deps — bundles by reference"
 msgstr "url 依赖 — 按引用的捆绑包"
 
 
-#: src/reference/bundles.md:147
+#: src/reference/bundles.md:159
 msgid "A consumer may pin a bundle by url instead of vendoring it:"
 msgstr "消费者可以用 url 固定一个捆绑包，而不是将其内嵌（vendor）："
 
 
-#: src/reference/bundles.md:149
+#: src/reference/bundles.md:161
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25755,239 +25830,238 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:157
+#: src/reference/bundles.md:169
 msgid ""
 "The mount is the bundle mount, one gate earlier: the embedder's remote produces the bytes (`DepRemote` — the standard `rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and — before all of them — the **pin law**: the bytes must hash to the manifest row's `sha256`, on every load, or the load refuses naming the dep, the url, and both hashes. The url dep mounts as a **leaf**: its bundle brings the whole closure (every declared dep satisfied by an in-archive group — the closure law is unchanged, and a url row inside a packed bundle is inert metadata; loading a bundle never fetches)."
 msgstr ""
 
 
-#: src/reference/bundles.md:167
+#: src/reference/bundles.md:179
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's own `rut pack` output, satisfied by the rode-along groups: the archive's groups re-encode from the consumer session's units (one `.rutc` path), source groups copy their file set under the new prefix, and the same manifest + pins still pack byte-identically. The pack refuses, loudly and named, the cases that would emit a bundle the loader must reject: an archive source group still declaring `dev-deps` directories (vendor the dep), a compiled group the consumer's closure never uses (it cannot ride unpackaged), and a declared dep that did not ride."
 msgstr ""
 "由于清单逐字节随行，url 行会带进消费者自己的 `rut pack` 输出，由随行组满足：存档的组从消费者会话的 units 重新编码（唯一的 `.rutc` 路径），源码组把它的文件集复制到新前缀下，而相同清单 + 相同固定值仍逐字节相同地打包。打包会响亮地、指名道姓地拒绝那些会产出加载器必须拒绝的捆绑包的情形：仍在声明 `dev-deps` 目录的存档源码组（vendor 这个依赖）、消费者闭包从不使用的编译组（它无法未打包地承载），以及没有承载的已声明依赖。"
 
 
-#: src/reference/bundles.md:178
+#: src/reference/bundles.md:190
 msgid "The wire version"
 msgstr "线上版本"
 
 
-#: src/reference/bundles.md:180
+#: src/reference/bundles.md:192
 msgid ""
 "`format_version` is 10 — the one bundle wire, both root kinds; the manifest's `type` routes lib-compiled vs host-decl. A loader refuses any other value **before reading anything else** — refuse, never guess: `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`."
 msgstr ""
 "`format_version` 是 10——唯一的捆绑包线上格式，两种根皆然；清单的 `type` 路由 lib-编译与宿主-声明两种根。加载器**在读取其他任何东西之前**拒绝其他任何值——拒绝，绝不猜测：`this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`。"
 
 
-#: src/reference/bundles.md:186
+#: src/reference/bundles.md:198
 msgid ""
-"Every file in the two layouts is part of the package: a bundle that dropped peer groups or multi-lib files would load base-only — semantically wrong, so the closure law is checked at the mount. Compilation is the delivery contract — one exception, the riding law above: a pkg with an open generic surface rides its source beside the binary so consumer-spelled shapes stay servable. Source sharing as the general contract stays a directory (`rut run <dir>`), as it always was outside bundles."
+"Every file in the two layouts is part of the package: a bundle that dropped peer groups or a declared child module would load partial — semantically wrong, so the closure law is checked at the mount. Compilation is the delivery contract — one exception, the riding law above: a pkg with an open generic surface rides its source beside the binary so consumer-spelled shapes stay servable. Source sharing as the general contract stays a directory (`rut run <dir>`), as it always was outside bundles."
 msgstr ""
-"两种布局里的每个文件都是包的一部分：丢掉对等组或多 lib 文件的捆绑包会只装基础部分——语义上是错的，所以闭包法则在挂载时校验。编译是交付契约——一个例外，即上文的承载法则：拥有开放泛型表面的包在二进制旁承载自己的源码，消费者拼写的形状因此始终可服务。作为一般契约的源码共享仍是目录（`rut run <dir>`），在捆绑包之外一如既往。"
 
 
-#: src/reference/bundles.md:195
+#: src/reference/bundles.md:207
 msgid ""
 "Peer-gated packages publish inside a compiled bundle two ways, per their group-kind law: a NON-generic compiled declarer's peer groups compile into its binary at pack time (the rows ride the binary; the group files do not travel), and a splice-needed declarer publishes as a source group, its group files riding beside the entry — the loader's peer gate appends by presence exactly as in a directory world ([Dependency kinds](dependency-kinds.md)). A generic-owning compiled declarer rides its group files too (the riding law), and the on-demand recompile splices exactly the rows whose peers are in the consumer's closure."
 msgstr ""
 "对等门控的包在编译捆绑包内以两种方式发布，依其组种类法则：非泛型的编译声明者，其对等组在打包期编译进它的二进制（行随二进制承载；组文件不旅行），需要拼接的声明者则以源码组发布，其组文件在入口旁承载——加载器的对等门按在场与否追加，与目录世界完全一样（[依赖种类](dependency-kinds.md)）。拥有泛型的编译声明者也承载自己的组文件（承载法则），按需重编译恰好拼接对等者在消费者闭包中的那些行。"
 
 
-#: src/reference/bundles.md:206
+#: src/reference/bundles.md:218
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the consuming run's world (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one world without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr ""
 
 
-#: src/reference/bundles.md:217
+#: src/reference/bundles.md:229
 msgid "The `bundle` module"
 msgstr "`bundle` 模块"
 
 
-#: src/reference/bundles.md:219
+#: src/reference/bundles.md:231
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, and the reader (both root kinds) live in the driver's `rut_driver::bundle` module — **pure and in-memory**: the walk adds every filesystem read. That half lives in `rut-native`, whose one-method `Source` trait is the one filesystem door: `rut_native::FsSource::at(dir)` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer needs the walk and lives beside it (`rut_native::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Loading a bundle into a run goes through `rut_native::load_bundle_session(path)` (the file read) or `rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
 
-#: src/reference/bundles.md:235
+#: src/reference/bundles.md:247
 msgid "Deterministic packing"
 msgstr "确定性打包"
 
 
-#: src/reference/bundles.md:237
+#: src/reference/bundles.md:249
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr "相同目录 + 相同工具链 ⇒ 逐字节相同的 `.rutbundle`："
 
 
-#: src/reference/bundles.md:239
+#: src/reference/bundles.md:251
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's binary, then dep groups in name order (deduplicated, recursive);"
 msgstr "固定条目顺序——先是 `rut.jsonc`，再是作用域台账、根的二进制，然后依赖组按名字排序（去重、递归）；"
 
 
-#: src/reference/bundles.md:242
+#: src/reference/bundles.md:254
 msgid "fixed (zeroed) timestamps;"
 msgstr "固定（清零）的时间戳；"
 
 
-#: src/reference/bundles.md:243
+#: src/reference/bundles.md:255
 msgid "STORE (no compression) — determinism over size."
 msgstr "STORE（不压缩）——确定性优先于体积。"
 
 
-#: src/reference/bundles.md:245
+#: src/reference/bundles.md:257
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module binary and verification](module-binary.md)): bundles are content-cacheable, and two builds of the same module diff to nothing."
 msgstr ""
 "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
 
 
-#: src/reference/bundles.md:249
+#: src/reference/bundles.md:261
 msgid "Stripping — the private sidecar"
 msgstr "剥离——私有的旁车"
 
 
-#: src/reference/bundles.md:251
+#: src/reference/bundles.md:263
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol table** at the sibling path `<out-without-ext>.rutsym`. Every renameable name in the `.rutc` binaries mangles to `%N` and every function's span/position tables leave — the sidecar carries exactly what left, so supplying it at load restores real names and line/col for stack-trace symbolication. The sidecar is never an entry inside the archive. It needs a fully-compiled closure (a source group that could bind a compiled group's surface is a pointed refusal); without `--strip`, packing is unchanged. The whole law lives in [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md). `run` accepts `--symbols <file.rutsym>` against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 "`rut pack <dir> --strip` 在上述内容之外，**外加一份私有符号表**，写在旁边的路径 `<out-without-ext>.rutsym`。`.rutc` 二进制里每个可改名的名字都改名为 `%N`，每个函数的区间/位置表都离开——旁车携带的正是离开的东西，因此在加载时提供它就能为栈追踪符号化还原真实名字与行/列。旁车绝不是归档里的一个条目。它需要一个全编译的闭包（可能绑定某编译组表面的源码组会被明确拒绝）；不加 `--strip` 时，打包一切照旧。完整的法则见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。`run` 对编译的捆绑包接受 `--symbols <file.rutsym>`（[rut CLI](cli.md)）。"
 
 
-#: src/reference/bundles.md:264
+#: src/reference/bundles.md:276
 msgid "Checks on load"
 msgstr "加载时的检查"
 
 
-#: src/reference/bundles.md:266
+#: src/reference/bundles.md:278
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle never executes. The order is the law: container, then manifest and version, then every group's decode, then the mount."
 msgstr "每项检查都在加载时、编译与链接之前运行——坏捆绑包绝不执行。顺序即法则：容器，然后清单与版本，然后每个组的解码，最后挂载。"
 
 
-#: src/reference/bundles.md:270
+#: src/reference/bundles.md:282
 msgid "rule on mismatch"
 msgstr "不匹配时的规则"
 
 
-#: src/reference/bundles.md:272
+#: src/reference/bundles.md:284
 msgid "zip entry CRC-32"
 msgstr "zip 条目 CRC-32"
 
 
-#: src/reference/bundles.md:272
+#: src/reference/bundles.md:284
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr "拒绝——损坏的捆绑包（点名该条目）"
 
 
-#: src/reference/bundles.md:273
+#: src/reference/bundles.md:285
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
 
-#: src/reference/bundles.md:273
+#: src/reference/bundles.md:285
 msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
 
-#: src/reference/bundles.md:274
+#: src/reference/bundles.md:286
 msgid "`format_version` exactly 10"
 msgstr "`format_version` 恰为 10"
 
 
-#: src/reference/bundles.md:274
+#: src/reference/bundles.md:286
 msgid ""
 "refuse — `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`"
 msgstr ""
 "拒绝——`this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`"
 
 
-#: src/reference/bundles.md:275
+#: src/reference/bundles.md:287
 msgid "a host root carrying a root `.rutc`"
 msgstr "宿主根携带根 `.rutc`"
 
 
-#: src/reference/bundles.md:275
+#: src/reference/bundles.md:287
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr "拒绝——宿主捆绑包的根是它的表面，不是编译单元"
 
 
-#: src/reference/bundles.md:276
+#: src/reference/bundles.md:288
 msgid "a host root carrying a `rut.scopes` ledger or a group entry"
 msgstr "宿主根携带 `rut.scopes` 台账或组条目"
 
 
-#: src/reference/bundles.md:276
+#: src/reference/bundles.md:288
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr "拒绝——宿主捆绑包即其面，单包"
 
 
-#: src/reference/bundles.md:277
+#: src/reference/bundles.md:289
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not a bare package name"
 msgstr "编译根没有自己的 `rut.scopes` 台账，或台账行不是裸包名"
 
 
-#: src/reference/bundles.md:277
+#: src/reference/bundles.md:289
 msgid "refuse — a corrupt compiled bundle"
 msgstr "拒绝——损坏的编译捆绑包"
 
 
-#: src/reference/bundles.md:278
+#: src/reference/bundles.md:290
 msgid "`<pkg>.rutc` decode: version, tables, surface ids"
 msgstr "`<pkg>.rutc` 解码：版本、各表、表面 id"
 
 
-#: src/reference/bundles.md:278
+#: src/reference/bundles.md:290
 msgid "refuse — names the entry and the cause"
 msgstr "拒绝——点出条目与原因"
 
 
-#: src/reference/bundles.md:279
+#: src/reference/bundles.md:291
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr "编译组的台账行与其二进制自身的作用域一致"
 
 
-#: src/reference/bundles.md:279
+#: src/reference/bundles.md:291
 msgid "refuse — corrupt or doctored"
 msgstr "拒绝——损坏或被篡改"
 
 
-#: src/reference/bundles.md:280
+#: src/reference/bundles.md:292
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:280
+#: src/reference/bundles.md:292
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:281
+#: src/reference/bundles.md:293
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr "每个已声明依赖都被一个组满足（编译根）"
 
 
-#: src/reference/bundles.md:281
+#: src/reference/bundles.md:293
 msgid "refuse — names the missing group"
 msgstr "拒绝——点出缺失的组"
 
 
-#: src/reference/bundles.md:283
+#: src/reference/bundles.md:295
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr "CDN 上的 std 树——按包交付"
 
 
-#: src/reference/bundles.md:285
+#: src/reference/bundles.md:297
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at `dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell (15 today). jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE the delivery and the publish act is a git tag:"
 msgstr ""
 "std 树（`rut/`）以**已提交**的按包捆绑包交付于 `dist/std/<pkg>.rutbundle`——`deps` 行能拼写的每个包一个捆绑包（今日 15 个）。jsDelivr 的 gh 车道按 ref 服务仓库文件，所以工件**就是**交付，发布动作是一次 git tag："
 
 
-#: src/reference/bundles.md:290
+#: src/reference/bundles.md:302
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26002,71 +26076,71 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:313
 msgid ""
 "`<tag>`/`<sha256>` are placeholders — real pins live in the examples (anti-rot: docs never rot pins). The laws:"
 msgstr "`<tag>`/`<sha256>` 是占位符——真钉住在示例里（防腐：文档永不腐烂钉）。法则："
 
 
-#: src/reference/bundles.md:304
+#: src/reference/bundles.md:316
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std.cjs` packs all 15 (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate: `--check` repacks and byte-compiles, no network); `--pins` rewrites the example manifests' url/sha256 rows; `--tag` prints the publish commands. Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 "**已提交工件，不可变标签。** `scripts/pack-std.cjs` 打包全部 15 个（确定性——同输入 ⇒ 同字节，新鲜度是纯等值门：`--check` 重打包并逐字节比较，不触网）；`--pins` 重写示例清单的 url/sha256 行；`--tag` 打印发布命令。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶。"
 
 
-#: src/reference/bundles.md:310
+#: src/reference/bundles.md:322
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). The riding law binds this lane too: a pkg that owns an open generic surface but carries no riding source refuses at the mount (`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
 "**编译捆绑包服务什么。**实例化以属主为锚：编译的属主在其台账中承载自己的打包闭包拼写的泛型实例化——而且，按泛型源码承载法则，表面导出泛型的编译 pkg 还在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账没有的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。所以 CDN 车道交付**宿主表面**（声明捆绑包）、**具体类库**（`http`、`ink`、`strbuild`——方法在表面的固有行上跨越）、**以及泛型 owner**（`pouch`、`nmapset`、`json`、`futures`——`Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。承载法则也约束这条车道：拥有开放泛型表面却不带承载源码的包在挂载时拒绝（`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory），包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset`——六钉法则）。"
 
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:341
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): first-mount-wins mounts one body, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. Pin sets stay minimal-top anyway — a closed bundle carries the rest."
 msgstr ""
 "**重复挂载是安全的。** 两个档案可携带同一组（`json` 与 `http` 的闭包都带 `strbuild`）：先挂载者胜挂载一个体，按档案的台账命名空间化让每个二进制的 id 都经自己档案的行解析。钉集反正保持最小顶——闭合捆绑包会带上其余。"
 
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:348
 msgid "Loading"
 msgstr "加载"
 
 
-#: src/reference/bundles.md:338
+#: src/reference/bundles.md:350
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same name resolution, same compile, same splice rules:"
 msgstr "捆绑包是目录形式之外的又一个解析来源——同样的名字解析、同样的编译、同样的拼接规则："
 
 
-#: src/reference/bundles.md:342
+#: src/reference/bundles.md:354
 msgid ""
 "// from a file\n"
 msgstr ""
 "// from a file\n"
 
 
-#: src/reference/bundles.md:343
+#: src/reference/bundles.md:355
 msgid ""
 "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:348
+#: src/reference/bundles.md:360
 msgid ""
 "After the offer, the package name resolves exactly as the directory form does — with one difference: a compiled group's body is the decoded program itself. The run assigns it a fresh scope, rebases its packed ids through the ledger, and pushes it; source groups offer as sources and compile (or splice) exactly as a directory world. Then the normal pipeline takes over ([Loading and the embed loop](loading.md)). Loose directories and loose `.rut` files stay valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
 
-#: src/reference/bundles.md:360
+#: src/reference/bundles.md:372
 msgid ""
 "# default output: a sibling of the dir\n"
 msgstr ""
 "# default output: a sibling of the dir\n"
 
 
-#: src/reference/bundles.md:364
+#: src/reference/bundles.md:376
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
@@ -26074,23 +26148,21 @@ msgstr "打包形态与其目录编译出完全相同的程序——由测试钉
 
 #: src/reference/project-structure.md:3
 msgid ""
-"One directory is one module; its `rut.jsonc` names the exact package it answers to and how to reach its surface and body. The manifest is what makes the directory **the runnable unit**: `rut run <dir>` (or its packed `.rutbundle`) is the only run lane — a loose `.rut` file is not a program ([the rut CLI](cli.md)). This page is the manifest grammar, the resolution laws, and where everything lives in the toolchain tree."
+"One directory is one module; its `rut.jsonc` names the exact package it answers to and how to reach its surface. The body is a **file module tree**: the root module is `mod.rut` beside the manifest, and `mod NAME;` declarations in it mount child modules (`NAME/mod.rut` beside the declaring file). The manifest is what makes the directory **the runnable unit**: `rut run <dir>` (or its packed `.rutbundle`) is the only run lane — a loose `.rut` file is not a program ([the rut CLI](cli.md)). This page is the manifest grammar, the resolution laws, and where everything lives in the toolchain tree."
 msgstr ""
-"一个目录就是一个模块；它的 `rut.jsonc` 指名它所对应的确切包，以及如何抵达它的表面与函数体。清单让这个目录成为**可运行单元**：`rut run <dir>`（或其打包的 `.rutbundle`）是唯一的车道——散的 `.rut` 文件不是程序（[rut CLI](cli.md)）。本页是清单文法、解析法则，以及一切在工具链树中的位置。"
 
 
-#: src/reference/project-structure.md:11
+#: src/reference/project-structure.md:13
 msgid "The manifest"
 msgstr "清单"
 
 
-#: src/reference/project-structure.md:13
+#: src/reference/project-structure.md:15
 msgid ""
 "```jsonc\n"
-"// rut/pouch/rut.jsonc — a body package\n"
+"// rut/pouch/rut.jsonc — a body package (the body is mod.rut beside it)\n"
 "{\n"
-"  \"name\": \"pouch\",\n"
-"  \"entry\": { \"lib\": \"./pouch.rut\" }\n"
+"  \"name\": \"pouch\"\n"
 "}\n"
 "\n"
 "// rut/calc/rut.jsonc — a pure declaration surface (a host pkg)\n"
@@ -26104,7 +26176,6 @@ msgid ""
 "// of your own, pinned url rows for the toolchain's packages\n"
 "{\n"
 "  \"name\": \"app\",\n"
-"  \"entry\": { \"lib\": \"./app.rut\" },\n"
 "\n"
 "  \"deps\": {\n"
 "    \"greet\": { \"path\": \"../greet\" },\n"
@@ -26138,286 +26209,280 @@ msgstr "包的 use 路径名：只允许裸的 `[a-zA-Z0-9_]+`。带作用域或
 
 
 #: src/reference/project-structure.md:46
-msgid "`entry.lib`"
-msgstr "`entry.lib`"
-
-
-#: src/reference/project-structure.md:46
-msgid "the body: one `.rut` file (or `.rutc`\\-style artifacts where supported)"
-msgstr "函数体：一个 `.rut` 文件（或在支持之处的 `.rutc`\\- 式产物）"
-
-
-#: src/reference/project-structure.md:47
-msgid "`entry.libs`"
-msgstr "`entry.libs`"
-
-
-#: src/reference/project-structure.md:47
-msgid "ordered extra `.rut` files — the **multi-lib entry** (below)"
-msgstr "有序的额外 `.rut` 文件——**多库入口**（见下）"
-
-
-#: src/reference/project-structure.md:48
-msgid ""
-"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind is an error naming both fixes"
-msgstr ""
-"声明的种类：宿主**包**用 `type = \"host\"`——纯声明面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；`type = \"lib\"`（或缺省）是普通源码包。种类从不推断——只有 `entry.type` 而无种类的清单是错误，点名两种修法"
-
-
-#: src/reference/project-structure.md:49
 msgid "`entry.type`"
 msgstr "`entry.type`"
 
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:46
 msgid ""
-"the declaration surface: one `.d.rut` file. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused)"
-msgstr "声明表面：一个 `.d.rut` 文件。在 lib 包上它是文档表面（仅表面的开发态按声明单元挂载；其中的 `host fn` 文本会被拒绝）"
+"the declaration surface: one `.d.rut` file — the ONLY entry key left. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused)"
+msgstr ""
+"声明表面：一个 `.d.rut` 文件 —— 仅存的入口键。在 lib 包上它是文档表面（仅有表面的开发状态会作为声明单元挂载；其中的 `host fn` 文本会被拒绝）"
 
 
-#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:161
+#: src/reference/project-structure.md:47
+msgid ""
+"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind and no `mod.rut` is an error naming both fixes"
+msgstr ""
+"声明的种类：`type = \"host\"` 表示**宿主包** —— 一个纯声明表面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；`type = \"lib\"`（或省略）是普通的源码包。种类从不被推断 —— 一个只写 `entry.type`、既无种类又无 `mod.rut` 的清单是一个错误，同时指出两种修复方法"
+
+
+#: src/reference/project-structure.md:48 src/reference/dependency-kinds.md:161
 msgid "`deps`"
 msgstr "`deps`"
 
 
-#: src/reference/project-structure.md:50
+#: src/reference/project-structure.md:48
 msgid ""
 "the transitively mounted dependencies — one source per descriptor: `pkg = { path = \"...\" }` (relative to this manifest) or `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here."
 msgstr ""
 "传递挂载的依赖 — 每个描述符一个来源：`pkg = { path = \"...\" }`（相对本清单）或 `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }`（远程 `.rutbundle`，固定值可选但推荐）（[依赖种类](dependency-kinds.md)）。此处拒绝 `optional`。"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:49
 msgid "`peer-deps`"
 msgstr "`peer-deps`"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:49
 msgid ""
 "presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md))"
 msgstr "在场门控的 peer——描述符接受 `path`、`optional`、`lib`（[依赖种类](dependency-kinds.md)）"
 
 
-#: src/reference/project-structure.md:52 src/reference/dependency-kinds.md:164
+#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:164
 msgid "`dev-deps`"
 msgstr "`dev-deps`"
 
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:50
 msgid "mounted only while building/testing this pkg itself"
 msgstr "仅在构建/测试本包自身时挂载"
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:51
 msgid "`inline`"
 msgstr "`inline`"
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:51
 msgid ""
 "`true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package)"
 msgstr ""
 "`true` 强制把源码内联进每个消费方而非链接（其类方法必须在调用点解析的包——固有 impl 尚不能跨表面；泛型导出自己就能链接，其实例化归声明包所有）"
 
 
-#: src/reference/project-structure.md:54
+#: src/reference/project-structure.md:52
 msgid "`format`, `format_version`"
 msgstr "`format`, `format_version`"
 
 
-#: src/reference/project-structure.md:54
+#: src/reference/project-structure.md:52
 msgid ""
 "bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md))"
 msgstr "捆绑包键——目录加载忽略，`rut pack` 要求（[模块捆绑包](bundles.md)）"
 
 
-#: src/reference/project-structure.md:55
+#: src/reference/project-structure.md:53
 msgid "`style`"
 msgstr ""
 
 
-#: src/reference/project-structure.md:55
+#: src/reference/project-structure.md:53
 msgid ""
 "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults."
 msgstr ""
 "格式化器旋钮：`indent_width`（1–8，默认 4）、`max_width`（≥ 20，默认 100）。在清单层无模式——未知键放行；畸形值是格式化器错误，绝不是编译错误。解析：被格式化文件最近的祖先清单；没有清单 → 默认值。"
 
 
-#: src/reference/project-structure.md:57
+#: src/reference/project-structure.md:55
+msgid ""
+"The **body keys are repealed**: `entry.lib` and `entry.libs` refuse loudly, each error naming the fix — the root module is `mod.rut` beside the manifest, structure lives in `mod` directories. (Inside a _published_ bundle the old keys still load — the reader's compat lane; see [Module bundles](bundles.md).)"
+msgstr ""
+"**代码体键已废除**：`entry.lib` 与 `entry.libs` 会被大声拒绝，每个错误都给出修复方法 —— 根模块是清单旁边的 `mod.rut`，结构生活在 `mod` 目录里。（在*已发布*的捆绑包内部，旧键仍然可以加载 —— 读取器的兼容通道；见[模块捆绑包](bundles.md)。）"
+
+
+#: src/reference/project-structure.md:61
 msgid ""
 "The manifest text is **JSONC** — `//` line comments, `/* */` block comments, and trailing commas are all legal — parsed by `serde_json` behind a syntax-stripping front stage: the comment and comma bytes become spaces before the parser sees them, so a syntax error keeps the parser's own wording under a `line N:` prefix that names the ORIGINAL file's line. The value laws are unchanged. Value errors are path-targeted (`deps.pouch: unknown key 'feats'`). Descriptors are key/value objects; unknown descriptor keys are path-targeted manifest errors. Duplicate keys are last-wins. An `_`\\-key refuses loudly naming the fix — comments are the prose now."
 msgstr ""
 "清单文本是 **JSONC**——`//` 行注释、`/* */` 块注释以及尾随逗号都合法——由 `serde_json` 在一个语法剥离前级之后解析：注释与逗号的字节在解析器看到之前变成空格，因此语法错误保留解析器自己的措辞，带有一个指出原始文件行的 `line N:` 前缀。值法则不变。值错误按路径定位（`deps.pouch: unknown key 'feats'`）。描述符是键/值对象；未知描述符键是按路径定位的清单错误。重复键后者胜。`_`\\-键大声拒绝并指出修复——注释才是散文。"
 
 
-#: src/reference/project-structure.md:68
+#: src/reference/project-structure.md:72
 msgid "Resolution laws"
 msgstr "解析法则"
 
 
-#: src/reference/project-structure.md:70
+#: src/reference/project-structure.md:74
 msgid ""
-"**Exact, single-step.** A use path resolves only if a module with that `name` is mounted. Nothing is derived from directories or file layouts."
-msgstr "**精确、单步。**一条 use 路径只有在具有该 `name` 的模块已挂载时才解析。任何东西都不从目录或文件布局推导。"
+"**Exact, single-step.** A use path resolves only if a module with that `name` is mounted. Nothing is derived from directories or file layouts beyond the `mod` declarations the source itself spells."
+msgstr ""
+"**精确、单步。** use 路径只有在名字为该 `name` 的模块已挂载时才能解析。除了源码自己写出的 `mod` 声明之外，不会从目录或文件布局推导任何东西。"
 
 
-#: src/reference/project-structure.md:73
+#: src/reference/project-structure.md:77
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An already-mounted name (the embedder's, the root's, or an earlier dep's) is never overwritten — which is what makes peer presence-by-name sound: the consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 "**遍历递归进行，带环守卫；先挂载者胜。**已挂载的名字（嵌入方的、根的、或更早依赖的）绝不被覆盖——这正是让 peer 按名字判在场得以健全的原因：消费方自己为某个包准备的路径永远压过声明者的 `path`。"
 
 
-#: src/reference/project-structure.md:78
+#: src/reference/project-structure.md:82
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with its key fails, naming both."
 msgstr "**名字不匹配是错误。**清单 `name` 与其键不一致的依赖会失败，并点名双方。"
 
 
-#: src/reference/project-structure.md:80
+#: src/reference/project-structure.md:84
 msgid ""
 "**The cross-table law.** A name in `deps` beside `peer-deps` or `dev-deps` is an error naming both rows; peer + dev together is the sanctioned pairing."
 msgstr ""
 "**跨表法则。**一个名字同时出现在 `deps` 与 `peer-deps` 或 `dev-deps` 里是错误，并点名两行；peer + dev 一起是被认可的组合。"
 
 
-#: src/reference/project-structure.md:83
+#: src/reference/project-structure.md:87
 msgid ""
 "**`core` needs no `deps`** — `.compile()` auto-offers it unconditionally ([core and the swappable packages](stdlib.md)); every name still requires `use core::{ .. };` per [core and the swappable packages](stdlib.md)."
 msgstr ""
 "**`core` 无需 `deps`** —— `.compile()` 无条件自动 offer 它（[core 与可换包](stdlib.md)）；每个名字仍须按 [core 与可换包](stdlib.md)拼 `use core::{ .. };`。"
 
 
-#: src/reference/project-structure.md:88
-msgid "The multi-lib entry"
-msgstr "多库入口"
-
-
-#: src/reference/project-structure.md:90
-msgid "A package's body may be split across files:"
-msgstr "包的函数体可以拆分到多个文件："
-
-
 #: src/reference/project-structure.md:92
+msgid "Module trees"
+msgstr "模块树"
+
+
+#: src/reference/project-structure.md:94
 msgid ""
-"```jsonc\n"
-"{\n"
-"  \"name\": \"ui\",\n"
-"  \"entry\": { \"lib\": \"./ui.rut\", \"libs\": [\"./store.rut\", \"./t1.rut\"] }\n"
-"}\n"
+"A package's body is authored as a **file module tree** — the `tur_kit`\\-style layout:"
+msgstr "包的代码体以**文件模块树**的形式编写 —— `tur_kit` 式的布局："
+
+
+#: src/reference/project-structure.md:107
+msgid "The root module declares its children:"
+msgstr "根模块声明它的子模块："
+
+
+#: src/reference/project-structure.md:109
+msgid ""
+"```rut\n"
+"// tur_kit/mod.rut\n"
+"pub mod layout;\n"
+"pub mod widget;\n"
 "```"
 msgstr ""
 
 
-#: src/reference/project-structure.md:99
+#: src/reference/project-structure.md:115
 msgid ""
-"The loader splices base-first, then `libs` in listed order, newline-joined, into **one module** — one namespace, one visibility scope. A name private to one file is visible to every other file of the package. The manifest is the canonical order (the splice never reads a directory listing — same manifest ⇒ same module). A `libs` row without `lib`, a `.d.rut` element, or a file named twice is a loud manifest error. This is assembly, not a language include form — use paths stay inter-module."
+"Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod NAME;`) in a file resolves against the sibling `NAME/mod.rut` directory. The loader never reads a directory listing — an undeclared directory is invisible, a declared child that is missing (or whose directory carries no `mod.rut`) is a loud error naming both spellings, and a `NAME.rut` file where a module directory is expected says so. Mounting is recursive and cycle-guarded by file identity; a repeated declaration mounts once."
 msgstr ""
-"加载器以基础文件在前的顺序拼接，然后按列出的顺序拼接 `libs`，以换行连接，拼成**一个模块**——一个命名空间，一个可见性作用域。对一个文件私有的名字，对该包的其他每个文件都可见。清单是规范顺序（拼接从不读取目录列表——相同清单 ⇒ 相同模块）。没有 `lib` 的 `libs` 行、一个 `.d.rut` 元素、或被点名两次的文件，都是响亮的清单错误。这是组装，不是语言层面的 include 形式——use 路径仍限于模块之间。"
+"挂载**由声明决定，而非目录发现**：文件中的 `mod NAME;`（或 `pub mod NAME;`）对照同级的 `NAME/mod.rut` 目录解析。加载器从不读取目录列表 —— 未声明的目录不可见，被声明却缺失的子模块（或其目录里没有 `mod.rut`）是一个大声错误并给出两种拼法，期望模块目录却是 `NAME.rut` 文件时也会如实报告。挂载是递归的、以文件身份防环；重复声明只挂载一次。"
 
 
-#: src/reference/project-structure.md:107
+#: src/reference/project-structure.md:124
 msgid ""
-"Contrast with peer groups: group files are _presence-gated_ and therefore impl-only; multi-lib files are unconditional and full module citizens — types, functions, and `pub` surface are legal in any file."
+"Visibility is per module file ([Modules and visibility](modules-and-visibility.md)): plain declarations are visible in their own module and its descendants, `pub(pkg)` shares inside the package, `pub` crosses packages. Cross-file references inside one package are qualified positions (`layout.Column`, `widget.mk(3)` — the dot spelling); `use` statements stay the only cross-package door (`use tur_kit::layout::{ Column }`)."
 msgstr ""
-"与 peer 分组对比：分组文件是_在场门控_的，因此只含 impl；多库文件是无条件的、完整的模块公民——类型、函数与 `pub` 表面在任何文件里都合法。"
+"可见性按模块文件划分（[模块与可见性](modules-and-visibility.md)）：无标注声明在其自身模块及后代中可见，`pub(pkg)` 在包内共享，`pub` 跨包。同一包内的跨文件引用是限定位置（`layout.Column`、`widget.mk(3)` —— 点号拼法）；`use` 语句仍是唯一的跨包之门（`use tur_kit::layout::{ Column }`）。"
 
 
-#: src/reference/project-structure.md:111
+#: src/reference/project-structure.md:132
 msgid "The toolchain tree"
 msgstr "工具链树"
 
 
-#: src/reference/project-structure.md:141
+#: src/reference/project-structure.md:162
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the vm's `HostPkgContext`/`HostRegistry` for the install law), `rut-native` beside the driver (it depends on the driver, never the reverse — the driver is provably pure: no fs, no net, no `std::path`), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the frontend crates — tokens, diagnostics, and symbols need no VM — plus the driver's pure core for manifest and bundle parsing (the dep tables behind the editor's dep walk). Its classifier is `rut-semantic` (re-exported as `rut_lsp::semantic`), which sits on the frontend crates for the same reason — embedders take it without the server."
 msgstr ""
 "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后；驱动层坐在 vm 的 `HostPkgContext`/`HostRegistry` 上以落安装法则），`rut-native` 在驱动层旁（它依赖驱动层，绝不反向 —— 驱动层可证纯净：无 fs、无网络、无 `std::path`），宿主（`rut-std`、`rut-wasm`）在其上，`rut-cli`/`demo` 再其上。`rut-lsp` 坐在前端 crate 上 —— token、诊断与符号不需要 VM —— 再加上驱动层的纯净核心做清单与捆绑包解析（编辑器依赖遍历背后的依赖表）。它的分类器是 `rut-semantic`（以 `rut_lsp::semantic` 再导出），出于同样的原因坐在前端 crate 上 —— 嵌入方不需要服务器也能取用它。"
 
 
-#: src/reference/project-structure.md:155
+#: src/reference/project-structure.md:176
 msgid "The in-tree packages"
 msgstr "树内包"
 
 
-#: src/reference/project-structure.md:157
+#: src/reference/project-structure.md:178
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr "`rut/` 收纳 CLI 按需 offer 的标准与可换包："
 
 
-#: src/reference/project-structure.md:160
+#: src/reference/project-structure.md:181
 msgid "shape"
 msgstr "形状"
 
 
-#: src/reference/project-structure.md:162
+#: src/reference/project-structure.md:183
 msgid "`core`"
 msgstr "`core`"
 
 
-#: src/reference/project-structure.md:162
+#: src/reference/project-structure.md:183
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's `.compile()`"
 msgstr "唯一的标准包 —— 内建表面，由每次运行的 `.compile()` 自动 offer"
 
 
-#: src/reference/project-structure.md:163
+#: src/reference/project-structure.md:184
 msgid ""
 "host pkg: the math surface — offer `rut_native::tree_pkg(\"calc\")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md))"
 msgstr ""
 "宿主包：数学表面 —— offer `rut_native::tree_pkg(\"calc\")`，绑定 `rut_std::math::pkg()`（[标准库](stdlib.md)）"
 
 
-#: src/reference/project-structure.md:164
+#: src/reference/project-structure.md:185
 msgid "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 
 
-#: src/reference/project-structure.md:164
+#: src/reference/project-structure.md:185
 msgid "host pkgs — pure `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr "宿主包——纯 `.d.rut` 表面；函数体住在 `rut-std`"
 
 
-#: src/reference/project-structure.md:165
+#: src/reference/project-structure.md:186
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr "`ink`, `http`, `strbuild`, `futures`"
 
 
-#: src/reference/project-structure.md:165
+#: src/reference/project-structure.md:186
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr "架在宿主行之上的内联 rut 包装（`inline = true`）"
 
 
-#: src/reference/project-structure.md:166
+#: src/reference/project-structure.md:187
 msgid "the sequence library (plain linked package)"
 msgstr "序列库（普通链接包）"
 
 
-#: src/reference/project-structure.md:167
+#: src/reference/project-structure.md:188
 msgid ""
 "the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md)"
 msgstr "带 `peer-deps`/`dev-deps` 的基础包——[依赖种类](dependency-kinds.md)的参考消费方"
 
 
-#: src/reference/project-structure.md:168
+#: src/reference/project-structure.md:189
 msgid "`nmapset`"
 msgstr "`nmapset`"
 
 
-#: src/reference/project-structure.md:168
+#: src/reference/project-structure.md:189
 msgid "native-key maps/sets over `nmap_host`"
 msgstr "架在 `nmap_host` 之上的原生键 map/set"
 
 
-#: src/reference/project-structure.md:170
+#: src/reference/project-structure.md:191
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps are resolved by name from manifests; a host may replace the non-`core` set wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 "引擎里没有任何东西知道可换包的名字——peer 与依赖都按名字从清单解析；宿主可以整体替换非 `core` 集合（[嵌入与原生模块](embedding.md)）。"
 
 
-#: src/reference/project-structure.md:176
+#: src/reference/project-structure.md:197
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR dump, and an optional binary; `run(binary, budget)` returning output lines, an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the ABI's uncapped encoding) and opts in through the page's fuel box; the heap defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so unbounded loops park and resume instead of hanging the page. The served artifact is deployed at <https://playground.rut.hpp2334.com>."
 msgstr ""

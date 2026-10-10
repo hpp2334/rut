@@ -785,7 +785,7 @@ mod tests {
         let mut idx = crate::hover::index(&s, &ast, &toks);
         idx.origin = "file:///ws/gadgets/lib.rut".to_string();
         assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
-        idx.src_path = Some("rut/pouch/pouch.rut".to_string());
+        idx.src_path = Some("rut/pouch/mod.rut".to_string());
         assert!(matches_pkg(&idx, "pouch"), "the path segment still resolves");
         assert!(!matches_pkg(&idx, "pouch.rut"), "the segment law strips `.rut` before comparing");
         assert!(!matches_pkg(&idx, "gadgets"), "src_path replaces origin as the hay");
@@ -805,7 +805,7 @@ mod tests {
         let hits = def(&d, at(&d.src, "= Vec.new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         // the TRUE rut/... path, not a label
-        assert_eq!(hits[0].uri, "rut/pouch/pouch.rut");
+        assert_eq!(hits[0].uri, "rut/pouch/mod.rut");
         // the reported range is the declaring `Vec` ident in the REAL
         // source file (normalize the embedded const like the index did)
         let real = normalize(crate::std_surface::POUCH);
@@ -815,7 +815,7 @@ mod tests {
         // the use-statement name resolves to the same target
         let hits = def(&d, at(&d.src, "use pouch::{ Vec }", 1) + 13, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(hits[0].uri, "rut/pouch/pouch.rut");
+        assert_eq!(hits[0].uri, "rut/pouch/mod.rut");
         assert_eq!(span_of(&real, &ix, &hits[0]), (want, want + 3));
     }
 

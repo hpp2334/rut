@@ -245,7 +245,7 @@ mod tests {
 // rut/pouch manifest — the surface + the body
 {
   "name": "pouch",
-  "entry": { "type": "./pouch.d.rut", "lib": "./pouch.rut" }
+  "entry": { "type": "./pouch.d.rut" }
 }
 "#;
 
@@ -269,7 +269,7 @@ mod tests {
     const JSON: &str = r#"
 {
   "name": "json",
-  "entry": { "lib": "./json.rut" },
+  
 
   "peer-deps": {
     "pouch":   { "path": "../pouch",   "optional": true, "lib": "./serde_pouch.rut" },
@@ -303,7 +303,7 @@ mod tests {
         // reached gate-less it stays the bare miss, not a false D2
         let mut s = Session::new();
         s.load_manifest(
-            r#"{"name": "j", "entry": {"lib": "./j.rut"}, "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
+            r#"{"name": "j", "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
         )
         .unwrap();
         let err = s.resolve("nmapset").unwrap_err();

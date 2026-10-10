@@ -35,9 +35,9 @@ fn hello_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
     );
-    write(&dir, "main.rut", "entry fn main() -> nil { return; }\n");
+    write(&dir, "mod.rut", "entry fn main() -> nil { return; }\n");
     root
 }
 
@@ -126,7 +126,7 @@ fn a_typo_path_never_gets_past_the_door() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A world with several `entry fn`s in the entry lib (the 02-digest
+/// A world with several `entry fn`s in the root module (the 02-digest
 /// shape) — `rut run` refuses to guess; `--entry <name>` designates.
 fn two_entries(tag: &str) -> PathBuf {
     let root = scratch(tag);
@@ -134,11 +134,11 @@ fn two_entries(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
     );
     write(
         &dir,
-        "main.rut",
+        "mod.rut",
         "entry fn main() -> nil { return; }\nentry fn other() -> nil { return; }\n",
     );
     root
@@ -177,7 +177,7 @@ fn several_entry_fns_refuse_to_guess_and_entry_designates() {
 fn entry_naming_a_non_entry_fn_is_loud() {
     let root = two_entries("misdesignated");
     let dir = root.join("hello");
-    write(&dir, "main.rut", "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n");
+    write(&dir, "mod.rut", "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n");
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap(), "--entry", "plain"])
         .output()
@@ -196,13 +196,13 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "entry": {"lib": "./main.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
     );
     // a pure library shape compiles clean — the designation is where
     // the run stops, never a source diagnostic
     write(
         &dir,
-        "main.rut",
+        "mod.rut",
         "pub fn helper() -> i32 { return 7; }\n",
     );
     let out = Command::new(rut())

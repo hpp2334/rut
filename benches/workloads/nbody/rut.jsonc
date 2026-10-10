@@ -5,10 +5,7 @@
   // mounts `pouch`; `ink` is declared for the logger. The JS twin is
   // ../nbody.js.
   "name": "nbody",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../rut/pouch"
     },

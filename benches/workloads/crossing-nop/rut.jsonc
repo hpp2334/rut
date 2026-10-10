@@ -4,10 +4,7 @@
   // `bench_cross` (the nops' host pkg; see nmap-hashset/rut.jsonc for the
   // pattern). The JS twin is ../crossing-nop.js.
   "name": "crossing_nop",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "bench_cross": {
       "path": "../../../rut/bench-cross"
     },

@@ -1,10 +1,7 @@
 {
   // str-views/ — O(1) slice views (a slice IS a str), codepoints — s.code / str.from_code.
   "name": "str_views",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

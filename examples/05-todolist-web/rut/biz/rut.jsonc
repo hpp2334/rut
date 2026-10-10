@@ -1,27 +1,19 @@
 {
   // biz/ — THE BIZ PACKAGE (the two-package law) and THE PROJECT ROOT:
-  // the todolist's domain and app — the sources, the derived counts line,
-  // the machine as mutations, the views, the app shell. ONE directory,
-  // ONE module, SEVERAL files (the multi-lib entry):
-  // `entry.libs` names the section files, the base splices first, the
-  // array IS the order. The root spec stays `app`
+  // the todolist's domain and app — the domain types, the machine as
+  // mutations, the views, the app shell. ONE directory, ONE module, a
+  // FILE-MODULE TREE: the root module is `mod.rut` (the law header),
+  // and `mod` declarations mount the children — `domain/`, `world/`,
+  // `app/` (each its own `mod.rut`). The root spec stays `app`
   // (the ABI shape: the host boots `main`, re-passes the container to
-  // the event doors; the mirror lane compiles the handed-over source under
+  // the event doors; the mirror lane compiles the handed-over tree under
   // this spec).
   //
-  // THE SURFACE LAW (see biz.rut's header): biz reads with ctx.get,
+  // THE SURFACE LAW (see mod.rut's header): biz reads with ctx.get,
   // writes with ctx.set (plain or mutation), and spells ONE crossing
   // name — tim_after. The ui package's store machinery is
   // module-private; biz cannot name it even to import it.
   "name": "app",
-  "entry": {
-    "lib": "./biz.rut",
-    "libs": [
-      "./domain.rut",
-      "./world.rut",
-      "./app.rut"
-    ]
-  },
   "deps": {
     // the sibling package — the consumer's OWN local package is what
     // `path` is for (the two-package law's ui side)

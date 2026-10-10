@@ -8,7 +8,7 @@ The split:
 
 | file | role |
 |---|---|
-| `sort.rut` | **the rut part** — insertion / bubble / selection (loop-shaped) + quicksort / merge sort (recursion, in-place vs. out-of-place), a deterministic `fill`, and the `entry fn` surface the host calls. No `main` — it's a library |
+| `mod.rut` | **the rut part** — insertion / bubble / selection (loop-shaped) + quicksort / merge sort (recursion, in-place vs. out-of-place), a deterministic `fill`, and the `entry fn` surface the host calls. No `main` — it's a library |
 | `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the session through `vm.call` |
 | `tests/session.rs` | asserts every algorithm, edge cases, cross-algorithm agreement, the JSON round trip, and trap cleanliness; runs under `cargo test --workspace` |
 

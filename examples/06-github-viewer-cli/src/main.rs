@@ -1,5 +1,5 @@
 //! 06-github-viewer-cli — the Rust half of `rgh`: mount, bind, launch,
-//! pump, exit. The BRAIN is `rgh.rut` (an async free fn over the
+//! pump, exit. The BRAIN is `mod.rut` (an async free fn over the
 //! redesigned rut/http lane); this file owns only I/O:
 //!
 //! - argv crosses in as ONE `\n`-joined `str` (the crossing
@@ -81,8 +81,8 @@ fn main() {
         .pkgs;
 
     let src =
-        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh.rut"))
-            .expect("read rgh.rut");
+        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mod.rut"))
+            .expect("read mod.rut");
     let mut chain = rut_driver::RutRun::new().pkgs(&loaded);
     // the async pair (the launcher set `boot` drives)
     for p in async_pkgs {

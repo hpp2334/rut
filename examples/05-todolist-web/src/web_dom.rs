@@ -219,12 +219,24 @@ fn page_state() -> Result<StateRc, String> {
 /// prelude riding auto), compile, bind the raw `web` rows, boot
 /// `Vm::builder` + the `main` turn. After this the
 /// page is purely event-driven — the host owns the loop.
-fn boot_page(src: &str) -> Result<(), String> {
+fn boot_page(rows: &str) -> Result<(), String> {
     // THE MIRROR (rut/rut.jsonc by hand — wasm has no filesystem):
     // every package the manifest names; the loader hands over the biz
-    // module's spliced source (base + entry.libs)
+    // module's tree as the ROWS WIRE (the `rut.mods` codec: `""` = the
+    // root module, one row per mounted child — the same bytes a packed
+    // bundle rides), parsed and mounted exactly as the loader would
+    let (root, children) = rut_driver::mods::parse_rows(rows)
+        .map_err(|e| format!("the app's module rows did not parse: {e}"))?;
+    let mods = rut_driver::mods::mount_rows(&root, &children)
+        .map_err(|e| format!("the app's module tree did not mount: {e}"))?;
+    let app = rut_driver::Pkg {
+        spec: "app".into(),
+        body: rut_driver::PkgBody::Source { text: root, is_decl: false },
+        mods,
+        ..rut_driver::Pkg::source("app", "")
+    };
     let run = crate::mount::mirror_run()?;
-    let mut compiled = crate::mount::compile_app(run, src)?;
+    let mut compiled = crate::mount::compile_root_pkg(run, app)?;
 
     let state = page_state()?;
     // the raw `web` rows join the compiled registry (the crossing is
@@ -267,7 +279,7 @@ pub extern "C" fn rut_web_boot(src_ptr: *const u8, src_len: usize) -> i32 {
     let src = match core::str::from_utf8(bytes) {
         Ok(s) => s,
         Err(e) => {
-            record_error(&format!("the app source is not utf-8: {e}"));
+            record_error(&format!("the app's module rows are not utf-8: {e}"));
             return -1;
         }
     };

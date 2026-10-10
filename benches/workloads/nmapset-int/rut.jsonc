@@ -10,10 +10,7 @@
   // checksum must equal the pinned 734932704 (same hash values — the
   // nmapset pkg ships the mapset-exact mix64 constants).
   "name": "nmapset_int",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

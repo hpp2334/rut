@@ -1,6 +1,6 @@
 //! 00-todolist — a Rust app embedding rut.
 //!
-//! `todolist.rut` is the application: a todo-list library with full CRUD.
+//! `mod.rut` is the application: a todo-list library with full CRUD.
 //! This file is the embedder: compile, verify, then drive the library
 //! through its `entry fn` surface — the host owns the session, holds the
 //! opaque container and the list handles, and every call crosses with

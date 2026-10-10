@@ -1,6 +1,14 @@
 // =====================================================================
 // §2 THE WIDGET TYPE (the old t1/widget — verbatim shape)
 // =====================================================================
+//
+// A CHILD module of the ui root (`pub mod widget;`): the Widget type
+// crosses to biz (`pub`), its kind/variant enums and predicates are
+// `pub(pkg)` (lowering/diff/components share them, nothing past the
+// package), and the handle types in the reactive-prop fields are the
+// store module's — spelled through the `store.` qualified positions.
+
+use pouch::{ Vec };
 
 // The Widget TYPE's section: the fat `Json`-shape struct, the
 // payloadless kind/variant enums, the fluent builders, and
@@ -40,17 +48,17 @@ pub struct Widget {
     // tree, never a pulled value; t1_render resolves them at the
     // render door — pull-on-read freshness, moved to where the tree
     // meets the page). nil = the literal arm.
-    text$: ?Derived<str> = nil; // a reactive Text content
-    value$: ?Derived<str> = nil; // a reactive Field value
-    live: ?Derived<Widget> = nil; // a reactive SUBTREE (tur's Each:
+    text$: ?store.Derived<str> = nil; // a reactive Text content
+    value$: ?store.Derived<str> = nil; // a reactive Field value
+    live: ?store.Derived<Widget> = nil; // a reactive SUBTREE (tur's Each:
     // the derived computes the whole branch; resolution splices it in)
     // -- semantic options
-    on_click: ?Mutation<str, opaque> = nil; // tur's onClick prop: the
+    on_click: ?store.Mutation<str, opaque> = nil; // tur's onClick prop: the
     // mutation the framework RUNS when this widget's listener fires
     // (clicks land here; the event detail is "")
-    on_input: ?Mutation<str, opaque> = nil; // tur's onInput prop: the
+    on_input: ?store.Mutation<str, opaque> = nil; // tur's onInput prop: the
     // mutation run with the input's carried value as the detail
-    on_row: ?Mutation<i64, opaque> = nil; // tur's
+    on_row: ?store.Mutation<i64, opaque> = nil; // tur's
     // `mutate((ctx, _ev) => act(ctx, index))` — the arg BOUND AS DATA,
     // never a runtime closure (a VM makeclosure inside a recompute
     // mints with a nil capture slot — the arena abort the rejected-add
@@ -66,6 +74,29 @@ pub struct Widget {
     children: Vec<Widget> = Vec.new();
 }
 
+// ---- the raw constructors ---------------------------------------------
+// The struct literal is spellable only in the type's OWN module (the
+// grammar's Ident-only literal heads), so the raw forms live HERE and
+// the component vocabulary (§5) composes them through the fluent
+// builders. `pub(pkg)`: ui-internal construction surface — biz goes
+// through §5.
+
+pub(pkg) fn of_kind(kind: WKind) -> Widget {
+    return Widget { kind: kind };
+}
+
+pub(pkg) fn of_text(tvar: TVariant, t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: tvar, text: t };
+}
+
+pub(pkg) fn of_button(bvar: BVariant, t: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: bvar, text: t };
+}
+
+pub(pkg) fn of_check(on: bool) -> Widget {
+    return Widget { kind: WKind.Checkbox, on: on };
+}
+
 // ---- the fluent builders (impl Widget, `mut self -> Self`) ----------
 // The constructors live in the component section (§5).
 
@@ -78,6 +109,18 @@ impl Widget {
 
     pub fn gap(mut self, n: i32) -> Self {
         self.gap = n;
+        return self;
+    }
+
+    pub fn size(mut self, n: i32) -> Self {
+        self.size = n;
+        return self;
+    }
+
+    /// Wire a reactive SUBTREE (tur's Each): the derived computes the
+    /// whole branch; the diff splices it in at the render door.
+    pub fn live(mut self, d: store.Derived<Widget>) -> Self {
+        self.live = d;
         return self;
     }
 
@@ -106,14 +149,14 @@ impl Widget {
     /// tur's `onClick(mutate(...))`: the mutation the framework runs
     /// when this widget fires (buttons, checkboxes). The event's
     /// SEMANTICS ride the mutation, not a subject string.
-    pub fn on_click(mut self, m: Mutation<str, opaque>) -> Self {
+    pub fn on_click(mut self, m: store.Mutation<str, opaque>) -> Self {
         self.on_click = m;
         return self;
     }
 
     /// tur's `{ onInput: mutate(...) }`: the mutation run with the
     /// input's event-carried value (fields).
-    pub fn on_input(mut self, m: Mutation<str, opaque>) -> Self {
+    pub fn on_input(mut self, m: store.Mutation<str, opaque>) -> Self {
         self.on_input = m;
         return self;
     }
@@ -121,7 +164,7 @@ impl Widget {
     /// tur's captured-index click, DATA-SHAPED: the machine mutation
     /// plus its arg as fields — no runtime closure mint (see on_row's
     /// comment); `ev_run` feeds it the bound arg on the firing event.
-    pub fn on_row(mut self, m: Mutation<i64, opaque>, arg: i64) -> Self {
+    pub fn on_row(mut self, m: store.Mutation<i64, opaque>, arg: i64) -> Self {
         self.on_row = m;
         self.row_arg = arg;
         return self;
@@ -136,14 +179,14 @@ impl Widget {
     /// tur's `Text({ text: derive(...) })`: a REACTIVE text content —
     /// the derived resolves at the render door; the literal `text`
     /// it replaces is what the diff compares.
-    pub fn text_of(mut self, d: Derived<str>) -> Self {
+    pub fn text_of(mut self, d: store.Derived<str>) -> Self {
         self.text$ = d;
         return self;
     }
 
     /// The reactive field value — the derived resolves at the render
     /// door (the draft mirror without an eager pull at view build).
-    pub fn value_of(mut self, d: Derived<str>) -> Self {
+    pub fn value_of(mut self, d: store.Derived<str>) -> Self {
         self.value$ = d;
         return self;
     }
@@ -173,7 +216,7 @@ impl Widget {
 
 // ---- the predicates (read by the lowering and the diff) -------------
 
-pub fn kind_name(w: Widget) -> str {
+pub(pkg) fn kind_name(w: Widget) -> str {
     return when (w.kind) {
         WKind.Column -> "Column",
         WKind.Row -> "Row",
@@ -186,28 +229,28 @@ pub fn kind_name(w: Widget) -> str {
     };
 }
 
-pub fn is_text(w: Widget) -> bool {
+pub(pkg) fn is_text(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Text -> true,
         else -> false,
     };
 }
 
-pub fn is_field(w: Widget) -> bool {
+pub(pkg) fn is_field(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Field -> true,
         else -> false,
     };
 }
 
-pub fn is_check(w: Widget) -> bool {
+pub(pkg) fn is_check(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Checkbox -> true,
         else -> false,
     };
 }
 
-pub fn is_button(w: Widget) -> bool {
+pub(pkg) fn is_button(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Button -> true,
         else -> false,
@@ -215,7 +258,7 @@ pub fn is_button(w: Widget) -> bool {
 }
 
 /// Whose text content is real: Text's words and a Button's label.
-pub fn takes_text(w: Widget) -> bool {
+pub(pkg) fn takes_text(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Text -> true,
         WKind.Button -> true,
@@ -223,7 +266,7 @@ pub fn takes_text(w: Widget) -> bool {
     };
 }
 
-pub fn takes_children(w: Widget) -> bool {
+pub(pkg) fn takes_children(w: Widget) -> bool {
     return when (w.kind) {
         WKind.Column -> true,
         WKind.Row -> true,
@@ -236,7 +279,7 @@ pub fn takes_children(w: Widget) -> bool {
 /// key, else the hook, else the positional `@i`. The els table's key
 /// is the FULL PATH from the root, so equal sibling names in different
 /// subtrees cannot collide.
-pub fn key_of(w: Widget, i: i32) -> str {
+pub(pkg) fn key_of(w: Widget, i: i32) -> str {
     if (w.key != "") {
         return w.key;
     }

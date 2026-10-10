@@ -1,10 +1,7 @@
 {
   // weak-cache/ — the cache/observer shape, shown with today's strong refs.
   "name": "weak_cache",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../../rut/pouch"
     },

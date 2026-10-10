@@ -5,10 +5,7 @@
   // presence while building json itself — the sanctioned both-kinds
   // pairing (T6/T9 self-build on this same manifest).
   "name": "json",
-  "entry": {
-    "lib": "./json.rut"
-  },
-  "inline": true,
+    "inline": true,
   "peer-deps": {
     "pouch": {
       "path": "../pouch",

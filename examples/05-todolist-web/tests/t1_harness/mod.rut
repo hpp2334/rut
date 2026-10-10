@@ -10,10 +10,11 @@
 // `ui` — the type + the four t1 names + the component vocabulary (the
 // one package now; its store machinery is module-private and CANNOT
 // be imported even by name).
-use ui::{
-    Widget, WKind, T1Root, t1_mount, t1_render, t1_event,
-    Store, Source, Derived, Mutation, Readable, Writable, live,
-    col, row, card, spacer, field, check,
+use ui::widget::{ Widget, WKind };
+use ui::store::{ Store, Source, Derived, Mutation, Readable, Writable };
+use ui::diff::{ T1Root, t1_mount, t1_render, t1_event };
+use ui::components::{
+    live, col, row, card, spacer, field, check,
     text, done, title, pending, muted, btn, quiet,
 };
 use nmapset::{ HashMap };

@@ -3,8 +3,4 @@
   // (tests/todolist_app.rs), its own module dir like every rut program.
   // Dep-free: no `use` at all — a container, a downcast, and the two
   // channels, no store, no widgets, no web crossings.
-  "name": "softfail",
-  "entry": {
-    "lib": "./softfail.rut"
-  }
-}
+  "name": "softfail"}

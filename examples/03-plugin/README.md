@@ -3,7 +3,7 @@
 A Rust chat-room **server** with a rut **moderator plugin**, in the shape
 of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 [02-digest](../02-digest) — but loaded as a **module directory**:
-`plugin/rut.json` names the module (`plugin`), `plugin/plugin.rut` is
+`plugin/rut.json` names the module (`plugin`), `plugin/mod.rut` is
 the whole plugin (adapter + business logic), `src/lib.rs` is the
 embedder SDK, and `src/main.rs` drives a scripted session through **both
 load forms** — the directory and a v5 **compiled** `.rutbundle` packed
@@ -30,7 +30,7 @@ where **both opaque directions** meet:
 RUST biz (main / tests)      →  typed Plugin methods, no vm.call
 RUST adapter (src/lib.rs)    →  the ONLY vm.call sites
         ↓ bus box in · export names out
-RUT adapter (plugin/plugin.rut) →  the ONLY entry fns; one-line forwards
+RUT adapter (plugin/mod.rut) →  the ONLY entry fns; one-line forwards
 RUT biz (plugin/moderator.rut)  →  pure logic + emit, no entry fn
 ```
 

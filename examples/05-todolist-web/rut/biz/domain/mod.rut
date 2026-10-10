@@ -1,0 +1,93 @@
+// domain/ — the domain types + the machine's pure scans. A CHILD
+// module of the biz root (`pub mod domain;`): the types are `pub` (the
+// app's data shape crosses to the store-probe spec), the machine's
+// consts and scans are `pub(pkg)` (shared across biz's modules, never
+// past the package).
+
+use pouch::{ Vec };
+
+// the request kinds (the Req rows' `kind`)
+pub(pkg) let KIND_ADD: i64 = 1;
+pub(pkg) let KIND_TOGGLE: i64 = 2;
+pub(pkg) let KIND_REMOVE: i64 = 3;
+
+// the per-kind simulated latency, in ms
+pub(pkg) let LATENCY_ADD: i64 = 400;
+pub(pkg) let LATENCY_TOGGLE: i64 = 250;
+pub(pkg) let LATENCY_REMOVE: i64 = 120;
+
+pub struct Todo {
+    id: i64;
+    title: str;
+    done: bool = false;
+}
+
+/// One booked request — a row of the continuation table. The UI reads
+/// `tag`/`latency` to book the timer; the machine reads the rest at
+/// answer time.
+pub struct Req {
+    id: i64;
+    tag: str;
+    kind: i64;
+    todo: i64; // TOGGLE/REMOVE target; ADD books 0
+    title: str;
+    latency: i64;
+}
+
+// ---- the constructors (the literal lives in the type's own module) ----
+// The struct literal is spellable only here (the grammar's Ident-only
+// literal heads); the sibling modules (world's machine) construct
+// through these. `pub(pkg)`: biz-internal construction, never past the
+// package (consumers READ the fields, the shape is the app's data).
+
+pub(pkg) fn mk_todo(id: i64, title: str) -> Todo {
+    return Todo { id: id, title: title };
+}
+
+pub(pkg) fn mk_req(id: i64, tag: str, kind: i64, todo: i64, title: str, latency: i64) -> Req {
+    return Req { id: id, tag: tag, kind: kind, todo: todo, title: title, latency: latency };
+}
+
+// ---- the machine's pure scans (no writes — the mutations write) ------
+
+pub(pkg) fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
+    for (let i = 0; i < items.len(); i += 1) {
+        if (items[i].id == todo) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+pub(pkg) fn find_req(rs: Vec<Req>, tag: str) -> i32 {
+    for (let i = 0; i < rs.len(); i += 1) {
+        if (rs[i].tag == tag) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+pub(pkg) fn find_by_title(items: Vec<Todo>, title: str) -> i32 {
+    for (let i = 0; i < items.len(); i += 1) {
+        if (items[i].title == title) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+pub(pkg) fn has_pending_for(rs: Vec<Req>, todo: i64) -> bool {
+    for (let r of rs) {
+        if (r.todo == todo) {
+            if (r.kind == KIND_TOGGLE) {
+                return true;
+            }
+            if (r.kind == KIND_REMOVE) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+

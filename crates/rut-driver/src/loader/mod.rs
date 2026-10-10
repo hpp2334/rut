@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
-    bundle_key, entry_rel, parse_manifest, read_entry, Bundle, GroupKind, Layout, Manifest,
+    bundle_key, parse_manifest_compat, read_entry, Bundle, GroupKind, Layout, Manifest,
     PkgType,
 };
 use crate::mods::{mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME};
@@ -150,7 +150,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-        let dm = parse_manifest(&dep_toml)
+        // the group manifest rides the compat lane: a PUBLISHED
+        // bundle's groups are forever old (the pinned CDN tags)
+        let dm = parse_manifest_compat(&dep_toml)
             .map_err(|e| RunError::law(format!("{origin}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
@@ -396,23 +398,26 @@ pub fn bundle_entry_pkg(
                 let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
                 let src = read(rel)?;
                 crate::decl::refuse_host_rows(&src, &origin)?;
-                if manifest.entry.lib.is_none() {
-                    // TRANSITIONAL dual-read: no `entry.lib` — the root
-                    // module is the `mod.rut` entry beside the manifest
-                    // when it exists; without one, today's surface-only
-                    // dev state stands (a decl unit — no host rows,
-                    // nothing exported; use sites resolve-miss,
-                    // correctly)
-                    match read("mod.rut") {
-                        Ok(root) => plain_source_pkg(entries, prefix, manifest, root)?,
-                        Err(_) => Pkg {
-                            body: PkgBody::Source { text: src, is_decl: true },
-                            entry: manifest.entry.clone(),
-                            ..Default::default()
-                        },
+                // the body: the `mod.rut` entry, else the OLD
+                // envelope's legacy keys, else the surface-only dev
+                // state (a decl unit — no host rows, nothing exported;
+                // use sites resolve-miss, correctly). An ambiguity —
+                // `entry.type` spelled, no declared kind, no body
+                // anywhere — refuses, naming both fixes.
+                match root_source(entries, prefix, manifest)? {
+                    Some(root) => plain_source_pkg(entries, prefix, manifest, root)?,
+                    None if !manifest.type_declared => {
+                        return Err(format!(
+                            "module at bundle prefix `{prefix}` spells `entry.type` but no kind — \
+                             `\"type\": \"host\"` for a host pkg, or `\"type\": \"lib\"` for the \
+                             surface-only dev state"
+                        ));
                     }
-                } else {
-                    plain_entry_pkg(entries, prefix, manifest)?
+                    None => Pkg {
+                        body: PkgBody::Source { text: src, is_decl: true },
+                        entry: manifest.entry.clone(),
+                        ..Default::default()
+                    },
                 }
             } else {
                 plain_entry_pkg(entries, prefix, manifest)?
@@ -422,49 +427,57 @@ pub fn bundle_entry_pkg(
     Ok(pkg)
 }
 
-/// The plain (non-decl) entry pkg. TRANSITIONAL dual-read: an
-/// `entry.lib` manifest splices `entry.libs` exactly as always; a
-/// manifest with no `entry.lib` takes the `mod.rut` ENTRY beside the
-/// manifest as the root (the new default — the loud repeal of the
-/// key is phase 5). Either way the source's `mod` declarations mount
-/// the child tree from the archive, recursively, cycle-guarded.
+/// The plain (non-decl) entry pkg. The root module is the `mod.rut`
+/// ENTRY beside the manifest; an OLD published bundle (the flat
+/// envelope — the pinned CDN tags are forever old) spells the repealed
+/// keys, and its manifest rides the compat lane, so the legacy lib +
+/// `libs` splice reads exactly as it always did. Either way the
+/// source's `mod` declarations mount the child tree from the archive,
+/// recursively, cycle-guarded.
 fn plain_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
 ) -> Result<Pkg, String> {
+    let src = match root_source(entries, prefix, manifest)? {
+        Some(src) => src,
+        None => {
+            return Err(format!(
+                "module at bundle prefix `{prefix}` has no entry — the root module is \
+                 `mod.rut` beside the manifest"
+            ));
+        }
+    };
+    plain_source_pkg(entries, prefix, manifest, src)
+}
+
+/// The bundle mount's body reader, ONE dispatch: the `mod.rut` entry
+/// (the post-repeal envelope — a source group's file set carries it,
+/// so does a generic root's riding source), else the OLD envelope's
+/// legacy keys read + spliced ('\n'-joined, the flat envelope's
+/// law), else `None` (no body anywhere).
+fn root_source(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    manifest: &Manifest,
+) -> Result<Option<String>, String> {
     let read = |rel: &str| -> Result<String, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
-    let (mut src, has_lib) = match &manifest.entry.lib {
-        Some(rel) => (read(rel)?, true),
-        // the transitional default: the root module is `mod.rut`
-        None => match read("mod.rut") {
-            Ok(root) => (root, false),
-            Err(_) => {
-                let rel = entry_rel(manifest).ok_or_else(|| {
-                    format!(
-                        "module at bundle prefix `{prefix}` has no entry — the root module is \
-                         `mod.rut` beside the manifest (or, transitional, spell `entry.lib`)"
-                    )
-                })?;
-                (read(rel)?, false)
-            }
-        },
-    };
-    // the multi-lib splice — ONLY on the `entry.lib` lane (the
-    // transitional law: the splice survives only for manifests that
-    // spell it): base first, then `libs` in manifest order,
-    // '\n'-joined — ONE source string
-    if has_lib {
-        for lib in &manifest.entry.libs {
-            src.push('\n');
-            src.push_str(&read(lib)?);
-        }
+    if let Ok(root) = read("mod.rut") {
+        return Ok(Some(root));
     }
-    plain_source_pkg(entries, prefix, manifest, src)
+    let Some(base) = &manifest.legacy_entry.lib else {
+        return Ok(None);
+    };
+    let mut src = read(base)?;
+    for lib in &manifest.legacy_entry.libs {
+        src.push('\n');
+        src.push_str(&read(lib)?);
+    }
+    Ok(Some(src))
 }
 
 /// A source pkg from its assembled root text: the `mod` declarations
@@ -488,14 +501,16 @@ fn plain_source_pkg(
 
 /// The generic-bearing source a compiled unit rides, read from the
 /// archive under `prefix` (empty for the root, `<pkg>/` for a group):
-/// the entry lib + `entry.libs` spliced, plus the `[peer-deps]` group
-/// files keyed by peer. The entry lib's PRESENCE is the dispatch
-/// marker the packer laid down — the packer rides source iff the pkg
-/// owns an open generic surface, so absence means a non-generic pkg
-/// (source-free by law); a generic-owning unit without the marker
-/// refuses at the mount seam ([`riding_source`]). Once the marker
-/// answers, every other riding file must be there (refuse, never
-/// guess — a corrupt archive is a load error).
+/// the root module's source, plus the `[peer-deps]` group files keyed
+/// by peer. The root source's PRESENCE is the dispatch marker the
+/// packer laid down — the packer rides source iff the pkg owns an open
+/// generic surface, so absence means a non-generic pkg (source-free by
+/// law); a generic-owning unit without the marker refuses at the mount
+/// seam ([`riding_source`]). Once the marker answers, every other
+/// riding file must be there (refuse, never guess — a corrupt archive
+/// is a load error). An OLD published bundle (the flat envelope) rides
+/// its source at the legacy `entry.lib` spelling instead — the
+/// reader-compat law keeps those loading.
 pub fn riding_gen_source(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -507,7 +522,7 @@ pub fn riding_gen_source(
         read_entry(entries, &key)
     };
     // the rows lane first: a mod-rooted compiled pkg carries no
-    // `entry.lib` — its root source rides as the `""` row (the
+    // standalone root entry — its root source rides as the `""` row (the
     // children ride beside it and mount by declaration at the pkg's
     // own mount). The rows' presence is that pkg's dispatch marker.
     if let Some((root, _)) = rows_body(entries, prefix)? {
@@ -519,17 +534,27 @@ pub fn riding_gen_source(
         }
         return Ok(Some(crate::session::GenSource { text: root, peers }));
     }
-    let Some(base) = &manifest.entry.lib else {
-        return Ok(None); // no body — nothing could ride
-    };
-    let mut text = match read(base) {
+    let text = match read("mod.rut") {
         Ok(t) => t,
-        Err(_) => return Ok(None), // the marker's absence: a non-generic pkg — source-free by law
+        // the OLD envelope: the legacy `entry.lib` spelling (+ its
+        // `libs` splice) is the marker and the source
+        Err(_) => {
+            let Some(base) = &manifest.legacy_entry.lib else {
+                return Ok(None); // no body — nothing could ride
+            };
+            match read(base) {
+                Ok(t) => {
+                    let mut text = t;
+                    for lib in &manifest.legacy_entry.libs {
+                        text.push('\n');
+                        text.push_str(&read(lib)?);
+                    }
+                    text
+                }
+                Err(_) => return Ok(None), // the marker's absence: a non-generic pkg — source-free by law
+            }
+        }
     };
-    for lib in &manifest.entry.libs {
-        text.push('\n');
-        text.push_str(&read(lib)?);
-    }
     let mut peers = Vec::new();
     for (peer, desc) in &manifest.peer_deps {
         if let Some(lib) = desc.get("lib") {

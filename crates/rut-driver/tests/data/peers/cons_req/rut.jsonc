@@ -8,10 +8,7 @@
   "format": "rutbundle",
   "format_version": 4,
   "name": "cons_req",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "json_required": {
       "path": "../json_required"
     }

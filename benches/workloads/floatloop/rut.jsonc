@@ -3,10 +3,7 @@
   // 2_000_000 iterations. A module dir like the rest of the workloads; the
   // JS twin is ../floatloop.js.
   "name": "floatloop",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

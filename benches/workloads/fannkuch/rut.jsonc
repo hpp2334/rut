@@ -4,10 +4,7 @@
   // mounts `pouch`; `ink` is declared for the logger. The JS twin is
   // ../fannkuch.js.
   "name": "fannkuch",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../rut/pouch"
     },

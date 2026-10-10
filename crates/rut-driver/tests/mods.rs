@@ -11,13 +11,14 @@
 //! - the collection: every mounted file's declarations gathered with
 //!   the mod path attached (the plumbing phase 3 gates on) — and a
 //!   mounted module nothing declares is named at compile;
-//! - the transitional dual-read: `entry.lib` manifests splice exactly
-//!   as always (AND mount children); no `entry.lib` → the root module
-//!   is `mod.rut` beside the manifest; the surface-only dev state
-//!   stands when no `mod.rut` exists;
+//! - the entry repeal: the root module is `mod.rut` beside the
+//!   manifest — the body keys refuse in a directory, the surface-only
+//!   dev state stands when no `mod.rut` exists, and the ambiguity
+//!   (`entry.type`, no kind, no body) names both fixes;
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
-//!   section and loads mounting the same tree; the committed std
-//!   artifacts (the OLD flat envelope) still load, and a flat package
+//!   section and loads mounting the same tree; the PUBLISHED std-v8
+//!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
+//!   still load through the reader-compat lane, and a flat package
 //!   repacks byte-identically (the freshness gate over all 16);
 //! - a mod file's `use` statements join the run chain's closure check.
 
@@ -266,36 +267,37 @@ fn a_mod_files_uses_join_the_closure_check() {
 }
 
 // ---------------------------------------------------------------------
-// the transitional dual-read (entry.lib stands; mod.rut is the default)
+// the entry repeal (the root module is `mod.rut`; the keys refuse)
 // ----------------------------------------------------------------------
 
 #[test]
-fn entry_lib_manifests_splice_and_mount_as_before() {
+fn entry_lib_manifests_refuse_loudly_naming_the_fix() {
+    // THE REPEAL: a directory manifest spelling the body keys refuses
+    // at parse — each message names the fix
     let root = scratch("entry-lib");
     let pkg = root.join("pkg");
     write(
         &pkg,
         "rut.jsonc",
-        r#"{"name": "pkg", "entry": {"lib": "./lib.rut", "libs": ["./tail.rut"]}}"#,
+        r#"{"name": "pkg", "entry": {"lib": "./lib.rut"}}"#,
     );
+    write(&pkg, "lib.rut", "entry fn main() -> i32 { return 7; }\n");
+    let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
+    assert!(err.contains("entry.lib: repealed"), "{err}");
+    assert!(err.contains("the root module is `mod.rut` beside the manifest"), "{err}");
+    assert!(err.contains("rename the file, drop the key"), "{err}");
+
+    // `entry.libs` — structure lives in `mod` directories
+    let pkg2 = root.join("pkg2");
     write(
-        &pkg,
-        "lib.rut",
-        "mod layout;\nentry fn main() -> i32 { return 7; }\n",
+        &pkg2,
+        "rut.jsonc",
+        r#"{"name": "pkg", "entry": {"libs": ["./tail.rut"]}}"#,
     );
-    write(&pkg, "tail.rut", "// the splice tail\n");
-    write(&pkg, "layout/mod.rut", "pub fn span() -> i32 { return 1; }\n");
-    let loaded = load(&pkg);
-    let pkg = loaded.pkg("pkg").expect("pkg mounted");
-    // the splice stands: base + libs, '\n'-joined — AND the declared
-    // child mounts from the spliced text
-    let PkgBody::Source { text, .. } = &pkg.body else { panic!("source body") };
-    assert_eq!(
-        text.as_str(),
-        "mod layout;\nentry fn main() -> i32 { return 7; }\n\n// the splice tail\n"
-    );
-    assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["layout"]);
-    assert_eq!(run_main(loaded), 7);
+    write(&pkg2, "tail.rut", "// the splice tail\n");
+    let err = rut_native::load_dir(&pkg2).unwrap_err().to_string();
+    assert!(err.contains("entry.libs: repealed"), "{err}");
+    assert!(err.contains("structure lives in `mod` directories"), "{err}");
 }
 
 #[test]
@@ -374,17 +376,17 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
 
 #[test]
 fn flat_packages_pack_without_a_rows_entry() {
-    // a package with no mod children: no `rut.mods` — byte-stable
-    // output (the freshness gate over the committed std bundles is the
-    // exhaustive version of this)
+    // a package with no mod children: no `rut.mods` — the flat
+    // envelope's pack shape (the freshness gate over the committed std
+    // bundles is the exhaustive version of this)
     let root = scratch("flat-pack");
     let pkg = root.join("pkg");
     write(
         &pkg,
         "rut.jsonc",
-        r#"{"name": "pkg", "format": "rutbundle", "format_version": 10, "entry": {"lib": "./lib.rut"}}"#,
+        r#"{"name": "pkg", "format": "rutbundle", "format_version": 10}"#,
     );
-    write(&pkg, "lib.rut", "entry fn main() -> i32 { return 7; }\n");
+    write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
     let bytes = rut_native::pack_dir(&pkg).expect("pack");
     let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
@@ -395,11 +397,14 @@ fn flat_packages_pack_without_a_rows_entry() {
 }
 
 #[test]
-fn the_committed_std_bundles_still_load_unchanged() {
-    // the pin is law: every published std-v8-shape artifact (the OLD
-    // flat envelope, no rows section) keeps loading through the same
-    // reader — unchanged
-    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"));
+fn the_published_std_v8_bundles_still_load_through_reader_compat() {
+    // the pin is law: every PUBLISHED std-v8 artifact (the OLD flat
+    // envelope — manifests spelling the repealed keys, sources at the
+    // legacy names) keeps loading through the reader's compat lane.
+    // The published bytes are committed at `dist/std-v8/` so the gate
+    // never networks; `dist/std` (the working envelope) is the
+    // freshness gate's business.
+    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
         let path = entry.unwrap().path();
@@ -408,7 +413,15 @@ fn the_committed_std_bundles_still_load_unchanged() {
         }
     }
     names.sort();
-    assert!(names.len() >= 16, "the committed std artifacts ride in dist/std: {names:?}");
+    let stems: Vec<String> = names
+        .iter()
+        .map(|p| p.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        stems,
+        vec!["http", "json", "nmapset", "pouch"],
+        "the pinned artifacts ride in dist/std-v8: {names:?}"
+    );
     for path in &names {
         let bytes = std::fs::read(path).expect("read the bundle");
         let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
@@ -416,6 +429,23 @@ fn the_committed_std_bundles_still_load_unchanged() {
         assert!(
             !entry_names.iter().any(|n| n.ends_with("rut.mods")),
             "{} is old-envelope — it carries no rows section",
+            path.display()
+        );
+        // the OLD manifest grammar rides: the archive's own rut.jsonc
+        // spells the repealed keys, and the compat parse answers them
+        let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
+            .unwrap()
+            .read("rut.jsonc")
+            .unwrap();
+        let m = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap();
+        assert!(
+            m.legacy_entry.lib.is_some(),
+            "{}: the old envelope's manifest carries the legacy keys",
+            path.display()
+        );
+        assert!(
+            rut_driver::bundle::parse_manifest(&manifest_text).is_err(),
+            "{}: the strict (directory) lane refuses the same text",
             path.display()
         );
         let loaded = Pkg::from_bundle(&bytes)
@@ -446,11 +476,11 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"name": "app", "format": "rutbundle", "format_version": 10, "entry": {"lib": "./lib.rut"}, "deps": {"pkg": {"path": "../pkg"}}}"#,
+        r#"{"name": "app", "format": "rutbundle", "format_version": 10, "deps": {"pkg": {"path": "../pkg"}}}"#,
     );
     write(
         &app,
-        "lib.rut",
+        "mod.rut",
         "use pkg::{who};\nentry fn main() -> str { return who(); }\n",
     );
     // pkg needs a pub fn the app imports — add it to the root module
@@ -470,6 +500,54 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     let pkg = loaded.pkg("pkg").expect("pkg group mounted");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["layout", "layout/grid"]);
+}
+
+#[test]
+fn an_old_envelopes_legacy_splice_still_reads_back() {
+    // THE READER-COMPAT LAW, splice flavor: a PUBLISHED old-envelope
+    // bundle carries the repealed keys and its source at the legacy
+    // names — the reader mounts the body exactly as the old grammar
+    // spliced it (base, then `libs` in listed order, '\n'-joined), and
+    // the riding source a consumer's link needs carries the SAME
+    // splice. Forged honestly: a real pack of the toolchain's pouch,
+    // re-spelled into the flat envelope (the manifest swaps to the
+    // legacy keys, the root source takes the legacy name, the rows
+    // section is dropped).
+    let bytes = rut_native::pack_dir(&PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../rut/pouch"
+    )))
+    .expect("pack the tree pouch");
+    let pouch_src =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch/mod.rut"))
+            .unwrap();
+    let legacy = r#"{"format": "rutbundle", "format_version": 10, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
+    let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .filter(|(n, _)| n != "rut.mods" && n != "mod.rut")
+        .flat_map(|(n, b)| {
+            if n == "rut.jsonc" {
+                vec![
+                    ("rut.jsonc".to_string(), legacy.as_bytes().to_vec()),
+                    ("pouch.rut".to_string(), pouch_src.clone().into_bytes()),
+                    ("extra.rut".to_string(), b"// the legacy splice tail\n".to_vec()),
+                ]
+            } else {
+                vec![(n, b)]
+            }
+        })
+        .collect();
+    let legacy_bytes = rut_driver::bundle::write_bundle(&entries).unwrap();
+    let loaded = Pkg::from_bundle(&legacy_bytes).expect("the old envelope loads");
+    let pkg = loaded.pkg("pouch").expect("pouch mounted");
+    // the spliced riding source: base, then libs in listed order
+    let gen = pkg.gen_source.as_ref().expect("the legacy splice rides");
+    assert_eq!(
+        gen.text.as_str(),
+        format!("{pouch_src}\n// the legacy splice tail\n"),
+        "the splice is base, then libs in manifest order, '\n'-joined"
+    );
 }
 
 // =====================================================================

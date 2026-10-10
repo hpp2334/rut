@@ -41,6 +41,15 @@
  * No pushing, no network. The `rut fetch` / `rut run` human lane hits
  * jsDelivr once per bundle, then caches; every offline gate is green
  * because the committed artifact IS the seed.
+ *
+ * THE PIN BOUNDARY (the file-modules phase): dist/std is the WORKING
+ * envelope — repacked whenever the pack shape moves (the mod.rut
+ * rename did), byte-checked by --check's freshness half. The example
+ * manifests' CDN rows are FROZEN at the std-v8 bytes (no tag
+ * re-points, no std-v9): those bytes are committed at `dist/std-v8/` —
+ * the offline gates' wire — and --check's pin half asserts every row
+ * against THEM, not against dist/std. The reader's compat lane loads
+ * the old envelope; that is a loading law, not a transition.
  */
 "use strict";
 
@@ -53,6 +62,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
+const PINNED = path.join(ROOT, "dist", "std-v8");
 const DEFAULT_TAG = "std-v8";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
@@ -102,13 +112,18 @@ function takeFlag(flag) {
   argv.splice(i, 1);
   return true;
 }
-const doPins = takeFlag("--pins");
 const doCheck = takeFlag("--check");
 const doTag = takeFlag("--tag");
 const tag = takeValue("--tag-name") ?? process.env.RUT_STD_TAG ?? DEFAULT_TAG;
 if (argv.length) die(`unknown arguments: ${argv.join(" ")}`);
-if ([doPins, doCheck, doTag].filter(Boolean).length > 1) {
-  die("--pins / --check / --tag are mutually exclusive modes");
+if (takeFlag("--pins")) {
+  die(
+    "--pins is retired: the example manifests' std-v8 rows are FROZEN (no tag re-points, no std-v9) — " +
+      "repack updates dist/std; the pins' bytes live at dist/std-v8"
+  );
+}
+if ([doCheck, doTag].filter(Boolean).length > 1) {
+  die("--check / --tag are mutually exclusive modes");
 }
 
 // ---------------------------------------------------------------------------
@@ -139,18 +154,16 @@ const PKGS = [
   { dir: "bench-cross" },
 ];
 
-// The example manifests' url rows — the single rewrite map (--pins).
-// `deps` lists the dep KEYS whose rows become url+sha256; keys a
-// manifest declares but this list omits stay untouched (path rows).
+// The example manifests' url rows — the frozen pins (--check verifies
+// them; nothing rewrites them). `deps` lists the dep KEYS whose rows
+// are pinned; the PINNED snapshot (`dist/std-v8/`) must carry an
+// artifact per distinct key — the bytes the rows' sha256 commits to.
 //
-// THE BOUNDARY (the generic-source riding law): a compiled bundle
-// whose pkg has an OPEN generic surface rides the source that serves
-// consumer-spelled shapes, so the url rows now cover the generic
-// owners too (pouch, json — `Vec<Todo>` compiles from the bundle at
-// the consumer's link). The examples flip the rows their embedders
-// seed offline from dist/std (the seed IS the cache; gates never
-// touch the network). See docs/src/reference/bundles.md (the std-CDN
-// section).
+// THE BOUNDARY (the file-modules phase): the rows are FROZEN. The
+// pack shape moved (mod.rut), dist/std repacked — the pins did NOT
+// move: they name the std-v8 bytes, which load through the reader's
+// compat lane (a loading law, not a transition). --pins is gone: no
+// tool rewrites these rows anymore.
 const EXAMPLES = [
   {
     manifest: "examples/00-todolist/rut.jsonc",
@@ -216,30 +229,6 @@ function urlRow(key) {
   return `${URL_BASE}@${tag}/dist/std/${key}.rutbundle`;
 }
 
-/**
- * Rewrite one example manifest's `[deps]` rows: each key in `wants`
- * becomes `key = { url = "…", sha256 = "<hash>" }`, hash from the
- * COMMITTED artifact (the delivery law: pins match what jsDelivr
- * serves). Idempotent — running twice changes nothing.
- */
-function pinExample(manifestRel, wants, hashes) {
-  const p = path.join(ROOT, manifestRel);
-  if (!fs.existsSync(p)) die(`${manifestRel} does not exist — run the phase that lands it first`);
-  let text = fs.readFileSync(p, "utf8");
-  for (const key of wants) {
-    if (!hashes[key]) die(`no artifact for \`${key}\` — pack first`);
-    // the row: `"key": { "url": "…", "sha256": "…" }` — path or url flavor,
-    // whole-row replace (the key names the row start; the row ends at
-    // the object's closing brace)
-    const rowRe = new RegExp(`("${key}")\\s*:\\s*\\{[^}]*\\}`);
-    if (!rowRe.test(text)) die(`${manifestRel}: no \`deps\` row for \`${key}\``);
-    const url = urlRow(key);
-    text = text.replace(rowRe, (_m, k) => `${k}: { "url": "${url}", "sha256": "${hashes[key]}" }`);
-  }
-  fs.writeFileSync(p, text);
-  info(`pinned ${dim(manifestRel)} → ${wants.map((k) => `${k}@${tag}`).join(", ")}`);
-}
-
 // ---------------------------------------------------------------------------
 // modes
 // ---------------------------------------------------------------------------
@@ -302,7 +291,23 @@ if (doCheck) {
   fs.rmSync(tmp, { recursive: true, force: true });
 
   // the example pins: every url row ends /dist/std/<key>.rutbundle and
-  // its pin equals sha256(committed bytes)
+  // its pin equals sha256 of the FROZEN std-v8 bytes (dist/std-v8/) —
+  // the bytes the row commits to. dist/std (the working envelope) is
+  // NOT the pins' reference: the rename moved the pack shape, the pins
+  // did not move, and the reader's compat lane loads the old envelope.
+  const pinHashes = {};
+  for (const { manifest, deps } of EXAMPLES) {
+    for (const key of deps) {
+      if (pinHashes[key]) continue;
+      const frozen = path.join(PINNED, `${key}.rutbundle`);
+      if (!fs.existsSync(frozen)) {
+        console.error(`  ${red("pin")}: dist/std-v8/${key}.rutbundle is missing — the frozen std-v8 bytes must be committed`);
+        drift++;
+        continue;
+      }
+      pinHashes[key] = sha256(fs.readFileSync(frozen));
+    }
+  }
   for (const { manifest, deps } of EXAMPLES) {
     const p = path.join(ROOT, manifest);
     if (!fs.existsSync(p)) continue; // the phase that lands it owns the row
@@ -322,8 +327,8 @@ if (doCheck) {
         console.error(`  ${red("pin")}: ${manifest} \`${key}\` url is \`${url}\`, want \`${wantUrl}\``);
         drift++;
       }
-      if (!pin || pin !== hashes[key]) {
-        console.error(`  ${red("pin")}: ${manifest} \`${key}\` sha256 does not match dist/std/${key}.rutbundle`);
+      if (!pin || pin !== pinHashes[key]) {
+        console.error(`  ${red("pin")}: ${manifest} \`${key}\` sha256 does not match dist/std-v8/${key}.rutbundle (the frozen std-v8 bytes)`);
         drift++;
       }
     }
@@ -331,16 +336,15 @@ if (doCheck) {
 
   if (drift) {
     console.error("");
-    die(
-      `${drift} drift row(s) — fix with: node scripts/pack-std.cjs && node scripts/pack-std.cjs --pins`
-    );
+    die(`${drift} drift row(s) — fix with: node scripts/pack-std.cjs`);
   }
-  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches`));
+  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the frozen std-v8 bytes`));
   process.exit(0);
 }
 
-// default + --pins: pack the committed artifacts, then (for --pins)
-// rewrite the example rows from them
+// default: pack the committed working-envelope artifacts (dist/std).
+// The pins never move (see --pins above): dist/std is the freshness
+// gate's half; dist/std-v8 is the pins' half.
 packAll(DIST);
 const hashes = {};
 for (const { dir } of PKGS) {
@@ -348,9 +352,4 @@ for (const { dir } of PKGS) {
   hashes[name] = sha256(fs.readFileSync(path.join(DIST, `${name}.rutbundle`)));
   console.error(`  ${green("packed")}: dist/std/${name}.rutbundle (sha256 ${hashes[name].slice(0, 16)}…)`);
 }
-if (doPins) {
-  for (const { manifest, deps } of EXAMPLES) pinExample(manifest, deps, hashes);
-  info(green(`example pins rewritten for ${tag} — commit dist/ + the manifests together`));
-} else {
-  info(green(`packed ${PKGS.length} artifacts → dist/std/ (pin the examples with --pins)`));
-}
+info(green(`packed ${PKGS.length} artifacts → dist/std/ (the std-v8 pins stay frozen; their bytes live at dist/std-v8/)`));

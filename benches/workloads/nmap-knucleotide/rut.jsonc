@@ -9,10 +9,7 @@
   // (same FNV-1a values — the nmapset pkg ships the mapset-exact
   // constants).
   "name": "nmap_knucleotide",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

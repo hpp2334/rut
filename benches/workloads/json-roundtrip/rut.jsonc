@@ -13,10 +13,7 @@
   // defined over the
   // ROUND-TRIPPED VALUES, not lexemes, and must equal the JS twin's.
   "name": "json_roundtrip",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../../../rut/json"
     },

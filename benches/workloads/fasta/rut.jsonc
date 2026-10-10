@@ -3,10 +3,7 @@
   // `out` concat shape at n = 10000. A module dir like the rest of the
   // workloads; the JS twin is ../fasta.js.
   "name": "fasta",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

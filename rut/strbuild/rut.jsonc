@@ -18,10 +18,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "strbuild",
-  "entry": {
-    "lib": "./strbuild.rut"
-  },
-  "deps": {
+    "deps": {
     "strbuild_host": {
       "path": "../strbuild_host"
     }

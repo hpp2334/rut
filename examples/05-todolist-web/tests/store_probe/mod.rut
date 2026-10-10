@@ -7,8 +7,9 @@
 // crossings and the contract is all-or-nothing; NO test here
 // fires a crossing. ----
 
-use ui::{Store, Source, Derived, Mutation, Readable, Writable};
-use app::{World, world_boot, Todo};
+use ui::store::{Store, Source, Derived, Mutation, Readable, Writable};
+use app::world::{World, world_boot};
+use app::domain::{ Todo };
 use pouch::{ Vec };
 
 entry fn store_new() -> opaque {

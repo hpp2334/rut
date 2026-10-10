@@ -1,10 +1,7 @@
 {
   // classes/ — class-method construction (new/from), Self {}, member pub + sealing.
   "name": "classes",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

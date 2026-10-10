@@ -1,10 +1,7 @@
 {
   // node-cycle/ — strong cycles keep cells alive: no collector, no weak refs yet.
   "name": "node_cycle",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

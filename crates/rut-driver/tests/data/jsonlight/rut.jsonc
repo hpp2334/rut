@@ -10,10 +10,7 @@
   // presence-gated — listing pouch/nmapset in ANY dep table of this
   // fixture would silently mount the full json. Light means json ALONE.
   "name": "jsonlight",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../../../../../rut/json"
     }

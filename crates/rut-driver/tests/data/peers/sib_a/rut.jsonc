@@ -4,10 +4,7 @@
   // splice path), so a consumer importing it splices pouch transitively —
   // the shape that, undeduped, collides with any OTHER pouch-riding use.
   "name": "sib_a",
-  "entry": {
-    "lib": "./sib_a.rut"
-  },
-  "inline": true,
+    "inline": true,
   "deps": {
     "pouch": {
       "path": "../pouch"

@@ -1,10 +1,7 @@
 {
   // literals/ — numeric suffixes, plain/raw/format strings, fixed [T], bytes buffers.
   "name": "literals",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../../rut/pouch"
     },

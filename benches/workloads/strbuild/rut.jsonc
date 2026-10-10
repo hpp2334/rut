@@ -8,10 +8,7 @@
   // root's name must not collide with the mounted `strbuild` pkg it
   // deps. The JS twin is ../strbuild.js.
   "name": "strbuild_bench",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "strbuild": {
       "path": "../../../rut/strbuild"
     },

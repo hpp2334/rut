@@ -5,10 +5,7 @@
   // separately). Dedup-by-origin makes it structurally impossible; the
   // `appkit` workaround retires as a NECESSITY (it stays legal).
   "name": "cons_sibs",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "sib_a": {
       "path": "../sib_a"
     },

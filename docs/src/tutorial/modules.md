@@ -91,17 +91,16 @@ one library package and one app:
 greet/
 ├── pkg/
 │   ├── rut.jsonc
-│   └── greet.rut
+│   └── mod.rut            # the package's root module
 └── app/
     ├── rut.jsonc
-    └── main.rut
+    └── mod.rut            # the app's root module
 ```
 
 ```jsonc
 // greet/pkg/rut.jsonc
 {
   "name": "greet",
-  "entry": { "lib": "./greet.rut" },
 
   "deps": {
     // the toolchain's pouch package, from jsDelivr — pinned by sha256
@@ -111,7 +110,7 @@ greet/
 ```
 
 ```rut
-// greet/pkg/greet.rut
+// greet/pkg/mod.rut
 use pouch::{ Vec };
 
 pub struct Greeting {
@@ -150,7 +149,6 @@ surface `ink_host`; you never spell it):
 // greet/app/rut.jsonc
 {
   "name": "app",
-  "entry": { "lib": "./main.rut" },
 
   "deps": {
     // your own package: a sibling directory
@@ -162,7 +160,7 @@ surface `ink_host`; you never spell it):
 ```
 
 ```rut
-// greet/app/main.rut
+// greet/app/mod.rut
 use greet::{ Greeting };
 use ink::{ Logger };
 
@@ -190,20 +188,24 @@ it), with a cycle guard and first-mount-wins.
 
 ## One package, several files
 
-A package's body can be split across files. The manifest splices them,
-base first, in listed order — into **one module**: one namespace, one
-visibility scope. A name private to one file is visible to every other
-file of the same package:
+A package's body can be split across files — **file modules**. The
+root module is `mod.rut` beside the manifest, and a `mod NAME;`
+declaration in it mounts the sibling `NAME/mod.rut` as a child module:
 
-```jsonc
-{
-  "name": "app",
-  "entry": { "lib": "./biz.rut", "libs": ["./domain.rut", "./world.rut", "./app.rut"] }
-}
+```text
+app/
+├── rut.jsonc        # { "name": "app" } — no entry keys
+├── mod.rut          # the root module: `mod domain; pub mod world;`
+├── domain/mod.rut   # app's `domain` module
+├── world/mod.rut    # app's `world` module
+└── app/mod.rut      # the shell
 ```
 
-This is assembly, not an include form — cross-package references still
-go through `use` paths.
+Each file is its own module: cross-file references are qualified
+(`domain.Todo`, `world.boot(..)`), and visibility is per module —
+private to the declaring module, `pub(pkg)` to share inside the
+package, `pub` to cross packages. Cross-package references still go
+through `use` paths (`use app::world::{ World }`).
 
 ## Dependency kinds
 

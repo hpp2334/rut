@@ -1,7 +1,7 @@
 # 02-digest — the byte-level one
 
 A Rust app embedding rut, in the shape of [00-todolist](../00-todolist) and
-[01-sort](../01-sort): `digest.rut` is the application, `src/main.rs` is the
+[01-sort](../01-sort): `mod.rut` is the application, `src/main.rs` is the
 embedder — and this time the embedder is also the **oracle**.
 
 The rut side is a byte-level library, everything flowing over `bytes`
@@ -36,7 +36,7 @@ The host verifies everything two independent ways:
    pseudo-random inputs across every padding-edge length (54-57, 63-65,
    111-113, 119-121, 127-129 …), plus a 64 KiB stress blob
 
-`digest.rut` knows nothing about the crates; only the host compares.
+`mod.rut` knows nothing about the crates; only the host compares.
 
 ## Run
 

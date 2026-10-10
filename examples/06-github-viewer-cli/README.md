@@ -9,7 +9,7 @@ cargo run -p rgh -- --repo=jquery/jquery --ref=3.7.1 download test/data/1x1.jpg
 cargo run -p rgh -- --repo=jquery/jquery --ref=3.7.1 download test/data/text.txt ./keep.txt
 ```
 
-`rgh.rut` is the program: argv carving, the URL building, the tree
+`mod.rut` is the program: argv carving, the URL building, the tree
 JSON decode, the human-size formatting, every error message and exit
 code. The Rust half (`src/main.rs`) is an embedder that mounts
 packages, binds host bodies, launches the brain, pumps the driving
@@ -66,10 +66,10 @@ rate-limit note; any other non-2xx → `rgh: CDN <n>`.
 
 | piece | where | does |
 |---|---|---|
-| the brain | `rgh.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
+| the brain | `mod.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
 | the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send(cx)` (headers), `body(cx)` (the drain), `byte_stream()` + `next(cx)` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
-| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, `assemble_peers`, compile `rgh.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
+| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, `assemble_peers`, compile `mod.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
 
 The disk-write split is the streaming shape: `download` TRUNCATES the
 dest through `write_file` once (a stale file never leaks its tail
@@ -113,7 +113,7 @@ json's generic-fn bodies are owner-anchored — only what json's own
 pack closure spells rides its compiled binary — so the entry spellings
 (`decodeJsonBytes<Root>`, an encode entry over a consumer type) could
 never be seeded there: this pkg's `Root`/`Entry` did not exist at
-json's pack time. `rgh.rut` answers with LOCAL generic shims whose
+json's pack time. `mod.rut` answers with LOCAL generic shims whose
 `T requires JsonSerialize/JsonDeserialize` bounds check the member set
 at instantiation — Entry and Root carry those members on their own
 inherent impls, so the shims monomorphize in THIS unit and dispatch

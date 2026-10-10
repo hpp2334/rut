@@ -2,7 +2,7 @@
 
 The byte-level example, in the shape of
 [00 — Todolist](00-todolist.md) and [01 — Sort](01-sort.md) — with a
-twist: this time the embedder is also the **oracle**. `digest.rut` is
+twist: this time the embedder is also the **oracle**. `mod.rut` is
 a byte-level library written in pure rut:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64
@@ -17,7 +17,7 @@ Nothing in the rut file trusts itself: the Rust host cross-checks
 every algorithm against independent crates (the RustCrypto hash
 family, `base64`, `crc32fast`, `serde_json`) on canonical test
 vectors *and* on deterministic pseudo-random inputs at every
-padding-edge length, plus a 64 KiB stress blob. `digest.rut` knows
+padding-edge length, plus a 64 KiB stress blob. `mod.rut` knows
 nothing about the crates; only the host compares.
 
 ## Run it
@@ -52,7 +52,7 @@ fuel used: 1014105 of Some(50000000)
 
 ### The integer surface is enough for real algorithms
 
-`digest.rut` runs on hex literals, `u32`/`u64`, the wrapping family,
+`mod.rut` runs on hex literals, `u32`/`u64`, the wrapping family,
 and signedness-correct shifts. CRC-32 is the compact showcase —
 table-free, bitwise, and exactly the textbook loop. The entry is pure
 rut — no host, no manifest — so it runs on its own, here checked

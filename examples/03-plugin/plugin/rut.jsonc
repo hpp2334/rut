@@ -22,10 +22,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "plugin",
-  "entry": {
-    "lib": "./plugin.rut"
-  },
-  "deps": {
+    "deps": {
     "server": {
       "path": "../server"
     },

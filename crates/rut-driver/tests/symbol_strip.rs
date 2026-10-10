@@ -63,13 +63,13 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn manifest(name: &str, _entry: &str, extra: &str) -> String {
+    format!(r#"{{"name": "{name}"{extra}}}"#)
 }
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
-fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
 }
 
 /// The fully-compiled closure: `app` (linkable root) uses `util`
@@ -80,21 +80,21 @@ fn fc_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#,)
+        &bundle_manifest("app", "mod.rut", r#", "deps": {"util": {"path": "../util"}}"#,)
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util::{ twice };\n\n\
          entry fn go() -> i64 {\n\
          \x20   return twice(21);\n\
          }\n",
     );
     let util = root.join("util");
-    write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
+    write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
     write(
         &util,
-        "util.rut",
+        "mod.rut",
         "pub fn twice(v: i64) -> i64 {\n\
          \x20   return v * 2;\n\
          }\n",
@@ -116,7 +116,7 @@ fn trace_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "entry": {"lib": "./app.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "app"}"#,
     );
     let mut src = String::from("fn boom() -> str {\n");
     src.push_str(&pad(25));
@@ -128,7 +128,7 @@ fn trace_world(tag: &str) -> PathBuf {
     src.push_str("    return boom();\n");
     src.push_str("}\n");
     src.push_str("entry fn go() -> i64 { return 7; }\n");
-    write(&app, "app.rut", &src);
+    write(&app, "mod.rut", &src);
     root
 }
 
@@ -143,33 +143,33 @@ fn mixed_world(tag: &str) -> PathBuf {
         "rut.jsonc",
         &bundle_manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util::{ twice };\n\n\
          entry fn go() -> i64 {\n\
          \x20   return twice(21);\n\
          }\n",
     );
     let util = root.join("util");
-    write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
-    write(&util, "util.rut", "pub fn twice(v: i64) -> i64 { return v * 2; }\n");
+    write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
+    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 { return v * 2; }\n");
     let boxy = root.join("boxy");
     write(
         &boxy,
         "rut.jsonc",
         &format!(
             "{}",
-            manifest("boxy", "boxy.rut", r#", "inline": true, "deps": {"util": {"path": "../util"}}"#)
+            manifest("boxy", "mod.rut", r#", "inline": true, "deps": {"util": {"path": "../util"}}"#)
         ),
     );
     write(
         &boxy,
-        "boxy.rut",
+        "mod.rut",
         "use util::{ twice };\n\n\
          pub fn boxed(v: i64) -> i64 {\n\
          \x20   return twice(v) + 1;\n\
@@ -302,11 +302,11 @@ fn strip_refuses_a_generic_owning_closure() {
     write(
         &lib,
         "rut.jsonc",
-        &bundle_manifest("pairz", "pairz.rut", ""),
+        &bundle_manifest("pairz", "mod.rut", ""),
     );
     write(
         &lib,
-        "pairz.rut",
+        "mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -316,11 +316,11 @@ fn strip_refuses_a_generic_owning_closure() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\

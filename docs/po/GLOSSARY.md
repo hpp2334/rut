@@ -145,6 +145,17 @@ context; after that, use the zh-CN rendering alone.
 | walk | 遍历 | rut-native 的目录遍历（the walk）；the deps walk → deps 遍历；动词 walk → 遍历；对照 offer |
 | offer | offer | 保留不译（`.pkg(..)` 的提供法则，名词）；动词 offer(s) → 提供；first-pkg-wins → 先提供者优先；the offer lane → offer 车道 |
 | first-pkg-wins | 先提供者优先 | 链上的 first-mount-wins（先挂载者胜） |
+| file module | 文件模块 | a `mod NAME;`-declared child: `NAME/mod.rut` beside the declaring file（`mod` 为代码） |
+| root module | 根模块 | the package's `mod.rut` beside its manifest |
+| module tree | 模块树 | the mounted file-module set of a package |
+| qualified position | 限定位置 | the dot-spelled intra-module reference（`layout.Column` stays code）；dot → 点号 |
+| use path | use 路径 | the `::`-spelled import path（`use` 为代码） |
+| mount | 挂载 | mounting is declared, not discovered → 挂载由声明决定，而非目录发现 |
+| declarations are the graph | 声明即图 | the `mod` decls ARE the module set — never a directory listing |
+| repealed | 已废除 | a retired manifest key refuses loudly → 被废除的键会大声拒绝并给出修复方法 |
+| reader compat | 读取器兼容 | old published bundle envelopes keep loading — a loading law |
+| module rows | 模块行 | the `rut.mods` additive envelope section（path-keyed source rows） |
+| riding source | 承载源码 | generic-source riding：the source that serves consumer-spelled shapes |
 | run chain | 运行链 | `RutRun::new()..compile()` 的组合 —— `Pkg` → `RutRun` → `Compiled` → `Vm` 一值贯通 |
 | auto-ride / auto-offer | 自动承载 / 自动 offer | core 在 `.compile()` 中自动承载（riding → 承载）；除非已 offer 了名为 `core` 的包 |
 | yield | 产出 | a walk's yield → 遍历的产出（`Loaded { pkgs, root }`） |

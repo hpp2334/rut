@@ -66,11 +66,12 @@ pub(crate) fn underscore_refused(path: &str, key: &str) -> ManifestError {
 
 /// Top-level keys. Unknown keys ride (forward compatibility, any
 /// shape), `host_scope` refuses loudly (the retirement law).
-pub(super) fn walk_top(
+pub(super) fn walk_top_lane(
     key: &str,
     value: &Value,
     declared_type: &mut bool,
     m: &mut Manifest,
+    compat: bool,
 ) -> Result<(), ManifestError> {
     match key {
         "name" => {
@@ -120,7 +121,7 @@ pub(super) fn walk_top(
         // compiler-materialized — the surface grammar has no `static`
         // field form, so the manifest is their only spelling
         "consts" => walk_consts(value, m)?,
-        "entry" => walk_entry(value, m)?,
+        "entry" => walk_entry(value, m, compat)?,
         "deps" => walk_deps(value, m)?,
         "peer-deps" => walk_peers(value, "peer-deps", m)?,
         "dev-deps" => walk_peers(value, "dev-deps", m)?,
@@ -130,9 +131,15 @@ pub(super) fn walk_top(
     Ok(())
 }
 
-/// The `entry` object: the entry keys plus the retired `entry.ir`,
-/// which rides; unknown keys are refused (the entry strictness).
-pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
+/// The `entry` object. The post-repeal grammar keeps only `type` (the
+/// `.d.rut` surface): the root module is `mod.rut` beside the manifest
+/// and the body keys refuse LOUDLY, naming the fix. `compat` is the
+/// bundle reader's lane — a PUBLISHED bundle's manifest is forever old
+/// (the pinned CDN tags), so there the keys parse onto
+/// [`Manifest::legacy_entry`] under the old value laws instead. The
+/// retired `entry.ir` rides either way; unknown keys are refused (the
+/// entry strictness).
+pub(super) fn walk_entry(value: &Value, m: &mut Manifest, compat: bool) -> Result<(), ManifestError> {
     let table = expect_object("entry", value)?;
     for (key, v) in table {
         if key.starts_with('_') {
@@ -140,8 +147,26 @@ pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), Manifest
         }
         match key.as_str() {
             "type" => m.entry.type_path = Some(expect_field_string("entry", "type", v)?),
-            "lib" => m.entry.lib = Some(expect_field_string("entry", "lib", v)?),
-            "libs" => m.entry.libs = expect_field_string_array("entry", "libs", v)?,
+            "lib" if compat => {
+                m.legacy_entry.lib = Some(expect_field_string("entry", "lib", v)?);
+            }
+            "libs" if compat => {
+                m.legacy_entry.libs = expect_field_string_array("entry", "libs", v)?;
+            }
+            "lib" => {
+                return Err(ManifestError(
+                    "entry.lib: repealed — the root module is `mod.rut` beside the manifest: \
+                     rename the file, drop the key"
+                        .into(),
+                ));
+            }
+            "libs" => {
+                return Err(ManifestError(
+                    "entry.libs: repealed — structure lives in `mod` directories: each file \
+                     becomes `NAME/mod.rut` and the root declares `mod NAME;`"
+                        .into(),
+                ));
+            }
             "ir" => {}
             other => {
                 return Err(ManifestError(format!("entry: unknown key '{other}'")));

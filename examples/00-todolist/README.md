@@ -8,7 +8,7 @@ The split:
 
 | file | role |
 |---|---|
-| `todolist.rut` | **the rut part** — `TodoList` class with full CRUD (`add` / `len` / `title_of` / `render` / `set_done` / `remove`) + the `entry fn` surface the host calls. No `main` — it's a library |
+| `mod.rut` | **the rut part** — `TodoList` class with full CRUD (`add` / `len` / `title_of` / `render` / `set_done` / `remove`) + the `entry fn` surface the host calls. No `main` — it's a library |
 | `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the session through `vm.call` |
 | `tests/session.rs` | asserts the whole CRUD session; runs under `cargo test --workspace` |
 

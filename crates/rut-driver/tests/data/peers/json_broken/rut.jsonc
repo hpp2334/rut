@@ -3,10 +3,7 @@
   // packaging bug in the pkg itself). LOUD at json_broken's own build
   // (D3); INERT for a consumer (optional peer, presence is by NAME).
   "name": "json_broken",
-  "entry": {
-    "lib": "./json.rut"
-  },
-  "peer-deps": {
+    "peer-deps": {
     "pouch": {
       "path": "../does-not-exist",
       "optional": true,

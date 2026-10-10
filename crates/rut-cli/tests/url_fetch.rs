@@ -76,8 +76,8 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn manifest(name: &str, _entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
 }
 
 /// `rut <args>` with this test's cache dir, env-cleaned (no XDG/HOME
@@ -101,13 +101,13 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util::{twice};\n\nentry fn main() {\n    let x = twice(21);\n}\n",
     );
     root
@@ -116,8 +116,8 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
 fn leaf_bundle(tag: &str) -> Vec<u8> {
     let root = scratch(tag);
     let util = root.join("util");
-    write(&util, "rut.jsonc", &manifest("util", "util.rut", ""));
-    write(&util, "util.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
+    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     rut_native::pack_dir(&util).expect("pack util")
 }
 

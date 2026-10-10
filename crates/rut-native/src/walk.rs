@@ -24,7 +24,10 @@ use std::path::{Path, PathBuf};
 
 use rut_core::id::ScopeId;
 
-use rut_driver::bundle::{bundle_key, parse_manifest, read_entry, Manifest, PkgType, MANIFEST_NAME};
+use rut_driver::bundle::{
+    bundle_key, parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType,
+    MANIFEST_NAME,
+};
 use rut_driver::loader::peer_gate;
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
 use rut_driver::{Loaded, Pkg, PkgBody, PeerDecl, RunError};
@@ -396,7 +399,7 @@ fn archive_peer_libs(
     Ok(out)
 }
 
-/// The transitional dual-read probe: `mod.rut` beside the manifest —
+/// The `mod.rut` probe: `mod.rut` beside the manifest —
 /// `Ok(Some(text))` when the directory carries one (it is the root
 /// module), `Ok(None)` when absent. A `mod.rut` that exists but cannot
 /// be read is the loud read error, never a silent fallback.
@@ -483,19 +486,21 @@ fn lib_pkg(
 ///
 /// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
 ///   parses in declaration mode and lowers into the module's host fns.
-///   No body exists — the embedding Rust binds it at run time.
-/// - a `type = "lib"` pkg (the default) — a source module: the body
-///   compiles; the surface derives from its exports. A declared
-///   surface with no body is the surface-only dev state (a decl unit);
-///   `host fn` text is refused in either file — the lib-surface law.
+///   No body exists — the embedding Rust binds it at run time. A
+///   `mod.rut` beside the manifest is a body: refused (a host pkg is
+///   pure surface).
+/// - a `type = "lib"` pkg (the default) — a source module: `mod.rut`
+///   beside the manifest IS the body (the root module); the surface
+///   derives from its exports. A declared surface with no `mod.rut` is
+///   the surface-only dev state (a decl unit) — but only with the kind
+///   spelled; the ambiguity refuses, naming both fixes. `host fn` text
+///   is refused in either file — the lib-surface law.
 ///
-/// The body lane is the TRANSITIONAL dual-read (the phase-2 clause,
-/// recorded in the run log): an `entry.lib` manifest splices
-/// `entry.libs` exactly as always; a manifest with NO `entry.lib`
-/// takes `mod.rut` beside the manifest as the root module (the loud
-/// repeal of the keys is phase 5). Either way the root's `mod`
-/// declarations mount the child tree — the module set replaces the
-/// splice as the primary lane.
+/// The root's `mod` declarations mount the child tree —
+/// `NAME/mod.rut` beside the declaring file, recursively,
+/// cycle-guarded. The repealed `entry.lib`/`entry.libs` keys refused
+/// at parse (the manifest walk); a published BUNDLE's old manifest
+/// rides the reader's compat lane instead (a loading law).
 ///
 /// The manifest's `namespace` row (when present) rides the pkg as the
 /// qualified-access head (`calc`'s `Math`), and its `consts` rows ride
@@ -513,6 +518,12 @@ fn load_entry_module(
                     "module in {dir} is a host pkg with no `entry.type`"
                 ))
             })?;
+            if dir_has_root_module(dir) {
+                return Err(LoadError::law(format!(
+                    "module in {dir} is a `type = \"host\"` pkg but a `mod.rut` sits beside the \
+                     manifest — a host pkg is pure surface; drop the file or declare `type = \"lib\"`"
+                )));
+            }
             let key = src.resolve(dir, rel).map_err(LoadError::law)?;
             let src_text = read_source_text(src, &key)?;
             let mut m = rut_driver::lower_decl_module(&src_text, &key).map_err(LoadError::law)?;
@@ -533,23 +544,20 @@ fn load_entry_module(
                 let key = src.resolve(dir, rel).map_err(LoadError::law)?;
                 let src_text = read_source_text(src, &key)?;
                 rut_driver::decl::refuse_host_rows(&src_text, &key).map_err(LoadError::law)?;
-                if manifest.entry.lib.is_none() {
-                    surface_only = Some(src_text);
-                }
+                surface_only = Some(src_text);
             }
-            if let Some(surface) = surface_only {
-                // TRANSITIONAL dual-read: no `entry.lib` — the root
-                // module is `mod.rut` beside the manifest when it
-                // exists; without one, today's surface-only dev state
-                // stands (a decl unit — no host rows, nothing
-                // exported; use sites resolve-miss, correctly). The
-                // loud repeal of the key is phase 5.
-                return match read_root_module(dir)? {
-                    Some(root) => {
-                        let root_file = PathBuf::from(dir).join("mod.rut");
-                        lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
-                    }
-                    None => Ok(fold_peers(
+            // the body: `mod.rut` beside the manifest — the root
+            // module, always. Without one, the surface-only dev state
+            // stands (a decl unit) — but the AMBIGUITY refuses: an
+            // `entry.type` spelled with no declared kind and no body
+            // names neither host nor lib.
+            match read_root_module(dir)? {
+                Some(root) => {
+                    let root_file = PathBuf::from(dir).join("mod.rut");
+                    lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
+                }
+                None => match surface_only {
+                    Some(surface) if manifest.type_declared => Ok(fold_peers(
                         Pkg {
                             body: PkgBody::Source { text: surface, is_decl: true },
                             entry: manifest.entry.clone(),
@@ -558,47 +566,24 @@ fn load_entry_module(
                         manifest,
                         dir_peer_libs(&PathBuf::from(dir), manifest),
                     )),
-                };
+                    Some(_) => Err(LoadError::law(format!(
+                        "module in {dir} spells `entry.type` but no kind — `\"type\": \"host\"` \
+                         for a host pkg, or `\"type\": \"lib\"` for the surface-only dev state"
+                    ))),
+                    None => Err(LoadError::law(format!(
+                        "module in {dir} has no entry — the root module is `mod.rut` beside \
+                         the manifest"
+                    ))),
+                },
             }
-            // the body: `entry.lib` (transitional) or `mod.rut` (the
-            // new default when the key is absent)
-            let (mut src_text, root_file) = match &manifest.entry.lib {
-                Some(rel) => {
-                    let key = src.resolve(dir, rel).map_err(LoadError::law)?;
-                    (read_source_text(src, &key)?, key)
-                }
-                None => {
-                    let path = PathBuf::from(dir).join("mod.rut");
-                    (
-                        read_root_module(dir)?.ok_or_else(|| {
-                            LoadError::law(format!(
-                                "module in {dir} has no entry — the root module is `mod.rut` \
-                                 beside the manifest (or, transitional, spell `entry.lib`)"
-                            ))
-                        })?,
-                        path.to_string_lossy().into_owned(),
-                    )
-                }
-            };
-            // The multi-lib splice — ONLY on the `entry.lib` lane (the
-            // transitional law: the splice survives only for manifests
-            // that spell it): the base `lib` first, then `libs` in
-            // manifest order, '\n'-joined exactly like the peer-group
-            // append — the combined text stays ONE source string. The
-            // manifest's array order is the canonical order: the splice
-            // never reads a directory listing, so same manifest ⇒ same
-            // module (the determinism law).
-            if manifest.entry.lib.is_some() {
-                for rel in &manifest.entry.libs {
-                    let key = src.resolve(dir, rel).map_err(LoadError::law)?;
-                    let text = read_source_text(src, &key)?;
-                    src_text.push('\n');
-                    src_text.push_str(&text);
-                }
-            }
-            return lib_pkg(dir, src_text, &root_file, manifest);
         }
     }
+}
+
+/// Does a `mod.rut` sit beside this manifest? The host arm's body
+/// probe (a body on a host pkg is a packaging error, named loudly).
+fn dir_has_root_module(dir: &str) -> bool {
+    PathBuf::from(dir).join("mod.rut").is_file()
 }
 
 /// The manifest's `consts` rows as the host body's constant table:
@@ -1028,7 +1013,9 @@ fn mount_url_dep(
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(&entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| LoadError::Bundle { origin: url.to_string(), message: e })?;
-        let dm = parse_manifest(&dep_toml)
+        // the group manifest rides the compat lane: a PUBLISHED
+        // bundle's groups are forever old (the pinned CDN tags)
+        let dm = parse_manifest_compat(&dep_toml)
             .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name

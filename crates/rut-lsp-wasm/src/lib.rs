@@ -613,9 +613,10 @@ mod tests {
         rut_begin();
         let out = take(rut_parse_manifest(PLUGIN_MANIFEST.as_ptr(), PLUGIN_MANIFEST.len()));
         assert_eq!(out["name"], "plugin");
+        // the body rides the mod.rut convention (the entry keys are repealed)
         assert_eq!(
             out["entries"],
-            serde_json::json!([{ "path": "plugin.rut", "mode": "Impl" }]),
+            serde_json::json!([{ "path": "mod.rut", "mode": "Impl" }]),
             "the entry carries its mode: {}",
             out["entries"]
         );
@@ -650,17 +651,20 @@ mod tests {
     fn add_def_named_feeds_the_use_path_tier() {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();
+        // a DIFFERENT module than the mod-tree fixture below — the two
+        // tests' defs share the one process-global state, and one pkg
+        // name must not answer from two def indexes at once
         let (u, n, s) = (
-            b"file:///ws/gadgets/lib.rut".as_slice(),
-            b"gadgets".as_slice(),
+            b"file:///ws/toolkit/lib.rut".as_slice(),
+            b"toolkit".as_slice(),
             &b"pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n"[..],
         );
         rut_add_def_named(u.as_ptr(), u.len(), n.as_ptr(), n.len(), s.as_ptr(), s.len());
-        let doc = "use gadgets::\nfn main() -> nil {\n}\n";
+        let doc = "use toolkit::\nfn main() -> nil {\n}\n";
         let uri = "file:///ws/main.rut";
         rut_begin();
         take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
-        // `use gadgets::⏐` — the dep's public names
+        // `use toolkit::⏐` — the dep's public names
         rut_begin();
         let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 13));
         let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
@@ -670,7 +674,7 @@ mod tests {
         rut_begin();
         let mods = take(rut_complete(uri.as_ptr(), uri.len(), 0, 4));
         let names: Vec<&str> = mods.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
-        assert!(names.contains(&"gadgets"), "the module name completes: {names:?}");
+        assert!(names.contains(&"toolkit"), "the module name completes: {names:?}");
     }
 
     #[test]
@@ -679,7 +683,7 @@ mod tests {
         rut_begin();
         let out = take(rut_add_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()));
         assert_eq!(out["module"], "pouch");
-        assert_eq!(out["files"], serde_json::json!(["pouch.rut"]));
+        assert_eq!(out["files"], serde_json::json!(["mod.rut"]));
         // a corrupt archive is the error envelope, never silent state
         rut_begin();
         let junk = b"definitely not a zip";
@@ -696,7 +700,7 @@ mod tests {
         let locs = take(rut_definition(uri.as_ptr(), uri.len(), 0, 13)); // the use-line `Vec`
         let uris: Vec<&str> = locs.as_array().unwrap().iter().map(|l| l["uri"].as_str().unwrap()).collect();
         assert!(
-            uris.contains(&"bundle:pouch/pouch.rut"),
+            uris.contains(&"bundle:pouch/mod.rut"),
             "the bundle index answers go-to-definition: {uris:?}"
         );
         // and the member surface hovers through the named module

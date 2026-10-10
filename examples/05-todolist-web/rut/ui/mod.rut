@@ -1,21 +1,19 @@
-// ui/ — THE UI-FRAMEWORK PACKAGE (the two-package law): everything the
-// biz code speaks THROUGH but never spells — the atom store machinery
-// (Store, Source, Derived, Mutation), the t1 widget framework (the
-// Widget type, the lowering table, the keyed diff), and the component
-// vocabulary. ONE directory, ONE module, SEVERAL files (the
-// multi-lib entry: this base + `entry.libs`, spliced in manifest
-// order): rut's landed visibility is `pub` or module-private
-// (t1/core's recorded reason), and ONE module keeps the framework's
-// private tables private for real — the splice preserves exactly that
-// (a name private to any file is visible to every file of the module,
-// and to nothing outside it).
+// mod.rut — THE UI-FRAMEWORK PACKAGE (the two-package law): everything
+// the biz code speaks THROUGH but never spells — the atom store
+// machinery (Store, Source, Derived, Mutation), the t1 widget
+// framework (the Widget type, the lowering table, the keyed diff),
+// and the component vocabulary. ONE directory, ONE module, a
+// FILE-MODULE TREE: this root carries the surface law and declares
+// the children; the tiers keep the framework's private tables private
+// for real — `pub` crosses packages, `pub(pkg)` shares inside ui,
+// plain private stays in the declaring file.
 //
-// THE FILE MAP (rut.toml's `entry.libs` — the array IS the order):
-//   ./store.rut     §1 the atom store — the machinery
-//   ./widget.rut    §2 the widget type
-//   ./lowering.rut  §3 the lowering table
-//   ./diff.rut      §4 the diff core
-//   ./components.rut §5 the component vocabulary
+// THE TREE (declarations are the graph — each child is `NAME/mod.rut`):
+//   store/       §1 the atom store — the machinery
+//   widget/      §2 the widget type
+//   lowering/    §3 the lowering table
+//   diff/        §4 the diff core
+//   components/  §5 the component vocabulary
 //
 // THE STORE'S SURFACE (tur's law, ported — github.com/hpp2334/tur: the
 // app never touches a store object; atoms and mutations are values the
@@ -51,20 +49,17 @@
 // in-flight set) returns because discovered edges admit cycles — a
 // self-reading derive panics loud.
 //
-// `inline = true`: the package exports GENERIC types (Source<T> and
-// friends), and a generic export splices by law (graph.rs auto-splices
-// generics even without the flag; the flag keeps it explicit — the
-// atom/nmapset/ink precedent). Biz's unit and this unit compose with
-// the graph's origin dedup — NOT the retired appkit concatenation.
+// The package exports GENERIC types (Source<T> and friends), so biz's
+// unit and this unit compose with the graph's origin dedup — NOT the
+// retired appkit concatenation.
 //
 // PURE of biz: nothing here names a todo, a list, or an app — the
 // store is a DECOUPLED-BIZ design (the motivating pattern: the
 // reactivity library over opaque cells).
 
-use pouch::{ Vec };
-use nmapset::{ HashMap };
-use web::{
-    ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove,
-    ui_set_input_value, ui_listen,
-};
+pub mod store;
+pub mod widget;
+pub mod lowering;
+pub mod diff;
+pub mod components;
 

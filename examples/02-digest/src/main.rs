@@ -1,6 +1,6 @@
 //! 02-digest — a Rust app embedding rut.
 //!
-//! `digest.rut` is the application: byte-level encodings (hex, base64),
+//! `mod.rut` is the application: byte-level encodings (hex, base64),
 //! crypto digests (MD5, SHA-1, SHA-256, SHA-512), hashmap hash keys
 //! (CRC-32, FNV-1a 32/64, djb2, sdbm), and a JSON codec — everything
 //! flowing over `bytes`/`str`/`opaque`, the shapes that
@@ -10,7 +10,7 @@
 //! checked against independent Rust — the RustCrypto hash crates,
 //! `base64`, `crc32fast`, and `serde_json` (plus three-line references
 //! for FNV/djb2/sdbm, which have no canonical crate) — and the demo
-//! prints the verdict per row. Nothing in `digest.rut` knows about the
+//! prints the verdict per row. Nothing in `mod.rut` knows about the
 //! crates; only the host compares.
 
 use std::future::Future;

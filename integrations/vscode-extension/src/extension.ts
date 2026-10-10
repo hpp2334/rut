@@ -283,9 +283,8 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
   // the mod tree (file modules): the root module's `mod NAME;` edges
   // mount `NAME/mod.rut` recursively — the wasm parses every file
   // (`addDefMod` answers the declared children), JS only moves bytes.
-  // The lib lane roots at the entry lib while the transitional key
-  // stands; a manifest-less package roots at its `mod.rut` (indexed
-  // here at mod path '')
+  // The root is `mod.rut` beside the manifest (the dep table spells
+  // it as the Impl entry, indexed by the entries loop at mod path '')
   const entryPaths = table.entries.filter((e) => e.mode === 'Impl').map((e) => e.path);
   await mountModTree(ctx, dir, module, entryPaths, depth);
   const rows: Array<{ row: DepRow; peer: boolean }> = [
@@ -349,8 +348,8 @@ async function mountModTree(
   let text: string;
   let decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
   if (entryPaths.length > 0) {
-    // the lib lane: the entry lib is the root module (already indexed
-    // by the entries loop — its text is re-read for the walk; the
+    // the root-module lane: `mod.rut` is the root (already indexed by
+    // the entries loop — its text is re-read for the walk; the
     // re-stamp at mod path '' is the same answer `None` spelled)
     rootUri = vscode.Uri.joinPath(pkgDir, entryPaths[0]);
     const bytes = await readFileNullable(rootUri);
@@ -365,7 +364,8 @@ async function mountModTree(
     }
     decls = stamped.decls;
   } else {
-    // the manifest-less lane: `mod.rut` beside the manifest IS the lib
+    // a host pkg (or surface-only dev state): no body row — `mod.rut`
+    // beside the manifest is probed anyway; a read miss mounts nothing
     rootUri = vscode.Uri.joinPath(pkgDir, 'mod.rut');
     const bytes = await readFileNullable(rootUri);
     if (bytes === null) {
@@ -709,7 +709,7 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 
 // a definition target -> a vscode Location. A target with a scheme
 // parses as-is; a repo-relative path (the embedded std surface's true
-// source, e.g. `rut/pouch/pouch.rut`) resolves against the workspace
+// source, e.g. `rut/pouch/mod.rut`) resolves against the workspace
 // folders — a workspace that is the rut repo gets a real jump into the
 // stdlib. Nowhere to resolve: dropped (a clean miss, never a wrong jump).
 function resolveLocations(locs: LspLocation[]): vscode.Location[] {

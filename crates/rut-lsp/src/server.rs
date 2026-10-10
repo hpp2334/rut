@@ -217,14 +217,10 @@ impl<'a> Walk<'a> {
         }
         // the mod tree — the pkg's file modules index under the same
         // name with their mod paths stamped (the editor face of the
-        // loader's mount)
-        let impl_entries: Vec<String> = table
-            .entries
-            .iter()
-            .filter(|e| e.mode == Mode::Impl)
-            .map(|e| e.path.clone())
-            .collect();
-        self.mount_mod_tree(&dir, &module, &impl_entries);
+        // loader's mount). The entries loop indexed the root module
+        // already (the Impl `mod.rut` row) whenever it was readable.
+        let root_indexed = table.entries.iter().any(|e| e.mode == Mode::Impl);
+        self.mount_mod_tree(&dir, &module, root_indexed);
         let at_root = depth == 1;
         let rows = table
             .deps
@@ -377,57 +373,29 @@ impl<'a> Walk<'a> {
     }
 
     /// the pkg's mod tree (the editor face of the loader's mount): the
-    /// root module is `mod.rut` beside the manifest while no
-    /// `entry.lib` stands (the transitional dual-read), else the entry
-    /// lib spliced with `entry.libs` exactly as the loader does — and
-    /// either way the root text's `mod` declarations mount the child
-    /// tree from the directory, recursively, cycle-guarded. The root
-    /// (when it is the mod.rut lane — the entries loop had nothing to
-    /// index) and every child index under the pkg name with their mod
-    /// paths stamped. A mount failure is ONE loud error hint (the
-    /// loader's diagnostics, mirrored), never silent bytes.
-    fn mount_mod_tree(&mut self, dir: &Path, module: &str, impl_entries: &[String]) {
-        let (root_text, root_path, lib_lane) = if impl_entries.is_empty() {
-            let p = dir.join("mod.rut");
-            match std::fs::read_to_string(&p) {
-                Ok(text) => (text, p, false),
-                // an entry-less manifest with no mod.rut — the loader's
-                // surface-only dev state; nothing mounts
-                Err(_) => return,
-            }
-        } else {
-            // the entry-lib lane: lib first, then libs, '\n'-joined —
-            // the loader's splice, so the mount reads the same text
-            let mut text = String::new();
-            let mut last: Option<PathBuf> = None;
-            for rel in impl_entries {
-                let p = dir.join(rel.trim_start_matches("./"));
-                match std::fs::read_to_string(&p) {
-                    Ok(t) => {
-                        if !text.is_empty() {
-                            text.push('\n');
-                        }
-                        text.push_str(&t);
-                        last = Some(p);
-                    }
-                    Err(_) => continue,
-                }
-            }
-            match last {
-                Some(p) => (text, p, true),
-                None => return,
-            }
+    /// root module is `mod.rut` beside the manifest — indexed under the
+    /// pkg name with mod path `""` unless the entries loop above
+    /// already indexed it — and the root text's `mod` declarations
+    /// mount the child tree from the directory, recursively,
+    /// cycle-guarded. An entry-less manifest with no `mod.rut` (the
+    /// surface-only dev state) mounts nothing. A mount failure is ONE
+    /// loud error hint (the loader's diagnostics, mirrored), never
+    /// silent bytes.
+    fn mount_mod_tree(&mut self, dir: &Path, module: &str, root_indexed: bool) {
+        let p = dir.join("mod.rut");
+        let Ok(root_text) = std::fs::read_to_string(&p) else {
+            return; // no root module — the surface-only dev state; nothing mounts
         };
-        if !lib_lane && self.files > 0 {
+        if !root_indexed && self.files > 0 {
             self.files -= 1;
-            let uri = root_path.to_string_lossy().into_owned();
+            let uri = p.to_string_lossy().into_owned();
             let idx = deps::index_dep_mod(module, &uri, "", &root_text, Mode::Impl, None, &[]);
             self.insert(idx);
         }
         let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
             Ok(fs_child_lookup(dir, parent, name))
         };
-        let canon = root_path.to_string_lossy().into_owned();
+        let canon = p.to_string_lossy().into_owned();
         match rut_driver::mount_mod_children(&root_text, &canon, &mut read) {
             Ok(mods) => {
                 for (path, m) in mods {

@@ -1,20 +1,21 @@
 # Project structure and rut.jsonc
 
 One directory is one module; its `rut.jsonc` names the exact package it
-answers to and how to reach its surface and body. The manifest is what
-makes the directory **the runnable unit**: `rut run <dir>` (or its
-packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
-a program ([the rut CLI](cli.md)). This page is the
-manifest grammar, the resolution laws, and where everything lives in the
-toolchain tree.
+answers to and how to reach its surface. The body is a **file module
+tree**: the root module is `mod.rut` beside the manifest, and `mod
+NAME;` declarations in it mount child modules (`NAME/mod.rut` beside
+the declaring file). The manifest is what makes the directory **the
+runnable unit**: `rut run <dir>` (or its packed `.rutbundle`) is the
+only run lane — a loose `.rut` file is not a program ([the rut
+CLI](cli.md)). This page is the manifest grammar, the resolution laws,
+and where everything lives in the toolchain tree.
 
 ## The manifest
 
 ```jsonc
-// rut/pouch/rut.jsonc — a body package
+// rut/pouch/rut.jsonc — a body package (the body is mod.rut beside it)
 {
-  "name": "pouch",
-  "entry": { "lib": "./pouch.rut" }
+  "name": "pouch"
 }
 
 // rut/calc/rut.jsonc — a pure declaration surface (a host pkg)
@@ -28,7 +29,6 @@ toolchain tree.
 // of your own, pinned url rows for the toolchain's packages
 {
   "name": "app",
-  "entry": { "lib": "./app.rut" },
 
   "deps": {
     "greet": { "path": "../greet" },
@@ -43,16 +43,20 @@ The keys, all of them:
 | key | meaning |
 |---|---|
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
-| `entry.lib` | the body: one `.rut` file (or `.rutc`-style artifacts where supported) |
-| `entry.libs` | ordered extra `.rut` files — the **multi-lib entry** (below) |
-| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind is an error naming both fixes |
-| `entry.type` | the declaration surface: one `.d.rut` file. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
+| `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
+| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
 | `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
 | `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `dev-deps` | mounted only while building/testing this pkg itself |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
+
+The **body keys are repealed**: `entry.lib` and `entry.libs` refuse
+loudly, each error naming the fix — the root module is `mod.rut` beside
+the manifest, structure lives in `mod` directories. (Inside a
+*published* bundle the old keys still load — the reader's compat lane;
+see [Module bundles](bundles.md).)
 
 The manifest text is **JSONC** — `//` line comments, `/* */` block
 comments, and trailing commas are all legal — parsed by `serde_json`
@@ -69,7 +73,7 @@ the fix — comments are the prose now.
 
 - **Exact, single-step.** A use path resolves only if a module with that
   `name` is mounted. Nothing is derived from directories or file
-  layouts.
+  layouts beyond the `mod` declarations the source itself spells.
 - **The walk is recursive, with a cycle guard; first mount wins.** An
   already-mounted name (the embedder's, the root's, or an earlier dep's)
   is never overwritten — which is what makes peer presence-by-name sound:
@@ -85,28 +89,45 @@ the fix — comments are the prose now.
   every name still requires `use core::{ .. };` per
   [core and the swappable packages](stdlib.md).
 
-## The multi-lib entry
+## Module trees
 
-A package's body may be split across files:
+A package's body is authored as a **file module tree** — the
+`tur_kit`-style layout:
 
-```jsonc
-{
-  "name": "ui",
-  "entry": { "lib": "./ui.rut", "libs": ["./store.rut", "./t1.rut"] }
-}
+```
+tur_kit/
+├── rut.jsonc        # no entry keys — mod.rut IS the lib
+├── mod.rut          # the root module
+├── layout/
+│   └── mod.rut      # tur_kit::layout
+└── widget/
+    └── mod.rut      # tur_kit::widget
 ```
 
-The loader splices base-first, then `libs` in listed order, newline-joined,
-into **one module** — one namespace, one visibility scope. A name private
-to one file is visible to every other file of the package. The manifest
-is the canonical order (the splice never reads a directory listing —
-same manifest ⇒ same module). A `libs` row without `lib`, a `.d.rut`
-element, or a file named twice is a loud manifest error. This is
-assembly, not a language include form — use paths stay inter-module.
+The root module declares its children:
 
-Contrast with peer groups: group files are *presence-gated* and therefore
-impl-only; multi-lib files are unconditional and full module citizens —
-types, functions, and `pub` surface are legal in any file.
+```rut
+// tur_kit/mod.rut
+pub mod layout;
+pub mod widget;
+```
+
+Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod
+NAME;`) in a file resolves against the sibling `NAME/mod.rut`
+directory. The loader never reads a directory listing — an undeclared
+directory is invisible, a declared child that is missing (or whose
+directory carries no `mod.rut`) is a loud error naming both spellings,
+and a `NAME.rut` file where a module directory is expected says so.
+Mounting is recursive and cycle-guarded by file identity; a repeated
+declaration mounts once.
+
+Visibility is per module file ([Modules and
+visibility](modules-and-visibility.md)): plain declarations are visible
+in their own module and its descendants, `pub(pkg)` shares inside the
+package, `pub` crosses packages. Cross-file references inside one
+package are qualified positions (`layout.Column`, `widget.mk(3)` —
+the dot spelling); `use` statements stay the only cross-package door
+(`use tur_kit::layout::{ Column }`).
 
 ## The toolchain tree
 

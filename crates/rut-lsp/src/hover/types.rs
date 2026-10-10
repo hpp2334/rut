@@ -202,7 +202,7 @@ pub struct DefIndex {
     /// byte offsets ⇄ (line, UTF-16 col) over `src`
     pub lines: LineIndex,
     /// the true repo-relative path of an EMBEDDED source (the std
-    /// surface's `include_str!` origin: `rut/pouch/pouch.rut`) — the
+    /// surface's `include_str!` origin: `rut/pouch/mod.rut`) — the
     /// definition layer jumps there instead of the provenance label,
     /// so a workspace that is the rut repo lands in the real file
     pub src_path: Option<String>,

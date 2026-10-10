@@ -7,10 +7,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "http",
-  "entry": {
-    "lib": "./http.rut"
-  },
-  "deps": {
+    "deps": {
     "http_host": {
       "path": "../http_host"
     },

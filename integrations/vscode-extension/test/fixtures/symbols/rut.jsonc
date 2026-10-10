@@ -4,8 +4,4 @@
   // fixture, no lane needed). Dir + manifest for the shape law: every rut
   // program the repo carries is a module dir with a `rut.jsonc`. Dep-free:
   // the fixture has no `use` statements.
-  "name": "symbols",
-  "entry": {
-    "lib": "./symbols.rut"
-  }
-}
+  "name": "symbols"}

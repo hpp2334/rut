@@ -1,10 +1,7 @@
 {
   // when/ — when pattern expressions over enums, exhaustiveness.
   "name": "when",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

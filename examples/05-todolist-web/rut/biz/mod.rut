@@ -1,15 +1,11 @@
-// biz.rut — THE BIZ PACKAGE (the two-package law): the todolist's
-// domain and app — the sources, the derived counts line, the machine
-// as MUTATIONS, the two view builders, and the app shell. ONE module,
-// SEVERAL files (the multi-lib entry: this base +
-// `entry.libs`, spliced in manifest order — a name in any file is
-// module-visible in every file, so the sections stay one namespace).
+// mod.rut — THE BIZ PACKAGE (the two-package law): the todolist's
+// domain and app. ONE module, a FILE-MODULE TREE: this root carries the
+// law and declares the children; each child is its own module file.
 //
-// THE FILE MAP (rut.toml's `entry.libs` — the array IS the order):
-//   ./domain.rut   the domain types + the machine's pure scans
-//   ./world.rut    THE WORLD: the handles bundle + world_boot
-//   ./entries.rut  the DOM-free host-test surface + the probe fixtures
-//   ./app.rut      the shell (AppRoot, the event doors, paint) + the views
+// THE TREE (declarations are the graph — each child is `NAME/mod.rut`):
+//   domain/   the domain types + the machine's pure scans
+//   world/    THE WORLD: the handles bundle + world_boot
+//   app/      the shell (AppRoot, the event doors, paint) + the views
 //
 // THE SURFACE IS THE HANDLES (tur's law — github.com/hpp2334/tur: the
 // app never touches a store object; atoms and mutations are values the
@@ -63,11 +59,7 @@
 // greps their spellings out of biz), and NO STORE VERB anywhere in
 // biz — the store's get/set are module-private; the gate fails loud.
 
-use ui::{
-    Store, Source, Derived, Mutation, Readable, Writable,
-    Widget, T1Root, t1_mount, t1_render, t1_event,
-    col, row, card, field, check, text, done, pending, muted, btn, quiet, live,
-};
-use pouch::{ Vec };
-use web::{ tim_after };
+pub mod domain;
+pub mod world;
+mod app;
 

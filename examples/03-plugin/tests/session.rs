@@ -10,7 +10,7 @@ use std::path::Path;
 use plugin::Plugin;
 
 /// The pack lane with the url dep's bytes primed from the committed
-/// artifacts — dist/std plays the wire: an OFFLINE remote is warmed
+/// artifacts — dist/std-v8 plays the wire: an OFFLINE remote is warmed
 /// via `DepRemote::write` (the stand-in for the GET), so the gate
 /// cannot network by construction. The rode-along law carries the
 /// pouch group inside the output.
@@ -26,7 +26,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let manifest_text =
         std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
-    let dist = d.join("../../../dist/std");
+    let dist = d.join("../../../dist/std-v8");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
         let artifact = url.rsplit('/').next().unwrap_or_default();
@@ -79,7 +79,7 @@ fn prime_project_cache() {
         let manifest_text =
             std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
         let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
-        let dist = d.join("../../../dist/std");
+        let dist = d.join("../../../dist/std-v8");
         let remote = rut_native::HttpRemote::offline(d.join(".rut").join("cache"));
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };
@@ -161,10 +161,10 @@ fn bad_bundles_are_refused_at_load() {
     std::fs::create_dir_all(&base).unwrap();
 
     // unknown format_version — refused before anything else is read
-    let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin", "entry": {"lib": "./plugin.rut"}}"#;
+    let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin"}"#;
     let bytes = rut_driver::bundle::write_bundle(&[
         ("rut.jsonc".to_string(), manifest.as_bytes().to_vec()),
-        ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),
+        ("mod.rut".to_string(), b"fn x() {} \n".to_vec()),
     ])
     .unwrap();
     let path = base.join("v99.rutbundle");

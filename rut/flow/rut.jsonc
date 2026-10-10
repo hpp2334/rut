@@ -15,10 +15,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "flow",
-  "entry": {
-    "lib": "./flow.rut"
-  },
-  "deps": {},
+    "deps": {},
   "peer-deps": {
     "pouch": {
       "path": "../pouch",

@@ -4,10 +4,7 @@
   // `calc` is ambient (the harness mounts std), so only `ink` is declared
   // (for the logger). The JS twin is ../mathhost.js.
   "name": "mathhost",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

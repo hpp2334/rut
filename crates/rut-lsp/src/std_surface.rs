@@ -7,7 +7,7 @@
 //! ALL ELEVEN stdlib packages are embedded (the `rut.jsonc` `name`
 //! fields — what a `use` path spells): the six `entry.type` declaration
 //! surfaces (`core`, `calc`, `nmap_host`, `ink_host`, `bench_cross`,
-//! `strbuild_host`) and the five `entry.lib` sources (`pouch`,
+//! `strbuild_host`) and the five root-module sources (`pouch`,
 //! `nmapset`, `json`, `ink`, `strbuild`) — the latter indexed in impl
 //! mode like the open document, so their class methods complete.
 //! Before the `rut-lsp-align`
@@ -25,11 +25,11 @@ pub const NMAP_HOST: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
 pub const INK_HOST: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/bench_cross.d.rut");
 pub const STRBUILD_HOST: &str = include_str!("../../../rut/strbuild_host/strbuild_host.d.rut");
-pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
-pub const NMAPSET: &str = include_str!("../../../rut/nmapset/nmapset.rut");
-pub const JSON: &str = include_str!("../../../rut/json/json.rut");
-pub const INK: &str = include_str!("../../../rut/ink/ink.rut");
-pub const STRBUILD: &str = include_str!("../../../rut/strbuild/strbuild.rut");
+pub const POUCH: &str = include_str!("../../../rut/pouch/mod.rut");
+pub const NMAPSET: &str = include_str!("../../../rut/nmapset/mod.rut");
+pub const JSON: &str = include_str!("../../../rut/json/mod.rut");
+pub const INK: &str = include_str!("../../../rut/ink/mod.rut");
+pub const STRBUILD: &str = include_str!("../../../rut/strbuild/mod.rut");
 
 const CORE_LABEL: &str = "core";
 
@@ -46,11 +46,11 @@ pub fn indexes() -> Vec<DefIndex> {
         ("ink_host", INK_HOST, rut_parser::Mode::Decl, "rut/ink_host/ink_host.d.rut"),
         ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut"),
         ("strbuild_host", STRBUILD_HOST, rut_parser::Mode::Decl, "rut/strbuild_host/strbuild_host.d.rut"),
-        ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/pouch.rut"),
-        ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/nmapset.rut"),
-        ("json", JSON, rut_parser::Mode::Impl, "rut/json/json.rut"),
-        ("ink", INK, rut_parser::Mode::Impl, "rut/ink/ink.rut"),
-        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/strbuild.rut"),
+        ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/mod.rut"),
+        ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/mod.rut"),
+        ("json", JSON, rut_parser::Mode::Impl, "rut/json/mod.rut"),
+        ("ink", INK, rut_parser::Mode::Impl, "rut/ink/mod.rut"),
+        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/mod.rut"),
     ]
     .into_iter()
     .map(|(origin, src, mode, src_path)| {

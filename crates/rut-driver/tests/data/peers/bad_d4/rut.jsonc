@@ -3,10 +3,7 @@
   // `[peer-deps]` — the cross-table collision is a manifest error naming
   // both rows, loud through the loader path.
   "name": "bad_d4",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../pouch"
     }

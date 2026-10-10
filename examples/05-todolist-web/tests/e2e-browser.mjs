@@ -51,12 +51,22 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const EXAMPLE = path.dirname(HERE); // examples/05-todolist-web
 const ROOT = path.resolve(EXAMPLE, "..", "..");
 const WASM = path.join(ROOT, "target", "wasm32-unknown-unknown", "release", "todolist_web.wasm");
-// the app source is the biz MODULE: the base plus its `entry.libs`
-// tail, concatenated in rut/biz/rut.jsonc's array order — the same
-// splice loader.js spells (the two-package law retired the single
-// app.rut this file used to read)
-const BIZ_FILES = ["rut/biz/biz.rut", "rut/biz/domain.rut", "rut/biz/world.rut", "rut/biz/app.rut"];
-const APP_SRC = BIZ_FILES.map((f) => path.join(EXAMPLE, f));
+// the app source is the biz MODULE TREE: the root module plus its
+// mounted children, packed into the ROWS WIRE — the same `rut.mods`
+// codec loader.js spells (`""` = the root, one row per mounted child;
+// the two-package law retired the single app.rut this file used to
+// read, the multi-lib splice the phase before that)
+const BIZ_TREE = {
+  "": "rut/biz/mod.rut",
+  domain: "rut/biz/domain/mod.rut",
+  world: "rut/biz/world/mod.rut",
+  app: "rut/biz/app/mod.rut",
+};
+const APP_ROWS = JSON.stringify(
+  Object.fromEntries(
+    Object.entries(BIZ_TREE).map(([k, f]) => [k, fs.readFileSync(path.join(EXAMPLE, f), "utf8")]),
+  ),
+);
 const BINDGEN_VERSION = "0.2.128"; // must match Cargo.lock's wasm-bindgen
 const NODE_ONLY = process.argv.includes("--node-only");
 
@@ -302,11 +312,9 @@ async function tier1(gluePath) {
   expect(readEnvelope(w) === "pump before boot", "last_error carries the envelope message");
   expect(readEnvelope(w) === "", "last_error reads once, then null");
 
-  // boot the REAL app source (the loader fetches and splices it; we
-  // hand the same splice over through the same alloc/write/boot path)
-  const src = Buffer.from(
-    APP_SRC.map((f) => fs.readFileSync(f)).join("\n"),
-  );
+  // boot the REAL app tree (the loader fetches the rows wire; we
+  // hand the same rows over through the same alloc/write/boot path)
+  const src = Buffer.from(APP_ROWS, "utf8");
   const ptr = w.rut_web_alloc(src.length);
   new Uint8Array(w.memory.buffer, ptr, src.length).set(src);
   expect(w.rut_web_boot(ptr, src.length) === 0, "boot compiles, mounts, verifies, and runs main (rc 0)");

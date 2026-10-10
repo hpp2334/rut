@@ -258,7 +258,7 @@ fn the_app_compiles() {
     // mirror chain (the manifest lane's gate is tests/mount_lane.rs;
     // loader.js fetches the same file this includes)
     let run = mount::mirror_run().expect("the mirror mounts");
-    mount::compile_app(run, &mount::biz_source()).expect("the app compiles");
+    mount::compile_app(run).expect("the app compiles");
 }
 
 #[test]

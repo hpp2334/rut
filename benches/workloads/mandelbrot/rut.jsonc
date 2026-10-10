@@ -3,10 +3,7 @@
   // max_iter = 500. A module dir like the rest of the workloads; the JS
   // twin is ../mandelbrot.js.
   "name": "mandelbrot",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

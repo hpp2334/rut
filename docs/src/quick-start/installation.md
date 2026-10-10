@@ -161,7 +161,6 @@ cat > hello/rut.jsonc <<'EOF'
 // hello/rut.jsonc — the manifest IS the program's door
 {
   "name": "hello",
-  "entry": { "lib": "./main.rut" },
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
     // std-v8 tag, pinned by sha256
@@ -169,7 +168,7 @@ cat > hello/rut.jsonc <<'EOF'
   }
 }
 EOF
-cat > hello/main.rut <<'EOF'
+cat > hello/mod.rut <<'EOF'
 use ink::{ Logger };
 
 entry fn main() {

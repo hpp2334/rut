@@ -59,13 +59,13 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn manifest(name: &str, _entry: &str, extra: &str) -> String {
+    format!(r#"{{"name": "{name}"{extra}}}"#)
 }
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
-fn bundle_manifest(name: &str, entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
 }
 
 /// One world, one in-memory pkg set (no filesystem): the specs'
@@ -307,11 +307,11 @@ fn packaged_generic_owner_serves_consumer_requests() {
     write(
         &pairz,
         "rut.jsonc",
-        &bundle_manifest("pairz", "pairz.rut", ""),
+        &bundle_manifest("pairz", "mod.rut", ""),
     );
     write(
         &pairz,
-        "pairz.rut",
+        "mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -321,11 +321,11 @@ fn packaged_generic_owner_serves_consumer_requests() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use pairz::{ Pair };\n\n\
          pub fn make() -> Pair<i64, str> {\n\
          \x20   return Pair { fst: 5, snd: \"x\" };\n\
@@ -342,7 +342,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     assert!(names.contains(&"pairz/pairz.rutc".to_string()), "{names:?}");
-    assert!(names.contains(&"pairz/pairz.rut".to_string()), "{names:?}");
+    assert!(names.contains(&"pairz/mod.rut".to_string()), "{names:?}");
     // and the pack-time closure's instantiation is IN the binary's ledger
     {
         let group = rut_driver::bundle::parse_bundle(&bytes)
@@ -412,10 +412,10 @@ fn packaged_generic_owner_serves_consumer_requests() {
 fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     let root = scratch("det");
     let pairz = root.join("pairz");
-    write(&pairz, "rut.jsonc", &manifest("pairz", "pairz.rut", ""));
+    write(&pairz, "rut.jsonc", &manifest("pairz", "mod.rut", ""));
     write(
         &pairz,
-        "pairz.rut",
+        "mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -425,11 +425,11 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let b = Pair<str, i64> { fst: \"x\", snd: 1 };\n\
@@ -449,10 +449,10 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
 fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     let root = scratch("equiv");
     let pairz = root.join("pairz");
-    write(&pairz, "rut.jsonc", &manifest("pairz", "pairz.rut", ""));
+    write(&pairz, "rut.jsonc", &manifest("pairz", "mod.rut", ""));
     write(
         &pairz,
-        "pairz.rut",
+        "mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -462,11 +462,11 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "app.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let p = Pair<i64, str> { fst: 21, snd: \"x\" };\n\

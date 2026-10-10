@@ -2,10 +2,7 @@
   // maps/ — the keyed-collection lane: HashMap/HashSet keys admitted by the compile-time
   // union bound; mounts `nmapset` (which pulls the `nmap_host` host pkg) + `ink` for the logger.
   "name": "maps",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../../rut/nmapset"
     },

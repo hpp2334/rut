@@ -24,8 +24,8 @@ entry fn main() {
 ```
 
 Every rut program is a **module directory**: a `rut.jsonc` naming the
-package and its dependencies, plus the source file the manifest points
-at. Create it and run the directory:
+package and its dependencies, plus the root module — `mod.rut`, the
+file the loader mounts. Create it and run the directory:
 
 ```sh
 mkdir hello
@@ -33,7 +33,6 @@ cat > hello/rut.jsonc <<'EOF'
 // hello/rut.jsonc — the manifest IS the program's door
 {
   "name": "hello",
-  "entry": { "lib": "./main.rut" },
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
     // std-v8 tag, pinned by sha256
@@ -41,7 +40,7 @@ cat > hello/rut.jsonc <<'EOF'
   }
 }
 EOF
-# save the program above as hello/main.rut, then:
+# save the program above as hello/mod.rut, then:
 rut run hello
 ```
 

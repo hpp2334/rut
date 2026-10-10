@@ -1,10 +1,7 @@
 {
   // structs/ — reference semantics (sharing by default), identity `==`.
   "name": "structs",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

@@ -71,17 +71,19 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn manifest(name: &str, entry: &str, extra: &str) -> String {
-    // `extra` is the fragment after the entry object (`, "deps": { … }`)
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "entry": {{"lib": "./{entry}"}}{extra}}}"#)
+fn manifest(name: &str, _entry: &str, extra: &str) -> String {
+    // `extra` is the fragment after the name row (`, "deps": { … }`) —
+    // the entry keys are repealed: the body is `mod.rut` beside the
+    // manifest (the `_entry` arg names the file the caller writes)
+    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
 fn leaf_world(tag: &str, name: &str, body: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join(name);
-    write(&dir, "rut.jsonc", &manifest(name, &format!("{name}.rut"), ""));
-    write(&dir, &format!("{name}.rut"), body);
+    write(&dir, "rut.jsonc", &manifest(name, "mod.rut", ""));
+    write(&dir, "mod.rut", body);
     root
 }
 
@@ -162,13 +164,13 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
@@ -188,8 +190,8 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     // the pinned equivalence: the url lane and the path lane link to
     // the identical binary
     let twin = root.join("app_path");
-    write(&twin, "rut.jsonc", &manifest("app", "app.rut", r#", "deps": {"util": {"path": "../util"}}"#));
-    write(&twin, "app.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
+    write(&twin, "rut.jsonc", &manifest("app", "mod.rut", r#", "deps": {"util": {"path": "../util"}}"#));
+    write(&twin, "mod.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
     let dir_loaded = load_dir(&twin).expect("dir load");
     assert_eq!(
         linked_binary(&dir_loaded),
@@ -217,11 +219,11 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{wrong}"}}}}"#),
         ),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
@@ -252,9 +254,9 @@ fn name_vs_key_refuses() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "app.rut", &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#)),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#)),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
@@ -280,7 +282,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
         "rut.jsonc",
         &manifest(
             "util",
-            "util.rut",
+            "mod.rut",
             r#", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}"#,
         ),
     );
@@ -300,9 +302,9 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
     let err = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
@@ -326,9 +328,9 @@ fn embedder_mount_outranks_the_url_dep() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
     let mut chain = rut_driver::RutRun::new()
         // the embedder's own mount, offered first
@@ -359,11 +361,11 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("pouch"),
         "rut.jsonc",
-        &manifest("pouch", "pouch.rut", r#", "inline": true"#),
+        &manifest("pouch", "mod.rut", r#", "inline": true"#),
     );
     write(
         &root.join("pouch"),
-        "pouch.rut",
+        "mod.rut",
         "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let mut items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
     );
     // codec — the json shape: the interface and public names in the
@@ -373,13 +375,13 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
         "rut.jsonc",
         &manifest(
             "codec",
-            "codec.rut",
+            "mod.rut",
             r#", "inline": true, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./codec_pouch.rut"}}, "dev-deps": {"pouch": {"path": "../pouch"}}"#,
         ),
     );
     write(
         &root.join("codec"),
-        "codec.rut",
+        "mod.rut",
         "pub interface Coded {\n    fn coded(self) -> str;\n}\n\npub class CodedStr(str);\n\nimpl CodedStr {\n    pub fn coded(self) -> str {\n        return self.inner;\n    }\n}\n\npub fn encode(s: str) -> str {\n    return CodedStr(s).coded();\n}\n",
     );
     write(
@@ -391,9 +393,9 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("zeta"),
         "rut.jsonc",
-        &manifest("zeta", "zeta.rut", r#", "deps": {"codec": {"path": "../codec"}}"#),
+        &manifest("zeta", "mod.rut", r#", "deps": {"codec": {"path": "../codec"}}"#),
     );
-    write(&root.join("zeta"), "zeta.rut", "pub fn ping() -> i32 {\n    return 7;\n}\n");
+    write(&root.join("zeta"), "mod.rut", "pub fn ping() -> i32 {\n    return 7;\n}\n");
     let bytes = pack_dir(&root.join("zeta")).expect("pack zeta");
     let url = "https://fixtures.test/zeta.rutbundle";
     (root, bytes, url.to_string())
@@ -412,13 +414,13 @@ fn mixed_dir_and_archive_peer_gate() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n",
     );
 
@@ -454,9 +456,9 @@ fn mixed_dir_and_archive_peer_gate() {
     write(
         &app2,
         "rut.jsonc",
-        &manifest("app2", "app2.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
+        &manifest("app2", "mod.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
-    write(&app2, "app2.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
+    write(&app2, "mod.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
     let session2 = block_on(rut_native::load_dir_with(&app2, &Table::from(table)))
         .expect("light load");
     assert!(
@@ -485,13 +487,13 @@ fn colliding_pack_numberings_namespace_per_archive() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             r#", "deps": {"util_a": {"url": "https://fixtures.test/a.rutbundle"}, "util_b": {"url": "https://fixtures.test/b.rutbundle"}}"#,
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util_a::{twice};\nuse util_b::{thrice};\n\nentry fn go() -> i64 {\n    return twice(1) + thrice(2);\n}\n",
     );
 
@@ -516,9 +518,9 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
     let err = load_dir(&app).unwrap_err().to_string();
     assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
@@ -540,13 +542,13 @@ fn pack_url_dep_rode_along_and_deterministic() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
@@ -596,13 +598,13 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
         "rut.jsonc",
         &manifest(
             "app",
-            "app.rut",
+            "mod.rut",
             &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
         ),
     );
     write(
         &app,
-        "app.rut",
+        "mod.rut",
         "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n",
     );
 
@@ -628,9 +630,9 @@ fn pack_refuses_unused_compiled_url_dep() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "app.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
-    write(&app, "app.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);

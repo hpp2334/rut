@@ -109,10 +109,10 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
+        format!(r#"{{"name": "app", "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
-    std::fs::write(app.join("app.rut"), src).unwrap();
+    std::fs::write(app.join("mod.rut"), src).unwrap();
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
@@ -213,8 +213,8 @@ fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
     let (url, bytes) = artifact("pouch");
     let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
     assert!(
-        parsed.iter().any(|(n, _)| n == "pouch.rut"),
-        "the fresh pack rides its source (the riding law moved; this fixture strips it)"
+        parsed.iter().any(|(n, _)| n == "mod.rut"),
+        "the fresh pack rides its source (the root module, `mod.rut`)"
     );
     let torn: Vec<(String, Vec<u8>)> = parsed
         .into_iter()
@@ -254,10 +254,10 @@ fn load_compile_run(
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        format!(r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
+        format!(r#"{{"name": "app", "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
     )
     .unwrap();
-    std::fs::write(app.join("app.rut"), src).unwrap();
+    std::fs::write(app.join("mod.rut"), src).unwrap();
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
@@ -498,13 +498,13 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     std::fs::write(
         app.join("rut.jsonc"),
         format!(
-            r#"{{"name": "app", "entry": {{"lib": "./app.rut"}}, "deps": {{"strbuild": {{"url": "{url}", "sha256": "{}"}}}}}}"#,
+            r#"{{"name": "app", "deps": {{"strbuild": {{"url": "{url}", "sha256": "{}"}}}}}}"#,
             sha256_hex(&std::fs::read(dist_std().join("strbuild.rutbundle")).unwrap())
         ),
     )
     .unwrap();
     std::fs::write(
-        app.join("app.rut"),
+        app.join("mod.rut"),
         "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder.new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();

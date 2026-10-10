@@ -1,4 +1,14 @@
-// ---- THE APP (the shell; the views live below) ------------------------
+// app/ — THE APP (the shell; the views live below). A PRIVATE child of
+// the biz root (`mod app;`): nothing outside the package imports it —
+// the ABI is the entry doors (`main`, `on_click`, `on_input`,
+// `on_timer`), and the shell reads the world and the domain through
+// the `world.`/`domain.` qualified positions.
+
+use ui::store::{ Mutation };
+use ui::widget::{ Widget };
+use ui::diff::{ T1Root, t1_mount, t1_render, t1_event };
+use ui::components::{ col, row, field, check, text, done, pending, muted, btn, quiet, live };
+use web::{ tim_after };
 
 /// The app container: everything a turn needs, built once at boot and
 /// returned to the host, which re-passes it on every event turn.
@@ -9,7 +19,7 @@
 /// the view wires onto the widget — nothing to look up, nothing to
 /// stale.
 pub class AppRoot {
-    world: World; // the handles + the machine
+    world: world.World; // the handles + the machine
     t1: T1Root; // the framework's diff/registry state
 }
 
@@ -19,7 +29,7 @@ pub class AppRoot {
 // atom takes the boot line BEFORE the first paint, so the status line
 // is pixel-identical from turn one (survey §4.5).
 entry fn main() -> opaque {
-    let boot: World = world_boot("booted — type a title, press Add");
+    let boot: world.World = world.world_boot("booted — type a title, press Add");
     let root = AppRoot {
         world: boot,
         t1: t1_mount("app"),
@@ -58,7 +68,7 @@ fn take_app(c: opaque) -> AppRoot {
 /// the timer — or opaque(nil), nothing to book.
 fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
     let booked = t1_event(r.t1, id, detail);
-    let req = opaque.downcast<Req>(booked);
+    let req = opaque.downcast<domain.Req>(booked);
     if (req != nil) {
         tim_after(req.latency, req.tag);
     }
@@ -113,7 +123,7 @@ fn paint(r: AppRoot) -> nil {
 // (survey §4.2 kept, completed: the pulls moved to the render door);
 // the events ride the widgets' own mutations (on_click/on_input).
 fn view(mut r: AppRoot) -> Widget {
-    let mut world: World = r.world;
+    let mut world: world.World = r.world;
 
     let mut tree = col().gap(12).pad(16).hook("root");
 
@@ -142,7 +152,7 @@ fn view(mut r: AppRoot) -> Widget {
 // `mutate((ctx, _ev) => act(ctx, index))` — .on_row(m, id), no
 // runtime closure).
 
-pub fn todo_row(t: Todo, flying: bool, toggle_row: Mutation<i64, opaque>, remove_row: Mutation<i64, opaque>) -> Widget {
+pub(pkg) fn todo_row(t: domain.Todo, flying: bool, toggle_row: Mutation<i64, opaque>, remove_row: Mutation<i64, opaque>) -> Widget {
     let mut row_w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
     row_w.w(check(t.done).on_row(toggle_row, t.id).hook(f"mark-{t.id}"));
     let mut lbl = text(t.title);

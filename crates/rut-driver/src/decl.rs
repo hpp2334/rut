@@ -1,7 +1,7 @@
 //! `.d.rut` surface lowering: a declaration
 //! file's `host fn`s become a mounted module's HOST surface, so a host
 //! pkg is a real package directory — `rut.jsonc` (`entry.type`, no
-//! `entry.lib`) plus the `.d.rut` itself. The compiler-limitation rule
+//! root module's source) plus the `.d.rut` itself. The compiler-limitation rule
 //! holds at LOAD time: every signature must be concrete
 //! over the crossing set, or the load refuses naming the offender.
 //!

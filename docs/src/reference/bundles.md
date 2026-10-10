@@ -28,20 +28,22 @@ exactly like the directory, and the two compile to identical programs.
 rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
 rut.scopes               the pack-time scope ledger (scope = "spec" rows)
 <pkg>.rutc               the root's compiled binary — bodies + surface
-<pkg>.rut                the root's generic-bearing source, when its surface
+mod.rut                  the root's generic-bearing source, when its surface
                            exports generics (the riding law, below)
+rut.mods                 the root's module rows, when it has mod children
 <pkg>.d.rut              the root's surface text (humans, LSP), when it declares one
 <dep>/rut.jsonc          per dep group, mixed kinds:
 <dep>/<dep>.rutc           linkable dep → a compiled group (its rut.jsonc rides too);
                            generic exports ride compiled — the binary carries
                            the closure's instantiations in its ledger
-<dep>/<dep>.rut            the group's generic-bearing source, when its surface
-<dep>/group-*.rut …        exports generics (the entry + the peer-deps group
-                           files, verbatim — the riding law, below)
+<dep>/mod.rut              the group's generic-bearing source, when its surface
+<dep>/group-*.rut …        exports generics (the root module + the peer-deps
+                           group files, verbatim — the riding law, below)
+<dep>/rut.mods             its module rows, when it has mod children
 <dep>/<dep>.d.rut          its surface text, when it declares one
 <leaf>/rut.jsonc           splice-needed dep (the `inline` flag) or a host
-<leaf>/<leaf>.rut           pkg → a source group: the source file set
-<leaf>/<leaf>.rut …         (entry, libs, peer groups)
+<leaf>/mod.rut             pkg → a source group: the source file set
+<leaf>/group-*.rut …       (the root module + peer groups)
 ```
 
 - The **`.rutc` binaries are the linking truth**: bodies plus the
@@ -56,6 +58,16 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   ledger to the module to ensure and rebases the ids onto its own
   numbering — pack-time and load-time numbering never have to agree. A
   reference with no ledger row is refused.
+- **The module rows are the tree's wire form** (`rut.mods` —
+  `<dep>/rut.mods` for a group): one JSON object, mod path → source
+  text, `""` = the root module, one row per mounted child. A package
+  with no mod children writes no rows entry — a flat package packs
+  exactly as before, byte-stable. The section is **additive**: the
+  reader accepts both envelopes, so a bundle packed before file
+  modules (the published std tags among them) keeps loading — that is
+  a loading law, not a transition; a NEW directory whose manifest
+  spells the repealed `entry.lib`/`entry.libs` keys refuses loudly at
+  the manifest walk.
 - **Mixed groups, one classifier**: the same splice law that rules the
   graph (the `inline` flag — [modules and
   visibility](modules-and-visibility.md)) decides each package's kind.
@@ -68,9 +80,9 @@ rut.scopes               the pack-time scope ledger (scope = "spec" rows)
   ledger names every `(owner, decl, arguments)` row. A compiled pkg
   whose surface exports an OPEN generic surface (generic fns, generic
   type exports, generic methods, generic-target impls) ALSO rides the
-  source that serves consumer-spelled shapes: the entry lib, each
-  `entry.libs` file, and each `peer-deps` group file, verbatim,
-  beside the binary. The entry lib's presence is the loader's dispatch
+  source that serves consumer-spelled shapes: the root module
+  (`mod.rut`) and each `peer-deps` group file, verbatim, beside the
+  binary. The riding source's presence is the loader's dispatch
   marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
   source-free by law. At the consumer's link, a request the ledger
   lacks lowers the ridden text in the consumer's session and compiles
@@ -184,7 +196,7 @@ guess: `this toolchain reads bundle format_version 10 only (found {v})
 — re-pack the directory`.
 
 Every file in the two layouts is part of the package: a bundle that
-dropped peer groups or multi-lib files would load base-only —
+dropped peer groups or a declared child module would load partial —
 semantically wrong, so the closure law is checked at the mount.
 Compilation is the delivery contract — one exception, the riding law
 above: a pkg with an open generic surface rides its source beside the

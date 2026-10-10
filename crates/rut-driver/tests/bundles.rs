@@ -48,7 +48,7 @@ fn make_dir_manifest() -> String {
     // bundle-shaped: the keys a `rut pack` needs are already there,
     // and directory loading ignores them (layout 10 — the one wire
     // number; the packer emits 10 and the loader reads 10 only)
-    r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"lib": "./mod.rut"}}"#.to_string()
+    r#"{"format": "rutbundle", "format_version": 10, "name": "mod"}"#.to_string()
 }
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -201,7 +201,7 @@ fn refusals() {
     std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"lib": "./mod.rut", "type": "./surface.d.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
@@ -239,11 +239,11 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::write(
-        m.join("main.rut"),
+        m.join("mod.rut"),
         "entry fn main() -> i32 { return 7; }\n",
     )
     .unwrap();
@@ -286,11 +286,11 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./main.rut"}, "deps": {"s": {"path": "../s2"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::write(
-        m2.join("main.rut"),
+        m2.join("mod.rut"),
         "entry fn main() -> i32 { return 7; }\n",
     )
     .unwrap();
@@ -336,8 +336,8 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the dep: a linkable source pkg → a compiled group
     let m = base.join("m");
     std::fs::create_dir_all(&m).unwrap();
-    std::fs::write(m.join("rut.jsonc"), r#"{"name": "m", "entry": {"lib": "./m.rut"}}"#).unwrap();
-    std::fs::write(m.join("m.rut"), "pub fn four() -> i32 { return 4; }\n").unwrap();
+    std::fs::write(m.join("rut.jsonc"), r#"{"name": "m"}"#).unwrap();
+    std::fs::write(m.join("mod.rut"), "pub fn four() -> i32 { return 4; }\n").unwrap();
     // the dep's dep: a host pkg (declaration-only surface) → source
     let s = base.join("s");
     std::fs::create_dir_all(&s).unwrap();
@@ -350,7 +350,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // m uses s
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"name": "m", "entry": {"lib": "./m.rut"}, "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"name": "m", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
 
@@ -359,11 +359,11 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "entry": {"lib": "./entry.rut"}, "deps": {"m": {"path": "../m"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
     std::fs::write(
-        main.join("entry.rut"),
+        main.join("mod.rut"),
         "use m::{ four };\nentry fn main() -> i32 { return four(); }\n",
     )
     .unwrap();
@@ -432,10 +432,8 @@ fn the_directory_manifest_speaks_jsonc() {
   // the header prose
   "format": "rutbundle",
   "format_version": 10, /* the one wire number */
-  "name": "mod",
-  "entry": {
-    "lib": "./mod.rut", // trailing prose
-  },
+  "name": "mod", /* beside the value */
+  "style": { "indent": "2", }, // a trailing comma, the JSONC way
 }
 "#,
     )

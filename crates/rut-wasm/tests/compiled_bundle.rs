@@ -14,17 +14,17 @@ fn pack_world() -> Vec<u8> {
     let _ = std::fs::remove_dir_all(&base);
     let lib = base.join("lib");
     std::fs::create_dir_all(&lib).unwrap();
-    std::fs::write(lib.join("rut.jsonc"), r#"{"name": "lib", "entry": {"lib": "./lib.rut"}}"#).unwrap();
-    std::fs::write(lib.join("lib.rut"), "pub fn four() -> i64 { return 4; }\n").unwrap();
+    std::fs::write(lib.join("rut.jsonc"), r#"{"name": "lib"}"#).unwrap();
+    std::fs::write(lib.join("mod.rut"), "pub fn four() -> i64 { return 4; }\n").unwrap();
     let app = base.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "entry": {"lib": "./app.rut"}, "deps": {"lib": {"path": "../lib"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "deps": {"lib": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(
-        app.join("app.rut"),
+        app.join("mod.rut"),
         "use lib::{ four };\nentry fn main() -> i64 { return four(); }\n",
     )
     .unwrap();

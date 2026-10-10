@@ -1,8 +1,13 @@
 // =====================================================================
 // §3 THE LOWERING TABLE (the old t1/lowering — verbatim shape)
 // =====================================================================
+//
+// A CHILD module of the ui root (`pub mod lowering;`): the table and
+// its output are `pub(pkg)` (the diff reads them; nothing past the
+// package does), and the widget.Widget it reads is the widget module's —
+// spelled through the `widget.` qualified positions.
 
-// Widget -> Lowered: the tag, the space-joined class tokens, and the
+// widget.Widget -> Lowered: the tag, the space-joined class tokens, and the
 // event the widget listens to. This table is THE styling contract
 // (design §5) — the one place a tag or a token may be spelled. The
 // five recorded deviations it implements (docs/t1-design.md §0):
@@ -14,40 +19,43 @@
 
 /// One row of the lowering table: the tag, the space-joined class
 /// tokens, and the event this widget listens to ("" = none).
-pub struct Lowered {
+pub(pkg) struct Lowered {
     tag: str;
     cls: str;
     listens: str;
 }
 
-fn tag_of_kind(w: Widget) -> str {
-    return when (w.kind) {
-        WKind.Column -> "div",
-        WKind.Row -> "div",
-        WKind.Spacer -> "div",
-        WKind.Card -> "div",
-        WKind.Text -> "span",
-        WKind.Button -> "button",
-        WKind.Checkbox -> "button", // framework-owned, NOT a native input
-        WKind.Field -> "input",
-    };
+// the token tables spell through `==` chains: `when` patterns take
+// bare enum paths (same-module spellings), and the enums live in the
+// widget module — qualified POSITIONS are the cross-module door, and
+// a comparison is one.
+pub(pkg) fn tag_of_kind(w: widget.Widget) -> str {
+    let k = w.kind;
+    if (k == widget.WKind.Column) { return "div"; }
+    if (k == widget.WKind.Row) { return "div"; }
+    if (k == widget.WKind.Spacer) { return "div"; }
+    if (k == widget.WKind.Card) { return "div"; }
+    if (k == widget.WKind.Text) { return "span"; }
+    if (k == widget.WKind.Button) { return "button"; }
+    // framework-owned, NOT a native input
+    if (k == widget.WKind.Checkbox) { return "button"; }
+    if (k == widget.WKind.Field) { return "input"; }
+    panic("t1: unknown widget kind");
 }
 
-fn tvar_token(v: TVariant) -> str {
-    return when (v) {
-        TVariant.Title -> "t1-text--title",
-        TVariant.Body -> "t1-text--body",
-        TVariant.Done -> "t1-text--done",
-        TVariant.Pending -> "t1-text--pending",
-        TVariant.Muted -> "t1-text--muted",
-    };
+fn tvar_token(v: widget.TVariant) -> str {
+    if (v == widget.TVariant.Title) { return "t1-text--title"; }
+    if (v == widget.TVariant.Body) { return "t1-text--body"; }
+    if (v == widget.TVariant.Done) { return "t1-text--done"; }
+    if (v == widget.TVariant.Pending) { return "t1-text--pending"; }
+    if (v == widget.TVariant.Muted) { return "t1-text--muted"; }
+    panic("t1: unknown text variant");
 }
 
-fn bvar_token(v: BVariant) -> str {
-    return when (v) {
-        BVariant.Primary -> "t1-btn--primary",
-        BVariant.Quiet -> "t1-btn--quiet",
-    };
+fn bvar_token(v: widget.BVariant) -> str {
+    if (v == widget.BVariant.Primary) { return "t1-btn--primary"; }
+    if (v == widget.BVariant.Quiet) { return "t1-btn--quiet"; }
+    panic("t1: unknown button variant");
 }
 
 fn check_token(on: bool) -> str {
@@ -89,50 +97,52 @@ fn join_cls(a: str, b: str) -> str {
     return f"{a} {b}";
 }
 
-/// The lowering table — TOTAL over WKind. Also the boundary where the
+/// The lowering table — TOTAL over widget.WKind. Also the boundary where the
 /// fat struct's one dishonesty is caught: a control with children is
 /// an app bug, and it panics here, named, at lowering time.
-pub fn lower(w: Widget) -> Lowered {
-    if (takes_children(w) == false) {
+pub(pkg) fn lower(w: widget.Widget) -> Lowered {
+    if (widget.takes_children(w) == false) {
         if (w.children.len() > 0) {
-            let name = kind_name(w);
+            let name = widget.kind_name(w);
             panic(f"t1: {name} takes no children — build layout with Column/Row/Card");
         }
     }
 
     let tag = tag_of_kind(w);
-    let mut cls = when (w.kind) {
-        WKind.Column -> "t1-col",
-        WKind.Row -> "t1-row",
-        WKind.Spacer -> "t1-spacer",
-        WKind.Card -> "t1-card",
-        WKind.Text -> "t1-text",
-        WKind.Button -> "t1-btn",
-        WKind.Checkbox -> "t1-check",
-        WKind.Field -> "t1-field",
-    };
+    // the kind token: an `==` chain (see the token tables above —
+    // `when` patterns stay same-module)
+    let k = w.kind;
+    let mut cls = "t1-text";
+    if (k == widget.WKind.Column) { cls = "t1-col"; }
+    if (k == widget.WKind.Row) { cls = "t1-row"; }
+    if (k == widget.WKind.Spacer) { cls = "t1-spacer"; }
+    if (k == widget.WKind.Card) { cls = "t1-card"; }
+    if (k == widget.WKind.Text) { cls = "t1-text"; }
+    if (k == widget.WKind.Button) { cls = "t1-btn"; }
+    if (k == widget.WKind.Checkbox) { cls = "t1-check"; }
+    if (k == widget.WKind.Field) { cls = "t1-field"; }
     let mut listens = "";
 
-    if (is_text(w)) {
+    if (widget.is_text(w)) {
         if (w.tvar == nil) {
             panic("t1: Text without a variant — construct with text/done/title/pending/muted");
         }
-        let v: TVariant = w.tvar;
+        let v: widget.TVariant = w.tvar;
         cls = join_cls(cls, tvar_token(v));
     }
-    if (is_button(w)) {
+    if (widget.is_button(w)) {
         if (w.bvar == nil) {
             panic("t1: Button without a variant — construct with btn/quiet");
         }
-        let v: BVariant = w.bvar;
+        let v: widget.BVariant = w.bvar;
         cls = join_cls(cls, bvar_token(v));
         listens = "click";
     }
-    if (is_check(w)) {
+    if (widget.is_check(w)) {
         cls = join_cls(cls, check_token(w.on));
         listens = "click";
     }
-    if (is_field(w)) {
+    if (widget.is_field(w)) {
         listens = "input"; // the value rides the event (event-carried law)
     }
 

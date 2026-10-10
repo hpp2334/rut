@@ -20,10 +20,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "futures",
-  "entry": {
-    "lib": "./futures.rut"
-  },
-  "deps": {
+    "deps": {
     "async_host": {
       "path": "../async_host"
     }

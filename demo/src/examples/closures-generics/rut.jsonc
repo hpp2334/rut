@@ -1,10 +1,7 @@
 {
   // closures-generics/ — anonymous fns (block bodies), monomorphized generics, fn types, capture.
   "name": "closures_generics",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../../rut/pouch"
     },

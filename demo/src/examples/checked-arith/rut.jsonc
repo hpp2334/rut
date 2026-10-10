@@ -1,10 +1,7 @@
 {
   // checked-arith/ — wrapping_* wraps two's-complement, checked_* answers the (T, bool) tuple.
   "name": "checked_arith",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../../rut/ink"
     }

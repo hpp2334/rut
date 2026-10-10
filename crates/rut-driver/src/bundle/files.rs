@@ -31,9 +31,10 @@ pub fn read_entry(entries: &[(String, Vec<u8>)], key: &str) -> Result<String, St
     }
 }
 
-/// The manifest's entry file (lib preferred, else the `.d.rut` surface).
+/// The manifest's surface file (the `.d.rut` entry key — the only key
+/// left; the body is `mod.rut` by convention, never a key).
 pub fn entry_rel(manifest: &Manifest) -> Option<&String> {
-    manifest.entry.lib.as_ref().or(manifest.entry.type_path.as_ref())
+    manifest.entry.type_path.as_ref()
 }
 
 use super::manifest::Manifest;

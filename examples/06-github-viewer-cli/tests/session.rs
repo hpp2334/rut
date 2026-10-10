@@ -35,7 +35,7 @@ use rut_std::http::{ FixtureReply, HttpFixture };
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
-const SRC: &str = include_str!("../rgh.rut");
+const SRC: &str = include_str!("../mod.rut");
 const TREE_JSON: &str = include_str!("fixtures/tree.json");
 const BOUNDARY_JSON: &str = include_str!("fixtures/tree-boundaries.json");
 const TEXT_BODY: &[u8] = include_bytes!("fixtures/text.txt");
@@ -151,7 +151,7 @@ fn world_expected() -> rut_vm::interp::ExpectedHostFns {
 
 /// Boot the brain over the fixture lane. Mounts what the embedder
 /// mounts (std + the brain's libs + the example's own host pkg), runs
-/// the peer gate, compiles `rgh.rut` in Impl mode, verifies, binds
+/// the peer gate, compiles `mod.rut` (the brain) in Impl mode, verifies, binds
 /// math + nmap + the async engine + the fixture HTTP lane + the
 /// rgh_host rows over the sinks (exit RECORDS — the one-way door is
 /// the embedder's), and checks the decl ↔ bodies contract pre-boot

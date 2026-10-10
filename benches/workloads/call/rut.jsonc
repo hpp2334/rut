@@ -2,10 +2,7 @@
   // call/ — recursion / call-frame overhead: fib(28). A module dir like
   // the rest of the workloads; the JS twin is ../call.js.
   "name": "call",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "ink": {
       "path": "../../../rut/ink"
     }

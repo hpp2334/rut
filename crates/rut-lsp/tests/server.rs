@@ -701,11 +701,11 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     // its `mod.rut` — the editor walk mounts the tree like the loader
     std::fs::write(
         dep.join("rut.jsonc"),
-        r#"{ "name": "gadgets", "entry": { "lib": "./lib.rut" } }"#,
+        r#"{ "name": "gadgets" }"#,
     )
     .unwrap();
     let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\npub mod layout;\n";
-    std::fs::write(dep.join("lib.rut"), lib_src).unwrap();
+    std::fs::write(dep.join("mod.rut"), lib_src).unwrap();
     std::fs::create_dir_all(dep.join("layout")).unwrap();
     std::fs::write(
         dep.join("layout/mod.rut"),
@@ -722,9 +722,9 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     std::fs::write(ws.join(&pouch_cache), POUCH_BUNDLE).unwrap();
     let manifest = format!(
         r#"{{
-  // the editor rides the same grammar the CLI parses
+  // the editor rides the same grammar the CLI parses — the root
+  // module is `mod.rut`, never a manifest key
   "name": "wsapp",
-  "entry": {{ "lib": "./main.rut" }},
   "deps": {{
     "gadgets": {{ "path": "../outside" }},
     "pouch": {{ "url": "{POUCH_URL}", "sha256": "{}" }},
@@ -750,22 +750,22 @@ fn main() -> nil {
     v.push(1);
 }
 ";
-    std::fs::write(ws.join("main.rut"), main_src).unwrap();
+    std::fs::write(ws.join("mod.rut"), main_src).unwrap();
     std::fs::create_dir_all(ws.join("helpers")).unwrap();
     std::fs::write(
         ws.join("helpers/mod.rut"),
         "pub struct Slot {\n    n: i32;\n}\npub fn mk(n: i32) -> Slot { return Slot { n: n }; }\n",
     )
     .unwrap();
-    let main_uri = format!("file://{}/main.rut", ws.display());
+    let main_uri = format!("file://{}/mod.rut", ws.display());
     DepFixture { base, ws, main_src: main_src.to_string(), main_uri }
 }
 
 /// the pouch bundle's own source, only reachable through the CACHE mount
-/// — the std surface's pouch index carries the relative `rut/pouch.rut`
+/// — the std surface's pouch index carries the relative `rut/pouch/mod.rut`
 /// origin instead, so this uri on the wire PROVES the cached bytes
 /// mounted
-const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/pouch.rut";
+const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/mod.rut";
 
 #[tokio::test]
 async fn dep_walk_resolves_path_and_cached_url_deps() {
@@ -797,7 +797,7 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
         .await;
     let locs = resp["result"].as_array().expect("definition locations");
     assert!(
-        locs.iter().any(|l| l["uri"].as_str().unwrap().ends_with("/outside/lib.rut")),
+        locs.iter().any(|l| l["uri"].as_str().unwrap().ends_with("/outside/mod.rut")),
         "the outside path dep answers F12: {resp}"
     );
 

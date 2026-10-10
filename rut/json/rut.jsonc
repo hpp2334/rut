@@ -23,10 +23,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "json",
-  "entry": {
-    "lib": "./json.rut"
-  },
-  "deps": {
+    "deps": {
     "strbuild": {
       "path": "../strbuild"
     }

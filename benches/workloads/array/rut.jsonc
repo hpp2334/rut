@@ -3,10 +3,7 @@
   // path, indexed read+write, full iteration. A module dir because it mounts
   // `pouch`; `ink` is declared for the logger. The JS twin is ../array.js.
   "name": "array",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../rut/pouch"
     },

@@ -4,10 +4,7 @@
   // program: the manifest names the probe's imports, the load mounts the
   // closure. `app` is the biz package (rut/biz — its spec IS `app`).
   "name": "store_probe",
-  "entry": {
-    "lib": "./store_probe.rut"
-  },
-  "deps": {
+    "deps": {
     "ui": {
       "path": "../../rut/ui"
     },

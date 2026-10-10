@@ -104,7 +104,7 @@ fn t10_the_collision_was_real() {
     // twice into one unit — and a doubly-spliced text does not compile
     // (duplicate type definitions). The fixture only goes green because
     // the dedup removed the second splice.
-    let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/pouch.rut")))
+    let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/mod.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
     let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &Seeds::none(), &rut_driver::ModInputs::flat());

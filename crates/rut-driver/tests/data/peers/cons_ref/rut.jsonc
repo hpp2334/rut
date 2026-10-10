@@ -5,10 +5,7 @@
   // fixture pins the registry handoff (json's peer declaration is
   // session-resident) and the baseline.
   "name": "cons_ref",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../json"
     }

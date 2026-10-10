@@ -4,9 +4,9 @@
 //! store object). It never sinks to the DOM's
 //! vocabulary — no crossing is spelled beyond the one clock name, no
 //! tag or style token is written, no listener id is named. The gate
-//! reads the biz layer's source (the biz module's five files, spliced
-//! the manifest's way — whole-text,
-//! comments included, NO whitelist) and fails LOUD on violations.
+//! reads the biz layer's source (the biz module's TREE — every mounted
+//! file, whole-text, comments included, NO whitelist) and fails LOUD
+//! on violations.
 //!
 //! Five checks:
 //!
@@ -39,28 +39,28 @@
 //!      nowhere in `src/`.
 
 /// The biz module's source — the module this gate exists to guard: the
-/// base plus `entry.libs`, spliced the manifest's way —
-/// the gate reads what the program actually compiles. The store/atom
-/// probes are NOT here: they are a test spec (tests/store_probe/),
-/// their own module over the same imports — the app's ABI is `main`
-/// plus the event doors, nothing else.
+/// FILE-MODULE TREE, every mounted file concatenated in mod-path
+/// order (the gate reads what the program actually compiles). The
+/// store/atom probes are NOT here: they are a test spec
+/// (tests/store_probe/), their own module over the same imports — the
+/// app's ABI is `main` plus the event doors, nothing else.
 static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    splice(
-        include_str!("../rut/biz/biz.rut"),
+    tree(
+        include_str!("../rut/biz/mod.rut"),
         &[
-            include_str!("../rut/biz/domain.rut"),
-            include_str!("../rut/biz/world.rut"),
-            include_str!("../rut/biz/app.rut"),
+            include_str!("../rut/biz/app/mod.rut"),
+            include_str!("../rut/biz/domain/mod.rut"),
+            include_str!("../rut/biz/world/mod.rut"),
         ],
     )
 });
 
-/// The loader's splice law, restated for the gate: base first, then
-/// libs in manifest order, '\n'-joined (crate::mount::biz_source is
-/// the same law).
-fn splice(base: &str, libs: &[&str]) -> String {
-    let mut src = base.to_string();
-    for part in libs {
+/// The module-tree law, restated for the gate: the root first, then
+/// the mounted children in mod-path order, '\n'-joined (the mirror
+/// crate::mount::biz_pkg offers the same tree).
+fn tree(root: &str, children: &[&str]) -> String {
+    let mut src = root.to_string();
+    for part in children {
         src.push('\n');
         src.push_str(part);
     }
@@ -75,11 +75,10 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
         "ui",
         &[
             // the store's public vocabulary — the store itself (boot's
-            // mint), the handle types, and the capability interfaces
-            // the ctx verbs' bounds observe (the handles carry the
-            // members; the names ride the import so the bounds resolve
-            // at biz's call sites)
-            "Store", "Source", "Derived", "Mutation", "Readable", "Writable",
+            // mint) and the handle types (the capability interfaces
+            // stay ui-internal: satisfaction is structural, and the
+            // bounds resolve without the names crossing)
+            "Store", "Source", "Derived", "Mutation",
             // the widget type and the framework's four names
             "Widget", "T1Root", "t1_mount", "t1_render", "t1_event",
             // the component constructors (+ live: the reactive subtree)
@@ -91,7 +90,9 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
     ("web", &["tim_after"]),
 ];
 
-/// One `use` statement: the package and the names it contributes.
+/// One `use` statement: the package (the FIRST path segment — the
+/// file-modules grammar spells `use pkg::A::B::{ .. }`, and the pkg
+/// head is what the crossing law pins) and the names it contributes.
 fn parse_use(src: &str, use_kw_at: usize) -> Option<(String, Vec<String>)> {
     let rest = &src[use_kw_at + 3..];
     let rest = rest.trim_start();
@@ -104,6 +105,8 @@ fn parse_use(src: &str, use_kw_at: usize) -> Option<(String, Vec<String>)> {
         .split(',')
         .map(|n| n.trim())
         .filter(|n| !n.is_empty())
+        // a nested segment (a typo'd `a::{ b::{ c } }`) is not a name
+        .filter(|n| !n.contains("::{") && *n != "{")
         .map(|n| n.to_string())
         .collect();
     Some((pkg, names))
@@ -134,28 +137,28 @@ fn imports(src: &str) -> Vec<(String, Vec<String>)> {
 
 #[test]
 fn the_app_imports_exactly_the_project_vocabulary() {
+    // the file-modules grammar spells one `use` per SEGMENT
+    // (`use ui::store::{ .. }`, `use ui::diff::{ .. }`) — the law pins
+    // the per-package vocabulary, so the statements aggregate into
+    // package unions before the equality
     let got = imports(&BIZ);
-    assert_eq!(
-        got.len(),
-        APP_IMPORTS.len(),
-        "the app's import set changed — biz may import exactly the \
-         two-package vocabulary (the store's public names, the widget \
-         vocabulary, the framework's four names, and web for the one \
-         clock name); got: {got:?}"
-    );
-    for (i, (pkg, names)) in got.iter().enumerate() {
-        let (want_pkg, want_names) = APP_IMPORTS[i];
-        assert_eq!(pkg, want_pkg, "import #{i}'s package drifted");
-        let mut sorted: Vec<String> = names.clone();
-        sorted.sort();
-        let mut want: Vec<String> = want_names.iter().map(|s| s.to_string()).collect();
-        want.sort();
-        assert_eq!(
-            sorted, want,
-            "`{pkg}`'s contributed names drifted — the per-package name \
-             pins are the crossing law (survey §5.1)"
-        );
+    let mut by_pkg: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        Default::default();
+    for (pkg, names) in got {
+        by_pkg.entry(pkg).or_default().extend(names);
     }
+    let want: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        APP_IMPORTS
+            .iter()
+            .map(|(p, ns)| (p.to_string(), ns.iter().map(|n| n.to_string()).collect()))
+            .collect();
+    assert_eq!(
+        by_pkg, want,
+        "the app's import vocabulary changed — biz may import exactly \
+         the two-package vocabulary (the store's public names, the \
+         widget vocabulary, the framework's four names, and web for \
+         the one clock name)"
+    );
     // P2 (survey §2.5): the appkit name survives nowhere in src/ — the
     // concatenation module is gone and stays gone.
     let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");

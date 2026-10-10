@@ -27,7 +27,7 @@
 // resolved through the REBUILT artifact at known corpus positions —
 // each label checked against the source's own ground truth (an
 // annotation or a decl-site type line in the same file, or the
-// stdlib's true pouch.rut decl) — plus the hover-consistency law (the
+// stdlib's true mod.rut decl) — plus the hover-consistency law (the
 // hint's type text is what hover shows for the same binding) and the
 // annotated-lets-never-restated + range-filter laws on a synthetic doc.
 //
@@ -59,7 +59,7 @@ const EXT = path.join(__dirname, '..');
 const REPO = path.join(EXT, '..', '..');
 const WASM_PATH = path.join(EXT, 'bin', 'rut-lsp.wasm');
 const BINDING_PATH = path.join(EXT, 'out', 'wasm.js');
-const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'symbols.rut');
+const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'mod.rut');
 
 // corpus roots, mirroring crates/rut-lsp/tests/corpus.rs and
 // test/grammar-corpus.js
@@ -498,7 +498,7 @@ async function main() {
 
   // STDLIB: `use pouch::{ Vec }` jumps into the EMBEDDED surface — the
   // response carries the true rut/... path and the span of the
-  // declaring ident in the REAL pouch.rut source
+  // declaring ident in the REAL pouch source
   {
     const uri = 'file:///ws/e2e-def-std.rut';
     const src = [
@@ -512,8 +512,8 @@ async function main() {
     if (a.diags.length !== 0) {
       bad.push(`def-std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
     }
-    const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'pouch.rut'), 'utf8');
-    const wantUri = path.join('rut', 'pouch', 'pouch.rut');
+    const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'mod.rut'), 'utf8');
+    const wantUri = path.join('rut', 'pouch', 'mod.rut');
     const want = { uri: wantUri, range: identAt(real, /^pub class Vec/, 'Vec'), len: 3 };
     let locs = rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
     if (!locs.length || locs[0].uri !== wantUri) {
@@ -557,9 +557,9 @@ async function main() {
   // ---- phase 3 (lsp-features): INLAY hints through the SHIPPED
   // artifact. CORPUS ground truth: every hint's label is checked
   // against the source's own decl lines (an annotation elsewhere in the
-  // file, the callee's ret, or the stdlib's true pouch.rut decl). ----
+  // file, the callee's ret, or the stdlib's true pouch decl). ----
   {
-    const digestPath = path.join(REPO, 'examples', '02-digest', 'digest.rut');
+    const digestPath = path.join(REPO, 'examples', '02-digest', 'mod.rut');
     const digestSrc = fs.readFileSync(digestPath, 'utf8');
     const digestUri = `file://${digestPath}`;
     const a = rut.analyze(digestUri, digestSrc);
@@ -614,10 +614,10 @@ async function main() {
       /^fn hex_val\(c: str\) -> i32 \{/m, 'digest free-call param');
     // PARAMETER hint through the CROSS-FILE method: `d.push(f"{c}")` →
     // `v:` — GT: the TRUE stdlib decl `pub fn push(mut self, v: T)`
-    const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'pouch.rut'), 'utf8');
+    const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'mod.rut'), 'utf8');
     hintAt(digestSrc, /d\.push\(f"\{c\}"\);/, 'f', 'v:', 2, null, 'digest push param');
     if (!/pub fn push\(mut self, v: T\) -> nil/.test(pouchSrc)) {
-      bad.push('digest push param: ground-truth push decl missing from pouch.rut');
+      bad.push('digest push param: ground-truth push decl missing from pouch mod.rut');
     }
     // the hover-consistency law, gated through the artifact: the
     // hint's type text IS what hover shows for the same binding
@@ -636,7 +636,7 @@ async function main() {
   // ANNOTATED Vec<i32> types the loop variable, in a second corpus
   // file (demo/src/examples/closures-generics/main.rut) ----
   {
-    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics', 'main.rut');
+    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics', 'mod.rut');
     const cgSrc = fs.readFileSync(cgPath, 'utf8');
     const cgUri = `file://${cgPath}`;
     const a = rut.analyze(cgUri, cgSrc);
@@ -945,7 +945,9 @@ async function main() {
     e.rut_begin();
     const table = take(e.rut_parse_manifest(...put(manifest)));
     assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
-    assert.deepStrictEqual(table.entries, [{ path: 'plugin.rut', mode: 'Impl' }],
+    // the body rides the mod.rut convention (the entry keys are
+    // repealed — the root module is a file, never a manifest key)
+    assert.deepStrictEqual(table.entries, [{ path: 'mod.rut', mode: 'Impl' }],
       `entry modes: ${JSON.stringify(table.entries)}`);
     const row = (name) => table.deps.find((r) => r.name === name);
     assert.deepStrictEqual(row('server'), {
@@ -1010,7 +1012,7 @@ async function main() {
     e.rut_begin();
     const bundle = take(e.rut_add_bundle(...putBytes(bundleBytes)));
     assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
-    assert.deepStrictEqual(bundle.files, ['pouch.rut']);
+    assert.deepStrictEqual(bundle.files, ['mod.rut']);
     e.rut_begin();
     const junk = Buffer.from('definitely not a zip');
     const bundleErr = take(e.rut_add_bundle(...putBytes(junk)));
@@ -1026,7 +1028,7 @@ async function main() {
     e.rut_begin();
     const vecLocs = take(e.rut_definition(...put(pouchUri), 0, pouchDoc.indexOf('Vec')));
     const targetUris = vecLocs.map((l) => l.uri);
-    if (!targetUris.includes('rut/pouch/pouch.rut') || !targetUris.includes('bundle:pouch/pouch.rut')) {
+    if (!targetUris.includes('rut/pouch/mod.rut') || !targetUris.includes('bundle:pouch/mod.rut')) {
       bad.push(`bundle go-to-definition targets: ${JSON.stringify(targetUris)}`);
     }
     const pushCh = pouchDoc.split('\n')[3].indexOf('push');

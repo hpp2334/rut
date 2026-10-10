@@ -15,10 +15,7 @@
   // offline remote from the committed artifacts (dist/std plays the
   // wire), so the gates never touch the network.
   "name": "todolist",
-  "entry": {
-    "lib": "./todolist.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "d0bc36bb385bcc14e76d6275c92613edeab2d46ae0d162f7104282caef1a12cd" }
   }
 }

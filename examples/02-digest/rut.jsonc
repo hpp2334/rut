@@ -26,10 +26,7 @@
   // carries `nmap_host`, whose bodies bind beside it (the tests do;
   // exactly ink + `logger::pkg`).
   "name": "digests",
-  "entry": {
-    "lib": "./digest.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "d0bc36bb385bcc14e76d6275c92613edeab2d46ae0d162f7104282caef1a12cd" },
     "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/json.rutbundle", "sha256": "67d4eea29c1b511d95a2e56edfe6b768c21c4a1c6a07a16ef6f7e01ce01f7fad" },
     "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/nmapset.rutbundle", "sha256": "160b70cd5f3ae9275ee50619ec884afdf50d93a5486115fe7cf0bf16f5030b10" }

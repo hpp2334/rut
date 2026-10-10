@@ -5,10 +5,7 @@
   // The `jsonlight` fixture beside this one mounts json WITHOUT the peers:
   // base-only, the container rows never exist.
   "name": "jsonpkg",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../../../../../rut/json"
     },

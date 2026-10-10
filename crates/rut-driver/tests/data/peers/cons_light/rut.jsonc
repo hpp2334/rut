@@ -3,10 +3,7 @@
   // absent and never touched: compiles green, SILENT. That IS the
   // feature; nothing pulls pouch/nmapset transitively.
   "name": "cons_light",
-  "entry": {
-    "lib": "./cons.rut"
-  },
-  "deps": {
+    "deps": {
     "json": {
       "path": "../json"
     }

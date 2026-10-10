@@ -5,7 +5,8 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std plays the wire, no gate networks). The four passes run FOR
+//! dist/std-v8 plays the wire — the PINNED artifacts, so no gate
+//! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
 //!
@@ -13,8 +14,8 @@
 //! [`mirror_pkgs`] offers the same closure by hand — one `Pkg` per
 //! package, the same mount properties the manifests state, everything
 //! `include_str!`/`include_bytes!` (the rut-wasm ink/ink_host
-//! precedent). Nothing here knows the app's SOURCE: the root's body
-//! crosses the ABI (loader.js hands over `rut/biz/biz.rut`) and
+//! precedent). Nothing here knows the app's SOURCE: the root's TREE
+//! crosses the ABI (loader.js hands over the module rows wire) and
 //! [`compile_app`] compiles it as the root.
 //!
 //! `tests/mount_lane.rs` (the P3 proof) pins the two lanes to the same
@@ -51,7 +52,7 @@ use rut_driver::{Compiled, Loaded, Pkg, RutRun};
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
 pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 
-const POUCH_RUT: &str = include_str!("../../../rut/pouch/pouch.rut");
+const POUCH_RUT: &str = include_str!("../../../rut/pouch/mod.rut");
 // the nmap host surface, from the COMMITTED CDN artifact (the v6 decl
 // bundle — `dist/std/nmap_host.rutbundle`, sha256-pinned by the pins
 // gate). THE BUNDLE LAW: a compiled decl surface binds like the
@@ -62,44 +63,59 @@ const POUCH_RUT: &str = include_str!("../../../rut/pouch/pouch.rut");
 // spelled (consumer shapes like this page's `Vec<Node>` are the
 // directory lane — see docs/src/reference/bundles.md).
 const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmap_host.rutbundle");
-const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
+const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/mod.rut");
 
-const UI_RUT: &str = include_str!("../rut/ui/ui.rut");
-// ui's `entry.libs` tail (rut.jsonc) — the mirror spells the manifest's
-// file list BY HAND (the mirror's whole job: an independent embedder
-// spelling what the manifest says; mount_lane pins the two together)
-const UI_STORE_RUT: &str = include_str!("../rut/ui/store.rut");
-const UI_WIDGET_RUT: &str = include_str!("../rut/ui/widget.rut");
-const UI_LOWERING_RUT: &str = include_str!("../rut/ui/lowering.rut");
-const UI_DIFF_RUT: &str = include_str!("../rut/ui/diff.rut");
-const UI_COMPONENTS_RUT: &str = include_str!("../rut/ui/components.rut");
+// the module trees, verbatim: root + every mounted child — the
+// mirror's whole job is an independent embedder spelling what the
+// manifest's `mod` declarations say (mount_lane pins the two together)
+const UI_ROOT: &str = include_str!("../rut/ui/mod.rut");
+const UI_STORE: &str = include_str!("../rut/ui/store/mod.rut");
+const UI_WIDGET: &str = include_str!("../rut/ui/widget/mod.rut");
+const UI_LOWERING: &str = include_str!("../rut/ui/lowering/mod.rut");
+const UI_DIFF: &str = include_str!("../rut/ui/diff/mod.rut");
+const UI_COMPONENTS: &str = include_str!("../rut/ui/components/mod.rut");
+const BIZ_ROOT: &str = include_str!("../rut/biz/mod.rut");
+const BIZ_DOMAIN: &str = include_str!("../rut/biz/domain/mod.rut");
+const BIZ_WORLD: &str = include_str!("../rut/biz/world/mod.rut");
+const BIZ_APP: &str = include_str!("../rut/biz/app/mod.rut");
 
-/// ui's source, spliced the manifest's way: base first,
-/// then `entry.libs` in array order, '\n'-joined — ONE pkg.
-pub fn ui_source() -> String {
-    let mut src = String::from(UI_RUT);
-    for part in [UI_STORE_RUT, UI_WIDGET_RUT, UI_LOWERING_RUT, UI_DIFF_RUT, UI_COMPONENTS_RUT] {
-        src.push('\n');
-        src.push_str(part);
-    }
-    src
+/// One mounted child module — the mirror's `mod NAME;` edge, spelled
+/// as the loader would mount it (the vis carried faithfully).
+fn child_mod(path: &str, vis: rut_ast::ast::Vis, text: &str) -> (String, rut_driver::ModSource) {
+    (
+        path.to_string(),
+        rut_driver::ModSource { path: path.to_string(), vis, text: text.to_string() },
+    )
 }
 
-/// biz's source, spliced the same way (biz.rut + its `entry.libs`
-/// tail) — the handed-over ABI source both the native mirror
-/// (mount_lane) and the wasm lane (loader.js) compose.
-pub fn biz_source() -> String {
-    let mut src = String::from(BIZ_RUT);
-    for part in [DOMAIN_RUT, WORLD_RUT, APP_RUT] {
-        src.push('\n');
-        src.push_str(part);
-    }
-    src
+/// ui's module tree, offered whole: the root module plus its five
+/// mounted children (all `pub mod` — biz crosses into each).
+pub fn ui_pkg() -> Pkg {
+    let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
+        child_mod("store", rut_ast::ast::Vis::Pub, UI_STORE),
+        child_mod("widget", rut_ast::ast::Vis::Pub, UI_WIDGET),
+        child_mod("lowering", rut_ast::ast::Vis::Pub, UI_LOWERING),
+        child_mod("diff", rut_ast::ast::Vis::Pub, UI_DIFF),
+        child_mod("components", rut_ast::ast::Vis::Pub, UI_COMPONENTS),
+    ]
+    .into();
+    Pkg { spec: "ui".into(), mods, ..Pkg::source("ui", UI_ROOT) }
 }
-const BIZ_RUT: &str = include_str!("../rut/biz/biz.rut");
-const DOMAIN_RUT: &str = include_str!("../rut/biz/domain.rut");
-const WORLD_RUT: &str = include_str!("../rut/biz/world.rut");
-const APP_RUT: &str = include_str!("../rut/biz/app.rut");
+
+/// biz's module tree, offered whole: the root module (the law header +
+/// the `mod` declarations) plus its three children (`domain`/`world`
+/// pub — the probe's use paths cross — `app` private). This is the
+/// handed-over ABI TREE both the native mirror (mount_lane) and the
+/// wasm lane (loader.js's rows wire) compose.
+pub fn biz_pkg() -> Pkg {
+    let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
+        child_mod("domain", rut_ast::ast::Vis::Pub, BIZ_DOMAIN),
+        child_mod("world", rut_ast::ast::Vis::Pub, BIZ_WORLD),
+        child_mod("app", rut_ast::ast::Vis::Self_, BIZ_APP),
+    ]
+    .into();
+    Pkg { spec: "app".into(), mods, ..Pkg::source("app", BIZ_ROOT) }
+}
 
 /// The rut/ project root — the manifest lane's walk point. Native
 /// only: the wasm lane has no filesystem and uses the mirror.
@@ -136,7 +152,7 @@ pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
     let mut pkgs = vec![web_pkg()?, Pkg::source("pouch", POUCH_RUT)];
     pkgs.extend(nmap_host);
     pkgs.push(Pkg::source("nmapset", NMAPSET_RUT));
-    pkgs.push(Pkg::source("ui", ui_source()));
+    pkgs.push(ui_pkg());
     Ok(pkgs)
 }
 
@@ -151,7 +167,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.host_pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std plays the wire: the committed artifacts prime ONE offline
+/// dist/std-v8 plays the wire: the pinned artifacts prime ONE offline
 /// cache per process (`DepRemote::write` is the stand-in for the GET —
 /// the ONCE-gated priming is the 03-plugin precedent), and every
 /// manifest-lane walk rides an `HttpRemote::offline` over it — a miss
@@ -172,7 +188,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std");
+        let dist = base.join("../../dist/std-v8");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",
@@ -266,22 +282,23 @@ pub fn expected_host_fns(loaded: &Loaded) -> rut_vm::interp::ExpectedHostFns {
     rut_driver::declared_host_fns(&pkgs)
 }
 
-/// Compile a run with a handed-in root source under an explicit spec —
-/// the mirror lane's compile half for ABI sources. Diags are the error
-/// text; the compiled run comes back (its registry carries every
-/// `.host_pkg` install).
-pub fn compile_root(run: RutRun, src: &str, spec: &str) -> Result<Compiled, String> {
+/// Compile a run with a handed-in root pkg — the mirror lane's compile
+/// half for the ABI tree (the pkg's root module is its body, its
+/// `mod` children its tree). Diags are the error text; the compiled
+/// run comes back (its registry carries every `.host_pkg` install).
+pub fn compile_root_pkg(run: RutRun, pkg: Pkg) -> Result<Compiled, String> {
+    let spec = pkg.spec.clone();
     let compiled = run
-        .pkg(Pkg::source(spec, src))
-        .entrypoint(spec)
+        .pkg(pkg)
+        .entrypoint(&spec)
         .compile()
         .map_err(|e| format!("the app does not compile: {e}"))?;
     checked(compiled)
 }
 
-/// [`compile_root`] under the app spec.
-pub fn compile_app(run: RutRun, src: &str) -> Result<Compiled, String> {
-    compile_root(run, src, "app")
+/// [`compile_root_pkg`] over the biz tree.
+pub fn compile_app(run: RutRun) -> Result<Compiled, String> {
+    compile_root_pkg(run, biz_pkg())
 }
 
 /// Compile a walked world from its root pkg — THE MANIFEST LANE's

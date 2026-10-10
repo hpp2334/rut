@@ -10,7 +10,8 @@ Allowed at module scope:
 
 | Declaration | Spelling |
 |---|---|
-| import | `use pkg::{ A, B };` / `use pkg::A;` |
+| import | `use pkg::{ A, B };` / `use pkg::A;` / `use pkg::a::b::{ C };` (see below) |
+| child module | `mod name;` / `pub mod name;` — declares a **file module** |
 | binding | `let name: T = expr;` (also under `pub`) |
 | enum / struct / class / interface | `enum E { .. }`, `struct S { .. }`, `class C { .. }`, `interface I { .. }` |
 | impl block | `impl T { .. }` — inherent, the type's module only |
@@ -26,6 +27,23 @@ declarations only*.
 signature-only native surfaces: `host` rows live in declaration files
 (`.d.rut`) and `builtin` rows in the engine's own `core` surface, never
 as executable bodies in `.rut`.
+
+### File modules (`mod`)
+
+A `mod NAME;` declaration mounts a **file module**: the sibling
+`NAME/mod.rut` directory beside the declaring file. There are no
+inline `mod X { .. }` blocks — files are the one mechanism. The
+package's root module is `mod.rut` beside its manifest ([Project
+structure](project-structure.md)); a child's own declarations may
+declare grandchildren (`layout/mod.rut` declaring `pub mod grid;`
+mounts `layout/grid/mod.rut`), recursively. Mounting follows
+declarations in source order, cycle-guarded by file identity; a
+repeated name mounts once. A missing child, a `NAME.rut` file where a
+module directory is expected, or a directory without its `mod.rut` is
+a loud error naming both spellings. `mod` versus `pub mod` feeds the
+same visibility law every declaration follows (below): a `pub mod`
+child's `pub` members cross packages; a plain `mod` child is the
+package's own.
 
 ### Uses
 
@@ -44,12 +62,24 @@ entry fn main() {
 0
 ```
 
-The package is **one bare identifier**; the names are one or more
-idents. rut is fully statically typed: the compiler resolves every used
-name and knows from usage whether it lands in type position (`Vec` in
-an annotation) or value position (`Logger(..)`), so there is nothing
-for the user to annotate. An unreferenced use name is a lint, not an
-error.
+The use path is **`pkg::` followed by module segments**: the head is
+the mounted package's bare `[a-zA-Z0-9_]+` name, then zero or more
+**module segments** walking the package's file modules, then the
+leaf — a brace list of one or more names, or a single name:
+
+```text
+use tur_kit::layout::grid::Cell;       // one name from a nested module
+use tur_kit::layout::{ Column, Span }  // several names from a module
+use ink::Logger;                       // the degenerate root path
+```
+
+Importing a *module itself* (`use tur_kit::layout;`) is an error —
+modules are namespaces, not values; the diagnostic names the fix
+(spell a name at the leaf). rut is fully statically typed: the
+compiler resolves every used name and knows from usage whether it
+lands in type position (`Column` in an annotation) or value position
+(`Logger(..)`), so there is nothing for the user to annotate. An
+unreferenced use name is a lint, not an error.
 
 The engine's builtin names — the primitives, `opaque`, `panic`,
 `type_id<T>()`, `str(x)` — are **ambient**: no `use` is
@@ -64,6 +94,21 @@ is the designation, not a name
 ([Host fns and declaration files](host-fns.md)).
 Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through
 `use`.
+
+### Qualified positions
+
+Inside one package, a declaration of another module is nameable where
+a path is legal — a type annotation, a call, a field read — by
+**dot-qualified position**: `layout.Column`, `store.Source<str>`,
+`widget.mk(3)`. The head resolves against the current module's scope,
+then the module's ancestors up to the package root; positions never
+take a package head — `use` statements are the only cross-package
+door. Two spellings, two doors:
+
+| form | spelling | door |
+|---|---|---|
+| use path | `use pkg::a::b::{ C }` | `::` — cross-package, the import |
+| qualified position | `a.b.C` / `a.b.f(..)` | `.` — intra-package, at the use site |
 
 ### Module-level `let`
 
@@ -107,21 +152,27 @@ bugs, deterministic and cheap loads.
 
 ## Visibility
 
-Modules form a tree per package (files in directories; the package root
-is the root module). Every declaration — and every class member —
-carries a visibility:
+Modules form a tree per package (the package root is the root module
+`mod.rut`; each declared child is a module file). Every declaration —
+and every class member — carries a visibility:
 
 | Form | Meaning |
 |---|---|
 | `pub fn ..` | **public** — nameable by any rut module (other packages included) |
-| `pub(mod) fn ..` | visible everywhere inside this **package's module tree** |
-| `pub(super) fn ..` | visible to the **parent module** only |
-| `pub(self) fn ..` | module-private — **the default** |
+| `pub(pkg) fn ..` | visible everywhere inside this **package** (its whole module tree) |
+| `pub(super) fn ..` | visible to the **parent module's subtree** only |
+| *(unannotated)* | module-private — visible in this module and its descendants; **the default** |
 
-- Unannotated = `pub(self)`: nothing leaks unless it says `pub`.
-- Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl`
-  (an impl exports with its target type), `fn`, `type` aliases. On a
-  `class` declaration it means the *type name* is visible.
+- Unannotated = private to the declaring module *and its descendants*
+  (a child module sees its ancestors' privates, never a sibling's).
+- The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed
+  but gated nothing; the parser refuses them with the fix (bare
+  private, or `pub(super)`/`pub(pkg)`/`pub`).
+- Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`,
+  `impl` (an impl exports with its target type), `fn`, `type` aliases,
+  and the `mod` edge itself (`pub mod` opens the child's `pub` members
+  to other packages; a plain `mod` keeps the child package-internal).
+  On a `class` declaration it means the *type name* is visible.
 - **Class members take the same forms**: an unannotated field or method
   is module-private; `pub` (optionally scoped) exposes it. See
   [Classes and constructors](classes.md).

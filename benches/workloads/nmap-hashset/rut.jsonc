@@ -9,10 +9,7 @@
   // (same hash values — the nmapset pkg ships the mapset-exact mix64
   // constants).
   "name": "nmap_hashset",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "nmapset": {
       "path": "../../../rut/nmapset"
     },

@@ -3,6 +3,16 @@
 // replaced by the one-kernel jotai shape; survey §4's declared DAG and
 // the flush are retired — the addendum records the reversal)
 // =====================================================================
+//
+// A CHILD module of the ui root (`pub mod store;`): the store's
+// VOCABULARY crosses to biz (`pub` — the classes, the capability
+// interfaces, the handle verbs, the ctx forms); the PLUMBING (the
+// shared members the interfaces observe, the write lane's internals)
+// stays private to this file — `pub(pkg)` would be too generous, and
+// nothing in ui outside this module reads it.
+
+use pouch::{ Vec };
+use nmapset::{ HashMap };
 
 // ---- the store's eyes: the handles' CAPABILITY INTERFACES + the
 // shared members they observe. Satisfaction is STRUCTURAL — the
@@ -13,12 +23,12 @@
 // member set; a shape without them fails its own instantiation,
 // loud. ----------
 
-interface Readable {
+pub interface Readable {
     fn atom_id(self) -> u32;
     fn materialize(self, st: Store) -> nil; // first touch: the seed lands
 }
 
-interface Writable {
+pub interface Writable {
     fn atom_id(self) -> u32;
 }
 
@@ -78,9 +88,9 @@ impl<T> Source<T> {
     pub fn set(mut self, v: T) -> nil {
         self.st.set<T, T>(self, v);
     }
-    pub fn atom_id(self) -> u32 { return self.id; }
+    pub(pkg) fn atom_id(self) -> u32 { return self.id; }
     /// first touch: the seed lands
-    pub fn materialize(self, st: Store) -> nil {
+    pub(pkg) fn materialize(self, st: Store) -> nil {
         st.kv.put(self.id, self.seed);
     }
 }
@@ -94,8 +104,8 @@ impl<T> Derived<T> {
     // the shared read members. atom_id is the key the store reads
     // uniformly over sources and deriveds; materialize is a no-op — a
     // derived's value only ever lands through its own recompute.
-    pub fn atom_id(self) -> u32 { return self.id; }
-    pub fn materialize(self, st: Store) -> nil {}
+    pub(pkg) fn atom_id(self) -> u32 { return self.id; }
+    pub(pkg) fn materialize(self, st: Store) -> nil {}
 }
 
 impl<A, R> Mutation<A, R> {
@@ -105,7 +115,7 @@ impl<A, R> Mutation<A, R> {
         return self.st.set<A, R>(self, arg);
     }
     // the shared write member.
-    pub fn atom_id(self) -> u32 { return self.id; }
+    pub(pkg) fn atom_id(self) -> u32 { return self.id; }
 }
 
 // ---- the ctx types: the whole world a program fn sees ---------------

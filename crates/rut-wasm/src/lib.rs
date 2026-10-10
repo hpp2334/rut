@@ -158,7 +158,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // the law).
     let flow_manifest = rut_driver::parse_manifest(include_str!("../../../rut/flow/rut.jsonc"))
         .expect("the flow manifest is valid");
-    let mut flow = rut_driver::Pkg::source("flow", include_str!("../../../rut/flow/flow.rut"));
+    let mut flow = rut_driver::Pkg::source("flow", include_str!("../../../rut/flow/mod.rut"));
     flow.entry = flow_manifest.entry.clone();
     for (peer, desc) in &flow_manifest.peer_deps {
         flow.peers.insert(peer.clone(), rut_driver::PeerDecl {
@@ -224,19 +224,19 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     let lib_pkgs = vec![
         ink_host,
         nmap_host,
-        rut_driver::Pkg::source("ink", include_str!("../../../rut/ink/ink.rut")),
-        rut_driver::Pkg::source("pouch", include_str!("../../../rut/pouch/pouch.rut")),
+        rut_driver::Pkg::source("ink", include_str!("../../../rut/ink/mod.rut")),
+        rut_driver::Pkg::source("pouch", include_str!("../../../rut/pouch/mod.rut")),
         // `nmapset` links like `ink` (its generic classes' methods cross on
         // the surface's inherent rows; a consumer requests the
         // instantiations); its `use nmap_host::` resolves
         // against the offered surface above
-        rut_driver::Pkg::source("nmapset", include_str!("../../../rut/nmapset/nmapset.rut")),
+        rut_driver::Pkg::source("nmapset", include_str!("../../../rut/nmapset/mod.rut")),
         flow,
         async_host,
-        rut_driver::Pkg::source("futures", include_str!("../../../rut/futures/futures.rut")),
+        rut_driver::Pkg::source("futures", include_str!("../../../rut/futures/mod.rut")),
         strbuild_host,
-        rut_driver::Pkg::source("strbuild", include_str!("../../../rut/strbuild/strbuild.rut")),
-        rut_driver::Pkg::source("json", include_str!("../../../rut/json/json.rut")),
+        rut_driver::Pkg::source("strbuild", include_str!("../../../rut/strbuild/mod.rut")),
+        rut_driver::Pkg::source("json", include_str!("../../../rut/json/mod.rut")),
         calc,
     ];
     // the rows snapshot `rut_run`'s installs answer to (owned; the

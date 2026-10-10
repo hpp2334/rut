@@ -7,10 +7,7 @@
   "format": "rutbundle",
   "format_version": 10,
   "name": "ink",
-  "entry": {
-    "lib": "./ink.rut"
-  },
-  "deps": {
+    "deps": {
     "ink_host": {
       "path": "../ink_host"
     }

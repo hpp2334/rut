@@ -4,10 +4,7 @@
   // twin so the checksum is exact. A module dir because it mounts `pouch`;
   // `ink` is declared for the logger. The JS twin is ../spectral-norm.js.
   "name": "spectral_norm",
-  "entry": {
-    "lib": "./main.rut"
-  },
-  "deps": {
+    "deps": {
     "pouch": {
       "path": "../../../rut/pouch"
     },

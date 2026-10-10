@@ -1,6 +1,6 @@
 //! 01-sort — a Rust app embedding rut.
 //!
-//! `sort.rut` is the application: a sorting library — five algorithms
+//! `mod.rut` is the application: a sorting library — five algorithms
 //! (insertion / bubble / selection / quicksort / merge sort) behind one
 //! `entry fn` dispatcher. This file is the embedder: compile, verify,
 //! then drive the library — the host owns the session, holds the opaque

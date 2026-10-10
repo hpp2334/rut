@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 rut-core = { path = "../../crates/rut-core" }
 rut-parser = { path = "../../crates/rut-parser" }
+rut-ast = { path = "../../crates/rut-ast" }
 rut-driver = { path = "../../crates/rut-driver" }
 # no `http` feature: the page never wires — its walks ride
 # `HttpRemote::offline` over the build-time cache (primed via

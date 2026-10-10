@@ -1,4 +1,13 @@
-// ---- THE WORLD: the handles bundle (there is no domain container) -----
+// world/ — THE WORLD: the handles bundle (there is no domain
+// container). A CHILD module of the biz root: the state record and its
+// boot fn are `pub` (the app shell and the store-probe spec both take
+// the World), the machine closures read the domain through the
+// `domain.` qualified positions.
+
+use ui::store::{ Store, Source, Derived, Mutation };
+use ui::widget::{ Widget };
+use ui::components::{ card, pending };
+use pouch::{ Vec };
 
 /// The state record: the store, the atoms, the derived, the machine's
 /// mutations. Fields are HANDLES — keys into the store — and the
@@ -9,21 +18,21 @@ pub class World {
     // store-probe spec (tests/store_probe/) reads the same handles
     // the app does — one surface, no probe-only shape.
     pub store: Store;
-    pub items$: Source<Vec<Todo>>; // the committed list — "the board"
-    pub reqs$: Source<Vec<Req>>; // the booked requests
+    pub items$: Source<Vec<domain.Todo>>; // the committed list — "the board"
+    pub reqs$: Source<Vec<domain.Req>>; // the booked requests
     pub draft$: Source<str>; // the field's event-carried value (str lane)
     pub note$: Source<str>; // the status line's tail (str lane)
     pub last$: Source<str>; // the answer channel's own log (str lane)
     pub next_todo$: Source<i64>; // the id machine's counters — state cells
     pub next_req$: Source<i64>; // now that the store is the state home
     pub counts$: Derived<str>; // "N open | M done | K in flight"
-    pub add_m: Mutation<str, Req>;
-    pub toggle_m: Mutation<i64, ?Req>;
-    pub remove_m: Mutation<i64, ?Req>;
+    pub add_m: Mutation<str, domain.Req>;
+    pub toggle_m: Mutation<i64, ?domain.Req>;
+    pub remove_m: Mutation<i64, ?domain.Req>;
     pub answer_m: Mutation<str, (str, str)>;
     // THE EVENT SURFACE (tur's onClick/onInput props): the mutations
     // the WIDGETS carry. The app wires them; the framework runs them.
-    // Every wrapper returns the BOOKING as a box — opaque(Req) when a
+    // Every wrapper returns the BOOKING as a box — opaque(domain.Req) when a
     // timer must be booked, opaque(nil) when there is nothing to book.
     pub draft_ev: Mutation<str, opaque>; // typing: draft$ + note$
     pub add_ev: Mutation<str, opaque>; // the Add click (reads the draft)
@@ -42,8 +51,8 @@ pub class World {
 /// app's boot turn; the DOM-free suite passes "").
 pub fn world_boot(boot_line: str) -> World {
     let mut store = Store.new();
-    let items$ = store.source<Vec<Todo>>(Vec.new());
-    let reqs$ = store.source<Vec<Req>>(Vec.new());
+    let items$ = store.source<Vec<domain.Todo>>(Vec.new());
+    let reqs$ = store.source<Vec<domain.Req>>(Vec.new());
     let draft$ = store.source_str("");
     // the boot line is the note's SEED (never a write): the app boots
     // "booted — ..." and the status line is pixel-identical from turn
@@ -57,8 +66,8 @@ pub fn world_boot(boot_line: str) -> World {
     // never declared. The SAME formula the status line has always
     // shown; the first get computes it.
     let counts$ = store.derive(fn (ctx) -> str {
-        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-        let reqs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
+        let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+        let reqs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
         let mut open = 0;
         for (let t of items) {
             if (t.done == false) {
@@ -73,65 +82,44 @@ pub fn world_boot(boot_line: str) -> World {
 
     /// Book an add: the request table grows, the list does not — the
     /// list changes when the timer's answer lands, as its own turn.
-    let add_m = store.mutation(fn (ctx, title: str) -> Req {
+    let add_m = store.mutation(fn (ctx, title: str) -> domain.Req {
         let id = ctx.get<i64, Source<i64>>(next_req$);
         ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
-        let req = Req {
-            id: id,
-            tag: f"req:{id}",
-            kind: KIND_ADD,
-            todo: 0,
-            title: title,
-            latency: LATENCY_ADD,
-        };
-        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
+        let req = domain.mk_req(id, f"req:{id}", domain.KIND_ADD, 0, title, domain.LATENCY_ADD);
+        let rs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
         rs.push(req);
-        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs); // the write point: store + mark
+        ctx.set<Vec<domain.Req>, Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$, rs); // the write point: store + mark
         return req;
     });
 
     /// Book a toggle; nil when the todo id is unknown — the caller
     /// (the UI) turns that into its loud listener-drift trap.
-    let toggle_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
-        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-        if (find_todo(items, todo) < 0) {
+    let toggle_m = store.mutation(fn (ctx, todo: i64) -> ?domain.Req {
+        let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+        if (domain.find_todo(items, todo) < 0) {
             return nil;
         }
         let id = ctx.get<i64, Source<i64>>(next_req$);
         ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
-        let req = Req {
-            id: id,
-            tag: f"req:{id}",
-            kind: KIND_TOGGLE,
-            todo: todo,
-            title: "",
-            latency: LATENCY_TOGGLE,
-        };
-        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
+        let req = domain.mk_req(id, f"req:{id}", domain.KIND_TOGGLE, todo, "", domain.LATENCY_TOGGLE);
+        let rs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
         rs.push(req);
-        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs);
+        ctx.set<Vec<domain.Req>, Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$, rs);
         return req;
     });
 
     /// Book a remove; nil when the todo id is unknown.
-    let remove_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
-        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-        if (find_todo(items, todo) < 0) {
+    let remove_m = store.mutation(fn (ctx, todo: i64) -> ?domain.Req {
+        let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+        if (domain.find_todo(items, todo) < 0) {
             return nil;
         }
         let id = ctx.get<i64, Source<i64>>(next_req$);
         ctx.set<i64, i64, Source<i64>>(next_req$, id + 1);
-        let req = Req {
-            id: id,
-            tag: f"req:{id}",
-            kind: KIND_REMOVE,
-            todo: todo,
-            title: "",
-            latency: LATENCY_REMOVE,
-        };
-        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
+        let req = domain.mk_req(id, f"req:{id}", domain.KIND_REMOVE, todo, "", domain.LATENCY_REMOVE);
+        let rs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
         rs.push(req);
-        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, rs);
+        ctx.set<Vec<domain.Req>, Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$, rs);
         return req;
     });
 
@@ -140,21 +128,21 @@ pub fn world_boot(boot_line: str) -> World {
     /// the turn reads (the ("", why) leg). Consumes the answered row,
     /// then commits per kind, writing items$/last$ through the ctx.
     let answer_m = store.mutation(fn (ctx, tag: str) -> (str, str) {
-        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
-        let at = find_req(rs, tag);
+        let rs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
+        let at = domain.find_req(rs, tag);
         if (at < 0) {
             panic(f"server: no request '{tag}' — the answer names no booked row");
         }
         let req = rs[at];
-        let kept: Vec<Req> = Vec.new();
+        let kept: Vec<domain.Req> = Vec.new();
         for (let r of rs) {
             if (r.tag != tag) {
                 kept.push(r);
             }
         }
-        ctx.set<Vec<Req>, Vec<Req>, Source<Vec<Req>>>(reqs$, kept); // consume the answered row
+        ctx.set<Vec<domain.Req>, Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$, kept); // consume the answered row
 
-        if (req.kind == KIND_ADD) {
+        if (req.kind == domain.KIND_ADD) {
             // commit_add
             let title = req.title;
             if (title == "") {
@@ -162,25 +150,25 @@ pub fn world_boot(boot_line: str) -> World {
                 ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-            if (find_by_title(items, title) >= 0) {
+            let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+            if (domain.find_by_title(items, title) >= 0) {
                 let line = f"rejected '{title}' — already on the list";
                 ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
             let id = ctx.get<i64, Source<i64>>(next_todo$);
             ctx.set<i64, i64, Source<i64>>(next_todo$, id + 1);
-            let its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-            its.push(Todo { id: id, title: title });
-            ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, its); // the write point: store + mark
+            let its = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+            its.push(domain.mk_todo(id, title));
+            ctx.set<Vec<domain.Todo>, Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$, its); // the write point: store + mark
             let line = f"added '{title}' as #{id}";
             ctx.set<str, str, Source<str>>(last$, line);
             return (line, "");
         }
-        if (req.kind == KIND_TOGGLE) {
+        if (req.kind == domain.KIND_TOGGLE) {
             // commit_toggle
-            let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-            let at2 = find_todo(items, req.todo);
+            let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+            let at2 = domain.find_todo(items, req.todo);
             if (at2 < 0) {
                 // the lost-id shape: a remove landed first — the answer
                 // says so, the turn moves on
@@ -188,9 +176,9 @@ pub fn world_boot(boot_line: str) -> World {
                 ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let mut its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
+            let mut its = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
             its[at2].done = its[at2].done == false;
-            ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, its); // the write point: store + mark
+            ctx.set<Vec<domain.Todo>, Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$, its); // the write point: store + mark
             let mut to = "open";
             if (its[at2].done) {
                 to = "done";
@@ -200,22 +188,22 @@ pub fn world_boot(boot_line: str) -> World {
             return (line, "");
         }
         // commit_remove
-        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-        let at3 = find_todo(items, req.todo);
+        let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+        let at3 = domain.find_todo(items, req.todo);
         if (at3 < 0) {
             let line = f"skipped remove #{req.todo} — the row is gone";
             ctx.set<str, str, Source<str>>(last$, line);
             return ("", line);
         }
-        let its = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
+        let its = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
         let gone = its[at3].title;
-        let kept2: Vec<Todo> = Vec.new();
+        let kept2: Vec<domain.Todo> = Vec.new();
         for (let t of its) {
             if (t.id != req.todo) {
                 kept2.push(t);
             }
         }
-        ctx.set<Vec<Todo>, Vec<Todo>, Source<Vec<Todo>>>(items$, kept2); // the write point: store + mark
+        ctx.set<Vec<domain.Todo>, Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$, kept2); // the write point: store + mark
         let line = f"removed '{gone}' (#{req.todo})";
         ctx.set<str, str, Source<str>>(last$, line);
         return (line, "");
@@ -224,7 +212,7 @@ pub fn world_boot(boot_line: str) -> World {
     // ---- THE EVENT WRAPPERS (tur's onClick/onInput props) -----------
     //
     // What the WIDGETS carry. Each returns the BOOKING as a box:
-    // opaque(Req) — the app books tim_after from it — or opaque(nil)
+    // opaque(domain.Req) — the app books tim_after from it — or opaque(nil)
     // when there is nothing to book. The write ORDER is the law: the
     // same writes, in the same order, as the dispatch legs they
     // replace (the sessions' status lines are byte-pinned).
@@ -243,7 +231,7 @@ pub fn world_boot(boot_line: str) -> World {
             ctx.set<str, str, Source<str>>(note$, "type a title first");
             return opaque(nil);
         }
-        let req = ctx.set<str, Req, Mutation<str, Req>>(add_m, title);
+        let req = ctx.set<str, domain.Req, Mutation<str, domain.Req>>(add_m, title);
         ctx.set<str, str, Source<str>>(draft$, ""); // the draft moved into the request
         ctx.set<str, str, Source<str>>(note$, f"requested add '{title}'");
         return opaque(req);
@@ -253,23 +241,23 @@ pub fn world_boot(boot_line: str) -> World {
     /// unknown todo) is DATA — nothing to book, no trap (the twins
     /// pin the empty-tag answer; the lost-id shape is the answer's).
     let toggle_row = store.mutation(fn (ctx, todo: i64) -> opaque {
-        let req = ctx.set<i64, ?Req, Mutation<i64, ?Req>>(toggle_m, todo);
+        let req = ctx.set<i64, ?domain.Req, Mutation<i64, ?domain.Req>>(toggle_m, todo);
         if (req == nil) {
             return opaque(nil);
         }
         ctx.set<str, str, Source<str>>(note$, f"requested toggle #{todo}");
-        let r: Req = req;
+        let r: domain.Req = req;
         return opaque(r);
     });
 
     /// a row's del: book the remove, note it. Same nil law.
     let remove_row = store.mutation(fn (ctx, todo: i64) -> opaque {
-        let req = ctx.set<i64, ?Req, Mutation<i64, ?Req>>(remove_m, todo);
+        let req = ctx.set<i64, ?domain.Req, Mutation<i64, ?domain.Req>>(remove_m, todo);
         if (req == nil) {
             return opaque(nil);
         }
         ctx.set<str, str, Source<str>>(note$, f"requested remove #{todo}");
-        let r: Req = req;
+        let r: domain.Req = req;
         return opaque(r);
     });
 
@@ -312,14 +300,14 @@ pub fn world_boot(boot_line: str) -> World {
     /// from its CREATE; a row's id is stable for its lifetime, so the
     /// captured args are equivalent).
     let list_tree$ = store.derive(fn (ctx) -> Widget {
-        let items = ctx.get<Vec<Todo>, Source<Vec<Todo>>>(items$);
-        let rs = ctx.get<Vec<Req>, Source<Vec<Req>>>(reqs$);
+        let items = ctx.get<Vec<domain.Todo>, Source<Vec<domain.Todo>>>(items$);
+        let rs = ctx.get<Vec<domain.Req>, Source<Vec<domain.Req>>>(reqs$);
         let mut list = card().pad(12).gap(8).hook("list");
         for (let t of items) {
-            list.w(todo_row(t, has_pending_for(rs, t.id), toggle_row, remove_row));
+            list.w(app.todo_row(t, domain.has_pending_for(rs, t.id), toggle_row, remove_row));
         }
         for (let rq of rs) {
-            if (rq.kind == KIND_ADD) {
+            if (rq.kind == domain.KIND_ADD) {
                 list.w(pending(f"... {rq.title}"));
             }
         }

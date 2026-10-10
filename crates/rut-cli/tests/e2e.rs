@@ -2386,7 +2386,7 @@ entry fn main() -> nil {
 
 #[test]
 fn dbg_digest() {
-    let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").expect("digest.rut");
+    let src = std::fs::read_to_string("../../examples/02-digest/mod.rut").expect("digest.rut");
     let mut world = Vec::new();
     // json mounted light (the base only — the encode half's traits and
     // writer; no peer group needed)
@@ -2532,7 +2532,7 @@ entry fn f(s: str) -> (bytes, str) {
 
 #[test]
 fn dbg_digest_diags() {
-    let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").unwrap();
+    let src = std::fs::read_to_string("../../examples/02-digest/mod.rut").unwrap();
     let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
     for d in &out.diags {
         let line = src[..d.span.lo as usize].bytes().filter(|&b| b == b'\n').count() + 1;

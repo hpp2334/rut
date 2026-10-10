@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "rut manifest (rut.jsonc)",
-  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `mod.rut` beside the manifest (file modules: `mod NAME;` in the root declares each `NAME/mod.rut` child); the `entry.lib`/`entry.libs` keys still load but are transitional.",
+  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `mod.rut` beside the manifest (file modules: `mod NAME;` in the root declares each `NAME/mod.rut` child); the repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `mod.rut` and drop the keys.",
   "type": "object",
   "properties": {
     "name": {
@@ -10,7 +10,10 @@
       "description": "The package name — what a `use` path spells (`use pouch::{ Vec }`). A bare package name: [a-zA-Z0-9_]+."
     },
     "type": {
-      "enum": ["lib", "host"],
+      "enum": [
+        "lib",
+        "host"
+      ],
       "description": "The package kind. `lib` is the ordinary rut package (a source body, deps allowed, no host rows). `host` is a pure declaration surface the embedding Rust binds at run time — no body, no deps of any kind. Absent means `lib`; a host package spells itself."
     },
     "format": {
@@ -23,20 +26,11 @@
     },
     "entry": {
       "type": "object",
-      "description": "Where the module's surface and body live — relative to this manifest's directory. TRANSITIONAL: the root module is `mod.rut` beside the manifest — a manifest with no `entry.lib` takes it (file modules: `mod NAME;` declares each `NAME/mod.rut` child). The `entry.lib`/`entry.libs` keys still load but are on their way out.",
+      "description": "Where the module's `.d.rut` declaration surface lives — relative to this manifest's directory. The body is `mod.rut` beside the manifest (the root module; `mod NAME;` declares each `NAME/mod.rut` child). The repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `mod.rut` and drop the keys.",
       "properties": {
         "type": {
           "type": "string",
           "description": "The `.d.rut` declaration surface — the type half. Indexes in Decl mode."
-        },
-        "lib": {
-          "type": "string",
-          "description": "The body source (a `.rut` file). TRANSITIONAL: still valid, but the root module is `mod.rut` — rename the file and drop this key (file modules mount the `mod` tree beside it)."
-        },
-        "libs": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "DEPRECATED — additional body files, spliced after `lib` in listed order. File modules replace the multi-lib splice: split each file into its own `NAME/mod.rut` directory and declare `mod NAME;` in the root."
         }
       },
       "additionalProperties": false
@@ -59,7 +53,9 @@
     },
     "style": {
       "type": "object",
-      "additionalProperties": { "type": "string" },
+      "additionalProperties": {
+        "type": "string"
+      },
       "description": "The package's formatter knobs — flat `\"key\": \"value\"` rows (e.g. `\"indent\": \"2\"`). Keys and values are validated by the `rut fmt` tool, never the loader; unknown keys ride."
     },
     "namespace": {
@@ -70,8 +66,19 @@
       "type": "object",
       "additionalProperties": {
         "anyOf": [
-          { "type": "number", "description": "The constant's f64 value." },
-          { "enum": ["inf", "+inf", "-inf", "nan"], "description": "The non-finite pair has no JSON spelling — the string names it." }
+          {
+            "type": "number",
+            "description": "The constant's f64 value."
+          },
+          {
+            "enum": [
+              "inf",
+              "+inf",
+              "-inf",
+              "nan"
+            ],
+            "description": "The non-finite pair has no JSON spelling — the string names it."
+          }
         ]
       },
       "description": "The host body's compiler-materialized constants (name → f64; calc's `Math.PI` family). The surface grammar has no `static` field form, so the manifest is their only spelling."
@@ -80,11 +87,15 @@
   "definitions": {
     "depTable": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/definitions/depDescriptor" }
+      "additionalProperties": {
+        "$ref": "#/definitions/depDescriptor"
+      }
     },
     "peerTable": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/definitions/peerDescriptor" }
+      "additionalProperties": {
+        "$ref": "#/definitions/peerDescriptor"
+      }
     },
     "depDescriptor": {
       "description": "Exactly one source: a `path` directory or a pinned `url` bundle — never both, never neither.",
@@ -97,7 +108,9 @@
               "description": "The dependency's module directory, relative to this manifest's directory (may reach outside the workspace folder)."
             }
           },
-          "required": ["path"],
+          "required": [
+            "path"
+          ],
           "additionalProperties": false
         },
         {
@@ -113,7 +126,9 @@
               "description": "The pin: 64 hex digits of the bundle's sha256 (lowercase-normalized). The pin is law at the mount door — fetched or cached bytes mount only when their hash matches; an unpinned url never mounts from the editor."
             }
           },
-          "required": ["url"],
+          "required": [
+            "url"
+          ],
           "additionalProperties": false
         }
       ]
