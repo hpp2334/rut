@@ -59,6 +59,10 @@ additional-js = ["theme/rut-highlight.js", "theme/jsonc-highlight.js", "theme/ru
 # the site root, zh book under /zh/) — relative asset and search URLs
 # resolve on their own, this keeps canonical links correct.
 site-url = "/zh/"
+# Same as the en book: rut is the only runnable language — mdbook's
+# playground "Run this code" button on ```rust blocks must stay off.
+[output.html.playground]
+runnable = false
 
 # The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
 # here: mdbook 0.5 dropped `output.html.additional-resources` (the build

@@ -32,6 +32,15 @@ edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
 additional-css = ["theme/rut-book.css"]
 additional-js = ["theme/rut-highlight.js", "theme/jsonc-highlight.js", "theme/rut-book.js", "theme/lang-toggle.js"]
 
+# rut is the ONLY runnable language in this book: the ▶ Run buttons on
+# ```rut blocks are rut-book.js's, riding the rut wasm engine. mdbook's
+# playground defaults `runnable = true`, which stamps every ```rust block
+# with a "Run this code" button that ships the snippet to
+# play.rust-lang.org — wrong for a language book whose rust blocks are
+# embedder/host examples. Turn it off.
+[output.html.playground]
+runnable = false
+
 # The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
 # here: mdbook 0.5 dropped `output.html.additional-resources` (the build
 # refuses the key — verified), so the deploy lane copies it post-build.
