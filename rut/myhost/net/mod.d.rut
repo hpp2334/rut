@@ -1,0 +1,6 @@
+// myhost/net/mod.d.rut — the tree's first level: the rows here
+// register path-qualified (`myhost::net::connect`).
+
+pub mod tls;
+
+pub host fn connect(url: str) -> opaque;

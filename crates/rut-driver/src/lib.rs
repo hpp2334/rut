@@ -18,6 +18,10 @@ pub mod pack;
 pub mod run;
 
 pub use bundle::{parse_manifest, Manifest};
+/// The parse mode the mount flavors speak (`Mode::Impl` for a lib
+/// body tree, `Mode::Decl` for a host surface tree) — re-exported so
+/// the FS/archive lanes can name the mount core's parameter.
+pub use rut_parser::Mode;
 pub use compile::{
     compile_module, compile_program, compile_program_resolved, ir_dump_of, CompileOutput,
     ProgramOutput, SeedGroup, Seeds,

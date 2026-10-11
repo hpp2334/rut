@@ -1,0 +1,5 @@
+// myhost/net/tls/mod.d.rut — the tree's second level (the mount
+// recurses; cycle-guarded by canonical file identity): the row
+// registers as `myhost::net::tls::handshake`.
+
+pub host fn handshake(c: opaque) -> opaque;

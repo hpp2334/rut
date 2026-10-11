@@ -41,6 +41,7 @@
 //! module-private and each layer keeps its privates private for real
 //! in one file.
 
+use std::collections::BTreeMap;
 use rut_core::binary::Program;
 use rut_driver::{Compiled, Loaded, Pkg, RutRun};
 
@@ -136,7 +137,7 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
 /// offer (the registration scope IS the package name: `web::*`, the
 /// prefix every crossing's host id carries).
 pub fn web_pkg() -> Result<Pkg, String> {
-    Ok(rut_driver::lower_decl_module(WEB_D_RUT, "web.d.rut")?.named("web"))
+    Ok(rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?.named("web"))
 }
 
 /// THE MIRROR — every package `rut/biz/rut.jsonc` names, offered by

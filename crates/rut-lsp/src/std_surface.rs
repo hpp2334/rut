@@ -16,6 +16,11 @@
 //! at all. (The hashmap-surface batch re-scoped this surface to the
 //! family pair; the type-name-law batch repeals the alias-row form —
 //! nmapset's index carries the two classes and NO `type` rows.)
+//!
+//! TODO(phase 2): the host surfaces here index their ROOT `.d.rut`
+//! only — a host pkg that organizes as a mod tree (`NAME/mod.d.rut`)
+//! needs its children embedded and indexed per module too (the
+//! std-surface tree indexing half of the host-mod-tree plan).
 
 use crate::hover::{self, DefIndex};
 

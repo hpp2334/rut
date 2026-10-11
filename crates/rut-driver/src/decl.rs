@@ -5,13 +5,24 @@
 //! holds at LOAD time: every signature must be concrete
 //! over the crossing set, or the load refuses naming the offender.
 //!
+//! The surface may organize as a module tree: `mod net;` in the root
+//! recurses into the mounted `net/mod.d.rut` (a `mod` whose child is
+//! not mounted is the loud error — the parse-only silent drop is
+//! gone), and every row carries the mod path it lives under
+//! ([`HostRow::path`]). The registration string is
+//! [`HostRow::full_name`] — `pkg::net::connect` — and an async row's
+//! family (`__start`/`__yield`/`__take`/`__cancel`) expands onto that
+//! same qualified name.
+//!
 //! What is NOT lowered (yet): `host struct` records and `builtin` decls
 //! stay parse-only surface — `opaque` covers host boxes, and `builtin`
 //! is the engine's (core's d.rut is mounted from `Surface::core`, not
 //! read from disk). An `async` host fn lowers like any other row (its
-//! `is_async` flag rides the 4-tuple); the compiler weaves its call
+//! `is_async` flag rides the row); the compiler weaves its call
 //! sites into the host future and the embedder registers the row
 //! family with `rut_vm::register_async!`.
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use rut_ast::ast::{AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
@@ -20,7 +31,12 @@ use rut_core::types::{
 };
 use rut_parser::{parse, Mode};
 
-use crate::session::{Pkg, PkgBody};
+use crate::mods::ModSource;
+use crate::session::{HostRow, Pkg, PkgBody};
+
+/// The host surface tree's module file — the Decl flavor's spelling
+/// (`NAME/mod.d.rut`), the twin of a lib body tree's `mod.rut`.
+pub const DECL_CHILD_FILE: &str = "mod.d.rut";
 
 /// A crossing-set type name → its boot `TypeId`: the
 /// primitives, `str`/`bytes`, and `opaque`. Everything else a host
@@ -81,17 +97,56 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
 }
 
 /// Lower a `.d.rut` surface into a host-body [`Pkg`]: every
-/// `host fn` becomes a bodyless host entry `(name, params, ret)` — the
-/// embedding Rust binds the bodies at run time. Non-`host` items are
-/// surface the compiler consumes elsewhere; parse failures and
-/// non-crossing signatures are load errors.
-pub fn lower_decl_module(src: &str, origin: &str) -> Result<Pkg, String> {
+/// `host fn` becomes a bodyless host entry carrying its mod path —
+/// the embedding Rust binds the bodies at run time. `children` is the
+/// MOUNTED tree (mod path → source, the `crate::mods::mount_mod_children`
+/// Decl flavor's output): a `mod net;` in the surface recurses into
+/// `net/mod.d.rut`'s rows, `net/tls` into `net/tls/mod.d.rut`, and so
+/// on — a declared child missing from the map is the loud error (the
+/// silent drop of a `mod` declaration in a `.d.rut` is fixed here).
+/// Non-`host` items are surface the compiler consumes elsewhere;
+/// parse failures and non-crossing signatures are load errors. The
+/// mounted tree rides the pkg (`Pkg::mods`) and the root text rides
+/// the body (`root_surface`) — the bundle lane and the phase-2 dep
+/// tables read both.
+pub fn lower_decl_module(
+    src: &str,
+    children: &BTreeMap<String, ModSource>,
+    origin: &str,
+) -> Result<Pkg, String> {
     let (ast, diags) = parse(src, Mode::Decl);
     if !diags.is_empty() {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
         return Err(format!("{origin}: the surface does not parse: {}", msgs.join("; ")));
     }
-    let mut host_funcs: Vec<(String, Vec<TypeId>, TypeId, bool)> = Vec::new();
+    let mut host_funcs: Vec<HostRow> = Vec::new();
+    // first mount wins, mirrored in the lowering: a repeated
+    // `mod NAME;` names the same mounted child — lower it once
+    let mut lowered: BTreeSet<String> = BTreeSet::new();
+    lower_module(&ast, "", children, origin, &mut host_funcs, &mut lowered)?;
+    Ok(Pkg {
+        body: PkgBody::Host {
+            host_funcs,
+            consts: vec![],
+            native_types: vec![],
+            native_fns: vec![],
+            native_impls: vec![],
+            root_surface: Some(src.to_string()),
+        },
+        mods: children.clone(),
+        ..Default::default()
+    })
+}
+
+/// One module's `host fn` rows, off its parsed items — the row-lowering
+/// both lanes share (the host tree recursion and the lib-surface law's
+/// root probe).
+fn lower_rows(
+    ast: &Ast,
+    path: &str,
+    display: &str,
+    rows: &mut Vec<HostRow>,
+) -> Result<(), String> {
     for it in ast.module_items(ast.root).to_vec() {
         let ItemKind::SurfaceFn { linkage: Linkage::Host, is_async, name, params, ret, .. } = ast.item(it)
         else {
@@ -102,56 +157,120 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Pkg, String> {
         for &p in params {
             let MemberKind::Param(pd) = ast.param(p) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: a `self` receiver cannot cross the host boundary"
+                    "{display}: host fn `{fname}`: a `self` receiver cannot cross the host boundary"
                 ));
             };
             let Some(th) = pd.ty else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: a host signature is concrete — every parameter is typed"
+                    "{display}: host fn `{fname}`: a host signature is concrete — every parameter is typed"
                 ));
             };
-            let tyname = ty_text(&ast, th);
+            let tyname = ty_text(ast, th);
             let Some(t) = crossing_ty(&tyname) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque`"
+                    "{display}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque`"
                 ));
             };
             ptys.push(t);
         }
         let rty = match ret {
             Some(r) => {
-                let tyname = ty_text(&ast, *r);
+                let tyname = ty_text(ast, *r);
                 crossing_ret_ty(&tyname).ok_or_else(|| {
                     format!(
-                        "{origin}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, and the answer optionals `?str`/`?bytes`/`?opaque`"
+                        "{display}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, and the answer optionals `?str`/`?bytes`/`?opaque`"
                     )
                 })?
             }
             None => TY_NIL,
         };
-        host_funcs.push((fname, ptys, rty, *is_async));
+        rows.push(HostRow {
+            path: path.to_string(),
+            name: fname,
+            params: ptys,
+            ret: rty,
+            is_async: *is_async,
+        });
     }
-    Ok(Pkg {
-        body: PkgBody::Host { host_funcs, consts: vec![], native_types: vec![], native_fns: vec![], native_impls: vec![] },
-        ..Default::default()
-    })
+    Ok(())
+}
+
+/// Lower one module of the surface tree: its own `host fn`s as
+/// path-carrying rows, then each `mod NAME;` recursed (first mount
+/// wins — a repeated declaration lowers its child once, `lowered`
+/// tracking the paths already walked). `display` is the declaring
+/// file's diagnostics name (the root's `origin`, a child's
+/// `<mod path>/mod.d.rut`); a child that is not in the mounted map —
+/// or one that does not parse — is the loud error.
+fn lower_module(
+    ast: &Ast,
+    path: &str,
+    children: &BTreeMap<String, ModSource>,
+    origin: &str,
+    rows: &mut Vec<HostRow>,
+    lowered: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    let display = if path.is_empty() {
+        origin.to_string()
+    } else {
+        format!("{path}/{DECL_CHILD_FILE}")
+    };
+    lower_rows(ast, path, &display, rows)?;
+    for it in ast.module_items(ast.root).to_vec() {
+        let ItemKind::ModDecl { vis: _, name } = ast.item(it) else {
+            continue;
+        };
+        let name = ast.name(*name).to_string();
+        let child_path = if path.is_empty() {
+            name.clone()
+        } else {
+            format!("{path}/{name}")
+        };
+        let Some(child) = children.get(&child_path) else {
+            return Err(format!(
+                "`mod {name};` in {display} — no `{child_path}` module is mounted \
+                 (the loader mounts `{child_path}/{DECL_CHILD_FILE}` beside the declaring file)"
+            ));
+        };
+        if !lowered.insert(child_path.clone()) {
+            continue; // first mount wins — one lowering per child
+        }
+        let (child_ast, diags) = parse(&child.text, Mode::Decl);
+        if !diags.is_empty() {
+            let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+            return Err(format!(
+                "{child_path}/{DECL_CHILD_FILE}: the surface does not parse: {}",
+                msgs.join("; ")
+            ));
+        }
+        lower_module(&child_ast, &child_path, children, origin, rows, lowered)?;
+    }
+    Ok(())
 }
 
 /// The lib-surface law: `host fn` text lives only in `type = "host"`
 /// pkgs. Non-parsing surfaces stay inert (doc-only); a surface that
 /// PARSES and declares host fns is the loud error. The walk runs it on
-/// every lib pkg's declared surface, both lanes.
+/// every lib pkg's declared surface, both lanes. The probe is the ROOT
+/// surface only (a `mod` declaration is invisible to it — the
+/// leaf-validation half over mounted trees is phase 2), the same reach
+/// the law has always had.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
-    if let Ok(m) = lower_decl_module(src, origin) {
-        if let PkgBody::Host { host_funcs, .. } = m.body {
-            if let Some((name, ..)) = host_funcs.first() {
-                return Err(format!(
-                    "{origin}: `host fn {name}` — a lib pkg cannot declare \
-                     host fns; split the rows into a `type = \"host\"` pkg \
-                     and depend on it"
-                ));
-            }
-        }
+    let (ast, diags) = parse(src, Mode::Decl);
+    if !diags.is_empty() {
+        return Ok(()); // non-parsing surfaces stay inert (doc-only)
+    }
+    let mut rows: Vec<HostRow> = Vec::new();
+    if lower_rows(&ast, "", origin, &mut rows).is_err() {
+        return Ok(()); // a non-crossing signature is the host lane's error, not this law's
+    }
+    if let Some(row) = rows.first() {
+        return Err(format!(
+            "{origin}: `host fn {}` — a lib pkg cannot declare \
+             host fns; split the rows into a `type = \"host\"` pkg \
+             and depend on it",
+            row.name
+        ));
     }
     Ok(())
 }

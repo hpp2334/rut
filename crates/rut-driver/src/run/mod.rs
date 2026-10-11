@@ -170,6 +170,7 @@ pub(crate) fn core_pkg() -> Pkg {
                 .map(|(t, n, i)| (*t, txt(*n), *i))
                 .collect(),
             host_funcs: vec![],
+            root_surface: None,
         },
         ..Default::default()
     }

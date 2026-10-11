@@ -3,6 +3,8 @@
 // no-launcher mode proves ruling 8 (users may write their own
 // launchers — the engine knows none of these names).
 
+use std::collections::BTreeMap;
+
 
 
 
@@ -201,6 +203,7 @@ fn a_user_launcher_over_the_same_future_surface() {
     // and the driving API is the engine half the user's row binds to
     let engine = rut_driver::lower_decl_module(
         include_str!("../../../rut/async_host/engine.d.rut"),
+        &BTreeMap::new(),
         "engine.d.rut",
     )
     .expect("engine surface")

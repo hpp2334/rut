@@ -33,8 +33,10 @@ pub enum PkgBody {
     /// and the builtin rows (`core`'s prelude, `calc`'s `Math`). The
     /// graph synthesizes a placeholder program from these rows.
     Host {
-        /// `(name, params, ret, is_async)` — `is_async` marks a
-        /// `host async fn` (the host future lane)
+        /// the declared rows — [`HostRow`] carries the mod path each
+        /// row lives under (`""` = the pkg root's own surface),
+        /// `is_async` marks a `host async fn` (the row family expands
+        /// at the mount)
         host_funcs: Vec<HostRow>,
         /// exported constants: `(name, type, raw bits)` — `calc::PI`
         consts: Vec<(String, rut_core::types::TypeId, u64)>,
@@ -54,12 +56,79 @@ pub enum PkgBody {
         /// lowering id)`. Bodyless and hostless — rut-lir expands the
         /// method call inline, ambient on the primitive.
         native_impls: Vec<(rut_core::types::TypeId, String, rut_core::ops::Intrinsic)>,
+        /// the `.d.rut` root surface the rows lowered from — `Some`
+        /// for a loaded `type = "host"` pkg (the rows' only carrier;
+        /// the dep-side decl tables of phase 2 read the tree off it),
+        /// `None` for hand-built row sets (`core`, `Pkg::host`)
+        root_surface: Option<String>,
     },
 }
 
-/// One declared host row: `(name, params, ret, is_async)`. `is_async`
-/// marks a `host async fn` (the row family expands at the mount).
-pub type HostRow = (String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool);
+/// One declared host row: the mod path it lives under (`""` = the
+/// pkg root's own surface, `"net"`, `"net/tls"`), its own name, the
+/// signature, and the async flag (`is_async` marks a `host async fn`
+/// — the row family expands at the mount).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostRow {
+    /// the module path relative to the pkg root — `""` for a row on
+    /// the root surface (flat pkgs), `"net"` / `"net/tls"` under a
+    /// `mod` tree
+    pub path: String,
+    /// the row's own name (`connect`) — never path-qualified
+    pub name: String,
+    pub params: Vec<rut_core::types::TypeId>,
+    pub ret: rut_core::types::TypeId,
+    pub is_async: bool,
+}
+
+impl HostRow {
+    /// A root-surface row (`path = ""`) — the flat spelling every
+    /// pre-`mod` surface carries.
+    pub fn root(
+        name: &str,
+        params: Vec<rut_core::types::TypeId>,
+        ret: rut_core::types::TypeId,
+        is_async: bool,
+    ) -> HostRow {
+        HostRow {
+            path: String::new(),
+            name: name.to_string(),
+            params,
+            ret,
+            is_async,
+        }
+    }
+
+    /// The scope-relative registration spelling: `name` at the root,
+    /// `path::name` under a module (each mod path segment a `::`
+    /// component — `net/tls` + `handshake` spells `net::tls::handshake`)
+    /// — what [`rut_vm::HostPkg`]'s builder accepts and the mount
+    /// table's per-scope keys carry (the pkg scope prefixes at the
+    /// install).
+    pub fn rel_name(&self) -> String {
+        let mut out = String::new();
+        for seg in self.path.split('/') {
+            if !out.is_empty() {
+                out.push_str("::");
+            }
+            out.push_str(seg);
+        }
+        if !out.is_empty() {
+            out.push_str("::");
+        }
+        out.push_str(&self.name);
+        out
+    }
+
+    /// The FULL registration name — `pkg::path::name` (`myhost::net::connect`).
+    /// The one source for the registration string: the synthesized
+    /// surface's host ids and the expected-fns table both spell it
+    /// through here, and the flat rows are the `path = ""` case
+    /// (`myhost::name`) — byte-identical to the old shape.
+    pub fn full_name(&self, pkg: &str) -> String {
+        format!("{pkg}::{}", self.rel_name())
+    }
+}
 
 impl Default for PkgBody {
     /// An empty source body — the manifest-only pkg (a pkg whose
@@ -194,6 +263,7 @@ impl Pkg {
                 native_types: vec![],
                 native_fns: vec![],
                 native_impls: vec![],
+                root_surface: None,
             },
             ..Default::default()
         }

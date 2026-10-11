@@ -110,12 +110,15 @@ pub struct PackOpts {
 }
 
 /// The pkg's own source text as the rows' `""` spelling: a source
-/// body's text, else a compiled unit's ridden root source (the rows
-/// lane's `""`, riding as the generic-source marker), else empty. A
-/// pkg with mounted mod children always answers the first or second.
+/// body's text, a host body's `.d.rut` root surface (the rows the
+/// tree lowered from — the `type = "host"` flavor of the same
+/// envelope), else a compiled unit's ridden root source (the rows
+/// lane's `""`, riding as the generic-source marker). A pkg with
+/// mounted mod children always answers one of the three.
 fn rows_root_text(pkg: &crate::session::Pkg) -> String {
     match &pkg.body {
         PkgBody::Source { text, .. } => text.clone(),
+        PkgBody::Host { root_surface, .. } => root_surface.clone().unwrap_or_default(),
         _ => pkg
             .gen_source
             .as_ref()

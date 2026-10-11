@@ -30,7 +30,7 @@ use rut_driver::bundle::{
 };
 use rut_driver::loader::peer_gate;
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
-use rut_driver::{Loaded, Pkg, PkgBody, PeerDecl, RunError};
+use rut_driver::{Loaded, Mode, Pkg, PkgBody, PeerDecl, RunError};
 
 use crate::error::LoadError;
 use crate::remote::DepRemote;
@@ -416,17 +416,24 @@ fn read_root_module(dir: &str) -> Result<Option<String>, LoadError> {
 }
 
 /// The dir lane's child lookup for the mod mount — the same three-case
-/// law the archive rows lane answers: `NAME/mod.rut` reads (with its
-/// canonical identity — the cycle guard's key, so a symlinked alias
-/// repeats it), a same-named FILE sibling (`NAME.rut`), a `NAME/`
-/// directory without its `mod.rut`, or nothing there at all.
-fn dir_child_lookup(dir: &Path, parent: &str, name: &str) -> Result<ChildLookup, String> {
+/// law the archive rows lane answers: `NAME/<child file>` reads (with
+/// its canonical identity — the cycle guard's key, so a symlinked
+/// alias repeats it), a same-named FILE sibling (`NAME.rut`), a
+/// `NAME/` directory without its module file, or nothing there at
+/// all. The child file's spelling is the caller's flavor: `mod.rut`
+/// for a lib body tree, `mod.d.rut` for a host surface tree.
+pub(crate) fn dir_child_lookup(
+    dir: &Path,
+    parent: &str,
+    name: &str,
+    child_file: &str,
+) -> Result<ChildLookup, String> {
     let base = if parent.is_empty() {
         dir.to_path_buf()
     } else {
         dir.join(parent)
     };
-    let mod_rs = base.join(name).join("mod.rut");
+    let mod_rs = base.join(name).join(child_file);
     match std::fs::read_to_string(&mod_rs) {
         Ok(text) => {
             let canon = std::fs::canonicalize(&mod_rs)
@@ -466,9 +473,11 @@ fn lib_pkg(
         .unwrap_or_else(|_| PathBuf::from(root_file))
         .to_string_lossy()
         .into_owned();
-    let mut lookup = |parent: &str, name: &str| dir_child_lookup(Path::new(dir), parent, name);
+    let mut lookup = |parent: &str, name: &str| {
+        dir_child_lookup(Path::new(dir), parent, name, "mod.rut")
+    };
     let mods: BTreeMap<String, ModSource> =
-        mount_mod_children(&root_text, &root_canon, &mut lookup)
+        mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
             .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
     Ok(fold_peers(
         Pkg {
@@ -485,10 +494,12 @@ fn lib_pkg(
 /// Build a directory's entry [`Pkg`] from its manifest:
 ///
 /// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
-///   parses in declaration mode and lowers into the module's host fns.
-///   No body exists — the embedding Rust binds it at run time. A
-///   `mod.rut` beside the manifest is a body: refused (a host pkg is
-///   pure surface).
+///   parses in declaration mode and lowers into the module's host fns;
+///   its `mod` declarations mount the child tree (`NAME/mod.d.rut`
+///   beside the declaring file, recursively, cycle-guarded) and every
+///   row carries the path it lives under. No body exists — the
+///   embedding Rust binds it at run time. A `mod.rut` beside the
+///   manifest is a body: refused (a host pkg is pure surface).
 /// - a `type = "lib"` pkg (the default) — a source module: `mod.rut`
 ///   beside the manifest IS the body (the root module); the surface
 ///   derives from its exports. A declared surface with no `mod.rut` is
@@ -521,12 +532,27 @@ fn load_entry_module(
             if dir_has_root_module(dir) {
                 return Err(LoadError::law(format!(
                     "module in {dir} is a `type = \"host\"` pkg but a `mod.rut` sits beside the \
-                     manifest — a host pkg is pure surface; drop the file or declare `type = \"lib\"`"
+                     manifest — a host pkg is pure surface (its mod tree rides `NAME/mod.d.rut` \
+                     files); drop the file or declare `type = \"lib\"`"
                 )));
             }
             let key = src.resolve(dir, rel).map_err(LoadError::law)?;
             let src_text = read_source_text(src, &key)?;
-            let mut m = rut_driver::lower_decl_module(&src_text, &key).map_err(LoadError::law)?;
+            // the surface's mod tree mounts beside it — `NAME/mod.d.rut`
+            // next to the declaring file, recursively, cycle-guarded;
+            // the root file's identity opens the guard's chain
+            let root_canon = std::fs::canonicalize(&key)
+                .unwrap_or_else(|_| PathBuf::from(&key))
+                .to_string_lossy()
+                .into_owned();
+            let mut lookup = |parent: &str, name: &str| {
+                dir_child_lookup(Path::new(dir), parent, name, "mod.d.rut")
+            };
+            let mods: BTreeMap<String, ModSource> =
+                mount_mod_children(&src_text, &root_canon, Mode::Decl, "mod.d.rut", &mut lookup)
+                    .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
+            let mut m =
+                rut_driver::lower_decl_module(&src_text, &mods, &key).map_err(LoadError::law)?;
             m.entry = manifest.entry.clone();
             m.namespace = manifest.namespace.clone();
             // the consts ride the host body (the manifest is their only

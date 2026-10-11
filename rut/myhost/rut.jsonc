@@ -1,0 +1,17 @@
+{
+  // myhost/ — the host-surface MOD TREE shape (the host-.d.rut-mod-tree
+  // plan, phase 1): a `type = "host"` pkg whose surface organizes as a
+  // module tree — `pub mod net;` in the root, the children in
+  // `NAME/mod.d.rut` beside the declaring file, recursively. The rows
+  // register path-qualified (`myhost::net::connect`), the root's own
+  // rows stay flat (`myhost::legacy_ping`); the embedding Rust binds
+  // them through the pkg scope (`HostPkg::new("myhost")` +
+  // `"net::connect"`).
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "myhost",
+  "type": "host",
+  "entry": {
+    "type": "./myhost.d.rut"
+  }
+}

@@ -6,6 +6,7 @@
 // the ink_host logger's recording native — the fmt batch's semantic-test
 // pattern; diagnostics are pinned per message.
 
+use std::collections::BTreeMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -50,7 +51,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
     let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
@@ -105,7 +106,7 @@ fn run_loop(vm: &mut Vm, cap: usize) {
 
 #[allow(dead_code)] // the diag lane some scenarios re-arm
 fn diags_of(src: &str) -> Vec<String> {
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("ink_host")
         .named("ink_host");
     let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))

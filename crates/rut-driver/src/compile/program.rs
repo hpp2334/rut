@@ -224,6 +224,12 @@ pub fn compile_program_resolved(
     // ---- pass 3: fns, consts, types, impls, natives
     for (dep_scope, surface, tmap, origin) in trait_maps.iter() {
         let dep_scope = *dep_scope;
+        // TODO(phase 2): qualified-use binding for host mod trees — a
+        // row under a dep's `mod` tree (its surface row carries the
+        // path; the registration string is `pkg::path::name`) binds
+        // through `use pkg::net::connect`, with the leaf names checked
+        // against the path-qualified rows. Today only the bare row
+        // names bind (flat host surfaces).
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
                 let exports: Vec<(rut_core::IdentId, TypeId)> = surface

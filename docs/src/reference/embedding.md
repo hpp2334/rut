@@ -147,7 +147,7 @@ first-pkg-wins) or pick pieces with `loaded.pkg(name)`.
 | `Pkg::host(name, rows)` | the native rows — exported constants, bodyless host fns |
 | `Pkg::compiled(name, program)` | a decoded `.rutc` binary pushed as-is |
 | `Pkg::from_bundle(bytes)` | the pure container parse — the bundle's pkgs as a `Loaded` (below) |
-| `lower_decl_module(text, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane |
+| `lower_decl_module(text, children, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with `mount_mod_children` in Decl mode) and each row carries the path it lives under |
 
 `Pkg` is pure data: the walker-found metadata (the `[deps]` table, the
 `[peer-deps]` declarations, the peer-integration group texts) is pub
@@ -309,7 +309,7 @@ contain those names.
 | `host_pkg_ctx(pkgs)` | the declared rows, partitioned by scope — for hosts that build registries OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row host's `verify_against`) |
 | `compile_module(src, mode, name)` | the single-source lane: the core prelude auto-rides, the source offers as the root pkg, one `.compile()` — returns diags, AST/IR dumps, and the binary. The walked packages (`calc`'s `Math`, the async pair) are NOT here: a host that wants them offers `rut_native::tree_pkg(..)` |
 | `compile_program(src, mode, name)` / `compile_program_resolved(..)` / `ir_dump_of(..)` | the raw pipeline pieces (tooling) |
-| `lower_decl_module(text, file)` | lower a `.d.rut` surface to host rows |
+| `lower_decl_module(text, children, file)` | lower a `.d.rut` surface to host rows (`children` = the mounted `mod` tree — a declared child with no mounted `NAME/mod.d.rut` is a loud error; registration is path-qualified, `pkg::net::connect`) |
 | `bundle::{parse_manifest, Bundle, Layout, ..}` | the container codec, the `rut.jsonc` grammar, the reader (both root kinds) — pure, in-memory |
 | `pack::{pack, PackOpts, ..}` | the pure emit half of packing (`rut-native` owns the walk + dev tables + the gate) |
 | `sha256_hex(bytes)` | pin arithmetic (pure) |

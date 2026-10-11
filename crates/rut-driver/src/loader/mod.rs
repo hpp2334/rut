@@ -15,9 +15,13 @@ use crate::bundle::{
     bundle_key, parse_manifest_compat, read_entry, Bundle, GroupKind, Layout, Manifest,
     PkgType,
 };
-use crate::mods::{mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME};
+use crate::decl::DECL_CHILD_FILE;
+use crate::mods::{
+    mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME,
+};
 use crate::run::{Loaded, RunError};
 use crate::session::{Pkg, PkgBody, PeerDecl};
+use crate::Mode;
 
 /// The hex sha256 of `bytes` — the pin law's arithmetic. Public so a
 /// call site can key its cache by url (the CLI does) without a sha2
@@ -302,7 +306,27 @@ fn rows_body(
         Err(_) => return Ok(None),
     };
     let (root, rows) = parse_rows(&text)?;
-    let mods = mount_rows(&root, &rows)?;
+    let mods = mount_rows(&root, &rows, Mode::Impl, "mod.rut")?;
+    Ok(Some((root, mods)))
+}
+
+/// The rows lane's HOST flavor: the same envelope over a `type =
+/// "host"` pkg's decl tree — `""` is the root `.d.rut`, `<path>` each
+/// child, mounted with the Decl flavor (`mod.d.rut` spellings) and
+/// read back as the mounted tree the lowering takes. `Ok(None)` when
+/// the archive carries no rows entry — a flat host bundle (the shape
+/// every pre-`mod` host pack has), which loads exactly as it did.
+fn decl_rows_body(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+) -> Result<Option<(String, BTreeMap<String, ModSource>)>, String> {
+    let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
+    let text = match read_entry(entries, &key) {
+        Ok(t) => t,
+        Err(_) => return Ok(None),
+    };
+    let (root, rows) = parse_rows(&text)?;
+    let mods = mount_rows(&root, &rows, Mode::Decl, DECL_CHILD_FILE)?;
     Ok(Some((root, mods)))
 }
 
@@ -349,15 +373,22 @@ fn entry_child_lookup<'a>(
 /// Build a package's entry [`Pkg`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
 /// in-archive counterpart of a directory mount: the declared kind
-/// dispatches (a `type = "host"` pkg is a decl surface; a `type =
-/// "lib"` pkg with a surface and no body is the surface-only dev
-/// state). The manifest's `namespace`/`consts` rows ride here too —
-/// the manifest is their only spelling.
+/// dispatches (a `type = "host"` pkg is a decl surface whose mod tree
+/// rides the rows envelope; a `type = "lib"` pkg with a surface and no
+/// body is the surface-only dev state). The manifest's
+/// `namespace`/`consts` rows ride here too — the manifest is their
+/// only spelling.
 pub fn bundle_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
 ) -> Result<Pkg, String> {
+    // the host lane: the decl tree rides the rows envelope when the
+    // tree mounts (the packer's host lane), else the flat surface
+    // entry lowers alone — the byte-compat shape
+    if manifest.pkg_type == PkgType::Host {
+        return host_entry_pkg(entries, prefix, manifest);
+    }
     let read = |rel: &str| -> Result<String, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}"))?;
@@ -374,57 +405,73 @@ pub fn bundle_entry_pkg(
             ..Default::default()
         });
     }
-    let pkg = match manifest.pkg_type {
-        PkgType::Host => {
-            let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
-                format!("module at bundle prefix `{prefix}` is a host pkg with no `entry.type`")
-            })?;
-            let src = read(rel)?;
-            let mut m = crate::decl::lower_decl_module(&src, &format!("{prefix}{rel}"))?;
-            m.entry = manifest.entry.clone();
-            m.namespace = manifest.namespace.clone();
-            let consts = manifest
-                .consts
-                .iter()
-                .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
-                .collect();
-            if let PkgBody::Host { consts: rows, .. } = &mut m.body {
-                *rows = consts;
+    // a lib pkg from here: the surface's host-row refusal (the
+    // lib-surface law), then the body — the `mod.rut` entry, else the
+    // OLD envelope's legacy keys, else the surface-only dev state (a
+    // decl unit — no host rows, nothing exported; use sites
+    // resolve-miss, correctly). An ambiguity — `entry.type` spelled,
+    // no declared kind, no body anywhere — refuses, naming both fixes.
+    let pkg = if let Some(rel) = &manifest.entry.type_path {
+        let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
+        let src = read(rel)?;
+        crate::decl::refuse_host_rows(&src, &origin)?;
+        match root_source(entries, prefix, manifest)? {
+            Some(root) => plain_source_pkg(entries, prefix, manifest, root)?,
+            None if !manifest.type_declared => {
+                return Err(format!(
+                    "module at bundle prefix `{prefix}` spells `entry.type` but no kind — \
+                     `\"type\": \"host\"` for a host pkg, or `\"type\": \"lib\"` for the \
+                     surface-only dev state"
+                ));
             }
-            m
+            None => Pkg {
+                body: PkgBody::Source { text: src, is_decl: true },
+                entry: manifest.entry.clone(),
+                ..Default::default()
+            },
         }
-        PkgType::Lib => {
-            if let Some(rel) = &manifest.entry.type_path {
-                let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
-                let src = read(rel)?;
-                crate::decl::refuse_host_rows(&src, &origin)?;
-                // the body: the `mod.rut` entry, else the OLD
-                // envelope's legacy keys, else the surface-only dev
-                // state (a decl unit — no host rows, nothing exported;
-                // use sites resolve-miss, correctly). An ambiguity —
-                // `entry.type` spelled, no declared kind, no body
-                // anywhere — refuses, naming both fixes.
-                match root_source(entries, prefix, manifest)? {
-                    Some(root) => plain_source_pkg(entries, prefix, manifest, root)?,
-                    None if !manifest.type_declared => {
-                        return Err(format!(
-                            "module at bundle prefix `{prefix}` spells `entry.type` but no kind — \
-                             `\"type\": \"host\"` for a host pkg, or `\"type\": \"lib\"` for the \
-                             surface-only dev state"
-                        ));
-                    }
-                    None => Pkg {
-                        body: PkgBody::Source { text: src, is_decl: true },
-                        entry: manifest.entry.clone(),
-                        ..Default::default()
-                    },
-                }
-            } else {
-                plain_entry_pkg(entries, prefix, manifest)?
-            }
-        }
+    } else {
+        plain_entry_pkg(entries, prefix, manifest)?
     };
     Ok(pkg)
+}
+
+/// The host lane of [`bundle_entry_pkg`]: the decl tree rides the rows
+/// envelope when the tree mounts (the packer's host lane — `""` is the
+/// root `.d.rut`, each child its mod path), else the flat surface
+/// entry lowers alone — the byte-compat shape every pre-`mod` host
+/// bundle carries. The manifest's `namespace`/`consts` rows fold in
+/// either way.
+fn host_entry_pkg(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    manifest: &Manifest,
+) -> Result<Pkg, String> {
+    let fold = |mut m: Pkg| -> Pkg {
+        m.entry = manifest.entry.clone();
+        m.namespace = manifest.namespace.clone();
+        let consts = manifest
+            .consts
+            .iter()
+            .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
+            .collect();
+        if let PkgBody::Host { consts: rows, .. } = &mut m.body {
+            *rows = consts;
+        }
+        m
+    };
+    if let Some((root, children)) = decl_rows_body(entries, prefix)? {
+        let rel = manifest.entry.type_path.as_deref().unwrap_or(DECL_CHILD_FILE);
+        let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
+        let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
+        return Ok(fold(m));
+    }
+    let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
+        format!("module at bundle prefix `{prefix}` is a host pkg with no `entry.type`")
+    })?;
+    let src = read_entry(entries, &bundle_key(&format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel)))?)?;
+    let m = crate::decl::lower_decl_module(&src, &Default::default(), &format!("{prefix}{rel}"))?;
+    Ok(fold(m))
 }
 
 /// The plain (non-decl) entry pkg. The root module is the `mod.rut`
@@ -490,7 +537,7 @@ fn plain_source_pkg(
     src: String,
 ) -> Result<Pkg, String> {
     let mut lookup = entry_child_lookup(entries, prefix);
-    let mods = mount_mod_children(&src, &format!("\u{0}{prefix}"), &mut lookup)?;
+    let mods = mount_mod_children(&src, &format!("\u{0}{prefix}"), Mode::Impl, "mod.rut", &mut lookup)?;
     Ok(Pkg {
         body: PkgBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),

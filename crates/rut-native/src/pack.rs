@@ -194,12 +194,18 @@ pub fn pack_dir_opts_fetched(
 
 /// Pack a `type = "host"` directory as a **decl root** —
 /// single-package, byte-deterministic: the manifest byte-for-byte plus
-/// its declaration surface file(s) (the same file-set shape a host
-/// group rides inside a compiled bundle). The pack-time VERIFICATION is the
-/// surface's own parse + lower (the exact lane a mount runs) — the
-/// lowered module is discarded; decls ride as source and the embedding
-/// Rust binds the bodies. A host pkg has no deps, no programs, no
-/// ledger — nothing else to emit.
+/// its declaration surface file set (the same file-set shape a host
+/// group rides inside a compiled bundle). The pack-time VERIFICATION is
+/// the surface's own parse + lower over its mounted mod tree (the
+/// exact lane a mount runs) — the lowered module is discarded; decls
+/// ride as source and the embedding Rust binds the bodies. A host pkg
+/// has no deps, no programs, no ledger — nothing else to emit.
+///
+/// The surface's mod tree rides the additive `rut.mods` rows envelope
+/// (`""` = the root surface, `<path>` = each child): the tree mounts
+/// from the directory (`NAME/mod.d.rut` beside the declaring file) and
+/// the rows entry is written ONLY when children exist — a flat host
+/// pkg packs byte-identically, no new entries, no version bump.
 fn pack_host_root(
     dir: &Path,
     manifest: &Manifest,
@@ -215,16 +221,39 @@ fn pack_host_root(
     let src_path = dir.join(rel);
     let src = std::fs::read_to_string(&src_path)
         .map_err(|e| PackError::io(src_path.display(), e))?;
-    // the verification: the surface parses and lowers into host rows —
-    // a broken `.d.rut` refuses to pack (discard the output)
-    rut_driver::lower_decl_module(&src, &src_path.display().to_string())
+    // the surface's mod tree mounts from the directory —
+    // `NAME/mod.d.rut` beside the declaring file, recursively,
+    // cycle-guarded (the load lane's Decl flavor, spelled identically)
+    let root_canon = std::fs::canonicalize(&src_path)
+        .unwrap_or_else(|_| src_path.clone())
+        .to_string_lossy()
+        .into_owned();
+    let mut lookup = |parent: &str, name: &str| {
+        crate::walk::dir_child_lookup(dir, parent, name, "mod.d.rut")
+    };
+    let mods: BTreeMap<String, rut_driver::ModSource> =
+        rut_driver::mount_mod_children(&src, &root_canon, rut_driver::Mode::Decl, "mod.d.rut", &mut lookup)
+            .map_err(PackError::law)?;
+    // the verification: the surface + its tree parse and lower into
+    // host rows — a broken `.d.rut` (or a declared child with no
+    // mounted file) refuses to pack (discard the output)
+    rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
         .map_err(PackError::law)?;
-    // entries = rut.jsonc + the surface (the root file set, prefix "") —
-    // the exact shape the container lane reads back at load
+    // entries = rut.jsonc + the surface (the root file set, prefix "")
+    // — the exact shape the container lane reads back at load
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     entries.push((rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes));
     let key = rut_driver::bundle::bundle_key(rel).map_err(PackError::law)?;
-    entries.push((key, src.into_bytes()));
+    entries.push((key, src.clone().into_bytes()));
+    // the mod tree rides beside the file set (the rows envelope's
+    // `""` row is the root surface the reader lowers from) — flat pkgs
+    // write no rows entry, so their bytes never move
+    if !mods.is_empty() {
+        entries.push((
+            rut_driver::mods::ROWS_NAME.into(),
+            rut_driver::mods::rows_json(&src, &mods).into_bytes(),
+        ));
+    }
     write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
 }
 

@@ -16,6 +16,7 @@
 
 #![allow(static_mut_refs)]
 
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 // the positional driver decode (`Ret for Value`) — the run envelope's
@@ -100,6 +101,48 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 
 // ---- compile ----
 
+/// Mount a decl tree over an in-memory file map — the wasm host's
+/// lookup closure (no filesystem on wasm32): a `mod NAME;` in the
+/// surface resolves against the map's `<mod path>` row through the
+/// SAME declaration-driven mount core the FS lane runs (missing row ⇒
+/// the loud missing-child spelling). The embedded surfaces are flat
+/// today; a child is one map entry.
+fn mount_memory(
+    root: &str,
+    children: &[(&str, &str)],
+) -> BTreeMap<String, rut_driver::ModSource> {
+    let map: BTreeMap<String, String> = children
+        .iter()
+        .map(|(p, t)| (p.to_string(), t.to_string()))
+        .collect();
+    let mut read = |parent: &str, name: &str| -> Result<rut_driver::ChildLookup, String> {
+        let path = if parent.is_empty() {
+            name.to_string()
+        } else {
+            format!("{parent}/{name}")
+        };
+        match map.get(&path) {
+            Some(text) => Ok(rut_driver::ChildLookup::Found {
+                text: text.clone(),
+                canon: path,
+            }),
+            None => Ok(rut_driver::ChildLookup::Missing),
+        }
+    };
+    rut_driver::mount_mod_children(root, "\u{0}wasm", rut_driver::Mode::Decl, "mod.d.rut", &mut read)
+        .expect("the embedded surface's mod tree mounts")
+}
+
+/// One embedded host surface as a pkg: the `.d.rut` text lowers with
+/// its (include_str!-fed) mod tree, under the registration scope the
+/// spec spells.
+fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) -> rut_driver::Pkg {
+    let mods = mount_memory(src, children);
+    rut_driver::lower_decl_module(src, &mods, origin)
+        .expect("the embedded surface is valid")
+        .named(spec)
+}
+
 /// The playground's library offers (§0.9 of the host-pkgs plan): wasm
 /// has no filesystem, so the toolchain libs this host ships are
 /// EMBEDDED — `ink_host`'s and `nmap_host`'s host surfaces lowered from
@@ -122,30 +165,23 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             binary: None,
         };
     }
-    let named = |spec: &str, pkg: rut_driver::Pkg| -> rut_driver::Pkg {
-        pkg.named(spec)
-    };
     // the `.compile()` product's host registry is the run-side install
     // snapshot: `rut_run` takes it (the one registry per compile) and
     // boots with it — the ctx ceremony is gone, the registry travels
-    let ink_host = named(
+    let ink_host = host_surface(
         "ink_host",
-        rut_driver::lower_decl_module(
-            include_str!("../../../rut/ink_host/ink_host.d.rut"),
-            "ink_host.d.rut",
-        )
-        .expect("the ink_host surface is valid"),
+        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        "ink_host.d.rut",
+        &[],
     );
     // the nmap lane (survey D6): the host surface lowers exactly like
     // `ink_host` — its registration scope is the default (the pkg
     // spec `nmap_host`), the scope `rut_std::nmap::pkg()` installs under
-    let nmap_host = named(
+    let nmap_host = host_surface(
         "nmap_host",
-        rut_driver::lower_decl_module(
-            include_str!("../../../rut/nmap_host/nmap.d.rut"),
-            "nmap.d.rut",
-        )
-        .expect("the nmap_host surface is valid"),
+        include_str!("../../../rut/nmap_host/nmap.d.rut"),
+        "nmap.d.rut",
+        &[],
     );
     // `flow` offers AFTER its deps (its generic class + traits ride the
     // source). The browser keeps no filesystem, so the peer-gate's
@@ -173,13 +209,11 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface offers as a linked source pkg —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
-    let async_host = named(
+    let async_host = host_surface(
         "async_host",
-        rut_driver::lower_decl_module(
-            include_str!("../../../rut/async_host/engine.d.rut"),
-            "engine.d.rut",
-        )
-        .expect("the async_host surface is valid"),
+        include_str!("../../../rut/async_host/engine.d.rut"),
+        "engine.d.rut",
+        &[],
     );
     // the book lane (the run buttons in docs/): `json` and `strbuild`
     // complete the CLI's loose-file host set — a book block that
@@ -191,13 +225,11 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // strbuild's rows ride the `strbuild_host` decl surface (the
     // ink/ink_host pattern), lowered here exactly like `ink_host`
     // above; the bodies bind in `rut_run` (`rut_std::strbuild::pkg()`)
-    let strbuild_host = named(
+    let strbuild_host = host_surface(
         "strbuild_host",
-        rut_driver::lower_decl_module(
-            include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
-            "strbuild_host.d.rut",
-        )
-        .expect("the strbuild_host surface is valid"),
+        include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
+        "strbuild_host.d.rut",
+        &[],
     );
     // calc rides as a lowered surface + the manifest's namespace/consts
     // rows — the same shape a `tree_pkg("calc")` walk yields (the wasm
@@ -205,11 +237,12 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // core prelude auto-offers in `.compile()`)
     let calc_manifest = rut_driver::parse_manifest(include_str!("../../../rut/calc/rut.jsonc"))
         .expect("the calc manifest is valid");
-    let mut calc = rut_driver::lower_decl_module(
+    let mut calc = host_surface(
+        "calc",
         include_str!("../../../rut/calc/calc.d.rut"),
         "calc.d.rut",
-    )
-    .expect("the calc surface is valid");
+        &[],
+    );
     calc.namespace = calc_manifest.namespace.clone();
     if let rut_driver::PkgBody::Host { consts, .. } = &mut calc.body {
         *consts = calc_manifest
@@ -218,7 +251,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
             .collect();
     }
-    let calc = named("calc", calc);
     // the library world (everything but the program's own source): the
     // run-side install snapshot reads its declared rows
     let lib_pkgs = vec![

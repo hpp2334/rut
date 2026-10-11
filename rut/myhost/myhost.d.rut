@@ -1,0 +1,7 @@
+// myhost/myhost.d.rut — the tree's root surface: one flat row (the
+// registration string stays `myhost::legacy_ping`) and the `mod net;`
+// edge whose children mount from `net/mod.d.rut` beside this file.
+
+pub mod net;
+
+pub host fn legacy_ping() -> bool;

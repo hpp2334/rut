@@ -134,9 +134,12 @@ impl Session {
     /// knowledge into the vm-side value `HostRegistry::install_host_pkg`
     /// checks against. One walk replaces the whole helper family:
     /// scope = spec (the registration naming has no override), each row
-    /// carries its `(params, ret)`, and async rows expand into their
-    /// family (`__start` params→opaque, `__yield` opaque,opaque→i32,
-    /// `__take` opaque→ret, `__cancel` opaque→nil) exactly as
+    /// carries its `(params, ret)` keyed by its scope-relative name
+    /// (`name` at the root, `path::name` under a module — the full
+    /// registration string is `scope::<rel>`), and async rows expand
+    /// into their family (`__start` params→opaque, `__yield`
+    /// opaque,opaque→i32, `__take` opaque→ret, `__cancel` opaque→nil)
+    /// onto that same qualified name, exactly as
     /// `register_async!`'s emitter spells them. Snapshot semantics:
     /// build once per boot lane; rebuild if mounts change after.
     pub(crate) fn host_pkg_context(&self) -> rut_vm::interp::HostPkgContext {
@@ -146,9 +149,10 @@ impl Session {
             let PkgBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
-            for (name, params, ret, is_async) in host_funcs {
-                ctx.declare(spec, name, params.clone(), *ret);
-                if !*is_async {
+            for row in host_funcs {
+                let rel = row.rel_name();
+                ctx.declare(spec, &rel, row.params.clone(), row.ret);
+                if !row.is_async {
                     continue;
                 }
                 // the row family (the weave's wire, phase 4): start
@@ -156,10 +160,10 @@ impl Session {
                 // yield is the resumption probe, take marshals the
                 // answer through the decl's own return type, cancel is
                 // the best-effort abort arm
-                ctx.declare(spec, &format!("{name}__start"), params.clone(), TY_OPAQUE);
-                ctx.declare(spec, &format!("{name}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
-                ctx.declare(spec, &format!("{name}__take"), vec![TY_OPAQUE], *ret);
-                ctx.declare(spec, &format!("{name}__cancel"), vec![TY_OPAQUE], TY_NIL);
+                ctx.declare(spec, &format!("{rel}__start"), row.params.clone(), TY_OPAQUE);
+                ctx.declare(spec, &format!("{rel}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+                ctx.declare(spec, &format!("{rel}__take"), vec![TY_OPAQUE], row.ret);
+                ctx.declare(spec, &format!("{rel}__cancel"), vec![TY_OPAQUE], TY_NIL);
             }
         }
         ctx

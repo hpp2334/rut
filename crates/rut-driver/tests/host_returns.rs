@@ -4,6 +4,7 @@
 //! identity, and cross back through compiled rut — the Some/nil shapes,
 //! the minted boxes, and the exact heap balance.
 
+use std::collections::BTreeMap;
 use rut_core::types::{TY_BYTES, TY_I64, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR};
 use rut_driver::lower_decl_module;
 
@@ -53,17 +54,17 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn the_answer_lanes_spell_in_the_decl_grammar() {
     // `-> ?T` renders through ty_text's `?` shape and maps to its fixed
     // boot `Opt` row; plain `bytes` keeps its own boot id
-    let m = lower_decl_module(DECL, "rets.d.rut").expect("the answer rows lower");
+    let m = lower_decl_module(DECL, &BTreeMap::new(), "rets.d.rut").expect("the answer rows lower");
     let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else {
         panic!("a lowered decl is a host body");
     };
     assert_eq!(
         *host_funcs,
         vec![
-            ("qstr_pick".to_string(), vec![], TY_OPT_STR, false),
-            ("qbytes_pick".to_string(), vec![], TY_OPT_BYTES, false),
-            ("qopaque_pick".to_string(), vec![], TY_OPT_OPAQUE, false),
-            ("bytes_give".to_string(), vec![], TY_BYTES, false),
+            rut_driver::HostRow::root("qstr_pick", vec![], TY_OPT_STR, false),
+            rut_driver::HostRow::root("qbytes_pick", vec![], TY_OPT_BYTES, false),
+            rut_driver::HostRow::root("qopaque_pick", vec![], TY_OPT_OPAQUE, false),
+            rut_driver::HostRow::root("bytes_give", vec![], TY_BYTES, false),
         ],
         "each answer lane maps to its boot row"
     );
@@ -73,7 +74,7 @@ fn the_answer_lanes_spell_in_the_decl_grammar() {
 fn a_q_param_still_refuses() {
     // the lanes are ANSWER-position: params keep the plain crossing
     // table (no Option param impls exist host-side to bind them)
-    let err = lower_decl_module("pub host fn f(x: ?str);", "rets.d.rut")
+    let err = lower_decl_module("pub host fn f(x: ?str);", &BTreeMap::new(), "rets.d.rut")
         .expect_err("a ?str param refuses");
     assert!(err.contains("not a crossing type"), "{err}");
 }
@@ -82,15 +83,15 @@ fn a_q_param_still_refuses() {
 fn nesting_beyond_the_answer_optionals_still_refuses() {
     // the `?` shape is the ONE legal nesting, one level deep — a nested
     // optional and a qualified path both refuse naming their text
-    let err = lower_decl_module("pub host fn f() -> ??str;", "rets.d.rut")
+    let err = lower_decl_module("pub host fn f() -> ??str;", &BTreeMap::new(), "rets.d.rut")
         .expect_err("a nested optional refuses");
     assert!(err.contains("??str"), "{err}");
-    let err = lower_decl_module("pub host fn f() -> ?Vec<?str>;", "rets.d.rut")
+    let err = lower_decl_module("pub host fn f() -> ?Vec<?str>;", &BTreeMap::new(), "rets.d.rut")
         .expect_err("a generic optional refuses");
     // ty_text never renders generic args (the pre-existing house shape) —
     // the refusal names the `?` head it saw
     assert!(err.contains("?Vec"), "{err}");
-    let err = lower_decl_module("pub host fn f() -> ?i32;", "rets.d.rut")
+    let err = lower_decl_module("pub host fn f() -> ?i32;", &BTreeMap::new(), "rets.d.rut")
         .expect_err("?i32 has no answer lane");
     assert!(err.contains("?i32"), "{err}");
 }
@@ -99,7 +100,7 @@ fn nesting_beyond_the_answer_optionals_still_refuses() {
 fn verify_against_names_the_q_rows_on_drift() {
     // the boot join is by boot-id identity: a `-> ?str` row against
     // a `-> f64` binding panics naming BOTH shapes, the `?` spelled
-    let module = lower_decl_module("pub host fn pick() -> ?str;", "rets.d.rut").unwrap().named("rets");
+    let module = lower_decl_module("pub host fn pick() -> ?str;", &BTreeMap::new(), "rets.d.rut").unwrap().named("rets");
     let expected = rut_driver::declared_host_fns(&[module]);
     assert_eq!(
         expected.get("rets::pick"),
@@ -158,7 +159,7 @@ fn registry(some: std::rc::Rc<std::cell::Cell<bool>>) -> rut_vm::interp::HostReg
 /// Mount the host pkg + its consumer, run `main`, answer the result and
 /// the heap balance (the answers must release exactly with the frame).
 fn run_app(src: &str, some: bool) -> (i64, u64) {
-    let rets = lower_decl_module(DECL, "rets.d.rut")
+    let rets = lower_decl_module(DECL, &BTreeMap::new(), "rets.d.rut")
         .expect("the answer rows lower")
         .named("rets");
     let compiled = rut_driver::RutRun::new()
@@ -184,7 +185,7 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
     // the load-time contract: the lanes verify by identity (the rets
     // rows are declared by the offered pkg)
     hosts.verify_against(&rut_driver::declared_host_fns(&[
-        lower_decl_module(DECL, "rets.d.rut").expect("rows").named("rets"),
+        lower_decl_module(DECL, &BTreeMap::new(), "rets.d.rut").expect("rows").named("rets"),
     ]));
     let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
     .expect("vm");

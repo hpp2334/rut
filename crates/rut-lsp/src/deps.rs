@@ -214,7 +214,7 @@ fn bundle_rows(
         Err(_) => return Ok(None),
     };
     let (root, rows) = rut_driver::mods::parse_rows(&text)?;
-    let mods = rut_driver::mods::mount_rows(&root, &rows)?;
+    let mods = rut_driver::mods::mount_rows(&root, &rows, Mode::Impl, "mod.rut")?;
     Ok(Some((root, mods)))
 }
 
@@ -311,6 +311,8 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
                     let mounted = rut_driver::mount_mod_children(
                         &root.src,
                         &format!("\u{0}{module}"),
+                        Mode::Impl,
+                        "mod.rut",
                         &mut entry_child_lookup(&entries),
                     )?;
                     let children = mounted

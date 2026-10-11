@@ -7,6 +7,7 @@
 // cancel arm (the cx `cancelled()` data path) with late results
 // discarded, and the direct row marshal (`__start`/`__yield`/`__take`).
 
+use std::collections::BTreeMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -152,10 +153,10 @@ impl Fixture {
 /// boot join: `expected_host_fns` must have EXPANDED the async
 /// rows into their families, or the verify panics here.
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
-    let fixture = lower_decl_module(FIXTURE_DECL, "fixture.d.rut")
+    let fixture = lower_decl_module(FIXTURE_DECL, &BTreeMap::new(), "fixture.d.rut")
         .expect("the fixture surface is valid")
         .named("fixture");
     let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
@@ -574,11 +575,12 @@ fn a_worker_thread_completes_and_the_poll_lane_drives_it() {
     // session by hand instead of `setup`. Its start closure spawns
     // std::thread — `std::thread` lives in the EMBEDDER closure only;
     // rut-vm touches atomics + the Mutex slot.
-    let ink_host = lower_decl_module(INK_HOST_DECL, "ink_host.d.rut")
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("ink_host")
         .named("ink_host");
     let fixture = lower_decl_module(
         &format!("{FIXTURE_DECL}pub host async fn wall(u: str) -> str;\n"),
+        &BTreeMap::new(),
         "fixture.d.rut",
     )
     .expect("fixture")

@@ -396,7 +396,7 @@ impl<'a> Walk<'a> {
             Ok(fs_child_lookup(dir, parent, name))
         };
         let canon = p.to_string_lossy().into_owned();
-        match rut_driver::mount_mod_children(&root_text, &canon, &mut read) {
+        match rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
             Ok(mods) => {
                 for (path, m) in mods {
                     if self.files == 0 {

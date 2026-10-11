@@ -161,7 +161,7 @@ impl<'a> GraphCompiler<'a> {
     /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
-        let PkgBody::Host { host_funcs, consts, native_types, native_fns, native_impls } =
+        let PkgBody::Host { host_funcs, consts, native_types, native_fns, native_impls, .. } =
             &module.body
         else {
             return None;
@@ -179,14 +179,15 @@ impl<'a> GraphCompiler<'a> {
             // question only arises for `Data` rows — a boot signature
             // spells the fixed crossing table, never a record
             let names = rut_core::Interner::default();
-            for (name, params, ret, _is_async) in host_funcs {
-                let bad = params.iter().any(|p| !boot_tt.crosses_boundary(&names, *p))
-                    || !boot_tt.crosses_boundary(&names, *ret);
+            for row in host_funcs {
+                let bad = row.params.iter().any(|p| !boot_tt.crosses_boundary(&names, *p))
+                    || !boot_tt.crosses_boundary(&names, row.ret);
                 if bad {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{host_scope}::{name}`: only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary"
+                            "host function `{}`: only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
+                            row.full_name(host_scope),
                         ),
                     ));
                     return None;
@@ -196,23 +197,27 @@ impl<'a> GraphCompiler<'a> {
             self.next_scope += 1;
             let mut surface = rut_core::binary::Surface::default();
             let mut funcs = Vec::new();
-            for (i, (name, params, ret, is_async)) in host_funcs.iter().enumerate() {
+            for (i, row) in host_funcs.iter().enumerate() {
+                // the registration name: `pkg::path::name` through the
+                // row's own full_name — the ONE source (flat rows are
+                // the `path = ""` case, spelling today's shape)
+                let host = row.full_name(host_scope);
                 surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: surface.names.intern(name),
-                    params: params.clone(),
-                    ret: *ret,
+                    name: surface.names.intern(&row.name),
+                    params: row.params.clone(),
+                    ret: row.ret,
                     local: i as u32,
-                    is_async: *is_async,
+                    is_async: row.is_async,
                     // the registration name rides the surface: the
                     // importer derives the minted row family's host ids
                     // from it, so `register_async!`'s one literal stays
                     // the source of truth on both sides
-                    host: Some(surface.names.intern(&format!("{host_scope}::{name}"))),
+                    host: Some(surface.names.intern(&host)),
                 });
                 funcs.push(FuncCode {
-                    name: surface.names.intern(name),
-                    params: params.clone(),
-                    ret: *ret,
+                    name: surface.names.intern(&row.name),
+                    params: row.params.clone(),
+                    ret: row.ret,
                     is_method: false,
                     n_captures: 0,
                     regs: vec![],
@@ -221,7 +226,7 @@ impl<'a> GraphCompiler<'a> {
                     code: vec![],
                     spans: vec![],
                     pos: vec![],
-                    host_id: Some(surface.names.intern(&format!("{host_scope}::{name}"))),
+                    host_id: Some(surface.names.intern(&host)),
                 });
             }
             for (name, ty, bits) in consts {
@@ -1009,7 +1014,12 @@ impl GraphCompiler<'_> {
     }
 
     /// The dep's per-module decl rows (parsed once per spec — the
-    /// consumers share it).
+    /// consumers share it). TODO(phase 2): a `PkgBody::Host` dep
+    /// collects from its root surface + mounted tree (the body
+    /// carries `root_surface`, the pkg carries `mods`), so a
+    /// qualified-use leaf naming a host row validates against the
+    /// path-carrying rows instead of silently skipping (today the
+    /// table comes back empty for a host root and the gate moves on).
     fn dep_mod_table(
         &mut self,
         spec: &str,

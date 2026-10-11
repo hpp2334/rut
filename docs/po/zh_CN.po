@@ -18178,12 +18178,16 @@ msgstr ""
 
 
 #: src/reference/embedding.md:150 src/reference/embedding.md:312
-msgid "`lower_decl_module(text, file)`"
+msgid "`lower_decl_module(text, children, file)`"
 msgstr ""
 
 
 #: src/reference/embedding.md:150
-msgid "a `.d.rut` lowered to host rows — the wasm hosts' surface lane"
+msgid ""
+"a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` "
+"is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with "
+"`mount_mod_children` in Decl mode) and each row carries the path it lives "
+"under"
 msgstr ""
 
 
@@ -18681,7 +18685,10 @@ msgstr ""
 
 
 #: src/reference/embedding.md:312
-msgid "lower a `.d.rut` surface to host rows"
+msgid ""
+"lower a `.d.rut` surface to host rows (`children` = the mounted `mod` tree — "
+"a declared child with no mounted `NAME/mod.d.rut` is a loud error; "
+"registration is path-qualified, `pkg::net::connect`)"
 msgstr ""
 
 

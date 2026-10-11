@@ -4,6 +4,7 @@
 //! `rut/ink_host/` and 03-plugin's `server/` load from disk, and a
 //! consumer compiles against them with no hand-written Rust surface.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
@@ -61,8 +62,8 @@ fn ink_host_loads_from_disk_with_its_name_scope() {
     assert_eq!(
         *host_funcs,
         vec![
-            ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE, false),
-            ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL, false),
+            rut_driver::HostRow::root("create_logger", vec![TY_STR], TY_OPAQUE, false),
+            rut_driver::HostRow::root("logger_log", vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL, false),
         ]
     );
 }
@@ -76,8 +77,8 @@ fn server_loads_from_disk() {
     assert_eq!(
         *host_funcs,
         vec![
-            ("subscribe".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
-            ("emit".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
+            rut_driver::HostRow::root("subscribe", vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
+            rut_driver::HostRow::root("emit", vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
         ]
     );
 }
@@ -220,6 +221,7 @@ fn non_crossing_signatures_refuse_at_load() {
     // offender
     let err = lower_decl_module(
         "pub host fn bad(v: [str]) -> str;",
+        &BTreeMap::new(),
         "test.d.rut",
     )
     .unwrap_err();
@@ -228,15 +230,15 @@ fn non_crossing_signatures_refuse_at_load() {
         "the load error names the offender: {err}"
     );
 
-    let err = lower_decl_module("pub host fn takes_ptr(p: ?i32);", "test.d.rut").unwrap_err();
+    let err = lower_decl_module("pub host fn takes_ptr(p: ?i32);", &BTreeMap::new(), "test.d.rut").unwrap_err();
     assert!(err.contains("not a crossing type"), "pointer params refuse: {err}");
 
     // a `self` receiver cannot cross
-    let err = lower_decl_module("pub host fn probe(self) -> nil;", "test.d.rut").unwrap_err();
+    let err = lower_decl_module("pub host fn probe(self) -> nil;", &BTreeMap::new(), "test.d.rut").unwrap_err();
     assert!(err.contains("receiver"), "a self receiver refuses: {err}");
 
     // and a surface that does not parse refuses with the parse errors
-    let err = lower_decl_module("pub host fn broken(;", "test.d.rut").unwrap_err();
+    let err = lower_decl_module("pub host fn broken(;", &BTreeMap::new(), "test.d.rut").unwrap_err();
     assert!(err.contains("does not parse"), "parse failures refuse: {err}");
 }
 
@@ -383,20 +385,20 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
 
     let ink_host = lower_decl_module(
         include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        &BTreeMap::new(),
         "ink_host.d.rut",
     )
     .expect("ink_host surface")
     .named("ink_host");
-    let mut engine = rut_driver::Pkg::host(
-        "engine",
-        vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
-    );
+    let engine_row = rut_driver::HostRow::root("probe", vec![TY_STR], TY_BOOL, true);
+    let mut engine = rut_driver::Pkg::host("engine", vec![engine_row.clone()]);
     engine.body = rut_driver::PkgBody::Host {
-        host_funcs: vec![("probe".to_string(), vec![TY_STR], TY_BOOL, true)],
+        host_funcs: vec![engine_row],
         consts: vec![],
         native_types: vec![],
         native_fns: vec![],
         native_impls: vec![],
+        root_surface: None,
     };
     let world = vec![ink_host, engine];
     let ctx = rut_driver::host_pkg_ctx(&world);
@@ -449,12 +451,14 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
 
     let ink_host = lower_decl_module(
         include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        &BTreeMap::new(),
         "ink_host.d.rut",
     )
     .expect("ink_host surface")
     .named("ink_host");
     let server = lower_decl_module(
         "pub host fn subscribe(bus: opaque, topic: str, handler: str) -> nil;\n",
+        &BTreeMap::new(),
         "server.d.rut",
     )
     .expect("server surface")

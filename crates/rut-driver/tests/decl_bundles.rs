@@ -152,7 +152,7 @@ fn host_root_packs_v6_and_loads_back() {
     assert_eq!(session.root, "logger_host");
     match &session.pkg("logger_host").unwrap().body {
         PkgBody::Host { host_funcs, .. } => {
-            let names: Vec<&str> = host_funcs.iter().map(|(n, ..)| n.as_str()).collect();
+            let names: Vec<&str> = host_funcs.iter().map(|r| r.name.as_str()).collect();
             assert_eq!(names, vec!["make_logger", "log"], "{names:?}");
         }
         other => panic!("the decl root mounts as host rows: {other:?}"),

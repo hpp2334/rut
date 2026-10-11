@@ -107,13 +107,18 @@ pub struct HostRegistry {
     installed_scopes: std::collections::HashSet<String>,
 }
 
-/// One host pkg's binding set. Rows register under UNPREFIXED names;
-/// the scope comes solely from [`HostPkg::new`] — a pkg cannot spell
-/// another pkg's rows (the anti-cross-injection law). The callable's
-/// Rust shape IS the `.d.rut` row, as [`HostRegistry::register`].
+/// One host pkg's binding set. Rows register under UNPREFIXED names —
+/// bare (`"connect"`) or scope-relative path-qualified
+/// (`"net::connect"`, a row living under the pkg's `mod net` tree);
+/// the scope comes solely from [`HostPkg::new`] and prefixes ONCE, at
+/// the install (`myhost` + `net::connect` → `myhost::net::connect`).
+/// A pkg cannot spell another pkg's rows (the anti-cross-injection
+/// law). The callable's Rust shape IS the `.d.rut` row, as
+/// [`HostRegistry::register`].
 pub struct HostPkg {
     scope: String,
-    /// row name ("map_new", "http_send__start") → binding
+    /// row name ("map_new", "net::connect", "http_send__start") →
+    /// binding
     rows: BTreeMap<String, HostBinding>,
 }
 
@@ -124,10 +129,13 @@ impl HostPkg {
         HostPkg { scope: scope.to_string(), rows: BTreeMap::new() }
     }
 
-    /// [`register!`](crate::register)'s law, scope-relative: the name is
-    /// the bare row name and the full registration name is formed once,
-    /// at the install. Panics on a duplicate row name within the pkg —
-    /// the flat registry's silent last-wins becomes a loud builder bug.
+    /// [`register!`](crate::register)'s law, scope-relative: the name
+    /// is the bare row name — or the row's scope-relative path
+    /// spelling (`"net::connect"`, for a row under the pkg's `mod net`
+    /// tree; the pkg scope itself is never part of it) — and the full
+    /// registration name is formed once, at the install. Panics on a
+    /// duplicate row name within the pkg — the flat registry's silent
+    /// last-wins becomes a loud builder bug.
     pub fn register<F, A, R, K>(&mut self, name: &str, f: F)
     where
         F: HostHandler<A, R, K> + 'static,
@@ -297,11 +305,14 @@ impl HostRegistry {
 
 /// [`register!`](crate::register)'s sugar for the [`HostPkg`] builder —
 /// the installer lane's default spelling. The name is the BARE row
-/// name; the scope comes solely from [`HostPkg::new`].
+/// name, or the row's scope-relative path spelling (`"net::connect"`
+/// — a row under the pkg's `mod net` tree); the scope comes solely
+/// from [`HostPkg::new`].
 ///
 /// ```ignore
 /// let mut pkg = HostPkg::new("calc");
 /// rut_vm::pkg_fn!(pkg, "abs", (f64,) -> f64, |vm, x| x.abs());
+/// rut_vm::pkg_fn!(pkg, "net::connect", (str,) -> opaque, |vm, url| ...);
 /// hosts.install_host_pkg(&ctx, pkg.build());
 /// ```
 #[macro_export]
@@ -314,7 +325,9 @@ macro_rules! pkg_fn {
 /// [`register_async!`](crate::register_async)'s sugar for the
 /// [`HostPkg`] builder: one row spelling → the five-row family
 /// (`<name>` trap, `__start`, `__yield`, `__take`, `__cancel`), all
-/// registered under bare row names — the scope prefixes at the merge.
+/// registered under bare row names — or the scope-relative path
+/// spelling (`"net::connect"` → `net::connect__start` et al); the
+/// scope prefixes at the merge.
 #[macro_export]
 macro_rules! pkg_async_fn {
     ($pkg:expr, $name:literal, ($($t:ty),* $(,)?) -> $ret:ty, $start:expr $(,)?) => {
@@ -390,7 +403,10 @@ pub struct HostPkgContext {
 impl HostPkgContext {
     /// Declare one row of the pkg mounted under `scope` — the
     /// driver's build-side API (the read side is `rows_of` et al.).
-    /// Async rows are declared pre-expanded by the caller.
+    /// `name` is the scope-relative spelling: the bare row name, or
+    /// the row's mod-path qualification (`"net::connect"`). Async rows
+    /// are declared pre-expanded by the caller (the family rides the
+    /// same qualified name).
     pub fn declare(&mut self, scope: &str, name: &str, params: Vec<TypeId>, ret: TypeId) {
         self.scopes
             .entry(scope.to_string())
@@ -577,5 +593,61 @@ mod host_pkg_tests {
         let mut hosts = HostRegistry::new();
         hosts.install_host_pkg(&ctx, pkg.build());
         hosts.verify_against(&ctx.flatten());
+    }
+
+    #[test]
+    fn path_qualified_rows_register_under_the_pkg_scope() {
+        // a row under the pkg's mod tree registers under its
+        // scope-relative path spelling; the install prefixes the scope
+        // ONCE — `myhost` + `net::connect` → `myhost::net::connect`
+        // (the scope prefix is forced here, the anti-cross-injection
+        // law untouched)
+        use rut_core::types::{TY_I64, TY_STR};
+        let mut ctx = HostPkgContext::default();
+        ctx.declare("myhost", "net::connect", vec![TY_STR], TY_I64);
+        ctx.declare("myhost", "net::tls::handshake", vec![TY_I64], TY_I64);
+        let mut pkg = HostPkg::new("myhost");
+        pkg.register::<_, (&str,), i64, _>("net::connect", |_vm: &mut Vm, _url: &str| 1);
+        crate::pkg_fn!(pkg, "net::tls::handshake", (i64,) -> i64, |_vm: &mut Vm, c: i64| c);
+        let mut hosts = HostRegistry::new();
+        hosts.install_host_pkg(&ctx, pkg.build());
+        // the full names resolve — verify_against passes only when the
+        // scope-prefixed path rows exist in the registry
+        hosts.verify_against(&ctx.flatten());
+        let flat = ctx.flatten();
+        assert!(flat.contains_key("myhost::net::connect"));
+        assert!(flat.contains_key("myhost::net::tls::handshake"));
+    }
+
+    #[test]
+    fn the_async_family_expands_path_qualified() {
+        // `pkg_async_fn!` over a path spelling emits the family on the
+        // qualified name (`net::probe__start` et al), matched by the
+        // ctx's pre-expanded declaration
+        use crate::Completer;
+        use rut_core::types::{TY_I32, TY_I64, TY_NIL, TY_OPAQUE};
+        let mut ctx = HostPkgContext::default();
+        ctx.declare("myhost", "net::probe", vec![TY_I64], TY_I64);
+        ctx.declare("myhost", "net::probe__start", vec![TY_I64], TY_OPAQUE);
+        ctx.declare("myhost", "net::probe__yield", vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+        ctx.declare("myhost", "net::probe__take", vec![TY_OPAQUE], TY_I64);
+        ctx.declare("myhost", "net::probe__cancel", vec![TY_OPAQUE], TY_NIL);
+        let mut pkg = HostPkg::new("myhost");
+        crate::pkg_async_fn!(pkg, "net::probe", (i64,) -> i64, move |x: i64| {
+            let c = Completer::<i64>::new();
+            c.complete(x);
+            c
+        });
+        let mut hosts = HostRegistry::new();
+        hosts.install_host_pkg(&ctx, pkg.build());
+        hosts.verify_against(&ctx.flatten());
+    }
+
+    #[test]
+    #[should_panic(expected = "host pkg `myhost` registers `net::connect` twice — one row per name")]
+    fn a_duplicate_path_qualified_row_panics() {
+        let mut pkg = HostPkg::new("myhost");
+        pkg.register::<_, (i64,), i64, _>("net::connect", |_vm: &mut Vm, x: i64| x);
+        pkg.register::<_, (i64,), i64, _>("net::connect", |_vm: &mut Vm, x: i64| x + 1);
     }
 }
