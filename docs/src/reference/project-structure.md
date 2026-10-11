@@ -126,7 +126,7 @@ visibility](modules-and-visibility.md)): plain declarations are visible
 in their own module and its descendants, `pub(pkg)` shares inside the
 package, `pub` crosses packages. Cross-file references inside one
 package are qualified positions (`layout::Column`, `widget::mk(3)` —
-the dot spelling); `use` statements stay the only cross-package door
+the `::` spelling); `use` statements stay the only cross-package door
 (`use tur_kit::layout::{ Column }`).
 
 ### Host surface trees

@@ -145,7 +145,7 @@ function marksEqual(a: OverlayMark[], b: OverlayMark[]): boolean {
 }
 
 function clamp(v: number, lo: number, hi: number): number {
-  return Math::max(lo, Math::min(hi, v));
+  return Math.max(lo, Math.min(hi, v));
 }
 
 /** Cut one line at every mark boundary; each segment inherits the

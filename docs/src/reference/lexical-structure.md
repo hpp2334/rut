@@ -80,6 +80,21 @@ are ordinary identifiers here: `let null = 5;` and `fn match()` are
 legal rut — and so is `trait`: an ordinary identifier (name your pet
 snake `trait` if you like; it carries no meaning).
 
+## Punctuation: `::` and `.`
+
+Two separators, one law:
+
+| token | role | spells |
+|---|---|---|
+| `::` | the path separator — segments of any **name-resolution** path | use paths, module positions, enum members, statics/associated fns, extern namespaces: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, `Vec<T>::from(..)` |
+| `.` | **value access** on an expression | fields, instance methods, tuple indices: `p.x`, `v.push(..)`, `t.0` |
+
+A path never spells `.`; a value access never spells `::`. Qualified
+positions resolve names inside one package, `use` paths cross packages
+(see [Modules and visibility](modules-and-visibility.md)); `Self`
+spells the enclosing type inside an impl body (its class-private
+literal, its members through the ordinary value-access postfix).
+
 ## The async block
 
 `async { .. }` — keyword before a block — is the async primitive: one

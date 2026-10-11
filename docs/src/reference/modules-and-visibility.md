@@ -99,16 +99,20 @@ Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through
 
 Inside one package, a declaration of another module is nameable where
 a path is legal — a type annotation, a call, a field read — by
-**dot-qualified position**: `layout::Column`, `store::Source<str>`,
+**qualified position**: `layout::Column`, `store::Source<str>`,
 `widget::mk(3)`. The head resolves against the current module's scope,
 then the module's ancestors up to the package root; positions never
 take a package head — `use` statements are the only cross-package
-door. Two spellings, two doors:
+door. `::` is THE path separator — every name-resolution path (use
+paths, qualified positions, enum members, statics/associated fns,
+extern namespaces) spells its segments with it; `.` is value access
+only (fields, instance methods, tuple indices — see
+[Lexical structure](lexical-structure.md)). One separator, two doors:
 
 | form | spelling | door |
 |---|---|---|
 | use path | `use pkg::a::b::{ C }` | `::` — cross-package, the import |
-| qualified position | `a.b.C` / `a.b.f(..)` | `.` — intra-package, at the use site |
+| qualified position | `a::b::C` / `a::b::f(..)` | `::` — intra-package, at the use site |
 
 ### Module-level `let`
 

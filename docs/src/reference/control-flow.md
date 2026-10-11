@@ -68,7 +68,7 @@ zero small big
 
 | Pattern | Example |
 |---|---|
-| enum member (dotted path) | `Light::Green` |
+| enum member (path) | `Light::Green` |
 | literal | `0`, `3.5`, `true`, `"text"` |
 | negative literal | `-1` |
 | alternatives (comma list) | `1, 2, 3` |

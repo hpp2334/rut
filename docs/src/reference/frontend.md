@@ -117,7 +117,8 @@ without special cases. `is` (type test) is a keyword; `as` is the only cast.
 
 rut's grammar makes shallow peeking enough: statements are keyword-led,
 `{` never starts an expression, imports are flat, and paths are
-`.`-dotted.
+`::`-separated (one `Colon2` token between segments, looped in the atom
+stage — no lookahead).
 
 | decision | mechanism |
 |---|---|

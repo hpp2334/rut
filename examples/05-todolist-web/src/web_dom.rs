@@ -227,7 +227,7 @@ fn boot_page(rows: &str) -> Result<(), String> {
     // bundle rides), parsed and mounted exactly as the loader would
     let (root, children) = rut_driver::mods::parse_rows(rows)
         .map_err(|e| format!("the app's module rows did not parse: {e}"))?;
-    let mods = rut_driver::mods::mount_rows(&root, &children)
+    let mods = rut_driver::mods::mount_rows(&root, &children, rut_parser::Mode::Impl, "mod.rut")
         .map_err(|e| format!("the app's module tree did not mount: {e}"))?;
     let app = rut_driver::Pkg {
         spec: "app".into(),

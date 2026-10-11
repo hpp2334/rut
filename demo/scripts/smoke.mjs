@@ -381,11 +381,11 @@ if (!existsSync(LSP_ARTIFACT)) {
   // -> tok-<name>), never on a hardcoded order
   const legend = lsp.legend;
   check(
-    legend.length === 15,
-    'the legend carries the ABI-reported 15 token types',
+    legend.length === 16,
+    'the legend carries the ABI-reported 16 token types',
     JSON.stringify(legend),
   );
-  for (const want of ['keyword', 'number', 'string', 'type', 'function', 'method', 'enumMember']) {
+  for (const want of ['keyword', 'number', 'string', 'type', 'function', 'method', 'enumMember', 'namespace']) {
     check(legend.includes(want), `the legend names '${want}'`);
   }
 
@@ -431,7 +431,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['tuple-errors', /^fn parse_u8\(s: str\) -> \(i32, str\) \{/, 'str', 'type'],
     ['ex-type-aliases', /^type Meters = i64;/, 'i64', 'type'],
     // types
-    ['opaque', /opaque\.downcast<Point>\(box1\);/, 'Point', 'type'],
+    ['opaque', /opaque::downcast<Point>\(box1\);/, 'Point', 'type'],
     ['sieve', /^fn sieve\(limit: i32\) -> Vec<i32> \{/, 'Vec', 'type'],
     ['ex-type-aliases', /^type Meters = i64;/, 'Meters', 'type'],
     ['ex-closures-generics', /fn sum\(xs: Vec<i32>\) -> i32 \{/, 'Vec', 'type'],
@@ -447,7 +447,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     // the name positions the legend also owns (the overlay paints them)
     ['hello-format', /^enum Flavor \{/, 'Flavor', 'enum'],
     ['values-and-pointers', /^struct Point \{/, 'Point', 'class'],
-    ['when-exhaustive', /Color\.Red\s+-> "red\+red",/, 'Red', 'enumMember'],
+    ['when-exhaustive', /Color::Red\s+-> "red\+red",/, 'Red', 'enumMember'],
     ['hello-format', /let name = "rut";/, 'name', 'variable'],
     ['ex-type-aliases', /^interface Labeled \{/, 'Labeled', 'interface'],
     ['ex-type-aliases', /fn label\(self\) -> str;/, 'label', 'method'],

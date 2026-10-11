@@ -148,8 +148,10 @@ context; after that, use the zh-CN rendering alone.
 | file module | 文件模块 | a `mod NAME;`-declared child: `NAME/mod.rut` beside the declaring file（`mod` 为代码） |
 | root module | 根模块 | the package's `mod.rut` beside its manifest |
 | module tree | 模块树 | the mounted file-module set of a package |
-| qualified position | 限定位置 | the dot-spelled intra-module reference（`layout::Column` stays code）；dot → 点号 |
+| qualified position | 限定位置 | the `::`-spelled intra-package reference（`layout::Column` stays code）；dot → 点号（`.` 只拼值访问） |
 | use path | use 路径 | the `::`-spelled import path（`use` 为代码） |
+| path separator | 路径分隔符 | `::` — THE path separator: every name-resolution path spells its segments with it（每条名称解析路径的段都由它拼写）；`.` is value access only |
+| value access | 值访问 | fields, instance methods, tuple indices → 字段、实例方法、元组索引（`.` 的唯一职责） |
 | mount | 挂载 | mounting is declared, not discovered → 挂载由声明决定，而非目录发现 |
 | declarations are the graph | 声明即图 | the `mod` decls ARE the module set — never a directory listing |
 | repealed | 已废除 | a retired manifest key refuses loudly → 被废除的键会大声拒绝并给出修复方法 |
