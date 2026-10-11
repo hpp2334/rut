@@ -63,6 +63,10 @@ pub(super) struct GraphCompiler<'a> {
     /// deps' per-module decl rows (phase 3): the use validation's
     /// table, parsed once per spec and shared across consumers
     pub(super) dep_decls: HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
+    /// The program root's spec — the dev arm's key: only the ROOT may
+    /// `use` its `dev-deps` heads (D5's allowlist reads it). From
+    /// `compile_graph`/`compile_units`' `root_spec`.
+    pub(super) root: String,
 }
 
 /// A linked source unit's compile inputs, recorded for the owner-side
@@ -152,6 +156,22 @@ impl<'a> GraphCompiler<'a> {
                 out
             }
         }
+    }
+
+    /// The declaration-gated ensure — the use law at the graph (D5's
+    /// compile-side half). Consumer `spec` may ensure and bind only the
+    /// heads its manifest declares (`deps` ∪ `peer-deps` ∪ the
+    /// program root's `dev-deps`; `core` rides unconditionally): a
+    /// mounted-but-undeclared head is D5, diagnosed in place, the unit
+    /// fails; an unmounted one is `ensure`'s own resolve error
+    /// (D2/NoModule — the same resolver text either way, so the miss
+    /// diagnoses exactly once).
+    fn ensure_use(&mut self, spec: &str, dep: &str) -> Option<Unit> {
+        if let Err(e) = self.session.resolve_use(spec, dep, &self.root) {
+            self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+            return None;
+        }
+        self.ensure(dep)
     }
 
     /// The native-module path: no rut body — synthesize
@@ -456,11 +476,12 @@ impl<'a> GraphCompiler<'a> {
             uses.push("core".to_string());
         }
 
-        // every dep links; its surface binds into this unit
+        // every dep links; its surface binds into this unit — the use
+        // law gates each head first (declared, not merely mounted)
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
-            let dep_unit = self.ensure(dep)?;
+            let dep_unit = self.ensure_use(spec, dep)?;
             if bound_scopes.insert(dep_unit.scope) {
                 // the exporter's spec rides the binding
                 bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
@@ -781,7 +802,9 @@ impl<'a> GraphCompiler<'a> {
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
-            let Some(dep_unit) = self.ensure(dep) else { return };
+            // the use law gates here too: the ridden source's heads
+            // are the OWNER pkg's uses (D5's consumer is the owner)
+            let Some(dep_unit) = self.ensure_use(owner, dep) else { return };
             if bound_scopes.insert(dep_unit.scope) {
                 bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
             }
@@ -911,7 +934,7 @@ impl GraphCompiler<'_> {
     /// a `pub` decl of the walked module. Flat use (`use dep::{A,B}`)
     /// is today's shape and skips the walk. `false` = diagnosed, the
     /// unit fails.
-    fn validate_qualified_uses(&mut self, _spec: &str, ast: &Ast, files: &[(u32, String)]) -> bool {
+    fn validate_qualified_uses(&mut self, spec: &str, ast: &Ast, files: &[(u32, String)]) -> bool {
         let mut ok = true;
         let session = self.session;
         for it in ast.module_items(ast.root).to_vec() {
@@ -922,17 +945,17 @@ impl GraphCompiler<'_> {
                 continue; // the flat spelling — today's shape
             }
             let dep_name = ast.name(path[0]).to_string();
-            // the using file's module (its span names the file) — kept
-            // for the diagnostics' "from" spelling
-            let from_at = match files.binary_search_by_key(&ast.span(it.id()).lo, |(s, _)| *s) {
-                Ok(i) => files[i].1.clone(),
-                Err(0) => String::new(),
-                Err(i) => files[i - 1].1.clone(),
-            };
-            let _ = &from_at;
-            let Ok(pkg) = session.resolve(&dep_name) else {
-                // an unknown dep: today's lanes name it; nothing to walk
-                continue;
+            // the nameability gate first: the head must be DECLARED,
+            // not merely mounted (D5's mounted-but-undeclared fire;
+            // an unmounted head keeps its D2/NoModule shape). Mod-path
+            // validation walks only declared heads.
+            let pkg = match session.resolve_use(spec, &dep_name, &self.root) {
+                Ok(p) => p,
+                Err(e) => {
+                    self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+                    ok = false;
+                    continue;
+                }
             };
             // the dep's tree flavor names the declaring files: a host
             // surface's children are `.d.rut` files (`mod.d.rut`), a

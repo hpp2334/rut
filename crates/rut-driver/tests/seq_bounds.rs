@@ -117,7 +117,9 @@ fn compile_std(src: &str) -> rut_core::binary::Program {
     let pouch = rut_native::dir_pkgs(&root.join("rut/pouch")).expect("mount pouch");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&pouch)
-        .pkg(rut_driver::Pkg::source("test", src))
+        // the root declares the tree pkg it names (the nameability law
+        // — mounted-but-undeclared is D5)
+        .pkg(rut_driver::Pkg::source("test", src).manifest(rut_driver::Manifest::lib("test", &["pouch"])))
         .entrypoint("test")
         .compile()
         .unwrap();

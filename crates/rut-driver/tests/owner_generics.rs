@@ -78,8 +78,15 @@ fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
 /// the retired `inline` flag's seat, kept for the callers' shape).
 fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Loaded {
     let mut pkgs: Vec<rut_driver::Pkg> = Vec::new();
+    // the hand world declares loosely: every pkg names every other
+    // (the law bounds uses by declarations, never declarations by
+    // uses — this suite's subject is owner-anchored generics)
     for (spec, src, _inline_retired) in modules {
-        pkgs.push(rut_driver::Pkg::source(spec, *src));
+        let heads: Vec<&str> =
+            modules.iter().map(|(s, _, _)| *s).filter(|s| *s != *spec).collect();
+        pkgs.push(
+            rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     rut_driver::Loaded { pkgs, root: String::new() }
 }
@@ -367,17 +374,22 @@ fn packaged_generic_owner_serves_consumer_requests() {
     // a consumer session over the bundle: its request resolves against
     // the ledger — assignment and `is` hold across the package boundary
     let mut session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
-    session.pkgs.push(rut_driver::Pkg::source(
-        "consumer",
-        "use pairz::{ Pair };\nuse app::{ make };\n\n\
-         entry fn go2() -> i64 {\n\
-         \x20   let mine: Pair<i64, str> = make();\n\
-         \x20   if (mine is Pair<i64, str>) {\n\
-         \x20       return mine.fst + 1;\n\
-         \x20   }\n\
-         \x20   return -1;\n\
-         }\n",
-    ));
+    session.pkgs.push(
+        rut_driver::Pkg::source(
+            "consumer",
+            "use pairz::{ Pair };\nuse app::{ make };\n\n\
+             entry fn go2() -> i64 {\n\
+             \x20   let mine: Pair<i64, str> = make();\n\
+             \x20   if (mine is Pair<i64, str>) {\n\
+             \x20       return mine.fst + 1;\n\
+             \x20   }\n\
+             \x20   return -1;\n\
+             }\n",
+        )
+        // the consumer declares the heads it names (the nameability
+        // law — mounted-but-undeclared is D5)
+        .manifest(rut_driver::Manifest::lib("consumer", &["pairz", "app", "calc"])),
+    );
     let got: i64 = run_entry(&session, "consumer", "go2");
     assert_eq!(got, 6, "the packaged instantiation served the consumer");
 
@@ -387,14 +399,18 @@ fn packaged_generic_owner_serves_consumer_requests() {
     // and runs
     let standalone = pack_dir(&pairz).expect("the lib packs alone");
     let mut lone = rut_driver::Pkg::from_bundle(&standalone).expect("load");
-    lone.pkgs.push(rut_driver::Pkg::source(
-        "late",
-        "use pairz::{ Pair };\n\n\
-         entry fn go3() -> i64 {\n\
-         \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
-         \x20   return p.fst;\n\
-         }\n",
-    ));
+    lone.pkgs.push(
+        rut_driver::Pkg::source(
+            "late",
+            "use pairz::{ Pair };\n\n\
+             entry fn go3() -> i64 {\n\
+             \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
+             \x20   return p.fst;\n\
+             }\n",
+        )
+        // the consumer declares the head it names (the nameability law)
+        .manifest(rut_driver::Manifest::lib("late", &["pairz", "calc"])),
+    );
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&lone)

@@ -82,8 +82,15 @@ fn run_returns(src: &str) -> Result<i64, String> {
 /// A multi-pkg graph (the last module is the root).
 fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
     let mut chain = rut_driver::RutRun::new();
+    // the hand world declares loosely: every pkg names every other
+    // (the law bounds uses by declarations, never declarations by
+    // uses — a suite-wide loose table is this helper's deliberate
+    // shape; the negative closure shapes mount nothing)
     for (spec, src) in modules {
-        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
+        let heads: Vec<&str> =
+            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
+        chain = chain
+            .pkg(rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())

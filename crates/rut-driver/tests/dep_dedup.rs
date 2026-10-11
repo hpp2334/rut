@@ -202,10 +202,18 @@ entry fn main() -> i64 {
     // the chain world: app -> wrap (inline) -> cell (generic export)
     // `inline` marks the splice law's input explicitly now: the generic
     // export alone no longer forces it (owner-anchored instantiation)
+    // each hand pkg declares the head it names (the nameability law —
+    // the declarations bound uses, never the reverse)
     let chain = rut_driver::RutRun::new()
         .pkg(rut_driver::Pkg::source("cell", cell_src))
-        .pkg(rut_driver::Pkg::source("wrap", wrap_src))
-        .pkg(rut_driver::Pkg::source("app", app_src));
+        .pkg(
+            rut_driver::Pkg::source("wrap", wrap_src)
+                .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
+        )
+        .pkg(
+            rut_driver::Pkg::source("app", app_src)
+                .manifest(rut_driver::Manifest::lib("app", &["wrap"])),
+        );
     let g = graph_of(chain.entrypoint("app").compile());
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let chain = g.program.expect("linked program");
@@ -317,13 +325,23 @@ entry fn main() -> i64 {
 ";
     // `inline` marks the splice law's input explicitly now: the generic
     // export alone no longer forces it (owner-anchored instantiation)
+    // each hand pkg declares the heads it names (the nameability law)
     let g = graph_of(
         rut_driver::RutRun::new()
             .pkg(rut_driver::Pkg::source("cell", cell_src))
-            .pkg(rut_driver::Pkg::source("wrap", wrap_src))
+            .pkg(
+                rut_driver::Pkg::source("wrap", wrap_src)
+                    .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
+            )
             .pkg(rut_driver::Pkg::source("boxx", box_src))
-            .pkg(rut_driver::Pkg::source("held", held_src))
-            .pkg(rut_driver::Pkg::source("app", app_src))
+            .pkg(
+                rut_driver::Pkg::source("held", held_src)
+                    .manifest(rut_driver::Manifest::lib("held", &["boxx"])),
+            )
+            .pkg(
+                rut_driver::Pkg::source("app", app_src)
+                    .manifest(rut_driver::Manifest::lib("app", &["wrap", "held"])),
+            )
             .entrypoint("app")
             .compile(),
     );

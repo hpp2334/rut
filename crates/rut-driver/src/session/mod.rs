@@ -19,6 +19,13 @@
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
 //! consumer manifest (`[deps]`).
 //!
+//! Two doors share that resolution: [`Session::resolve`] (the raw
+//! mount lookup) and [`Session::resolve_use`] — the USE door, which
+//! adds the nameability law on top: a mounted head passes only when
+//! the consumer DECLARES it (its manifest's `deps` ∪ `peer-deps` ∪ the
+//! program root's `dev-deps`; `core` rides unconditionally). The
+//! mounted-but-undeclared miss is D5, the dedicated diagnostic.
+//!
 //! The dep kinds: `[deps]` is today's transitively-mounted
 //! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
 //! the peer) with `optional = true` marking the presence-mounted kind
@@ -127,6 +134,47 @@ impl Session {
             }
         }
         ResolveError::NoModule { spec: spec.to_string() }
+    }
+
+    /// The single use-door: resolve `head` FOR `consumer` under the
+    /// nameability law. The order: a malformed name is
+    /// [`ResolveError::BadSpec`]; an UNMOUNTED head keeps the existing
+    /// shapes (D2 when the miss is a declared optional peer of a
+    /// mounted pkg, else NoModule — unchanged); a MOUNTED head passes
+    /// only when `consumer` DECLARES it — [`Session::declares`]'s
+    /// allowlist — otherwise D5, the dedicated
+    /// mounted-but-undeclared diagnostic. `core` passes
+    /// unconditionally: the graph already rides the prelude into every
+    /// unit. `root` is the program root's spec — the one consumer whose
+    /// `dev-deps` are nameable (dev tables mount only for a self-build).
+    pub(crate) fn resolve_use(
+        &self,
+        consumer: &str,
+        head: &str,
+        root: &str,
+    ) -> Result<&Pkg, ResolveError> {
+        let pkg = self.resolve(head)?;
+        if head == "core" || self.declares(consumer, head, root) {
+            Ok(pkg)
+        } else {
+            Err(ResolveError::not_declared(head, consumer, pkg.mounted_by.as_deref()))
+        }
+    }
+
+    /// The nameability allowlist: the heads `consumer` may `use` — its
+    /// own manifest's `deps` ∪ `peer-deps` tables, plus `dev-deps` when
+    /// the consumer IS the program root. Read off `pkg.manifest` (the
+    /// STRUCTURAL form every producer stamps — the walk's jsonc read, a
+    /// bundle's in-archive manifest, a host's `Pkg::manifest(..)` /
+    /// `parse_manifest(..)`), never jsonc text: a stamped pkg is the
+    /// one mechanism, and hosts build worlds where no file exists.
+    fn declares(&self, consumer: &str, head: &str, root: &str) -> bool {
+        let Some(c) = self.modules.get(consumer) else {
+            return false;
+        };
+        c.manifest.deps.contains_key(head)
+            || c.manifest.peer_deps.contains_key(head)
+            || (c.spec == root && c.manifest.dev_deps.contains_key(head))
     }
 
     /// The mounted host pkgs' declared rows, partitioned by

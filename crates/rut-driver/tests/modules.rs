@@ -208,11 +208,16 @@ fn graph_compiles_and_links_uses_in_order() {
                 "pub fn seven() -> i32 { return 7; }\n\
                  entry fn main() -> i32 { return seven(); }\n",
             ))
-            .pkg(rut_driver::Pkg::source(
-                "app_main",
-                "use math::{ seven };\n\
-                 entry fn main() -> i32 { return seven(); }\n",
-            ))
+            // the consumer declares the head it names (the nameability
+            // law — mounted-but-undeclared is D5)
+            .pkg(
+                rut_driver::Pkg::source(
+                    "app_main",
+                    "use math::{ seven };\n\
+                     entry fn main() -> i32 { return seven(); }\n",
+                )
+                .manifest(rut_driver::Manifest::lib("app_main", &["math"])),
+            )
             .entrypoint("app_main")
             .compile(),
     );
@@ -243,18 +248,26 @@ fn graph_threads_a_type_through_a_chain() {
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
                  entry fn main() -> i32 { return 0; }\n",
             ))
-            .pkg(rut_driver::Pkg::source(
-                "geo_mid",
-                "use geo_base::{Point, origin};\n\
-                 pub fn shifted() -> Point { return origin(); }\n\
-                 entry fn main() -> i32 { return 0; }\n",
-            ))
-            .pkg(rut_driver::Pkg::source(
-                "app_main",
-                "use geo_base::{Point};\n\
-                 use geo_mid::{shifted};\n\
-                 entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n",
-            ))
+            // the chain's consumers declare the heads they name (the
+            // nameability law — mounted-but-undeclared is D5)
+            .pkg(
+                rut_driver::Pkg::source(
+                    "geo_mid",
+                    "use geo_base::{Point, origin};\n\
+                     pub fn shifted() -> Point { return origin(); }\n\
+                     entry fn main() -> i32 { return 0; }\n",
+                )
+                .manifest(rut_driver::Manifest::lib("geo_mid", &["geo_base"])),
+            )
+            .pkg(
+                rut_driver::Pkg::source(
+                    "app_main",
+                    "use geo_base::{Point};\n\
+                     use geo_mid::{shifted};\n\
+                     entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n",
+                )
+                .manifest(rut_driver::Manifest::lib("app_main", &["geo_base", "geo_mid"])),
+            )
             .entrypoint("app_main")
             .compile(),
     );
@@ -354,16 +367,21 @@ fn consumer_uses_pouch_vec() {
         rut_driver::RutRun::new()
             // core first: the pouch source uses its prelude names
             .pkg(rut_driver::Pkg::source("pouch", coll_src))
-            .pkg(rut_driver::Pkg::source(
-                "app_main",
-                "use pouch::{ Vec };\n\
-                 entry fn main() -> i32 {\n\
-                     let mut v: Vec<i32> = Vec::new();\n\
-                     v.push(1);\n\
-                     v.push(2);\n\
-                     return v.len();\n\
-                 }\n",
-            ))
+            .pkg(
+                rut_driver::Pkg::source(
+                    "app_main",
+                    "use pouch::{ Vec };\n\
+                     entry fn main() -> i32 {\n\
+                         let mut v: Vec<i32> = Vec::new();\n\
+                         v.push(1);\n\
+                         v.push(2);\n\
+                         return v.len();\n\
+                     }\n",
+                )
+                // the consumer declares the head it names (the
+                // nameability law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib("app_main", &["pouch"])),
+            )
             .entrypoint("app_main")
             .compile(),
     );

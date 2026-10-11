@@ -13,8 +13,15 @@ use std::rc::Rc;
 /// Compile a module graph and run its `main`, returning the exit code.
 fn run_graph(modules: &[(&str, &str)]) -> i32 {
     let mut chain = rut_driver::RutRun::new();
+    // the hand world declares loosely: every pkg names every other
+    // (the law bounds uses by declarations, never declarations by
+    // uses — the suites' negative shapes are satisfaction/closure
+    // lanes, not nameability)
     for (spec, src) in modules {
-        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
+        let heads: Vec<&str> =
+            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
+        chain = chain
+            .pkg(rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
     }
     let (root, _) = modules.last().expect("root");
     let g = chain.entrypoint(root).compile().expect("compile the graph");
@@ -36,8 +43,12 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
 /// Compile a module graph and return its diagnostics (the refusal lane).
 fn compile_expect_err(modules: &[(&str, &str)]) -> Vec<String> {
     let mut chain = rut_driver::RutRun::new();
+    // the same loose table as [`run_graph`]: every pkg names every other
     for (spec, src) in modules {
-        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
+        let heads: Vec<&str> =
+            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
+        chain = chain
+            .pkg(rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
     }
     let (root, _) = modules.last().expect("root");
     let g = chain.entrypoint(root).compile().expect("compile the graph");

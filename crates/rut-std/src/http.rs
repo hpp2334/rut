@@ -731,7 +731,15 @@ entry fn boot_stream(url: str) -> nil {
                     .pkgs,
             );
         }
-        world.push(rut_driver::Pkg::source("app", SRC));
+        world.push(
+            rut_driver::Pkg::source("app", SRC)
+                // the app declares the heads it names (the nameability
+                // law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib(
+                    "app",
+                    &["http", "http_host", "futures", "async_host", "ink_host"],
+                )),
+        );
         let compiled = rut_driver::RutRun::new()
             .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
             .entrypoint("app")
@@ -913,7 +921,15 @@ entry fn boot(url: str) -> nil {
                     .pkgs,
             );
         }
-        world.push(rut_driver::Pkg::source("app", src));
+        world.push(
+            rut_driver::Pkg::source("app", src)
+                // the app declares the heads it names (the nameability
+                // law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib(
+                    "app",
+                    &["http", "http_host", "futures", "async_host", "ink_host"],
+                )),
+        );
         let compiled = rut_driver::RutRun::new()
             .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
             .entrypoint("app")
@@ -1017,7 +1033,15 @@ entry fn boot(url: str) -> nil {
                     .pkgs,
             );
         }
-        world.push(rut_driver::Pkg::source("app", src));
+        world.push(
+            rut_driver::Pkg::source("app", src)
+                // the app declares the heads it names (the nameability
+                // law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib(
+                    "app",
+                    &["http", "http_host", "futures", "async_host", "ink_host"],
+                )),
+        );
         let compiled = rut_driver::RutRun::new()
             .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
             .entrypoint("app")
@@ -1108,7 +1132,15 @@ entry fn boot() -> nil {
                     .pkgs,
             );
         }
-        world.push(rut_driver::Pkg::source("app", src));
+        world.push(
+            rut_driver::Pkg::source("app", src)
+                // the app declares the heads it names (the nameability
+                // law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib(
+                    "app",
+                    &["http", "http_host", "futures", "async_host", "ink_host"],
+                )),
+        );
         let compiled = rut_driver::RutRun::new()
             .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
             .entrypoint("app")
@@ -1257,7 +1289,15 @@ entry fn boot_stream(url: str) -> nil {
     launch_future(streamed(log, url));
 }
 "#;
-        world.push(rut_driver::Pkg::source("app", stream_src));
+        world.push(
+            rut_driver::Pkg::source("app", stream_src)
+                // the app declares the heads it names (the nameability
+                // law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib(
+                    "app",
+                    &["http", "http_host", "futures", "async_host", "ink_host"],
+                )),
+        );
         let compiled = rut_driver::RutRun::new()
             .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
             .entrypoint("app")

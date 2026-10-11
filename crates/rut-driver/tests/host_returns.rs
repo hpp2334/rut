@@ -169,7 +169,9 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
         .named("rets");
     let compiled = rut_driver::RutRun::new()
         .pkg(rets)
-        .pkg(rut_driver::Pkg::source("app", src))
+        // the consumer declares the host surface it names (the
+        // nameability law — mounted-but-undeclared is D5)
+        .pkg(rut_driver::Pkg::source("app", src).manifest(rut_driver::Manifest::lib("app", &["rets"])))
         .entrypoint("app")
         .compile()
         .unwrap();

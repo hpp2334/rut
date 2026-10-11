@@ -86,7 +86,12 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn vm_with_host() -> Vm {
     let mut loaded = rut_native::dir_pkgs(std::path::Path::new(PKG_DIR)).expect("mount keypayload");
     let expected = rut_driver::declared_host_fns(&loaded.pkgs);
-    loaded.pkgs.push(rut_driver::Pkg::source("app", SRC));
+    loaded.pkgs.push(
+        // the app declares the host surface it names (the nameability
+        // law — mounted-but-undeclared is D5)
+        rut_driver::Pkg::source("app", SRC)
+            .manifest(rut_driver::Manifest::lib("app", &["keypayload"])),
+    );
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
         .entrypoint("app")

@@ -616,7 +616,15 @@ entry fn main() -> nil {
         .pkgs;
     pkgs.push(ink_host);
     pkgs.push(fixture);
-    pkgs.push(rut_driver::Pkg::source("app", app));
+    // the root declares its heads (the Q2-4a sweep's law — the uses
+    // diagnostic (D5) fires for a hand root that names an undeclared
+    // mounted pkg): app rides the ink_host surface + the futures pair
+    pkgs.push(
+        rut_driver::Pkg::source("app", app).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["ink_host", "futures", "async_host", "fixture"],
+        )),
+    );
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
         .entrypoint("app")

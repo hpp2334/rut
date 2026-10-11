@@ -142,10 +142,16 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) ->
 /// session? The wrapper name is the compiled-world observable for "the
 /// group mounted" — the impl-registration rows are gone (satisfaction
 /// is structural), so the group's exported wrapper is what resolves.
+/// The hand probe declares the heads it names (the nameability law —
+/// a mounted-but-undeclared use is D5): codec + pouch, the world's
+/// dir-declared heads.
 fn probe_compiles(session: &rut_driver::Loaded, probe: &str) -> bool {
     let g = rut_driver::RutRun::new()
         .pkgs(session)
-        .pkg(rut_driver::Pkg::source("probe", probe))
+        .pkg(
+            rut_driver::Pkg::source("probe", probe)
+                .manifest(rut_driver::Manifest::lib("probe", &["codec", "pouch"])),
+        )
         .entrypoint("probe")
         .compile()
         .expect("compile the probe");

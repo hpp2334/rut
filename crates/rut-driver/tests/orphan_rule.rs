@@ -89,8 +89,15 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     let mut chain = rut_driver::RutRun::new();
+    // the hand world declares loosely: every pkg names every other
+    // (the law bounds uses by declarations, never declarations by
+    // uses — a suite-wide loose table is this helper's deliberate
+    // shape; the negative closure shapes mount nothing)
     for (spec, src) in modules {
-        chain = chain.pkg(rut_driver::Pkg::source(spec, *src));
+        let heads: Vec<&str> =
+            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
+        chain = chain
+            .pkg(rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())
@@ -288,9 +295,10 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
     let g = graph_of(
         chain
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-            .pkg(rut_driver::Pkg::source(
-                "main",
-                "\
+            .pkg(
+                rut_driver::Pkg::source(
+                    "main",
+                    "\
 use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError, JsonVec };
 use pouch::{ Vec };
 
@@ -316,7 +324,11 @@ entry fn main() -> ?str {
     return doc;
 }
 ",
-            ))
+                )
+                // the root declares the tree pkgs it names (the
+                // nameability law — mounted-but-undeclared is D5)
+                .manifest(rut_driver::Manifest::lib("main", &["json", "pouch", "calc"])),
+            )
             .entrypoint("main")
             .compile(),
     );

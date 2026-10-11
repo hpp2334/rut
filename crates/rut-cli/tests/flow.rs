@@ -455,9 +455,10 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
         world.extend(rut_driver::Pkg::from_bundle(&bytes).expect("mount bundle").pkgs);
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    world.push(rut_driver::Pkg::source(
-        "app",
-        r#"
+    world.push(
+        rut_driver::Pkg::source(
+            "app",
+            r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, FromFlow, IntoFlow };
 
@@ -466,7 +467,14 @@ entry fn main() -> nil {
     let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map(fn(x) { return x * 2; })).collected();
 }
 "#,
-    ));
+        )
+        // the root declares the heads it names (the nameability law —
+        // mounted-but-undeclared is D5)
+        .manifest(rut_driver::Manifest::lib(
+            "app",
+            &["pouch", "nmapset", "flow", "ink", "ink_host", "calc"],
+        )),
+    );
     let out = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
         .entrypoint("app")

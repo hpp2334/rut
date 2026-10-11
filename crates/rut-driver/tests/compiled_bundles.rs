@@ -216,14 +216,19 @@ fn a_source_group_splices_into_a_consumer_session() {
     let root = mixed_world("splice");
     let bytes = pack_dir(&root.join("app")).expect("pack");
     let mut loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
-    loaded.pkgs.push(rut_driver::Pkg::source(
-        "consumer",
-        "use boxy::{ Holder };\nuse util::{ twice };\n\n\
-         entry fn go2() -> i64 {\n\
-         \x20   let h = Holder<i64>::make(5);\n\
-         \x20   return twice(h.get());\n\
-         }\n",
-    ));
+    loaded.pkgs.push(
+        rut_driver::Pkg::source(
+            "consumer",
+            "use boxy::{ Holder };\nuse util::{ twice };\n\n\
+             entry fn go2() -> i64 {\n\
+             \x20   let h = Holder<i64>::make(5);\n\
+             \x20   return twice(h.get());\n\
+             }\n",
+        )
+        // the consumer declares the bundle groups it names (the
+        // nameability law — mounted-but-undeclared is D5)
+        .manifest(rut_driver::Manifest::lib("consumer", &["boxy", "util", "calc"])),
+    );
     // the CONSUMER is the root here — a source unit over the bundle's
     // mounted groups, compiled and linked exactly like a directory world
     let g = rut_driver::RutRun::new()

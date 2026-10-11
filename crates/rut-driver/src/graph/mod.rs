@@ -88,6 +88,7 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
         seeded_keys: HashSet::new(),
         fresh_owners: HashSet::new(),
         dep_decls: HashMap::new(),
+        root: root_spec.to_string(),
     };
     let ok = c.ensure(root_spec).is_some();
     c.resolve_requests();

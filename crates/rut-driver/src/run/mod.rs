@@ -27,8 +27,9 @@
 //!    rows snapshot (the context is internal now — a wiring drift is
 //!    the loud panic, exactly as before);
 //! 4. the closure check — every `use` name in every offered source
-//!    resolves; a miss is [`RunError`], carrying the resolver's own
-//!    diagnostic (the D2 peer text included);
+//!    resolves AND is declared by its consumer (the D5 nameability
+//!    law: mounted-but-undeclared refuses, unmounted keeps D2/NoModule);
+//!    a miss is [`RunError`], carrying the resolver's own diagnostic;
 //! 5. parse → check → LIR → link. Shape/closure failures are
 //!    `Err(RunError)`; compile diagnostics ride INSIDE
 //!    [`Compiled::graph`] exactly as they always did.
@@ -343,12 +344,24 @@ impl RutRun {
         for hp in host_pkgs {
             hosts.install_host_pkg(&ctx, hp);
         }
-        // 4. the closure check — every `use` name resolves (the
-        //    load-lane gate 7, now the run's law). A source that does
-        //    not parse stays out of this check; the compile reports it.
+        // 4. the closure check — every `use` name resolves AND is
+        //    declared (the load-lane gate 7, now the run's law; the
+        //    nameability half is D5's). A source that does not parse
+        //    stays out of this check; the compile reports it. The
+        //    entrypoint read is hoisted above the check: the root spec
+        //    is the dev arm's key (only the ROOT may name its
+        //    `dev-deps`), so it must be known here.
+        let root = entrypoint.ok_or_else(|| {
+            RunError::law("no entrypoint — the run needs .entrypoint(..) to name the root pkg")
+        })?;
+        if session.resolve(&root).is_err() {
+            return Err(RunError::law(format!(
+                "entrypoint `{root}` is not offered — .pkg(..) it (or offer the walk's root) before .compile()"
+            )));
+        }
         let mounted: Vec<(String, Pkg)> =
             session.modules().map(|(s, m)| (s.clone(), m.clone())).collect();
-        for (_, pkg) in &mounted {
+        for (spec, pkg) in &mounted {
             // the root's own uses — a source body's parse (compiled
             // bodies carry no source; the flat shape is exactly
             // today's check)
@@ -357,7 +370,7 @@ impl RutRun {
                 let (ast, diags) = rut_parser::parse(text, mode);
                 if diags.is_empty() {
                     for name in crate::graph::uses_of(&ast) {
-                        if let Err(e) = session.resolve(&name) {
+                        if let Err(e) = session.resolve_use(spec, &name, &root) {
                             return Err(RunError::law(e.to_string()));
                         }
                     }
@@ -372,7 +385,7 @@ impl RutRun {
                     continue; // the compile reports the syntax
                 }
                 for name in crate::graph::uses_of(&ast) {
-                    if let Err(e) = session.resolve(&name) {
+                    if let Err(e) = session.resolve_use(spec, &name, &root) {
                         return Err(RunError::law(format!(
                             "`{}` ({}): {e}",
                             pkg.spec, m.path
@@ -382,14 +395,6 @@ impl RutRun {
             }
         }
         // 5. parse → check → LIR → link
-        let root = entrypoint.ok_or_else(|| {
-            RunError::law("no entrypoint — the run needs .entrypoint(..) to name the root pkg")
-        })?;
-        if session.resolve(&root).is_err() {
-            return Err(RunError::law(format!(
-                "entrypoint `{root}` is not offered — .pkg(..) it (or offer the walk's root) before .compile()"
-            )));
-        }
         let graph = compile_graph(&session, &root);
         Ok(Compiled { graph, hosts })
     }

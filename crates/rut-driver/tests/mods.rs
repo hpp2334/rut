@@ -582,8 +582,13 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::P
 /// diagnostic messages.
 fn compile_with_diags(pkgs: &[rut_driver::Pkg], entry: &str) -> Vec<String> {
     let mut run = rut_driver::RutRun::new();
+    // the hand world declares loosely: every pkg names every other
+    // (the law bounds uses by declarations, never declarations by
+    // uses — these tests pin visibility/positions, not nameability)
     for p in pkgs {
-        run = run.pkg(p.clone());
+        let heads: Vec<&str> =
+            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
+        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
     }
     let c = run.entrypoint(entry).compile().expect("compile carries the diags");
     c.graph.diags.iter().map(|d| d.msg.clone()).collect()
@@ -591,8 +596,11 @@ fn compile_with_diags(pkgs: &[rut_driver::Pkg], entry: &str) -> Vec<String> {
 
 fn run_main_pkgs(pkgs: &[rut_driver::Pkg], entry: &str) -> i64 {
     let mut run = rut_driver::RutRun::new();
+    // the same loose table as [`compile_with_diags`]
     for p in pkgs {
-        run = run.pkg(p.clone());
+        let heads: Vec<&str> =
+            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
+        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
     }
     let c = run.entrypoint(entry).compile().expect("compile the walk");
     assert!(c.graph.diags.is_empty(), "{:?}", c.graph.diags);
