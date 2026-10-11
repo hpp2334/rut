@@ -61,13 +61,21 @@ entry fn main() {
 }
 "#;
 
+/// the `new` arg surface.
+#[derive(clap::Args)]
+pub(crate) struct NewArgs {
+    /// the module directory to scaffold (the package name is its basename)
+    dir: String,
+}
+
 /// `rut new <dir>` — scaffold a hello-world module directory: a
 /// `rut.jsonc` (the derived name + the whole swappable std set as
 /// pinned url deps) and a `mod.rut` (the ink hello). The name comes
 /// from the target's basename and obeys the manifest law — refused,
 /// never sanitized; an existing `rut.jsonc` or `mod.rut` is never
 /// clobbered; other pre-existing files are left alone.
-pub(crate) fn new(dir: &str) {
+pub(crate) fn new(args: &NewArgs) {
+    let dir = args.dir.as_str();
     let p = std::path::Path::new(dir);
     let name = p
         .file_name()

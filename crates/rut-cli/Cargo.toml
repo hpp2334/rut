@@ -10,6 +10,10 @@ name = "rut"
 path = "src/main.rs"
 
 [dependencies]
+# the arg surface: derive-based clap — the one third-party dep (the
+# hand-rolled door served fine at 3 flags, but -h/--help and honest
+# parse errors earn it)
+clap = { version = "4.5", features = ["derive"] }
 rut-driver = { path = "../rut-driver" }
 # the walk + the remotes + the pack lanes (the native host half)
 rut-native = { path = "../rut-native" }

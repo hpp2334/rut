@@ -1,10 +1,22 @@
 //! the `fmt` subcommand: canonical house layout over the AST reprint.
 
+/// the `fmt` arg surface.
+#[derive(clap::Args)]
+pub(crate) struct FmtArgs {
+    /// the `.rut` file or directory tree to format
+    path: String,
+    /// write nothing; exit 1 when anything would change
+    #[arg(long)]
+    check: bool,
+}
+
 /// `rut fmt <file.rut | dir> [--check]` — the source formatter: canonical house layout over the AST reprint, comments recovered
 /// and reattached verbatim, style from the nearest ancestor `rut.jsonc`'s
 /// `[style]` block. Default: rewrite in place. `--check`: write nothing,
 /// exit 1 when anything would change.
-pub(crate) fn fmt(path: &str, check: bool) {
+pub(crate) fn fmt(args: &FmtArgs) {
+    let path = args.path.as_str();
+    let check = args.check;
     let p = std::path::Path::new(path);
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     if p.is_dir() {

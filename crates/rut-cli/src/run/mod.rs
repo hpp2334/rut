@@ -9,7 +9,27 @@ mod symbols;
 
 use crate::cache;
 
-pub(crate) fn run(path: &str, fuel: Option<u64>, symbols: Option<String>, entry: Option<String>) {
+/// the `run` arg surface.
+#[derive(clap::Args)]
+pub(crate) struct RunArgs {
+    /// the module directory (`rut.jsonc`) or packed `.rutbundle` to run
+    path: String,
+    /// name the `entry fn` to run — with several, the CLI refuses to guess
+    #[arg(long, value_name = "FN")]
+    entry: Option<String>,
+    /// cap the op budget per turn (absent = uncapped)
+    #[arg(long, value_name = "N")]
+    fuel: Option<u64>,
+    /// restore a stripped artifact's private symbol table (compiled `.rutbundle` only)
+    #[arg(long, value_name = "FILE")]
+    symbols: Option<String>,
+}
+
+pub(crate) fn run(args: &RunArgs) {
+    let path = args.path.as_str();
+    let fuel = args.fuel;
+    let symbols = args.symbols.clone();
+    let entry = args.entry.clone();
     let p = door::admit(path, symbols.as_deref());
     // the program plus the host rows snapshot the installs answer to —
     // a module directory (`rut.jsonc`) or a `.rutbundle` — walk the

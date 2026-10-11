@@ -2,12 +2,20 @@
 
 use crate::cache;
 
+/// the `fetch` arg surface.
+#[derive(clap::Args)]
+pub(crate) struct FetchArgs {
+    /// the module directory whose url deps to cache
+    dir: String,
+}
+
 /// `rut fetch <dir>` — pre-populate the bundle cache: load the
 /// directory's graph with the cache-first fetcher and discard the
 /// session. CI warms the cache while the network is up; the later
 /// offline `run` hits only the cache. A `.rutbundle` input is refused:
 /// bundles are closed — there is nothing to fetch.
-pub(crate) fn fetch_cmd(dir: &str) {
+pub(crate) fn fetch_cmd(args: &FetchArgs) {
+    let dir = args.dir.as_str();
     let p = std::path::Path::new(dir);
     if !p.is_dir() {
         eprintln!("fetch: {dir} is not a module directory (a `.rutbundle` is closed — nothing to fetch)");

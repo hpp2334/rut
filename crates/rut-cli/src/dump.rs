@@ -1,6 +1,14 @@
 //! the `dump` subcommand: the AST + IR readbacks for one file.
 
-pub(crate) fn dump(path: &str) {
+/// the `dump` arg surface.
+#[derive(clap::Args)]
+pub(crate) struct DumpArgs {
+    /// the `.rut` file to dump
+    path: String,
+}
+
+pub(crate) fn dump(args: &DumpArgs) {
+    let path = args.path.as_str();
     let src = load(path);
     let out = rut_driver::compile_module(&src, mode_of(path), "main");
     if !out.diags.is_empty() {
