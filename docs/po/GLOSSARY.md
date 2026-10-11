@@ -164,3 +164,7 @@ context; after that, use the zh-CN rendering alone.
 | world | 世界 | the walk's world → 遍历的世界；close the world → 收束世界；the consumer's world → 消费者的世界 |
 | named record | 具名记录 | user struct/class rows; never cross → 具名记录永不跨越 |
 | anonymous tuple | 匿名元组 | the `(T, ..)` spelling crosses field-by-field → 匿名元组逐字段跨越 |
+| scaffold | 脚手架 | 动词 scaffold → 搭建脚手架；`rut new` scaffolds a directory → 为目录搭建脚手架 |
+| clobber | 覆盖 | refuse to clobber → 拒绝覆盖（已有的文件）；clobber refusal → 拒绝覆盖 |
+| basename | 基名 | the target's basename → 目标的基名 |
+| derived name | 派生名 | the package name derived from the basename → 从基名派生的包名 |

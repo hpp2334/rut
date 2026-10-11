@@ -17,6 +17,7 @@ checkout, or a plain `cargo build --release`
 
 ```sh
 rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
+rut new <dir>
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
 rut fetch <dir>
@@ -70,6 +71,65 @@ capped, so a program that never idles fails loudly instead of hanging.
 
 A `.d.rut` input is refused: a declaration file is a surface, not a
 runnable module ([host fns and declaration files](host-fns.md)).
+
+## `new`
+
+```sh
+rut new hello            # scaffold a hello-world module directory
+```
+
+Scaffolds a hello-world module directory: the manifest with the full
+swappable std set as pinned url deps, plus the root module — the same
+bytes as [your first rut program](../quick-start/first-program.md).
+The directory is runnable as-is: `rut run hello` prints `hello, rut!`.
+
+Behavior:
+
+| item | behavior |
+|---|---|
+| package name | derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the manifest's law). An illegal name is refused, never sanitized (exit 2) |
+| clobber refusal | a target already holding a `rut.jsonc` or a `mod.rut` is refused (exit 2, naming the file) — other pre-existing files are fine |
+| parents | created as needed — `rut new a/b/hello` works |
+| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as pinned url deps at the `@std-v9` tag; `mod.rut` — the ink hello |
+| first run | fetches the std set (9 bundles) into `<dir>/.rut/cache` — `rut fetch <dir>` pre-warms without running |
+
+The two created files, for `rut new hello` — both verbatim:
+
+```text
+{
+  // hello — scaffolded by `rut new`: a runnable hello-world module
+  // dir — the manifest carries the deps, and `mod.rut` is the root
+  // module the loader mounts.
+  //
+  // THE STD SET: all nine swappable std libs, each a COMMITTED
+  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag,
+  // sha256-pinned here — the pin is law at the mount door on every
+  // load). Unused deps are legal: host pkgs merge inert unless the
+  // program mounts their pkg, inline pkgs inline per-using-consumer —
+  // this hello (ink only) runs clean with the full set declared.
+  "name": "hello",
+  "deps": {
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle", "sha256": "2a45f7279797446bc7bb8e1ed31f9ac0de275e1d615f50f5439ab87a5e1c4f8a" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle", "sha256": "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle", "sha256": "a39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle", "sha256": "c27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle", "sha256": "61974c5c60e8c85fe9a155b46cf965dfe2ba0dfcd0451d0d46d55145cabd5407" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle", "sha256": "b22614a88d62f711ec061cebd573b452f93c6ef85b96fbed8531cf012aae8353" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle", "sha256": "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a" }
+  }
+}
+
+// hello/mod.rut
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("hello");
+    let name = "rut";
+    log.info(f"hello, {name}!");
+}
+```
 
 ## `fmt`
 

@@ -729,8 +729,8 @@ msgstr ""
 #: src/quick-start/installation.md:170
 msgid ""
 "# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] "
-"[--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o "
-"out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>\n"
+"[--symbols <file.rutsym>] | new <dir> | fmt <file.rut | dir> [--check] | "
+"pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>\n"
 msgstr ""
 
 #: src/quick-start/installation.md:174
@@ -760,7 +760,7 @@ msgid ""
 "    \"ink\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
 "\"sha256\": "
-"\"04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0\" }\n"
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -783,6 +783,14 @@ msgstr ""
 
 #: src/quick-start/installation.md:216
 msgid ""
+"The hand-typed walkthrough is the lesson — the manifest is what you are "
+"learning. When it is routine, `rut new hello` is the one-step equivalent: it "
+"scaffolds the directory (`rut.jsonc` plus the hello `mod.rut`), with the "
+"whole swappable std set pinned as deps ([the rut CLI](../reference/cli.md))."
+msgstr ""
+
+#: src/quick-start/installation.md:222
+msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut "
 "program](first-program.md) — and keep the lane's role in mind: the CLI is "
 "for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. "
@@ -790,36 +798,36 @@ msgid ""
 "CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 
-#: src/quick-start/installation.md:223
+#: src/quick-start/installation.md:229
 msgid "Optional: the wasm playground"
 msgstr ""
 
-#: src/quick-start/installation.md:225
+#: src/quick-start/installation.md:231
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:233
+#: src/quick-start/installation.md:239
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifact into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:240
+#: src/quick-start/installation.md:246
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:242
+#: src/quick-start/installation.md:248
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:247
+#: src/quick-start/installation.md:253
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:248
+#: src/quick-start/installation.md:254
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -875,7 +883,7 @@ msgid ""
 "    \"ink\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
 "\"sha256\": "
-"\"04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0\" }\n"
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -931,14 +939,28 @@ msgid "`entry fn main()` is the entry the CLI calls."
 msgstr ""
 
 #: src/quick-start/first-program.md:76
+msgid ""
+"Typing the directory by hand is the lesson — the manifest IS the program's "
+"door, and now you have written one. For the next directory, the CLI "
+"scaffolds it in one step: `rut new <dir>` writes exactly those two files — "
+"the manifest with the derived name (and, unlike the walkthrough above, the "
+"whole swappable std set as pinned url deps) and the same `mod.rut` — and "
+"`rut run <dir>` runs it ([the rut CLI](../reference/cli.md)):"
+msgstr ""
+
+#: src/quick-start/first-program.md:85
+msgid "# hello/rut.jsonc (the std set, pinned) + hello/mod.rut\n"
+msgstr ""
+
+#: src/quick-start/first-program.md:89
 msgid "Values, briefly"
 msgstr ""
 
-#: src/quick-start/first-program.md:78
+#: src/quick-start/first-program.md:91
 msgid "Extend the file — rut infers, and every type is known at compile time:"
 msgstr ""
 
-#: src/quick-start/first-program.md:80
+#: src/quick-start/first-program.md:93
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -958,7 +980,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/quick-start/first-program.md:101
+#: src/quick-start/first-program.md:114
 msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values "
 "and variables](../tutorial/values-and-variables.md) tutorial, and the exact "
@@ -966,44 +988,44 @@ msgid ""
 "inference](../reference/literals-and-inference.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:106
+#: src/quick-start/first-program.md:119
 msgid "Format"
 msgstr ""
 
-#: src/quick-start/first-program.md:108
+#: src/quick-start/first-program.md:121
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:111 src/reference/cli.md:77
+#: src/quick-start/first-program.md:124 src/reference/cli.md:137
 msgid "# rewrite in place\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:112
+#: src/quick-start/first-program.md:125
 msgid "# verify only (note: --check goes AFTER the path)\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:113
+#: src/quick-start/first-program.md:126
 msgid "# walk a directory tree, every *.rut file\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:116
+#: src/quick-start/first-program.md:129
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs "
 "changes, which makes it a clean CI gate. A file that does not parse is "
 "refused loudly rather than half-formatted."
 msgstr ""
 
-#: src/quick-start/first-program.md:120
+#: src/quick-start/first-program.md:133
 msgid "Inspect"
 msgstr ""
 
-#: src/quick-start/first-program.md:122
+#: src/quick-start/first-program.md:135
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a "
 "snippet behaves differently than you expect:"
 msgstr ""
 
-#: src/quick-start/first-program.md:129
+#: src/quick-start/first-program.md:142
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the "
 "packages, so it is the tool for surface questions (\"what does this lower "
@@ -1011,15 +1033,15 @@ msgid ""
 "panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:135
+#: src/quick-start/first-program.md:148
 msgid "Budget it"
 msgstr ""
 
-#: src/quick-start/first-program.md:137
+#: src/quick-start/first-program.md:150
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr ""
 
-#: src/quick-start/first-program.md:143
+#: src/quick-start/first-program.md:156
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — "
 "the same contract the VM enforces for embedded hosts, along with heap "
@@ -1027,23 +1049,23 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:148
+#: src/quick-start/first-program.md:161
 msgid "Where next"
 msgstr ""
 
-#: src/quick-start/first-program.md:150
+#: src/quick-start/first-program.md:163
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
 msgstr ""
 
-#: src/quick-start/first-program.md:152
+#: src/quick-start/first-program.md:165
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
 msgstr ""
 
-#: src/quick-start/first-program.md:154
+#: src/quick-start/first-program.md:167
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
@@ -1171,7 +1193,7 @@ msgid "Types"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
-#: src/reference/native-containers.md:115 src/reference/cli.md:182
+#: src/reference/native-containers.md:115 src/reference/cli.md:242
 msgid "Notes"
 msgstr ""
 
@@ -1630,11 +1652,11 @@ msgid ""
 "    \"pouch\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", "
 "\"sha256\": "
-"\"128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34\" },\n"
+"\"2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\" },\n"
 "    \"ink\":   { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
 "\"sha256\": "
-"\"04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0\" }\n"
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -3893,7 +3915,7 @@ msgid ""
 "    \"pouch\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", "
 "\"sha256\": "
-"\"128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34\" }\n"
+"\"2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -3955,7 +3977,7 @@ msgid ""
 "    \"ink\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
 "\"sha256\": "
-"\"04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0\" }\n"
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -4633,7 +4655,7 @@ msgid ""
 "/ `HashSet()` are the designated `new`; `with_capacity(n)` stays named."
 msgstr ""
 
-#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:176
+#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:177
 msgid "`flow` — the push pipeline"
 msgstr ""
 
@@ -9085,11 +9107,11 @@ msgid ""
 "    \"pouch\":   { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", "
 "\"sha256\": "
-"\"128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34\" },\n"
+"\"2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\" },\n"
 "    \"nmapset\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle\", "
 "\"sha256\": "
-"\"ee9a7cf00c7ab18b6037badfcac49f1abb1c94036c5349288570a43da7ecc598\" }\n"
+"\"62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -10115,7 +10137,7 @@ msgid ""
 ".. }`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:58
+#: src/reference/lexical-structure.md:58 src/reference/cli.md:75
 msgid "`new`"
 msgstr ""
 
@@ -10743,7 +10765,7 @@ msgstr ""
 msgid "seq"
 msgstr ""
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:330
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:331
 msgid "`Vec<T>`"
 msgstr ""
 
@@ -10753,7 +10775,7 @@ msgid ""
 "generic types](builtin-generic-types.md))"
 msgstr ""
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:329
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:330
 msgid "`[T]`"
 msgstr ""
 
@@ -10767,7 +10789,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:328
+#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:329
 msgid "`?T`"
 msgstr ""
 
@@ -11241,7 +11263,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:389
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:390
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -11257,7 +11279,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:174
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:175
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -11273,7 +11295,7 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:173
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:174
 msgid "`freeze() -> bytes`"
 msgstr ""
 
@@ -12491,7 +12513,7 @@ msgid "marker"
 msgstr ""
 
 #: src/reference/classes.md:89 src/reference/stdlib.md:117
-#: src/reference/stdlib.md:216
+#: src/reference/stdlib.md:217
 msgid "surface"
 msgstr ""
 
@@ -17794,8 +17816,8 @@ msgid ""
 msgstr ""
 
 #: src/reference/embedding.md:206 src/reference/templates.md:17
-#: src/reference/dependency-kinds.md:220 src/reference/cli.md:47
-#: src/reference/cli.md:152
+#: src/reference/dependency-kinds.md:220 src/reference/cli.md:48
+#: src/reference/cli.md:88 src/reference/cli.md:212
 msgid "behavior"
 msgstr ""
 
@@ -18446,7 +18468,7 @@ msgstr ""
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:411 src/reference/cli.md:52
+#: src/reference/embedding.md:411 src/reference/cli.md:53
 msgid "heap limit"
 msgstr ""
 
@@ -18539,7 +18561,7 @@ msgstr ""
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:438 src/reference/cli.md:59
+#: src/reference/embedding.md:438 src/reference/cli.md:60
 msgid "`math::pkg()`"
 msgstr ""
 
@@ -18555,7 +18577,7 @@ msgstr ""
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:440 src/reference/cli.md:61
+#: src/reference/embedding.md:440 src/reference/cli.md:62
 msgid "`nmap::pkg()`"
 msgstr ""
 
@@ -18573,7 +18595,7 @@ msgid ""
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:442 src/reference/cli.md:63
+#: src/reference/embedding.md:442 src/reference/cli.md:64
 msgid "`async_host::pkg()`"
 msgstr ""
 
@@ -18581,7 +18603,7 @@ msgstr ""
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:443 src/reference/cli.md:64
+#: src/reference/embedding.md:443 src/reference/cli.md:65
 msgid "`http::pkg()`"
 msgstr ""
 
@@ -18593,11 +18615,11 @@ msgid ""
 "readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:444 src/reference/cli.md:62
+#: src/reference/embedding.md:444 src/reference/cli.md:63
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:444 src/reference/stdlib.md:128
+#: src/reference/embedding.md:444 src/reference/stdlib.md:129
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
@@ -19327,7 +19349,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-fns.md:130 src/reference/frontend.md:159
-#: src/reference/cli.md:163
+#: src/reference/cli.md:223
 msgid "Declaration mode"
 msgstr ""
 
@@ -19591,9 +19613,9 @@ msgid "emitted row"
 msgstr ""
 
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
-#: src/reference/stdlib.md:167 src/reference/stdlib.md:216
-#: src/reference/stdlib.md:383 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:50 src/reference/cli.md:174
+#: src/reference/stdlib.md:168 src/reference/stdlib.md:217
+#: src/reference/stdlib.md:384 src/reference/typed-bytecode.md:101
+#: src/reference/project-structure.md:50 src/reference/cli.md:234
 msgid "meaning"
 msgstr ""
 
@@ -20333,7 +20355,7 @@ msgstr ""
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:75 src/reference/stdlib.md:324
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:325
 msgid "members"
 msgstr ""
 
@@ -20486,8 +20508,8 @@ msgstr ""
 msgid "`ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:119 src/reference/stdlib.md:125
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:119 src/reference/stdlib.md:126
+#: src/reference/stdlib.md:129
 msgid "host pkg"
 msgstr ""
 
@@ -20502,6 +20524,7 @@ msgid "`ink`"
 msgstr ""
 
 #: src/reference/stdlib.md:120 src/reference/stdlib.md:121
+#: src/reference/stdlib.md:122
 msgid "inline rut pkg"
 msgstr ""
 
@@ -20518,84 +20541,92 @@ msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
 #: src/reference/stdlib.md:122
-msgid "`nmap_host` / `nmapset`"
-msgstr ""
-
-#: src/reference/stdlib.md:122 src/reference/stdlib.md:124
-#: src/reference/stdlib.md:126
-msgid "host pkg + inline rut pkg"
+msgid "`flow`"
 msgstr ""
 
 #: src/reference/stdlib.md:122
+msgid "the push pipeline (`Flow<E>`, the wrappers)"
+msgstr ""
+
+#: src/reference/stdlib.md:123
+msgid "`nmap_host` / `nmapset`"
+msgstr ""
+
+#: src/reference/stdlib.md:123 src/reference/stdlib.md:125
+#: src/reference/stdlib.md:127
+msgid "host pkg + inline rut pkg"
+msgstr ""
+
+#: src/reference/stdlib.md:123
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:123 src/reference/project-structure.md:238
+#: src/reference/stdlib.md:124 src/reference/project-structure.md:238
 msgid "`json`"
 msgstr ""
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:124
 msgid "inline rut pkg (pulls `strbuild_host`)"
 msgstr ""
 
-#: src/reference/stdlib.md:123
+#: src/reference/stdlib.md:124
 msgid ""
 "`encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and "
 "their wrapper families"
 msgstr ""
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:125
 msgid "`strbuild_host` / `strbuild`"
 msgstr ""
 
-#: src/reference/stdlib.md:124
+#: src/reference/stdlib.md:125
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:125 src/reference/project-structure.md:233
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:233
 msgid "`calc`"
 msgstr ""
 
-#: src/reference/stdlib.md:125
+#: src/reference/stdlib.md:126
 msgid "the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:127
 msgid "`async_host` / `futures`"
 msgstr ""
 
-#: src/reference/stdlib.md:126
+#: src/reference/stdlib.md:127
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr ""
 
-#: src/reference/stdlib.md:127
+#: src/reference/stdlib.md:128
 msgid "`http_host` / `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:127
+#: src/reference/stdlib.md:128
 msgid "host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:127 src/reference/cli.md:64
+#: src/reference/stdlib.md:128 src/reference/cli.md:65
 msgid "the std HTTP lanes"
 msgstr ""
 
-#: src/reference/stdlib.md:128
+#: src/reference/stdlib.md:129
 msgid "`bench-cross`"
 msgstr ""
 
-#: src/reference/stdlib.md:130
+#: src/reference/stdlib.md:131
 msgid "`ink_host` and `ink` — logging"
 msgstr ""
 
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:133
 msgid ""
 "There is no global output builtin. All logging goes through a used logger; "
 "the host owns the sink, and an uninstalled sink is a silent no-op — a script "
 "cannot accidentally spam an embedded host's stdout."
 msgstr ""
 
-#: src/reference/stdlib.md:136
+#: src/reference/stdlib.md:137
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -20607,114 +20638,114 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:149
+#: src/reference/stdlib.md:150
 msgid ""
 "`Logger(\"app\")` constructs through the class's `[constructor]` member — "
 "the call form spells the construction."
 msgstr ""
 
-#: src/reference/stdlib.md:152
+#: src/reference/stdlib.md:153
 msgid "method"
 msgstr ""
 
-#: src/reference/stdlib.md:152
+#: src/reference/stdlib.md:153
 msgid "level passed to `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:154
+#: src/reference/stdlib.md:155
 msgid "`debug(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:154
+#: src/reference/stdlib.md:155
 msgid "0"
 msgstr ""
 
-#: src/reference/stdlib.md:155
+#: src/reference/stdlib.md:156
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:155 src/reference/frontend.md:98
+#: src/reference/stdlib.md:156 src/reference/frontend.md:98
 msgid "1"
 msgstr ""
 
-#: src/reference/stdlib.md:156
+#: src/reference/stdlib.md:157
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:156 src/reference/frontend.md:99
+#: src/reference/stdlib.md:157 src/reference/frontend.md:99
 msgid "2"
 msgstr ""
 
-#: src/reference/stdlib.md:157
+#: src/reference/stdlib.md:158
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:157 src/reference/frontend.md:100
+#: src/reference/stdlib.md:158 src/reference/frontend.md:100
 msgid "3"
 msgstr ""
 
-#: src/reference/stdlib.md:159
+#: src/reference/stdlib.md:160
 msgid ""
 "Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on "
 "the run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` "
 "along (`deps`)."
 msgstr ""
 
-#: src/reference/stdlib.md:163
+#: src/reference/stdlib.md:164
 msgid "`pouch` — `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:166
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:167 src/reference/stdlib.md:383
+#: src/reference/stdlib.md:168 src/reference/stdlib.md:384
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:170
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:170
 msgid "construction (`[v; n]` under the hood)"
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:171
 msgid "`push(v)` / `pop() -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:170
+#: src/reference/stdlib.md:171
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > "
 "0`"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:172
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:172
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr ""
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:173
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/stdlib.md:172
+#: src/reference/stdlib.md:173
 msgid "bridges to the fixed array"
 msgstr ""
 
-#: src/reference/stdlib.md:173
+#: src/reference/stdlib.md:174
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr ""
 
-#: src/reference/stdlib.md:174
+#: src/reference/stdlib.md:175
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it marks an "
 "`[iterable]` member, and a Flow wraps one drive in adapter stages — a "
@@ -20722,7 +20753,7 @@ msgid ""
 "fused builtin loops stay the perf tier."
 msgstr ""
 
-#: src/reference/stdlib.md:183
+#: src/reference/stdlib.md:184
 msgid ""
 "Entry and sink are **interfaces, satisfied structurally**: `IntoFlow<E>` is "
 "`fn into_flow(self) -> Flow<E>` — `Flow` itself carries the identity member "
@@ -20735,7 +20766,7 @@ msgid ""
 "every time."
 msgstr ""
 
-#: src/reference/stdlib.md:194
+#: src/reference/stdlib.md:195
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -20756,91 +20787,91 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:218
+#: src/reference/stdlib.md:219
 msgid ""
 "the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the "
 "wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid "`VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)`"
 msgstr ""
 
-#: src/reference/stdlib.md:219
+#: src/reference/stdlib.md:220
 msgid ""
 "the adapters — newtype wrappers manufactured at the call site; a primitive "
 "or bare container cannot carry members, the wrapper does"
 msgstr ""
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:221
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:220
+#: src/reference/stdlib.md:221
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:222
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:221
+#: src/reference/stdlib.md:222
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:223
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:223
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:223
+#: src/reference/stdlib.md:224
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:223
+#: src/reference/stdlib.md:224
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:224
+#: src/reference/stdlib.md:225
 msgid "`W<T>::from_flow(it: Flow<E>) -> W<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:224
+#: src/reference/stdlib.md:225
 msgid ""
 "the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and "
 "`SetFlow<T>`; `collected()` / `items()` unwrap the materialized container"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:226
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:226
 msgid ""
 "chains are iterable — the `[iterable]` member on `Flow<E>` feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:228
 msgid ""
 "**Import the interfaces you spell and the pipeline type**: `use flow::{ "
 "Flow, IntoFlow, FromFlow }` — the use-both law names each one."
 msgstr ""
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:231
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
 "host-table walk — json's map encode grows with it) and a map sink (nmapset's "
@@ -20848,17 +20879,17 @@ msgid ""
 "wrappers are the precedent such a family would follow)."
 msgstr ""
 
-#: src/reference/stdlib.md:236
+#: src/reference/stdlib.md:237
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:238
+#: src/reference/stdlib.md:239
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:241
+#: src/reference/stdlib.md:242
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -20877,13 +20908,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:254
+#: src/reference/stdlib.md:255
 msgid ""
 "Both classes designate `new` — `HashMap()` / `HashSet()` spell the "
 "construction; `with_capacity` stays a named constructor."
 msgstr ""
 
-#: src/reference/stdlib.md:257
+#: src/reference/stdlib.md:258
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -20894,11 +20925,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:265
+#: src/reference/stdlib.md:266
 msgid "`calc` — the `Math` namespace"
 msgstr ""
 
-#: src/reference/stdlib.md:267
+#: src/reference/stdlib.md:268
 msgid ""
 "```rut\n"
 "use calc::{ Math };\n"
@@ -20917,7 +20948,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:286
+#: src/reference/stdlib.md:287
 msgid ""
 "Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`, "
 "`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, "
@@ -20928,31 +20959,31 @@ msgid ""
 "methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:294
+#: src/reference/stdlib.md:295
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:296
+#: src/reference/stdlib.md:297
 msgid ""
 "Pure rut, `inline = true`, zero host fns — offering json adds no host "
 "bindings."
 msgstr ""
 
-#: src/reference/stdlib.md:308
+#: src/reference/stdlib.md:309
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:311
+#: src/reference/stdlib.md:312
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:314
+#: src/reference/stdlib.md:315
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
@@ -20961,7 +20992,7 @@ msgid ""
 "them without asking."
 msgstr ""
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:320
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no "
 "inherent members to have. The wrapper families are the spelled, per-call "
@@ -20969,95 +21000,95 @@ msgid ""
 "auto-inserted, forever."
 msgstr ""
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:325
 msgid "wrapper"
 msgstr ""
 
-#: src/reference/stdlib.md:324
+#: src/reference/stdlib.md:325
 msgid "wraps"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:327
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:327
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:327
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:327
+#: src/reference/stdlib.md:328
 msgid "`JsonU64`"
 msgstr ""
 
-#: src/reference/stdlib.md:327
+#: src/reference/stdlib.md:328
 msgid "`u64`"
 msgstr ""
 
-#: src/reference/stdlib.md:327
+#: src/reference/stdlib.md:328
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies "
 "`JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode "
 "row); `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:328
+#: src/reference/stdlib.md:329
 msgid "`SOpt<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:328
+#: src/reference/stdlib.md:329
 msgid ""
 "both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction "
 "bound means a decode-only `T` cannot ride it)"
 msgstr ""
 
-#: src/reference/stdlib.md:329
+#: src/reference/stdlib.md:330
 msgid "`JsonArr<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:329
+#: src/reference/stdlib.md:330
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:330
+#: src/reference/stdlib.md:331
 msgid "`JsonVec<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:330
+#: src/reference/stdlib.md:331
 msgid "both (the pouch peer group); `to_vec()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:332
 msgid ""
 "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:332
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:332
 msgid ""
 "decode-only (the nmapset peer group); `to_map()` unwraps — `JMapBytes` "
 "answers the bytes-keys disclosure"
 msgstr ""
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:333
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:333
 msgid "`HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:332
+#: src/reference/stdlib.md:333
 msgid "decode-only (the nmapset peer group); `to_set()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:334
+#: src/reference/stdlib.md:335
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -21065,13 +21096,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:341
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -21080,11 +21111,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:345
+#: src/reference/stdlib.md:346
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:346
+#: src/reference/stdlib.md:347
 msgid ""
 "**Ownership**: json owns the interfaces; all container wrappers live in "
 "json, gated by peer groups — `JsonVec` activates when `pouch` is anywhere in "
@@ -21093,17 +21124,17 @@ msgid ""
 "mounts json light."
 msgstr ""
 
-#: src/reference/stdlib.md:351
+#: src/reference/stdlib.md:352
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str::scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:355
+#: src/reference/stdlib.md:356
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:358
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -21113,7 +21144,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:364
+#: src/reference/stdlib.md:365
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -21131,54 +21162,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:385
+#: src/reference/stdlib.md:386
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:385
+#: src/reference/stdlib.md:386
 msgid ""
 "grow from small — the designated `[constructor]`: `StringBuilder()` spells it"
 msgstr ""
 
-#: src/reference/stdlib.md:386
+#: src/reference/stdlib.md:387
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:386
+#: src/reference/stdlib.md:387
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:387
+#: src/reference/stdlib.md:388
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:387
+#: src/reference/stdlib.md:388
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:388
+#: src/reference/stdlib.md:389
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:388
+#: src/reference/stdlib.md:389
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:389
+#: src/reference/stdlib.md:390
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:390
+#: src/reference/stdlib.md:391
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:390
+#: src/reference/stdlib.md:391
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:392
+#: src/reference/stdlib.md:393
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -21188,25 +21219,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:400
 msgid ""
 "Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain. "
 "Offering `strbuild` pulls `strbuild_host` along (`deps`); offering `json` "
 "pulls both (its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:403
+#: src/reference/stdlib.md:404
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:407
+#: src/reference/stdlib.md:408
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:409
+#: src/reference/stdlib.md:410
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
@@ -21217,7 +21248,7 @@ msgid ""
 "futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:417
+#: src/reference/stdlib.md:418
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks) "
 "as a surface tree — `net/` carries the send + the response readbacks, "
@@ -21227,7 +21258,7 @@ msgid ""
 "constructs through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:425
+#: src/reference/stdlib.md:426
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -21242,18 +21273,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:437
+#: src/reference/stdlib.md:438
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:441
+#: src/reference/stdlib.md:442
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:443
+#: src/reference/stdlib.md:444
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -21264,7 +21295,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:451
+#: src/reference/stdlib.md:452
 msgid ""
 "`inline = true` packages (ink, pouch, nmapset, json, strbuild, futures) are "
 "source-inlined into each consumer — required for class-method surfaces, "
@@ -21272,7 +21303,7 @@ msgid ""
 "frontend](frontend.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:455
+#: src/reference/stdlib.md:456
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
@@ -23471,7 +23502,7 @@ msgstr ""
 msgid "Two files leave the build:"
 msgstr ""
 
-#: src/reference/symbol-stripping.md:26 src/reference/cli.md:167
+#: src/reference/symbol-stripping.md:26 src/reference/cli.md:227
 msgid "file"
 msgstr ""
 
@@ -24117,7 +24148,7 @@ msgstr ""
 msgid "call"
 msgstr ""
 
-#: src/reference/loading.md:47 src/reference/cli.md:57
+#: src/reference/loading.md:47 src/reference/cli.md:58
 msgid "purpose"
 msgstr ""
 
@@ -25262,11 +25293,11 @@ msgid ""
 "    \"pouch\": { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", "
 "\"sha256\": "
-"\"128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34\" },\n"
+"\"2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\" },\n"
 "    \"ink\":   { \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
 "\"sha256\": "
-"\"04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0\" }\n"
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -26230,48 +26261,48 @@ msgid ""
 "([installation](../quick-start/installation.md))."
 msgstr ""
 
-#: src/reference/cli.md:26
+#: src/reference/cli.md:27
 msgid "Running `rut` with no subcommand prints the usage line to stderr."
 msgstr ""
 
-#: src/reference/cli.md:28 src/reference/cli.md:167
+#: src/reference/cli.md:29 src/reference/cli.md:227
 msgid "`run`"
 msgstr ""
 
-#: src/reference/cli.md:30
+#: src/reference/cli.md:31
 msgid ""
 "Compiles and executes. Two input forms — every rut program is a module "
 "directory ([project structure](project-structure.md)), so there is no "
 "loose-file shape:"
 msgstr ""
 
-#: src/reference/cli.md:34
+#: src/reference/cli.md:35
 msgid "input"
 msgstr ""
 
-#: src/reference/cli.md:34
+#: src/reference/cli.md:35
 msgid "pipeline"
 msgstr ""
 
-#: src/reference/cli.md:36
+#: src/reference/cli.md:37
 msgid "`dir` (a module directory with `rut.jsonc`)"
 msgstr ""
 
-#: src/reference/cli.md:36
+#: src/reference/cli.md:37
 msgid ""
 "load the whole graph, compile it, run the entry designation (below) "
 "([project structure](project-structure.md))"
 msgstr ""
 
-#: src/reference/cli.md:37
+#: src/reference/cli.md:38
 msgid "`mod.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:37
+#: src/reference/cli.md:38
 msgid "the packed form of the same contract ([module bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/cli.md:39
+#: src/reference/cli.md:40
 msgid ""
 "Anything else is refused at the door (exit 2): a loose `.rut` file is not a "
 "runnable unit — give the directory a `rut.jsonc` (`{\"name\": \"…\", "
@@ -26279,19 +26310,19 @@ msgid ""
 "commas are legal), or run a packed `.rutbundle`."
 msgstr ""
 
-#: src/reference/cli.md:45
+#: src/reference/cli.md:46
 msgid "Flags and defaults:"
 msgstr ""
 
-#: src/reference/cli.md:47 src/reference/cli.md:152
+#: src/reference/cli.md:48 src/reference/cli.md:88 src/reference/cli.md:212
 msgid "item"
 msgstr ""
 
-#: src/reference/cli.md:49
+#: src/reference/cli.md:50
 msgid "`--entry <fn>`"
 msgstr ""
 
-#: src/reference/cli.md:49
+#: src/reference/cli.md:50
 msgid ""
 "name the `entry fn` to run. Without the flag: exactly one `entry fn` runs "
 "the program; several refuse to guess (exit 1, naming the set); none reports "
@@ -26300,22 +26331,22 @@ msgid ""
 "loud error"
 msgstr ""
 
-#: src/reference/cli.md:50
+#: src/reference/cli.md:51
 msgid "`--fuel N`"
 msgstr ""
 
-#: src/reference/cli.md:50
+#: src/reference/cli.md:51
 msgid ""
 "cap the op budget per turn. Fuel is opt-in: without the flag the run is "
 "uncapped; a missing or unparsable value is a loud error (exit 2) — no silent "
 "default"
 msgstr ""
 
-#: src/reference/cli.md:51
+#: src/reference/cli.md:52
 msgid "`--symbols <file.rutsym>`"
 msgstr ""
 
-#: src/reference/cli.md:51
+#: src/reference/cli.md:52
 msgid ""
 "restore a [stripped artifact's](symbol-stripping.md) private symbol table — "
 "legal only against a compiled `.rutbundle` (the directory lane compiles "
@@ -26324,51 +26355,51 @@ msgid ""
 "names; sections naming modules the bundle does not carry warn"
 msgstr ""
 
-#: src/reference/cli.md:52
+#: src/reference/cli.md:53
 msgid "fixed at 64 MiB"
 msgstr ""
 
-#: src/reference/cli.md:53
+#: src/reference/cli.md:54
 msgid "interrupt check"
 msgstr ""
 
-#: src/reference/cli.md:53
+#: src/reference/cli.md:54
 msgid "every 1024 ops"
 msgstr ""
 
-#: src/reference/cli.md:55
+#: src/reference/cli.md:56
 msgid "Bodies bound by `run` (each rides the chain as `.host_pkg(..)`):"
 msgstr ""
 
-#: src/reference/cli.md:57
+#: src/reference/cli.md:58
 msgid "chain step"
 msgstr ""
 
-#: src/reference/cli.md:59
+#: src/reference/cli.md:60
 msgid "`calc`'s float fns"
 msgstr ""
 
-#: src/reference/cli.md:60
+#: src/reference/cli.md:61
 msgid "`logger::pkg` (sink: stdout)"
 msgstr ""
 
-#: src/reference/cli.md:60
+#: src/reference/cli.md:61
 msgid "the logger; silent no-op unless the program uses `ink`"
 msgstr ""
 
-#: src/reference/cli.md:61
+#: src/reference/cli.md:62
 msgid "the native key table behind `nmapset`"
 msgstr ""
 
-#: src/reference/cli.md:62
+#: src/reference/cli.md:63
 msgid "the crossing-benchmark rows"
 msgstr ""
 
-#: src/reference/cli.md:63
+#: src/reference/cli.md:64
 msgid "the async launchers"
 msgstr ""
 
-#: src/reference/cli.md:66
+#: src/reference/cli.md:67
 msgid ""
 "Execution: `main` is called with no arguments; then the async driving loop "
 "runs — drain the ready queue, advance the virtual clock to the next timer "
@@ -26376,69 +26407,203 @@ msgid ""
 "capped, so a program that never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/cli.md:71
+#: src/reference/cli.md:72
 msgid ""
 "A `.d.rut` input is refused: a declaration file is a surface, not a runnable "
 "module ([host fns and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/cli.md:74 src/reference/cli.md:167
-msgid "`fmt`"
+#: src/reference/cli.md:78
+msgid "# scaffold a hello-world module directory\n"
 msgstr ""
 
 #: src/reference/cli.md:81
+msgid ""
+"Scaffolds a hello-world module directory: the manifest with the full "
+"swappable std set as pinned url deps, plus the root module — the same bytes "
+"as [your first rut program](../quick-start/first-program.md). The directory "
+"is runnable as-is: `rut run hello` prints `hello, rut!`."
+msgstr ""
+
+#: src/reference/cli.md:86
+msgid "Behavior:"
+msgstr ""
+
+#: src/reference/cli.md:90
+msgid "package name"
+msgstr ""
+
+#: src/reference/cli.md:90
+msgid ""
+"derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the "
+"manifest's law). An illegal name is refused, never sanitized (exit 2)"
+msgstr ""
+
+#: src/reference/cli.md:91
+msgid "clobber refusal"
+msgstr ""
+
+#: src/reference/cli.md:91
+msgid ""
+"a target already holding a `rut.jsonc` or a `mod.rut` is refused (exit 2, "
+"naming the file) — other pre-existing files are fine"
+msgstr ""
+
+#: src/reference/cli.md:92
+msgid "parents"
+msgstr ""
+
+#: src/reference/cli.md:92
+msgid "created as needed — `rut new a/b/hello` works"
+msgstr ""
+
+#: src/reference/cli.md:93
+msgid "files written"
+msgstr ""
+
+#: src/reference/cli.md:93
+msgid ""
+"`rut.jsonc` — the derived name plus the whole swappable std set (nine "
+"packages) as pinned url deps at the `@std-v9` tag; `mod.rut` — the ink hello"
+msgstr ""
+
+#: src/reference/cli.md:94
+msgid "first run"
+msgstr ""
+
+#: src/reference/cli.md:94
+msgid ""
+"fetches the std set (9 bundles) into `<dir>/.rut/cache` — `rut fetch <dir>` "
+"pre-warms without running"
+msgstr ""
+
+#: src/reference/cli.md:96
+msgid "The two created files, for `rut new hello` — both verbatim:"
+msgstr ""
+
+#: src/reference/cli.md:98
+msgid ""
+"```text\n"
+"{\n"
+"  // hello — scaffolded by `rut new`: a runnable hello-world module\n"
+"  // dir — the manifest carries the deps, and `mod.rut` is the root\n"
+"  // module the loader mounts.\n"
+"  //\n"
+"  // THE STD SET: all nine swappable std libs, each a COMMITTED\n"
+"  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag,\n"
+"  // sha256-pinned here — the pin is law at the mount door on every\n"
+"  // load). Unused deps are legal: host pkgs merge inert unless the\n"
+"  // program mounts their pkg, inline pkgs inline per-using-consumer —\n"
+"  // this hello (ink only) runs clean with the full set declared.\n"
+"  \"name\": \"hello\",\n"
+"  \"deps\": {\n"
+"    \"ink\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\", "
+"\"sha256\": "
+"\"4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6\" },\n"
+"    \"pouch\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", "
+"\"sha256\": "
+"\"2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\" },\n"
+"    \"flow\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle\", "
+"\"sha256\": "
+"\"2a45f7279797446bc7bb8e1ed31f9ac0de275e1d615f50f5439ab87a5e1c4f8a\" },\n"
+"    \"nmapset\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle\", "
+"\"sha256\": "
+"\"62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02\" },\n"
+"    \"json\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle\", "
+"\"sha256\": "
+"\"a39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983\" },\n"
+"    \"strbuild\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle\", "
+"\"sha256\": "
+"\"c27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e\" },\n"
+"    \"calc\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle\", "
+"\"sha256\": "
+"\"61974c5c60e8c85fe9a155b46cf965dfe2ba0dfcd0451d0d46d55145cabd5407\" },\n"
+"    \"futures\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle\", "
+"\"sha256\": "
+"\"b22614a88d62f711ec061cebd573b452f93c6ef85b96fbed8531cf012aae8353\" },\n"
+"    \"http\": { \"url\": "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle\", "
+"\"sha256\": "
+"\"c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a\" }\n"
+"  }\n"
+"}\n"
+"\n"
+"// hello/mod.rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"hello\");\n"
+"    let name = \"rut\";\n"
+"    log.info(f\"hello, {name}!\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/cli.md:134 src/reference/cli.md:227
+msgid "`fmt`"
+msgstr ""
+
+#: src/reference/cli.md:141
 msgid "The canonical formatter. Behavior:"
 msgstr ""
 
-#: src/reference/cli.md:83
+#: src/reference/cli.md:143
 msgid ""
 "a **directory** argument is walked recursively; every `.rut` file is "
 "collected (sorted) and formatted;"
 msgstr ""
 
-#: src/reference/cli.md:85
+#: src/reference/cli.md:145
 msgid ""
 "style comes from the nearest ancestor `rut.jsonc`'s `style` block; no "
 "manifest → defaults ([project structure](project-structure.md));"
 msgstr ""
 
-#: src/reference/cli.md:87
+#: src/reference/cli.md:147
 msgid "`.d.rut` files are formatted in declaration mode;"
 msgstr ""
 
-#: src/reference/cli.md:88
+#: src/reference/cli.md:148
 msgid ""
 "a file that does not parse clean is **refused** (diagnostics listed, nonzero "
 "exit) — fmt never reformats on a parse error;"
 msgstr ""
 
-#: src/reference/cli.md:90
+#: src/reference/cli.md:150
 msgid ""
 "default mode rewrites in place and prints `formatted: <path>` per changed "
 "file;"
 msgstr ""
 
-#: src/reference/cli.md:92
+#: src/reference/cli.md:152
 msgid ""
 "`--check` writes nothing: it prints `unformatted: <path>` for each "
 "would-change file and exits nonzero, or `fmt: N file(s) formatted` when "
 "everything is clean."
 msgstr ""
 
-#: src/reference/cli.md:96
+#: src/reference/cli.md:156
 msgid "`pack`"
 msgstr ""
 
-#: src/reference/cli.md:99
+#: src/reference/cli.md:159
 msgid "# packed plugins/server -> server.rutbundle (18304 bytes)\n"
 msgstr ""
 
-#: src/reference/cli.md:101
+#: src/reference/cli.md:161
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 msgstr ""
 
-#: src/reference/cli.md:106
+#: src/reference/cli.md:166
 msgid ""
 "Packs a module directory into a **deterministic** `.rutbundle` — same input, "
 "same bytes. Without `-o`, the output is written beside the input as "
@@ -26455,7 +26620,7 @@ msgid ""
 "bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/cli.md:121
+#: src/reference/cli.md:181
 msgid ""
 "`--strip` mangles every renameable name and strips the symbolication tables "
 "from the emitted binaries, writing the private symbol table at the sibling "
@@ -26465,11 +26630,11 @@ msgid ""
 "`.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/cli.md:128 src/reference/cli.md:167
+#: src/reference/cli.md:188 src/reference/cli.md:227
 msgid "`dump`"
 msgstr ""
 
-#: src/reference/cli.md:134
+#: src/reference/cli.md:194
 msgid ""
 "Prints the compiler's view of one file: the `== AST ==` section followed by "
 "`== IR ==` (per-function typed register tables and op listings). Compilation "
@@ -26478,15 +26643,15 @@ msgid ""
 "inspecting a host surface's slots."
 msgstr ""
 
-#: src/reference/cli.md:140
+#: src/reference/cli.md:200
 msgid "`fetch`"
 msgstr ""
 
-#: src/reference/cli.md:143
+#: src/reference/cli.md:203
 msgid "# CI: warm the cache while the network is up\n"
 msgstr ""
 
-#: src/reference/cli.md:146
+#: src/reference/cli.md:206
 msgid ""
 "Walks a module **directory** with the url-dep remote and discards the result "
 "— every `deps` url is fetched (or found in the cache) and pinned, so a later "
@@ -26495,133 +26660,133 @@ msgid ""
 "law are the same lane `run`/`pack` use:"
 msgstr ""
 
-#: src/reference/cli.md:154
+#: src/reference/cli.md:214
 msgid "cache root"
 msgstr ""
 
-#: src/reference/cli.md:154
+#: src/reference/cli.md:214
 msgid ""
 "`<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides "
 "the root (CLI-side only — the walk never reads env). Entries named "
 "`<sha256(url)>.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:155
+#: src/reference/cli.md:215
 msgid "cache-first"
 msgstr ""
 
-#: src/reference/cli.md:155
+#: src/reference/cli.md:215
 msgid "a hit never touches the network — offline reloads are the point"
 msgstr ""
 
-#: src/reference/cli.md:156
+#: src/reference/cli.md:216
 msgid "miss"
 msgstr ""
 
-#: src/reference/cli.md:156
+#: src/reference/cli.md:216
 msgid ""
 "GET (redirects on), non-2xx is a loud error, a size cap refuses without "
 "buffering, the write is atomic (tmp + rename)"
 msgstr ""
 
-#: src/reference/cli.md:157
+#: src/reference/cli.md:217
 msgid "poisoned entry"
 msgstr ""
 
-#: src/reference/cli.md:157
+#: src/reference/cli.md:217
 msgid ""
 "the `sha256` pin is the loader's law at the mount door; when it refuses, the "
 "CLI maps the url back to its cache path, deletes the entry, and exits 2 — "
 "the next run re-fetches and heals"
 msgstr ""
 
-#: src/reference/cli.md:159
+#: src/reference/cli.md:219
 msgid ""
 "The wire is `rut-native`'s `http` feature (default on) — a build with "
 "`default-features = false` (the wasm graphs) has no transport at all: a "
 "cache miss errors loudly instead of networking."
 msgstr ""
 
-#: src/reference/cli.md:165
+#: src/reference/cli.md:225
 msgid "The file extension selects the parser mode:"
 msgstr ""
 
-#: src/reference/cli.md:167
+#: src/reference/cli.md:227
 msgid "mode"
 msgstr ""
 
-#: src/reference/cli.md:169
+#: src/reference/cli.md:229
 msgid "`*.rut`"
 msgstr ""
 
-#: src/reference/cli.md:169
+#: src/reference/cli.md:229
 msgid "implementation"
 msgstr ""
 
-#: src/reference/cli.md:169
+#: src/reference/cli.md:229
 msgid "runs `main`"
 msgstr ""
 
-#: src/reference/cli.md:169
+#: src/reference/cli.md:229
 msgid "formats impls"
 msgstr ""
 
-#: src/reference/cli.md:169
+#: src/reference/cli.md:229
 msgid "AST + IR of the module"
 msgstr ""
 
-#: src/reference/cli.md:170
+#: src/reference/cli.md:230
 msgid "`*.d.rut`"
 msgstr ""
 
-#: src/reference/cli.md:170
+#: src/reference/cli.md:230
 msgid "declaration"
 msgstr ""
 
-#: src/reference/cli.md:170
+#: src/reference/cli.md:230
 msgid "refused (exit 2)"
 msgstr ""
 
-#: src/reference/cli.md:170
+#: src/reference/cli.md:230
 msgid "formats the surface"
 msgstr ""
 
-#: src/reference/cli.md:170
+#: src/reference/cli.md:230
 msgid "the surface's AST + IR"
 msgstr ""
 
-#: src/reference/cli.md:172
+#: src/reference/cli.md:232
 msgid "Exit codes"
 msgstr ""
 
-#: src/reference/cli.md:174
+#: src/reference/cli.md:234
 msgid "code"
 msgstr ""
 
-#: src/reference/cli.md:176
+#: src/reference/cli.md:236
 msgid "`0`"
 msgstr ""
 
-#: src/reference/cli.md:176
+#: src/reference/cli.md:236
 msgid "success"
 msgstr ""
 
-#: src/reference/cli.md:177
+#: src/reference/cli.md:237
 msgid "`1`"
 msgstr ""
 
-#: src/reference/cli.md:177
+#: src/reference/cli.md:237
 msgid ""
 "compile diagnostics; no binary emitted; binary decode or verify failure; VM "
 "boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt "
 "--check` found drift; `pack` or output-write failure"
 msgstr ""
 
-#: src/reference/cli.md:178
+#: src/reference/cli.md:238
 msgid "`2`"
 msgstr ""
 
-#: src/reference/cli.md:178
+#: src/reference/cli.md:238
 msgid ""
 "usage errors (missing arguments); unreadable input file; `run` on a "
 "`.d.rut`; `run` on an input that is neither a module directory nor a "
@@ -26629,11 +26794,11 @@ msgid ""
 "`sha256` pin refusal (the poisoned cache entry is evicted)"
 msgstr ""
 
-#: src/reference/cli.md:180
+#: src/reference/cli.md:240
 msgid "Diagnostics go to stderr; `pack`'s success line goes to stdout."
 msgstr ""
 
-#: src/reference/cli.md:184
+#: src/reference/cli.md:244
 msgid ""
 "The CLI offers and binds on behalf of the program, but it never injects "
 "names the program did not declare: a program that never spells `use ink::` "
@@ -26642,12 +26807,12 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/cli.md:189
+#: src/reference/cli.md:249
 msgid ""
 "The HTTP lane is native-only: the CLI build carries it, wasm builds do not."
 msgstr ""
 
-#: src/reference/cli.md:191
+#: src/reference/cli.md:251
 msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + "
 "`run <bundle>` is the shipping path — both run the identical contract "

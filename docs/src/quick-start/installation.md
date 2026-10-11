@@ -168,7 +168,7 @@ no subcommand prints the usage line:
 
 ```sh
 rut
-# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
+# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | new <dir> | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
 ```
 
 The binary embeds the whole engine: lexer, parser, compiler, typed
@@ -191,7 +191,7 @@ cat > hello/rut.jsonc <<'EOF'
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
     // std-v9 tag, pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
   }
 }
 EOF
@@ -212,6 +212,12 @@ hello, rut!
 
 The first run fetched `ink` from jsDelivr into `hello/.rut/cache`;
 `rut fetch hello` pre-warms that cache without running anything.
+
+The hand-typed walkthrough is the lesson — the manifest is what you
+are learning. When it is routine, `rut new hello` is the one-step
+equivalent: it scaffolds the directory (`rut.jsonc` plus the hello
+`mod.rut`), with the whole swappable std set pinned as deps
+([the rut CLI](../reference/cli.md)).
 
 If that printed, the CLI is ready. Continue to
 [your first rut program](first-program.md) — and keep the lane's role

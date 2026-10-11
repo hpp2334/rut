@@ -36,7 +36,7 @@ cat > hello/rut.jsonc <<'EOF'
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
     // std-v9 tag, pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
   }
 }
 EOF
@@ -72,6 +72,19 @@ Three things to notice:
   expression, rendered through the value's display contract.
 
 `entry fn main()` is the entry the CLI calls.
+
+Typing the directory by hand is the lesson — the manifest IS the
+program's door, and now you have written one. For the next directory,
+the CLI scaffolds it in one step: `rut new <dir>` writes exactly those
+two files — the manifest with the derived name (and, unlike the
+walkthrough above, the whole swappable std set as pinned url deps) and
+the same `mod.rut` — and `rut run <dir>` runs it
+([the rut CLI](../reference/cli.md)):
+
+```sh
+rut new hello    # hello/rut.jsonc (the std set, pinned) + hello/mod.rut
+rut run hello
+```
 
 ## Values, briefly
 

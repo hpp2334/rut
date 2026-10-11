@@ -119,6 +119,7 @@ constants are `calc`'s.
 | `ink_host` | host pkg | `create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)` |
 | `ink` | inline rut pkg | the `Logger` class over `ink_host` |
 | `pouch` | inline rut pkg | the growable sequence `Vec<T>` |
+| `flow` | inline rut pkg | the push pipeline (`Flow<E>`, the wrappers) |
 | `nmap_host` / `nmapset` | host pkg + inline rut pkg | the native key table; `HashMap`/`HashSet` |
 | `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and their wrapper families |
 | `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |

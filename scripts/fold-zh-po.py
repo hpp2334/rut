@@ -25,16 +25,18 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (the
-# cargo-install lanes: installation.md's temporary-run section splits
-# into three `###` lanes — `cargo install` from git, from a checkout,
-# plain build — with the usage block deduplicated and the `[--entry
-# <fn>]` reality fix; README.md's repo block gains the no-checkout
-# pointer; cli.md's intro names the three ways to get the binary).
-# Terminology per docs/po/GLOSSARY.md (临时运行车道 / 检出 / 锁定 /
-# 用法行 / 车道); code spans byte-identical (`cargo +nightly-2026-07-15
-# install --git …`, `~/.cargo/bin/rut`); link text translated, targets
-# untouched ([锁定 nightly](#pin-the-nightly), [快速开始] / [安装]);
+# Fresh translations for the strings this sweep changed (the `rut new`
+# documentation: cli.md gains the usage row and the `## new` section —
+# purpose sentence, behavior table, the two-file text listing;
+# first-program.md gains the scaffold shortcut after the manual
+# walkthrough; installation.md's usage line gains `new <dir>` and the
+# Try-it gains the one-step-equivalent sentence; stdlib.md's swappable
+# table gains the `flow` row. The std-v9 pin sweep touches only code
+# blocks — those fold to ""). Terminology per docs/po/GLOSSARY.md
+# (脚手架 / 拒绝覆盖 / 基名 / 派生名 / 可换 std 集合 / 推送管线 /
+# 固定值 / 退出码); code spans byte-identical (`rut new <dir>`,
+# `rut.jsonc`, `mod.rut`, `@std-v9`); link text translated, targets
+# untouched ([rut CLI](../reference/cli.md), [你的第一个 rut 程序]);
 # full-width punctuation in prose. Everything not in FRESH either
 # keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
 # mechanical cutover shapes), or folds to "" — the English fallback BY
@@ -42,8 +44,8 @@ PO = 'docs/po/zh_CN.po'
 # FRESH is pruned after every landed sweep: once a msgstr is folded
 # into zh_CN.po it is kept byte-for-byte by the fold itself, so the
 # dict only ever carries translations for the CURRENT sweep's new and
-# changed strings. This sweep's nine entries landed and were pruned;
-# see the git history of this file.
+# changed strings. This sweep's seventeen entries landed and were
+# pruned; see the git history of this file.
 FRESH = {}
 
 
