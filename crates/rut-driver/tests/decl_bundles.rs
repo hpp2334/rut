@@ -13,7 +13,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 
 mod common;
-use common::block_on;
+use common::{block_on, write_lock};
 
 use rut_driver::{PkgBody, PackOpts};
 use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError};
@@ -189,6 +189,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
+    write_lock(&app, &table);
     let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("url load");
     assert_eq!(session.root, "app");
     assert!(matches!(
@@ -398,6 +399,7 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
         ),
     );
     write(&app2, "mod.rut", "entry fn main() -> nil {}\n");
+    write_lock(&app2, &table);
     let err = block_on(load_dir_with(&app2, &common::Table::from(table)))
         .unwrap_err()
         .to_string();
@@ -446,6 +448,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     }
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
+    write_lock(&app, &table);
     let session =
         block_on(load_dir_with(&app, &Counting(table))).expect("load");
     assert!(matches!(
@@ -485,6 +488,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     );
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
+    write_lock(&app, &table);
     let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("load");
     let g = rut_driver::RutRun::new()
         .pkgs(&session)

@@ -29,8 +29,11 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, PackError> {
 }
 
 /// [`pack_dir`] over pre-fetched url bytes — the fetched core the
-/// `*_with` lane calls after awaiting the prefetch. Url rows read the
-/// map; a url row absent from it is the loud no-fetcher error.
+/// `*_with` lane calls after awaiting the prefetch. The root's
+/// `rut.lock` is read from disk (the realistic lane — a fixture that
+/// fetches is a project that installed) and the url rows' pins are
+/// verified at the mount door; a url row absent from the map is the
+/// loud no-fetcher error.
 pub fn pack_dir_fetched(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
@@ -50,9 +53,9 @@ pub fn pack_dir_opts(
     pack_dir_opts_fetched(dir, opts, &BTreeMap::new())
 }
 
-/// `[pack_dir]` with a url-dep fetcher — the `*_with` lane: collect the
-/// url rows, await `fetch` per url sequentially, pack over the
-/// bytes map.
+/// `[pack_dir]` with a url-dep fetcher — the `*_with` lane: read the
+/// root's lock (it gates the prefetch), collect the url rows, await
+/// `fetch` per url sequentially, pack over the bytes map.
 pub async fn pack_dir_with(dir: &Path, fetch: &dyn DepRemote) -> Result<Vec<u8>, PackError> {
     Ok(pack_dir_opts_with(dir, &PackOpts::default(), fetch).await?.0)
 }
@@ -64,21 +67,41 @@ pub async fn pack_dir_opts_with(
     fetch: &dyn DepRemote,
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
     let src = FsSource::at(dir);
-    let map = crate::walk::prefetch_urls(&src, &dir.to_string_lossy(), fetch)
+    let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
+        .map_err(rut_driver::pack::PackError::from)?;
+    let map = crate::walk::prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, fetch)
         .await
         .map_err(rut_driver::pack::PackError::from)?;
-    pack_dir_opts_fetched(dir, opts, &map)
+    pack_dir_opts_locked(dir, opts, &map, &lock)
 }
 
 use crate::remote::DepRemote;
 
-/// The pack lane's sync core: the root manifest's gates, the walk, the
-/// dev tables, the one peer gate — then the driver's pure pack over
-/// the assembled world.
+/// The pack lane's fetched core: read the root's `rut.lock` from disk
+/// (the realistic lane — the walk's mount door verifies against it),
+/// then the manifest's gates, the walk, the dev tables, the one peer
+/// gate — then the driver's pure pack over the assembled world.
 pub fn pack_dir_opts_fetched(
     dir: &Path,
     opts: &PackOpts,
     map: &BTreeMap<String, Vec<u8>>,
+) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
+    let src = FsSource::at(dir);
+    let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
+        .map_err(rut_driver::pack::PackError::from)?;
+    pack_dir_opts_locked(dir, opts, map, &lock)
+}
+
+/// [`pack_dir_opts_fetched`] with the lock read — the pack lanes'
+/// resolved core (no separate pub resolved name: the pack has no
+/// install-side caller yet). The root manifest's gates, the walk, the
+/// dev tables, the one peer gate — then the driver's pure pack over
+/// the assembled world.
+fn pack_dir_opts_locked(
+    dir: &Path,
+    opts: &PackOpts,
+    map: &BTreeMap<String, Vec<u8>>,
+    lock: &BTreeMap<String, String>,
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
     let manifest_path = dir.join(rut_driver::bundle::MANIFEST_NAME);
     let manifest_bytes = match std::fs::read(&manifest_path) {
@@ -131,7 +154,7 @@ pub fn pack_dir_opts_fetched(
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
     let mut world = World::new();
-    let root = walk_dir(&mut world, &src, &dir_key, map).map_err(rut_driver::pack::PackError::from)?;
+    let root = walk_dir(&mut world, &src, &dir_key, map, lock).map_err(rut_driver::pack::PackError::from)?;
     if root != name {
         return Err(PackError::law(format!(
             "{} names itself `{root}` — expected `{name}`",
@@ -152,7 +175,7 @@ pub fn pack_dir_opts_fetched(
         match source {
             PkgSource::Dir(gdir) => {
                 let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
-                mount_dev_table(&mut world, &src, gdir, &dm, map).map_err(rut_driver::pack::PackError::from)?;
+                mount_dev_table(&mut world, &src, gdir, &dm, map, lock).map_err(rut_driver::pack::PackError::from)?;
             }
             PkgSource::Archive { .. } => {
                 let dm = group_manifest(source, &world.archives);

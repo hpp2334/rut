@@ -28,15 +28,27 @@ pub enum LoadError {
     /// the container or the layout refused (CRC, version, decode)
     #[error("{origin}: {message}")]
     Bundle { origin: String, message: String },
-    /// the sha256 pin mismatched at the mount door
+    /// the sha256 pin mismatched at the mount door — the pin's source
+    /// is rut.lock now (the manifest rows lost their `sha256`); the
+    /// `"sha256 pin mismatch for "` phrase is eviction law: the CLI's
+    /// poisoned-cache eviction matches on it, so it never drifts
     #[error(
-        "dep `{spec}` — sha256 pin mismatch for {url}: the manifest pins {pin}, the fetched bytes hash to {got}"
+        "dep `{spec}` — sha256 pin mismatch for {url}: rut.lock pins {pin}, the fetched bytes hash to {got}"
     )]
     Pin {
         spec: String,
         url: String,
         pin: String,
         got: String,
+    },
+    /// a url dep with no lock row — the pin lives in rut.lock, and a
+    /// url without one is not the install law yet
+    #[error(
+        "dep `{spec}` ({url}) is not pinned — rut.lock has no row for it: run `rut install`"
+    )]
+    Unpinned {
+        spec: String,
+        url: String,
     },
     /// the remote policy failed (a fetch, a lookup, a write)
     #[error(transparent)]

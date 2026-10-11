@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod common;
-use common::{block_on, Table};
+use common::{block_on, write_lock, Table};
 
 use rut_native::load_dir_with;
 
@@ -112,6 +112,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     )
     .unwrap();
     std::fs::write(app.join("mod.rut"), src).unwrap();
+    write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
@@ -260,6 +261,7 @@ fn load_compile_run(
     )
     .unwrap();
     std::fs::write(app.join("mod.rut"), src).unwrap();
+    write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = rut_driver::RutRun::new()
         .pkgs(&loaded)
@@ -495,6 +497,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();
+    write_lock(&app, &table);
     let session =
         block_on(load_dir_with(&app, &Table::from(table))).expect("strbuild bundle loads");
     // the builder's host rows demand bodies — the embedder half

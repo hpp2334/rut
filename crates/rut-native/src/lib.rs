@@ -12,10 +12,13 @@
 //!   arrive and how they cache. Cache-first, wire-on-miss, offline
 //!   flavor included.
 //! - [`load_dir`] / [`load_dir_with`] — the directory walk with all
-//!   its laws: `[deps]` recursion, the sha256 pin verified at the
+//!   its laws: `[deps]` recursion, the rut.lock pin verified at the
 //!   mount door, the root-only `[dev-deps]` pass, the peer gate, url
 //!   prefetch. The yield is [`rut_driver::Loaded`] — offer its pkgs to
-//!   a run with [`rut_driver::RutRun::pkg`].
+//!   a run with [`rut_driver::RutRun::pkg`]. [`load_dir_resolved`] is
+//!   the pins-injected flavor (install's validation lane).
+//! - [`url_dep_rows`] — the closure's url dep rows (spec, url): what
+//!   `rut install` walks before it can pin anything.
 //! - [`dir_pkgs`] / [`dir_pkgs_with`] — the OFFER lane: a package
 //!   directory walked for someone else's program (no dev pass, no
 //!   gate — presence is the run's own `.compile()` law).
@@ -43,7 +46,7 @@ pub use pack::{
 pub use remote::{DepRemote, HttpRemote};
 pub use source::{FsSource, Source};
 pub use walk::{
-    dir_pkgs, dir_pkgs_with, load_bundle_session, load_dir, load_dir_fetched, load_dir_with,
-    load_module_source, load_path_session, load_path_session_with, prefetch_urls, tree_pkg,
-    Archive,
+    dir_pkgs, dir_pkgs_with, load_bundle_session, load_dir, load_dir_fetched, load_dir_resolved,
+    load_dir_with, load_module_source, load_path_session, load_path_session_with, prefetch_urls,
+    tree_pkg, url_dep_rows, Archive,
 };

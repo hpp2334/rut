@@ -1,20 +1,21 @@
-//! url deps — `[deps]` rows naming a remote `.rutbundle` url, an
-//! optional `sha256` pin, and the injected remote. The layer
-//! split under test: the CALL SITE owns HOW bytes arrive (here: the
-//! shared ready-map fixture — no network, no runtime dep), the LOADER
-//! owns WHAT they are — the pin is manifest law, verified at the mount
-//! door on every load.
+//! url deps — `[deps]` rows naming a remote `.rutbundle` url, the
+//! rut.lock pin, and the injected remote. The layer split under test:
+//! the CALL SITE owns HOW bytes arrive (here: the shared ready-map
+//! fixture — no network, no runtime dep), the LOADER owns WHAT they
+//! are — the pin is lock law, read from `<root>/rut.lock` and
+//! verified at the mount door on every load.
 //!
 //! Fixtures are real packed bundles (`pack_dir`, no net); the consumer
-//! worlds mount them through the fetcher. Bundles stay CLOSED: no test
-//! fetches at bundle load, and the inert-url-row case proves the
+//! worlds mount them through the fetcher, and their `rut.lock` pins
+//! the fixture urls (`common::write_lock`). Bundles stay CLOSED: no
+//! test fetches at bundle load, and the inert-url-row case proves the
 //! loader refuses rather than fetches.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod common;
-use common::{block_on, Table};
+use common::{block_on, write_lock, Table};
 
 use rut_driver::sha256_hex;
 use rut_native::{load_dir, pack_dir};
@@ -171,6 +172,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
+    write_lock(&app, &table);
     let loaded = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("url load");
     assert_eq!(loaded.root, "app");
@@ -256,6 +258,7 @@ fn name_vs_key_refuses() {
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
+    write_lock(&app, &table);
     let err = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
@@ -303,6 +306,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
+    write_lock(&app, &table);
     let err = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .unwrap_err()
         .to_string();
@@ -333,6 +337,7 @@ fn embedder_mount_outranks_the_url_dep() {
         .pkg(rut_driver::Pkg::source("util", "// the embedder's"));
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
+    write_lock(&app, &table);
     let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
     assert_eq!(walked.root, "app");
     chain = chain.pkgs(&walked);
@@ -422,6 +427,7 @@ fn mixed_dir_and_archive_peer_gate() {
 
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes);
+    write_lock(&app, &table);
     let session =
         block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
             .expect("url load");
@@ -455,6 +461,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest("app2", "mod.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
     );
     write(&app2, "mod.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
+    write_lock(&app2, &table);
     let session2 = block_on(rut_native::load_dir_with(&app2, &Table::from(table)))
         .expect("light load");
     assert!(
@@ -496,6 +503,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
     let mut table = BTreeMap::new();
     table.insert("https://fixtures.test/a.rutbundle".to_string(), bytes_a);
     table.insert("https://fixtures.test/b.rutbundle".to_string(), bytes_b);
+    write_lock(&app, &table);
     let session = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
     assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::PkgBody::Compiled(_)));
@@ -545,6 +553,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
+    write_lock(&app, &map);
     let packed = rut_native::pack_dir_fetched(&app, &map).expect("pack");
     // determinism: the same world ⇒ the same bytes
     let packed_again = rut_native::pack_dir_fetched(&app, &map).expect("pack again");
@@ -602,6 +611,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
 
     let mut map = BTreeMap::new();
     map.insert(url, bytes);
+    write_lock(&app, &map);
     let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("packed dep `codec` needs its own [dev-deps] directories"),
@@ -628,6 +638,7 @@ fn pack_refuses_unused_compiled_url_dep() {
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
+    write_lock(&app, &map);
     let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
     assert!(
         err.contains("compiled group `util`"),
@@ -635,4 +646,179 @@ fn pack_refuses_unused_compiled_url_dep() {
     );
     assert!(err.contains("cannot ride unpackaged"), "{err}");
     assert!(err.contains("vendor this dep"), "{err}");
+}
+
+// ------------------------------------------------------------------
+// the lock law: rut.lock is the pin's only source (phase 2)
+
+#[test]
+fn an_unpinned_url_row_refuses_with_the_install_recipe() {
+    // the lock deleted / never committed: the `_with` lane refuses
+    // BEFORE any fetch — the prefetch runs against an EMPTY table, so
+    // a fetch attempt would answer "no fixture bytes"; the refusal is
+    // the lock's, not the wire's
+    let root = leaf_world("unpinned", "util", UTIL_BODY);
+    let bytes = pack_dir(&root.join("util")).expect("pack util");
+    let url = "https://fixtures.test/util.rutbundle";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+    );
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+
+    let err = block_on(rut_native::load_dir_with(&app, &Table::new()))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains(&format!(
+            "dep `util` ({url}) is not pinned — rut.lock has no row for it: run `rut install`"
+        )),
+        "{err}"
+    );
+
+    // the vendored-map lane: the bytes are in hand, but the lock has
+    // no row — the mount door refuses (the no-fetcher lane with an
+    // empty map keeps ITS law: no bytes, no load, pin or no pin)
+    let mut map = BTreeMap::new();
+    map.insert(url.to_string(), bytes);
+    let err = rut_native::load_dir_fetched(&app, &map).unwrap_err().to_string();
+    assert!(err.contains("is not pinned — rut.lock has no row for it"), "{err}");
+    assert!(err.contains("run `rut install`"), "{err}");
+}
+
+#[test]
+fn a_lock_pin_mismatch_names_both_hashes() {
+    // the poisoned-cache law, lock-sourced: the "sha256 pin mismatch
+    // for " phrase survives (the CLI's eviction matches on it), the
+    // pin's source phrase is rut.lock's now
+    let root = leaf_world("lockpin", "util", UTIL_BODY);
+    let bytes = pack_dir(&root.join("util")).expect("pack util");
+    let url = "https://fixtures.test/util.rutbundle";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+    );
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), bytes);
+    let stale = "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e";
+    write(&app, "rut.lock", &rut_driver::render_lock(&rut_driver::LockFile::from_rows(
+        vec![rut_driver::LockRow { pkg: "util".into(), url: url.to_string(), sha256: stale.into() }],
+    )));
+
+    let err = rut_native::load_dir_fetched(&app, &table).unwrap_err().to_string();
+    assert!(err.contains("sha256 pin mismatch for "), "{err}");
+    assert!(err.contains(&format!("dep `util` — sha256 pin mismatch for {url}")), "{err}");
+    assert!(err.contains(&format!("rut.lock pins {stale}")), "{err}");
+    let got = rut_driver::sha256_hex(table.get(url).unwrap());
+    assert!(err.contains(&format!("the fetched bytes hash to {got}")), "{err}");
+}
+
+#[test]
+fn a_malformed_lock_refuses_loudly_naming_the_file() {
+    // present-but-malformed: the loud parse error — rut.lock's path
+    // plus the path-targeted value law (the manifest's shapes)
+    let root = leaf_world("badlock", "util", UTIL_BODY);
+    let app = root.join("app");
+    write(&app, "rut.jsonc", &manifest("app", "mod.rut", ""));
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "rut.lock",
+        r#"{"format": "rutlock", "format_version": 1, "deps": [{ "pkg": "util", "url": "https://x/u.rutbundle", "sha256": "nothex" }]}"#,
+    );
+
+    let err = load_dir(&app).unwrap_err().to_string();
+    assert!(err.contains("rut.lock"), "{err}");
+    assert!(err.contains("deps[0].sha256: must be 64 hex digits, found 'nothex'"), "{err}");
+}
+
+#[test]
+fn the_resolved_lane_validates_computed_pins_without_a_lock_file() {
+    // install's chicken-and-egg lane: mount-validate against COMPUTED
+    // pins (the map install is about to write as rut.lock) — no lock
+    // file on disk, no fetcher, the same mount-door laws
+    let root = leaf_world("resolved", "util", UTIL_BODY);
+    let bytes = pack_dir(&root.join("util")).expect("pack util");
+    let url = "https://fixtures.test/util.rutbundle";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+    );
+    write(
+        &app,
+        "mod.rut",
+        "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
+
+    let mut map = BTreeMap::new();
+    map.insert(url.to_string(), bytes);
+    let mut pins = BTreeMap::new();
+    pins.insert(url.to_string(), rut_driver::sha256_hex(map.get(url).unwrap()));
+    let loaded = rut_native::load_dir_resolved(&app, &map, &pins).expect("computed pins load");
+    assert_eq!(run_entry::<i64>(loaded, "go"), 42);
+
+    // and the same door refuses a wrong computed pin
+    pins.insert(url.to_string(), "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e".into());
+    let err = rut_native::load_dir_resolved(&app, &map, &pins).unwrap_err().to_string();
+    assert!(err.contains("sha256 pin mismatch for "), "{err}");
+}
+
+#[test]
+fn url_dep_rows_collect_the_closure_deduped_by_url() {
+    // the install-side collector: root + path-dep manifests (deps AND
+    // dev-deps tables; a dev table is walked for PINS, never mounted),
+    // url deps are leaves — deduped by url (the identity), the FIRST
+    // spec in collect order wins
+    let root = scratch("rows");
+    let url_a = "https://fixtures.test/a.rutbundle";
+    let url_b = "https://fixtures.test/b.rutbundle";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(
+                r#", "deps": {{"util": {{"url": "{url_a}"}}, "sub": {{"path": "../sub"}}}}"#
+            ),
+        ),
+    );
+    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &root.join("sub"),
+        "rut.jsonc",
+        &manifest(
+            "sub",
+            "mod.rut",
+            &format!(
+                r#", "deps": {{"twin": {{"url": "{url_a}"}}}}, "dev-deps": {{"other": {{"path": "../other"}}}}"#
+            ),
+        ),
+    );
+    write(
+        &root.join("other"),
+        "rut.jsonc",
+        &manifest("other", "mod.rut", &format!(r#", "deps": {{"deep": {{"url": "{url_b}"}}}}"#)),
+    );
+
+    let rows = rut_native::url_dep_rows(&app).expect("collect");
+    assert_eq!(
+        rows,
+        vec![
+            ("twin".to_string(), url_a.to_string()),
+            ("deep".to_string(), url_b.to_string()),
+        ],
+        "the url is the identity, the FIRST spec in collect order wins: the dep tables are \
+         ordered maps, so `sub` (and its twin row) collect before `util`; sub's dev table is \
+         walked for pins"
+    );
 }

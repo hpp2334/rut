@@ -3,13 +3,39 @@
 //! runtime dep) and the std-only `block_on` driver. The layer split
 //! under test everywhere it is used: the CALL SITE owns HOW bytes
 //! arrive (here: the map), the LOADER owns WHAT they are — the pin is
-//! manifest law, verified at the mount door on every load.
+//! rut.lock law, verified at the mount door on every load.
 
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::path::Path;
 use std::task::{Context, Poll};
 
 use rut_native::{DepRemote, RemoteError};
+
+/// Write `<dir>/rut.lock` pinning every url in the table to the
+/// sha256 of its fixture bytes — the realistic fixture: the walk
+/// reads the lock from disk now, and a project that fetches is a
+/// project that installed.
+pub fn write_lock(dir: &Path, table: &BTreeMap<String, Vec<u8>>) {
+    let rows = table
+        .iter()
+        .map(|(url, bytes)| rut_driver::LockRow {
+            pkg: url
+                .rsplit('/')
+                .next()
+                .unwrap_or(url)
+                .trim_end_matches(".rutbundle")
+                .to_string(),
+            url: url.clone(),
+            sha256: rut_driver::sha256_hex(bytes),
+        })
+        .collect();
+    std::fs::write(
+        dir.join("rut.lock"),
+        rut_driver::render_lock(&rut_driver::LockFile::from_rows(rows)),
+    )
+    .unwrap();
+}
 
 /// The in-memory remote: url → bytes, answered `ready` (sync impls are
 /// first-class on the trait).

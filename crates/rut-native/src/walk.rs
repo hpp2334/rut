@@ -5,8 +5,9 @@
 //! intra-module include form. A `.rutbundle` is the same contract
 //! zipped; a `[deps]` row may also declare a **url**: a remote
 //! `.rutbundle` the CALL SITE fetches ([`DepRemote`]) and the walk
-//! mounts — the sha256 pin is manifest law, verified here at the mount
-//! door on every load.
+//! mounts — the sha256 pin is LOCK law (`rut.lock` beside the root
+//! manifest; the manifest row's `sha256` is retired), read fresh on
+//! every load and verified here at the mount door.
 //!
 //! The walk yields [`rut_driver::Loaded`] — pure pkgs plus the root's
 //! name. The mount order is the law:
@@ -227,9 +228,13 @@ pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, Loa
 // the url-dep lanes
 // ---------------------------------------------------------------------
 
-/// One url dep row collected by the phase-1 walk: the url (the pin is
-/// re-read from the manifest row at the mount door).
+/// One url dep row collected by the closure walk: the spec it was
+/// declared under (display-only — the mount door re-keys off the
+/// manifest row; the lock's `pkg` column and `rut install`'s rows are
+/// the consumers) and the url (the identity — the fetch key and the
+/// lock's).
 struct UrlDep {
+    spec: String,
     url: String,
 }
 
@@ -267,8 +272,7 @@ fn collect_url_deps_walk(
     for table in [&manifest.deps, &manifest.dev_deps] {
         for (spec, desc) in table {
             if let Some(url) = desc.get("url") {
-                out.push(UrlDep { url: url.clone() });
-                let _ = spec; // the mount door re-keys off the manifest row
+                out.push(UrlDep { spec: spec.clone(), url: url.clone() });
             } else if let Some(rel) = desc.get("path") {
                 let dep_dir = src.resolve(dir, rel).map_err(LoadError::law)?;
                 collect_url_deps_walk(src, &dep_dir, visiting, out)?;
@@ -287,13 +291,48 @@ fn canonical(key: &str) -> Result<PathBuf, LoadError> {
         .map_err(|e| LoadError::law(format!("cannot resolve {key}: {e}")))
 }
 
+/// The lock file's one name — beside the walk root's `rut.jsonc`.
+const LOCK_NAME: &str = "rut.lock";
+
+/// The walk root's `rut.lock` as the pin map the walk travels with
+/// (url → sha256). MISSING file ⇒ an empty map — a project with no
+/// url deps needs no lock. Present but malformed ⇒ the loud load
+/// error naming the file and the parse error (`line N:` syntax,
+/// path-targeted value laws — the manifest's shapes, through the same
+/// JSONC front stage). One lock per root: it pins the whole closure's
+/// url rows (root + every path-dep manifest's `[deps]`/`[dev-deps]`;
+/// url deps are leaves, so nothing beyond them is ever read), and the
+/// url is the identity — the map's key.
+pub(crate) fn read_lock(
+    src: &dyn Source,
+    dir: &str,
+) -> Result<BTreeMap<String, String>, LoadError> {
+    let key = src.resolve(dir, LOCK_NAME).map_err(LoadError::law)?;
+    let bytes = match src.read(&key) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(BTreeMap::new()), // no lock file ⇒ no pins
+    };
+    let text = String::from_utf8(bytes)
+        .map_err(|_| LoadError::law(format!("{key}: not UTF-8")))?;
+    let lock =
+        rut_driver::parse_lock(&text).map_err(|e| LoadError::law(format!("{key}: {e}")))?;
+    Ok(lock
+        .deps()
+        .iter()
+        .map(|row| (row.url.clone(), row.sha256.clone()))
+        .collect())
+}
+
 /// Phase 2 — the async join: await `fetch` per url row, SEQUENTIALLY,
 /// into the bytes map the sync core reads. The map is the join (a call
 /// site wanting concurrency does it inside its `fetch`); equal urls
-/// fetch once.
+/// fetch once. The LOCK gates the wire: an unpinned url is refused
+/// BEFORE any fetch — the walk never fetches a dep the lock does not
+/// pin (the mount door repeats the check for the injected-map lanes).
 pub async fn prefetch_urls(
     src: &dyn Source,
     dir: &str,
+    pins: &BTreeMap<String, String>,
     remote: &dyn DepRemote,
 ) -> Result<BTreeMap<String, Vec<u8>>, LoadError> {
     let rows = collect_url_deps(src, dir)?;
@@ -302,28 +341,58 @@ pub async fn prefetch_urls(
         if map.contains_key(&row.url) {
             continue;
         }
+        if !pins.contains_key(&row.url) {
+            return Err(LoadError::Unpinned {
+                spec: row.spec.clone(),
+                url: row.url.clone(),
+            });
+        }
         let bytes = remote.fetch(&row.url).await?;
         map.insert(row.url.clone(), bytes);
     }
     Ok(map)
 }
 
+/// The closure's url dep rows — `(spec, url)` — the collector the CLI
+/// walks BEFORE it can pin anything: root manifest + every path-dep
+/// manifest's `[deps]`/`[dev-deps]` url rows, url deps are leaves.
+/// Deduped by url (the identity): the FIRST spec in collect order
+/// wins (the lock's `pkg` column — display-only). Deterministic: the
+/// manifest tables are ordered maps, the recursion is depth-first.
+pub fn url_dep_rows(dir: &Path) -> Result<Vec<(String, String)>, RunError> {
+    let src = FsSource::at(dir);
+    let rows = collect_url_deps(&src, dir.to_string_lossy().as_ref())?;
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    for row in rows {
+        if seen.insert(row.url.clone()) {
+            out.push((row.spec, row.url));
+        }
+    }
+    Ok(out)
+}
+
 /// The no-fetcher law: a url row in a loader that has no bytes for it.
-/// Names the FIX, matching the D-style diagnostics.
+/// Names the FIX, matching the D-style diagnostics — and the lock:
+/// without a fetcher neither the bytes nor their rut.lock pin-check
+/// can happen.
 fn no_fetcher(spec: &str, url: &str) -> LoadError {
     LoadError::law(format!(
-        "dep `{spec}` is declared by url (`{url}`) — this loader has no `dep_fetch`: call \
-         `load_dir_with` / `pack_dir_with` (the CLI does), or vendor the dep"
+        "dep `{spec}` is declared by url (`{url}`) — this loader has no `dep_fetch`, so the \
+         fetch and its rut.lock pin-check cannot run: call `load_dir_with` / `pack_dir_with` \
+         (the CLI does), or vendor the dep"
     ))
 }
 
 /// The url-dep context the sync core walks with: the fetched bytes
-/// (url → bytes) and the archives those bytes opened (slot-ordered).
-/// The OLD sync wrappers pass an empty map — a url row there is the
-/// loud no-fetcher error, never a network call (the walk never
-/// fetches; bundles stay closed at load, url rows are leaves).
+/// (url → bytes), the LOCK's pins (url → sha256 — gate 0's law), and
+/// the archives those bytes opened (slot-ordered). The OLD sync
+/// wrappers pass an empty map — a url row there is the loud
+/// no-fetcher error, never a network call (the walk never fetches;
+/// bundles stay closed at load, url rows are leaves).
 struct Fetched<'a> {
     map: &'a BTreeMap<String, Vec<u8>>,
+    lock: &'a BTreeMap<String, String>,
     /// defense-in-depth cycle guard: url deps are leaves, so no
     /// recursion can re-enter a url — the guard keeps that true even
     /// if the walk ever grows one.
@@ -710,12 +779,30 @@ pub fn load_dir(dir: &Path) -> Result<Loaded, RunError> {
 
 /// [`load_dir`] over PRE-FETCHED url bytes — the pub sync core the
 /// `*_with` lanes call after [`prefetch_urls`], and the fixture lane
-/// tests use directly. Every url row's `sha256` pin is verified HERE,
-/// at the mount door, on every load.
+/// tests use directly. The root's `rut.lock` is read from disk (the
+/// realistic lane — a fixture that fetches is a project that
+/// installed) and every url row's pin is verified HERE, at the mount
+/// door, on every load.
 pub fn load_dir_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> Result<Loaded, RunError> {
     let src = FsSource::at(dir);
+    let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
+    load_dir_resolved(dir, map, &lock)
+}
+
+/// [`load_dir_fetched`] with the pins INJECTED — install's
+/// chicken-and-egg lane: mount-validate against COMPUTED pins
+/// (url → sha256, the map `rut install` is about to write as
+/// `rut.lock`) without requiring the lock file to exist. Same walk,
+/// same mount-door laws; the only difference is where the pins come
+/// from.
+pub fn load_dir_resolved(
+    dir: &Path,
+    map: &BTreeMap<String, Vec<u8>>,
+    pins: &BTreeMap<String, String>,
+) -> Result<Loaded, RunError> {
+    let src = FsSource::at(dir);
     let mut world = World::new();
-    let root = walk_dir(&mut world, &src, dir.to_string_lossy().as_ref(), map)?;
+    let root = walk_dir(&mut world, &src, dir.to_string_lossy().as_ref(), map, pins)?;
     run_gate(&mut world, &root)?;
     Ok(world.into_loaded(root))
 }
@@ -723,21 +810,25 @@ pub fn load_dir_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> Result<L
 /// [`load_dir`] with a url-dep remote — the `*_with` lane: HOW
 /// bytes arrive is the remote's (transport, cache, offline policy);
 /// the walk still owns WHAT they are (the pin, at the mount door).
-/// The walk collects the url rows, awaits `fetch` per url
-/// sequentially, then mounts over the bytes map.
+/// The lock is read from the root first — it gates the prefetch —
+/// then the walk collects the url rows, awaits `fetch` per url
+/// sequentially, and mounts over the bytes map.
 pub async fn load_dir_with(dir: &Path, remote: &dyn DepRemote) -> Result<Loaded, RunError> {
     let src = FsSource::at(dir);
-    let map = prefetch_urls(&src, &dir.to_string_lossy(), remote).await?;
-    load_dir_fetched(dir, &map)
+    let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
+    let map = prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, remote).await?;
+    load_dir_resolved(dir, &map, &lock)
 }
 
 /// The internal sync core — mount the root and every `[deps]` row into
-/// `world`, first mount wins, and answer the root's name.
+/// `world`, first mount wins, and answer the root's name. `lock` is
+/// the pin map the whole closure's url rows travel with.
 pub(crate) fn walk_dir(
     world: &mut World,
     src: &dyn Source,
     dir: &str,
     map: &BTreeMap<String, Vec<u8>>,
+    lock: &BTreeMap<String, String>,
 ) -> Result<String, LoadError> {
     let manifest = read_manifest(src, dir)?;
     let root = manifest
@@ -755,6 +846,7 @@ pub(crate) fn walk_dir(
     let mut visiting = vec![canonical(dir)?];
     let mut fetched = Fetched {
         map,
+        lock,
         visiting_urls: Default::default(),
     };
     resolve_table(world, src, dir, &manifest.deps, &mut visiting, &mut fetched)?;
@@ -799,10 +891,12 @@ pub(crate) fn mount_dev_table(
     dir: &str,
     manifest: &Manifest,
     map: &BTreeMap<String, Vec<u8>>,
+    lock: &BTreeMap<String, String>,
 ) -> Result<(), LoadError> {
     let mut visiting = Vec::new();
     let mut fetched = Fetched {
         map,
+        lock,
         visiting_urls: Default::default(),
     };
     resolve_table(world, src, dir, &manifest.dev_deps, &mut visiting, &mut fetched)
@@ -812,13 +906,13 @@ pub(crate) fn mount_dev_table(
 /// it the root's `[dev-deps]`, which mounts exactly the same way).
 /// Each entry is a relative `path` to a package directory, loaded and
 /// mounted under its key — or a `url`, whose pre-fetched bytes mount
-/// through [`mount_url_dep`] (the sha256 pin is law at that door; the
-/// walk NEVER fetches, and a url dep is a leaf). **First mount wins** —
-/// a name already in the world (the embedder's, the root's, or an
-/// earlier dep's) is never overwritten; a dep whose manifest `name`
-/// disagrees with its key is an error naming both. `visiting` guards
-/// cycles. Every mounted pkg's directory (or archive location) and
-/// `[peer-deps]` declarations are recorded for pass 3.
+/// through [`mount_url_dep`] (the rut.lock pin is law at that door;
+/// the walk NEVER fetches, and a url dep is a leaf). **First mount
+/// wins** — a name already in the world (the embedder's, the root's,
+/// or an earlier dep's) is never overwritten; a dep whose manifest
+/// `name` disagrees with its key is an error naming both. `visiting`
+/// guards cycles. Every mounted pkg's directory (or archive location)
+/// and `[peer-deps]` declarations are recorded for pass 3.
 fn resolve_table(
     world: &mut World,
     src: &dyn Source,
@@ -841,7 +935,7 @@ fn resolve_table(
                     "cyclic use: `{spec}` ({url}) is already being loaded"
                 )));
             }
-            mount_url_dep(world, spec, url, desc.get("sha256").map(String::as_str), bytes)?;
+            mount_url_dep(world, spec, url, fetched.lock, bytes)?;
             fetched.visiting_urls.remove(url);
             continue;
         }
@@ -925,15 +1019,16 @@ pub(crate) fn run_gate(world: &mut World, root: &str) -> Result<(), LoadError> {
 }
 
 /// Mount a url dep's fetched bytes — the mount door where the pin is
-/// LAW. The fetcher saw only a url; the manifest row's `sha256` and
+/// LAW. The fetcher saw only a url; the LOCK's pin for that url and
 /// the bytes meet HERE, on EVERY load (fresh fetch, cache hit,
 /// vendored map, test fixture) — a check the call site performed would
-/// be a check the call site could skip. Gate order mirrors the driver's
-/// bundle walk:
+/// be a check the call site could skip. Gate order mirrors the
+/// driver's bundle walk:
 ///
-/// 0. the pin: `sha256_hex(bytes)` must equal the row's pin (lowercase
-///    by grammar law) — a mismatch names the dep, the url, and BOTH
-///    hashes;
+/// 0. the pin: the LOCK pins the url (a missing row is the loud
+///    `Unpinned` install recipe) and `sha256_hex(bytes)` must equal it
+///    (lowercase by grammar law) — a mismatch names the dep, the url,
+///    and BOTH hashes;
 /// 1. the container (every entry CRC-verified) — origin is the url;
 /// 2. the layout: manifest + exact `format_version`, every group
 ///    decode + verified;
@@ -957,23 +1052,27 @@ fn mount_url_dep(
     world: &mut World,
     spec: &str,
     url: &str,
-    pin: Option<&str>,
+    lock: &BTreeMap<String, String>,
     bytes: &[u8],
 ) -> Result<(), LoadError> {
     if world.pkgs.contains_key(spec) {
         return Ok(()); // first mount wins — the embedder's (or an earlier) mount
     }
-    // gate 0 — the pin law
-    if let Some(pin) = pin {
-        let got = rut_driver::sha256_hex(bytes);
-        if got != pin {
-            return Err(LoadError::Pin {
-                spec: spec.to_string(),
-                url: url.to_string(),
-                pin: pin.to_string(),
-                got,
-            });
-        }
+    // gate 0 — the pin law: the LOCK pins the url (the manifest row
+    // lost its `sha256`); no row is the loud install recipe, a row
+    // that disagrees names both hashes
+    let pin = lock.get(url).ok_or_else(|| LoadError::Unpinned {
+        spec: spec.to_string(),
+        url: url.to_string(),
+    })?;
+    let got = rut_driver::sha256_hex(bytes);
+    if got != *pin {
+        return Err(LoadError::Pin {
+            spec: spec.to_string(),
+            url: url.to_string(),
+            pin: pin.clone(),
+            got,
+        });
     }
     // gate 1 — the container
     let bundle = match rut_driver::bundle::Bundle::parse(bytes) {
@@ -1205,27 +1304,42 @@ pub fn dir_pkgs(dir: &Path) -> Result<Loaded, RunError> {
 }
 
 /// [`dir_pkgs`] over pre-fetched url bytes — the `dir_pkgs_with`
-/// lane's sync core. The gate does not run here (the offer law);
-/// archive locations ride the world, so a later gate pass sees them —
-/// note it moves group texts recorded at mount (an embedder that
-/// mounts url deps offer-by-offer owns its archive list; the load/pack
-/// lanes run the gate themselves).
+/// lane's sync core. The root's `rut.lock` is read from disk (the
+/// same law the load lanes keep). The gate does not run here (the
+/// offer law); archive locations ride the world, so a later gate pass
+/// sees them — note it moves group texts recorded at mount (an
+/// embedder that mounts url deps offer-by-offer owns its archive
+/// list; the load/pack lanes run the gate themselves).
 pub(crate) fn dir_pkgs_fetched(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
 ) -> Result<Loaded, RunError> {
+    let src = FsSource::at(dir);
+    let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
+    dir_pkgs_resolved(dir, map, &lock)
+}
+
+/// [`dir_pkgs_fetched`] with the pins injected — the offer lane's
+/// resolved core (mirrors [`load_dir_resolved`]; no separate pub name
+/// — the offer lane has no install-side caller yet).
+fn dir_pkgs_resolved(
+    dir: &Path,
+    map: &BTreeMap<String, Vec<u8>>,
+    lock: &BTreeMap<String, String>,
+) -> Result<Loaded, RunError> {
     let mut world = World::new();
-    let name = offer_dir(&mut world, dir, map)?;
+    let name = offer_dir(&mut world, dir, map, lock)?;
     Ok(world.into_loaded(name))
 }
 
-/// [`dir_pkgs`] with a url-dep remote — collects the url rows,
-/// fetches, mounts over the bytes map. The gate still does not run
-/// here (the offer law).
+/// [`dir_pkgs`] with a url-dep remote — reads the root's lock (it
+/// gates the prefetch), collects the url rows, fetches, mounts over
+/// the bytes map. The gate still does not run here (the offer law).
 pub async fn dir_pkgs_with(dir: &Path, remote: &dyn DepRemote) -> Result<Loaded, RunError> {
     let src = FsSource::at(dir);
-    let map = prefetch_urls(&src, &dir.to_string_lossy(), remote).await?;
-    dir_pkgs_fetched(dir, &map)
+    let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
+    let map = prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, remote).await?;
+    dir_pkgs_resolved(dir, &map, &lock)
 }
 
 /// The offer lane's core: walk `dir` + deps into an EXISTING world,
@@ -1234,6 +1348,7 @@ pub(crate) fn offer_dir(
     world: &mut World,
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
+    lock: &BTreeMap<String, String>,
 ) -> Result<String, LoadError> {
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
@@ -1251,6 +1366,7 @@ pub(crate) fn offer_dir(
     let mut visiting = vec![canonical(&dir_key)?];
     let mut fetched = Fetched {
         map,
+        lock,
         visiting_urls: Default::default(),
     };
     resolve_deps(world, &src, &dir_key, &manifest, &mut visiting, &mut fetched)?;
