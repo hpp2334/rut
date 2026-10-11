@@ -71,6 +71,9 @@ Build the CLI binary from a checkout:
 cargo build --release -p rut-cli   # the `rut` binary: run / fmt / pack / dump
 ```
 
+No checkout? `cargo +nightly-2026-07-15 install --git https://github.com/hpp2334/rut.git --locked rut-cli` puts the same binary on your
+`PATH` ([Quick Start](quick-start/installation.md)).
+
 That binary is the **temporary-run** lane — running module directories
 and bundles, `fmt`, `dump`, `pack`. To *use* rut in your own project, depend on the
 engine crates as a git dependency — the crates are not on crates.io

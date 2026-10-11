@@ -11,7 +11,9 @@ bundles, `fmt`, `dump`, `pack`. The intended consumption path is depending on th
 crates from your own project through a Cargo git dependency
 ([installation](../quick-start/installation.md)) and embedding the VM
 ([embedding and native modules](embedding.md)) — this page documents the
-binary itself.
+binary itself. To get the binary: `cargo install` from git, `cargo install --path` from a
+checkout, or a plain `cargo build --release`
+([installation](../quick-start/installation.md)).
 
 ```sh
 rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]

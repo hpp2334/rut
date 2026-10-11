@@ -25,24 +25,25 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (the host-root
-# amendment: `mod.d.rut` beside the manifest is a host pkg's default
-# root, lib parity with a body's `mod.rut`; `entry.type` is optional
-# and a spelled entry wins — the project-structure keys rows, the
-# host-surface-trees prose, the http_host pilot row, and bundles.md's
-# override-lane paragraph). Terminology per docs/po/GLOSSARY.md (宿主包
-# / 声明表面 / 清单 / 捆绑包 / 车道); code spans and diagnostics
-# byte-identical; the extracted markup style is mirrored (`**bold**`,
-# link text translated, targets untouched, full-width punctuation in
-# prose). Everything not in FRESH either keeps its msgstr
-# byte-for-byte (unchanged msgid), rides MECH (the mechanical cutover
-# shapes), or folds to "" — the English fallback BY DESIGN. Code
-# blocks fold to "" (the untranslated set is code-only).
+# Fresh translations for the strings this sweep changed (the
+# cargo-install lanes: installation.md's temporary-run section splits
+# into three `###` lanes — `cargo install` from git, from a checkout,
+# plain build — with the usage block deduplicated and the `[--entry
+# <fn>]` reality fix; README.md's repo block gains the no-checkout
+# pointer; cli.md's intro names the three ways to get the binary).
+# Terminology per docs/po/GLOSSARY.md (临时运行车道 / 检出 / 锁定 /
+# 用法行 / 车道); code spans byte-identical (`cargo +nightly-2026-07-15
+# install --git …`, `~/.cargo/bin/rut`); link text translated, targets
+# untouched ([锁定 nightly](#pin-the-nightly), [快速开始] / [安装]);
+# full-width punctuation in prose. Everything not in FRESH either
+# keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
+# mechanical cutover shapes), or folds to "" — the English fallback BY
+# DESIGN. Code blocks fold to "" (the untranslated set is code-only).
 # FRESH is pruned after every landed sweep: once a msgstr is folded
 # into zh_CN.po it is kept byte-for-byte by the fold itself, so the
 # dict only ever carries translations for the CURRENT sweep's new and
-# changed strings. The phase-2 sweep's `[constructor]`-designation
-# entries landed and were pruned; see the git history of this file.
+# changed strings. This sweep's nine entries landed and were pruned;
+# see the git history of this file.
 FRESH = {}
 
 

@@ -125,23 +125,50 @@ the full contract.
 
 ## The rut CLI — temporary runs
 
-For temporary runs the repo builds a standalone binary. Clone
-and build it:
+For temporary runs the repo builds a standalone binary — three ways to
+get it on `PATH`, pick one.
+
+### `cargo install` from git — no checkout
+
+```sh
+rustup toolchain install nightly-2026-07-15
+cargo +nightly-2026-07-15 install --git https://github.com/hpp2334/rut.git --locked rut-cli
+```
+
+The pinned nightly is not optional — the engine builds on incomplete
+features (see [Pin the nightly](#pin-the-nightly) above) and a stable
+toolchain refuses to; the pin is `nightly-2026-07-15` (check this
+repo's `rust-toolchain.toml` for the current value). `--locked` builds
+against the repo's committed `Cargo.lock`. The binary lands at
+`~/.cargo/bin/rut`, normally already on `PATH`.
+
+### `cargo install` from a checkout
+
+```sh
+git clone https://github.com/hpp2334/rut.git
+cd rut
+cargo install --path crates/rut-cli --locked
+```
+
+Standing inside the clone, rustup resolves the repo's
+`rust-toolchain.toml` pin for you — same binary, same destination.
+
+### Plain build
 
 ```sh
 git clone https://github.com/hpp2334/rut.git
 cd rut
 cargo build --release -p rut-cli
+export PATH="$PWD/target/release:$PATH"
 ```
 
-This produces the `rut` binary at `target/release/rut`. Put it on your
-`PATH` (or call it by path — the pages here use the bare name):
+All three lanes end in the same `rut` binary — call it by path or put
+it on your `PATH` (the pages here use the bare name). Running it with
+no subcommand prints the usage line:
 
 ```sh
-cargo build --release -p rut-cli
-export PATH="$PWD/target/release:$PATH"
 rut
-# usage: rut — run <dir | mod.rutbundle> [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
+# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
 ```
 
 The binary embeds the whole engine: lexer, parser, compiler, typed
