@@ -89,7 +89,10 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     let expected = rut_driver::declared_host_fns(&world);
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
-        .pkg(rut_driver::Pkg::source("app_boxes", SRC))
+        .pkg(
+            rut_driver::Pkg::source("app_boxes", SRC)
+                .manifest(rut_driver::Manifest::lib("app_boxes", &["boxes", "pouch"])),
+        )
         .entrypoint("app_boxes")
         .compile()
         .unwrap();
@@ -242,7 +245,10 @@ entry fn churn(n: i64) -> nil {
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
-        .pkg(rut_driver::Pkg::source("churn", src))
+        .pkg(
+            rut_driver::Pkg::source("churn", src)
+                .manifest(rut_driver::Manifest::lib("churn", &["calc", "pouch"])),
+        )
         .entrypoint("churn")
         .compile()
         .unwrap();

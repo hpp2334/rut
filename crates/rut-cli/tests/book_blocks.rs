@@ -114,9 +114,13 @@ fn book_blocks_compile_and_run() {
                 continue;
             }
 
-            // the book's host lane: offer what the block names
+            // the book's host lane: offer what the block names — and
+            // DECLARE what was offered on the root (the structural
+            // form the wasm host stamps; the world's heads are the
+            // declaration's rows, calc included)
             let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
             let mut world = Vec::new();
+            let mut heads: Vec<&str> = Vec::new();
             for (name, dir) in [
                 ("ink_host", "rut/ink_host"),
                 ("ink", "rut/ink"),
@@ -136,15 +140,20 @@ fn book_blocks_compile_and_run() {
                             .unwrap_or_else(|e| panic!("{rel}#{n}: mount {name}: {e}"))
                             .pkgs,
                     );
+                    heads.push(name);
                 }
             }
+            heads.push("calc");
             world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
             // the rows snapshot the installs answer to
             let ctx = rut_driver::host_pkg_ctx(&world);
 
             let compiled = match rut_driver::RutRun::new()
                 .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
-                .pkg(rut_driver::Pkg::source("main", &body))
+                .pkg(
+                    rut_driver::Pkg::source("main", &body)
+                        .manifest(rut_driver::Manifest::lib("main", &heads)),
+                )
                 .entrypoint("main")
                 .compile()
             {

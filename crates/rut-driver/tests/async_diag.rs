@@ -23,7 +23,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -47,7 +52,10 @@ fn diags_of(src: &str) -> Vec<String> {
         .pkgs;
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: async_pkgs, root: String::new() })
-        .pkg(rut_driver::Pkg::source("app", src))
+        .pkg(
+            rut_driver::Pkg::source("app", src)
+                .manifest(rut_driver::Manifest::lib("app", &["futures"])),
+        )
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -229,7 +237,10 @@ entry fn main() -> nil {
 "#;
     let compiled = rut_driver::RutRun::new()
         .pkg(engine)
-        .pkg(rut_driver::Pkg::source("app", src))
+        .pkg(
+            rut_driver::Pkg::source("app", src)
+                .manifest(rut_driver::Manifest::lib("app", &["my_engine"])),
+        )
         .entrypoint("app")
         .compile()
         .unwrap();

@@ -48,7 +48,13 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
         world.extend(rut_driver::Pkg::from_bundle(&bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}")).pkgs);
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    world.push(rut_driver::Pkg::source("app", src));
+    // the root DECLARES its uses structurally — exactly the heads this
+    // world mounts (calc, ink, pouch, nmapset, flow; the bundles ride
+    // their own committed manifests)
+    world.push(
+        rut_driver::Pkg::source("app", src)
+            .manifest(rut_driver::Manifest::lib("app", &["calc", "flow", "ink", "nmapset", "pouch"])),
+    );
     let ctx = rut_driver::host_pkg_ctx(&world);
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })

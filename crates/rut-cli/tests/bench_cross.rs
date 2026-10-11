@@ -59,7 +59,11 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
     let mut world = rut_native::dir_pkgs(std::path::Path::new(pkg_dir))
         .expect("mount bench_cross")
         .pkgs;
-    world.push(rut_driver::Pkg::source("app", SRC));
+    // the root DECLARES its use (the bench_cross surface's names)
+    world.push(
+        rut_driver::Pkg::source("app", SRC)
+            .manifest(rut_driver::Manifest::lib("app", &["bench_cross"])),
+    );
     let ctx = rut_driver::host_pkg_ctx(&world);
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })

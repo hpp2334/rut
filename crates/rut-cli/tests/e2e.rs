@@ -134,11 +134,16 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
 }
 
 /// Compile a snippet with the logger use appended (the original spans of
-/// `src` are preserved).
+/// `src` are preserved). The root DECLARES its uses structurally: the
+/// case world's heads (`ink`, `pouch`, `calc` — the libs the world
+/// mounts, `Logger`'s use appended above included).
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let mut chain = rut_driver::RutRun::new()
-        .pkg(rut_driver::Pkg::source(module, &combined));
+        .pkg(
+            rut_driver::Pkg::source(module, &combined)
+                .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
+        );
     for d in ["rut/ink", "rut/pouch"] {
         let pkgs = rut_native::dir_pkgs(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),

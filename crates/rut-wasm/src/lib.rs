@@ -4,6 +4,11 @@
 //! Raw ABI over wasm32 linear memory (no wasm-bindgen glue):
 //!   rut_alloc(len) -> ptr                      bump allocation
 //!   rut_compile(src_ptr, src_len) -> result    JSON envelope, base64 binary
+//!   rut_compile_manifest(src, src_len, man, man_len) -> result
+//!                                              the manifest lane: the
+//!                                              program's own consumer
+//!                                              manifest (jsonc) rides
+//!                                              beside the source
 //!   rut_run(bin_ptr, bin_len, fuel, heap) -> result
 //!   rut_resume(extra_fuel, heap) -> result     continue the parked frame
 //!   rut_drop_frame() -> u32                    retire the parked frame
@@ -13,6 +18,9 @@
 //! `"err"` beside `"trap"` (err-channel phase 3): a `main` returning the
 //! `(?T, err)` pair shape surfaces its non-empty err there, while panics
 //! and budget traps stay on `trap` — the two channels never mix.
+//! The manifest lane is optional: plain `rut_compile` defaults the
+//! program's declaration host-side to the offered lib names (one place;
+//! the resolver never loosens it).
 
 #![allow(static_mut_refs)]
 
@@ -143,14 +151,90 @@ fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) 
         .named(spec)
 }
 
+/// One std pkg mounted from the repo tree's OWN files — the source AND
+/// the manifest ride `include_str!`, so `rut/<name>/rut.jsonc` stays
+/// the single source of truth (no hand-maintained dep table here; the
+/// parsed structural form carries the `deps`/`peer-deps` rows). The
+/// `[peer-deps]` group TEXTS ride too (the wasm host has no
+/// filesystem — the manifest's `lib` path resolves through
+/// [`group_text`]), but stay UNMOUNTED: the run chain's peer gate
+/// performs the presence law itself, so a group mounts exactly when
+/// its peer is in the program's closure (this also closes the old gap
+/// where `json`'s wrapper groups never mounted while `flow`'s did).
+macro_rules! std_pkg {
+    ($name:literal) => {
+        peers_of(
+            rut_driver::Pkg::source(
+                $name,
+                include_str!(concat!("../../../rut/", $name, "/mod.rut")),
+            )
+            .manifest(
+                rut_driver::parse_manifest(include_str!(concat!(
+                    "../../../rut/",
+                    $name,
+                    "/rut.jsonc"
+                )))
+                .expect(concat!("the std `", $name, "` manifest is valid")),
+            ),
+        )
+    };
+}
+
+/// Fold a hand-offered pkg's parsed manifest `[peer-deps]` onto the
+/// pkg the way the walk's fold does — the declarations onto
+/// [`rut_driver::Pkg::peers`], the embedded group texts onto
+/// [`rut_driver::Pkg::peer_libs`] — leaving `groups_mounted` false so
+/// the peer gate's presence pass does the mounting. A manifest `lib`
+/// path this host cannot embed is a build-time bug: loud, never a
+/// silent missing group.
+fn peers_of(mut pkg: rut_driver::Pkg) -> rut_driver::Pkg {
+    let descs: Vec<(String, BTreeMap<String, String>)> =
+        pkg.manifest.peer_deps.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for (peer, desc) in descs {
+        let text = desc.get("lib").map(|lib| {
+            group_text(&pkg.spec, lib)
+                .unwrap_or_else(|| panic!("pkg `{}`: cannot embed the group `{lib}` — add it to `group_text`", pkg.spec))
+                .to_string()
+        });
+        pkg.peer_libs.insert(peer.clone(), text);
+        pkg.peers.insert(peer, rut_driver::PeerDecl::of(&desc));
+    }
+    pkg
+}
+
+/// The embedded peer-group texts, keyed (pkg spec, manifest `lib`
+/// path). The surrogate for the directory walk's file read: the same
+/// files the gate pass would read from disk.
+fn group_text(pkg: &str, lib: &str) -> Option<&'static str> {
+    match (pkg, lib) {
+        ("flow", "./group-pouch.rut") => Some(include_str!("../../../rut/flow/group-pouch.rut")),
+        ("flow", "./group-nmapset.rut") => {
+            Some(include_str!("../../../rut/flow/group-nmapset.rut"))
+        }
+        ("json", "./group-pouch.rut") => Some(include_str!("../../../rut/json/group-pouch.rut")),
+        ("json", "./group-nmapset.rut") => {
+            Some(include_str!("../../../rut/json/group-nmapset.rut"))
+        }
+        _ => None,
+    }
+}
+
 /// The playground's library offers (§0.9 of the host-pkgs plan): wasm
 /// has no filesystem, so the toolchain libs this host ships are
 /// EMBEDDED — `ink_host`'s and `nmap_host`'s host surfaces lowered from
-/// their `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source.
-/// This host's choice, not the engine's: the driver knows none of these
+/// their `.d.rut`s, the source pkgs through the [`std_pkg!`] macro
+/// (source + manifest, both `include_str!`d from the tree). This
+/// host's choice, not the engine's: the driver knows none of these
 /// names. (`nmap_host` + `nmapset` are the survey D6 amendment — the
 /// demo's map lane; `rut_std::nmap::pkg()` binds the crossings in `rut_run`.)
-fn compile_playground(src: &str) -> rut_driver::CompileOutput {
+///
+/// `manifest_text` is the `main` lane's optional consumer manifest —
+/// jsonc, parsed at this door into the structural form. `None` (the
+/// plain `rut_compile` export) DEFAULTS it host-side to the offered
+/// lib names — the single place the default lives, and the resolver
+/// never loosens it: a `use` of a pkg outside the declared set is the
+/// enforcement phase's business, this field is its input.
+fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::CompileOutput {
     // the string lane's own render: the tree UI's structured AST rides
     // every envelope, diags or not
     let (ast, parse_diags) = rut_parser::parse(src, rut_parser::Mode::Impl);
@@ -183,29 +267,6 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         "nmap.d.rut",
         &[],
     );
-    // `flow` offers AFTER its deps (its generic class + traits ride the
-    // source). The browser keeps no filesystem, so the peer-gate's
-    // directory walk can't run here: the manifest's peer-deps record
-    // onto the pkg, and each integration group whose optional peer this
-    // world holds rides its include_str! text — the same append the
-    // gate pass performs from disk, with the gate flag set so the
-    // close-of-world pass never double-appends (`Vec.from_flow`
-    // resolves through the group rows; the book gate's lane proves
-    // the law).
-    let flow_manifest = rut_driver::parse_manifest(include_str!("../../../rut/flow/rut.jsonc"))
-        .expect("the flow manifest is valid");
-    let mut flow = rut_driver::Pkg::source("flow", include_str!("../../../rut/flow/mod.rut"));
-    flow.entry = flow_manifest.entry.clone();
-    for (peer, desc) in &flow_manifest.peer_deps {
-        flow.peers.insert(peer.clone(), rut_driver::PeerDecl {
-            optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
-            lib: desc.get("lib").cloned(),
-            path: desc.get("path").cloned().unwrap_or_default(),
-        });
-    }
-    flow.peer_groups.push(include_str!("../../../rut/flow/group-pouch.rut").to_string());
-    flow.peer_groups.push(include_str!("../../../rut/flow/group-nmapset.rut").to_string());
-    flow.groups_mounted = true;
     // the async set: the engine rows lower from their decl,
     // the typed launcher surface offers as a linked source pkg —
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
@@ -234,7 +295,8 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     // calc rides as a lowered surface + the manifest's namespace/consts
     // rows — the same shape a `tree_pkg("calc")` walk yields (the wasm
     // host has no filesystem, so the files ride `include_str!`; the
-    // core prelude auto-offers in `.compile()`)
+    // core prelude auto-offers in `.compile()`). The whole parsed
+    // manifest rides the pkg like every other offer's does.
     let calc_manifest = rut_driver::parse_manifest(include_str!("../../../rut/calc/rut.jsonc"))
         .expect("the calc manifest is valid");
     let mut calc = host_surface(
@@ -242,41 +304,76 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         include_str!("../../../rut/calc/calc.d.rut"),
         "calc.d.rut",
         &[],
-    );
-    calc.namespace = calc_manifest.namespace.clone();
+    )
+    .manifest(calc_manifest);
+    calc.namespace = calc.manifest.namespace.clone();
     if let rut_driver::PkgBody::Host { consts, .. } = &mut calc.body {
-        *consts = calc_manifest
+        *consts = calc.manifest
             .consts
             .iter()
             .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
             .collect();
     }
     // the library world (everything but the program's own source): the
-    // run-side install snapshot reads its declared rows
+    // run-side install snapshot reads its declared rows. Every source
+    // pkg mounts through `std_pkg!` — the tree's own rut.jsonc is the
+    // dep law; `flow`/`json` groups mount through the peer gate's
+    // presence pass (both peers ride this world, so all four wrapper
+    // families exist on the page).
     let lib_pkgs = vec![
         ink_host,
         nmap_host,
-        rut_driver::Pkg::source("ink", include_str!("../../../rut/ink/mod.rut")),
-        rut_driver::Pkg::source("pouch", include_str!("../../../rut/pouch/mod.rut")),
-        // `nmapset` links like `ink` (its generic classes' methods cross on
-        // the surface's inherent rows; a consumer requests the
-        // instantiations); its `use nmap_host::` resolves
-        // against the offered surface above
-        rut_driver::Pkg::source("nmapset", include_str!("../../../rut/nmapset/mod.rut")),
-        flow,
+        // `ink`'s `use ink_host::` resolves against the offered surface
+        // above; `nmapset` links like `ink` (its generic classes'
+        // methods cross on the surface's inherent rows; a consumer
+        // requests the instantiations)
+        std_pkg!("ink"),
+        std_pkg!("pouch"),
+        std_pkg!("nmapset"),
+        std_pkg!("flow"),
         async_host,
-        rut_driver::Pkg::source("futures", include_str!("../../../rut/futures/mod.rut")),
+        std_pkg!("futures"),
         strbuild_host,
-        rut_driver::Pkg::source("strbuild", include_str!("../../../rut/strbuild/mod.rut")),
-        rut_driver::Pkg::source("json", include_str!("../../../rut/json/mod.rut")),
+        std_pkg!("strbuild"),
+        std_pkg!("json"),
         calc,
     ];
     // the rows snapshot `rut_run`'s installs answer to (owned; the
     // compile-time world dies here, the table travels)
     *CTX.lock().unwrap() = Some(rut_driver::host_pkg_ctx(&lib_pkgs));
+    // the `main` lane's structural declaration: the page's manifest
+    // when it passes one, else the host-side DEFAULT — the offered lib
+    // names (core stays row-free: the prelude is free by law). One
+    // place, computed FROM the world this host actually mounts; the
+    // resolver never loosens it.
+    let main_manifest = match manifest_text {
+        Some(text) => match rut_driver::parse_manifest(text) {
+            Ok(m) => m,
+            Err(e) => {
+                return CompileOutput {
+                    diags: vec![rut_lexer::diag::Diag::new(
+                        rut_lexer::span::Span::new(0, 0),
+                        format!("the manifest does not parse: {e}"),
+                    )],
+                    ast_json,
+                    ast_dump: String::new(),
+                    ir_dump: String::new(),
+                    binary: None,
+                };
+            }
+        },
+        None => rut_driver::Manifest::lib(
+            "main",
+            &lib_pkgs
+                .iter()
+                .map(|p| p.spec.as_str())
+                .filter(|s| *s != "core")
+                .collect::<Vec<_>>(),
+        ),
+    };
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: lib_pkgs, root: String::new() })
-        .pkg(rut_driver::Pkg::source("main", src))
+        .pkg(rut_driver::Pkg::source("main", src).manifest(main_manifest))
         .entrypoint("main")
         .compile();
     match compiled {
@@ -308,7 +405,30 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
 #[no_mangle]
 pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
     let src = unsafe { read_str(src_ptr, src_len) };
-    let out = compile_playground(src);
+    // no manifest passed: the offered-libs default applies host-side
+    compile_envelope(compile_playground(src, None))
+}
+
+/// The compile's manifest lane: the page may pass the program's own
+/// consumer manifest (jsonc) beside the source — parsed at this door
+/// into the structural form and stamped on the `main` pkg. A manifest
+/// that does not parse comes back as a span-0 diagnostic (the loud
+/// door); the plain `rut_compile` keeps the offered-libs default.
+#[no_mangle]
+pub extern "C" fn rut_compile_manifest(
+    src_ptr: *const u8,
+    src_len: usize,
+    man_ptr: *const u8,
+    man_len: usize,
+) -> *mut u8 {
+    let src = unsafe { read_str(src_ptr, src_len) };
+    let man = unsafe { read_str(man_ptr, man_len) };
+    compile_envelope(compile_playground(src, Some(man)))
+}
+
+/// The compile envelope writer: diags, the AST tree, the IR render, and
+/// the base64 binary — the shape both compile exports answer.
+fn compile_envelope(out: rut_driver::CompileOutput) -> *mut u8 {
     let mut json = String::from("{\"diags\":[");
     for (i, d) in out.diags.iter().enumerate() {
         if i > 0 {
@@ -650,7 +770,7 @@ entry fn main() {
     }
 
     fn compile_case(src: &str) -> Vec<u8> {
-        let out = compile_playground(src);
+        let out = compile_playground(src, None);
         assert!(
             out.diags.is_empty(),
             "test case must compile: {:?}",
@@ -917,6 +1037,103 @@ entry fn main() {
             "{j}"
         );
     }
+
+    // ---- the json peer-group GAP fix: json's wrapper families mount
+    // through the peer gate's presence pass exactly like flow's always
+    // did — `JsonVec` exists on this page because `pouch` rides the
+    // world (before this phase only flow's groups were force-appended;
+    // json's were never mounted). ----
+
+    const BOOK_JSON_VEC: &str = r#"
+use json::{ encodeJson, decodeJson, JsonVec, JsonWriter, JsonReader,
+            EncodeJsonError, DecodeJsonError };
+use pouch::{ Vec };
+use ink::{ Logger };
+
+class Note { n: i64; }
+
+impl Note {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_object();
+        w.key("n");
+        w.write_i64(self.n);
+        w.end_object();
+        return nil;
+    }
+}
+
+impl Note {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let mut n: ?i64 = nil;
+        while (r.more()) {
+            let k = r.next_key();
+            if (k == "n") { n = r.read_i64(); } else { r.skip_value(); }
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        let nv: i64 = n;
+        return (Note { n: nv }, nil);
+    }
+}
+
+entry fn main() {
+    let log = Logger::new("json");
+    let mut v: Vec<Note> = Vec::new();
+    v.push(Note { n: 7 });
+    let (text, e) = encodeJson(JsonVec(v));
+    if (e != nil) { panic("encode failed"); }
+    let doc: str = text;
+    let (back, e2) = decodeJson<JsonVec<Note>>(doc);
+    if (e2 != nil) { panic("decode failed"); }
+    let w: JsonVec<Note> = back;
+    let rows: Vec<Note> = w.to_vec();
+    log.info(f"count={rows.len()}");
+}
+"#;
+
+    #[test]
+    fn the_json_wrapper_groups_mount_by_presence_on_the_page() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(BOOK_JSON_VEC), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "output"), "[\"count=1\"]", "{j}");
+    }
+
+    // ---- the manifest lane (`rut_compile_manifest`): the page's own
+    // consumer manifest parses at the door and stamps the `main` pkg;
+    // a manifest that does not parse is the loud span-0 diagnostic;
+    // the no-manifest default keeps the std uses legal (every
+    // compile_case above rides it). ----
+
+    #[test]
+    fn the_manifest_lane_parses_at_the_door_and_stamps_the_main_pkg() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        // a real (jsonc) consumer manifest — comments and a path row
+        let man = r#"
+// the page's narrower declaration
+{
+  "name": "main",
+  "deps": { "ink": { "path": "rut/ink" } }
+}
+"#;
+        let out = compile_playground(HELLO, Some(man));
+        assert!(
+            out.diags.is_empty(),
+            "the parsed manifest keeps the program compiling: {:?}",
+            out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        );
+        assert!(out.binary.is_some());
+        // a malformed manifest refuses at the door — span-0, named
+        let out = compile_playground(HELLO, Some("{\"name\": \"main\", "));
+        assert_eq!(out.diags.len(), 1, "{:?}", out.diags);
+        assert_eq!(out.diags[0].span.lo, 0);
+        assert!(out.diags[0].msg.contains("does not parse"), "{:?}", out.diags[0].msg);
+        assert!(out.binary.is_none());
+    }
+
 
     // ---- the entry-err channel (err-channel phase 3): "err" beside
     // "trap". A (?T, err) main crosses under the ORIGINAL rule (the

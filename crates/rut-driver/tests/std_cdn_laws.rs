@@ -48,7 +48,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -541,10 +546,12 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
 
 #[test]
 fn ambient_std_and_a_url_std_bundle_coexist() {
-    // the ambient redundancy note: mount_std already mounts core/calc;
-    // pinning core's CDN bundle on top is a HARMLESS doubled mount
-    // (first-mount-wins — the same law as any duplicate) and custom
-    // hosts that do not ambient-mount get the rows from the bundle
+    // the redundancy note, post-ambient-tier (Q2-3: nothing ambient-
+    // mounts calc anymore — only declared rows mount; core still
+    // auto-offers): this host's calc offer beside a pinned core CDN
+    // bundle is a HARMLESS doubled mount of core (first-mount-wins —
+    // the same law as any duplicate) and custom hosts that offer none
+    // of the std get the rows from the bundle
     let (url, bytes) = artifact("core");
     let base = std::env::temp_dir().join(format!("rut-std-cdn-core-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);

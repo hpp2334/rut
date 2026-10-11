@@ -31,7 +31,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -89,7 +94,11 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
     let compile_app = |src: &str| {
         rut_driver::RutRun::new()
             .pkgs(&server)
-            .pkg(rut_driver::Pkg::source("app", src))
+            .pkg(
+                // the app DECLARES its use (the server host surface)
+                rut_driver::Pkg::source("app", src)
+                    .manifest(rut_driver::Manifest::lib("app", &["server"])),
+            )
             .entrypoint("app")
             .compile()
             .unwrap()
@@ -198,7 +207,11 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     // (the pkg resolves; the ITEM misses as the ordinary unknown name)
     let out = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::Pkg::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n"))
+        .pkg(
+            // the app DECLARES its use (the `s` surface)
+            rut_driver::Pkg::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n")
+                .manifest(rut_driver::Manifest::lib("app", &["s"])),
+        )
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -466,10 +479,12 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     let world = vec![
         ink_host,
         server,
+        // the app DECLARES its uses (both host surfaces)
         rut_driver::Pkg::source(
             "app",
             "use ink_host::{ create_logger };\nuse server::{ subscribe };\nentry fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n",
-        ),
+        )
+        .manifest(rut_driver::Manifest::lib("app", &["ink_host", "server"])),
     ];
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })

@@ -46,10 +46,18 @@ fn classics_run_clean() {
         // `nmap_host` through its `[deps]`)
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         // the classics use the toolchain libs offered from the tree;
-        // calc rides beside; the core prelude auto-offers
+        // calc rides beside; the core prelude auto-offers. The root
+        // DECLARES its uses structurally — the classic's own rut.jsonc
+        // is the manifest (the same file the page's manifest-honoring
+        // lane reads), parsed at the door.
+        let manifest = rut_driver::parse_manifest(
+            &std::fs::read_to_string(path.parent().unwrap().join("rut.jsonc"))
+                .unwrap_or_else(|e| panic!("{name}: read its rut.jsonc: {e}")),
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
         let mut chain = rut_driver::RutRun::new()
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-            .pkg(rut_driver::Pkg::source("main", &src));
+            .pkg(rut_driver::Pkg::source("main", &src).manifest(manifest));
         for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
             let pkgs = rut_native::dir_pkgs(&tree.join(d))
                 .unwrap_or_else(|e| panic!("mount {d}: {e}"));

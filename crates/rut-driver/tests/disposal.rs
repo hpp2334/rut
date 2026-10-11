@@ -30,7 +30,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -55,7 +60,12 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let compiled = rut_driver::RutRun::new()
         .pkgs(&ink)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(rut_driver::Pkg::source("app_main", &combined))
+        .pkg(
+            // the root DECLARES its uses structurally (ink + calc, the
+            // world this helper mounts; the logger use is appended above)
+            rut_driver::Pkg::source("app_main", &combined)
+                .manifest(rut_driver::Manifest::lib("app_main", &["calc", "ink"])),
+        )
         .entrypoint("app_main")
         .compile()
         .unwrap();

@@ -319,7 +319,11 @@ fn vm_with_nmap() -> Vm {
     let mut world = rut_native::dir_pkgs(std::path::Path::new(PKG_DIR))
         .expect("mount nmap_host")
         .pkgs;
-    world.push(rut_driver::Pkg::source("app", SRC));
+    // the root DECLARES its use (the nmap_host surface's names)
+    world.push(
+        rut_driver::Pkg::source("app", SRC)
+            .manifest(rut_driver::Manifest::lib("app", &["nmap_host"])),
+    );
     let ctx = rut_driver::host_pkg_ctx(&world);
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })

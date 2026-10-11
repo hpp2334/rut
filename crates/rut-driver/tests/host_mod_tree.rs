@@ -259,10 +259,14 @@ fn the_registration_contract_speaks_the_path_spelling() {
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
         .host_pkg(pkg.build())
-        .pkg(rut_driver::Pkg::source(
-            "app",
-            "use myhost::{legacy_ping};\n\nentry fn main() -> nil {\n    let _ = legacy_ping();\n}\n",
-        ))
+        .pkg(
+            // the app DECLARES its use (the myhost host surface)
+            rut_driver::Pkg::source(
+                "app",
+                "use myhost::{legacy_ping};\n\nentry fn main() -> nil {\n    let _ = legacy_ping();\n}\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["myhost"])),
+        )
         .entrypoint("app")
         .compile()
         .expect("the installer joins the path-qualified rows");
@@ -353,10 +357,14 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
         .host_pkg(pkg.build())
-        .pkg(rut_driver::Pkg::source(
-            "app",
-            "use duo::a::{ probe };\n\nentry fn main() -> i64 {\n    return probe(\"hey\");\n}\n",
-        ))
+        .pkg(
+            // the app DECLARES its use (the duo host surface)
+            rut_driver::Pkg::source(
+                "app",
+                "use duo::a::{ probe };\n\nentry fn main() -> i64 {\n    return probe(\"hey\");\n}\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["duo"])),
+        )
         .entrypoint("app")
         .compile()
         .expect("both leaves install");
@@ -374,10 +382,14 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
     let loaded = load_path_session(Path::new(&dir)).expect("loads");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_driver::Pkg::source(
-            "app",
-            "use myhost::{ legacy_ping };\nuse myhost::net::tls::handshake;\n\nentry fn main() -> bool {\n    return legacy_ping();\n}\n",
-        ))
+        .pkg(
+            // the app DECLARES its use (the myhost host surface)
+            rut_driver::Pkg::source(
+                "app",
+                "use myhost::{ legacy_ping };\nuse myhost::net::tls::handshake;\n\nentry fn main() -> bool {\n    return legacy_ping();\n}\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["myhost"])),
+        )
         .entrypoint("app")
         .compile()
         .expect("compiles");

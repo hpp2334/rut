@@ -32,7 +32,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -52,7 +57,12 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn world_with(app_src: &str) -> rut_driver::Loaded {
     let mut loaded = rut_native::dir_pkgs(std::path::Path::new(POUCH_DIR)).expect("mount pouch");
-    loaded.pkgs.push(rut_driver::Pkg::source("app_main", app_src));
+    // the root DECLARES its pouch use (the nmapset worlds extend the
+    // world and the declaration beside it)
+    loaded.pkgs.push(
+        rut_driver::Pkg::source("app_main", app_src)
+            .manifest(rut_driver::Manifest::lib("app_main", &["nmapset", "pouch"])),
+    );
     loaded
 }
 

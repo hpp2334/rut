@@ -22,7 +22,10 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     match rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: case_world(), root: String::new() })
-        .pkg(rut_driver::Pkg::source(module, &combined))
+        .pkg(
+            rut_driver::Pkg::source(module, &combined)
+                .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
+        )
         .host_pkg(rut_std::logger::pkg(|_msg| {}))
         .host_pkg(rut_std::math::pkg())
         .entrypoint(module)

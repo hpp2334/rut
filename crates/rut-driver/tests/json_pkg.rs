@@ -37,7 +37,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -636,11 +641,16 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
     let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>::new();\n    v.push(1);\n}\n";
+    // the probe DECLARES its uses structurally (the audit's d2probe
+    // row): json + pouch, exactly what the source spells
+    let probe = |p: rut_driver::Pkg| {
+        p.manifest(rut_driver::Manifest::lib("d2probe", &["json", "pouch"]))
+    };
     let light = rut_native::load_dir(Path::new(LIGHT)).expect("mount light");
     let err = rut_driver::RutRun::new()
         .pkgs(&light)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(rut_driver::Pkg::source("d2probe", src))
+        .pkg(probe(rut_driver::Pkg::source("d2probe", src)))
         .entrypoint("d2probe")
         .compile()
         .unwrap_err();
@@ -650,7 +660,7 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     let out = rut_driver::RutRun::new()
         .pkgs(&full)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(rut_driver::Pkg::source("d2probe", src))
+        .pkg(probe(rut_driver::Pkg::source("d2probe", src)))
         .entrypoint("d2probe")
         .compile()
         .unwrap();

@@ -50,10 +50,15 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn compile(host: rut_driver::Pkg, src: &str) -> rut_driver::GraphOutput {
+    let head = host.spec.clone();
     graph_of(
         rut_driver::RutRun::new()
             .pkg(host)
-            .pkg(rut_driver::Pkg::source("app", src))
+            .pkg(
+                // the app DECLARES its use (the host surface's spec)
+                rut_driver::Pkg::source("app", src)
+                    .manifest(rut_driver::Manifest::lib("app", &[&head])),
+            )
             .entrypoint("app")
             .compile(),
     )
@@ -189,10 +194,14 @@ fn a_qualified_host_call_runs_the_registered_body() {
     let compiled = rut_driver::RutRun::new()
         .pkg(myhost())
         .host_pkg(pkg.build())
-        .pkg(rut_driver::Pkg::source(
-            "app",
-            "use myhost::net::{ connect };\nuse myhost::net::tls::handshake;\nuse myhost::{ legacy_ping };\n\nentry fn main() -> i64 {\n    let _ = legacy_ping();\n    return handshake(connect(\"abc\"));\n}\n",
-        ))
+        .pkg(
+            // the app DECLARES its use (the myhost host surface)
+            rut_driver::Pkg::source(
+                "app",
+                "use myhost::net::{ connect };\nuse myhost::net::tls::handshake;\nuse myhost::{ legacy_ping };\n\nentry fn main() -> i64 {\n    let _ = legacy_ping();\n    return handshake(connect(\"abc\"));\n}\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["myhost"])),
+        )
         .entrypoint("app")
         .compile()
         .expect("compiles");
@@ -231,10 +240,14 @@ fn an_async_mod_row_binds_through_the_qualified_spelling() {
         rut_driver::RutRun::new()
             .pkgs(&futures)
             .pkg(host)
-            .pkg(rut_driver::Pkg::source(
-                "app",
-                "use futures::{ launch_future };\nuse fixture::net::{ probe };\n\nasync fn job() -> nil {\n    let n = await probe(\"k\");\n    let _ = n;\n}\n\nentry fn main() -> nil {\n    launch_future(job());\n}\n",
-            ))
+            .pkg(
+                // the app DECLARES its uses (futures + the fixture surface)
+                rut_driver::Pkg::source(
+                    "app",
+                    "use futures::{ launch_future };\nuse fixture::net::{ probe };\n\nasync fn job() -> nil {\n    let n = await probe(\"k\");\n    let _ = n;\n}\n\nentry fn main() -> nil {\n    launch_future(job());\n}\n",
+                )
+                .manifest(rut_driver::Manifest::lib("app", &["fixture", "futures"])),
+            )
             .entrypoint("app")
             .compile(),
     );

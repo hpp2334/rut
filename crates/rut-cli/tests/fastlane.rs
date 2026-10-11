@@ -74,7 +74,11 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     let mut world = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
         .expect("mount fastlane")
         .pkgs;
-    world.push(rut_driver::Pkg::source("app", SRC));
+    // the root DECLARES its use (the fastlane host surface's names)
+    world.push(
+        rut_driver::Pkg::source("app", SRC)
+            .manifest(rut_driver::Manifest::lib("app", &["fastlane"])),
+    );
     let expected = rut_driver::declared_host_fns(&world);
     let compiled = rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })

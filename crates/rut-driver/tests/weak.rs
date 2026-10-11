@@ -51,7 +51,12 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(spec, src))
+            // the root DECLARES its calc use (the structural form; the
+            // offer stays the walked tree pkg)
+            .pkg(
+                rut_driver::Pkg::source(spec, src)
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+            )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(spec)
             .compile(),
@@ -125,7 +130,12 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let out = graph_of(
         rut_driver::RutRun::new()
             .pkgs(&ink)
-            .pkg(rut_driver::Pkg::source("app_main", &combined))
+            .pkg(
+                // the root DECLARES its uses structurally (ink; the
+                // logger use is appended above)
+                rut_driver::Pkg::source("app_main", &combined)
+                    .manifest(rut_driver::Manifest::lib("app_main", &["ink"])),
+            )
             .entrypoint("app_main")
             .compile(),
     );
@@ -396,7 +406,12 @@ entry fn main() -> i32 {
     let mut chain = rut_driver::RutRun::new().pkgs(&weak_host);
     let ctx = rut_driver::host_pkg_ctx(&weak_host.pkgs);
     chain = chain
-        .pkg(rut_driver::Pkg::source("app_main", src))
+        .pkg(
+            // the root DECLARES its uses structurally (the weak_host
+            // surface's names)
+            rut_driver::Pkg::source("app_main", src)
+                .manifest(rut_driver::Manifest::lib("app_main", &["weak_host"])),
+        )
         .entrypoint("app_main");
     let out = graph_of(chain.compile());
     assert!(out.diags.is_empty(), "{:?}", out.diags);
