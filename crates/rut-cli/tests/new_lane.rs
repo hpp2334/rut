@@ -1,13 +1,13 @@
-//! The `rut new` lane through the binary: the scaffold's two files
-//! (manifest + root module), the refusals (clobber, illegal name), the
-//! born-formatted template, the pins against the committed
+//! The `rut new` lane through the binary: the scaffold's three files
+//! (manifest + lock + root module), the refusals (clobber, illegal
+//! name), the born-formatted template, the pins against the committed
 //! `dist/std-v9` snapshot, and the offline end-to-end — the
 //! full-deps manifest mounts clean and the ink-only hello runs.
 //!
 //! One deliberate restatement: `mod.rut`'s bytes are mirrored here
 //! (a `[[bin]]`'s internals cannot be imported by an integration
 //! test); every other law is checked through the SCAFFOLDED files, so
-//! the manifest — not a duplicate table — carries the pins.
+//! the lock — not a duplicate table — carries the pins.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -93,10 +93,9 @@ fn scaffold_creates_the_manifest_and_root_module() {
             url.ends_with(&format!("/dist/std/{pkg}.rutbundle")),
             "`{pkg}` rides the std tag: {url}"
         );
-        assert_eq!(
-            dep["sha256"].len(),
-            64,
-            "a sha256 pin rides every url row: {url}"
+        assert!(
+            dep.get("sha256").is_none(),
+            "manifest rows are UNPINNED — the pin lives in rut.lock: {url}"
         );
     }
 
@@ -109,7 +108,7 @@ fn scaffold_creates_the_manifest_and_root_module() {
 
 #[test]
 fn scaffold_refuses_to_clobber() {
-    for seeded in ["rut.jsonc", "mod.rut"] {
+    for seeded in ["rut.jsonc", "mod.rut", "rut.lock"] {
         let root = scratch(&format!("clobber-{seeded}"));
         let dir = root.join("hello");
         std::fs::create_dir_all(&dir).unwrap();
@@ -163,18 +162,37 @@ fn template_is_fmt_clean() {
 #[test]
 fn pins_match_the_frozen_std_v9_snapshot() {
     let (_root, dir) = scaffold("pins", "hello");
-    // the scaffolded manifest is the carrier — parse ITS rows and hold
+    // the scaffolded lock is the carrier — parse ITS rows and hold
     // each pin against the committed artifact; no table duplication
+    let lock_text = std::fs::read_to_string(dir.join("rut.lock")).unwrap();
+    let lock = rut_driver::parse_lock(&lock_text).expect("the scaffolded rut.lock parses");
+    assert_eq!(lock.deps().len(), 9, "the lock pins exactly the nine");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v9");
+    for row in lock.deps() {
+        assert!(
+            row.url.ends_with(&format!("/dist/std/{}.rutbundle", row.pkg)),
+            "`{}` rides the std tag: {}",
+            row.pkg,
+            row.url
+        );
+        let bytes = std::fs::read(frozen.join(format!("{}.rutbundle", row.pkg)))
+            .unwrap_or_else(|e| panic!("the frozen dist/std-v9/{}.rutbundle: {e}", row.pkg));
+        assert_eq!(
+            row.sha256,
+            rut_driver::sha256_hex(&bytes),
+            "the `{}` pin is the sha256 of the frozen artifact",
+            row.pkg
+        );
+    }
+    // the manifest and the lock tell the same story: every manifest
+    // url has its pin row, unpinned in the manifest itself
     let manifest = std::fs::read_to_string(dir.join("rut.jsonc")).unwrap();
     let m = rut_driver::parse_manifest(&manifest).unwrap();
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v9");
+    assert_eq!(m.deps.len(), lock.deps().len(), "one lock row per manifest url row");
     for (pkg, dep) in &m.deps {
-        let bytes = std::fs::read(frozen.join(format!("{pkg}.rutbundle")))
-            .unwrap_or_else(|e| panic!("the frozen dist/std-v9/{pkg}.rutbundle: {e}"));
-        assert_eq!(
-            dep["sha256"],
-            rut_driver::sha256_hex(&bytes),
-            "the `{pkg}` pin is the sha256 of the frozen artifact"
+        assert!(
+            lock.deps().iter().any(|r| &r.pkg == pkg && r.url == dep["url"]),
+            "the lock pins `{pkg}`'s url"
         );
     }
 }
@@ -244,18 +262,21 @@ fn scaffolded_project_runs_against_a_local_server() {
     let server = BundleServer::serve(payloads);
 
     // the scaffold with ONLY the dep urls rewritten to the local
-    // server — the pins are the same bytes
+    // server — manifest AND lock (the lock's rows carry the same urls;
+    // the pins are the same bytes either way)
     let (root, dir) = scaffold("e2e", "hello");
-    let manifest_path = dir.join("rut.jsonc");
-    let manifest = std::fs::read_to_string(&manifest_path).unwrap();
-    std::fs::write(
-        &manifest_path,
-        manifest.replace(
-            "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/",
-            &format!("http://127.0.0.1:{}/", server.port),
-        ),
-    )
-    .unwrap();
+    for file in ["rut.jsonc", "rut.lock"] {
+        let path = dir.join(file);
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            text.replace(
+                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/",
+                &format!("http://127.0.0.1:{}/", server.port),
+            ),
+        )
+        .unwrap();
+    }
 
     // the ink-only hello runs clean against the FULL manifest — unused
     // deps are legal (host pkgs merge inert unless the program mounts

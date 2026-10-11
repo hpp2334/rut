@@ -92,19 +92,24 @@ fn rut(cache: &Path, args: &[&str]) -> (i32, String) {
     (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stderr).into_owned())
 }
 
-/// The consumer world: `util` served by url, pinned; app calls it.
+/// The consumer world: `util` served by url, pinned by the `rut.lock`
+/// beside the manifest — the pin ledger (the manifest rows are
+/// unpinned; the `sha256` key is retired from the grammar). app calls
+/// it.
 fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
     let root = scratch(tag);
     let app = root.join("app");
     write(
         &app,
         "rut.jsonc",
-        &manifest(
-            "app",
-            "mod.rut",
-            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
-        ),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
+    let lock = rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
+        pkg: "util".into(),
+        url: url.into(),
+        sha256: pin.into(),
+    }]);
+    write(&app, "rut.lock", &rut_driver::render_lock(&lock));
     write(
         &app,
         "mod.rut",

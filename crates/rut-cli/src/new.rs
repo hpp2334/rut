@@ -5,12 +5,15 @@
 /// every `.compile()`), never the `*_host` surfaces (they ride
 /// transitively), never `bench_cross` (dev tooling, not app std).
 ///
-/// LOCKSTEP: the pins are the sha256 of the frozen `dist/std-v9/`
+/// LOCKSTEP: the shas are the sha256 of the frozen `dist/std-v9/`
 /// artifacts (phase 3, tag live); keep in step with the stdlib book
 /// pages and the tag lane — when the tag moves, these rows move with
-/// it. `tests/new_lane.rs` holds the law by checking the SCAFFOLDED
-/// manifest's pins against the committed snapshot (the manifest is the
-/// carrier — no duplicate table here).
+/// it. The manifest rows are UNPINNED (the `sha256` key is retired
+/// from the url descriptor grammar — pins live in rut.lock): the
+/// scaffold renders this table into `rut.lock` via
+/// `rut_driver::render_lock`, and `tests/new_lane.rs` holds the law by
+/// checking the SCAFFOLDED lock's pins against the committed snapshot
+/// (the lock is the carrier — no duplicate table here).
 const STD: &[(&str, &str)] = &[
     (
         "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle",
@@ -70,10 +73,12 @@ pub(crate) struct NewArgs {
 
 /// `rut new <dir>` — scaffold a hello-world module directory: a
 /// `rut.jsonc` (the derived name + the whole swappable std set as
-/// pinned url deps) and a `mod.rut` (the ink hello). The name comes
-/// from the target's basename and obeys the manifest law — refused,
-/// never sanitized; an existing `rut.jsonc` or `mod.rut` is never
-/// clobbered; other pre-existing files are left alone.
+/// UNPINNED url deps — the pins live in rut.lock), a `rut.lock` (the
+/// std set's pins, rendered through the lock grammar), and a `mod.rut`
+/// (the ink hello). The name comes from the target's basename and
+/// obeys the manifest law — refused, never sanitized; an existing
+/// `rut.jsonc`, `mod.rut`, or `rut.lock` is never clobbered; other
+/// pre-existing files are left alone.
 pub(crate) fn new(args: &NewArgs) {
     let dir = args.dir.as_str();
     let p = std::path::Path::new(dir);
@@ -87,9 +92,9 @@ pub(crate) fn new(args: &NewArgs) {
         eprintln!("new: `{name}` is not a legal package name — [a-zA-Z0-9_]+, non-empty");
         std::process::exit(2);
     }
-    // refuse to clobber: a dir that already carries either file of the
-    // pair keeps it — other pre-existing files are fine
-    for file in ["rut.jsonc", "mod.rut"] {
+    // refuse to clobber: a dir that already carries any file of the
+    // trio keeps it — other pre-existing files are fine
+    for file in ["rut.jsonc", "mod.rut", "rut.lock"] {
         if p.join(file).exists() {
             eprintln!("new: `{dir}` already has a `{file}` — refusing to overwrite");
             std::process::exit(2);
@@ -99,31 +104,33 @@ pub(crate) fn new(args: &NewArgs) {
         eprintln!("new: cannot create {dir}: {e}");
         std::process::exit(2);
     }
-    let manifest = p.join("rut.jsonc");
-    if let Err(e) = std::fs::write(&manifest, manifest_text(&name)) {
-        eprintln!("new: cannot write {}: {e}", manifest.display());
-        std::process::exit(2);
+    for (file, text) in [
+        ("rut.jsonc", manifest_text(&name)),
+        ("rut.lock", lock_text()),
+        ("mod.rut", MOD_RUT.to_string()),
+    ] {
+        let path = p.join(file);
+        if let Err(e) = std::fs::write(&path, text) {
+            eprintln!("new: cannot write {}: {e}", path.display());
+            std::process::exit(2);
+        }
     }
-    let module = p.join("mod.rut");
-    if let Err(e) = std::fs::write(&module, MOD_RUT) {
-        eprintln!("new: cannot write {}: {e}", module.display());
-        std::process::exit(2);
-    }
-    println!("created {dir} — rut.jsonc + mod.rut (the std set as deps, the ink hello)");
+    println!("created {dir} — rut.jsonc + rut.lock + mod.rut (the std set as deps, pinned by the lock, the ink hello)");
     println!("run it: rut run {dir}");
-    println!("first run fetches the std set (9 bundles) into {dir}/.rut/cache — rut fetch {dir} pre-warms");
+    println!("first run fetches the std set (9 bundles) into {dir}/.rut/cache — rut fetch {dir} pre-warms; after a dep edit, rut install {dir} re-pins rut.lock");
 }
 
-/// The scaffolded manifest: the derived name, the std set as pinned
-/// url rows — the comment voice of the examples' manifests (the CDN
-/// row callout).
+/// The scaffolded manifest: the derived name, the std set as UNPINNED
+/// url rows (the pin lives in the sibling `rut.lock` now — `rut
+/// install` is its writer), the comment voice of the examples'
+/// manifests (the CDN row callout).
 fn manifest_text(name: &str) -> String {
     let mut rows = String::new();
     let last = STD.len() - 1;
-    for (i, (url, sha)) in STD.iter().enumerate() {
-        let pkg = url.rsplit('/').next().unwrap().trim_end_matches(".rutbundle");
+    for (i, (url, _sha)) in STD.iter().enumerate() {
         rows.push_str(&format!(
-            "    \"{pkg}\": {{ \"url\": \"{url}\", \"sha256\": \"{sha}\" }}{}\n",
+            "    \"{}\": {{ \"url\": \"{url}\" }}{}\n",
+            pkg_of(url),
             if i == last { "" } else { "," },
         ));
     }
@@ -134,15 +141,39 @@ fn manifest_text(name: &str) -> String {
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag,
-  // sha256-pinned here — the pin is law at the mount door on every
-  // load). Unused deps are legal: host pkgs merge inert unless the
-  // program mounts their pkg, inline pkgs inline per-using-consumer —
-  // this hello (ink only) runs clean with the full set declared.
+  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag).
+  // The pins live in `rut.lock` beside this file (machine-generated:
+  // the scaffold wrote them; `rut install` re-pins after a dep edit —
+  // the sha256 key is retired from manifest rows). Unused deps are
+  // legal: host pkgs merge inert unless the program mounts their pkg,
+  // inline pkgs inline per-using-consumer — this hello (ink only)
+  // runs clean with the full set declared.
   "name": "{name}",
   "deps": {{
 {rows}  }}
 }}
 "#
     )
+}
+
+/// The scaffolded `rut.lock`: this table's pins rendered through the
+/// lock grammar — rows sorted by url, byte-deterministic, exactly what
+/// `rut install` would write for the manifest above.
+fn lock_text() -> String {
+    let lock = rut_driver::LockFile::from_rows(
+        STD.iter()
+            .map(|(url, sha)| rut_driver::LockRow {
+                pkg: pkg_of(url).to_string(),
+                url: url.to_string(),
+                sha256: sha.to_string(),
+            })
+            .collect(),
+    );
+    rut_driver::render_lock(&lock)
+}
+
+/// The dep name for a bundle url — the file's stem (the lock's `pkg`
+/// is display-only; the url is the identity).
+fn pkg_of(url: &str) -> &str {
+    url.rsplit('/').next().unwrap().trim_end_matches(".rutbundle")
 }
