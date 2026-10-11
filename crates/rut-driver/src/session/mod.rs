@@ -234,6 +234,7 @@ impl Session {
                     .iter()
                     .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
                     .collect(),
+                manifest: manifest.clone(),
                 ..Default::default()
             })?;
         }

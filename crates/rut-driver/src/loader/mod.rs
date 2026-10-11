@@ -144,6 +144,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             peers: manifest_peers(&manifest),
             peer_libs: libs,
             bundle_scopes: scopes.clone(),
+            manifest: manifest.clone(),
             ..Default::default()
         },
     );
@@ -206,6 +207,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                     mods: rows_mods(entries, &format!("{prefix}/")).map_err(err)?,
                     peers: manifest_peers(&dm),
                     peer_libs: libs,
+                    manifest: dm.clone(),
+                    // the first-mount edge: the archive root pulled its groups
+                    mounted_by: Some(root_spec.clone()),
                     ..Default::default()
                 }
             }
@@ -217,6 +221,8 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                     archive_peer_libs(entries, &format!("{prefix}/"), &dm).map_err(err)?,
                 );
                 pkg.spec = name.clone();
+                // the first-mount edge: the archive root pulled its groups
+                pkg.mounted_by = Some(root_spec.clone());
                 pkg
             }
         };
@@ -277,13 +283,16 @@ fn archive_peer_libs(
     Ok(out)
 }
 
-/// [`manifest_peers`] + the integration texts folded into a walked pkg
-/// — the constructor + fold pair the entry lanes share.
+/// The manifest + [`manifest_peers`] + the integration texts folded
+/// into a walked pkg — the constructor + fold pair the entry lanes
+/// share. The WHOLE structural manifest rides (dev rows included —
+/// data only; a dep's dev table is still never walked).
 pub(crate) fn fold_peers(
     mut pkg: Pkg,
     manifest: &Manifest,
     libs: BTreeMap<String, Option<String>>,
 ) -> Pkg {
+    pkg.manifest = manifest.clone();
     pkg.peers.extend(manifest_peers(manifest));
     pkg.peer_libs.extend(libs);
     pkg
@@ -402,6 +411,7 @@ pub fn bundle_entry_pkg(
             body: PkgBody::Source { text: root, is_decl: false },
             entry: manifest.entry.clone(),
             mods,
+            manifest: manifest.clone(),
             ..Default::default()
         });
     }
@@ -427,6 +437,7 @@ pub fn bundle_entry_pkg(
             None => Pkg {
                 body: PkgBody::Source { text: src, is_decl: true },
                 entry: manifest.entry.clone(),
+                manifest: manifest.clone(),
                 ..Default::default()
             },
         }
@@ -454,6 +465,7 @@ fn host_entry_pkg(
     let fold = |mut m: Pkg| -> Pkg {
         m.entry = manifest.entry.clone();
         m.namespace = manifest.namespace.clone();
+        m.manifest = manifest.clone();
         let consts = manifest
             .consts
             .iter()
@@ -567,6 +579,7 @@ fn plain_source_pkg(
         body: PkgBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
         mods,
+        manifest: manifest.clone(),
         ..Default::default()
     })
 }

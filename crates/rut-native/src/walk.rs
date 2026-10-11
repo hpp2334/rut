@@ -415,15 +415,18 @@ fn manifest_peers(manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
     .collect()
 }
 
-/// [`manifest_peers`] folded into a walked pkg, plus the peer-gated
-/// integration texts read from the pkg's OWN source (dir or archive) —
-/// the walk reads each declared `lib` file once, at mount; the gate
-/// later moves a text onto the pkg only when the peer is present in
-/// the program's closure (presence law). A text that cannot be read is
-/// recorded as `None` — the gate turns it into the loud D3
-/// packaging-bug error, but ONLY when the peer is present (an absent
-/// optional peer stays inert, read or not).
+/// The manifest + [`manifest_peers`] folded into a walked pkg, plus
+/// the peer-gated integration texts read from the pkg's OWN source
+/// (dir or archive) — the walk reads each declared `lib` file once, at
+/// mount; the gate later moves a text onto the pkg only when the peer
+/// is present in the program's closure (presence law). A text that
+/// cannot be read is recorded as `None` — the gate turns it into the
+/// loud D3 packaging-bug error, but ONLY when the peer is present (an
+/// absent optional peer stays inert, read or not). The WHOLE
+/// structural manifest rides too (dev rows included — data only; a
+/// dep's dev table is still never walked).
 fn fold_peers(mut pkg: Pkg, manifest: &Manifest, libs: BTreeMap<String, Option<String>>) -> Pkg {
+    pkg.manifest = manifest.clone();
     pkg.peers.extend(manifest_peers(manifest));
     pkg.peer_libs.extend(libs);
     pkg
@@ -849,10 +852,10 @@ pub(crate) fn walk_dir(
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_table(world, src, dir, &manifest.deps, &mut visiting, &mut fetched)?;
+    resolve_table(world, src, dir, &root, &manifest.deps, &mut visiting, &mut fetched)?;
     // the dev pass — the ROOT's dev table mounts exactly like `[deps]`;
     // a dep's dev table is never walked (pass 2 is root-only)
-    resolve_table(world, src, dir, &manifest.dev_deps, &mut visiting, &mut fetched)?;
+    resolve_table(world, src, dir, &root, &manifest.dev_deps, &mut visiting, &mut fetched)?;
     Ok(root)
 }
 
@@ -869,26 +872,30 @@ fn dir_key_dir(dir: &str) -> String {
 }
 
 /// Resolve a manifest's `[deps]` recursively — pass 1 of
-/// the mount order.
+/// the mount order. `parent` is the spec of the pkg whose table walks
+/// (the first-mount edge every mount below records).
 fn resolve_deps(
     world: &mut World,
     src: &dyn Source,
     dir: &str,
+    parent: &str,
     manifest: &Manifest,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
 ) -> Result<(), LoadError> {
-    resolve_table(world, src, dir, &manifest.deps, visiting, fetched)
+    resolve_table(world, src, dir, parent, &manifest.deps, visiting, fetched)
 }
 
 /// The dev-table mount — the pack lane's compile-once-per-owner pass:
 /// a DIR dep group's own `[dev-deps]` mount into the pack's world, so
 /// its unit compiles over the same closure wherever it is packed (the
 /// presence its peer groups ride). NEVER part of a consumer's world.
+/// `parent` is the group's own spec (the first-mount edge).
 pub(crate) fn mount_dev_table(
     world: &mut World,
     src: &dyn Source,
     dir: &str,
+    parent: &str,
     manifest: &Manifest,
     map: &BTreeMap<String, Vec<u8>>,
     lock: &BTreeMap<String, String>,
@@ -899,7 +906,7 @@ pub(crate) fn mount_dev_table(
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_table(world, src, dir, &manifest.dev_deps, &mut visiting, &mut fetched)
+    resolve_table(world, src, dir, parent, &manifest.dev_deps, &mut visiting, &mut fetched)
 }
 
 /// Walk one descriptor table — the `[deps]` walk (pass 1; pass 2 feeds
@@ -911,12 +918,16 @@ pub(crate) fn mount_dev_table(
 /// wins** — a name already in the world (the embedder's, the root's,
 /// or an earlier dep's) is never overwritten; a dep whose manifest
 /// `name` disagrees with its key is an error naming both. `visiting`
-/// guards cycles. Every mounted pkg's directory (or archive location)
-/// and `[peer-deps]` declarations are recorded for pass 3.
+/// guards cycles; `parent` is the spec of the pkg whose table this is
+/// — the first-mount edge every pkg mounted here records
+/// ([`Pkg::mounted_by`]). Every mounted pkg's manifest, directory (or
+/// archive location) and `[peer-deps]` declarations are recorded for
+/// pass 3.
 fn resolve_table(
     world: &mut World,
     src: &dyn Source,
     dir: &str,
+    parent: &str,
     table: &BTreeMap<String, BTreeMap<String, String>>,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
@@ -935,7 +946,7 @@ fn resolve_table(
                     "cyclic use: `{spec}` ({url}) is already being loaded"
                 )));
             }
-            mount_url_dep(world, spec, url, fetched.lock, bytes)?;
+            mount_url_dep(world, spec, url, parent, fetched.lock, bytes)?;
             fetched.visiting_urls.remove(url);
             continue;
         }
@@ -957,13 +968,16 @@ fn resolve_table(
                 actual: dm.name.as_deref().unwrap_or("<unnamed>").to_string(),
             });
         }
-        let dep_pkg = load_entry_module(src, &dep_dir, &dm)?;
+        let mut dep_pkg = load_entry_module(src, &dep_dir, &dm)?;
+        // the first-mount edge: the declaring pkg's spec (diagnostic
+        // data — the uses diagnostic's "pulled by" clause reads it)
+        dep_pkg.mounted_by = Some(parent.to_string());
         world.register(spec, dep_pkg)?;
         world.locs.insert(spec.clone(), Loc::Dir(PathBuf::from(&dep_dir)));
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
-        resolve_deps(world, src, &dep_dir, &dm, visiting, fetched)?;
+        resolve_deps(world, src, &dep_dir, spec, &dm, visiting, fetched)?;
         visiting.pop();
     }
     Ok(())
@@ -1052,6 +1066,7 @@ fn mount_url_dep(
     world: &mut World,
     spec: &str,
     url: &str,
+    parent: &str,
     lock: &BTreeMap<String, String>,
     bytes: &[u8],
 ) -> Result<(), LoadError> {
@@ -1104,11 +1119,13 @@ fn mount_url_dep(
                 )));
             }
             let libs = archive_peer_libs(&entries, "", url, &manifest)?;
-            let pkg = fold_peers(
+            let mut pkg = fold_peers(
                 bundle_entry_pkg(&entries, "", &manifest, url)?,
                 &manifest,
                 libs,
             );
+            // the first-mount edge: the declaring pkg's spec pulled this archive
+            pkg.mounted_by = Some(parent.to_string());
             world.register(&root_spec, pkg)?;
             let slot = world.archives.len();
             world
@@ -1166,6 +1183,10 @@ fn mount_url_dep(
             // row-free, so the graph's compiled-mount arm sees exactly
             // the pack-time shape
             bundle_scopes: scopes.clone(),
+            manifest: manifest.clone(),
+            // the first-mount edge: the declaring pkg's spec pulled
+            // this archive
+            mounted_by: Some(parent.to_string()),
             ..Default::default()
         },
     )?;
@@ -1227,16 +1248,22 @@ fn mount_url_dep(
                         .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
                     peers: manifest_peers(&dm),
                     peer_libs: libs,
+                    manifest: dm.clone(),
+                    // the first-mount edge: the archive root pulled its groups
+                    mounted_by: Some(root_spec.clone()),
                     ..Default::default()
                 }
             }
             rut_driver::bundle::GroupKind::Source => {
                 let libs = archive_peer_libs(&entries, &format!("{prefix}/"), url, &dm)?;
-                fold_peers(
+                let mut pkg = fold_peers(
                     bundle_entry_pkg(&entries, &format!("{prefix}/"), &dm, url)?,
                     &dm,
                     libs,
-                )
+                );
+                // the first-mount edge: the archive root pulled its groups
+                pkg.mounted_by = Some(root_spec.clone());
+                pkg
             }
         };
         world.register(&name, pkg)?;
@@ -1369,7 +1396,7 @@ pub(crate) fn offer_dir(
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_deps(world, &src, &dir_key, &manifest, &mut visiting, &mut fetched)?;
+    resolve_deps(world, &src, &dir_key, &name, &manifest, &mut visiting, &mut fetched)?;
     Ok(name)
 }
 

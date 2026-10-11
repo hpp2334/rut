@@ -4,14 +4,14 @@
 //! A `Pkg` is pure data — a named package. The walk (rut-native)
 //! yields them; [`crate::run::RutRun`] offers them; the compile-time
 //! mount table (the crate-internal `Session`) holds them. Walker-found
-//! metadata (the deps table, the peer declarations and their
-//! integration texts) is pub data on it; the walk's own bookkeeping
-//! (where the pkg's files live) never rides — it died with the walk's
-//! move to rut-native.
+//! metadata (the pkg's own manifest — dep tables included, the peer
+//! declarations and their integration texts) is pub data on it; the
+//! walk's own bookkeeping (where the pkg's files live) never rides —
+//! it died with the walk's move to rut-native.
 
 use std::collections::BTreeMap;
 
-use crate::bundle::Entry;
+use crate::bundle::{Entry, Manifest};
 use crate::mods::ModSource;
 
 /// What a mounted pkg's body IS. The graph dispatches on this:
@@ -193,10 +193,22 @@ pub struct Pkg {
     /// here. Empty for flat packages: every manifest-spelled source
     /// set stays byte-stable, and a flat pkg's compile is untouched.
     pub mods: BTreeMap<String, ModSource>,
-    /// The pkg's own `[deps]` table as the walk found it — the parsed
-    /// manifest's dep rows (spec → descriptor). Pub data: an embedder
-    /// can inspect what the closure declares.
-    pub deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// The pkg's own parsed manifest — the STRUCTURAL form every
+    /// producer stamps: the walk's `rut.jsonc` read, a bundle group's
+    /// in-archive manifest, a host's in-memory build
+    /// ([`Pkg::manifest`]). Json text is only a loader input; this is
+    /// the one mechanism — the dep tables (`deps`, `peer-deps`,
+    /// `dev-deps`) are read off it, never off pkg fields (the old flat
+    /// `deps` field folded in here). For a walked pkg the WHOLE
+    /// manifest rides, dev rows included, so a program root's
+    /// self-build allowlist reads its own `dev-deps` back later.
+    pub manifest: Manifest,
+    /// The first-mount edge: WHO pulled this pkg into the world — the
+    /// parent spec whose dep row declared it (a dir walk), the archive
+    /// root whose group it rides (a bundle), or `None` (a hand offer,
+    /// or the walk's own root). Pure diagnostic data: the uses
+    /// diagnostic's later "pulled by `a`" clause reads it.
+    pub mounted_by: Option<String>,
     /// The pkg's own `[peer-deps]` declarations — declaring name →
     /// declaration. Pub data: the peer gate reads it post-closure; the
     /// reference-site missing-peer diagnostic resolves against it.
@@ -229,6 +241,18 @@ impl Pkg {
     /// with the registration scope spelled at the offer.
     pub fn named(mut self, spec: &str) -> Pkg {
         self.spec = spec.to_string();
+        self
+    }
+
+    /// Attach the parsed structural manifest — the builder-style door
+    /// for hosts building worlds in memory
+    /// (`Pkg::source("app", src).manifest(Manifest::lib("app", &["ink"]))`).
+    /// The walk's producers stamp the same field; a hand offer without
+    /// one carries `Manifest::default()`. Parsing json text is never
+    /// this method's business — the host calls
+    /// [`crate::bundle::parse_manifest`] itself.
+    pub fn manifest(mut self, m: Manifest) -> Pkg {
+        self.manifest = m;
         self
     }
 

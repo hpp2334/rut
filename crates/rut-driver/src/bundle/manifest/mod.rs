@@ -183,6 +183,29 @@ pub struct Manifest {
     pub consts: BTreeMap<String, f64>,
 }
 
+impl Manifest {
+    /// The structural constructor for hand worlds (tests, examples,
+    /// hosts building a world in memory): a `type = "lib"` manifest
+    /// named `name` whose `deps` table carries one PRESENCE-ONLY row
+    /// per entry of `deps` — an empty descriptor map. This bypasses
+    /// the json grammar, so the empty map is legal HERE only:
+    /// `rut.jsonc` text still refuses a pathless descriptor (the
+    /// grammar's own law, untouched). The row says "this pkg declares
+    /// that head" — nothing more; a walked dep's rows keep their
+    /// source descriptors.
+    pub fn lib(name: &str, deps: &[&str]) -> Manifest {
+        Manifest {
+            name: Some(name.to_string()),
+            pkg_type: PkgType::Lib,
+            deps: deps
+                .iter()
+                .map(|d| (d.to_string(), BTreeMap::new()))
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
 /// A malformed manifest — a load error, never a runtime trap.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 #[error("{0}")]
@@ -873,6 +896,26 @@ mod tests {
         // the sanctioned both-kinds pairing parses (pouch in peer + dev)
         assert!(m.dev_deps.contains_key("pouch"));
         assert_eq!(m.dev_deps.get("pouch").unwrap().get("path").unwrap(), "../pouch");
+    }
+
+    #[test]
+    fn manifest_lib_builds_presence_only_rows_the_grammar_rejects() {
+        // the structural constructor: a lib manifest whose deps rows
+        // are presence-only (empty descriptor maps) — legal HERE only,
+        // the same shape as text refuses
+        let m = Manifest::lib("app", &["ink", "pouch"]);
+        assert_eq!(m.name.as_deref(), Some("app"));
+        assert_eq!(m.pkg_type, PkgType::Lib);
+        assert!(!m.type_declared);
+        assert!(m.deps.contains_key("ink") && m.deps.contains_key("pouch"));
+        assert!(m.deps.get("ink").unwrap().is_empty(), "presence-only");
+        // the json grammar keeps its law: a pathless descriptor in TEXT
+        // refuses loudly
+        let err = parse_manifest(r#"{"name": "app", "deps": {"ink": {}}}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "deps.ink: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
+        );
     }
 
     #[test]

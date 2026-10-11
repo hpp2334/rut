@@ -395,6 +395,15 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         matches!(sf.body, rut_driver::PkgBody::Host { .. }),
         "the host pkg rode along as a host body"
     );
+    // the first-mount edge + the structural manifest: a group records
+    // the ARCHIVE ROOT as its puller, and every archive pkg rides its
+    // own in-archive manifest
+    let mf = session.pkg("m").expect("m mounted");
+    assert_eq!(sf.mounted_by.as_deref(), Some("main"), "the archive root pulled its groups");
+    assert_eq!(mf.mounted_by.as_deref(), Some("main"));
+    assert!(session.pkg("main").unwrap().mounted_by.is_none(), "the bundle root has no parent");
+    assert_eq!(mf.manifest.name.as_deref(), Some("m"));
+    assert!(mf.manifest.deps.contains_key("s"), "the group's own dep rows ride");
     let g = rut_driver::RutRun::new()
         .pkgs(&session)
         .entrypoint(&session.root)

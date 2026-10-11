@@ -14,7 +14,7 @@
 //! (`sib_a`/`sib_b` ride the shared inline `pouch`; `cons_sibs`
 //! imports both).
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use rut_driver::Seeds;
@@ -96,6 +96,33 @@ fn t10_sibling_imports_of_a_shared_inline_pkg_compile() {
     let loaded = load("cons_sibs").expect("mount");
     assert_eq!(loaded.root, "cons_sibs");
     assert_eq!(run_main(loaded), 16, "Slot::first() + Crate::rest() = 7 + 9");
+}
+
+#[test]
+fn walked_pkgs_carry_their_manifest_and_first_mount_edge() {
+    // the structural-manifest law: every walked pkg rides its OWN
+    // parsed manifest (dep rows included), and `mounted_by` records the
+    // FIRST-mount edge — the parent spec whose dep row pulled it (the
+    // walk root itself has none). sib_a walks before sib_b, so the
+    // shared `pouch` records sib_a's edge even though sib_b declares
+    // it too.
+    let loaded = load("cons_sibs").expect("mount");
+    let by_spec: BTreeMap<_, _> = loaded.pkgs.iter().map(|p| (p.spec.as_str(), p)).collect();
+    let root = by_spec["cons_sibs"];
+    assert!(root.mounted_by.is_none(), "the walk root has no parent");
+    assert_eq!(root.manifest.name.as_deref(), Some("cons_sibs"));
+    assert!(root.manifest.deps.contains_key("sib_a"), "the root's own dep rows ride");
+    let sib_a = by_spec["sib_a"];
+    assert_eq!(sib_a.mounted_by.as_deref(), Some("cons_sibs"));
+    assert_eq!(sib_a.manifest.name.as_deref(), Some("sib_a"));
+    assert!(sib_a.manifest.deps.contains_key("pouch"));
+    let pouch = by_spec["pouch"];
+    assert_eq!(
+        pouch.mounted_by.as_deref(),
+        Some("sib_a"),
+        "first mount wins — sib_a's edge, not sib_b's"
+    );
+    assert!(pouch.manifest.deps.contains_key("base"), "pouch's own dep rows ride");
 }
 
 #[test]

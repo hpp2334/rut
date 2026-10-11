@@ -175,7 +175,8 @@ fn pack_dir_opts_locked(
         match source {
             PkgSource::Dir(gdir) => {
                 let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
-                mount_dev_table(&mut world, &src, gdir, &dm, map, lock).map_err(rut_driver::pack::PackError::from)?;
+                mount_dev_table(&mut world, &src, gdir, spec, &dm, map, lock)
+                    .map_err(rut_driver::pack::PackError::from)?;
             }
             PkgSource::Archive { .. } => {
                 let dm = group_manifest(source, &world.archives);
