@@ -18,6 +18,7 @@ checkout, or a plain `cargo build --release`
 ```sh
 rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
 rut new <dir>
+rut install <dir> [--locked]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
 rut fetch <dir>
@@ -42,9 +43,9 @@ loose-file shape:
 | `mod.rutbundle` | the packed form of the same contract ([module bundles](bundles.md)) |
 
 Anything else is refused at the door (exit 2): a loose `.rut` file is
-not a runnable unit — give the directory a `rut.jsonc`
-(`{"name": "…", "entry": {"lib": "./<file>.rut"}}` — JSONC: `//`
-comments and trailing commas are legal), or run a packed
+not a runnable unit — give the directory a `rut.jsonc` naming the
+package (`{"name": "…"}` — the root module is `mod.rut` beside it;
+JSONC: `//` comments and trailing commas are legal), or run a packed
 `.rutbundle`.
 
 Flags and defaults:
@@ -82,9 +83,10 @@ runnable module ([host fns and declaration files](host-fns.md)).
 rut new hello            # scaffold a hello-world module directory
 ```
 
-Scaffolds a hello-world module directory: the manifest with the full
-swappable std set as pinned url deps, plus the root module — the same
-bytes as [your first rut program](../quick-start/first-program.md).
+Scaffolds a hello-world module directory in **three files**: the
+manifest with the full swappable std set as **unpinned** url deps, the
+matching `rut.lock` (the std set's pins), and the root module — the
+same bytes as [your first rut program](../quick-start/first-program.md).
 The directory is runnable as-is: `rut run hello` prints `hello, rut!`.
 
 Behavior:
@@ -92,12 +94,12 @@ Behavior:
 | item | behavior |
 |---|---|
 | package name | derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the manifest's law). An illegal name is refused, never sanitized (exit 2) |
-| clobber refusal | a target already holding a `rut.jsonc` or a `mod.rut` is refused (exit 2, naming the file) — other pre-existing files are fine |
+| clobber refusal | a target already holding a `rut.jsonc`, a `mod.rut`, or a `rut.lock` is refused (exit 2, naming the file) — other pre-existing files are fine |
 | parents | created as needed — `rut new a/b/hello` works |
-| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as pinned url deps at the `@std-v9` tag; `mod.rut` — the ink hello |
-| first run | fetches the std set (9 bundles) into `<dir>/.rut/cache` — `rut fetch <dir>` pre-warms without running |
+| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v9` tag; `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `mod.rut` — the ink hello |
+| first run | fetches the std set (9 bundles) into `<dir>/.rut/cache`; `rut install <dir>` or `rut fetch <dir>` pre-warms without running |
 
-The two created files, for `rut new hello` — both verbatim:
+The three created files, for `rut new hello` — all verbatim:
 
 ```text
 {
@@ -106,23 +108,44 @@ The two created files, for `rut new hello` — both verbatim:
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag,
-  // sha256-pinned here — the pin is law at the mount door on every
-  // load). Unused deps are legal: host pkgs merge inert unless the
-  // program mounts their pkg, inline pkgs inline per-using-consumer —
-  // this hello (ink only) runs clean with the full set declared.
+  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag).
+  // The pins live in `rut.lock` beside this file (machine-generated:
+  // the scaffold wrote them; `rut install` re-pins after a dep edit —
+  // the sha256 key is retired from manifest rows). Unused deps are
+  // legal: host pkgs merge inert unless the program mounts their pkg,
+  // inline pkgs inline per-using-consumer — this hello (ink only)
+  // runs clean with the full set declared.
   "name": "hello",
   "deps": {
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
-    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle", "sha256": "2a45f7279797446bc7bb8e1ed31f9ac0de275e1d615f50f5439ab87a5e1c4f8a" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle", "sha256": "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle", "sha256": "a39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983" },
-    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle", "sha256": "c27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e" },
-    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle", "sha256": "61974c5c60e8c85fe9a155b46cf965dfe2ba0dfcd0451d0d46d55145cabd5407" },
-    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle", "sha256": "b22614a88d62f711ec061cebd573b452f93c6ef85b96fbed8531cf012aae8353" },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle", "sha256": "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle" }
   }
+}
+
+// hello/rut.lock
+// rut.lock — generated by `rut install`; commit it. Rows sorted by url;
+// the sha256 is law at the mount door on every load.
+{
+  "format": "rutlock",
+  "format_version": 1,
+  "deps": [
+    { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle",     "sha256": "61974c5c60e8c85fe9a155b46cf965dfe2ba0dfcd0451d0d46d55145cabd5407" },
+    { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle",     "sha256": "2a45f7279797446bc7bb8e1ed31f9ac0de275e1d615f50f5439ab87a5e1c4f8a" },
+    { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle",  "sha256": "b22614a88d62f711ec061cebd573b452f93c6ef85b96fbed8531cf012aae8353" },
+    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle",     "sha256": "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a" },
+    { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle",      "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" },
+    { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle",     "sha256": "a39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983" },
+    { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle",  "sha256": "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02" },
+    { "pkg": "pouch",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle",    "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
+    { "pkg": "strbuild", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle", "sha256": "c27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e" }
+  ]
 }
 
 // hello/mod.rut
@@ -134,6 +157,64 @@ entry fn main() {
     log.info(f"hello, {name}!");
 }
 ```
+
+## `install`
+
+```sh
+rut install app/             # resolve the url deps, write rut.lock
+rut install app/ --locked    # CI: verify against rut.lock, write nothing
+```
+
+Resolves the closure's url deps and **pins them in `rut.lock`** — the
+pin ledger beside the walk root's `rut.jsonc`, one per root, **committed**
+(like Cargo.lock): it is what makes everyone's build resolve the same
+bytes. The lane: collect every url row the closure declares (the walk's
+own collection — a path dep's url rows are collected with it, so the
+root's lock pins the whole closure), fetch each cache-first and
+sequentially, mount-validate the whole graph against the **computed**
+pins (install never writes a lock over bytes that do not load), then
+write `<dir>/rut.lock` atomically. A `.rutbundle` argument is refused
+(exit 2): bundles are closed — there is nothing to install.
+
+The lock is machine-generated and **byte-deterministic** — rows sorted
+by url, fixed field order (`pkg`/`url`/`sha256`), a header comment, a
+trailing newline — so the same closure renders the same bytes and the
+file diffs cleanly. The url is the identity (the fetch key; one url,
+one row); `pkg` is display-only (the first dep name that spelled the
+url). Parsing is JSONC-lenient like the manifest's (comments and
+trailing commas legal — hand-edits load), and the value refusals are
+path-targeted (`deps[1].sha256: must be 64 hex digits…`). An empty
+closure still writes the empty-deps lock: the record that the closure
+resolved to nothing.
+
+The streams: progress on **stderr**, summaries on **stdout** —
+
+```text
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle
+install: ink — downloaded (4193 bytes)
+install: 1 url deps resolved — 1 downloaded, 0 cache hits (4193 bytes total)
+rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)
+```
+
+(a warm cache swaps the miss pair for one `install: ink — cache hit
+(4193 bytes)` line — no fake re-download flash; a re-run over an
+identical lock prints `rut.lock unchanged (1 rows, no drift)` and
+writes nothing).
+
+`--locked` never writes and never evicts: it fetches the same closure
+and verifies every row against the existing lock — the CI gate.
+
+| `--locked` case | behavior |
+|---|---|
+| lock fresh | `install: 1 url deps verified against rut.lock — 0 downloaded, 1 cache hits, 0 drift`, exit 0 |
+| no lock, non-empty closure | the install recipe, exit 2: ``install: no rut.lock in <dir> — run `rut install` first`` |
+| no lock, empty closure | passes lockless — a no-dep project needs no lock |
+| a dep's url has no lock row | the `+` diff row, exit 2: ``+ <url> (dep `X` has no rut.lock row)`` |
+| fetched bytes break the lock's pin | the `~` row, exit 2 — it names the url and BOTH hashes: ``~ <url> (dep `X` pins <lock sha>, the fetched bytes hash to <served sha>)`` |
+| a lock row no dep names anymore | the `-` row, exit 2: ``- <url> (no dep names this url anymore)`` |
+
+Any drift prints `install: --locked found drift, rut.lock untouched:`
+and the diff block; the lock file on disk is byte-for-byte what it was.
 
 ## `fmt`
 
@@ -208,9 +289,13 @@ rut fetch app/            # CI: warm the cache while the network is up
 ```
 
 Walks a module **directory** with the url-dep remote and discards the
-result — every `deps` url is fetched (or found in the cache) and
-pinned, so a later offline `run` hits only the cache. A `.rutbundle`
-argument is refused: bundles are closed — there is nothing to fetch.
+result — every `deps` url is fetched (or found in the cache) and the
+graph is then loaded and thrown away, so a later offline `run` hits
+only the cache. The load is the same law every load obeys: the walk
+root's `rut.lock` must pin every collected url row, so `rut fetch` is
+the *re*-warm lane — [`install`](#install) is the lane that writes the
+lock a fetch (and every run) travels with. A `.rutbundle` argument is
+refused (exit 2): bundles are closed — there is nothing to fetch.
 The cache and the eviction law are the same lane `run`/`pack` use:
 
 | item | behavior |
@@ -218,7 +303,7 @@ The cache and the eviction law are the same lane `run`/`pack` use:
 | cache root | `<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the walk never reads env). Entries named `<sha256(url)>.rutbundle` |
 | cache-first | a hit never touches the network — offline reloads are the point |
 | miss | GET (redirects on), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename) |
-| poisoned entry | the `sha256` pin is the loader's law at the mount door; when it refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals |
+| poisoned entry | the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals |
 
 The wire is `rut-native`'s `http` feature (default on) — a build with
 `default-features = false` (the wasm graphs) has no transport at all:
@@ -239,9 +324,11 @@ The file extension selects the parser mode:
 |---|---|
 | `0` | success |
 | `1` | compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; `pack` or output-write failure |
-| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; `fmt` finds no `.rut` files under a directory; a url dep's `sha256` pin refusal (the poisoned cache entry is evicted) |
+| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned cache entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`mod.rut`/`rut.lock`, or an illegal package name |
 
-Diagnostics go to stderr; `pack`'s success line goes to stdout.
+Diagnostics go to stderr; the success summaries (`pack`'s packed line,
+`install`/`fetch`'s resolved/verified lines and lock reports) go to
+stdout.
 
 ## Notes
 

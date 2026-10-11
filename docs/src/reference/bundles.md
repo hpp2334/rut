@@ -172,31 +172,37 @@ rut.jsonc](project-structure.md); the dependency semantics are
 
 ## Url deps — bundles by reference
 
-A consumer may pin a bundle by url instead of vendoring it:
+A consumer may mount a bundle by url instead of vendoring it:
 
 ```jsonc
 {
   "deps": {
-    "server": { "url": "https://example.com/server.rutbundle", "sha256": "<64-hex>" }
+    "server": { "url": "https://example.com/server.rutbundle" }
   }
 }
 ```
 
+The pin lives beside the manifest, in the walk root's `rut.lock`
+(`rut install` writes it — [the rut CLI](cli.md)): the manifest row
+names the url, the lock pins its bytes.
+
 The mount is the bundle mount, one gate earlier: the embedder's
 remote produces the bytes (`DepRemote` — the standard
 `rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and —
-before all of them — the **pin law**: the bytes must hash to the
-manifest row's `sha256`, on every load, or the load refuses naming the
-dep, the url, and both hashes. The url dep mounts as a **leaf**: its
-bundle brings the whole closure (every declared dep satisfied by an
-in-archive group — the closure law is unchanged, and a url row inside
-a packed bundle is inert metadata; loading a bundle never fetches).
+before all of them — the **pin law**: the url must have a lock row
+(an unpinned url refuses, naming `rut install`), and the bytes must
+hash to the lock row's `sha256`, on every load, or the load refuses
+naming the dep, the url, and both hashes. The url dep mounts as a
+**leaf**: its bundle brings the whole closure (every declared dep
+satisfied by an in-archive group — the closure law is unchanged, and a
+url row inside a packed bundle is inert metadata; loading a bundle
+never fetches).
 
 Because the manifest rides byte-for-byte, url rows carry into a
 consumer's own `rut pack` output, satisfied by the rode-along groups:
 the archive's groups re-encode from the consumer session's units (one
 `.rutc` path), source groups copy their file set under the new prefix,
-and the same manifest + pins still pack byte-identically. The pack
+and the same manifest + lock still pack byte-identically. The pack
 refuses, loudly and named, the cases that would emit a bundle the
 loader must reject: an archive source group still declaring `dev-deps`
 directories (vendor the dep), a compiled group the consumer's closure
@@ -319,21 +325,23 @@ artifacts ARE the delivery and the publish act is a git tag:
 {
   "deps": {
     "http": {
-      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutbundle",
-      "sha256": "<64-hex>"
+      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutbundle"
     }
   }
 }
 ```
 
-`<tag>`/`<sha256>` are placeholders — real pins live in the examples
-(anti-rot: docs never rot pins). The laws:
+`<tag>` is a placeholder — real urls live in the worked manifests, and
+the real pins live in each project's committed `rut.lock` (the
+in-repo examples' locks are the reference; anti-rot: docs never rot
+pins). The laws:
 
 - **Committed artifacts, immutable tags.** `scripts/pack-std::cjs`
   packs all 15 (deterministic — same input ⇒ byte-identical, so
   freshness is a pure equality gate: `--check` repacks and
-  byte-compiles, no network); `--pins` rewrites the example manifests'
-  url/sha256 rows; `--tag` prints the publish commands. Tags advance
+  byte-compiles, no network; the retired `--pins` flag is gone — the
+  pins live in `rut.lock` now, written by `rut install`, and no
+  manifest tool rewrites them anymore). Tags advance
   (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively.
 - **What a compiled bundle serves.** Instantiation is owner-anchored:
   a compiled owner carries the generic instantiations its own pack

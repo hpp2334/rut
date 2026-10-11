@@ -43,7 +43,7 @@ nightly pin, a runnable smoke test) is
 
 ```rust
 // 1. The walk (rut-native): a directory's whole closure as walked
-//    pkgs — `[deps]` recursion, the sha256 pins, the peer gate.
+//    pkgs — `[deps]` recursion, the rut.lock pins, the peer gate.
 let loaded = block_on(rut_native::load_dir_with(
     std::path::Path::new("plugins/server"),
     &rut_native::HttpRemote::project_local(project_dir),
@@ -149,8 +149,8 @@ directory — or a packed `.rutbundle` — and yields the closure:
 
 | lane | what it does |
 |---|---|
-| `load_dir(dir)` | the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch is an error), the `sha256` pin verified at the mount door, the root-only `[dev-deps]` pass, ONE peer-gate pass over the closed set. Url deps are the loud no-fetcher error. |
-| `load_dir_with(dir, &remote)` | the same walk; url `deps` rows are collected, fetched over the host's `DepRemote`, and pinned at the mount door |
+| `load_dir(dir)` | the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch is an error), the root's `rut.lock` read fresh (an unpinned url refuses, naming `rut install`), the lock pins verified at the mount door, the root-only `[dev-deps]` pass, ONE peer-gate pass over the closed set. Url deps are the loud no-fetcher error. |
+| `load_dir_with(dir, &remote)` | the same walk; url `deps` rows are collected, gated against the root's `rut.lock`, fetched over the host's `DepRemote`, and pinned at the mount door |
 | `load_dir_fetched(dir, &map)` | the walk over PRE-fetched url bytes — the sync core; tests and offline hosts hand a `url → bytes` map |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: a directory walks (above); a `.rutbundle` loads closed (below) |
 
@@ -245,9 +245,10 @@ impl rut_native::DepRemote for Mem {
 }
 ```
 
-The walk still owns WHAT the bytes are: the `sha256` pin is manifest
-law, verified at the mount door on every load — fresh fetch, cache
-hit, vendored map, test fixture.
+The walk still owns WHAT the bytes are: the pin is **lock law** — the
+root's `rut.lock` (url → sha256), gated before any fetch and verified
+at the mount door on every load — fresh fetch, cache hit, vendored
+map, test fixture.
 
 **The filesystem policy** is `rut_native::Source` — string keys, all
 key math in the impl. `FsSource::at(dir)` is the real filesystem with

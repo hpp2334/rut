@@ -83,8 +83,11 @@ source text by design; a partially translated book is a valid book.
 | keep-set | 保留集 | names that never rename（host ABI、exports、pkg specs） |
 | temporary-run lane | 临时运行车道 | the CLI's role — quick experiments (run/fmt/dump/pack)，不是交付路径；两条消费车道都叫车道 |
 | git dependency | git 依赖 | the Cargo dependency form that ships the engine crates |
-| pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定 |
-| fetch | 拉取 | the `DepRemote` contract → `DepRemote` 契约（代码不译）；`rut fetch` stays code |
+| pin | 固定值 | the sha256 pin → sha256 固定值；动词 pin（把依赖固定到某哈希）→ 固定；the pin's source is `rut.lock` — 固定值以 `rut.lock` 为源（the pin = lock law → 固定值即锁法则） |
+| rut.lock | `rut.lock` | stays code（同 `rut.jsonc`）；the pin ledger → 固定值清单；one per walk root → 每个遍历根一份；committed → 随清单一起提交；byte-deterministic → 字节确定 |
+| rut install | `rut install` | stays code；the lock-writing lane → 写入 `rut.lock` 的车道；`--locked` stays code（CI 校验车道，绝不写入） |
+| walk root | 遍历根 | the lock pins the whole closure at the walk root → 锁在遍历根固定整个闭包 |
+| fetch | 拉取 | the `DepRemote` contract → `DepRemote` 契约（代码不译）；`rut fetch` stays code（re-warm lane → 再预热车道） |
 | bracket marker | 括号标记 | `[disposal]` / `[iterable]` / `[constructor]` stay code；标记词不译——方括号即指定 |
 | marker | 标记 | the closed marker set → 封闭标记集；designation by bracket, not name → 以方括号指定，而非以名字指定 |
 | designated surface | 指定表面 | the three designated surfaces：`[disposal]`（引擎事件）、`[iterable]`（for-of 脱糖）、`[constructor]`（用户调用的 `Type(..)`）——stay code；the designation routes the call → 指定路由调用；designate → 指定 |

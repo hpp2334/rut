@@ -25,7 +25,7 @@ entry fn main() {
 
 Every rut program is a **module directory**: a `rut.jsonc` naming the
 package and its dependencies, plus the root module — `mod.rut`, the
-file the loader mounts. Create it and run the directory:
+file the loader mounts. Create it, install the deps, run the directory:
 
 ```sh
 mkdir hello
@@ -35,24 +35,40 @@ cat > hello/rut.jsonc <<'EOF'
   "name": "hello",
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
-    // std-v9 tag, pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
+    // std-v9 tag; the pin lives in rut.lock, one install below
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle" }
   }
 }
 EOF
-# save the program above as hello/mod.rut, then:
+cat > hello/mod.rut <<'EOF'
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("hello");
+    log.info(f"hello, rut!");
+}
+EOF
+rut install hello   # fetch ink, pin it, write hello/rut.lock
 rut run hello
 ```
 
 ```text
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle
+install: ink — downloaded (4193 bytes)
+install: 1 url deps resolved — 1 downloaded, 0 cache hits (4193 bytes total)
+rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)
 hello, rut!
 ```
 
 The run works from ANY directory — nothing about it assumes a clone of
-the toolchain's repo. The url row names the package on jsDelivr; the
-CLI fetches it once into the project's cache (`.rut/cache`), every
-later run is a pure cache hit, and `rut fetch hello` pre-warms the
-cache without running anything.
+the toolchain's repo. The url row names the package on jsDelivr;
+`rut install` fetched it once into the project's cache (`.rut/cache`)
+and pinned its sha256 in `hello/rut.lock` — the lock rides beside the
+manifest, committed, and every load verifies the fetched bytes against
+it (an unpinned url refuses at the door: `run `rut install``). Every
+later run is a pure cache hit, `rut install hello --locked` re-verifies
+the lock without writing (the CI lane), and `rut fetch hello` re-warms
+the cache without running anything.
 
 Three things to notice:
 
@@ -76,13 +92,13 @@ Three things to notice:
 Typing the directory by hand is the lesson — the manifest IS the
 program's door, and now you have written one. For the next directory,
 the CLI scaffolds it in one step: `rut new <dir>` writes exactly those
-two files — the manifest with the derived name (and, unlike the
-walkthrough above, the whole swappable std set as pinned url deps) and
-the same `mod.rut` — and `rut run <dir>` runs it
-([the rut CLI](../reference/cli.md)):
+three files — the manifest with the derived name (and, unlike the
+walkthrough above, the whole swappable std set as url deps), the
+matching `rut.lock` (the std set's pins), and the same `mod.rut` — and
+`rut run <dir>` runs it ([the rut CLI](../reference/cli.md)):
 
 ```sh
-rut new hello    # hello/rut.jsonc (the std set, pinned) + hello/mod.rut
+rut new hello    # hello/rut.jsonc (the std set) + hello/rut.lock + hello/mod.rut
 rut run hello
 ```
 
@@ -121,9 +137,9 @@ and the exact rules live in
 The formatter is the style — there is no configuration:
 
 ```sh
-rut fmt hello/main.rut         # rewrite in place
-rut fmt hello/main.rut --check # verify only (note: --check goes AFTER the path)
-rut fmt .                      # walk a directory tree, every *.rut file
+rut fmt hello/mod.rut         # rewrite in place
+rut fmt hello/mod.rut --check # verify only (note: --check goes AFTER the path)
+rut fmt .                     # walk a directory tree, every *.rut file
 ```
 
 `--check` prints `unformatted: <file>` and exits `1` when a file needs
@@ -136,7 +152,7 @@ refused loudly rather than half-formatted.
 a snippet behaves differently than you expect:
 
 ```sh
-rut dump hello/main.rut
+rut dump hello/mod.rut
 ```
 
 `dump` runs the lone module through the frontend *without* mounting the

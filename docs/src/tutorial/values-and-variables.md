@@ -268,22 +268,24 @@ it constantly.
 
 Put this in a module directory and run it: `literals/rut.jsonc` names
 the two packages the program uses, and the program is
-`literals/main.rut`:
+`literals/mod.rut`:
 
 ```jsonc
 // literals/rut.jsonc
 {
   "name": "literals",
-  "entry": { "lib": "./main.rut" },
 
   "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
+    // the pins live in literals/rut.lock — `rut install` writes it
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle" }
   }
 }
 ```
 
-Save the program as `literals/main.rut` and run `rut run literals`:
+Save the program as `literals/mod.rut`, then `rut install literals`
+(fetches the two url deps and writes `rut.lock`) and
+`rut run literals`:
 
 ```rut
 use pouch::{ Vec };

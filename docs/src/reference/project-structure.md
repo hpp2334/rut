@@ -33,14 +33,15 @@ and where everything lives in the toolchain tree.
 }
 
 // a consumer (an app directory): a `path` row for a sibling package
-// of your own, pinned url rows for the toolchain's packages
+// of your own, url rows for the toolchain's packages — the pins live
+// in the app's rut.lock (`rut install` writes it)
 {
   "name": "app",
 
   "deps": {
     "greet": { "path": "../greet" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle" }
   }
 }
 ```
@@ -52,7 +53,7 @@ The keys, all of them:
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
 | `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
-| `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
+| `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`). Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
 | `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `dev-deps` | mounted only while building/testing this pkg itself |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |

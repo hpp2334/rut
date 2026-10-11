@@ -103,8 +103,9 @@ greet/
   "name": "greet",
 
   "deps": {
-    // the toolchain's pouch package, from jsDelivr — pinned by sha256
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" }
+    // the toolchain's pouch package, from jsDelivr — the pin lives in
+    // the app's rut.lock (one lock per walk root)
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
   }
 }
 ```
@@ -153,8 +154,9 @@ surface `ink_host`; you never spell it):
   "deps": {
     // your own package: a sibling directory
     "greet": { "path": "../pkg" },
-    // the toolchain's ink package, from jsDelivr — pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6" }
+    // the toolchain's ink package, from jsDelivr — the pin lives in
+    // this app's rut.lock
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle" }
   }
 }
 ```
@@ -173,13 +175,19 @@ entry fn main() {
 }
 ```
 
-Run the app from its directory:
+Run the app from its directory — `rut install` fetches the url deps
+and writes the app's `rut.lock` (the pin ledger every load verifies
+against; it pins the whole closure, including the url row `../pkg`
+declares), then `rut run .`:
 
 ```sh
+rut install .
 rut run .
 ```
 
 ```text
+install: 2 url deps resolved — 2 downloaded, 0 cache hits (10594 bytes total)
+rut.lock written: 2 rows (2 added, 0 changed, 0 dropped)
 dear rut, hello from a package
 ```
 

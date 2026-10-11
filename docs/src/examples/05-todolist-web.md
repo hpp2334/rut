@@ -216,10 +216,10 @@ privacy boundary, which is why there are exactly two
   "deps": {
     // the sibling package — the consumer's own local package
     "ui":      { "path": "../ui" },
-    // the toolchain's packages, from jsDelivr at the std-v9 tag,
-    // pinned by sha256
-    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle", "sha256": "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02" }
+    // the toolchain's packages, from jsDelivr at the std-v9 tag —
+    // the pins live in this walk root's rut.lock
+    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" }
   }
 }
 ```
@@ -234,8 +234,8 @@ package, `pub` crosses to biz — and the grep gate pins that biz's
 import set stays exactly the two-package vocabulary. The native lane
 mounts the *directory* — the manifest, not a Rust fn, is the module
 list. The `path` row is for the project's own sibling package; the
-toolchain's packages ride in as pinned url deps from the std tree's
-jsDelivr CDN
+toolchain's packages ride in as url deps from the std tree's jsDelivr
+CDN, pinned by each walk root's committed `rut.lock`
 ([dependency kinds](../reference/dependency-kinds.md)). The wasm lane
 mounts the same packages by hand as a mirror (the app's own tree
 crossing the ABI as the module-rows wire), and a test pins both lanes
