@@ -1,8 +1,7 @@
 //! The dep tables' descriptor grammars: `deps` (one source — `path` or
-//! `url` — plus, only beside `url`, the `sha256` pin) and the
-//! `peer-deps`/`dev-deps` shape (`path`, `lib`, `optional`). All
-//! diagnostics are PATH-TARGETED: the descriptor's path (`deps.pouch`)
-//! prefixes every refusal.
+//! `url`) and the `peer-deps`/`dev-deps` shape (`path`, `lib`,
+//! `optional`). All diagnostics are PATH-TARGETED: the descriptor's
+//! path (`deps.pouch`) prefixes every refusal.
 
 use std::collections::BTreeMap;
 
@@ -24,14 +23,20 @@ pub(super) fn check_dep_key(table: &str, key: &str) -> Result<(), ManifestError>
 }
 
 /// A `deps` descriptor: exactly ONE source — `path` (a directory) or
-/// `url` (a remote `.rutbundle`), never both, never neither — plus,
-/// only beside `url`, the `sha256` pin. `optional` is rejected (it is
-/// a `peer-deps` attribute); any other key is the entry strictness —
-/// a path-targeted error.
+/// `url` (a remote `.rutbundle`), never both, never neither. The
+/// `sha256` pin is RETIRED from the grammar — pins live in `rut.lock`
+/// — so the strict lane refuses the key loudly (the `host_scope`
+/// treatment: a silent ignore would surface as an unpinned fetch
+/// later), while the bundle reader's compat lane keeps parsing it onto
+/// the row as INERT metadata (a published bundle is forever old; url
+/// rows inside bundles are already inert — bundles are closed, never
+/// fetch). `optional` is rejected (it is a `peer-deps` attribute); any
+/// other key is the entry strictness — a path-targeted error.
 pub(super) fn parse_deps_descriptor(
     table: &str,
     spec: &str,
     value: &Value,
+    compat: bool,
 ) -> Result<BTreeMap<String, String>, ManifestError> {
     let path = format!("{table}.{spec}");
     let obj = expect_object(&path, value)?;
@@ -45,8 +50,13 @@ pub(super) fn parse_deps_descriptor(
             "path" | "url" => {
                 out.insert(k.clone(), expect_field_string(&path, k, v)?);
             }
-            "sha256" => {
+            "sha256" if compat => {
                 out.insert(k.clone(), parse_pin(&path, k, v)?);
+            }
+            "sha256" => {
+                return Err(ManifestError(format!(
+                    "{path}: 'sha256' retired — pins live in rut.lock (run `rut install`)"
+                )));
             }
             "optional" => {
                 return Err(ManifestError(format!(
@@ -77,17 +87,16 @@ pub(super) fn parse_deps_descriptor(
                 "{path}: 'url' must be an http(s) url, found '{url}'"
             )));
         }
-    } else if out.contains_key("sha256") {
-        return Err(ManifestError(format!(
-            "{path}: 'sha256' pins a url — beside 'path' it has no meaning"
-        )));
     }
     Ok(out)
 }
 
-/// The sha256 pin: exactly 64 hex digits, stored LOWERCASE — the pin
-/// law compares the fetched bytes' hash against it, so the manifest
-/// normalizes first and the comparison is byte-exact.
+/// The sha256 pin's OLD value laws, kept for the compat lane only:
+/// exactly 64 hex digits, stored LOWERCASE — the pin law compares the
+/// fetched bytes' hash against it, so the parse normalizes first and
+/// the comparison is byte-exact. The directory grammar refuses the key
+/// before this can speak (see the retirement arm above); the lock file
+/// carries the law forward (`crates/rut-driver/src/lock.rs`).
 pub(super) fn parse_pin(
     path: &str,
     key: &str,

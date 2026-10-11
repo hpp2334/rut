@@ -30,7 +30,6 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, Table};
 
-use rut_driver::sha256_hex;
 use rut_native::load_dir_with;
 
 
@@ -188,10 +187,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
     let mut rows = String::new();
     for key in ["futures", "http", "json", "nmapset", "pouch"] {
         let (url, bytes) = artifact(key);
-        rows.push_str(&format!(
-            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
-            sha256_hex(&bytes)
-        ));
+        rows.push_str(&format!("\"{key}\": {{\"url\": \"{url}\"}},\n"));
         table.insert(url, bytes);
     }
     let base = std::env::temp_dir().join(format!("rut-std-cdn-six-{}", std::process::id()));
@@ -237,10 +233,7 @@ fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
     table.insert(url.clone(), torn_bytes.clone());
     let err = load_and_compile(
         &base,
-        &format!(
-            "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
-            sha256_hex(&torn_bytes)
-        ),
+        &format!("\"pouch\": {{\"url\": \"{url}\"}}"),
         table,
         "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
     )
@@ -292,10 +285,7 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
     table.insert(url.clone(), bytes.clone());
     let (diags, program, _session) = load_compile_run(
         &base,
-        &format!(
-            "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
-            sha256_hex(&bytes)
-        ),
+        &format!("\"pouch\": {{\"url\": \"{url}\"}}"),
         table,
         "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    items.push(9);\n    return items.len() as i32;\n}\n",
     )
@@ -328,10 +318,7 @@ fn a_json_peer_shape_compiles_with_the_consumer_type() {
     let mut rows = String::new();
     for key in ["json", "pouch", "nmapset"] {
         let (url, bytes) = artifact(key);
-        rows.push_str(&format!(
-            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
-            sha256_hex(&bytes)
-        ));
+        rows.push_str(&format!("\"{key}\": {{\"url\": \"{url}\"}},\n"));
         table.insert(url, bytes);
     }
     let base = std::env::temp_dir().join(format!("rut-std-cdn-json-{}", std::process::id()));
@@ -430,10 +417,7 @@ fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
     let mut rows = String::new();
     for key in ["json", "pouch", "nmapset"] {
         let (url, bytes) = artifact(key);
-        rows.push_str(&format!(
-            "\"{key}\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}},\n",
-            sha256_hex(&bytes)
-        ));
+        rows.push_str(&format!("\"{key}\": {{\"url\": \"{url}\"}},\n"));
         table.insert(url, bytes);
     }
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join("strbuild");
@@ -475,10 +459,7 @@ fn the_load_time_compile_is_deterministic() {
         table.insert(url.clone(), bytes.clone());
         let (diags, program, _session) = load_compile_run(
             &base,
-            &format!(
-                "\"pouch\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
-                sha256_hex(&bytes)
-            ),
+            &format!("\"pouch\": {{\"url\": \"{url}\"}}"),
             table,
             src,
         )
@@ -506,10 +487,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        format!(
-            r#"{{"name": "app", "deps": {{"strbuild": {{"url": "{url}", "sha256": "{}"}}}}}}"#,
-            sha256_hex(&std::fs::read(dist_std().join("strbuild.rutbundle")).unwrap())
-        ),
+        format!(r#"{{"name": "app", "deps": {{"strbuild": {{"url": "{url}"}}}}}}"#),
     )
     .unwrap();
     std::fs::write(
@@ -571,10 +549,7 @@ fn ambient_std_and_a_url_std_bundle_coexist() {
     table.insert(url.clone(), bytes.clone());
     let diags = load_and_compile(
         &base,
-        &format!(
-            "\"core\": {{\"url\": \"{url}\", \"sha256\": \"{}\"}}",
-            sha256_hex(&bytes)
-        ),
+        &format!("\"core\": {{\"url\": \"{url}\"}}"),
         table,
         "entry fn main() -> i32 {\n    return 7;\n}\n",
     )

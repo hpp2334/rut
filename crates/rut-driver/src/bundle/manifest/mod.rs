@@ -35,13 +35,18 @@
 //! { "deps": { "pouch": { "path": "rut/pouch" } } }
 //! ```
 //!
-//! or by url — a packed `.rutbundle` fetched by the host and pinned by
-//! its sha256:
+//! or by url — a packed `.rutbundle` fetched by the host:
 //!
 //! ```json
-//! { "deps": { "pouch": { "url": "https://example.com/pouch.rutbundle",
-//!                        "sha256": "<64-hex>" } } }
+//! { "deps": { "pouch": { "url": "https://example.com/pouch.rutbundle" } } }
 //! ```
+//!
+//! The url row carries NO pin: the old `sha256` key is RETIRED — pins
+//! live in `rut.lock` beside the walk root's manifest (written by
+//! `rut install`). The directory grammar refuses the key loudly,
+//! naming the fix; a manifest riding INSIDE a published bundle parses
+//! through the compat lane, where the key still lands on the row as
+//! inert metadata (bundles are closed — their url rows never fetch).
 //!
 //! Resolution is exact and single-step: a use path resolves only if a
 //! module with that `name` is mounted — nothing is derived. Package
@@ -71,8 +76,10 @@
 
 mod descriptor;
 mod expect;
-mod jsonc;
-mod walk;
+// crate-visible: the lock file parses through the same JSONC front
+// stage (strip) and keeps the same syntax-error shape (syntax_error)
+pub(crate) mod jsonc;
+pub(crate) mod walk;
 
 use std::collections::BTreeMap;
 
@@ -142,8 +149,10 @@ pub struct Manifest {
     /// unknown
     pub format_version: Option<u64>,
     /// `deps` — exact specifier → descriptor: exactly one source key,
-    /// `path` (a directory) or `url` (a remote `.rutbundle`), plus
-    /// `sha256` (the pin) only beside `url`. Kept for the host to
+    /// `path` (a directory) or `url` (a remote `.rutbundle`). The old
+    /// `sha256` pin key is retired from the grammar (pins live in
+    /// `rut.lock`): the strict lane refuses it, the bundle reader's
+    /// compat lane parses it as inert metadata. Kept for the host to
     /// resolve; the Session does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `peer-deps` — REQUIRED by default; the CONSUMER
@@ -953,28 +962,81 @@ mod tests {
         );
     }
 
-    // ---- the url source kind: one descriptor, one source; the pin ----
+    // ---- the url source kind: one descriptor, one source; the
+    // retired pin ----
 
     #[test]
-    fn url_dep_parses_and_pin_normalizes_to_lowercase() {
+    fn url_dep_parses_and_the_pin_is_retired_in_directories() {
+        // the url row's new shape: no pin — pins live in rut.lock
         let m = parse_manifest(
+            r#"{"name": "app", "deps": {"pouch": {"url": "https://example.com/pouch.rutbundle"}}}"#,
+        )
+        .unwrap();
+        let d = m.deps.get("pouch").unwrap();
+        assert_eq!(d.get("url").unwrap(), "https://example.com/pouch.rutbundle");
+        assert!(d.get("sha256").is_none(), "the pin is retired from the grammar");
+        // the retirement is LOUD (the host_scope treatment): the key's
+        // existence is the crime, never a silent ignore
+        let err = parse_manifest(
+            r#"{"name": "app", "deps": {"pouch": {"url": "https://example.com/pouch.rutbundle", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "deps.pouch: 'sha256' retired — pins live in rut.lock (run `rut install`)"
+        );
+        // the refusal fires even value-shaped wrong (bad hex, beside
+        // path — the key is retired, not its value)
+        let err = parse_manifest(
+            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "sha256": "nothex"}}}"#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().starts_with("deps.pouch: 'sha256' retired"),
+            "{err}"
+        );
+        let err = parse_manifest(
+            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "nothex"}}}"#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().starts_with("deps.pouch: 'sha256' retired"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_compat_lane_keeps_the_pin_as_inert_metadata() {
+        // a PUBLISHED bundle is forever old: the pin parses onto the
+        // row under the old value laws, stored LOWERCASE — inert (url
+        // rows inside bundles never fetch)
+        let m = parse_manifest_compat(
             r#"{"name": "app", "deps": {"pouch": {"url": "https://example.com/pouch.rutbundle", "sha256": "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"}}}"#,
         )
         .unwrap();
         let d = m.deps.get("pouch").unwrap();
         assert_eq!(d.get("url").unwrap(), "https://example.com/pouch.rutbundle");
-        // the pin law compares byte-exactly — the manifest normalizes first
         assert_eq!(
             d.get("sha256").unwrap(),
             "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
         );
-        // an unpinned url is legal (the pin is optional; reproducible
-        // packs want one)
-        let m = parse_manifest(
-            r#"{"name": "app", "deps": {"pouch": {"url": "http://localhost:8080/pouch.rutbundle"}}}"#,
+        // the old beside-path refusal is retired with the key: inert is
+        // inert, whatever it sits beside
+        let m = parse_manifest_compat(
+            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}}}"#,
         )
         .unwrap();
-        assert!(m.deps.get("pouch").unwrap().get("sha256").is_none());
+        assert!(m.deps.get("pouch").unwrap().get("sha256").is_some());
+        // the old value laws still hold there (the entry.lib treatment):
+        // the hex law speaks on the compat lane
+        let err = parse_manifest_compat(
+            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "sha256": "nothex"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "deps.pouch: 'sha256' must be 64 hex digits, found 'nothex'"
+        );
     }
 
     #[test]
@@ -993,24 +1055,6 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "deps.pouch: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
-        );
-        // sha256 beside path (no url) is meaningless
-        let err = parse_manifest(
-            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "deps.pouch: 'sha256' pins a url — beside 'path' it has no meaning"
-        );
-        // bad hex
-        let err = parse_manifest(
-            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "sha256": "nothex"}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "deps.pouch: 'sha256' must be 64 hex digits, found 'nothex'"
         );
         // non-http(s)
         let err =

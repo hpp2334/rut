@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::block_on;
 
-use rut_driver::{sha256_hex, PkgBody, PackOpts};
+use rut_driver::{PkgBody, PackOpts};
 use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError};
 
 // ------------------------------------------------------------------
@@ -172,14 +172,13 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     );
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
-    let pin = sha256_hex(&bytes);
 
     let app = scratch("urllane-app").join("app");
     write(
         &app,
         "rut.jsonc",
         &format!(
-            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}", "sha256": "{pin}"}}}}}}"#
+            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
     write(
@@ -364,13 +363,13 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
 }
 
 #[test]
-fn url_lane_pin_and_name_key_hold_for_host_bundles() {
+fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
     let dir = host_world("pins", "logger_host", "logger_host.d.rut", "pub host fn log(line: str);\n");
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
 
-    // a VALID but wrong pin refuses at the door (the pin law precedes
-    // everything)
+    // the retired manifest pin refuses at parse (pins live in
+    // rut.lock) — even value-shaped right, even with a fetcher in hand
     let wrong = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
     let app = scratch("pins-app").join("app");
     write(
@@ -386,7 +385,8 @@ fn url_lane_pin_and_name_key_hold_for_host_bundles() {
     let err = block_on(load_dir_with(&app, &common::Table::from(table.clone())))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("sha256 pin mismatch"), "{err}");
+    assert!(err.contains("deps.logger_host: 'sha256' retired"), "{err}");
+    assert!(err.contains("rut.lock"), "{err}");
 
     // name-vs-key: the key spells the mounted name
     let app2 = scratch("pins-app2").join("app2");

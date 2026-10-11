@@ -15,7 +15,9 @@ use super::{valid_spec, Manifest, ManifestError, PkgType};
 // prefix, the parser's own wording carries the rest. ----
 
 /// A JSON syntax error as one `line N: <message>` diagnostic.
-pub(super) fn syntax_error(err: &serde_json::Error) -> ManifestError {
+/// Crate-visible: the lock file parses through the same JSONC front
+/// stage and keeps the same error shape.
+pub(crate) fn syntax_error(err: &serde_json::Error) -> ManifestError {
     let line = err.line().max(1);
     let raw = err.to_string();
     let message = strip_location(&raw).unwrap_or(raw.as_str());
@@ -122,7 +124,7 @@ pub(super) fn walk_top_lane(
         // field form, so the manifest is their only spelling
         "consts" => walk_consts(value, m)?,
         "entry" => walk_entry(value, m, compat)?,
-        "deps" => walk_deps(value, m)?,
+        "deps" => walk_deps(value, m, compat)?,
         "peer-deps" => walk_peers(value, "peer-deps", m)?,
         "dev-deps" => walk_peers(value, "dev-deps", m)?,
         "style" => walk_style(value, m)?,
@@ -177,15 +179,23 @@ pub(super) fn walk_entry(value: &Value, m: &mut Manifest, compat: bool) -> Resul
 }
 
 /// The `deps` object: exact specifier → descriptor; the descriptor
-/// laws are [`parse_deps_descriptor`]'s.
-pub(super) fn walk_deps(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
+/// laws are [`parse_deps_descriptor`]'s. `compat` is the bundle
+/// reader's lane — there the retired `sha256` pin still parses (inert).
+pub(super) fn walk_deps(
+    value: &Value,
+    m: &mut Manifest,
+    compat: bool,
+) -> Result<(), ManifestError> {
     let table = expect_object("deps", value)?;
     for (spec, v) in table {
         if spec.starts_with('_') {
             return Err(underscore_refused("deps", spec));
         }
         check_dep_key("deps", spec)?;
-        m.deps.insert(spec.clone(), parse_deps_descriptor("deps", spec, v)?);
+        m.deps.insert(
+            spec.clone(),
+            parse_deps_descriptor("deps", spec, v, compat)?,
+        );
     }
     Ok(())
 }

@@ -156,17 +156,12 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     let root = leaf_world("happy", "util", UTIL_BODY);
     let bytes = pack_dir(&root.join("util")).expect("pack util");
     let url = "https://fixtures.test/util.rutbundle";
-    let pin = sha256_hex(&bytes);
 
     let app = root.join("app");
     write(
         &app,
         "rut.jsonc",
-        &manifest(
-            "app",
-            "mod.rut",
-            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
-        ),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(
         &app,
@@ -206,12 +201,17 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
 }
 
 #[test]
-fn pin_mismatch_names_dep_url_and_both_hashes() {
+fn the_manifest_pin_retires_loudly_even_with_a_fetcher() {
+    // the pins moved to rut.lock: the manifest url row lost its
+    // `sha256`, and the retirement is LOUD — the key's existence is
+    // the crime (the pin here is value-shaped RIGHT), never a silent
+    // ignore that would surface as an unpinned fetch later. The pin
+    // law itself (mismatch naming both hashes) re-points at rut.lock
+    // when the walk learns to read it.
     let root = leaf_world("pin", "util", UTIL_BODY);
     let bytes = pack_dir(&root.join("util")).expect("pack util");
     let url = "https://fixtures.test/util.rutbundle";
-    // a VALID but wrong pin: 64 hex digits, not the bytes' hash
-    let wrong = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+    let pin = sha256_hex(&bytes);
 
     let app = root.join("app");
     write(
@@ -220,7 +220,7 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
         &manifest(
             "app",
             "mod.rut",
-            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{wrong}"}}}}"#),
+            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
     write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
@@ -231,17 +231,13 @@ fn pin_mismatch_names_dep_url_and_both_hashes() {
         block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
             .unwrap_err()
             .to_string();
-    assert!(err.contains("sha256 pin mismatch"), "{err}");
-    assert!(err.contains("util"), "{err}");
-    assert!(err.contains(url), "{err}");
-    assert!(err.contains(wrong), "the pinned hash: {err}");
-    assert!(err.contains(&sha256_hex(&bytes)), "the fetched bytes' hash: {err}");
+    assert!(err.contains("deps.util: 'sha256' retired"), "{err}");
+    assert!(err.contains("rut.lock"), "{err}");
 
-    // the law runs on EVERY load — a correct pin passes (the happy
-    // path's twin), and the same wrong pin refuses the vendored-map
-    // lane identically: the door, not the fetcher, holds the lock
+    // the same refusal on the vendored-map lane: the parse is the
+    // door, not the fetcher
     let err = rut_native::load_dir_fetched(&app, &table).unwrap_err().to_string();
-    assert!(err.contains("sha256 pin mismatch"), "{err}");
+    assert!(err.contains("'sha256' retired"), "{err}");
 }
 
 #[test]
@@ -534,17 +530,12 @@ fn pack_url_dep_rode_along_and_deterministic() {
     let root = leaf_world("pack", "util", UTIL_BODY);
     let bytes = pack_dir(&root.join("util")).expect("pack util");
     let url = "https://fixtures.test/util.rutbundle";
-    let pin = sha256_hex(&bytes);
 
     let app = root.join("app");
     write(
         &app,
         "rut.jsonc",
-        &manifest(
-            "app",
-            "mod.rut",
-            &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
-        ),
+        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
     );
     write(
         &app,
@@ -555,13 +546,14 @@ fn pack_url_dep_rode_along_and_deterministic() {
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
     let packed = rut_native::pack_dir_fetched(&app, &map).expect("pack");
-    // determinism: same manifest + same pins ⇒ same bytes
+    // determinism: the same world ⇒ the same bytes
     let packed_again = rut_native::pack_dir_fetched(&app, &map).expect("pack again");
     assert_eq!(packed, packed_again, "same inputs must pack byte-identically");
 
     // the rode-along group: the output carries util as a compiled group
     // re-encoded from THIS session's units (the one .rutc path), and
-    // the url+sha256 rows rode byte-for-byte inside its manifest
+    // the url row rode byte-for-byte inside its manifest (pinless —
+    // pins live in rut.lock, not in the manifest)
     let names: Vec<String> = rut_driver::bundle::parse_bundle(&packed)
         .unwrap()
         .into_iter()
@@ -574,7 +566,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
         .read("rut.jsonc")
         .unwrap();
     assert!(out_manifest.contains(&format!(r#""url": "{url}""#)), "{out_manifest}");
-    assert!(out_manifest.contains(&pin), "{out_manifest}");
+    assert!(!out_manifest.contains("sha256"), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
     let session = rut_driver::Pkg::from_bundle(&packed).expect("load");

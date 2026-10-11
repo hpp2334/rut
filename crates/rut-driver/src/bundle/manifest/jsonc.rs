@@ -36,7 +36,7 @@
 /// UTF-8 (blanked bytes are ASCII spaces; multibyte characters outside
 /// comments are never split, and inside comments a half-blanked
 /// character is still just spaces).
-pub(super) fn strip(text: &str) -> String {
+pub(crate) fn strip(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = bytes.to_vec();
     let mut in_string = false;
