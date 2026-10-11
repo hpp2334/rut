@@ -4,23 +4,24 @@
 //! faces: the stdio server (`server`, native) and the wasm shim
 //! (`rut-lsp-wasm`) — one index, no drift.
 //!
-//! ALL ELEVEN stdlib packages are embedded (the `rut.jsonc` `name`
+//! All TWELVE stdlib packages are embedded (the `rut.jsonc` `name`
 //! fields — what a `use` path spells): the six `entry.type` declaration
 //! surfaces (`core`, `calc`, `nmap_host`, `ink_host`, `bench_cross`,
-//! `strbuild_host`) and the five root-module sources (`pouch`,
+//! `strbuild_host`), the five root-module sources (`pouch`,
 //! `nmapset`, `json`, `ink`, `strbuild`) — the latter indexed in impl
-//! mode like the open document, so their class methods complete.
+//! mode like the open document, so their class methods complete — and
+//! the `myhost` fixture, the host-surface MOD TREE shape: its entries
+//! are the root `.d.rut` PLUS each child Decl file (`net/mod.d.rut`,
+//! `net/tls/mod.d.rut`), indexed per module with their mod paths
+//! stamped, so a qualified host use (`use myhost::net::{ connect }`)
+//! walks the tree exactly like a lib dep's. A flat host pkg carries no
+//! children — the root file alone, as every std host pkg is today.
 //! Before the `rut-lsp-align`
 //! batch only core/calc/pouch were
 //! here and a bare user project got no `HashMap`/`HashSet` completion
 //! at all. (The hashmap-surface batch re-scoped this surface to the
 //! family pair; the type-name-law batch repeals the alias-row form —
 //! nmapset's index carries the two classes and NO `type` rows.)
-//!
-//! TODO(phase 2): the host surfaces here index their ROOT `.d.rut`
-//! only — a host pkg that organizes as a mod tree (`NAME/mod.d.rut`)
-//! needs its children embedded and indexed per module too (the
-//! std-surface tree indexing half of the host-mod-tree plan).
 
 use crate::hover::{self, DefIndex};
 
@@ -35,52 +36,100 @@ pub const NMAPSET: &str = include_str!("../../../rut/nmapset/mod.rut");
 pub const JSON: &str = include_str!("../../../rut/json/mod.rut");
 pub const INK: &str = include_str!("../../../rut/ink/mod.rut");
 pub const STRBUILD: &str = include_str!("../../../rut/strbuild/mod.rut");
+pub const MYHOST: &str = include_str!("../../../rut/myhost/myhost.d.rut");
+pub const MYHOST_NET: &str = include_str!("../../../rut/myhost/net/mod.d.rut");
+pub const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/net/tls/mod.d.rut");
 
 const CORE_LABEL: &str = "core";
 
-/// the std surface as definition indexes, in lookup order. `src_path`
-/// carries each package's TRUE repo-relative source path (the
-/// `include_str!` origin) — the definition layer jumps there, so a
-/// workspace that is the rut repo gets a real jump into `rut/pouch/
-/// pouch.rut` instead of a synthetic label.
+/// One embedded file of a std pkg: the mod path it indexes at (`""` =
+/// the pkg root — the root surface's own row), the Decl-mode source,
+/// and the TRUE repo-relative path (the `include_str!` origin — the
+/// definition layer jumps there).
+pub struct StdFile {
+    pub mod_path: &'static str,
+    pub src: &'static str,
+    pub src_path: &'static str,
+}
+
+/// the std surface as definition indexes, in lookup order. A host pkg
+/// with a mod tree yields one index PER FILE (root + children), all
+/// named `module` — the (module, mod_path) pair keys the walk, the
+/// same shape a directory dep's mount indexes with.
 pub fn indexes() -> Vec<DefIndex> {
     [
-        (CORE_LABEL, CORE, rut_parser::Mode::Decl, "rut/core/core.d.rut"),
-        ("calc", CALC, rut_parser::Mode::Decl, "rut/calc/calc.d.rut"),
-        ("nmap_host", NMAP_HOST, rut_parser::Mode::Decl, "rut/nmap_host/nmap.d.rut"),
-        ("ink_host", INK_HOST, rut_parser::Mode::Decl, "rut/ink_host/ink_host.d.rut"),
-        ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut"),
-        ("strbuild_host", STRBUILD_HOST, rut_parser::Mode::Decl, "rut/strbuild_host/strbuild_host.d.rut"),
-        ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/mod.rut"),
-        ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/mod.rut"),
-        ("json", JSON, rut_parser::Mode::Impl, "rut/json/mod.rut"),
-        ("ink", INK, rut_parser::Mode::Impl, "rut/ink/mod.rut"),
-        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/mod.rut"),
+        (CORE_LABEL, CORE, rut_parser::Mode::Decl, "rut/core/core.d.rut", &[] as &[StdFile]),
+        ("calc", CALC, rut_parser::Mode::Decl, "rut/calc/calc.d.rut", &[]),
+        ("nmap_host", NMAP_HOST, rut_parser::Mode::Decl, "rut/nmap_host/nmap.d.rut", &[]),
+        ("ink_host", INK_HOST, rut_parser::Mode::Decl, "rut/ink_host/ink_host.d.rut", &[]),
+        ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut", &[]),
+        ("strbuild_host", STRBUILD_HOST, rut_parser::Mode::Decl, "rut/strbuild_host/strbuild_host.d.rut", &[]),
+        ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/mod.rut", &[]),
+        ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/mod.rut", &[]),
+        ("json", JSON, rut_parser::Mode::Impl, "rut/json/mod.rut", &[]),
+        ("ink", INK, rut_parser::Mode::Impl, "rut/ink/mod.rut", &[]),
+        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/mod.rut", &[]),
+        // the host-surface mod tree: root + each child Decl file
+        (
+            "myhost",
+            MYHOST,
+            rut_parser::Mode::Decl,
+            "rut/myhost/myhost.d.rut",
+            &[
+                StdFile { mod_path: "net", src: MYHOST_NET, src_path: "rut/myhost/net/mod.d.rut" },
+                StdFile {
+                    mod_path: "net/tls",
+                    src: MYHOST_NET_TLS,
+                    src_path: "rut/myhost/net/tls/mod.d.rut",
+                },
+            ],
+        ),
     ]
     .into_iter()
-    .map(|(origin, src, mode, src_path)| {
-        let src = rut_lexer::lexer::normalize(src);
-        let (toks, _) = rut_lexer::lexer::lex(&src);
-        let (ast, _) = rut_parser::parse(&src, mode);
-        let mut idx = hover::index(&src, &ast, &toks);
-        // the std surface is the PUBLIC face (the hashmap-surface
-        // batch): nmapset's internals stay off it — its lane classes
-        // are `pub`-less in the source now, and a pub-less type never
-        // rides the surface (completions, the bare-project index,
-        // hovers from it). Other pkgs keep their full index rows
-        // (their types are pub anyway).
-        if origin == "nmapset" {
-            idx.types.retain(|t| t.is_pub);
+    .flat_map(|(origin, src, mode, src_path, children)| {
+        let mut out = Vec::with_capacity(1 + children.len());
+        // the root file's index (mod_path None answers the root)
+        out.push(std_index(origin, src, mode, src_path, None));
+        // each child Decl file, its mod path stamped
+        for f in children {
+            out.push(std_index(origin, f.src, rut_parser::Mode::Decl, f.src_path, Some(f.mod_path)));
         }
-        idx.origin = origin.to_string();
-        idx.src_path = Some(src_path.to_string());
-        // the manifest name rides EVERY surface index — the use-path
-        // completion reads the same named set as any dep (std is not
-        // special), and the use-graph matcher consults it first
-        idx.module = Some(origin.to_string());
-        idx
+        out
     })
     .collect()
+}
+
+/// One std pkg file's definition index — the ordinary hover pass, the
+/// origin stamped with the pkg's TRUE repo-relative source path, the
+/// (module, mod_path) pair naming where it stands.
+fn std_index(
+    origin: &str,
+    src: &str,
+    mode: rut_parser::Mode,
+    src_path: &str,
+    mod_path: Option<&str>,
+) -> DefIndex {
+    let src = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&src);
+    let (ast, _) = rut_parser::parse(&src, mode);
+    let mut idx = hover::index(&src, &ast, &toks);
+    // the std surface is the PUBLIC face (the hashmap-surface
+    // batch): nmapset's internals stay off it — its lane classes
+    // are `pub`-less in the source now, and a pub-less type never
+    // rides the surface (completions, the bare-project index,
+    // hovers from it). Other pkgs keep their full index rows
+    // (their types are pub anyway).
+    if origin == "nmapset" {
+        idx.types.retain(|t| t.is_pub);
+    }
+    idx.origin = origin.to_string();
+    idx.src_path = Some(src_path.to_string());
+    // the manifest name rides EVERY surface index — the use-path
+    // completion reads the same named set as any dep (std is not
+    // special), and the use-graph matcher consults it first
+    idx.module = Some(origin.to_string());
+    idx.mod_path = mod_path.map(|p| p.to_string());
+    idx
 }
 
 #[cfg(test)]
@@ -88,16 +137,93 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_eleven_packages_embed_and_index() {
+    fn all_twelve_packages_embed_and_index() {
         let idxs = indexes();
-        assert_eq!(idxs.len(), 11, "origins: {:?}", idxs.iter().map(|i| i.origin.clone()).collect::<Vec<_>>());
+        // myhost's tree yields three indexes (root + net + net/tls);
+        // the named ORIGINS stay twelve
+        let mut origins: Vec<String> = idxs.iter().map(|i| i.origin.clone()).collect();
+        origins.sort();
+        origins.dedup();
+        assert_eq!(origins.len(), 12, "origins: {origins:?}");
         for i in &idxs {
             assert!(!i.types.is_empty() || !i.fns.is_empty(), "{}: empty index", i.origin);
         }
-        let origins: Vec<&str> = idxs.iter().map(|i| i.origin.as_str()).collect();
-        for want in ["core", "calc", "nmap_host", "ink_host", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild"] {
-            assert!(origins.contains(&want), "missing pkg `{want}`: {origins:?}");
+        for want in ["core", "calc", "nmap_host", "ink_host", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild", "myhost"] {
+            assert!(origins.contains(&want.to_string()), "missing pkg `{want}`: {origins:?}");
         }
+    }
+
+    #[test]
+    fn the_host_tree_indexes_root_and_children() {
+        // the phase-2 shape: the host surface's entries are the root
+        // `.d.rut` PLUS each child Decl file, per module with the mod
+        // path stamped — the walk reads the (module, mod_path) pair
+        let idxs = indexes();
+        let mine: Vec<&DefIndex> = idxs.iter().filter(|i| i.origin == "myhost").collect();
+        assert_eq!(mine.len(), 3, "{:?}", mine.iter().map(|i| &i.mod_path).collect::<Vec<_>>());
+        assert_eq!(mine[0].mod_path, None, "the root file answers the root");
+        assert_eq!(mine[0].src_path.as_deref(), Some("rut/myhost/myhost.d.rut"));
+        assert_eq!(mine[1].mod_path.as_deref(), Some("net"));
+        assert_eq!(mine[1].src_path.as_deref(), Some("rut/myhost/net/mod.d.rut"));
+        assert_eq!(mine[2].mod_path.as_deref(), Some("net/tls"));
+        // the root carries the `pub mod net;` edge and its flat row;
+        // the children carry their own rows
+        assert!(mine[0].mods.iter().any(|m| m.name == "net"));
+        assert!(mine[0].fns.iter().any(|f| f.name == "legacy_ping"));
+        assert!(mine[1].mods.iter().any(|m| m.name == "tls"));
+        assert!(mine[1].fns.iter().any(|f| f.name == "connect"));
+        assert!(mine[2].fns.iter().any(|f| f.name == "handshake"));
+    }
+
+    #[test]
+    fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
+        // F12 on the leaf of `use myhost::net::{ connect }` lands in
+        // `net/mod.d.rut` (the walked module's own file); F12 on the
+        // `net` segment lands on the declaring `pub mod net;` edge
+        let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
+        let normalized = rut_lexer::lexer::normalize(src);
+        let (toks, _) = rut_lexer::lexer::lex(&normalized);
+        let (ast, _) = rut_parser::parse(&normalized, rut_parser::Mode::Impl);
+        let mut doc_idx = crate::hover::index(&normalized, &ast, &toks);
+        let doc_uri = "file:///t/main.rut";
+        doc_idx.origin = doc_uri.to_string();
+        let idxs = indexes();
+        let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
+        let ctx = crate::definition::Ctx {
+            doc_uri,
+            toks: &toks,
+            ast: &ast,
+            idxs: &chain,
+        };
+        // the leaf: the `connect` inside the braces
+        let leaf = normalized.find("connect").expect("the leaf") as u32;
+        let hits = crate::definition::definition(&ctx, leaf);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "rut/myhost/net/mod.d.rut", "the leaf's file");
+        // the segment: `net` in the use path — the declaring edge
+        let seg = normalized.find("net").expect("the segment") as u32;
+        let hits = crate::definition::definition(&ctx, seg);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "rut/myhost/myhost.d.rut", "the edge's file");
+    }
+
+    #[test]
+    fn hover_over_a_qualified_host_use_renders_the_row() {
+        // the hover face rides the same chain: the leaf renders the
+        // row's signature from the child file
+        let src = "use myhost::net::{ connect };\n";
+        let normalized = rut_lexer::lexer::normalize(src);
+        let (toks, _) = rut_lexer::lexer::lex(&normalized);
+        let (ast, _) = rut_parser::parse(&normalized, rut_parser::Mode::Impl);
+        let mut doc_idx = crate::hover::index(&normalized, &ast, &toks);
+        let doc_uri = "file:///t/main.rut";
+        doc_idx.origin = doc_uri.to_string();
+        let idxs = indexes();
+        let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
+        let leaf = normalized.find("connect").expect("the leaf") as u32;
+        let h = crate::hover::hover(&chain, &toks, &ast, leaf).expect("the leaf hovers");
+        assert!(h.markdown.contains("connect"), "{}", h.markdown);
+        assert!(h.markdown.contains("myhost"), "the hover names the exporting pkg: {}", h.markdown);
     }
 
     #[test]

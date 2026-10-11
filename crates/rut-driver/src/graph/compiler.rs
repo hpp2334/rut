@@ -202,8 +202,14 @@ impl<'a> GraphCompiler<'a> {
                 // row's own full_name — the ONE source (flat rows are
                 // the `path = ""` case, spelling today's shape)
                 let host = row.full_name(host_scope);
+                // the surface name: the row's mod-path-qualified
+                // spelling (`net::connect`) — the qualified-use binding
+                // composes the consumer's use path against it; root
+                // rows stay bare (`connect`), the flat byte-identical
+                // shape
+                let qual = row.rel_name();
                 surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: surface.names.intern(&row.name),
+                    name: surface.names.intern(&qual),
                     params: row.params.clone(),
                     ret: row.ret,
                     local: i as u32,
@@ -215,7 +221,7 @@ impl<'a> GraphCompiler<'a> {
                     host: Some(surface.names.intern(&host)),
                 });
                 funcs.push(FuncCode {
-                    name: surface.names.intern(&row.name),
+                    name: surface.names.intern(&qual),
                     params: row.params.clone(),
                     ret: row.ret,
                     is_method: false,
@@ -854,8 +860,10 @@ impl<'a> GraphCompiler<'a> {
 
 
 /// The exact package names a module uses, in source order, deduped.
-/// `path[0]` is the package — the same strings the flat grammar
-/// produced (the mod-path segments behind it are phase 2+'s business).
+/// `path[0]` is the package — the dep the graph ensures and binds;
+/// the mod-path segments behind it are the qualified-use lanes'
+/// (validation walks the dep's tree, the binding composes them onto
+/// the host mod rows).
 pub(crate) fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
@@ -926,6 +934,21 @@ impl GraphCompiler<'_> {
                 // an unknown dep: today's lanes name it; nothing to walk
                 continue;
             };
+            // the dep's tree flavor names the declaring files: a host
+            // surface's children are `.d.rut` files (`mod.d.rut`), a
+            // lib body's are `mod.rut` — the diagnostics spell the one
+            // that exists
+            let child_file = match &pkg.body {
+                PkgBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
+                _ => "mod.rut",
+            };
+            let at_file = |at: &str| -> String {
+                if at.is_empty() {
+                    child_file.to_string()
+                } else {
+                    format!("{at}/{child_file}")
+                }
+            };
             // walk the mod path, one `pub mod` edge per segment
             let mut at = String::new();
             let mut walked = true;
@@ -951,7 +974,7 @@ impl GraphCompiler<'_> {
                             format!(
                                 "`{seg_text}` is not a module of `{dep_name}` — no `mod {seg_text};` under {} \
                                  (`use {dep_name}::..` walks the dep's mounted `mod` tree)",
-                                rut_lir::check::ModInputs::display(&at),
+                                at_file(&at),
                             ),
                         ));
                     }
@@ -964,7 +987,7 @@ impl GraphCompiler<'_> {
                         format!(
                             "`{seg_text}` is not visible from outside the package (`mod`, not `pub mod`) — \
                              spell `pub mod {seg_text};` in `{dep_name}`'s {} to widen it",
-                            rut_lir::check::ModInputs::display(&at),
+                            at_file(&at),
                         ),
                     ));
                     walked = false;
@@ -977,14 +1000,15 @@ impl GraphCompiler<'_> {
                 continue;
             }
             // the leaf names: each must be a `pub` decl of the walked
-            // module (when the dep's rows are readable — a compiled
-            // root's decls ride its binary; the binding gate answers)
-            let is_source = self.dep_is_source(&dep_name);
+            // module (when the dep's rows are readable — a source body
+            // and a host surface both carry their text; a compiled
+            // unit's decls ride its binary, the binding gate answers)
+            let rows_readable = self.dep_rows_readable(&dep_name);
             // the verdicts compute under the table borrow, then diagnose
             let verdicts: Vec<Option<String>> = {
                 let Some(table) = self.dep_mod_table(&dep_name) else { continue };
                 let Some(rows) = table.get(&at) else { continue };
-                if rows.is_empty() && !is_source {
+                if rows.is_empty() && !rows_readable {
                     continue; // a compiled unit's decls are its binary's
                 }
                 names
@@ -994,7 +1018,7 @@ impl GraphCompiler<'_> {
                         match rows.iter().find(|d| d.name == text) {
                             None => Some(format!(
                                 "`{text}` is not declared in `{dep_name}`'s module `{at}` ({})",
-                                rut_lir::check::ModInputs::display(&at),
+                                at_file(&at),
                             )),
                             Some(d) if d.vis != Vis::Pub => Some(format!(
                                 "`{text}` in `{dep_name}::{}` is not `pub` — only `pub` names cross packages",
@@ -1014,12 +1038,10 @@ impl GraphCompiler<'_> {
     }
 
     /// The dep's per-module decl rows (parsed once per spec — the
-    /// consumers share it). TODO(phase 2): a `PkgBody::Host` dep
-    /// collects from its root surface + mounted tree (the body
-    /// carries `root_surface`, the pkg carries `mods`), so a
-    /// qualified-use leaf naming a host row validates against the
-    /// path-carrying rows instead of silently skipping (today the
-    /// table comes back empty for a host root and the gate moves on).
+    /// consumers share it). A `PkgBody::Host` dep collects from its
+    /// root surface + mounted tree (the body carries `root_surface`,
+    /// the pkg carries `mods`), so a qualified-use leaf naming a host
+    /// row validates against the path-carrying rows.
     fn dep_mod_table(
         &mut self,
         spec: &str,
@@ -1034,10 +1056,13 @@ impl GraphCompiler<'_> {
         self.dep_decls.get(spec)
     }
 
-    fn dep_is_source(&self, spec: &str) -> bool {
+    /// Does the dep's decl text ride the pkg (a source body or a host
+    /// surface)? Its per-module rows are then collectible — the leaf
+    /// gate runs. A compiled unit's rows ride its binary instead.
+    fn dep_rows_readable(&self, spec: &str) -> bool {
         self.session
             .resolve(spec)
-            .map(|m| matches!(m.body, crate::session::PkgBody::Source { .. }))
+            .map(|m| matches!(m.body, crate::session::PkgBody::Source { .. } | crate::session::PkgBody::Host { .. }))
             .unwrap_or(false)
     }
 }

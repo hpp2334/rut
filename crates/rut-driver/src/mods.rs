@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use rut_ast::ast::{Ast, ItemKind, Vis};
+use rut_ast::ast::{Ast, ItemKind, Linkage, Vis};
 use rut_parser::{parse, Mode};
 
 use crate::session::{Pkg, PkgBody};
@@ -212,6 +212,9 @@ pub enum DeclKind {
     ModuleLet,
     /// a `mod NAME;` declaration (the mounted child's edge)
     Mod,
+    /// a `host fn` surface row (a `type = "host"` pkg's `.d.rut`
+    /// files) — the leaf a qualified use validates against
+    HostFn,
 }
 
 /// One mounted file, parsed: its mod path (`""` = the pkg root), the
@@ -245,21 +248,51 @@ impl ModuleSet {
 /// mounted module, a mounted module nothing declares, a child that
 /// fails to parse) — the caller folds each into its diagnostics. A
 /// pkg with no mod children collects to the root unit alone.
+///
+/// The flavor rides the body: a source body speaks Impl and names
+/// `mod.rut`; a host body (`type = "host"`) speaks Decl over its
+/// retained surface text (`root_surface`) and names `mod.d.rut` — the
+/// same files the loader mounted, re-parsed for their declaration
+/// rows (the host rows ride as [`DeclKind::HostFn`], so a qualified
+/// use validates against the path-carrying tree). A hand-built host
+/// body with no retained surface (`core`, `Pkg::host`) collects no
+/// root unit — its rows carry no mod tree to speak of.
 pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
     let mut problems: Vec<String> = Vec::new();
     let mut set = ModuleSet::default();
-    // the root unit: the body text (source bodies only — a compiled
-    // root's children still collect below, the root's AST rides the
-    // binary). TODO(phase 2): a `PkgBody::Host` root collects too —
-    // its root surface text rides the body (`root_surface`) and its
-    // children are Decl-mode files; the host rows then ride the
-    // per-module decl rows the qualified-use gate reads.
+    // the flavor: a host body's tree speaks Decl and mounts
+    // `NAME/mod.d.rut`; everything else is the lib shape
+    let host = matches!(&pkg.body, PkgBody::Host { .. });
+    let (mode, child_file) = if host {
+        (Mode::Decl, crate::decl::DECL_CHILD_FILE)
+    } else {
+        (Mode::Impl, "mod.rut")
+    };
+    // the root unit: the body text (source bodies and host surfaces —
+    // a compiled root's children still collect below, the root's AST
+    // rides the binary)
     let root_declares: BTreeMap<String, Vis> = match &pkg.body {
         PkgBody::Source { text, is_decl } => {
-            let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
-            let (ast, diags) = parse(text, mode);
+            let m = if *is_decl { Mode::Decl } else { Mode::Impl };
+            let (ast, diags) = parse(text, m);
             if !diags.is_empty() {
                 problems.extend(diags.iter().map(|d| format!("`{spec}` (mod.rut): {}", d.msg)));
+                BTreeMap::new()
+            } else {
+                let decls = decl_rows(&ast);
+                let declared: BTreeMap<String, Vis> = decls
+                    .iter()
+                    .filter(|d| d.kind == DeclKind::Mod)
+                    .map(|d| (d.name.clone(), d.vis))
+                    .collect();
+                set.units.push(ModuleUnit { path: String::new(), ast, decls });
+                declared
+            }
+        }
+        PkgBody::Host { root_surface: Some(text), .. } => {
+            let (ast, diags) = parse(text, Mode::Decl);
+            if !diags.is_empty() {
+                problems.extend(diags.iter().map(|d| format!("`{spec}` ({child_file}): {}", d.msg)));
                 BTreeMap::new()
             } else {
                 let decls = decl_rows(&ast);
@@ -277,9 +310,9 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
     // the children, mod-path order — each its own module root
     let mut child_decls: BTreeMap<String, BTreeMap<String, Vis>> = BTreeMap::new();
     for (path, m) in &pkg.mods {
-        let (ast, diags) = parse(&m.text, Mode::Impl);
+        let (ast, diags) = parse(&m.text, mode);
         if !diags.is_empty() {
-            problems.extend(diags.iter().map(|d| format!("`{spec}` ({path}/mod.rut): {}", d.msg)));
+            problems.extend(diags.iter().map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)));
             child_decls.insert(path.clone(), BTreeMap::new());
             set.units.push(ModuleUnit { path: path.clone(), ast, decls: vec![] });
             continue;
@@ -303,10 +336,10 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
                 format!("{parent}/{name}")
             };
             if !pkg.mods.contains_key(&child) {
-                let file = file_display(parent, "mod.rut");
+                let file = file_display(parent, child_file);
                 problems.push(format!(
                     "`mod {name};` in `{spec}`'s {file} — no `{child}` module is mounted \
-                     (the loader mounts `{child}/mod.rut` beside it)"
+                     (the loader mounts `{child}/{child_file}` beside it)"
                 ));
             }
         }
@@ -334,9 +367,9 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
         };
         if !declared.contains_key(&name) {
             problems.push(format!(
-                "`{spec}`'s `{path}/mod.rut` is mounted but no `mod {name};` declares it — \
+                "`{spec}`'s `{path}/{child_file}` is mounted but no `mod {name};` declares it — \
                  declarations are the graph: spell `mod {name};` in {}",
-                file_display(&parent, "mod.rut"),
+                file_display(&parent, child_file),
             ));
         }
     }
@@ -356,10 +389,12 @@ fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
             ItemKind::Class { vis, name, .. } => (*name, *vis, DeclKind::Class),
             ItemKind::Interface { vis, name, .. } => (*name, *vis, DeclKind::Interface),
             ItemKind::ModDecl { vis, name } => (*name, *vis, DeclKind::Mod),
-            // TODO(phase 2): a `SurfaceFn` arm — the host rows must
-            // ride the decl rows too, so a leaf use (`use
-            // myhost::net::connect`) can validate against the host
-            // surface's per-module rows
+            // a `host fn` surface row — the host tree's leaf decl: the
+            // declaring `pub` rides it, so a qualified use validates
+            // (`pub host fn` crosses, a bare `host fn` is private)
+            ItemKind::SurfaceFn { linkage: Linkage::Host, vis, name, .. } => {
+                (*name, *vis, DeclKind::HostFn)
+            }
             _ => continue,
         };
         out.push(DeclRow { name: ast.name(name).to_string(), vis, kind });
@@ -667,5 +702,122 @@ mod tests {
         let (_, rows) = parse_rows(r#"{"": "pub mod net;\n", "net": "pub host fn c() -> opaque;\n"}"#).unwrap();
         let mounted = mount_rows("pub mod net;\n", &rows, Mode::Decl, "mod.d.rut").unwrap();
         assert_eq!(mounted.keys().collect::<Vec<_>>(), vec!["net"]);
+    }
+
+    /// A host-body pkg from a root surface + mounted tree — the shape
+    /// `lower_decl_module` yields (the dep tables read it as found).
+    fn host_pkg(root: &str, children: &[(&str, Vis, &str)]) -> Pkg {
+        let mut mods = BTreeMap::new();
+        for (path, vis, text) in children {
+            mods.insert(
+                path.to_string(),
+                ModSource { path: path.to_string(), vis: *vis, text: text.to_string() },
+            );
+        }
+        Pkg {
+            spec: "myhost".to_string(),
+            body: crate::session::PkgBody::Host {
+                host_funcs: vec![],
+                consts: vec![],
+                native_types: vec![],
+                native_fns: vec![],
+                native_impls: vec![],
+                root_surface: Some(root.to_string()),
+            },
+            mods,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_host_tree_collects_its_decl_rows() {
+        // the phase-2 collection: the root surface parses Decl, the
+        // children parse Decl (`mod.d.rut` files), and the `host fn`
+        // rows ride the per-module decl rows as `HostFn` — the
+        // qualified-use leaf gate's input
+        let pkg = host_pkg(
+            "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            &[
+                ("net", Vis::Pub, "pub mod tls;\npub host fn connect(url: str) -> opaque;\n"),
+                ("net/tls", Vis::Pub, "host fn private_probe();\npub host fn handshake(c: opaque) -> opaque;\n"),
+            ],
+        );
+        let (set, problems) = collect_module_set("myhost", &pkg);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(set.paths(), vec!["", "net", "net/tls"]);
+        // the root: the mod edge + the flat row
+        let root = &set.units[0].decls;
+        assert_eq!(root[0].name, "net");
+        assert_eq!(root[0].kind, DeclKind::Mod);
+        assert_eq!(root[0].vis, Vis::Pub);
+        assert_eq!(root[1].name, "legacy_ping");
+        assert_eq!(root[1].kind, DeclKind::HostFn);
+        assert_eq!(root[1].vis, Vis::Pub, "`pub host fn` carries its pub");
+        // the net child: its edge + its row
+        let net = &set.units[1].decls;
+        assert_eq!(net[0].kind, DeclKind::Mod);
+        assert_eq!(net[1].name, "connect");
+        assert_eq!(net[1].kind, DeclKind::HostFn);
+        assert_eq!(net[1].vis, Vis::Pub);
+        // net/tls: a bare `host fn` keeps its privacy — the leaf gate
+        // reads `vis` off the row
+        let tls = &set.units[2].decls;
+        assert_eq!(tls[0].name, "private_probe");
+        assert_eq!(tls[0].kind, DeclKind::HostFn);
+        assert_eq!(tls[0].vis, Vis::Self_, "a bare `host fn` is private");
+        assert_eq!(tls[1].name, "handshake");
+        assert_eq!(tls[1].vis, Vis::Pub);
+    }
+
+    #[test]
+    fn the_host_tree_checks_speak_the_mod_d_rut_spelling() {
+        // the collection's loud half names `mod.d.rut` on the Decl
+        // flavor — the files the errors point at are the ones that
+        // exist
+        let pkg = host_pkg("pub mod net;\n", &[]);
+        let (_, problems) = collect_module_set("myhost", &pkg);
+        assert!(
+            problems.iter().any(|p| p.contains("`mod net;` in `myhost`'s mod.d.rut")
+                && p.contains("the loader mounts `net/mod.d.rut` beside it")),
+            "{problems:?}"
+        );
+        // a mounted child nothing declares — the reverse law, same flavor
+        let pkg = host_pkg("pub host fn legacy_ping() -> bool;\n", &[("net", Vis::Pub, "")]);
+        let (_, problems) = collect_module_set("myhost", &pkg);
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.contains("`net/mod.d.rut` is mounted but no `mod net;` declares it")),
+            "{problems:?}"
+        );
+        // a child that fails to parse names its `.d.rut` file
+        let pkg = host_pkg("pub mod net;\n", &[("net", Vis::Pub, "pub host fn broken( {{")]);
+        let (_, problems) = collect_module_set("myhost", &pkg);
+        assert!(
+            problems.iter().any(|p| p.starts_with("`myhost` (net/mod.d.rut):")),
+            "{problems:?}"
+        );
+    }
+
+    #[test]
+    fn a_source_tree_collects_exactly_as_before() {
+        // the lib shape is untouched by the host arm: Impl children,
+        // `mod.rut` spellings, no host rows
+        let mut pkg = Pkg::source(
+            "app",
+            "mod layout;\nentry fn main() {}\n",
+        );
+        pkg.mods.insert(
+            "layout".to_string(),
+            ModSource {
+                path: "layout".into(),
+                vis: Vis::Pub,
+                text: "pub fn span() -> i32 { return 1; }\n".into(),
+            },
+        );
+        let (set, problems) = collect_module_set("app", &pkg);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(set.paths(), vec!["", "layout"]);
+        assert!(set.units[1].decls.iter().any(|d| d.kind == DeclKind::Fn && d.name == "span"));
     }
 }

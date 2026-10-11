@@ -219,8 +219,15 @@ impl<'a> Walk<'a> {
         // name with their mod paths stamped (the editor face of the
         // loader's mount). The entries loop indexed the root module
         // already (the Impl `mod.rut` row) whenever it was readable.
+        // A HOST pkg carries no lib body: its surface tree mounts the
+        // Decl flavor instead (`NAME/mod.d.rut` children, Decl mode —
+        // the entries loop indexed the root `.d.rut`).
         let root_indexed = table.entries.iter().any(|e| e.mode == Mode::Impl);
-        self.mount_mod_tree(&dir, &module, root_indexed);
+        if table.host {
+            self.mount_decl_tree(&dir, &module, &table);
+        } else {
+            self.mount_mod_tree(&dir, &module, root_indexed);
+        }
         let at_root = depth == 1;
         let rows = table
             .deps
@@ -337,16 +344,18 @@ impl<'a> Walk<'a> {
             Ok(b) => {
                 for f in &b.files {
                     let uri = format!("bundle:{}/{}", b.module, f.path);
-                    // a mounted mod child rides as `<path>/mod.rut` (the
-                    // rows lane's root as `mod.rut`) — its mod path
-                    // stamps the index; flat files keep today's shape
+                    // a mounted mod child rides as `<path>/mod.rut` (a
+                    // host tree's as `<path>/mod.d.rut`, the rows
+                    // lane's root as `mod.rut`) — its mod path stamps
+                    // the index in the file's own mode; flat files
+                    // keep today's shape
                     let idx = match deps::bundle_file_mod_path(&f.path) {
                         Some(p) => deps::index_dep_mod(
                             &b.module,
                             &uri,
                             &p,
                             &f.src,
-                            rut_parser::Mode::Impl,
+                            f.mode,
                             b.namespace.as_deref(),
                             &b.consts,
                         ),
@@ -393,7 +402,7 @@ impl<'a> Walk<'a> {
             self.insert(idx);
         }
         let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-            Ok(fs_child_lookup(dir, parent, name))
+            Ok(fs_child_lookup(dir, parent, name, "mod.rut"))
         };
         let canon = p.to_string_lossy().into_owned();
         match rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
@@ -406,6 +415,49 @@ impl<'a> Walk<'a> {
                     let child_file = dir.join(format!("{path}/mod.rut"));
                     let uri = child_file.to_string_lossy().into_owned();
                     let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
+                    self.insert(idx);
+                }
+            }
+            Err(e) => {
+                self.hint_once(
+                    format!("mods:{}", dir.display()),
+                    MessageType::ERROR,
+                    format!("rut: {e}"),
+                );
+            }
+        }
+    }
+
+    /// the HOST surface tree (the Decl flavor of the mount): the root
+    /// `.d.rut` is the entries loop's Decl row (already indexed); its
+    /// `mod` declarations mount the `NAME/mod.d.rut` children, each
+    /// indexed under the pkg name at its mod path in Decl mode — the
+    /// qualified-host-use walk (`use myhost::net::{ connect }`)
+    /// resolves through exactly these stamps. A surface pkg with no
+    /// `entry.type` (or an unreadable one) mounts nothing.
+    fn mount_decl_tree(&mut self, dir: &Path, module: &str, table: &deps::DepTable) {
+        let Some(entry) = table.entries.iter().find(|e| e.mode == Mode::Decl) else {
+            return;
+        };
+        let root_path = dir.join(&entry.path);
+        let Ok(root_text) = std::fs::read_to_string(&root_path) else {
+            return;
+        };
+        let child_file = rut_driver::decl::DECL_CHILD_FILE;
+        let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+            Ok(fs_child_lookup(dir, parent, name, child_file))
+        };
+        let canon = root_path.to_string_lossy().into_owned();
+        match rut_driver::mount_mod_children(&root_text, &canon, Mode::Decl, child_file, &mut read) {
+            Ok(mods) => {
+                for (path, m) in mods {
+                    if self.files == 0 {
+                        break;
+                    }
+                    self.files -= 1;
+                    let child = dir.join(format!("{path}/{child_file}"));
+                    let uri = child.to_string_lossy().into_owned();
+                    let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
                     self.insert(idx);
                 }
             }
@@ -494,12 +546,13 @@ fn resolve_doc_mods(file: &Path) -> DocMods {
 }
 
 /// the fs lane's child lookup — the loader's three-case law over the
-/// directory: `NAME/mod.rut`, a same-named FILE sibling, a dir
-/// without its `mod.rut`, or nothing. The canonical identity (the
-/// cycle guard's key) is the resolved path.
-fn fs_child_lookup(dir: &Path, parent: &str, name: &str) -> rut_driver::ChildLookup {
+/// directory: `NAME/<child file>`, a same-named FILE sibling, a dir
+/// without its module file, or nothing. The canonical identity (the
+/// cycle guard's key) is the resolved path. `child_file` is the
+/// flavor's spelling (`mod.rut` / `mod.d.rut`).
+fn fs_child_lookup(dir: &Path, parent: &str, name: &str, child_file: &str) -> rut_driver::ChildLookup {
     let base = if parent.is_empty() { dir.to_path_buf() } else { dir.join(parent) };
-    let mod_rut = base.join(name).join("mod.rut");
+    let mod_rut = base.join(name).join(child_file);
     if mod_rut.is_file() {
         let text = std::fs::read_to_string(&mod_rut).unwrap_or_default();
         let canon = mod_rut

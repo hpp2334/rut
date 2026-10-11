@@ -45,13 +45,13 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             // `host` — the one native linkage left: the embedding Rust.
             // `extern` is removed — the loader + `entry fn`
             // cover it.
-            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, Vis::Self_))),
             // `prelude builtin` — the AMBIENT engine surface (core only,
             // compiler-lowered). `prelude` is contextual: a legal
             // identifier everywhere except directly before `builtin`
             "prelude" if p.at_kw2("builtin") => {
                 p.bump();
-                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true })))
+                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true }, Vis::Self_)))
             }
             // bare `builtin` — the old spelling is gone: diagnosed, then
             // recovered as ambient so downstream diagnostics stay sane
@@ -60,7 +60,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                     sp,
                     "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)",
                 );
-                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true })))
+                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true }, Vis::Self_)))
             }
             "extern" => {
                 p.err(
@@ -108,11 +108,11 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
                 Some(Frame::Fn(FnFrame::new(vis, true, false)))
             }
             "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
-            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, vis))),
             // `pub builtin` — the IMPORT-GATED engine surface spelling:
             // the decl resolves only through `use <pkg>::{ .. }` (the
             // ambient twin is `prelude builtin`)
-            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: false }))),
+            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: false }, vis))),
             "extern" => {
                 p.err_here(
                     "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
@@ -1544,6 +1544,10 @@ impl FnFrame {
 
 pub(crate) struct SurfaceFrame {
     linkage: Linkage,
+    /// the declaring visibility (`pub host fn` vs bare `host fn`) —
+    /// carried faithfully onto every `SurfaceFn` row so the
+    /// cross-package leaf gate (`pub` only) can read it
+    vis: Vis,
     lo: u32,
     stage: SuStage,
     /// `host async fn name(..) -> T;` — the host future lane: the
@@ -1572,9 +1576,10 @@ enum SuStage {
 }
 
 impl SurfaceFrame {
-    pub(crate) fn new(linkage: Linkage) -> Self {
+    pub(crate) fn new(linkage: Linkage, vis: Vis) -> Self {
         SurfaceFrame {
             linkage,
+            vis,
             lo: 0,
             stage: SuStage::Params,
             is_async: false,
@@ -1875,7 +1880,7 @@ impl SurfaceFrame {
     fn pop_fn(&mut self, p: &mut Parser) -> Step {
         let node = p.item(
             ItemKind::SurfaceFn {
-                vis: Vis::Self_,
+                vis: self.vis,
                 linkage: self.linkage,
                 is_async: self.is_async,
                 name: self.name,

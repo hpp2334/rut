@@ -80,6 +80,10 @@ pub struct DepTable {
     pub namespace: Option<String>,
     /// the compiler-materialized constants (`Math.PI`), name → f64
     pub consts: Vec<(String, f64)>,
+    /// `type = "host"` — the entry surface is a pure `.d.rut` and its
+    /// `mod` tree mounts the Decl flavor (`NAME/mod.d.rut` children,
+    /// Decl mode) instead of a lib body's `mod.rut` tree
+    pub host: bool,
     /// `deps` — transitively mounted
     pub deps: Vec<DepRow>,
     /// `dev-deps` — mounted only for the pkg's own build/tests
@@ -172,6 +176,7 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
         entries,
         namespace: m.namespace,
         consts: m.consts.into_iter().collect(),
+        host: m.pkg_type == rut_driver::bundle::PkgType::Host,
         deps: rows(&m.deps),
         dev_deps: rows(&m.dev_deps),
         peer_deps: rows(&m.peer_deps),
@@ -205,16 +210,24 @@ pub struct BundleIndex {
 /// additive envelope section: the root text (`""`) mounted with its
 /// child tree through rut-driver's rows codec (the same declaration-
 /// driven mount a directory runs). `Ok(None)` = no rows entry — the
-/// old flat envelope, which keeps loading byte-for-byte.
+/// old flat envelope, which keeps loading byte-for-byte. The flavor
+/// rides the pkg: a host tree speaks Decl and mounts `mod.d.rut`
+/// children, a lib body's tree the Impl `mod.rut` shape.
 fn bundle_rows(
     entries: &[(String, Vec<u8>)],
+    host: bool,
 ) -> Result<Option<(String, std::collections::BTreeMap<String, rut_driver::ModSource>)>, String> {
     let text = match read_entry(entries, rut_driver::mods::ROWS_NAME) {
         Ok(t) => t,
         Err(_) => return Ok(None),
     };
     let (root, rows) = rut_driver::mods::parse_rows(&text)?;
-    let mods = rut_driver::mods::mount_rows(&root, &rows, Mode::Impl, "mod.rut")?;
+    let (mode, child_file) = if host {
+        (Mode::Decl, rut_driver::decl::DECL_CHILD_FILE)
+    } else {
+        (Mode::Impl, "mod.rut")
+    };
+    let mods = rut_driver::mods::mount_rows(&root, &rows, mode, child_file)?;
     Ok(Some((root, mods)))
 }
 
@@ -276,22 +289,36 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         }
     }
     // the tree: rows entry first (the additive envelope — the pack
-    // writer's shape), else the file-entry mount over the root module
-    let tree: Option<(BundleFile, Vec<BundleFile>)> = match bundle_rows(&entries)? {
+    // writer's shape), else the file-entry mount over the root module.
+    // The HOST flavor's root already rode the decl-surface push above
+    // (the entry.type surface) — only its children join here, each a
+    // Decl file at `<mod path>/mod.d.rut`; a lib tree's root re-rides
+    // as `mod.rut` beside its Impl children.
+    let tree: Option<(Option<BundleFile>, Vec<BundleFile>)> = match bundle_rows(&entries, table.host)? {
         Some((root_text, mods)) => {
+            let (child_file, mode) = if table.host {
+                (rut_driver::decl::DECL_CHILD_FILE, Mode::Decl)
+            } else {
+                ("mod.rut", Mode::Impl)
+            };
             let children = mods
                 .into_iter()
                 .map(|(path, m)| BundleFile {
-                    path: format!("{path}/mod.rut"),
+                    path: format!("{path}/{child_file}"),
                     src: m.text,
-                    mode: Mode::Impl,
+                    mode,
                 })
                 .collect();
-            Some((
-                BundleFile { path: "mod.rut".to_string(), src: root_text, mode: Mode::Impl },
-                children,
-            ))
+            if table.host {
+                Some((None, children))
+            } else {
+                Some((
+                    Some(BundleFile { path: "mod.rut".to_string(), src: root_text, mode: Mode::Impl }),
+                    children,
+                ))
+            }
         }
+        None if table.host => None, // a host surface carries no lib body
         None => {
             // the source lane: root = the `mod.rut` entry (the
             // post-repeal convention), or the OLD envelope's legacy
@@ -323,14 +350,16 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
                             mode: Mode::Impl,
                         })
                         .collect();
-                    Some((root, children))
+                    Some((Some(root), children))
                 }
                 None => None,
             }
         }
     };
     if let Some((root, children)) = tree {
-        files.push(root);
+        if let Some(root) = root {
+            files.push(root);
+        }
         files.extend(children);
     } else {
         // no body rode (a compiled-only or surface-only bundle) — the
@@ -348,15 +377,21 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
 }
 
 /// a bundle file's mod path: the rows lane's root rides as `mod.rut`
-/// (`Some("")`), a mounted child as `<path>/mod.rut` (`Some(path)`);
-/// anything else is today's flat shape (`None`) — shared by both
-/// faces (the stdio walk and the wasm shim index identically)
+/// (`Some("")`), a mounted child as `<path>/mod.rut` (a host tree's
+/// as `<path>/mod.d.rut`) — `Some(path)`; anything else is today's
+/// flat shape (`None`) — shared by both faces (the stdio walk and the
+/// wasm shim index identically)
 pub fn bundle_file_mod_path(path: &str) -> Option<String> {
-    match path.strip_suffix("/mod.rut") {
-        Some(p) => Some(p.to_string()),
-        None if path == "mod.rut" => Some(String::new()),
-        None => None,
+    if let Some(p) = path.strip_suffix("/mod.rut") {
+        return Some(p.to_string());
     }
+    if let Some(p) = path.strip_suffix(format!("/{}", rut_driver::decl::DECL_CHILD_FILE).as_str()) {
+        return Some(p.to_string());
+    }
+    if path == "mod.rut" {
+        return Some(String::new());
+    }
+    None
 }
 
 /// Index one dep source file: the ordinary [`analysis::index_at`] pass
@@ -698,6 +733,84 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(bundle_file_mod_path("mod.rut").as_deref(), Some(""));
         assert_eq!(bundle_file_mod_path("layout/mod.rut").as_deref(), Some("layout"));
         assert_eq!(bundle_file_mod_path("layout/grid/mod.rut").as_deref(), Some("layout/grid"));
+        // the host tree's Decl children spell the same mod paths
+        assert_eq!(bundle_file_mod_path("net/mod.d.rut").as_deref(), Some("net"));
+        assert_eq!(bundle_file_mod_path("net/tls/mod.d.rut").as_deref(), Some("net/tls"));
         assert_eq!(bundle_file_mod_path("pouch.rut"), None);
+        assert_eq!(bundle_file_mod_path("myhost.d.rut"), None, "a surface root is a flat file");
+    }
+
+    /// a host-tree bundle in the pack writer's shape: a `type = "host"`
+    /// manifest + the root `.d.rut` entry + the additive `rut.mods`
+    /// rows entry (the Decl tree as path-keyed rows)
+    fn host_tree_bundle() -> Vec<u8> {
+        use std::collections::BTreeMap;
+        let mods = BTreeMap::from([
+            (
+                "net".to_string(),
+                rut_driver::ModSource {
+                    path: "net".into(),
+                    vis: rut_ast::ast::Vis::Pub,
+                    text: "pub mod tls;\npub host fn connect(url: str) -> opaque;\n".into(),
+                },
+            ),
+            (
+                "net/tls".to_string(),
+                rut_driver::ModSource {
+                    path: "net/tls".into(),
+                    vis: rut_ast::ast::Vis::Pub,
+                    text: "pub host fn handshake(c: opaque) -> opaque;\n".into(),
+                },
+            ),
+        ]);
+        let rows = rut_driver::mods::rows_json("pub mod net;\npub host fn legacy_ping() -> bool;\n", &mods);
+        rut_driver::bundle::write_bundle(&[
+            (
+                MANIFEST_NAME.into(),
+                br#"{ "name": "myhost", "type": "host", "entry": { "type": "./myhost.d.rut" } }"#.to_vec(),
+            ),
+            ("myhost.d.rut".into(), b"pub mod net;\npub host fn legacy_ping() -> bool;\n".to_vec()),
+            (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn a_host_tree_bundle_unpacks_the_decl_flavor() {
+        let b = bundle_sources(&host_tree_bundle()).expect("the host bundle unpacks");
+        assert_eq!(b.module, "myhost");
+        // the root surface rode the decl entry; the children are Decl
+        // files at `<mod path>/mod.d.rut`
+        let files: Vec<(&str, Mode)> = b.files.iter().map(|f| (f.path.as_str(), f.mode)).collect();
+        assert_eq!(
+            files,
+            vec![
+                ("myhost.d.rut", Mode::Decl),
+                ("net/mod.d.rut", Mode::Decl),
+                ("net/tls/mod.d.rut", Mode::Decl),
+            ],
+            "{files:?}"
+        );
+        assert!(b.files[0].src.contains("pub mod net;"));
+        assert!(b.files[1].src.contains("connect"));
+        assert!(b.files[2].src.contains("handshake"));
+    }
+
+    #[test]
+    fn a_host_manifest_marks_the_table() {
+        let t = dep_table(
+            r#"{ "name": "myhost", "type": "host", "entry": { "type": "./myhost.d.rut" } }"#,
+        )
+        .expect("the host manifest parses");
+        assert!(t.host, "type = host marks the table");
+        assert_eq!(
+            t.entries,
+            vec![EntrySource { path: "myhost.d.rut".into(), mode: Mode::Decl }],
+            "the surface indexes in Decl mode; no lib body row"
+        );
+        let surface_only =
+            dep_table(r#"{ "name": "s", "type": "lib", "entry": { "type": "./s.d.rut" } }"#)
+                .expect("the lib manifest parses");
+        assert!(!surface_only.host, "a lib manifest stays unmarked");
     }
 }

@@ -251,10 +251,13 @@ fn lower_module(
 /// The lib-surface law: `host fn` text lives only in `type = "host"`
 /// pkgs. Non-parsing surfaces stay inert (doc-only); a surface that
 /// PARSES and declares host fns is the loud error. The walk runs it on
-/// every lib pkg's declared surface, both lanes. The probe is the ROOT
-/// surface only (a `mod` declaration is invisible to it — the
-/// leaf-validation half over mounted trees is phase 2), the same reach
-/// the law has always had.
+/// every lib pkg's declared surface, both lanes. The probe is the
+/// ROOT surface, and the root is the whole law: a lib decl surface
+/// mounts no children (the loader mounts no tree under a
+/// surface-only lib pkg, and the compile refuses a decl-mode pkg
+/// carrying mods), while an implementation body refuses `host` text
+/// at parse — so `host fn` rows under a mounted tree can only ever
+/// come from the host lane's own lowering.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
     let (ast, diags) = parse(src, Mode::Decl);
     if !diags.is_empty() {

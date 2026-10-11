@@ -160,6 +160,30 @@ pub fn compile_program_resolved(
             }
         }
     }
+    // the QUALIFIED-use leaves (phase 2): `use pkg::a::b::{ leaf }`
+    // composes `a::b::leaf` — the spelling a host mod tree's surface
+    // rows carry (`net::connect`) — keyed by the use head (the dep
+    // pkg). A host mod row binds under its LEAF name through this
+    // map; flat rows keep the bare-name lane below.
+    let mut qualified_leaves: std::collections::HashMap<(String, String), rut_core::IdentId> =
+        std::collections::HashMap::new();
+    for it in ast.module_items(ast.root).to_vec() {
+        if let rut_ast::ast::ItemKind::Use { path, names } = ast.item(it) {
+            if path.len() < 2 {
+                continue;
+            }
+            let head = ast.name(path[0]).to_string();
+            let prefix = path[1..]
+                .iter()
+                .map(|&s| ast.name(s).to_string())
+                .collect::<Vec<_>>()
+                .join("::");
+            for &n in names {
+                let composed = format!("{prefix}::{}", ast.name(n));
+                qualified_leaves.insert((head.clone(), composed), n);
+            }
+        }
+    }
     // the orphan rule's locality input: this unit's own
     // pkg spec. Every decl's origin IS its module — no source crosses
     // a boundary, the origin map is gone.
@@ -224,14 +248,22 @@ pub fn compile_program_resolved(
     // ---- pass 3: fns, consts, types, impls, natives
     for (dep_scope, surface, tmap, origin) in trait_maps.iter() {
         let dep_scope = *dep_scope;
-        // TODO(phase 2): qualified-use binding for host mod trees — a
-        // row under a dep's `mod` tree (its surface row carries the
-        // path; the registration string is `pkg::path::name`) binds
-        // through `use pkg::net::connect`, with the leaf names checked
-        // against the path-qualified rows. Today only the bare row
-        // names bind (flat host surfaces).
         for f in &surface.funcs {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
+            let text = surface.names.name(f.name);
+            // the binding gate: a flat row binds by its bare name when
+            // the unit wrote it (`use` leaf or code); a host mod row's
+            // surface spelling is `path::name` (`net::connect`) — it
+            // binds under the LEAF of the qualified use that named it
+            // (`use myhost::net::{ connect }`), never under the bare
+            // text and never through a flat use
+            let id = if text.contains("::") {
+                qualified_leaves
+                    .get(&(origin.clone(), text.to_string()))
+                    .copied()
+            } else {
+                ctx.ast.interner.lookup(text)
+            };
+            if let Some(id) = id {
                 let exports: Vec<(rut_core::IdentId, TypeId)> = surface
                     .type_exports
                     .iter()

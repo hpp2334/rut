@@ -535,16 +535,17 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
     let defs = &mut state().defs;
     for f in &b.files {
         let uri = format!("bundle:{}/{}", b.module, f.path);
-        // a mounted mod child rides as `<path>/mod.rut` (the rows
-        // lane's root as `mod.rut`) — its mod path stamps the index;
-        // flat files keep today's shape
+        // a mounted mod child rides as `<path>/mod.rut` (a host tree's
+        // as `<path>/mod.d.rut`, the rows lane's root as `mod.rut`) —
+        // its mod path stamps the index in the file's own mode; flat
+        // files keep today's shape
         let idx = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
             Some(p) => rut_lsp::deps::index_dep_mod(
                 &b.module,
                 &uri,
                 &p,
                 &f.src,
-                rut_parser::Mode::Impl,
+                f.mode,
                 b.namespace.as_deref(),
                 &b.consts,
             ),
