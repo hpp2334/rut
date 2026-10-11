@@ -9,6 +9,11 @@
   // `web` is the HOST DECL surface: the embedder
   // registers it in both lanes (src/mount.rs), so it rides no manifest
   // path here — the registration prefix every crossing carries is `web`.
+  // The DECLARATION is still structural, not absent: this pkg's diff
+  // layer `use web::*`, and the walk/mirror lanes stamp the
+  // presence-only `web` row onto the parsed manifest
+  // (src/mount.rs `declare_web`) — a rut.jsonc text cannot spell it
+  // while the pathless-descriptor grammar stays deferred.
   "name": "ui",
   "deps": {
     // THE STD CLOSURE, from the CDN — the same rut.lock-pinned jsDelivr

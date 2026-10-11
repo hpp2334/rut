@@ -65,9 +65,14 @@ fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>().join("\n");
 
     // the std closure walks through the manifest lane (rut.jsonc is
-    // the url carrier; the committed artifact seeds the fetcher), the
-    // brain's source is the root, and the async pair + calc offer
-    // beside it — the passes run for real, peer gate included
+    // the url carrier; the committed artifact seeds the fetcher) — the
+    // brain's source IS the walk's root, riding the manifest it read —
+    // and the embedder's extra offers ride beside it: the async pair
+    // (its declared row already mounted it; the re-offer is inert by
+    // first-pkg-wins) and calc (the host-install base — the Math
+    // bodies' decl surface; nothing `use`s it, and no row names it:
+    // the declared closure is the manifest's alone). The passes run
+    // for real, peer gate included
     let (loaded, rgh_host) = match load_rgh() {
         Ok(x) => x,
         Err(e) => {

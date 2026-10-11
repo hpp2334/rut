@@ -34,13 +34,15 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 fn main() {
-    // the manifest lane: this dir's `rut.jsonc` carries the deps, the
-    // walk runs its passes and yields the pkgs — then the chain
-    // (calc offered; the core prelude auto-rides), verify, drive
+    // the manifest lane: this dir's `rut.jsonc` carries the deps —
+    // calc is a DECLARED head like the rest (its path row into the
+    // toolchain tree), so the walk mounts exactly the declared closure
+    // and yields the pkgs — then the chain (the core prelude
+    // auto-rides; no hand offers: the declared rows are the whole
+    // world), verify, drive
     let loaded = load(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()

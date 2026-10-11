@@ -61,12 +61,12 @@ fn load() -> rut_driver::Loaded {
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
     // the manifest lane: `rut.jsonc` carries pouch + json (CDN bundles
     // — the LIGHT consumer world — the manifest header owns that
-    // story), the walk yields the pkgs — then the chain (calc offered;
-    // the core prelude auto-rides)
+    // story; calc is a declared path row into the toolchain tree), the
+    // walk yields exactly the declared closure — then the chain (the
+    // core prelude auto-rides; no hand offers)
     let loaded = load();
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install here
         .host_pkg(rut_std::strbuild::pkg())

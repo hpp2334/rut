@@ -28,7 +28,11 @@
 //! two-package law's count is unchanged, and the host crossing is not
 //! a mounted package). BOTH lanes offer it by hand: the embedder
 //! offers what the closure uses — [`web_pkg`], already part of every
-//! `*_run` chain here.
+//! `*_run` chain here. The DECLARATION is structural: `web` has no
+//! artifact and no pathable row, so the consumers that name it (the
+//! app root, ui, the crossing harness) carry a presence-only deps row
+//! stamped in Rust ([`declare_web`]) — the hand lane's only spelling
+//! while the pathless-descriptor grammar stays deferred.
 //!
 //! What died here before this file's current shape: the old
 //! concatenation module (ONE module fabricated from the store
@@ -89,8 +93,50 @@ fn child_mod(path: &str, vis: rut_ast::ast::Vis, text: &str) -> (String, rut_dri
     )
 }
 
+/// The structural `web` row — the declaration law's answer for the
+/// embedder-registered host decl surface. `web` has no artifact and no
+/// path/url (a WALKED run can't mount it; the embedder offers the
+/// surface itself), so a consumer that `use web::` declares it with a
+/// PRESENCE-ONLY deps row stamped onto the parsed manifest in Rust —
+/// the same empty-descriptor shape [`rut_driver::Manifest::lib`]
+/// spells, and the one spelling rut.jsonc text cannot carry (the
+/// grammar still refuses a pathless descriptor; the grammar change
+/// stays deferred). Declarations bound uses, never the reverse: the
+/// row is legal on a consumer even before any law fires.
+fn declare_web(mut m: rut_driver::Manifest) -> rut_driver::Manifest {
+    m.deps.entry("web".to_string()).or_default();
+    m
+}
+
+/// The specs that name `web` in this project — the walk lane stamps
+/// [`declare_web`] onto exactly these walked manifests (their
+/// rut.jsonc text cannot carry the row).
+const WEB_CONSUMERS: [&str; 3] = ["app", "ui", "harness"];
+
+/// ui's manifest, from its REAL rut.jsonc (the same text the walk lane
+/// parses — one source of truth) plus the structural `web` row: ui is
+/// a NON-ROOT library pkg whose diff layer crosses `web::*`.
+fn ui_manifest() -> rut_driver::Manifest {
+    declare_web(
+        rut_driver::parse_manifest(include_str!("../rut/ui/rut.jsonc"))
+            .expect("the ui manifest is valid"),
+    )
+}
+
+/// biz's manifest, from its REAL rut.jsonc (the root's own — its
+/// `name` is the ABI spec `app`) plus the structural `web` row: the
+/// app shell crosses `tim_after`.
+fn biz_manifest() -> rut_driver::Manifest {
+    declare_web(
+        rut_driver::parse_manifest(include_str!("../rut/biz/rut.jsonc"))
+            .expect("the biz manifest is valid"),
+    )
+}
+
 /// ui's module tree, offered whole: the root module plus its five
-/// mounted children (all `pub mod` — biz crosses into each).
+/// mounted children (all `pub mod` — biz crosses into each). The pkg
+/// rides its real manifest ([`ui_manifest`]) — the mirror states the
+/// same declaration the walk reads.
 pub fn ui_pkg() -> Pkg {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
         child_mod("store", rut_ast::ast::Vis::Pub, UI_STORE),
@@ -100,14 +146,17 @@ pub fn ui_pkg() -> Pkg {
         child_mod("components", rut_ast::ast::Vis::Pub, UI_COMPONENTS),
     ]
     .into();
-    Pkg { spec: "ui".into(), mods, ..Pkg::source("ui", UI_ROOT) }
+    let base = Pkg::source("ui", UI_ROOT).manifest(ui_manifest());
+    Pkg { spec: "ui".into(), mods, ..base }
 }
 
 /// biz's module tree, offered whole: the root module (the law header +
 /// the `mod` declarations) plus its three children (`domain`/`world`
 /// pub — the probe's use paths cross — `app` private). This is the
 /// handed-over ABI TREE both the native mirror (mount_lane) and the
-/// wasm lane (loader.js's rows wire) compose.
+/// wasm lane (loader.js's rows wire) compose. The pkg rides its real
+/// manifest ([`biz_manifest`]) — the root declares exactly what its
+/// modules `use`.
 pub fn biz_pkg() -> Pkg {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
         child_mod("domain", rut_ast::ast::Vis::Pub, BIZ_DOMAIN),
@@ -115,7 +164,8 @@ pub fn biz_pkg() -> Pkg {
         child_mod("app", rut_ast::ast::Vis::Self_, BIZ_APP),
     ]
     .into();
-    Pkg { spec: "app".into(), mods, ..Pkg::source("app", BIZ_ROOT) }
+    let base = Pkg::source("app", BIZ_ROOT).manifest(biz_manifest());
+    Pkg { spec: "app".into(), mods, ..base }
 }
 
 /// The rut/ project root — the manifest lane's walk point. Native
@@ -135,24 +185,41 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
 
 /// The `web` host surface as a pkg — the embedder half both lanes
 /// offer (the registration scope IS the package name: `web::*`, the
-/// prefix every crossing's host id carries).
+/// prefix every crossing's host id carries). The pkg rides the
+/// structural constructor's manifest: `web` is an embedder-registered
+/// surface with no artifact and no path/url, so [`rut_driver::Manifest::lib`]
+/// is its only declaration spelling (it `use`s nothing — the row set
+/// is empty).
 pub fn web_pkg() -> Result<Pkg, String> {
-    Ok(rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?.named("web"))
+    Ok(rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?
+        .named("web")
+        .manifest(rut_driver::Manifest::lib("web", &[])))
 }
 
 /// THE MIRROR — every package `rut/biz/rut.jsonc` names, offered by
 /// hand (the wasm lane; also mount_lane's comparison world): `web`
 /// (the crossing surface) + `pouch` + `nmap_host` (the committed CDN
 // artifact — the url-dep mount's in-memory twin) + `nmapset` + `ui`.
-/// The ROOT is deliberately absent: the app's SOURCE crosses the ABI
-/// ([`compile_app`] offers and compiles it).
+/// Every hand offer rides its real manifest — the same rut.jsonc text
+/// the walk lane parses ([`declare_web`] adds the structural `web` row
+/// where the pkg names the surface). The ROOT is deliberately absent:
+/// the app's SOURCE crosses the ABI ([`compile_app`] offers and
+/// compiles it).
 pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
     let nmap_host = rut_driver::Pkg::from_bundle(NMAP_HOST_BUNDLE)
         .map_err(|e| e.to_string())?
         .pkgs;
-    let mut pkgs = vec![web_pkg()?, Pkg::source("pouch", POUCH_RUT)];
+    let pouch = Pkg::source("pouch", POUCH_RUT).manifest(
+        rut_driver::parse_manifest(include_str!("../../../rut/pouch/rut.jsonc"))
+            .expect("the pouch manifest is valid"),
+    );
+    let nmapset = Pkg::source("nmapset", NMAPSET_RUT).manifest(
+        rut_driver::parse_manifest(include_str!("../../../rut/nmapset/rut.jsonc"))
+            .expect("the nmapset manifest is valid"),
+    );
+    let mut pkgs = vec![web_pkg()?, pouch];
     pkgs.extend(nmap_host);
-    pkgs.push(Pkg::source("nmapset", NMAPSET_RUT));
+    pkgs.push(nmapset);
     pkgs.push(ui_pkg());
     Ok(pkgs)
 }
@@ -221,7 +288,11 @@ fn std_remote() -> rut_native::HttpRemote {
 /// over [`std_remote`] — the same embedder shape the other examples
 /// spell, with the offline flavor swapped in. One noop-waker poll
 /// settles the READY futures: every url row is a primed cache hit, so
-/// nothing ever awaits the wire.
+/// nothing ever awaits the wire. After the walk, the embedder stamps
+/// the structural `web` row ([`declare_web`]) onto the walked
+/// consumers that name the surface ([`WEB_CONSUMERS`]) — their
+/// rut.jsonc text cannot carry it, and the embedder's registration is
+/// what puts `web` in these worlds.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
     use std::future::Future as _;
@@ -231,7 +302,15 @@ pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
     loop {
         match fut.as_mut().poll(&mut cx) {
-            std::task::Poll::Ready(v) => return v.map_err(|e| e.to_string()),
+            std::task::Poll::Ready(v) => {
+                let mut loaded = v.map_err(|e| e.to_string())?;
+                for p in loaded.pkgs.iter_mut() {
+                    if WEB_CONSUMERS.contains(&p.spec.as_str()) {
+                        p.manifest = declare_web(p.manifest.clone());
+                    }
+                }
+                return Ok(loaded);
+            }
             std::task::Poll::Pending => std::thread::yield_now(),
         }
     }
@@ -247,9 +326,10 @@ pub fn project() -> Result<Loaded, String> {
 
 /// A probe's manifest lane — `tests/<probe>/` walked for real, the
 /// probe's own manifest naming its deps (the sibling ui row stays a
-/// local `path`; the std rows are pinned jsDelivr urls; `web` rides no
-/// row). The softfail fixture is the deliberate exception: no crossings
-/// is its point, so its test loads bare.
+/// local `path`; the std rows are pinned jsDelivr urls; the `web` head
+/// rides the walk's structural stamp, see [`walk_dir`]). The softfail
+/// fixture is the deliberate exception: no crossings is its point, so
+/// its test loads bare.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn probe(probe: &str) -> Result<Loaded, String> {
     walk_dir(&probe_dir(probe))

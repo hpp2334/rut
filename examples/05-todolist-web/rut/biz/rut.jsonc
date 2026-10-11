@@ -13,6 +13,14 @@
   // writes with ctx.set (plain or mutation), and spells ONE crossing
   // name — tim_after. The ui package's store machinery is
   // module-private; biz cannot name it even to import it.
+  //
+  // THE WEB HEAD: the app shell `use web::{ tim_after }` — `web` is
+  // the embedder-registered host decl surface (no artifact, no
+  // pathable row), so it rides no deps row in this text; the
+  // declaration is STRUCTURAL — the walk/mirror lanes stamp the
+  // presence-only row onto the parsed manifest (src/mount.rs
+  // `declare_web`) while the pathless-descriptor grammar stays
+  // deferred.
   "name": "app",
   "deps": {
     // the sibling package — the consumer's OWN local package is what

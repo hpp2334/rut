@@ -120,11 +120,15 @@ fn main() {
     // ---- compile (frontend + LIR + binary emit) ----
     // A loose `.rut` workload uses the toolchain libs (`ink`+`ink_host`,
     // `pouch`) — third-party pkgs walked from the tree, plus the
-    // engine's calc (the core prelude auto-offers). A module-DIR
-    // workload (`rut.jsonc`, the `nmapset` bench dirs) walks its own
-    // `[deps]` graph instead. The rows snapshot (the ctx) comes from
-    // the offered pkgs — the per-iteration registries below install
-    // against it, exactly the snapshot a `.host_pkg` install would.
+    // embedder's calc offer (the Math bodies' decl base — a workload
+    // that `use calc::` declares it in its own rut.jsonc; the loose
+    // lane's bench root declares the whole offer, see below). A
+    // module-DIR workload (`rut.jsonc`, every dir under
+    // `benches/workloads/`) walks its own `[deps]` graph instead —
+    // exactly the declared closure mounts. The rows snapshot (the ctx)
+    // comes from the offered pkgs — the per-iteration registries below
+    // install against it, exactly the snapshot a `.host_pkg` install
+    // would.
     let t0 = Instant::now();
     let (ctx, prog) = if path.is_dir() {
         let loaded = rut_native::load_path_session(path)
@@ -164,12 +168,22 @@ fn main() {
             );
         }
         world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+        // the bench root rides a STRUCTURAL manifest: a loose file has
+        // no rut.jsonc of its own, so `Manifest::lib` declares exactly
+        // the heads this embedder's fixed offer carries — the workload
+        // may `use` any subset (declarations bound uses, never the
+        // reverse). A bench harness's root is not the law's gate; the
+        // dir-workload lane (rut run / the walked closure) is.
+        let bench = rut_driver::Pkg::source("bench", &src).manifest(rut_driver::Manifest::lib(
+            "bench",
+            &["calc", "ink", "pouch", "nmapset", "json", "strbuild"],
+        ));
         let mut chain = rut_driver::RutRun::new();
         for p in &world {
             chain = chain.pkg(p.clone());
         }
         let compiled = chain
-            .pkg(rut_driver::Pkg::source("bench", &src))
+            .pkg(bench)
             .entrypoint("bench")
             .compile()
             .unwrap_or_else(|e| fail(format!("compile: {e}")));
@@ -212,10 +226,12 @@ fn main() {
         hosts.install_host_pkg(&ctx, rut_std::math::pkg());
         // the nmap experiment's native key table (the mapset-host plan) —
         // installed only when the program's dep graph declares `nmap_host::`
-        // (the engine's `calc` is expected of every workload; `nmap_host`
-        // is a tree pkg like any other). The gate here is purely to
-        // minimize per-iteration work — the asymmetric contract makes a
-        // blanket install legal either way (unmounted scopes merge inert)
+        // (calc rides in every world this probe builds — declared by the
+        // workloads that `use` it, the embedder's offer otherwise;
+        // `nmap_host` is a tree pkg like any other). The gate here is
+        // purely to minimize per-iteration work — the asymmetric contract
+        // makes a blanket install legal either way (unmounted scopes
+        // merge inert)
         if ctx.is_mounted("nmap_host") {
             hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
         }

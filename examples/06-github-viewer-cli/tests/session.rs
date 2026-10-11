@@ -96,8 +96,9 @@ impl Sinks {
 // -------------------------------------------------------------- boot ---
 
 /// The world the brain needs, as walked pkgs: the tree pkgs (pouch,
-/// nmapset, json, the http pair) + rgh_host + the async pair. Offer
-/// with `.pkg(..)`, first-pkg-wins.
+/// nmapset, json, the http pair) + rgh_host + the async pair — every
+/// one a walked pkg riding its real rut.jsonc manifest. Offer with
+/// `.pkg(..)`, first-pkg-wins.
 fn world_pkgs() -> Vec<rut_driver::Pkg> {
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     let mut pkgs = Vec::new();
@@ -115,7 +116,23 @@ fn world_pkgs() -> Vec<rut_driver::Pkg> {
     pkgs
 }
 
-/// Compile `src` as the brain over the world: calc offered, the core
+/// The brain pkg with its REAL manifest: `rut.jsonc` parsed once — the
+/// single source of truth the walk lane (`load_path_session_with`)
+/// reads. The hand lane never re-resolves the rows (the url row rides
+/// as data), but the declaration law's subject is complete: the
+/// brain's `use` heads — pouch, json, futures, http, rgh_host — are
+/// exactly the manifest's declared rows, so the same text declares for
+/// both mounts. The one head no row can name is absent here by
+/// construction: the brain uses no embedder-registered surface.
+fn brain(src: &str) -> rut_driver::Pkg {
+    let m = rut_driver::parse_manifest(include_str!("../rut.jsonc"))
+        .expect("the rgh manifest is valid");
+    rut_driver::Pkg::source("rgh", src).manifest(m)
+}
+
+/// Compile `src` as the brain over the world: the walked pkgs (each
+/// carrying its manifest) + calc (the embedder's host-install base
+/// offer — the Math bodies' decl surface; nothing `use`s it), the core
 /// prelude riding auto, the body installs riding the chain, one
 /// `.compile()` (the gate ran inside).
 fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Compiled {
@@ -128,7 +145,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
     }
     let compiled = chain
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(rut_driver::Pkg::source("rgh", src))
+        .pkg(brain(src))
         .entrypoint("rgh")
         .compile()
         .expect("compile the brain");
@@ -156,8 +173,9 @@ fn world_expected() -> rut_vm::interp::ExpectedHostFns {
 /// rgh_host rows over the sinks (exit RECORDS — the one-way door is
 /// the embedder's), and checks the decl ↔ bodies contract pre-boot
 fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static) -> (Vm, Sinks, HttpFixture) {
-    // the brain compiles over the walked world (calc offered; the core
-    // prelude auto-rides) with the body installs riding the chain
+    // the brain compiles over the walked world (every pkg riding its
+    // manifest; calc is the embedder's host-install base offer, the
+    // core prelude auto-rides) with the body installs riding the chain
     let sinks = Sinks::default();
     let (http_pkg, fx) = rut_std::http::pkg_with(fix);
     let mut compiled = compile_brain(

@@ -124,13 +124,13 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 fn main() {
     // the manifest lane: this dir's `rut.jsonc` carries the deps
     // (`pouch` + `json` as CDN bundles — the LIGHT consumer world; the
-    // manifest header owns that story), the walk runs its passes and
-    // yields the pkgs — then the chain (calc offered; the core prelude
-    // auto-rides), verify, drive
+    // manifest header owns that story; calc is a declared path row
+    // into the toolchain tree), the walk mounts exactly the declared
+    // closure — then the chain (the core prelude auto-rides; no hand
+    // offers), verify, drive
     let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install here
         .host_pkg(rut_std::strbuild::pkg())

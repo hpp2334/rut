@@ -3,5 +3,9 @@
   // probe), its own module dir like every rut program. Dep-free on
   // purpose: the only `use` names `web`, and `web` is the HOST DECL
   // surface — the embedder registers it in both lanes (src/mount.rs), so
-  // it rides no manifest path here, the same shape the rut/ packages ride.
+  // it rides no manifest path here, the same shape the rut/ packages
+  // ride. The DECLARATION is still structural, not absent: the walk
+  // lane stamps the presence-only `web` row onto this pkg's parsed
+  // manifest (src/mount.rs `declare_web`) — a rut.jsonc text cannot
+  // spell it while the pathless-descriptor grammar stays deferred.
   "name": "harness"}

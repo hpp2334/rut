@@ -54,12 +54,12 @@ fn load() -> rut_driver::Loaded {
 
 fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     // the manifest lane: `rut.jsonc` carries the deps (pouch rides its
-    // CDN bundle, pinned), the walk yields the pkgs — then the chain
-    // (calc offered; the core prelude auto-rides)
+    // CDN bundle, pinned; calc is a declared path row into the
+    // toolchain tree), the walk yields exactly the declared closure —
+    // then the chain (the core prelude auto-rides; no hand offers)
     let loaded = load();
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()
