@@ -25,6 +25,10 @@
 //!   rut_parse_manifest(ptr, len) -> ptr        rut.jsonc bytes -> the
 //!                                              dep-table JSON (or the
 //!                                              error envelope)
+//!   rut_set_lock(ptr, len) -> ptr              rut.lock bytes -> the
+//!                                              url→pin ledger
+//!                                              rut_parse_manifest stamps
+//!                                              onto url rows
 //!   rut_add_def_named(uri, name, src)          index a dep source file
 //!                                              under its module NAME
 //!   rut_add_def_mod(uri, name, path, src)
@@ -72,6 +76,11 @@ struct State {
     docs: HashMap<String, String>,
     /// the std surface + workspace files, in lookup order
     defs: Vec<DefIndex>,
+    /// url → pin, from the workspace root's `rut.lock` (the host reads
+    /// the file and hands the bytes to `rut_set_lock`; the manifest
+    /// grammar carries no pins). `rut_parse_manifest` stamps the rows
+    /// onto its url deps.
+    lock_pins: std::collections::BTreeMap<String, String>,
 }
 
 static mut STATE: Option<State> = None;
@@ -83,6 +92,7 @@ fn state() -> &'static mut State {
             STATE = Some(State {
                 docs: HashMap::new(),
                 defs: rut_lsp::std_surface::indexes(),
+                lock_pins: std::collections::BTreeMap::new(),
             });
         }
         STATE.as_mut().unwrap_unchecked()
@@ -409,14 +419,37 @@ fn dep_table_json(t: &rut_lsp::deps::DepTable) -> serde_json::Value {
 
 /// parse one `rut.jsonc` — the dep-table JSON out (the module's identity,
 /// its entry sources with the mode each indexes in, and its dep rows
-/// with the url rows' cache paths). A malformed manifest is the error
-/// envelope — the host surfaces it as a hint.
+/// with the url rows' cache paths and lock-sourced pins). A malformed
+/// manifest is the error envelope — the host surfaces it as a hint.
 #[no_mangle]
 pub extern "C" fn rut_parse_manifest(ptr: *const u8, len: usize) -> *mut u8 {
     let text = unsafe { read_str(ptr, len) };
-    match rut_lsp::deps::dep_table(text) {
+    match rut_lsp::deps::dep_table_pinned(text, &state().lock_pins) {
         Ok(t) => json_envelope(dep_table_json(&t)),
         Err(e) => json_envelope(serde_json::json!({ "error": e })),
+    }
+}
+
+/// hand the dep-table face the workspace root's `rut.lock` bytes — the
+/// url→pin ledger `rut_parse_manifest` stamps onto url rows (the lock is
+/// the pin's only source; the manifest grammar retired `sha256`).
+/// Answers `{"pins": N}`, or the `{"error": …}` envelope for a
+/// malformed lock — the host surfaces it as a hint, and the (empty)
+/// ledger stands so url rows answer `sha256: null` (the unpinned
+/// refusal), never guessed pins.
+#[no_mangle]
+pub extern "C" fn rut_set_lock(ptr: *const u8, len: usize) -> *mut u8 {
+    let text = unsafe { read_str(ptr, len) };
+    match rut_lsp::deps::lock_pins(text) {
+        Ok(pins) => {
+            let n = pins.len();
+            state().lock_pins = pins;
+            json_envelope(serde_json::json!({ "pins": n }))
+        }
+        Err(e) => {
+            state().lock_pins = std::collections::BTreeMap::new();
+            json_envelope(serde_json::json!({ "error": e }))
+        }
     }
 }
 
@@ -588,7 +621,6 @@ mod tests {
     /// every state-touching test holds this for its whole body
     static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    const PLUGIN_MANIFEST: &str = include_str!("../../../examples/03-plugin/plugin/rut.jsonc");
     const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
     /// the CDN url's own sha256 — the cache filename rut-lsp computes
     /// (the URL STRING is hashed, never the bytes)
@@ -608,11 +640,40 @@ mod tests {
         }
     }
 
+    /// The plugin manifest's dep shape, INLINE and unpinned: the real
+    /// `examples/03-plugin/plugin/rut.jsonc` migrates off the retired
+    /// manifest `sha256` key in the docs/examples phase — the grammar
+    /// refuses the key today, so the host-side fixture is the shape
+    /// every manifest must now spell (pins ride `rut_set_lock`).
+    const PLUGIN_SHAPE: &str = r#"{
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "plugin",
+  "deps": {
+    "server": { "path": "../server" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
+  }
+}"#;
+
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
+    const POUCH_PIN: &str = "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466";
+
+    /// hand a lock spelling `rows` to `rut_set_lock`, byte-typed
+    fn set_lock(rows: Vec<rut_driver::LockRow>) -> serde_json::Value {
+        let text = rut_driver::render_lock(&rut_driver::LockFile::from_rows(rows));
+        rut_begin();
+        take(rut_set_lock(text.as_ptr(), text.len()))
+    }
+
     #[test]
     fn manifest_envelope_spells_the_dep_table() {
         let _lock = TEST_SERIAL.lock().unwrap();
+        // the lock WITHOUT a pouch row stands first: the url row answers
+        // `sha256: null` — the unpinned refusal, never a guessed pin
+        let out = set_lock(vec![]);
+        assert_eq!(out["pins"], 0, "{out}");
         rut_begin();
-        let out = take(rut_parse_manifest(PLUGIN_MANIFEST.as_ptr(), PLUGIN_MANIFEST.len()));
+        let out = take(rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()));
         assert_eq!(out["name"], "plugin");
         // the body rides the mod.rut convention (the entry keys are repealed)
         assert_eq!(
@@ -628,7 +689,40 @@ mod tests {
         let pouch = rows.iter().find(|r| r["name"] == "pouch").unwrap();
         assert_eq!(pouch["source"]["kind"], "url");
         assert_eq!(pouch["source"]["cache_path"], POUCH_CACHE);
-        assert!(pouch["source"]["sha256"].as_str().unwrap().len() == 64);
+        assert!(pouch["source"]["sha256"].is_null(), "no lock row ⇒ unpinned: {}", pouch["source"]);
+
+        // the lock's row stamps the pin — the JSON keeps the `sha256`
+        // field, now LOCK-SOURCED (the manifest itself stays unpinned)
+        let out = set_lock(vec![rut_driver::LockRow {
+            pkg: "pouch".into(),
+            url: POUCH_URL.into(),
+            sha256: POUCH_PIN.into(),
+        }]);
+        assert_eq!(out["pins"], 1, "{out}");
+        rut_begin();
+        let out = take(rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()));
+        let pouch = out["deps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["name"] == "pouch")
+            .unwrap();
+        assert_eq!(pouch["source"]["sha256"], POUCH_PIN, "the pin is lock-sourced");
+        assert_eq!(pouch["source"]["cache_path"], POUCH_CACHE);
+    }
+
+    #[test]
+    fn a_malformed_lock_is_the_error_envelope_and_stands_empty() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        rut_begin();
+        let bad = take(rut_set_lock(b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".as_ptr(), b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".len()));
+        assert!(bad["error"].as_str().unwrap().contains("64 hex digits"), "{bad}");
+        // the empty ledger stands: the url row answers null (the host
+        // shows the unpinned refusal), never half-parsed pins
+        rut_begin();
+        let out = take(rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()));
+        let pouch = out["deps"].as_array().unwrap().iter().find(|r| r["name"] == "pouch").unwrap();
+        assert!(pouch["source"]["sha256"].is_null(), "{}", pouch["source"]);
     }
 
     #[test]

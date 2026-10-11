@@ -714,7 +714,9 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     .unwrap();
 
     // the url rows: pouch pinned + PRIMED from the committed bundle,
-    // ghost pinned but primed nowhere (the miss), bare unpinned
+    // ghost pinned but primed nowhere (the miss), bare unpinned —
+    // pins ride `rut.lock` (the CLI's install writes it; the manifest
+    // grammar carries no sha256)
     const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
     const GHOST_URL: &str = "https://example.invalid/ghost.rutbundle";
     const BARE_URL: &str = "https://example.invalid/bare.rutbundle";
@@ -723,19 +725,31 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     let manifest = format!(
         r#"{{
   // the editor rides the same grammar the CLI parses — the root
-  // module is `mod.rut`, never a manifest key
+  // module is `mod.rut`, never a manifest key; the pins ride rut.lock
   "name": "wsapp",
   "deps": {{
     "gadgets": {{ "path": "../outside" }},
-    "pouch": {{ "url": "{POUCH_URL}", "sha256": "{}" }},
-    "ghost": {{ "url": "{GHOST_URL}", "sha256": "{}" }},
+    "pouch": {{ "url": "{POUCH_URL}" }},
+    "ghost": {{ "url": "{GHOST_URL}" }},
     "bare": {{ "url": "{BARE_URL}" }}
   }}
 }}"#,
-        sha256_hex(POUCH_BUNDLE),
-        "0".repeat(64),
     );
     std::fs::write(ws.join("rut.jsonc"), manifest).unwrap();
+    let lock = rut_driver::LockFile::from_rows(vec![
+        rut_driver::LockRow {
+            pkg: "pouch".into(),
+            url: POUCH_URL.into(),
+            sha256: sha256_hex(POUCH_BUNDLE),
+        },
+        rut_driver::LockRow {
+            pkg: "ghost".into(),
+            url: GHOST_URL.into(),
+            sha256: "0".repeat(64),
+        },
+        // `bare` has no row — the walk's unpinned refusal
+    ]);
+    std::fs::write(ws.join("rut.lock"), rut_driver::render_lock(&lock)).unwrap();
 
     let main_src = "\
 use gadgets::{ Widget };
@@ -975,7 +989,10 @@ async fn dep_walk_hint_once_for_cache_miss_and_unpinned() {
         .iter()
         .find(|h| h["params"]["message"].as_str().unwrap().contains("bare"))
         .expect("the unpinned hint names the dep");
-    assert!(bare["params"]["message"].as_str().unwrap().contains("sha256"), "{bare}");
+    let msg = bare["params"]["message"].as_str().unwrap();
+    assert!(msg.contains("not pinned"), "{msg}");
+    assert!(msg.contains("rut.lock has no row for it"), "{msg}");
+    assert!(msg.contains("run `rut install`"), "{msg}");
     let _ = remove_ws(fx.base);
 }
 

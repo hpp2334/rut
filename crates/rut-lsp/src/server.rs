@@ -21,13 +21,17 @@
 //! source indexes through `rut_lsp::deps::index_dep` into the same defs
 //! store the scan fills.
 //!
-//! Url deps are CACHE-ONLY here: the bytes are read from the dep table's
-//! Rust-computed `.rut/cache/<sha256(url)>.rutbundle` path with the
-//! sha256 pin verified at the mount door; a miss or an unpinned row is
-//! ONE `window/showMessage` (info) naming the dep and the fetch
-//! alternative. This server face NEVER touches the network — fetching is
-//! the extension's job (`rut fetch` / the VS Code extension warm the
-//! same shared cache). The asymmetry with the extension is deliberate.
+//! Url deps are pinned by `<root>/rut.lock` (the CLI's install writes
+//! it; the manifest grammar carries no pins): the walk reads the lock
+//! once at the root and `dep_table_pinned` stamps its rows onto the url
+//! rows. The bytes are read from the dep table's Rust-computed
+//! `.rut/cache/<sha256(url)>.rutbundle` path with the lock pin verified
+//! at the mount door; a miss, an unpinned row, or a mismatched cache is
+//! ONE `window/showMessage` (info) naming the dep and the CLI
+//! alternative. This server face NEVER touches the network — fetching
+//! is the extension's job (`rut install` / `rut fetch` / the VS Code
+//! extension warm the same shared cache). The asymmetry with the
+//! extension is deliberate.
 //!
 //! The server registers no file watchers today. When a client wires
 //! `workspace/didChangeWatchedFiles` for `**/rut.jsonc` +
@@ -122,14 +126,35 @@ type DepHint = (MessageType, String);
 
 /// walk the workspace root's manifest deps into `defs`: path deps
 /// recurse against the manifest dir, url deps mount from `.rut/cache/`
-/// (cache-only — see the module doc). Returns the hints to show.
+/// pinned by the root's `rut.lock` (cache-only — see the module doc).
+/// Returns the hints to show.
 fn walk_workspace_deps(root: &Path, defs: &mut Vec<DefIndex>) -> Vec<DepHint> {
+    // the pin ledger: <root>/rut.lock — the url rows' pins (the
+    // manifest grammar carries none). A missing file is no pins (a
+    // project with no url deps needs no lock — and an unpinned url row
+    // refuses with the install recipe); a present-but-malformed lock is
+    // ONE error hint naming the file, still no pins (the same loud
+    // shape the loader's load law speaks).
+    let (pins, hints) = match std::fs::read_to_string(root.join("rut.lock")) {
+        Ok(text) => match deps::lock_pins(&text) {
+            Ok(pins) => (pins, Vec::new()),
+            Err(e) => (
+                std::collections::BTreeMap::new(),
+                vec![(
+                    MessageType::ERROR,
+                    format!("rut: {} — {e}", root.join("rut.lock").display()),
+                )],
+            ),
+        },
+        Err(_) => (std::collections::BTreeMap::new(), Vec::new()),
+    };
     let mut w = Walk {
         root: root.to_path_buf(),
+        pins,
         defs,
         seen: HashSet::new(),
         files: MAX_DEP_FILES,
-        hints: Vec::new(),
+        hints,
         hint_keys: HashSet::new(),
     };
     w.manifest(root, 1);
@@ -139,6 +164,8 @@ fn walk_workspace_deps(root: &Path, defs: &mut Vec<DefIndex>) -> Vec<DepHint> {
 struct Walk<'a> {
     /// the workspace root — `.rut/cache/` resolves against it
     root: PathBuf,
+    /// url → pin, from the root's `rut.lock` (the pin ledger)
+    pins: std::collections::BTreeMap<String, String>,
     defs: &'a mut Vec<DefIndex>,
     /// resolved manifest dirs — the cycle break
     seen: HashSet<PathBuf>,
@@ -183,7 +210,7 @@ impl<'a> Walk<'a> {
         let Ok(text) = std::fs::read_to_string(dir.join(MANIFEST_NAME)) else {
             return; // no manifest here — nothing to parse, nothing to hint
         };
-        let table = match deps::dep_table(&text) {
+        let table = match deps::dep_table_pinned(&text, &self.pins) {
             Ok(t) => t,
             Err(e) => {
                 self.hint_once(
@@ -291,19 +318,20 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// one url row — the CACHE-ONLY mount door. The pin is law: only
-    /// pinned rows are even considered, only pin-verified bytes mount.
-    /// The server cannot fetch (the deliberate asymmetry — the
-    /// extension's job), so a miss/poisoned cache is ONE info hint
-    /// naming the CLI/extension alternative, never silent, never network.
+    /// one url row — the CACHE-ONLY mount door. The pin is law (the
+    /// root rut.lock's row): only pinned rows are even considered, only
+    /// pin-verified bytes mount. The server cannot fetch (the
+    /// deliberate asymmetry — the extension's job), so an unpinned row,
+    /// a miss, or a poisoned cache is ONE info hint naming the CLI
+    /// alternative, never silent, never network.
     fn mount_url(&mut self, name: &str, url: &str, pin: Option<&str>, cache_path: &str) {
         let Some(pin) = pin else {
             self.hint_once(
                 format!("unpinned:{url}"),
                 MessageType::INFO,
                 format!(
-                    "rut: dep '{name}' has no sha256 pin — the editor never mounts unpinned \
-                     url bytes; pin the bundle's hash beside its url in {MANIFEST_NAME}"
+                    "rut: dep '{name}' ({url}) is not pinned — rut.lock has no row for it: \
+                     run `rut install`"
                 ),
             );
             return;
@@ -311,16 +339,17 @@ impl<'a> Walk<'a> {
         let bytes = match std::fs::read(self.root.join(cache_path)) {
             Ok(bytes) => {
                 if hex_sha256(&bytes) != pin {
-                    // poisoned entry: the pin is checked at the mount door
-                    // on every load — the cache-only face cannot refetch to
-                    // heal, so the bytes stay out and the hint names the
-                    // re-warm
+                    // poisoned entry: the lock pin is checked at the
+                    // mount door on every load — the cache-only face
+                    // cannot refetch to heal, so the bytes stay out and
+                    // the hint names the re-warm
                     self.hint_once(
                         format!("pin:{url}"),
                         MessageType::INFO,
                         format!(
                             "rut: dep '{name}' — sha256 pin mismatch in .rut/cache for {url}: \
-                             delete the cached file and run `rut fetch` to re-warm the cache"
+                             rut.lock pins {pin}; delete the cached file and run `rut install` \
+                             (or `rut fetch`) to re-warm the cache"
                         ),
                     );
                     return;

@@ -160,6 +160,8 @@ fn fetch_cache_offline_pin_refusal_and_eviction() {
     assert_eq!(code, 2, "a pin refusal exits 2: {err}");
     assert!(err.contains("sha256 pin mismatch"), "{err}");
     assert!(err.contains(url.as_str()), "{err}");
+    // the pin's SOURCE is the lock now (the manifest row is unpinned)
+    assert!(err.contains("rut.lock pins"), "{err}");
     assert!(!entry.exists(), "the poisoned entry must be evicted");
 
     // 4. healed: serve again — the entry re-fetches and the run passes

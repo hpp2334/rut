@@ -8,8 +8,11 @@
 //! - [`dep_table`] parses one manifest into a [`DepTable`]: the
 //!   module's own identity (`name`, entry sources with the mode each
 //!   indexes in, `namespace`, `consts`) plus its dep rows (`deps`,
-//!   `dev-deps`, `peer-deps`), each a `path` directory or a pinned
-//!   `url` bundle with the `.rut/cache/` cache path computed here.
+//!   `dev-deps`, `peer-deps`), each a `path` directory or a `url`
+//!   bundle with the `.rut/cache/` cache path computed here. The pin
+//!   is NOT the manifest's business — [`lock_pins`] reads `rut.lock`
+//!   (the walk root's ledger) and [`dep_table_pinned`] stamps its rows
+//!   onto the url rows.
 //! - [`bundle_sources`] unpacks a `.rutbundle` into the module's OWN
 //!   source files — the zip's own `rut.jsonc` names the module; the
 //!   rode-along dep groups are the loader's business, not the
@@ -43,9 +46,10 @@ pub struct EntrySource {
 }
 
 /// Where a dep row's bytes live: a directory beside the manifest, or a
-/// remote `.rutbundle` pinned by its sha256. The cache path is
-/// computed HERE (`.rut/cache/<sha256(url)>.rutbundle`) — the faces
-/// never hash URLs.
+/// remote `.rutbundle` pinned by its sha256 (the pin lock-sourced —
+/// `rut.lock` at the dep-walk root, never the manifest). The cache
+/// path is computed HERE (`.rut/cache/<sha256(url)>.rutbundle`) — the
+/// faces never hash URLs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepSource {
     Path { dir: String },
@@ -101,14 +105,17 @@ pub fn cache_path(url: &str) -> String {
 }
 
 /// One dep row from a parsed descriptor map. `deps` rows may be path-
-/// or url-sourced (the pin beside the url); `peer-deps`/`dev-deps`
-/// descriptors are path-only by grammar (a url there refused at parse)
-/// — the url arm simply never fires for them.
+/// or url-sourced; `peer-deps`/`dev-deps` descriptors are path-only by
+/// grammar (a url there refused at parse) — the url arm simply never
+/// fires for them. Url rows parse UNPINNED: the manifest grammar
+/// retired `sha256` (an old bundle manifest's pin rides as inert
+/// metadata the compat lane ignores, exactly like the loader does) —
+/// the pin arrives from `rut.lock` via [`dep_table_pinned`].
 fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> DepRow {
     let source = match (desc.get("path"), desc.get("url")) {
         (_, Some(url)) => DepSource::Url {
             url: url.clone(),
-            sha256: desc.get("sha256").cloned(),
+            sha256: None,
             cache_path: cache_path(url),
         },
         (Some(dir), _) => DepSource::Path { dir: dir.clone() },
@@ -131,6 +138,47 @@ fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> Dep
 pub fn dep_table(manifest_text: &str) -> Result<DepTable, String> {
     let m: Manifest = parse_manifest(manifest_text).map_err(|e| e.to_string())?;
     dep_table_of(m)
+}
+
+/// The url → pin map one `rut.lock` spells — the pin ledger the faces
+/// read at the dep-walk root and thread through [`dep_table_pinned`].
+/// The lock is the pin's ONLY source (the manifest grammar retired
+/// `sha256`); the map is keyed by url because that is the identity the
+/// CLI's install writes rows under (one lock pins the whole closure,
+/// nested path-dep url rows included). Malformed text is the error —
+/// the caller (the server walk) surfaces it as a hint, never silent
+/// pins.
+pub fn lock_pins(
+    lock_text: &str,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let lock = rut_driver::parse_lock(lock_text).map_err(|e| e.to_string())?;
+    Ok(lock
+        .deps()
+        .iter()
+        .map(|r| (r.url.clone(), r.sha256.clone()))
+        .collect())
+}
+
+/// [`dep_table`] with the dep-walk root's `rut.lock` applied: every url
+/// row the lock pins answers `sha256: Some(pin)`; a url with no lock
+/// row stays `None` — the walk refuses it with the install recipe
+/// (the editor's mirror of the loader's `Unpinned` law).
+pub fn dep_table_pinned(
+    manifest_text: &str,
+    pins: &std::collections::BTreeMap<String, String>,
+) -> Result<DepTable, String> {
+    let mut t = dep_table(manifest_text)?;
+    for row in t
+        .deps
+        .iter_mut()
+        .chain(t.dev_deps.iter_mut())
+        .chain(t.peer_deps.iter_mut())
+    {
+        if let DepSource::Url { url, sha256, .. } = &mut row.source {
+            *sha256 = pins.get(url).cloned();
+        }
+    }
+    Ok(t)
 }
 
 /// [`dep_table`] over the bundle reader's compat lane: an archive's
@@ -513,13 +561,31 @@ pub fn index_dep_mod(
 mod tests {
     use super::*;
 
-    const PLUGIN_MANIFEST: &str = include_str!("../../../examples/03-plugin/plugin/rut.jsonc");
     const CALC_MANIFEST: &str = include_str!("../../../rut/calc/rut.jsonc");
     const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
 
+    /// The plugin manifest's dep shape, INLINE and unpinned: the real
+    /// `examples/03-plugin/plugin/rut.jsonc` migrates off the retired
+    /// manifest `sha256` key in the docs/examples phase — the grammar
+    /// refuses the key today, so the editor's fixture is the shape
+    /// every manifest must now spell (pins live in rut.lock).
+    const PLUGIN_SHAPE: &str = r#"{
+  "format": "rutbundle",
+  "format_version": 10,
+  "name": "plugin",
+  "deps": {
+    "server": { "path": "../server" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
+  }
+}"#;
+
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
+    const POUCH_PIN: &str = "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466";
+
     #[test]
     fn plugin_manifest_rows_path_and_url() {
-        let t = dep_table(PLUGIN_MANIFEST).expect("the real plugin manifest parses");
+        // unpinned in the manifest — the pin is the lock's row
+        let t = dep_table(PLUGIN_SHAPE).expect("the plugin-shape manifest parses");
         assert_eq!(t.name.as_deref(), Some("plugin"));
         // the entry: one lib source, Impl mode
         // the body rides the mod.rut convention (the entry keys are repealed)
@@ -532,15 +598,13 @@ mod tests {
         assert_eq!(server.source, DepSource::Path { dir: "../server".into() });
         assert!(!server.optional);
         assert!(server.lib.is_none());
-        // … and the pinned url row with the cache path computed here
+        // … and the url row: UNPINNED at parse (sha256 retired from the
+        // grammar), the cache path computed here
         let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
         match &pouch.source {
             DepSource::Url { url, sha256, cache_path } => {
-                assert_eq!(url, "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle");
-                assert_eq!(
-                    sha256.as_deref(),
-                    Some("2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466")
-                );
+                assert_eq!(url, POUCH_URL);
+                assert_eq!(sha256, &None, "the manifest is never the pin's source");
                 assert_eq!(
                     cache_path,
                     &format!(".rut/cache/{}.rutbundle", {
@@ -553,6 +617,43 @@ mod tests {
             other => panic!("pouch must be a url row: {other:?}"),
         }
         assert!(t.dev_deps.is_empty() && t.peer_deps.is_empty());
+    }
+
+    #[test]
+    fn the_lock_pins_the_url_rows_and_a_missing_row_stays_none() {
+        // dep_table_pinned: the walk-root rut.lock's rows stamp the url
+        // rows (the manifest's own grammar cannot); a url the lock does
+        // not name stays None — the walk's install-recipe refusal
+        let pins = lock_pins(&rut_driver::render_lock(&rut_driver::LockFile::from_rows(
+            vec![rut_driver::LockRow { pkg: "pouch".into(), url: POUCH_URL.into(), sha256: POUCH_PIN.into() }],
+        )))
+        .expect("the lock parses");
+        let t = dep_table_pinned(PLUGIN_SHAPE, &pins).expect("parses");
+        let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
+        assert_eq!(
+            pouch.source,
+            DepSource::Url {
+                url: POUCH_URL.into(),
+                sha256: Some(POUCH_PIN.into()),
+                cache_path: cache_path(POUCH_URL),
+            },
+            "the pin is lock-sourced"
+        );
+        // a url the lock has no row for: None — never a guessed pin
+        let t = dep_table_pinned(PLUGIN_SHAPE, &std::collections::BTreeMap::new()).expect("parses");
+        let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
+        assert!(
+            matches!(&pouch.source, DepSource::Url { sha256: None, .. }),
+            "no lock row ⇒ unpinned: {:?}",
+            pouch.source
+        );
+    }
+
+    #[test]
+    fn a_malformed_lock_is_the_error_not_silent_pins() {
+        let err = lock_pins(r#"{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p", "url": "https://x/p.rutbundle", "sha256": "nothex"}]}"#)
+            .unwrap_err();
+        assert!(err.contains("64 hex digits"), "{err}");
     }
 
     #[test]
