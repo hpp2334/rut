@@ -22,9 +22,10 @@
  *   node scripts/pack-std.cjs --check      gate mode: repack to a temp
  *                                          dir, byte-compare against
  *                                          the committed artifacts, and
- *                                          assert every example pin
- *                                          row matches sha256(committed
- *                                          bytes) + the url shape.
+ *                                          assert every example
+ *                                          rut.lock pin row matches
+ *                                          sha256(committed bytes) +
+ *                                          the url shape.
  *                                          Exit 1 on drift.
  *   node scripts/pack-std.cjs --tag        PRINT the publish commands
  *                                          (git tag + push). Never runs
@@ -45,11 +46,11 @@
  * THE PIN BOUNDARY (the file-modules phase): dist/std is the WORKING
  * envelope — repacked whenever the pack shape moves (the mod.rut
  * rename did; the `::` path-law break did), byte-checked by --check's
- * freshness half. The example manifests' CDN rows ride the committed
- * `dist/std-v9/` bytes — the offline gates' wire — and --check's pin
- * half asserts every row against THEM, not against dist/std. The
- * reader's compat lane loads the old envelope; that is a loading law,
- * not a transition.
+ * freshness half. The example projects' rut.lock rows ride the
+ * committed `dist/std-v9/` bytes — the offline gates' wire — and
+ * --check's pin half asserts every row against THEM, not against
+ * dist/std. The reader's compat lane loads the old envelope; that is a
+ * loading law, not a transition.
  */
 "use strict";
 
@@ -154,53 +155,27 @@ const PKGS = [
   { dir: "bench-cross" },
 ];
 
-// The example manifests' url rows — the frozen pins (--check verifies
-// them; nothing rewrites them). `deps` lists the dep KEYS whose rows
-// are pinned; the PINNED snapshot (`dist/std-v9/`) must carry an
-// artifact per distinct key — the bytes the rows' sha256 commits to.
+// The example roots' rut.lock files — the frozen pins (--check verifies
+// them; nothing rewrites them). Each lock's rows are url-keyed, sha256
+// per row; the PINNED snapshot (`dist/std-v9/`) must carry an artifact
+// per distinct url key — the bytes each row's sha256 commits to.
 //
-// THE BOUNDARY (the file-modules phase): the rows are FROZEN. The
-// pack shape moved (mod.rut), dist/std repacked — the pins did NOT
-// move: they name the std-v9 bytes, which load through the reader's
-// compat lane (a loading law, not a transition). --pins is gone: no
-// tool rewrites these rows anymore.
+// THE BOUNDARY (the lock phase): the rows are FROZEN. The pack shape
+// moved (mod.rut), dist/std repacked — the pins did NOT move: they
+// name the std-v9 bytes, which load through the reader's compat lane
+// (a loading law, not a transition). The manifest sha256 key is
+// retired — the lock is THE pin law. --pins is gone: no tool rewrites
+// these rows anymore.
 const EXAMPLES = [
-  {
-    manifest: "examples/00-todolist/rut.jsonc",
-    deps: ["pouch"],
-  },
-  {
-    manifest: "examples/01-sort/rut.jsonc",
-    deps: ["pouch"],
-  },
-  {
-    manifest: "examples/02-digest/rut.jsonc",
-    deps: ["pouch", "json", "nmapset"],
-  },
-  {
-    manifest: "examples/03-plugin/plugin/rut.jsonc",
-    deps: ["pouch"],
-  },
-  {
-    manifest: "examples/05-todolist-web/rut/biz/rut.jsonc",
-    deps: ["pouch", "nmapset"],
-  },
-  {
-    manifest: "examples/05-todolist-web/rut/ui/rut.jsonc",
-    deps: ["pouch", "nmapset"],
-  },
-  {
-    manifest: "examples/05-todolist-web/tests/store_probe/rut.jsonc",
-    deps: ["pouch"],
-  },
-  {
-    manifest: "examples/05-todolist-web/tests/t1_harness/rut.jsonc",
-    deps: ["pouch", "nmapset"],
-  },
-  {
-    manifest: "examples/06-github-viewer-cli/rut.jsonc",
-    deps: ["http"],
-  },
+  "examples/00-todolist/rut.lock",
+  "examples/01-sort/rut.lock",
+  "examples/02-digest/rut.lock",
+  "examples/03-plugin/plugin/rut.lock",
+  "examples/05-todolist-web/rut/biz/rut.lock",
+  "examples/05-todolist-web/rut/ui/rut.lock",
+  "examples/05-todolist-web/tests/store_probe/rut.lock",
+  "examples/05-todolist-web/tests/t1_harness/rut.lock",
+  "examples/06-github-viewer-cli/rut.lock",
 ];
 
 // ---------------------------------------------------------------------------
@@ -290,45 +265,50 @@ if (doCheck) {
   }
   fs.rmSync(tmp, { recursive: true, force: true });
 
-  // the example pins: every url row ends /dist/std/<key>.rutbundle and
-  // its pin equals sha256 of the committed envelope bytes (dist/std-v9/) —
-  // the bytes the row commits to. dist/std (the working envelope) is
-  // NOT the pins' reference: the rename moved the pack shape, the pins
-  // did not move, and the reader's compat lane loads the old envelope.
+  // the example pins: every rut.lock row spells a
+  // /dist/std/<key>.rutbundle url and its sha256 equals the hash of the
+  // committed envelope bytes (dist/std-v9/) — the bytes the row commits
+  // to. dist/std (the working envelope) is NOT the pins' reference: the
+  // rename moved the pack shape, the pins did not move, and the
+  // reader's compat lane loads the old envelope.
   const pinHashes = {};
-  for (const { manifest, deps } of EXAMPLES) {
-    for (const key of deps) {
-      if (pinHashes[key]) continue;
+  const pinOf = (key) => {
+    if (!(key in pinHashes)) {
       const frozen = path.join(PINNED, `${key}.rutbundle`);
-      if (!fs.existsSync(frozen)) {
+      pinHashes[key] = fs.existsSync(frozen) ? sha256(fs.readFileSync(frozen)) : null;
+    }
+    return pinHashes[key];
+  };
+  for (const lock of EXAMPLES) {
+    const p = path.join(ROOT, lock);
+    if (!fs.existsSync(p)) continue; // the phase that lands it owns the rows
+    let rows;
+    try {
+      rows = JSON.parse(fs.readFileSync(p, "utf8").replace(/^[ \t]*\/\/.*$/gm, "")).deps;
+    } catch (e) {
+      console.error(`  ${red("pin")}: ${lock} does not parse (${e.message})`);
+      drift++;
+      continue;
+    }
+    for (const row of rows) {
+      const m = (row.url || "").match(/\/dist\/std\/([A-Za-z0-9_]+)\.rutbundle$/);
+      const key = m && m[1];
+      if (!key) {
+        console.error(`  ${red("pin")}: ${lock} has a row off the std envelope — url ${row.url}`);
+        drift++;
+        continue;
+      }
+      const wantUrl = urlRow(key);
+      if (row.url !== wantUrl) {
+        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` url is \`${row.url}\`, want \`${wantUrl}\``);
+        drift++;
+      }
+      const pin = pinOf(key);
+      if (!pin) {
         console.error(`  ${red("pin")}: dist/std-v9/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
         drift++;
-        continue;
-      }
-      pinHashes[key] = sha256(fs.readFileSync(frozen));
-    }
-  }
-  for (const { manifest, deps } of EXAMPLES) {
-    const p = path.join(ROOT, manifest);
-    if (!fs.existsSync(p)) continue; // the phase that lands it owns the row
-    const text = fs.readFileSync(p, "utf8");
-    for (const key of deps) {
-      const rowRe = new RegExp(`"${key}"\\s*:\\s*\\{[^}]*\\}`);
-      const row = rowRe.test(text) && text.match(rowRe)[0];
-      if (!row) {
-        console.error(`  ${red("pin")}: ${manifest} has no \`${key}\` row`);
-        drift++;
-        continue;
-      }
-      const url = (row.match(/"url"\s*:\s*"([^"]+)"/) || [])[1];
-      const pin = (row.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/) || [])[1];
-      const wantUrl = urlRow(key);
-      if (url !== wantUrl) {
-        console.error(`  ${red("pin")}: ${manifest} \`${key}\` url is \`${url}\`, want \`${wantUrl}\``);
-        drift++;
-      }
-      if (!pin || pin !== pinHashes[key]) {
-        console.error(`  ${red("pin")}: ${manifest} \`${key}\` sha256 does not match dist/std-v9/${key}.rutbundle (the committed envelope bytes)`);
+      } else if (row.sha256 !== pin) {
+        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v9/${key}.rutbundle (the committed envelope bytes)`);
         drift++;
       }
     }
