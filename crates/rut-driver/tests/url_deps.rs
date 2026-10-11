@@ -405,10 +405,11 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
 #[test]
 fn mixed_dir_and_archive_peer_gate() {
     let (root, bytes, url) = peer_world("peer");
-    // the consumer: pouch by PATH (mounted first — name order), zeta by
-    // url (codec rides the archive as a source group). Presence for
-    // codec's peer comes from the dir lane; the group file reads from
-    // the archive — one gate, two source kinds.
+    // the consumer declares every head it uses (the walked law): codec
+    // and pouch by PATH, zeta by url. Name order mounts codec from the
+    // DIR first, so the archive's ridden codec source group loses
+    // first-mount-wins; codec's optional peer pouch is present through
+    // the dir lane, and the one gate mounts the integration text.
     let app = root.join("app");
     write(
         &app,
@@ -416,7 +417,7 @@ fn mixed_dir_and_archive_peer_gate() {
         &manifest(
             "app",
             "mod.rut",
-            &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
+            &format!(r#", "deps": {{"codec": {{"path": "../codec"}}, "pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
         ),
     );
     write(
@@ -431,8 +432,9 @@ fn mixed_dir_and_archive_peer_gate() {
     let session =
         block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
             .expect("url load");
-    // zeta: compiled; codec: the archive's source group; pouch: the DIR
-    // mount won (first-mount-wins across the two lanes)
+    // zeta: compiled (the archive root); codec + pouch: the DIR mounts
+    // (the declared rows won first-mount-wins over the archive's ridden
+    // codec group)
     assert!(matches!(
         session.pkg("zeta").unwrap().body,
         rut_driver::PkgBody::Compiled(_)
@@ -445,20 +447,26 @@ fn mixed_dir_and_archive_peer_gate() {
         session.pkg("pouch").unwrap().body,
         rut_driver::PkgBody::Source { .. }
     ));
-    // THE unification proof: the group file was read FROM THE ARCHIVE
-    // and compiled into codec's unit (the group's wrapper resolves)
+    // the peer gate over the mixed world: codec's optional peer pouch
+    // is present (the dir lane), so the integration group text mounts
+    // and the wrapper resolves for the consumer probe
     assert!(
         probe_compiles(&session, CODEC_POUCH_PROBE),
-        "the archive group must mount through the unified gate"
+        "the present peer's integration group must mount"
     );
 
-    // the absence twin: no pouch dir, codec mounts light — the same
-    // gate, inert optional peer, no read
+    // the absence twin: codec declared (the use is legal), pouch still
+    // absent — the same gate, the optional peer inert, the integration
+    // group never mounts
     let app2 = root.join("app2");
     write(
         &app2,
         "rut.jsonc",
-        &manifest("app2", "mod.rut", &format!(r#", "deps": {{"zeta": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app2",
+            "mod.rut",
+            &format!(r#", "deps": {{"codec": {{"path": "../codec"}}, "zeta": {{"url": "{url}"}}}}"#),
+        ),
     );
     write(&app2, "mod.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
     write_lock(&app2, &table);
@@ -466,7 +474,7 @@ fn mixed_dir_and_archive_peer_gate() {
         .expect("light load");
     assert!(
         !probe_compiles(&session2, CODEC_POUCH_PROBE),
-        "absent peer stays inert: the group never mounted"
+        "absent peer stays inert: the integration group never mounted"
     );
 }
 
@@ -592,6 +600,15 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     // v1 refusal: an archive-backed SOURCE group whose manifest still
     // declares [dev-deps] dirs — those paths never crossed the pack
     // boundary; the group's own-build closure cannot be reproduced
+    //
+    // ORDERING NOTE (the use-law enforcement phase): this app spells
+    // `use codec::{encode}` with NO codec row — undeclared today (the
+    // transitive zeta→codec edge), and the pack-side refusal fires
+    // before any use-law diagnostic exists. When the walked law's D5
+    // diagnostic lands, its refusal may fire FIRST here; the test's
+    // subject is the PACK-side dev-deps refusal — if the use-law
+    // precedes it, give `app` the `codec` path row (../codec, the
+    // fixture's own layout) and keep this test's subject intact.
     let (root, bytes, url) = peer_world("devrefuse");
     let app = root.join("app");
     write(

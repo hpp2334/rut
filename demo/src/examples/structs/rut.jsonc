@@ -2,6 +2,7 @@
   // structs/ — reference semantics (sharing by default), identity `==`.
   "name": "structs",
     "deps": {
+    "calc": { "path": "../../../../rut/calc" },
     "ink": {
       "path": "../../../../rut/ink"
     }

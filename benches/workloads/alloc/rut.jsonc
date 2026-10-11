@@ -3,6 +3,9 @@
   // A module dir like the rest of the workloads; the JS twin is ../alloc.js.
   "name": "alloc",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "ink": {
       "path": "../../../rut/ink"
     }

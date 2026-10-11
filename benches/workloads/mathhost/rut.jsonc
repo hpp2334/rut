@@ -1,10 +1,14 @@
 {
   // mathhost/ — calc's host-fn helpers (Math::abs/min/max/signum) in a hot
   // loop: every call crosses the FFI — the host-fn hot-path canary.
-  // `calc` is ambient (the harness mounts std), so only `ink` is declared
-  // (for the logger). The JS twin is ../mathhost.js.
+  // `calc` is a declared path row (the walk mounts the surface; the
+  // chain's blanket host-pkg install binds the bodies); `ink` is
+  // declared for the logger. The JS twin is ../mathhost.js.
   "name": "mathhost",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "ink": {
       "path": "../../../rut/ink"
     }

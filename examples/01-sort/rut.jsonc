@@ -15,12 +15,13 @@
   // offline remote from the committed artifacts (dist/std plays the
   // wire), so the gates never touch the network.
   //
-  // THE ABSENT ROW: `calc` takes none — it is ambient. The embedder mounts
-  // std (`mount_std`), and nothing in the engine knows a harness's ambient
-  // set (the bench workloads' rule); a `use calc::` resolves against that
-  // mount at compile time, never through a dep row.
+  // THE CALC ROW: `calc` is a declared head like every other — a path
+  // row into the toolchain tree. The walk mounts exactly the declared
+  // closure (`rut run` has no ambient tier), and the chain's blanket
+  // host-pkg install binds the `Math` bodies to whatever mounted.
   "name": "sort",
     "deps": {
+    "calc": { "path": "../../rut/calc" },
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
   }
 }

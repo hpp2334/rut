@@ -4,6 +4,9 @@
   // workloads; the JS twin is ../fasta.js.
   "name": "fasta",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "ink": {
       "path": "../../../rut/ink"
     }

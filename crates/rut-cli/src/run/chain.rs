@@ -1,14 +1,16 @@
-//! the host chain: the std pkg offers + installs, the symbol mount,
-//! the compile, the verify.
+//! the host chain: the symbol mount, the compile, the verify.
 
 use crate::run::symbols;
 
 /// Compile the loaded graph through the host chain. The CLI is a
-/// host: it offers calc from the toolchain tree (the `Math` surface;
-/// the core prelude auto-rides in .compile()) and installs the
-/// matching pkgs — the blanket-install lane (the asymmetry makes it
-/// legal): math always, the logger to stdout when a program uses ink,
-/// the rest merging inert unless the program mounts their pkg.
+/// host: it installs the matching pkgs blanket-side (the logger to
+/// stdout when a program uses ink, math for a mounted calc, the rest
+/// merging inert unless the program mounts their pkg) — but it offers
+/// NOTHING ambient: the walk mounts exactly the graph the root's
+/// manifest declares (`deps` + `dev-deps` at the program root), and a
+/// `use` head with no declared row is the closure check's loud
+/// unknown-pkg error. `core` is the one unconditional head (the
+/// prelude auto-rides in .compile()).
 pub(crate) fn compile(loaded: &rut_driver::Loaded, symbols: Option<&str>) -> rut_driver::Compiled {
     let mut chain = rut_driver::RutRun::new().pkgs(loaded);
     // the symbol table restores BEFORE the graph compiles, so
@@ -17,7 +19,6 @@ pub(crate) fn compile(loaded: &rut_driver::Loaded, symbols: Option<&str>) -> rut
         chain = chain.symbols(&map);
     }
     let compiled = match chain
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .host_pkg(rut_std::math::pkg())
         // the nmap experiment's native key table (the mapset-host plan) — a
         // program only reaches it when it declares `use nmap_host::{...}` or a

@@ -5,6 +5,9 @@
   // workloads; no JS twin — the row runs rut-only.
   "name": "u64loop",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "ink": {
       "path": "../../../rut/ink"
     }

@@ -4,6 +4,9 @@
   // the workloads; the JS twin is ../intloop.js.
   "name": "intloop",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "ink": {
       "path": "../../../rut/ink"
     }

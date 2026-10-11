@@ -27,6 +27,7 @@
   // exactly ink + `logger::pkg`).
   "name": "digests",
     "deps": {
+    "calc": { "path": "../../rut/calc" },
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
     "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle" },
     "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" }

@@ -1,10 +1,13 @@
 {
   // quicksort/ — deterministic LCG input, in-place Lomuto quicksort, rolled
-  // checksum, n = 100_000. A module dir because it mounts `pouch` (`calc`
-  // is ambient — the harness mounts std); `ink` is declared for the
-  // logger. The JS twin is ../quicksort.js.
+  // checksum, n = 100_000. A module dir: it mounts `pouch` and `calc`,
+  // both path rows into the tree; `ink` is declared for the logger.
+  // The JS twin is ../quicksort.js.
   "name": "quicksort",
     "deps": {
+    "calc": {
+      "path": "../../../rut/calc"
+    },
     "pouch": {
       "path": "../../../rut/pouch"
     },
