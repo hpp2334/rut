@@ -48,7 +48,7 @@ fn lcg(x: u32) -> u32 {
 }
 
 fn alpha_vec() -> Vec<str> {
-    let a: Vec<str> = Vec.new();
+    let a: Vec<str> = Vec::new();
     for (let c of "abcdefghijklmnopqrstuvwx") {
         a.push(f"{c}");
     }
@@ -74,7 +74,7 @@ fn val_text(sign: u32, mag: u32) -> str {
 // order: id, name, active, score, six vals, tags, meta (rev + kind))
 
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
-    let parts: Vec<str> = Vec.new();
+    let parts: Vec<str> = Vec::new();
     let mut x: u32 = 42;
     for (let i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
@@ -152,7 +152,7 @@ impl DocMeta {
 }
 
 // DocMeta's DECODE is not spelt as a delegating member here: the
-// interface-static form `DocMeta.decode(r)` is not an admitted
+// interface-static form `DocMeta::decode(r)` is not an admitted
 // receiver (struct types aren't in the static-call receiver set), so
 // DocRow's decode inlines the shape directly onto the reader — see
 // the "meta" arm below. The ENCODE side rides normal method dispatch
@@ -237,7 +237,7 @@ impl DocRow {
                     score = v;
                 },
                 "vals" -> {
-                    let mut v = Vec<i64>.new();
+                    let mut v = Vec<i64>::new();
                     r.begin_array();
                     while (r.more()) {
                         let x = r.read_i64();
@@ -249,7 +249,7 @@ impl DocRow {
                     vals = v;
                 },
                 "tags" -> {
-                    let mut v = Vec<str>.new();
+                    let mut v = Vec<str>::new();
                     r.begin_array();
                     while (r.more()) {
                         let x = r.read_str();
@@ -274,7 +274,7 @@ impl DocRow {
                 },
                 "meta" -> {
                     // DocMeta's shape inlined onto the reader (the
-                    // interface-static form `DocMeta.decode(r)` is not
+                    // interface-static form `DocMeta::decode(r)` is not
                     // an admitted receiver here — struct types aren't
                     // in the static-call receiver set, so the loop is
                     // spelled directly, exactly the shape the member
@@ -303,7 +303,7 @@ impl DocRow {
                     r.end_object();
                     if (r.failed()) { return (nil, r.error()); }
                     if (rev == nil || kind == nil) {
-                        let kd: DecodeErrorKind = DecodeErrorKind.WrongType;
+                        let kd: DecodeErrorKind = DecodeErrorKind::WrongType;
                         return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "rev and kind" });
                     }
                     let ri: i64 = rev;
@@ -318,7 +318,7 @@ impl DocRow {
         if (r.failed()) { return (nil, r.error()); }
         if (id == nil || have_active == false || name == nil || score == nil
             || vals == nil || tags == nil || meta == nil) {
-            let kd: DecodeErrorKind = DecodeErrorKind.WrongType;
+            let kd: DecodeErrorKind = DecodeErrorKind::WrongType;
             return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "every key of the row" });
         }
         let idi: i64 = id;

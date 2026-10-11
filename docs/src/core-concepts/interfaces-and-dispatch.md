@@ -129,7 +129,7 @@ fn blit(g: Canvas, s: Area) { g.render(s.area()); }   // a parameter over any Ar
 entry fn main() {
     let log = Logger("shapes");
     let g = Canvas { log: log };
-    let mut mixed: Vec<Area> = Vec.new();   // heterogeneous storage
+    let mut mixed: Vec<Area> = Vec::new();   // heterogeneous storage
     mixed.push(Circle { r: 1.0 });
     mixed.push(UnitSquare { side: 2.0 });
     for (let s of mixed) { blit(g, s); }

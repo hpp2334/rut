@@ -1,7 +1,7 @@
 {
   // calc/ — the `Math` namespace: the float members are host functions
   // (f64 bodies in `rut-std`, each with an f32 twin under a `_f` suffix
-  // — `Math.sqrt_f(x: f32) -> f32`; rut has no overloading, so the
+  // — `Math::sqrt_f(x: f32) -> f32`; rut has no overloading, so the
   // width is in the name). A `type = "host"` tree package: the surface
   // is calc.d.rut, the BODIES stay rut-std behind the inert host-pkg
   // install (`.host_pkg(rut_std::math::pkg())`) — the declaration
@@ -17,9 +17,9 @@
   //   "namespace" — the qualified-access head `use calc::{Math}` binds;
   //   "consts"    — f64, compiler-materialized (JSON has no spelling
   //                 for the non-finite pair; `"inf"` / `"-inf"` name
-  //                 it): Math.PI Math.TAU Math.E Math.SQRT_2 Math.LN_2
-  //                 Math.LN_10 Math.LOG2_E Math.LOG10_E Math.INFINITY
-  //                 Math.NEG_INFINITY Math.EPSILON Math.MAX Math.MIN
+  //                 it): Math::PI Math::TAU Math::E Math::SQRT_2 Math::LN_2
+  //                 Math::LN_10 Math::LOG2_E Math::LOG10_E Math::INFINITY
+  //                 Math::NEG_INFINITY Math::EPSILON Math::MAX Math::MIN
   //                 Math.MIN_POSITIVE.
   //
   // Contract (std/core.d.rut): the surface is kept TRUE to the

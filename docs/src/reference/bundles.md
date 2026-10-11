@@ -322,7 +322,7 @@ artifacts ARE the delivery and the publish act is a git tag:
 `<tag>`/`<sha256>` are placeholders — real pins live in the examples
 (anti-rot: docs never rot pins). The laws:
 
-- **Committed artifacts, immutable tags.** `scripts/pack-std.cjs`
+- **Committed artifacts, immutable tags.** `scripts/pack-std::cjs`
   packs all 15 (deterministic — same input ⇒ byte-identical, so
   freshness is a pure equality gate: `--check` repacks and
   byte-compiles, no network); `--pins` rewrites the example manifests'

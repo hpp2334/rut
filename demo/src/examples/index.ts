@@ -80,7 +80,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-str-views",
     name: "str views",
-    blurb: "O(1) slice views (a slice IS a str), codepoints — s.code / str.from_code",
+    blurb: "O(1) slice views (a slice IS a str), codepoints — s.code / str::from_code",
     source: strViewsSrc,
   },
   {
@@ -92,7 +92,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-opaque",
     name: "opaque",
-    blurb: "opaque / opaque.downcast<T> -> ?T / is — erasure and checked recovery",
+    blurb: "opaque / opaque::downcast<T> -> ?T / is — erasure and checked recovery",
     source: opaqueSrc,
   },
   {

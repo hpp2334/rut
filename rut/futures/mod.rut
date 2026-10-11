@@ -4,7 +4,7 @@
 // each embedder by choice; users may write their own launchers the
 // same way). The engine rows cross the erasure box (`opaque`);
 // this package restores the typed arrow: `opaque(f)` seals the frame
-// on the way out, `opaque.downcast<Future<nil>>` recovers the sleep
+// on the way out, `opaque::downcast<Future<nil>>` recovers the sleep
 // mint on the way in.
 //
 // `Future<T>` is core's CLOSED engine class (v20): every async
@@ -64,7 +64,7 @@ pub fn launch_future<T>(f: Future<T>) -> LaunchedFutureHandle<T> {
 // loop's timer queue does the waiting). The mint crosses SEALED under
 // the `Future<nil>` class spelling — the downcast is the recovery.
 pub fn sleep(ms: u32) -> Future<nil> {
-    return opaque.downcast<Future<nil>>(__sleep(ms));
+    return opaque::downcast<Future<nil>>(__sleep(ms));
 }
 
 // ---- structured competition -----------------------------------------
@@ -87,7 +87,7 @@ pub class Either2<A, B> {
 }
 
 impl<A, B> Either2<A, B> {
-    // The two constructions — `Either2.a(v)` / `Either2.b(v)`.
+    // The two constructions — `Either2::a(v)` / `Either2::b(v)`.
     pub fn a(v: A) -> Self {
         return Either2 { left: v, right: nil };
     }
@@ -120,14 +120,14 @@ impl<A, B> Either2<A, B> {
 // type is the fn signature's `Either2<T, U>`, computed at the call
 // site, never in an impl-target position.
 pub fn select2<T, U>(a: Future<T>, b: Future<U>) -> Future<Either2<T, U>> {
-    return opaque.downcast<Future<Either2<T, U>>>(__select2<T, U>(opaque(a), opaque(b)));
+    return opaque::downcast<Future<Either2<T, U>>>(__select2<T, U>(opaque(a), opaque(b)));
 }
 
 // First-ready over a cohort: the answer is `(i, v)` — the winner's
 // index and value — and every other member is cancelled. Homogeneous:
 // every element answers the same `T`.
 pub fn select_all<T>(futs: [Future<T>]) -> Future<(u32, T)> {
-    return opaque.downcast<Future<(u32, T)>>(__select_all<T>(opaque(futs)));
+    return opaque::downcast<Future<(u32, T)>>(__select_all<T>(opaque(futs)));
 }
 
 // ---- the completer: the manually-resolvable future -------------------
@@ -175,6 +175,6 @@ impl<T> Completer<T> {
 // `type_id<T>()` constant is the linked answer id the engine's frame
 // and seal names derive from.
 pub fn completer<T>() -> (Future<T>, Completer<T>) {
-    let f = opaque.downcast<Future<T>>(__completer<T>(type_id<T>()));
+    let f = opaque::downcast<Future<T>>(__completer<T>(type_id<T>()));
     return (f, Completer { f: f });
 }

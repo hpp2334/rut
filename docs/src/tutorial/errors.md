@@ -90,7 +90,7 @@ The simplest err is a `str` message (empty string means success):
 ```rut
 fn hex_dec(s: str) -> (bytes, str) {
     if (s.len() % 2 != 0) {
-        return (bytes.zeroed(0), "hex: odd-length input");
+        return (bytes::zeroed(0), "hex: odd-length input");
     }
     // ... decode ...
     return (out.freeze(), "");
@@ -203,7 +203,7 @@ land in the host's diagnostics — see
 
 When a value must cross a boundary that cannot name its type — host
 handles, heterogeneous boxes — `opaque(v)` seals it and
-`opaque.downcast<T>(o) -> ?T` recovers it (`nil` on a wrong type,
+`opaque::downcast<T>(o) -> ?T` recovers it (`nil` on a wrong type,
 never a trap):
 
 ```rut
@@ -214,7 +214,7 @@ struct Point { x: i32; y: i32 }
 entry fn main() {
     let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });
-    let p = opaque.downcast<Point>(box1);   // ?Point
+    let p = opaque::downcast<Point>(box1);   // ?Point
     when (p != nil) {
         true -> { log.info(f"point {p.x} {p.y}"); },
         else -> { log.info("point: nil"); },

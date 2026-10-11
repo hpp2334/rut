@@ -1,7 +1,7 @@
 //! Host-constructed `opaque` boxes: the embedder news any
 //! `'static` Rust value behind an `opaque`, borrows it back typed, and rut
 //! sees only the box. The erasure semantics must hold on the rut side —
-//! `o is opaque` is `true`, `opaque.downcast<T>` is `None` for every `T` (never a
+//! `o is opaque` is `true`, `opaque::downcast<T>` is `None` for every `T` (never a
 //! trap), `own` shares identity — and the payload's `Drop` runs when the
 //! box's rc hits 0.
 //!
@@ -36,18 +36,18 @@ entry fn put(c: opaque, k: str, v: i64) -> nil { store_set(c, k, v); }
 entry fn get(c: opaque, k: str) -> i64 { return store_get(c, k); }
 entry fn size(c: opaque) -> i64 { return store_size(c); }
 entry fn wrap_put(c: opaque, k: str, v: i64) -> nil {
-    let s = Store.adopt(c);
+    let s = Store::adopt(c);
     s.set(k, v);
 }
 entry fn wrap_get(c: opaque, k: str) -> i64 {
-    return Store.adopt(c).get(k);
+    return Store::adopt(c).get(k);
 }
 entry fn erase_laws(c: opaque) -> bool {
     // on a host payload box: it is an opaque and nothing more
     // specific — no rut type recovers from it, the recovery is `nil`,
     // never a trap
-    let i64_hit = opaque.downcast<i64>(c) != nil;
-    let str_hit = opaque.downcast<str>(c) != nil;
+    let i64_hit = opaque::downcast<i64>(c) != nil;
+    let str_hit = opaque::downcast<str>(c) != nil;
     return c is opaque && !i64_hit && !str_hit;
 }
 entry fn share(c: opaque) -> opaque {
@@ -224,12 +224,12 @@ class Node {
     tags: Vec<str>;
 }
 impl Node {
-    fn new(name: str) -> Self { return Self { name: name, tag: opaque(0), tags: Vec.new() }; }
+    fn new(name: str) -> Self { return Self { name: name, tag: opaque(0), tags: Vec::new() }; }
 }
 
 entry fn churn(n: i64) -> nil {
     for (let i = 0i64; i < n; i += 1) {
-        let node = Node.new(f"n{i}");
+        let node = Node::new(f"n{i}");
         node.tags.push(f"t{i}");
     }
 }

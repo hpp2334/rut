@@ -95,7 +95,7 @@ fn t10_sibling_imports_of_a_shared_inline_pkg_compile() {
     // example is another lane's property and is not touched).
     let loaded = load("cons_sibs").expect("mount");
     assert_eq!(loaded.root, "cons_sibs");
-    assert_eq!(run_main(loaded), 16, "Slot.first() + Crate.rest() = 7 + 9");
+    assert_eq!(run_main(loaded), 16, "Slot::first() + Crate::rest() = 7 + 9");
 }
 
 #[test]
@@ -149,7 +149,7 @@ pub class Wrap {
 
 impl Wrap {
     pub fn make(v: i64) -> Self {
-        let mut inner = Cell<i64>.make(v);
+        let mut inner = Cell<i64>::make(v);
         return Self { c: inner };
     }
 
@@ -162,7 +162,7 @@ impl Wrap {
 use wrap::{Wrap};
 
 entry fn main() -> i64 {
-    let w = Wrap.make(5);
+    let w = Wrap::make(5);
     return w.get();
 }
 ";
@@ -231,7 +231,7 @@ pub class Wrap {
 
 impl Wrap {
     pub fn make(v: i64) -> Self {
-        let mut inner = Cell<i64>.make(v);
+        let mut inner = Cell<i64>::make(v);
         return Self { c: inner };
     }
 
@@ -264,7 +264,7 @@ pub class Held {
 
 impl Held {
     pub fn make(v: i64) -> Self {
-        let mut inner = Boxx<i64>.make(v);
+        let mut inner = Boxx<i64>::make(v);
         return Self { b: inner };
     }
 
@@ -278,8 +278,8 @@ use wrap::{Wrap};
 use held::{Held};
 
 entry fn main() -> i64 {
-    let w = Wrap.make(5);
-    let h = Held.make(7);
+    let w = Wrap::make(5);
+    let h = Held::make(7);
     return w.get() + h.get();
 }
 ";

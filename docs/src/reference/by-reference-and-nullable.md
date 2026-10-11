@@ -108,10 +108,10 @@ hash/eq interface contract for keys). `?T == ?T` is slot identity: two
 [Rc, dispose, and identity](rc-dispose-identity.md) for the full law
 and the lint on obviously-fresh composites.
 
-## `bytes.clone()` — the one copy escape hatch
+## `bytes::clone()` — the one copy escape hatch
 
 `b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot
-deep copy, the **only copy syntax in the language**. `bytes.from(a)`
+deep copy, the **only copy syntax in the language**. `bytes::from(a)`
 also deep-copies. Every other type shares on binding, and a divergent
 value of any other type is unreachable — build a new one instead.
 
@@ -120,7 +120,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("t");
-    let header = bytes.from([1, 2, 3]);
+    let header = bytes::from([1, 2, 3]);
     let alias = header;              // shares: one buffer, two names
     let diverged = header.clone();   // a fresh buffer, same octets
     log.info(f"{alias == header} {diverged == header}");
@@ -144,7 +144,7 @@ true true
   through the window hit the parent (see
   [String slicing and views](string-views.md)).
 - Erasure rides the same laws: `opaque(v)` aliases the payload's cell,
-  and `opaque.downcast<T>(o)`'s match is the box's own inner cell (see
+  and `opaque::downcast<T>(o)`'s match is the box's own inner cell (see
   [opaque — erasure and downcast](opaque.md)).
 
 ## The answer channel

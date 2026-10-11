@@ -22,7 +22,7 @@ a compile error on the declaration or binding — never a call-time failure.
   crosses, decoded nil-flattened.
 - Everything else — structs, classes, `Vec<T>`, `[T]`, interface-typed
   values, closures — stays inside the VM. Seal polymorphic values in the
-  erasure box: `opaque(v)` at the call, `opaque.downcast<T>(v)` after
+  erasure box: `opaque(v)` at the call, `opaque::downcast<T>(v)` after
   ([opaque — erasure and downcast](opaque.md)).
 
 ## Rust ↔ rut type map

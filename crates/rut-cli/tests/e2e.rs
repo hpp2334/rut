@@ -159,15 +159,15 @@ fn case1_hello_format() {
 enum Flavor { Sweet, Sour }
 fn describe(f: Flavor) -> str {
     return when (f) {
-        Flavor.Sweet -> "sweet",
-        Flavor.Sour  -> "sour",
+        Flavor::Sweet -> "sweet",
+        Flavor::Sour  -> "sour",
     };
 }
 entry fn main() -> nil {
     let name = "rut";
     let n = 41 + 1;
-    Logger.new("app").info(f"hi {name}! n={n} tab:\t");
-    Logger.new("app").info(describe(Flavor.Sour));
+    Logger::new("app").info(f"hi {name}! n={n} tab:\t");
+    Logger::new("app").info(describe(Flavor::Sour));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -188,8 +188,8 @@ entry fn main() -> nil {
     p.x = 4;
     let mut r = p;
     r.x = 9;
-    Logger.new("app").info(f"q.x={q.x} p.x={p.x} r.x={r.x}");
-    Logger.new("app").info(f"q==p {q == p}, r==p {r == p}");
+    Logger::new("app").info(f"q.x={q.x} p.x={p.x} r.x={r.x}");
+    Logger::new("app").info(f"q==p {q == p}, r==p {r == p}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -223,16 +223,16 @@ type BoxTy = opaque;
 entry fn main() -> nil {
     let box1 = opaque(Point { x: 1, y: 2 });
     let box2 = opaque("hello");
-    Logger.new("app").info(f"box1 is Point: {box1 is Point}");
-    Logger.new("app").info(f"box2 is Point: {box2 is Point}");
-    Logger.new("app").info(f"box1 is opaque: {box1 is opaque}");
-    Logger.new("app").info(f"box1 is BoxTy: {box1 is BoxTy}");
-    Logger.new("app").info(f"box1 is Hashable: {box1 is Hashable}");
-    let p = opaque.downcast<Point>(box1);
+    Logger::new("app").info(f"box1 is Point: {box1 is Point}");
+    Logger::new("app").info(f"box2 is Point: {box2 is Point}");
+    Logger::new("app").info(f"box1 is opaque: {box1 is opaque}");
+    Logger::new("app").info(f"box1 is BoxTy: {box1 is BoxTy}");
+    Logger::new("app").info(f"box1 is Hashable: {box1 is Hashable}");
+    let p = opaque::downcast<Point>(box1);
     if (p != nil) {
-        Logger.new("app").info(f"recovered {p.x} {p.y}");
+        Logger::new("app").info(f"recovered {p.x} {p.y}");
     }
-    Logger.new("app").info(f"miss is nil: {opaque.downcast<Point>(box2) == nil}");
+    Logger::new("app").info(f"miss is nil: {opaque::downcast<Point>(box2) == nil}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -253,7 +253,7 @@ entry fn main() -> nil {
 
 #[test]
 fn case3b_opaque_downcast_nullable_laws() {
-    // refval-round2: `opaque.downcast<T>(o) -> ?T` — the ALIAS handoff.
+    // refval-round2: `opaque::downcast<T>(o) -> ?T` — the ALIAS handoff.
     // A match hands the box itself back (no tuple mint, no allocation):
     // the `?T` shares the box's inner cell, so writes through the
     // recovery are the source's, in both directions, through every
@@ -263,14 +263,14 @@ fn case3b_opaque_downcast_nullable_laws() {
     let src = r#"
 struct Point { x: i32; y: i32 }
 fn find(o: opaque) -> ?Point {
-    return opaque.downcast<Point>(o);
+    return opaque::downcast<Point>(o);
 }
 entry fn main() -> nil {
-    let log = Logger.new("app");
+    let log = Logger::new("app");
     let mut pt = Point { x: 1, y: 2 };
     let b = opaque(pt);
-    let mut p = opaque.downcast<Point>(b);
-    let mut q = opaque.downcast<Point>(b);
+    let mut p = opaque::downcast<Point>(b);
+    let mut q = opaque::downcast<Point>(b);
     p.x = 9;                       // through the recovery...
     q.y = 7;                       // ...through a second holder...
     pt.y = 5;                      // ...and back the other way
@@ -300,11 +300,11 @@ entry fn main() -> i32 {
     let mut n = 5;
     let b = opaque(n);
     n = 9;
-    let v = opaque.downcast<i32>(b);
+    let v = opaque::downcast<i32>(b);
     if (v == nil) { return 1; }
     if (v != 5) { return 2; }
-    if (opaque.downcast<str>(b) != nil) { return 3; }
-    let miss = opaque.downcast<Point>(opaque("s"));
+    if (opaque::downcast<str>(b) != nil) { return 3; }
+    let miss = opaque::downcast<Point>(opaque("s"));
     return miss.x;
 }
 "#;
@@ -318,8 +318,8 @@ fn case4_sieve() {
     let src = r#"
 use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
-    let mut marks = Vec<u8>.filled(0, limit + 1);
-    let primes: Vec<i32> = Vec.new();
+    let mut marks = Vec<u8>::filled(0, limit + 1);
+    let primes: Vec<i32> = Vec::new();
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
@@ -334,7 +334,7 @@ fn sieve(limit: i32) -> Vec<i32> {
 }
 entry fn main() -> nil {
     let primes = sieve(100);
-    Logger.new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
+    Logger::new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 10_000_000);
@@ -348,18 +348,18 @@ fn case5_when_exhaustive() {
 enum Color { Red, Green, Blue }
 fn mix(a: Color, b: Color) -> str {
     return when (a) {
-        Color.Red -> when (b) {
-            Color.Red   -> "red+red",
-            Color.Green -> "yellow",
-            Color.Blue  -> "magenta",
+        Color::Red -> when (b) {
+            Color::Red   -> "red+red",
+            Color::Green -> "yellow",
+            Color::Blue  -> "magenta",
         },
-        Color.Green -> "greenish",
-        Color.Blue  -> "blueish",
+        Color::Green -> "greenish",
+        Color::Blue  -> "blueish",
     };
 }
 entry fn main() -> nil {
-    Logger.new("app").info(mix(Color.Red, Color.Green));
-    Logger.new("app").info(mix(Color.Blue, Color.Blue));
+    Logger::new("app").info(mix(Color::Red, Color::Green));
+    Logger::new("app").info(mix(Color::Blue, Color::Blue));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -380,9 +380,9 @@ impl A { pub fn get(self) -> i32 { return 10; } }
 impl B { pub fn get(self) -> i32 { return 20; } }
 entry fn main() -> nil {
     let mut w: Get = A { v: 1 };
-    Logger.new("app").info(f"first={w.get()}");
+    Logger::new("app").info(f"first={w.get()}");
     w = B { v: 2 };
-    Logger.new("app").info(f"second={w.get()}");
+    Logger::new("app").info(f"second={w.get()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -416,15 +416,15 @@ impl Square {
     pub fn name(self) -> str { return "square"; }
 }
 entry fn main() -> nil {
-    let shapes: Vec<Shape> = Vec.from([
+    let shapes: Vec<Shape> = Vec::from([
         Circle { r: 1 },
         Square { s: 2 },
     ]);
     for (let s of shapes) {
-        Logger.new("app").info(f"{s.name()} area={s.area()}");
+        Logger::new("app").info(f"{s.name()} area={s.area()}");
     }
     let c = Circle { r: 1 };
-    Logger.new("app").info(f"c is Shape: {c is Shape}");
+    Logger::new("app").info(f"c is Shape: {c is Shape}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -440,15 +440,15 @@ fn case7_closures_generics() {
     let src = r#"
 use pouch::{ Vec };
 fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
-    let out: Vec<U> = Vec<U>.new();
+    let out: Vec<U> = Vec<U>::new();
     for (let x of v) { out.push(f(x)); }
     return out;
 }
 entry fn main() -> nil {
-    let xs = Vec<i32>.from([1, 2, 3, 4]);
+    let xs = Vec<i32>::from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
-    Logger.new("app").info(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
+    Logger::new("app").info(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -464,7 +464,7 @@ entry fn main() -> nil {
     while (true) {
         i += 1;
         if (i % 1000000 == 0) {
-            Logger.new("app").info(f"tick {i}");
+            Logger::new("app").info(f"tick {i}");
         }
     }
 }
@@ -484,16 +484,16 @@ fn overflow_traps_and_wrapping_escapes() {
 entry fn main() -> nil {
     let mut x = 2147483647;
     x = x.wrapping_add(1);   // wrapping: fine
-    Logger.new("app").info(f"x={x}");
+    Logger::new("app").info(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
     s = s.wrapping_shl(1);   // wrapping shl: bits shifted out are gone
-    Logger.new("app").info(f"s={s}");
+    Logger::new("app").info(f"s={s}");
     s = s.wrapping_shl(1);   // same law
-    Logger.new("app").info(f"s={s}");
+    Logger::new("app").info(f"s={s}");
     let u: u32 = 3221225472u32; // 0xC000_0000
-    Logger.new("app").info(f"u={u.wrapping_shl(1)}");
+    Logger::new("app").info(f"u={u.wrapping_shl(1)}");
     let y = 2147483647 + 1;  // trapping: overflow
-    Logger.new("app").info(f"y={y}");
+    Logger::new("app").info(f"y={y}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -507,9 +507,9 @@ fn plain_shl_traps_when_bits_leave_the_width() {
     // silently a RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 entry fn main() -> nil {
-    Logger.new("app").info("before");
+    Logger::new("app").info("before");
     let s = 1073741824 << 1;   // 1 << 31 does not fit i32
-    Logger.new("app").info(f"after {s}");
+    Logger::new("app").info(f"after {s}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -524,11 +524,11 @@ fn shr_follows_signedness() {
     let src = r#"
 entry fn main() -> nil {
     let u: u64 = 0xFFFFFFFFFFFFFFFFu64;
-    Logger.new("app").info(f"u={u >> 1}");
+    Logger::new("app").info(f"u={u >> 1}");
     let v: u32 = 0x80000000u32;
-    Logger.new("app").info(f"v={v >> 31}");
+    Logger::new("app").info(f"v={v >> 31}");
     let s = -8 as i64;
-    Logger.new("app").info(f"s={s >> 1}");
+    Logger::new("app").info(f"s={s >> 1}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -544,14 +544,14 @@ fn ne_on_primitives_is_not_eq() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    Logger.new("app").info(f"a={1 != 56}");
-    Logger.new("app").info(f"b={1 == 56}");
-    Logger.new("app").info(f"c={2 != 2}");
-    if (3 != 4) { Logger.new("app").info("differs"); } else { Logger.new("app").info("equal"); }
-    let mut m: Vec<u8> = Vec.new();
+    Logger::new("app").info(f"a={1 != 56}");
+    Logger::new("app").info(f"b={1 == 56}");
+    Logger::new("app").info(f"c={2 != 2}");
+    if (3 != 4) { Logger::new("app").info("differs"); } else { Logger::new("app").info("equal"); }
+    let mut m: Vec<u8> = Vec::new();
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
-    Logger.new("app").info(f"padded={m.len()}");
+    Logger::new("app").info(f"padded={m.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -561,7 +561,7 @@ entry fn main() -> nil {
 
 #[test]
 fn bare_vec_filled_with_a_value_reads_back() {
-    // `Vec<T>.filled(v, n)` — n slots of the repeat value
+    // `Vec<T>::filled(v, n)` — n slots of the repeat value
     // `[v; n]`. (The old `zeroed(n)` has no generic shape: the repeat
     // construction needs a VALUE, and a generic `T` has none. The form
     // used to emit ArrNew with a hardcoded ZERO length — the argument
@@ -570,17 +570,17 @@ fn bare_vec_filled_with_a_value_reads_back() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut k: Vec<u32> = Vec.filled(0, 4);
-    Logger.new("app").info(f"a len={k.len()} k3={k[3]}");
+    let mut k: Vec<u32> = Vec::filled(0, 4);
+    Logger::new("app").info(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
-    Logger.new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
-    let mut j: Vec<u8> = Vec.filled(0, 3);
+    Logger::new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
+    let mut j: Vec<u8> = Vec::filled(0, 3);
     j.push(1);
-    Logger.new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
-    let e: Vec<u32> = Vec.filled(0, 0);
-    let b: Vec<u32> = Vec.new();
-    Logger.new("app").info(f"d {e.len()} {b.len()}");
+    Logger::new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
+    let e: Vec<u32> = Vec::filled(0, 0);
+    let b: Vec<u32> = Vec::new();
+    Logger::new("app").info(f"d {e.len()} {b.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -590,7 +590,7 @@ entry fn main() -> nil {
 
 #[test]
 fn generic_static_receiver_resolves() {
-    // `Vec<u32>.from(..)` parses as a Method over Path[Vec<u32>] — the
+    // `Vec<u32>::from(..)` parses as a Method over Path[Vec<u32>] — the
     // static-receiver route used to demand an EMPTY generics list, so the
     // callee fell through to expression-compile and died as `unknown name
     // Vec — module paths`, order-dependently. The explicit type argument
@@ -598,11 +598,11 @@ fn generic_static_receiver_resolves() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let a: Vec<u32> = Vec<u32>.from([1, 2, 3]);
-    let b = Vec<u32>.from([4, 5]);
-    let c = Vec<u8>.from([250, 251]);
-    let d: Vec<u32> = Vec.from([6, 7]);   // bare form, annotation-driven
-    Logger.new("app").info(f"a={a[0] + a[1] + a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+    let a: Vec<u32> = Vec<u32>::from([1, 2, 3]);
+    let b = Vec<u32>::from([4, 5]);
+    let c = Vec<u8>::from([250, 251]);
+    let d: Vec<u32> = Vec::from([6, 7]);   // bare form, annotation-driven
+    Logger::new("app").info(f"a={a[0] + a[1] + a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -610,15 +610,15 @@ entry fn main() -> nil {
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
     // (the prelude use is present, so the static route engages)
-    let bad = "use core::{ Option };\nentry fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    let bad = "use core::{ Option };\nentry fn main() -> nil { let x = Option<i32>::some(5); Logger::new(\"app\").info(f\"{x.value}\"); }";
     let out = compile_out(bad, "main");
-    // no backward compat: a removed head is an unknown name, full stop
-    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
+    // explicit generics on the retired head stay a clear error
+    assert!(out.diags.iter().any(|d| d.msg.contains("generic type paths (`Option<..>::some`) are not supported")));
     // and the plain (non-generic) spelling is the same ordinary miss —
     // every retired spelling falls to the normal resolution path
-    let unused = "entry fn main() -> nil { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
+    let unused = "entry fn main() -> nil { let x = Option::some(5); Logger::new(\"app\").info(f\"{x}\"); }";
     let out = compile_out(unused, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
+    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option::some`")));
 }
 
 #[test]
@@ -629,8 +629,8 @@ fn heap_budget_traps_before_the_write() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let v = Vec<u8>.filled(0, 5000000);
-    Logger.new("app").info("allocated");
+    let v = Vec<u8>::filled(0, 5000000);
+    Logger::new("app").info("allocated");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -661,7 +661,7 @@ fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
 entry fn main() -> nil {
-    Logger.new("app").info(when (Color.Red) { Color.Red -> "r" });
+    Logger::new("app").info(when (Color::Red) { Color::Red -> "r" });
 }
 "#;
     let out = compile(src, "main");
@@ -677,7 +677,7 @@ fn option_eq_is_a_compile_error() {
     let src = r#"
 entry fn main() -> nil {
     let a = Option.some(1);
-    Logger.new("app").info(f"{a == a}");
+    Logger::new("app").info(f"{a == a}");
 }
 "#;
     let out = compile(src, "main");
@@ -694,7 +694,7 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour }
-entry fn main() -> nil { Logger.new("app").info(f"{1 + 1}"); }
+entry fn main() -> nil { Logger::new("app").info(f"{1 + 1}"); }
 "#;
     // the AST dumps ride CompileOutput (the demo envelope lane)
     let out = compile_out(src, "main");
@@ -738,14 +738,14 @@ fn classify(n: i32) -> str {
     }
 }
 entry fn main() -> nil {
-    Logger.new("app").info(classify(0));
-    Logger.new("app").info(classify(-3));
-    Logger.new("app").info(classify(7));
+    Logger::new("app").info(classify(0));
+    Logger::new("app").info(classify(-3));
+    Logger::new("app").info(classify(7));
     let mut late = 0;
     for (let i = 0; i < 4; i += 1) {
         if (i % 2 == 0) { late += 1; } else { late += 10; }
     }
-    Logger.new("app").info(f"late={late}");
+    Logger::new("app").info(f"late={late}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -761,11 +761,11 @@ fn shortcircuit_truth_table() {
 entry fn main() -> nil {
     let t = true;
     let f = false;
-    Logger.new("app").info(f"and: {t && t} {t && f} {f && t} {f && f}");
-    Logger.new("app").info(f"or:  {t || t} {t || f} {f || t} {f || f}");
+    Logger::new("app").info(f"and: {t && t} {t && f} {f && t} {f && f}");
+    Logger::new("app").info(f"or:  {t || t} {t || f} {f || t} {f || f}");
     let n = 6;
-    if (n > 0 && n % 2 == 0) { Logger.new("app").info("even positive"); }
-    if (n < 0 || n % 3 == 0) { Logger.new("app").info("div by 3 or negative"); }
+    if (n > 0 && n % 2 == 0) { Logger::new("app").info("even positive"); }
+    if (n < 0 || n % 3 == 0) { Logger::new("app").info("div by 3 or negative"); }
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -798,18 +798,18 @@ class Wrapped {
     inner: Counter;
 }
 impl Wrapped {
-    fn new() -> Self { return Self { inner: Counter.new() }; }
+    fn new() -> Self { return Self { inner: Counter::new() }; }
     fn bump(mut self) -> nil { self.inner.bump(); }
     fn count(self) -> i32 { return self.inner.count(); }
 }
 entry fn main() -> nil {
-    let mut c = Counter.new();
+    let mut c = Counter::new();
     c.bump();
     c.bump();
-    Logger.new("app").info(f"count={c.count()}");
-    let mut w = Wrapped.new();
+    Logger::new("app").info(f"count={c.count()}");
+    let mut w = Wrapped::new();
     w.bump();
-    Logger.new("app").info(f"wrapped={w.count()}");
+    Logger::new("app").info(f"wrapped={w.count()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -833,11 +833,11 @@ entry fn main() -> nil {
             else    -> { kept += 100; },
         }
     }
-    Logger.new("app").info(f"dropped={dropped} kept={kept}");
-    when (Light.Red) {
-        Light.Green  -> { Logger.new("app").info("go"); },
-        Light.Yellow -> { Logger.new("app").info("brake"); },
-        Light.Red    -> { Logger.new("app").info("stop"); },
+    Logger::new("app").info(f"dropped={dropped} kept={kept}");
+    when (Light::Red) {
+        Light::Green  -> { Logger::new("app").info("go"); },
+        Light::Yellow -> { Logger::new("app").info("brake"); },
+        Light::Red    -> { Logger::new("app").info("stop"); },
     }
 }
 "#;
@@ -856,18 +856,18 @@ fn enum_singletons_survive_their_use_sites() {
 enum Flavor { Sweet, Sour, Salty }
 fn describe(f: Flavor) -> str {
     return when (f) {
-        Flavor.Sweet  -> "sweet",
-        Flavor.Sour   -> "sour",
-        Flavor.Salty  -> "salty",
+        Flavor::Sweet  -> "sweet",
+        Flavor::Sour   -> "sour",
+        Flavor::Salty  -> "salty",
     };
 }
 entry fn main() -> nil {
-    let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
-    Logger.new("app").info(hits[0]);
-    Logger.new("app").info(hits[1]);
-    Logger.new("app").info(hits[2]);
+    let hits = [describe(Flavor::Sweet), describe(Flavor::Sour), describe(Flavor::Salty)];
+    Logger::new("app").info(hits[0]);
+    Logger::new("app").info(hits[1]);
+    Logger::new("app").info(hits[2]);
     for (let i = 0; i < 50; i += 1) {
-        Logger.new("app").info(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
+        Logger::new("app").info(describe(when (i % 2) { 0 -> Flavor::Sweet, else -> Flavor::Salty }));
     }
 }
 "#;
@@ -915,9 +915,9 @@ use pouch::{ Vec };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
-entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec::new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let b = opaque.downcast<?Box>(c);
+    let b = opaque::downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -962,7 +962,7 @@ fn entry_crossing_rule_is_compile_time() {
     let src = r#"
 use pouch::{ Vec };
 struct Row { id: i32; }
-entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
+entry fn bad_ret() -> Vec<Row> { return Vec::new(); }
 "#;
     let out = compile(src, "m");
     assert!(
@@ -1072,26 +1072,26 @@ fn anonymous_tuples_still_cross_the_digest_shape() {
 #[test]
 fn bytes_are_an_immutable_primitive() {
     // bytes is the immutable binary primitive. Construction via
-    // bytes(n)/bytes.from(..), a Vec<u8> builder freezes into one, and ==
+    // bytes(n)/bytes::from(..), a Vec<u8> builder freezes into one, and ==
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
     let z = bytes(3);
-    Logger.new("app").info(f"z={z.len()}");
-    let a = bytes.from([1, 2, 3]);
-    let b = bytes.from([1, 2, 3]);
-    Logger.new("app").info(f"a={a.len()} eq={a == b} ne={a != z}");
-    let mut buf: Vec<u8> = Vec.new();
+    Logger::new("app").info(f"z={z.len()}");
+    let a = bytes::from([1, 2, 3]);
+    let b = bytes::from([1, 2, 3]);
+    Logger::new("app").info(f"a={a.len()} eq={a == b} ne={a != z}");
+    let mut buf: Vec<u8> = Vec::new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
-    Logger.new("app").info(f"f={f.len()} f0={f[0]} f1={f[1]}");
+    Logger::new("app").info(f"f={f.len()} f0={f[0]} f1={f[1]}");
     let enc = "rut".encode();
-    Logger.new("app").info(f"enc={enc.len()} dec={enc.decode()}");
+    Logger::new("app").info(f"enc={enc.len()} dec={enc.decode()}");
     let mut sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
-    Logger.new("app").info(f"sum={sum}");
+    Logger::new("app").info(f"sum={sum}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1106,8 +1106,8 @@ entry fn main() -> nil {
 fn bytes_index_out_of_bounds_traps() {
     let src = r#"
 entry fn main() -> nil {
-    let a = bytes.from([1]);
-    Logger.new("app").info(f"{a[5]}");
+    let a = bytes::from([1]);
+    Logger::new("app").info(f"{a[5]}");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -1125,11 +1125,11 @@ entry fn main() -> nil {
     let u = "héllo";
     let mut k = 0;
     for (let c of u) { k += 1; }
-    Logger.new("app").info(f"{a[0]}{a[3]}{u[1]} {k}");
+    Logger::new("app").info(f"{a[0]}{a[3]}{u[1]} {k}");
     let xs = [10, 20, 30];
     let mut s = 0;
     for (let x of xs) { s += x; }
-    Logger.new("app").info(f"s={s}");
+    Logger::new("app").info(f"s={s}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1142,7 +1142,7 @@ fn str_index_out_of_bounds_traps() {
     let src = r#"
 entry fn main() -> nil {
     let a = "ACGT";
-    Logger.new("app").info(f"{a[9]}");
+    Logger::new("app").info(f"{a[9]}");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -1160,15 +1160,15 @@ pub class Stack {
     items: Vec<Row>;                // unannotated member = module-private
 }
 impl Stack {
-    fn new() -> Self { return Self { items: Vec.new() }; }
+    fn new() -> Self { return Self { items: Vec::new() }; }
     fn push(mut self, id: i32) -> nil { self.items.push(Row { id: id }); }
     pub fn len(self) -> i32 { return self.items.len(); }
 }
 pub fn drain(s: Stack) -> i32 { return s.len(); }
 entry fn main() -> nil {
-    let mut st = Stack.new();
+    let mut st = Stack::new();
     st.push(1);
-    Logger.new("app").info(f"drained {drain(st)}");
+    Logger::new("app").info(f"drained {drain(st)}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1192,10 +1192,10 @@ impl Gauge {
     fn secret(self) -> i32 { return self.n * 100; }
 }
 entry fn main() -> nil {
-    let mut g = Gauge.new();
+    let mut g = Gauge::new();
     g.bump();
     g.bump();
-    Logger.new("app").info(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
+    Logger::new("app").info(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
 }
 "#;
     // the dump labels member visibility (annotated members only) —
@@ -1238,7 +1238,7 @@ fn count(n: Node) -> i32 {
     return c;
 }
 entry fn main() -> nil {
-    Logger.new("app").info(f"CHECKSUM {count(make(10, 1))}");
+    Logger::new("app").info(f"CHECKSUM {count(make(10, 1))}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 5_000_000);
@@ -1264,7 +1264,7 @@ fn make_early() -> Early {
 }
 entry fn main() -> nil {
     let e = make_early();
-    Logger.new("app").info(f"tag={e.tag} x={e.later.x}");
+    Logger::new("app").info(f"tag={e.tag} x={e.later.x}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1286,8 +1286,8 @@ impl Node {
     fn val(self) -> i32 { return self.v; }
 }
 entry fn main() -> nil {
-    let a = Node.new();
-    Logger.new("app").info(f"v={a.val()} has_next={a.next != nil}");
+    let a = Node::new();
+    Logger::new("app").info(f"v={a.val()} has_next={a.next != nil}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1307,7 +1307,7 @@ class Vec<T> {
     len: i32;
 }
 impl<T> Vec<T> {
-    fn new() -> Self { return Vec.with_capacity(0); }
+    fn new() -> Self { return Vec::with_capacity(0); }
     fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }
     fn len(self) -> i32 { return self.len; }
     fn push(mut self, v: T) -> nil {
@@ -1334,15 +1334,15 @@ impl<T> Vec<T> {
     }
 }
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
     v.push(40);
     v.push(50);
-    Logger.new("app").info(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
+    Logger::new("app").info(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
     let p = v.pop();
-    Logger.new("app").info(f"{v.len()} {p}");
+    Logger::new("app").info(f"{v.len()} {p}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -1357,14 +1357,14 @@ fn vec_class_slice_syntax_runs() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3);
     v[0] = 10;
     let mut sum = 0;
     for (let x of v) { sum += x; }
-    let w: Vec<i32> = Vec.from([7, 8]);
-    let z: Vec<u8> = Vec.filled(0, 3);
-    Logger.new("app").info(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
+    let w: Vec<i32> = Vec::from([7, 8]);
+    let z: Vec<u8> = Vec::filled(0, 3);
+    Logger::new("app").info(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1386,12 +1386,12 @@ fn pouch_vec_via_module_loader_runs() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
     let top = v.pop();
-    Logger.new("app").info(f"{v.len()} {top}");
+    Logger::new("app").info(f"{v.len()} {top}");
 }
 "#,
     ));
@@ -1439,12 +1439,12 @@ use core::{ string_join };
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<str> = Vec.new();
+    let mut v: Vec<str> = Vec::new();
     v.push("hello");
     v.push(" ");
     v.push("world");
     let s = string_join(v.as_array());
-    Logger.new("app").info(f"{s.len()} {s}");
+    Logger::new("app").info(f"{s.len()} {s}");
 }
 "#,
     ));
@@ -1490,7 +1490,7 @@ entry fn main() {
     let t = f"{s}";
     let c = "x";
     let u = f"{c}";
-    Logger.new("app").info(f"{t} {u} {t.len()}");
+    Logger::new("app").info(f"{t} {u} {t.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1516,7 +1516,7 @@ entry fn main() -> nil {
     let mut n = "";
     let mut k = 0;
     while (k < 5) { n = f"{n}{k},"; k += 1; }
-    Logger.new("app").info(f"{s.len()} {a} {b} {base} {n}");
+    Logger::new("app").info(f"{s.len()} {a} {b} {base} {n}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 4_000_000);
@@ -1543,7 +1543,7 @@ entry fn main() -> nil {
         out = f"{out}{t}";
         i += 1;
     }
-    Logger.new("app").info(f"{out.len()}");
+    Logger::new("app").info(f"{out.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 8_000_000);
@@ -1600,7 +1600,7 @@ entry fn main() -> nil {
 
 #[test]
 fn plus_shape_concat_is_linear_bytes_decode_at_100k() {
-    // the shape the fast path was BUILT for: the `bytes.decode()` lowering
+    // the shape the fast path was BUILT for: the `bytes::decode()` lowering
     // appends one 1-codepoint str per octet through `Concat([out, c]) ->
     // out` (dst == args[0], the `+` accumulator). 100k octets must decode
     // inside the fuel budget (≈ 40 interpreted ops per octet) — only the
@@ -1611,8 +1611,8 @@ entry fn main() -> nil {
     let mut b: [u8] = [0; 100000];
     let mut i = 0;
     while (i < 100000) { b[i] = (65 + i % 26) as u8; i += 1; }
-    let out = bytes.from(b).decode();
-    Logger.new("app").info(f"{out.len()}");
+    let out = bytes::from(b).decode();
+    Logger::new("app").info(f"{out.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 24_000_000);
@@ -1636,7 +1636,7 @@ entry fn main() -> nil {
         out = f"{out}{t}";
         i += 1;
     }
-    Logger.new("app").info(f"{out.len()} {alias.len()}");
+    Logger::new("app").info(f"{out.len()} {alias.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 8_000_000);
@@ -1646,15 +1646,15 @@ entry fn main() -> nil {
 
 #[test]
 fn string_join_and_vec_as_array_run() {
-    // the builtin `string_join([str])` and the `Vec<T>.as_array()` bridge
+    // the builtin `string_join([str])` and the `Vec<T>::as_array()` bridge
     let src = r#"
 use core::{ string_join };
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut v: Vec<str> = Vec.new();
+    let mut v: Vec<str> = Vec::new();
     v.push("x"); v.push("y"); v.push("z");
-    let e: Vec<str> = Vec.new();
-    Logger.new("app").info(f"{string_join(v.as_array())} {string_join(e.as_array()).len()}");
+    let e: Vec<str> = Vec::new();
+    Logger::new("app").info(f"{string_join(v.as_array())} {string_join(e.as_array()).len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1682,7 +1682,7 @@ entry fn main() -> nil {
     let i = 300 as u8 as i32;
     let j = -2.9 as i32;
     let k = 1.0e300f64 as u8;
-    Logger.new("app").info(f"{a} {b} {c} {d} {e} {f} {g} {h} {i} {j} {k}");
+    Logger::new("app").info(f"{a} {b} {c} {d} {e} {f} {g} {h} {i} {j} {k}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1753,7 +1753,7 @@ fn builtin_impl_numeric_methods_run() {
     let src = r#"
 use calc::{ Math };
 entry fn main() -> nil {
-    let log = Logger.new("app");
+    let log = Logger::new("app");
     // i32 wrapping
     log.info(f"{2147483647.wrapping_add(1)} {(-2147483647 - 1).wrapping_sub(1)} {65536.wrapping_mul(65536)}");
     // i32 saturating
@@ -1783,8 +1783,8 @@ entry fn main() -> nil {
     // wrapping shift
     log.info(f"{1073741824.wrapping_shl(1)}");
     // float helpers (host fns) + constants
-    log.info(f"{Math.abs(-2.5)} {Math.min(1.0, 2.0)} {Math.max(1.0, 2.0)} {Math.signum(-3.5)} {Math.signum(0.0)} {Math.signum(4.5)}");
-    log.info(f"{Math.sqrt(2.0)} {Math.PI}");
+    log.info(f"{Math::abs(-2.5)} {Math::min(1.0, 2.0)} {Math::max(1.0, 2.0)} {Math::signum(-3.5)} {Math::signum(0.0)} {Math::signum(4.5)}");
+    log.info(f"{Math::sqrt(2.0)} {Math::PI}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -1812,16 +1812,16 @@ fn case_f32_math_surface() {
     let src = r#"
 use calc::{ Math };
 entry fn main() -> nil {
-    Logger.new("f32").info(f"{Math.sqrt_f(2.0)} {Math.abs_f(-2.5)} {Math.min_f(1.0, 2.0)} {Math.max_f(1.0, 2.0)}");
-    Logger.new("f32").info(f"{Math.signum_f(-3.5)} {Math.signum_f(0.0)} {Math.signum_f(4.5)} {Math.copysign_f(3.0, -1.0)}");
-    Logger.new("f32").info(f"{Math.fma_f(2.0, 3.0, 4.0)} {Math.pow_f(2.0, 10.0)} {Math.floor_f(2.7)} {Math.hypot_f(3.0, 4.0)}");
+    Logger::new("f32").info(f"{Math::sqrt_f(2.0)} {Math::abs_f(-2.5)} {Math::min_f(1.0, 2.0)} {Math::max_f(1.0, 2.0)}");
+    Logger::new("f32").info(f"{Math::signum_f(-3.5)} {Math::signum_f(0.0)} {Math::signum_f(4.5)} {Math::copysign_f(3.0, -1.0)}");
+    Logger::new("f32").info(f"{Math::fma_f(2.0, 3.0, 4.0)} {Math::pow_f(2.0, 10.0)} {Math::floor_f(2.7)} {Math::hypot_f(3.0, 4.0)}");
     // the width survives the boundary: 0.1f32 rounds differently from
     // 0.1f64, and sqrt_f(x*x) comes back f32-rounded
     let x: f32 = 0.1;
-    let r: f32 = Math.sqrt_f(x * x);
-    Logger.new("f32").info(f"{x} {r}");
+    let r: f32 = Math::sqrt_f(x * x);
+    Logger::new("f32").info(f"{x} {r}");
     // a wrong-width arg cannot reach the boundary at all: the checker's
-    // widening rule is f32 -> f64 only, so `Math.sqrt_f(f64var)` is a
+    // widening rule is f32 -> f64 only, so `Math::sqrt_f(f64var)` is a
     // compile error, and f64 literals infer down to the f32 param
 }
 "#;
@@ -1843,7 +1843,7 @@ fn core_nan_const_is_name_explicit() {
     let with = r#"
 use core::{NAN};
 entry fn main() -> nil {
-    Logger.new("app").info(f"{NAN} {NAN == NAN} {NAN < 1.0}");
+    Logger::new("app").info(f"{NAN} {NAN == NAN} {NAN < 1.0}");
 }
 "#;
     let (lines, trap, _) = run_case(with, 1_000_000);
@@ -1882,9 +1882,9 @@ impl B {
     pub fn get(self) -> i32 { return self.v; }
 }
 entry fn main() -> nil {
-    let b = B.new(7);
+    let b = B::new(7);
     let w: Wrap<i32> = b;
-    Logger.new("app").info(f"{w.get()}");
+    Logger::new("app").info(f"{w.get()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1926,15 +1926,15 @@ fn total(it: CountUp) -> i32 {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("it");
+    let log = Logger::new("it");
     let mut acc: ?Acc = Acc { };
-    for (let v of CountUp.new(9)) {
+    for (let v of CountUp::new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
         acc.total = acc.total + v;
     }
     log.info(f"sum={acc.total}");
-    log.info(f"total={total(CountUp.new(4))}");
+    log.info(f"total={total(CountUp::new(4))}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1954,17 +1954,17 @@ use pouch::{ Vec };
 use ink::{ Logger };
 struct Row { v: i32 }
 entry fn main() -> nil {
-    let log = Logger.new("ref");
-    let xs: Vec<i32> = Vec.new();
+    let log = Logger::new("ref");
+    let xs: Vec<i32> = Vec::new();
     xs.push(1); xs.push(2); xs.push(3);
     let mut sum = 0;
     for (let v of xs) { sum += v; }
     log.info(f"sum={sum}");
-    let m: Vec<Vec<i32>> = Vec.new();
-    let r0: Vec<i32> = Vec.new(); r0.push(10); m.push(r0);
+    let m: Vec<Vec<i32>> = Vec::new();
+    let r0: Vec<i32> = Vec::new(); r0.push(10); m.push(r0);
     for (let row of m) { row.push(20); }
     log.info(f"rowlen={m[0].len()}");
-    let rs: Vec<Row> = Vec.new();
+    let rs: Vec<Row> = Vec::new();
     rs.push(Row { v: 5 });
     for (let r of rs) { r.v = 7; }
     log.info(f"v={rs[0].v}");
@@ -1987,8 +1987,8 @@ entry fn main() -> nil {
     let a = 0.1;            // default: f32
     let b: f64 = 0.1;       // annotation: f64
     let c = 0.1 + 0.0;      // computed f32
-    Logger.new("app").info(f"{a} {b} {c}");
-    Logger.new("app").info(f"{a == c}");
+    Logger::new("app").info(f"{a} {b} {c}");
+    Logger::new("app").info(f"{a == c}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -2004,7 +2004,7 @@ fn float_literal_default_does_not_implicitly_widen() {
 use pouch::{ Vec };
 entry fn main() -> nil {
     let a = 0.1;                 // f32 by default
-    let v: Vec<f64> = Vec.new();
+    let v: Vec<f64> = Vec::new();
     v.push(a);                   // must not widen to f64
 }
 "#;
@@ -2028,7 +2028,7 @@ fn offset(x: f64) -> f64 { return x + 0.5; }
 entry fn main() -> nil {
     let r = offset(-2.0);
     let v: f64 = 1.0 / 4.0;
-    Logger.new("app").info(f"{r} {v}");
+    Logger::new("app").info(f"{r} {v}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -2050,20 +2050,20 @@ struct P { x: i32 = 0 }
 entry fn main() -> nil {
     let mut a: [i32] = [0; 8];
     a[3] = 33;
-    Logger.new("t").info(f"a3={a[3]} len={a.len()}");
+    Logger::new("t").info(f"a3={a[3]} len={a.len()}");
     let mut ps: [?P] = [nil; 2];
     let p0 = P { x: 4 };
     ps[0] = p0;
-    Logger.new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
-    let all: Vec<i32> = Vec.filled(9, 3);
-    Logger.new("t").info(f"all={all[0]} {all[1]} {all[2]}");
+    Logger::new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
+    let all: Vec<i32> = Vec::filled(9, 3);
+    Logger::new("t").info(f"all={all[0]} {all[1]} {all[2]}");
     let shared = P { x: 5 };
     let mut both: [?P] = [shared; 2];
     both[1].x = 6;
-    Logger.new("t").info(f"shared={both[0].x}");
+    Logger::new("t").info(f"shared={both[0].x}");
     let n: i32 = 3;
     let sized: [i32] = [2; n * 2];
-    Logger.new("t").info(f"sized={sized.len()} last={sized[5]}");
+    Logger::new("t").info(f"sized={sized.len()} last={sized[5]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -2086,9 +2086,9 @@ fn a1_addr_of_deref_and_nil() {
 struct P { x: i32 = 0; }
 entry fn main() -> nil {
     let p: ?P = P { x: 5 };
-    Logger.new("t").info(f"x={p.x} nil={p == nil}");
+    Logger::new("t").info(f"x={p.x} nil={p == nil}");
     let n: ?P = nil;
-    Logger.new("t").info(f"n nil={n == nil}");
+    Logger::new("t").info(f"n nil={n == nil}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2116,8 +2116,8 @@ fn disposal_runs_at_refcount_zero() {
     let src = r#"
 use core::{ DisposalContext };
 struct P { x: i32 = 0; }
-impl P { [disposal] fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"dropped {self.x}"); } }
-entry fn main() -> nil { let p = P { x: 9 }; Logger.new("t").info("body done"); }
+impl P { [disposal] fn dispose(mut self, cx: DisposalContext) { Logger::new("t").info(f"dropped {self.x}"); } }
+entry fn main() -> nil { let p = P { x: 9 }; Logger::new("t").info("body done"); }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
     assert_eq!(trap, None);
@@ -2132,13 +2132,13 @@ fn disposal_fires_in_reverse_binding_order_at_frame_end() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { }
-impl A { [disposal] fn dispose_a(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:a"); } }
+impl A { [disposal] fn dispose_a(mut self, cx: DisposalContext) { Logger::new("t").info("dispose:a"); } }
 struct B { }
-impl B { [disposal] fn dispose_b(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:b"); } }
+impl B { [disposal] fn dispose_b(mut self, cx: DisposalContext) { Logger::new("t").info("dispose:b"); } }
 entry fn main() -> nil {
     let a = A { };
     let b = B { };
-    Logger.new("t").info("body done");
+    Logger::new("t").info("body done");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2153,11 +2153,11 @@ fn dispose_runs_when_a_binding_is_rebound_mid_frame() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
 entry fn main() -> nil {
     let mut a = A { n: 1 };
     a = A { n: 2 };
-    Logger.new("t").info("body done");
+    Logger::new("t").info("body done");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2174,11 +2174,11 @@ fn dispose_cascades_through_a_record_field() {
     let src = r#"
 use core::{ DisposalContext };
 struct Kid { }
-impl Kid { [disposal] fn release_kid(mut self, cx: DisposalContext) { Logger.new("t").info("kid gone"); } }
+impl Kid { [disposal] fn release_kid(mut self, cx: DisposalContext) { Logger::new("t").info("kid gone"); } }
 struct Parent { kid: ?Kid = nil; }
 entry fn main() -> nil {
     let p = Parent { kid: Kid { } };
-    Logger.new("t").info("body done");
+    Logger::new("t").info("body done");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2194,7 +2194,7 @@ struct A { }
 impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
-    Logger.new("t").info("body done");
+    Logger::new("t").info("body done");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2212,10 +2212,10 @@ struct A { }
 impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
-    Logger.new("t").info("body done");
+    Logger::new("t").info("body done");
 }
 entry fn next_call() -> i64 {
-    Logger.new("t").info("still here");
+    Logger::new("t").info("still here");
     return 7;
 }
 "#;
@@ -2284,8 +2284,8 @@ fn divmod(a: i32, b: i32) -> (i32, i32) {
 }
 entry fn main() -> nil {
     let (q, r) = divmod(7, 2);
-    Logger.new("t").info(f"q={q} r={r}");
-    Logger.new("t").info(f"t1={divmod(9, 4).1}");
+    Logger::new("t").info(f"q={q} r={r}");
+    Logger::new("t").info(f"t1={divmod(9, 4).1}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2301,7 +2301,7 @@ fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
 }
 entry fn main() -> nil {
     let r = apply(fn (x: i32) -> i32 { return x + 1; }, 5);
-    Logger.new("t").info(f"r={r}");
+    Logger::new("t").info(f"r={r}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2320,7 +2320,7 @@ fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
     return f(v);
 }
 entry fn main() -> nil {
-    Logger.new("t").info(f"r={apply(double, 3)}");
+    Logger::new("t").info(f"r={apply(double, 3)}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2338,7 +2338,7 @@ fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
 entry fn main() -> nil {
     let g = inc;
     let h = fn (x: i32) -> i32 { return g(x) * 10; };
-    Logger.new("t").info(f"r={apply(h, 4)}");
+    Logger::new("t").info(f"r={apply(h, 4)}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2362,7 +2362,7 @@ entry fn main() -> nil {
     let r = Runner { op: square };
     let a = f(5);
     let b = r.run(6);
-    Logger.new("t").info(f"local={a} field={b}");
+    Logger::new("t").info(f"local={a} field={b}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2376,7 +2376,7 @@ fn a1_zero_value_field_defaults() {
 struct P3 { x: i32; s: str; }
 entry fn main() -> nil {
     let p = P3 { };
-    Logger.new("t").info(f"x={p.x} s=[{p.s}]");
+    Logger::new("t").info(f"x={p.x} s=[{p.s}]");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2416,9 +2416,9 @@ fn dbg_digest_md5() {
 use pouch::{ Vec };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec::new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let b = opaque.downcast<?Box>(c);
+    let b = opaque::downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -2450,14 +2450,14 @@ fn dbg_vec_build() {
     let src = r#"
 use pouch::{ Vec };
 fn table() -> Vec<str> {
-    let t: Vec<str> = Vec.new();
+    let t: Vec<str> = Vec::new();
     t.push("a");
     t.push("b");
     return t;
 }
 entry fn main() -> nil {
     let t = table();
-    Logger.new("t").info(f"len={t.len()} first={t[0]}");
+    Logger::new("t").info(f"len={t.len()} first={t[0]}");
 }
 "#;
     let out = compile(src, "main");
@@ -2477,15 +2477,15 @@ use pouch::{ Vec };
 struct Inner { v: i32 = 0; }
 struct Outer { inner: Inner; nums: Vec<i32>; tag: str; }
 entry fn main() -> nil {
-    let mut o = Outer { inner: Inner { v: 1 }, nums: Vec.new(), tag: "x" };
+    let mut o = Outer { inner: Inner { v: 1 }, nums: Vec::new(), tag: "x" };
     o.nums.push(7);
     let snap = o;
     o.inner.v = 99;
     o.nums.push(8);
     o.tag = "y";
-    Logger.new("t").info(f"snap inner={snap.inner.v} tag=[{snap.tag}]");
-    Logger.new("t").info(f"o inner={o.inner.v} tag=[{o.tag}] n0={o.nums[0]} n1={o.nums[1]}");
-    Logger.new("t").info(f"snap n={snap.nums.len()}");
+    Logger::new("t").info(f"snap inner={snap.inner.v} tag=[{snap.tag}]");
+    Logger::new("t").info(f"o inner={o.inner.v} tag=[{o.tag}] n0={o.nums[0]} n1={o.nums[1]}");
+    Logger::new("t").info(f"snap n={snap.nums.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 200_000);
@@ -2503,10 +2503,10 @@ fn a2_mutating_method_hits_the_original() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let t: Vec<str> = Vec.new();
+    let t: Vec<str> = Vec::new();
     t.push("a");
     t.push("b");
-    Logger.new("t").info(f"len={t.len()} first={t[0]}");
+    Logger::new("t").info(f"len={t.len()} first={t[0]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2520,7 +2520,7 @@ fn dbg_freeze() {
     let src = r#"
 use pouch::{ Vec };
 entry fn f(s: str) -> (bytes, str) {
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     out.push(7);
     return (out.freeze(), s);
 }
@@ -2552,7 +2552,7 @@ fn str_slice_views_read_through_and_flatten() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("view");
+    let log = Logger::new("view");
     let s = "hello world";
     let w = s.slice(6, 11);
     log.info(f"[{w}] len={w.len()}");
@@ -2561,7 +2561,7 @@ entry fn main() -> nil {
     if (w == "world") { log.info("eq"); }
     let u = "héllo wörld";
     log.info(f"[{u.slice(1, 5)}]");
-    let mut parts: Vec<str> = Vec.new();
+    let mut parts: Vec<str> = Vec::new();
     parts.push(s.slice(0, 5));
     parts.push(u.slice(6, 11));
     log.info(f"[{parts[0]}][{parts[1]}]");
@@ -2589,7 +2589,7 @@ use ink::{ Logger };
 entry fn main() -> nil {
     let s = "hello";
     let t = s.slice(3, 1);
-    Logger.new("view").info(t);
+    Logger::new("view").info(t);
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -2606,8 +2606,8 @@ fn array_views_are_write_through_pointers() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("win");
-    let mut v: Vec<i32> = Vec.new();
+    let log = Logger::new("win");
+    let mut v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3); v.push(4);
     let mut w = v.slice(1, 3);
     log.info(f"[{w[0]} {w[1]}] len={w.len()}");
@@ -2639,11 +2639,11 @@ fn array_views_are_fixed_length_and_bounds_checked() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
     w.push(3);
-    Logger.new("win").info("unreachable");
+    Logger::new("win").info("unreachable");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -2653,11 +2653,11 @@ entry fn main() -> nil {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let v: Vec<i32> = Vec.new();
+    let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
     let x = w[5];
-    Logger.new("win").info(f"{x}");
+    Logger::new("win").info(f"{x}");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -2674,7 +2674,7 @@ pub fn noop() -> nil { return; }
 entry fn main() -> nil {
     let u: nil = nil;
     let p: ?Node = nil;
-    Logger.new("app").info(f"nil={p == nil} u={u == nil}");
+    Logger::new("app").info(f"nil={p == nil} u={u == nil}");
     noop();
 }
 "#;
@@ -2723,9 +2723,9 @@ impl Gen {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("cap");
+    let log = Logger::new("cap");
     let mut cur = Box2 { v: -1 };
-    for (let b of Gen.new(3)) {
+    for (let b of Gen::new(3)) {
         cur = Box2 { v: b * 100 };
     }
     log.info(f"last={cur.v}");
@@ -2744,11 +2744,11 @@ fn capture_rebind_after_lambda_creation_is_seen() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("cap");
-    let mut xs: Vec<i32> = Vec.new();
+    let log = Logger::new("cap");
+    let mut xs: Vec<i32> = Vec::new();
     xs.push(1);
     let get = fn() -> i32 { return xs.len(); };
-    let mut ys: Vec<i32> = Vec.new();
+    let mut ys: Vec<i32> = Vec::new();
     ys.push(9); ys.push(9);
     xs = ys;
     log.info(f"see={get()}");
@@ -2767,10 +2767,10 @@ fn capture_rebind_inside_lambda_propagates_out() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("cap");
-    let mut zs: Vec<i32> = Vec.new();
+    let log = Logger::new("cap");
+    let mut zs: Vec<i32> = Vec::new();
     zs.push(5);
-    let set = fn() -> bool { zs = Vec.new(); zs.push(7); return true; };
+    let set = fn() -> bool { zs = Vec::new(); zs.push(7); return true; };
     set();
     log.info(f"len={zs.len()} first={zs[0]}");
 }
@@ -2788,7 +2788,7 @@ fn primitive_capture_stays_a_copy() {
     let src = r#"
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("cap");
+    let log = Logger::new("cap");
     let mut count = 0;
     let bump = fn() -> i32 { count = count + 1; return count; };
     let a = bump();
@@ -2809,8 +2809,8 @@ fn read_only_ref_capture_and_push_through_capture_unchanged() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let log = Logger.new("cap");
-    let ws: Vec<i32> = Vec.new();
+    let log = Logger::new("cap");
+    let ws: Vec<i32> = Vec::new();
     let add = fn(v: i32) -> bool { ws.push(v); return true; };
     add(1); add(2);
     log.info(f"len={ws.len()} first={ws[0]}");
@@ -2847,19 +2847,19 @@ impl Gen {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("cap");
+    let log = Logger::new("cap");
     let mut picked = Box2 { v: -1 };
-    for (let a of Gen.new(2)) {
-        for (let b of Gen.new(2)) {
+    for (let a of Gen::new(2)) {
+        for (let b of Gen::new(2)) {
             if (b == 1) { picked = Box2 { v: a * 10 + b }; }
         }
     }
     log.info(f"picked={picked.v}");
-    let mut shared: Vec<i32> = Vec.new();
+    let mut shared: Vec<i32> = Vec::new();
     shared.push(0);
-    for (let a of Gen.new(2)) {
-        shared = Vec.new();
-        for (let b of Gen.new(2)) {
+    for (let a of Gen::new(2)) {
+        shared = Vec::new();
+        for (let b of Gen::new(2)) {
             shared.push(a * 10 + b);
         }
     }
@@ -2892,7 +2892,7 @@ impl Count3 {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("cap");
+    let log = Logger::new("cap");
     let mut grab: ?(fn() -> i32) = nil;
     let src: [i32] = [7, 8, 9];
     for (let x of src) {
@@ -2900,7 +2900,7 @@ entry fn main() -> nil {
     }
     let fused = grab();
     let mut grab2: ?(fn() -> i32) = nil;
-    for (let y of Count3.new()) {
+    for (let y of Count3::new()) {
         grab2 = fn() -> i32 { return y; };
     }
     let desug = grab2();

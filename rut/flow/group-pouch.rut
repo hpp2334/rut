@@ -8,7 +8,7 @@
 // class, and satisfaction is having the members on the type's own
 // inherent impl — flow cannot grow members on another module's class.
 // The adapters are the spelled manufacture: `VecFlow(xs).into_flow()`
-// at the entry, `VecFlow<T>.from_flow(pipe)` at the sink (the call
+// at the entry, `VecFlow<T>::from_flow(pipe)` at the sink (the call
 // site spells it; nothing is auto-inserted).
 
 use pouch::{ Vec };
@@ -22,7 +22,7 @@ pub class VecFlow<T>(Vec<T>);
 impl<T> VecFlow<T> {
     pub fn into_flow(self) -> Flow<T> {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(T) -> bool) -> nil {
                     for (let x of self.inner) {
                         if (!emit(x)) {
@@ -34,11 +34,11 @@ impl<T> VecFlow<T> {
     }
 
     // the sink (the FromFlow member): the EXPLICIT pipeline — the
-    // call site manufactures the wrapper (`VecFlow<T>.from_flow(it)`).
+    // call site manufactures the wrapper (`VecFlow<T>::from_flow(it)`).
     // No new type variables (T is the class's own), so no
     // generic-method support is needed here.
     pub fn from_flow(it: Flow<T>) -> Self {
-        let out: Vec<T> = Vec.new();
+        let out: Vec<T> = Vec::new();
         it.iterate(fn (x: T) -> bool { out.push(x); return true; });
         return VecFlow(out);
     }

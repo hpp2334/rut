@@ -51,9 +51,9 @@ in front of a reader.
 | `structs` | reference semantics (sharing by default), identity `==` | `len=6.324555320336759 color=16711935 area=6` |
 | `literals` | numeric suffixes, plain/raw/format strings, fixed `[T]`, bytes buffers | `a=10 e=1.5 d64=1.5 ch=h p.x=1 zero[0]=9 len=3 bin=64` |
 | `checked-arith` | `wrapping_*` wraps two's-complement, `checked_*` answers the `(T, bool)` tuple | `wrap=4 under=255` |
-| `str-views` | O(1) slice views (a slice IS a str), codepoints — `s.code` / `str.from_code` | `word=world len=5 eq=true` |
+| `str-views` | O(1) slice views (a slice IS a str), codepoints — `s.code` / `str::from_code` | `word=world len=5 eq=true` |
 | `bytes` | the binary primitive — encode/decode, clone as the ONE copy | `round=true octets=8 chars=8` |
-| `opaque` | `opaque` / `opaque.downcast<T> -> ?T` / `is` — erasure and checked recovery | `point 1 2` |
+| `opaque` | `opaque` / `opaque::downcast<T> -> ?T` / `is` — erasure and checked recovery | `point 1 2` |
 | `when` | `when` pattern expressions over enums, exhaustiveness | `small` |
 | `maps` | the keyed-collection lane — `HashMap`/`HashSet`, keys admitted by the compile-time union bound | `rut=3 runs=1` |
 | `node-cycle` | strong cycles keep cells alive — the program's responsibility | `head.next alive: true` |
@@ -109,7 +109,7 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) {
 
 entry fn main() {
     let log = Logger("sort");
-    let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
+    let xs = Vec<i32>::from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 
     let mut out = "";
@@ -133,7 +133,7 @@ it here and compare with the fuel-counted host sweep.
 ### Erasure and checked recovery, in one screen
 
 The `opaque` case is the reference for the erasure primitive —
-`opaque(v)` forgets the static type, `opaque.downcast<T>` answers the
+`opaque(v)` forgets the static type, `opaque::downcast<T>` answers the
 nullable, and `is` names the *box*, never the payload
 ([opaque — erasure and downcast](../reference/opaque.md)). The case's
 `erase_and_recover` verbatim, with its two payload types and a `main`
@@ -148,16 +148,16 @@ enum Flavor { Sweet, Sour }
 fn erase_and_recover() {
     let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
-    let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
+    let box2 = opaque(Flavor::Sour);             // zero-copy (shares the cell)
     let box3 = opaque("hello");
 
-    let p = opaque.downcast<Point>(box1);       // ?Point — the nullable
+    let p = opaque::downcast<Point>(box1);       // ?Point — the nullable
     when (p != nil) {
         true -> { log.info(f"point {p.x} {p.y}"); },
         else  -> { log.info("point: nil"); },
     }
-    let wrong = opaque.downcast<i32>(box2);     // wrong type: nil, no trap
-    log.info(f"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
+    let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no trap
+    log.info(f"sour? {opaque::downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
     log.info(f"is str: {box3 is str}");   // `is` names the box — misses every payload type; downcast recovers
 }
 

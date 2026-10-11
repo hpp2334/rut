@@ -9,7 +9,7 @@ use strbuild::{ StringBuilder };
 //   - append/len/build round trips (ASCII + astral + empty)
 //   - the codepoint rule: append_code counts astral as ONE codepoint;
 //     an invalid scalar (surrogate) mints U+FFFD at the host fn — the
-//     str.from_code rule, decided BELOW the pkg (in rut-std)
+//     str::from_code rule, decided BELOW the pkg (in rut-std)
 //   - the growth law: geometric growth is invisible to content —
 //     2^17 appends over a tiny hint cross ~16 class-rounded grows and
 //     answer byte-exact text
@@ -30,7 +30,7 @@ fn check(got: str, want: str) -> str {
 // ---- append/len/build round trips ----
 
 entry fn roundtrip() -> str {
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder::new();
     b.append("he");
     b.append("llo");
     b.append(" ");
@@ -40,13 +40,13 @@ entry fn roundtrip() -> str {
 }
 
 entry fn roundtrip_empty() -> str {
-    let b = StringBuilder.new();
+    let b = StringBuilder::new();
     if (b.len() != 0) { return "BAD:len"; }
     return check(b.build(), "");
 }
 
 entry fn roundtrip_astral() -> str {
-    let mut b = StringBuilder.with_cap(16);
+    let mut b = StringBuilder::with_cap(16);
     b.append("a\u{1F600}b");            // ascii, astral, ascii
     if (b.len() != 3) { return "BAD:len"; }
     return check(b.build(), "a\u{1F600}b");
@@ -55,7 +55,7 @@ entry fn roundtrip_astral() -> str {
 // ---- the codepoint rule ----
 
 entry fn append_code_law() -> str {
-    let mut b = StringBuilder.with_cap(16);
+    let mut b = StringBuilder::with_cap(16);
     b.append("a");
     b.append_code(0x1F600);             // astral: 1 codepoint, 4 octets
     b.append_code(0x2026);              // BMP: 1 codepoint, 3 octets
@@ -66,7 +66,7 @@ entry fn append_code_law() -> str {
 
 entry fn append_code_surrogate_mints_fffd() -> str {
     // invalid scalars mint U+FFFD — the host fn's rule, not the pkg's
-    let mut c = StringBuilder.with_cap(4);
+    let mut c = StringBuilder::with_cap(4);
     c.append_code(0xD800);
     if (c.len() != 1) { return "BAD:len"; }
     return check(c.build(), "\u{FFFD}");
@@ -75,7 +75,7 @@ entry fn append_code_surrogate_mints_fffd() -> str {
 // ---- the growth law ----
 
 entry fn growth_is_invisible_to_content() -> str {
-    let mut b = StringBuilder.with_cap(8);
+    let mut b = StringBuilder::with_cap(8);
     let mut i: i32 = 0;
     while (i < 131072) {
         b.append("abcd");
@@ -93,7 +93,7 @@ entry fn growth_is_invisible_to_content() -> str {
 // ---- the share/copy law ----
 
 entry fn share_copy_law() -> str {
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder::new();
     b.append("one");
     let alias = b;                      // shares the ONE instance cell
     alias.append("+two");               // visible through the original
@@ -113,7 +113,7 @@ fn sink(mut b: StringBuilder) {
 entry fn param_shares_the_cell() -> str {
     // the mut-non-nilable param law: the parameter shares the caller's
     // instance cell — appends through it land in the caller's document
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder::new();
     b.append("a");
     sink(b);
     return check(b.build(), "a(sunk)");
@@ -122,7 +122,7 @@ entry fn param_shares_the_cell() -> str {
 entry fn finish_under_alias() -> str {
     // finishing THROUGH an alias answers the shared buffer; the built
     // str is immune to later appends through either name
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder::new();
     b.append("x");
     let alias = b;                      // shares the ONE instance cell
     let s = alias.build();              // the materialization, via the alias
@@ -135,9 +135,9 @@ entry fn finish_under_alias() -> str {
 // ---- with_cap: honored as the mint, advisory as behavior ----
 
 entry fn cap_hint_is_advisory() -> str {
-    let mut a = StringBuilder.new();            // grows from small
-    let mut z = StringBuilder.with_cap(0);      // explicit 0: the same path
-    let mut h = StringBuilder.with_cap(4096);   // pre-sized past the need
+    let mut a = StringBuilder::new();            // grows from small
+    let mut z = StringBuilder::with_cap(0);      // explicit 0: the same path
+    let mut h = StringBuilder::with_cap(4096);   // pre-sized past the need
     let mut i: i32 = 0;
     while (i < 100) {
         a.append("xy"); z.append("xy"); h.append("xy");
@@ -155,5 +155,5 @@ entry fn cap_hint_is_advisory() -> str {
 // the negative hint: the host fn's `Invalid` trap, unchanged by the
 // face (asserted Rust-side — a trap cannot ride a str answer)
 entry fn neg_cap() -> nil {
-    let _ = StringBuilder.with_cap(-1);
+    let _ = StringBuilder::with_cap(-1);
 }

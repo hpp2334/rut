@@ -96,7 +96,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             || self.ctx.extern_generics.contains_key(&base);
         if !base_generics.is_empty() && !is_data {
             self.ctx.err(sp, format!(
-                "generic type paths (`{}<..>.{}`) are not supported in this build",
+                "generic type paths (`{}<..>::{}`) are not supported in this build",
                 self.ctx.name(base), self.ctx.name(member)
             ));
             return Err(());
@@ -162,16 +162,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
-            (sym::WEAK, sym::NEW) => {
-                // Weak.new(v) — the weak box's construction (v1):
+            (sym::WEAK, sym::NEW) if self.ctx.used.contains(&sym::WEAK) => {
+                // Weak::new(v) — the weak box's construction (v1):
                 // the class-method form of the old type-call.
+                // IMPORT-GATED like the type position (`use core::{ Weak }`):
+                // without the use the head misses to the tail's
+                // not-in-scope diagnostic naming the fix.
                 // Exactly one argument; its type is the instantiation's
                 // elem and must be a reference type (every non-primitive
                 // is — the `Weak<i32>` admission diagnoses here, the
                 // `is_ref` gate). The op consumes the argument's
                 // temporary (the one consuming op).
                 if args.len() != 1 {
-                    self.ctx.err(sp, "Weak.new(v) takes exactly one argument — the value to weak-reference");
+                    self.ctx.err(sp, "Weak::new(v) takes exactly one argument — the value to weak-reference");
                     return Err(());
                 }
                 let elem = self.compile_expr(args[0], None)?;
@@ -295,7 +298,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         _ => {
                             self.ctx.err(sp, format!(
-                                "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
                                 b = self.ctx.name(base), m = self.ctx.name(member)
                             ));
                             return Err(());
@@ -333,7 +336,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Some((ed, eargs)) if ed == dname => eargs,
                             _ => {
                                 self.ctx.err(sp, format!(
-                                    "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                    "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
                                     b = self.ctx.name(base), m = self.ctx.name(member)
                                 ));
                                 return Err(());
@@ -364,7 +367,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Some((ed, eargs)) if ed == base => eargs,
                             _ => {
                                 self.ctx.err(sp, format!(
-                                    "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                    "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
                                     b = self.ctx.name(base), m = self.ctx.name(member)
                                 ));
                                 return Err(());
@@ -394,7 +397,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let msg = self
             .ctx
             .not_in_core_scope(base)
-            .unwrap_or_else(|| format!("unknown name `{}.{}`", self.ctx.name(base), self.ctx.name(member)));
+            .unwrap_or_else(|| format!("unknown name `{}::{}`", self.ctx.name(base), self.ctx.name(member)));
         self.ctx.err(sp, msg);
         Err(())
     }

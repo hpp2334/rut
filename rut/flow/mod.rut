@@ -26,7 +26,7 @@ pub interface IntoFlow<E> {
 // type — the member is a no-self static (`fn from_flow(it: Flow<E>)
 // -> Self`), and the adapters are the only shapes that can carry it
 // (the sink targets are foreign classes). The call site spells it:
-// `VecFlow<T>.from_flow(pipe)`, `collected()` unwraps — wrappers are
+// `VecFlow<T>::from_flow(pipe)`, `collected()` unwraps — wrappers are
 // explicit manufacture; nothing is auto-inserted.
 pub interface FromFlow<E> {
     fn from_flow(it: Flow<E>) -> Self;
@@ -49,7 +49,7 @@ impl<E> Flow<E> {
     // Keep the elements the predicate admits.
     pub fn filter(self, p: fn(E) -> bool) -> Self {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(E) -> bool) -> nil {
                     (self.drive)(
                         fn (x: E) -> bool {
@@ -70,7 +70,7 @@ impl<E> Flow<E> {
     pub fn take(self, n: i32) -> Self {
         let mut st: TakeState = TakeState { n: n };
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(E) -> bool) -> nil {
                     (self.drive)(
                         fn (x: E) -> bool {
@@ -89,7 +89,7 @@ impl<E> Flow<E> {
     pub fn skip(self, n: i32) -> Self {
         let mut st: TakeState = TakeState { n: n };
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(E) -> bool) -> nil {
                     (self.drive)(
                         fn (x: E) -> bool {
@@ -127,7 +127,7 @@ impl<E> Flow<E> {
     pub fn enumerate(self) -> Flow<(i32, E)> {
         let mut st: CountState = CountState { n: 0 };
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn((i32, E)) -> bool) -> nil {
                     (self.drive)(
                         fn (x: E) -> bool {
@@ -145,7 +145,7 @@ impl<E> Flow<E> {
     // (`.map<i32>(..)`); a fn path infers too.
     pub fn map<R>(self, f: fn(E) -> R) -> Flow<R> {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(R) -> bool) -> nil {
                     (self.drive)(fn (x: E) -> bool { return emit(f(x)); });
                 },
@@ -200,7 +200,7 @@ pub class ArrFlow<T>([T]);
 impl<T> ArrFlow<T> {
     pub fn into_flow(self) -> Flow<T> {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(T) -> bool) -> nil {
                     for (let x of self.inner) {
                         if (!emit(x)) {
@@ -217,7 +217,7 @@ pub class StrFlow(str);
 impl StrFlow {
     pub fn into_flow(self) -> Flow<str> {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(str) -> bool) -> nil {
                     for (let c of self.inner) {
                         if (!emit(c)) {
@@ -234,7 +234,7 @@ pub class BytesFlow(bytes);
 impl BytesFlow {
     pub fn into_flow(self) -> Flow<u8> {
         return
-            Flow.new(
+            Flow::new(
                 fn (emit: fn(u8) -> bool) -> nil {
                     for (let b of self.inner) {
                         if (!emit(b)) {

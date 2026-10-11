@@ -7,11 +7,11 @@ use pouch::{Vec};
 use nmapset::{Map};
 
 entry fn go_vec() -> str {
-    let v = Vec<i64>.filled(7, 2);
+    let v = Vec<i64>::filled(7, 2);
     return JVecI64(v).json_serialize();
 }
 
 entry fn go_map() -> str {
-    let m = Map<str, i64>.single("k", 1);
+    let m = Map<str, i64>::single("k", 1);
     return JMapStrI64(m).json_serialize();
 }

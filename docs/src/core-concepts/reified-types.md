@@ -21,7 +21,7 @@ language-facing *surfaces* of reification:
 
 - **`is` type tests** — `x is Circle` (exact) and `x is Drawable`
   (capability: does this value's type have a registered impl?).
-- **Checked erasure** — `opaque.downcast<T>(o)` reads the box's runtime
+- **Checked erasure** — `opaque::downcast<T>(o)` reads the box's runtime
   type and recovers the payload, or `nil` on a mismatch.
 - **Host-boundary checks** — native functions declare parameter types
   once; every call is checked against them.
@@ -39,7 +39,7 @@ always reachable:
    "re-parse-and-pray" layer, because a wrong-shaped call fails loudly
    at the boundary.
 2. **Erasure is checked, not blind.** `opaque(v)` stamps the box;
-   `opaque.downcast<T>` consults the stamp. A box answers type tests *by
+   `opaque::downcast<T>` consults the stamp. A box answers type tests *by
    the box* — `o is T` misses for every payload type — so the only way
    back to the payload is the checked recovery. Erasure without
    reification would be `any`; with reification it is a sealed box.
@@ -129,7 +129,7 @@ Every type test is a small, pure read:
 - **Interface probe** (`x is Drawable`): load the type id, scan the
   descriptor's registered impl list. Pure in its inputs, so repeated
   probes deduplicate and invariant ones hoist.
-- **Downcast** (`opaque.downcast<T>(o)`): the same type-id compare,
+- **Downcast** (`opaque::downcast<T>(o)`): the same type-id compare,
   followed by the guarded payload extract.
 
 There is no runtime

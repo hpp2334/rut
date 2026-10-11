@@ -1,6 +1,6 @@
 //! Builtin names are AMBIENT: no
 //! `use` is needed for the engine's fns and containers — the erasure
-//! primitive's statics are `opaque(..)` / `opaque.downcast<T>`. The
+//! primitive's statics are `opaque(..)` / `opaque::downcast<T>`. The
 //! type-name string itself is `opaque` since phase 2 (interner/boot/
 //! crossing in lockstep); the old boot/free call spellings are gone
 //! (their removal is pinned in `the_old_spellings_are_gone` below).
@@ -77,10 +77,10 @@ fn builtins_resolve_with_no_use_statement() {
         "struct Point { x: i32; y: i32 }\n\
          entry fn main() -> i32 {\n\
              let b = opaque(Point { x: 3, y: 4 });\n\
-             let p = opaque.downcast<Point>(b);\n\
+             let p = opaque::downcast<Point>(b);\n\
              if (p == nil) { panic(\"point downcast failed\"); }\n\
              let b2 = opaque(7);\n\
-             let n = opaque.downcast<i32>(b2);\n\
+             let n = opaque::downcast<i32>(b2);\n\
              if (n == nil) { panic(\"int downcast failed\"); }\n\
              return p.x + p.y + n;\n\
          }\n",
@@ -165,7 +165,7 @@ fn the_gated_names_require_the_import() {
          class Acc { total: i32 = 0; }\n\
          entry fn main() -> i32 {\n\
              let mut acc: ?Acc = Acc { };\n\
-             for (let v of CountUp.new(4)) { acc.total = acc.total + v; }\n\
+             for (let v of CountUp::new(4)) { acc.total = acc.total + v; }\n\
              return acc.total;\n\
          }\n",
     );
@@ -179,9 +179,9 @@ fn opaque_downcast_member_carries_the_nullable_contract() {
     let v = run_main(
         "entry fn main() -> i32 {\n\
              let b = opaque(\"hello\");\n\
-             let miss = opaque.downcast<i64>(b);\n\
+             let miss = opaque::downcast<i64>(b);\n\
              if (miss != nil) { return 1; }\n\
-             let s = opaque.downcast<str>(b);\n\
+             let s = opaque::downcast<str>(b);\n\
              if (s == nil) { return 3; }\n\
              return s.len() as i32;\n\
          }\n",
@@ -231,7 +231,7 @@ fn opaque_type_position_resolves_under_both_spellings() {
          entry fn main() -> i32 {\n\
              let b = keep(opaque(4));\n\
              let b2 = keep2(b);\n\
-             let n = opaque.downcast<i32>(b2);\n\
+             let n = opaque::downcast<i32>(b2);\n\
              if (n == nil) { return 0; }\n\
              return n;\n\
          }\n",

@@ -53,8 +53,8 @@ fn log_m(h: ?Harness, label: str) -> Mutation<str, opaque> {
 // the pump re-passes every turn. No tree yet — the first render is a
 // probe's job (t1_render's create path).
 entry fn main() -> opaque {
-    let store = Store.new();
-    let log$ = store.source<Vec<str>>(Vec.new());
+    let store = Store::new();
+    let log$ = store.source<Vec<str>>(Vec::new());
     let num$ = store.source<i64>(7);
     let num_view$ = store.derive(fn (ctx) -> str {
         return f"n={ctx.get<i64, Source<i64>>(num$)}";
@@ -89,12 +89,12 @@ fn h_event(c: opaque, h: ?Harness, id: str, detail: str) -> (?opaque, str) {
 }
 
 entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     return h_event(c, h, id, detail);
 }
 
 entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     return h_event(c, h, id, value);
 }
 
@@ -120,7 +120,7 @@ fn list_col() -> Widget {
 /// Every kind, every variant, the ladder, role + placeholder + hooks —
 /// the lowering snapshot's subject, all hooks distinct.
 entry fn t1p_render_kinds(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
 
     let mut tree = col().gap(16).pad(16).hook("kinds");
@@ -150,7 +150,7 @@ entry fn t1p_render_kinds(c: opaque) {
 
 /// Two rows, milk then tea. The diff scenarios' left side.
 entry fn t1p_rows_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
     tree.w(row_w(h, 1, "milk", false));
@@ -160,7 +160,7 @@ entry fn t1p_rows_a(c: opaque) {
 
 /// The same rows SWAPPED — the keyed reorder's right side.
 entry fn t1p_rows_b(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
     tree.w(row_w(h, 2, "tea", false));
@@ -170,7 +170,7 @@ entry fn t1p_rows_b(c: opaque) {
 
 /// Row 1 only — rows 2 left the list.
 entry fn t1p_rows_c(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
     tree.w(row_w(h, 1, "milk", false));
@@ -179,7 +179,7 @@ entry fn t1p_rows_c(c: opaque) {
 
 /// Rows 1, 2 and a NEW 3 — the keyed append's right side.
 entry fn t1p_rows_d(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
     tree.w(row_w(h, 1, "milk", false));
@@ -190,7 +190,7 @@ entry fn t1p_rows_d(c: opaque) {
 
 /// Row 1's checkbox ON — the toggle's one-class-patch right side.
 entry fn t1p_rows_toggle(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
     tree.w(row_w(h, 1, "milk", true));
@@ -200,7 +200,7 @@ entry fn t1p_rows_toggle(c: opaque) {
 
 /// A keyed flat list a,b,c — order is directly readable (texts).
 entry fn t1p_flat_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(4).hook("flat");
     tree.w(text("a").key("a"));
@@ -211,7 +211,7 @@ entry fn t1p_flat_a(c: opaque) {
 
 /// The mixed sequence: c,x,a — b gone, x created, a moved, c kept.
 entry fn t1p_flat_b(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(4).hook("flat");
     tree.w(text("c").key("c"));
@@ -222,7 +222,7 @@ entry fn t1p_flat_b(c: opaque) {
 
 /// One text line — the text-patch scenario, before.
 entry fn t1p_solo_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("solo");
     tree.w(text("before").hook("line"));
@@ -231,7 +231,7 @@ entry fn t1p_solo_a(c: opaque) {
 
 /// The same line, text patched — after. No other delta exists.
 entry fn t1p_solo_b(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("solo");
     tree.w(text("after").hook("line"));
@@ -240,7 +240,7 @@ entry fn t1p_solo_b(c: opaque) {
 
 /// A field with an empty value — the value-patch scenario, before.
 entry fn t1p_field_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("form");
     tree.w(field().placeholder("What needs doing?").on_input(log_m(h, "type")).hook("new-todo"));
@@ -249,7 +249,7 @@ entry fn t1p_field_a(c: opaque) {
 
 /// The same field, value patched to the draft — after.
 entry fn t1p_field_b(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("form");
     tree.w(field().placeholder("What needs doing?").on_input(log_m(h, "type")).hook("new-todo").value("milk"));
@@ -261,7 +261,7 @@ entry fn t1p_field_b(c: opaque) {
 /// A Text with a child — the fat struct's one dishonesty, caught at
 /// the lowering boundary.
 entry fn t1p_trap_text_children(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let bad = text("x").hook("bad").w(row());
     t1_render(root, bad);
@@ -269,21 +269,21 @@ entry fn t1p_trap_text_children(c: opaque) {
 
 /// Off-ladder gap — no arbitrary values, ever.
 entry fn t1p_trap_bad_gap(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, row().gap(6).hook("bad"));
 }
 
 /// Off-ladder pad.
 entry fn t1p_trap_bad_pad(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, col().pad(20).hook("bad"));
 }
 
 /// Off-ladder size.
 entry fn t1p_trap_bad_size(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, spacer(10));
 }
@@ -291,10 +291,10 @@ entry fn t1p_trap_bad_size(c: opaque) {
 /// A hand-built Text with no variant — the fat struct permits it, the
 /// lowering does not.
 entry fn t1p_trap_text_no_variant(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, Widget {
-        kind: WKind.Text,
+        kind: WKind::Text,
         text: "anon",
         tvar: nil,
         bvar: nil,
@@ -313,20 +313,20 @@ entry fn t1p_trap_text_no_variant(c: opaque) {
         gap: 0,
         pad: 0,
         size: 0,
-        children: Vec.new(),
+        children: Vec::new(),
     });
 }
 
 /// A listening widget that carries no event mutation.
 entry fn t1p_trap_listener_no_mutation(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, btn("anon").hook("bad"));
 }
 
 /// A surviving key that changed kind — keys are identity.
 entry fn t1p_trap_kind_change(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut a = col().key("x");
     a.w(text("a"));
@@ -340,7 +340,7 @@ entry fn t1p_trap_kind_change(c: opaque) {
 /// this — it stands in for internal drift so the patcher's unknown-
 /// handle law can be exercised (unknown id during patch = LOUD).
 entry fn t1p_els_steal(c: opaque, path: str) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut els: HashMap<str, opaque> = root.els;
     els.remove(path);
@@ -349,7 +349,7 @@ entry fn t1p_els_steal(c: opaque, path: str) {
 // ---- registry reads (the tests' assertions) --------------------------
 
 entry fn t1p_regs_len(c: opaque) -> i32 {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut regs: HashMap<str, Ev> = root.regs;
     return regs.len();
@@ -358,21 +358,21 @@ entry fn t1p_regs_len(c: opaque) -> i32 {
 /// Whether the id answers a live event mutation — the retirement
 /// asserts peek existence; the LABEL asserts live on the fired log.
 entry fn t1p_regs_has(c: opaque, id: str) -> bool {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut regs: HashMap<str, Ev> = root.regs;
     return regs.has(id);
 }
 
 entry fn t1p_els_len(c: opaque) -> i32 {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut els: HashMap<str, opaque> = root.els;
     return els.len();
 }
 
 entry fn t1p_els_has(c: opaque, path: str) -> bool {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut els: HashMap<str, opaque> = root.els;
     return els.has(path);
@@ -381,7 +381,7 @@ entry fn t1p_els_has(c: opaque, path: str) -> bool {
 /// The live handle for a path — the tests downcast it host-side and
 /// read the twin's node id (element identity through the handles).
 entry fn t1p_els_handle(c: opaque, path: str) -> opaque {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut els: HashMap<str, opaque> = root.els;
     let hit = els.get(path);
@@ -395,7 +395,7 @@ entry fn t1p_els_handle(c: opaque, path: str) -> opaque {
 /// The delivered labels, "|"-joined, in arrival order — the event
 /// mutations' own writes, read through the handle (pull-on-read).
 entry fn t1p_log(c: opaque) -> str {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let lg: Vec<str> = h.log$.get();
     let mut out = "";
     let mut first = true;
@@ -411,7 +411,7 @@ entry fn t1p_log(c: opaque) -> str {
 
 /// The mounted root's diff identity (key_of(prev)) — "" pre-render.
 entry fn t1p_prev_key(c: opaque) -> str {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let prev = root.prev;
     if (prev == nil) {
@@ -430,7 +430,7 @@ entry fn t1p_prev_key(c: opaque) -> str {
 /// t1_render's: the same tree re-rendered after a cell write patches
 /// the text, because the prop resolves fresh each render.
 entry fn t1p_live_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("livezone");
     tree.w(text("").text_of(h.num_view$).hook("lv"));
@@ -440,7 +440,7 @@ entry fn t1p_live_a(c: opaque) {
 /// The reactive SUBTREE (tur's Each): the whole branch is a derived,
 /// materialized at the render door and keyed-diffed like any tree.
 entry fn t1p_live_each_a(c: opaque) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, col().gap(8).hook("livezone").w(live(h.each_view$)));
 }
@@ -448,6 +448,6 @@ entry fn t1p_live_each_a(c: opaque) {
 /// Test code may push the cell directly (the harness is the frozen
 /// test surface's peer, not the app).
 entry fn t1p_live_bump(c: opaque, v: i64) {
-    let h = opaque.downcast<?Harness>(c);
+    let h = opaque::downcast<?Harness>(c);
     h.num$.set(v);
 }

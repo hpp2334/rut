@@ -551,7 +551,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         // `<namespace>.CONST` — a used namespace's constants
-        // (`Math.PI`). Name-generic: routed by the bound
+        // (`Math::PI`). Name-generic: routed by the bound
         // namespace head, never by a hardcoded string.
         if segs.len() == 2 && self.ctx.is_extern_namespace(segs[0].name) {
             if let Some((ty, bits)) = self.ctx.extern_const(segs[1].name) {
@@ -561,7 +561,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             let ns = self.ctx.name(segs[0].name).to_string();
             let m = self.ctx.name(segs[1].name).to_string();
-            self.ctx.err(sp, format!("`{ns}.{m}` is not a namespace constant"));
+            self.ctx.err(sp, format!("`{ns}::{m}` is not a namespace constant"));
             return Err(());
         }
         // two segments: local field chain `p.x`, `req.value.reply` — locals
@@ -656,7 +656,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
-    /// The qualified VALUE path (`layout.LIMIT`, `mod.Color.Red`):
+    /// The qualified VALUE path (`layout::LIMIT`, `mod::Color::Red`):
     /// the head names a child `mod` of the current module or of an
     /// ancestor; further segments walk child mods until one names an
     /// ENUM of the walked module (the trailing `Enum.Member` pair), or

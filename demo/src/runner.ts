@@ -68,9 +68,9 @@ class WasmApi implements RutApi {
   }
 
   private write(bytes: Uint8Array): number {
-    const ptr = this.e.rut_alloc(bytes.length);
+    const ptr = this.e.rut_alloc(bytes::length);
     if (ptr === 0) throw new Error("wasm heap exhausted");
-    new Uint8Array(this.e.memory.buffer, ptr, bytes.length).set(bytes);
+    new Uint8Array(this.e.memory.buffer, ptr, bytes::length).set(bytes);
     return ptr;
   }
 
@@ -83,7 +83,7 @@ class WasmApi implements RutApi {
   compile(src: string): CompileResult {
     const bytes = this.enc.encode(src);
     const ptr = this.write(bytes);
-    const resPtr = this.e.rut_compile(ptr, bytes.length);
+    const resPtr = this.e.rut_compile(ptr, bytes::length);
     const json = this.readEnvelope(resPtr);
     const parsed = JSON.parse(json) as CompileResult & { binary?: string };
     return {
@@ -99,8 +99,8 @@ class WasmApi implements RutApi {
     const resPtr = this.e.rut_run(
       ptr,
       binary.length,
-      BigInt(Math.max(0, Math.floor(budget.fuel))),
-      BigInt(Math.max(0, Math.floor(budget.heapBytes))),
+      BigInt(Math::max(0, Math::floor(budget.fuel))),
+      BigInt(Math::max(0, Math::floor(budget.heapBytes))),
     );
     const parsed = JSON.parse(this.readEnvelope(resPtr)) as RunResult;
     return {
@@ -115,7 +115,7 @@ class WasmApi implements RutApi {
 
   resume(extraFuel: number): RunResult {
     const resPtr = this.e.rut_resume(
-      BigInt(Math.max(0, Math.floor(extraFuel))),
+      BigInt(Math::max(0, Math::floor(extraFuel))),
       // the parked machine keeps the heap limit it was built with
       BigInt(0),
     );

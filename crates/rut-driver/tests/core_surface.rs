@@ -306,7 +306,7 @@ fn own_strbuf_named_type_still_resolves() {
          impl StrBuf {\n    pub fn new() -> Self { return Self { n: 0 }; }\n\
          \x20   pub fn push(mut self, k: i32) { self.n += k; }\n\
          \x20   pub fn len(self) -> i32 { return self.n; }\n}\n\
-         entry fn main() -> i32 { let b = StrBuf.new(); b.push(4); return b.len(); }\n",
+         entry fn main() -> i32 { let b = StrBuf::new(); b.push(4); return b.len(); }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>());
     let flat = rut_core::link::flatten(out.program.expect("linked program"));

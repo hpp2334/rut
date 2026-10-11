@@ -18,7 +18,7 @@
 //     append(value: str)  append a str's octets in place — O(|s|)
 //                         amortized
 //     append_code(cp: u32)  append one codepoint (invalid scalars mint
-//                         U+FFFD — the str.from_code rule, decided at
+//                         U+FFFD — the str::from_code rule, decided at
 //                         the host fn, not here)
 //     len() -> i32        the CODEPOINT count so far (tracked, O(1))
 //     build() -> str      the ONE materialization: a fresh immutable

@@ -308,11 +308,11 @@ list, §5, becomes the surface). The host gains GENERAL machinery only,
 anything a tokenizer wants, and json rewires onto it — the engine
 never learns json exists:
 
-- **`str.code_at(i)`** — the codepoint at a codepoint index (the
+- **`str::code_at(i)`** — the codepoint at a codepoint index (the
   survey's gap 1). Lowers to the existing `StrCharAt` + conv, so it
   rides today's encodings; it deletes the reader's `cs[p]` reads and
   every slice-per-char mint left on the encode side.
-- **`str.scan(from, set)`** — the fused host-side scan/classify (gap
+- **`str::scan(from, set)`** — the fused host-side scan/classify (gap
   2, phase 1's handoff made it binding: classify is call-frame-bound,
   so the WHOLE loop must leave the interpreter; a one-lookup-at-a-time
   primitive is worthless). Walks codepoints from `from`, classifies
@@ -320,7 +320,7 @@ never learns json exists:
   keeps scanning), stops at the first nonzero class, and returns the
   packed pair `(stop << 8) | class` — one rut call per token boundary,
   O(calls) not O(bytes-in-rut). New `StrScan` native.
-- **`str.starts_with(from, head)`** — the prefix test at a codepoint
+- **`str::starts_with(from, head)`** — the prefix test at a codepoint
   offset, compared host-side (gap 3's starts-with half; `lit()`
   becomes one call with zero per-index cells). New `StrStartsWith`
   native.
@@ -333,7 +333,7 @@ never learns json exists:
   `StrBufNew`/`StrBufPush`/`StrBufPushCode`/`StrBufLen`/`StrBufFinish`
   natives and a `CellData::StrBuf` payload (own() deep-copies;
   assignment shares, the class law).
-- **The codepoint split re-rides (gap 5)**: `JsonReader.of` no longer
+- **The codepoint split re-rides (gap 5)**: `JsonReader::of` no longer
   materializes a `[?u32]` column — no per-codepoint walk, no column
   alloc + drop; the reader is a direct cursor over `src`, and the
   classify stage (skip_ws/digit_run/read_str's body scan/more's
@@ -626,7 +626,7 @@ hashset 25.1 → 12.6 MB, hashmap-str 15.9 → 9.8 MB, knucleotide
 Where the rest goes: the two str-keyed rows moved least because their
 dominant per-op cost was never the map — every `hash()` of a `str` key
 copies it through `encode()` before mixing, and re-probes re-hash. A
-zero-copy `str.bytes()` view is the known next lever, deliberately out
+zero-copy `str::bytes()` view is the known next lever, deliberately out
 of scope here. The int-keyed rows are left at the interpreter floor —
 dispatch plus RC traffic on the field reads a probe chain needs — at
 ~2.6-3.3x QuickJS net (from 4.1-4.6x), with no box, frame, vtable call,
@@ -677,7 +677,7 @@ remains dominated by k-mer materialization (`seq.slice` per position),
 which the map swap cannot touch. The int rows' residual decomposes per
 map op into the wrapper's interpreter work (generic call frame, hash,
 `vals` traffic — nmapset-int is 24.8 M ops) plus the crossing package:
-one `opaque.new` mint and one or two host calls (~17 ns/call, the
+one `opaque::new` mint and one or two host calls (~17 ns/call, the
 mathhost floor). The mint alone is small — a 600 k escaped-mint loop
 measures ~27 ns/mint, ~15% of nmapset-int's exec — so no single term
 dominates; the residual is the per-op package itself. The known
@@ -696,7 +696,7 @@ pass-by-reference sharing: records and arrays — previously **value**
 types, memcpy'd on binding and on store — are now shared cells (one
 handle retain/release), the `CloneVal`/`MoveVal`/`ArrGetRef`/`ValEq`
 ops and the move-elision liveness pass are deleted, `?T` (the renamed
-pointer) is the one nullable, and `bytes.clone()` is the only copy.
+pointer) is the one nullable, and `bytes::clone()` is the only copy.
 Full suite, same-day runs, 3 reps + 1 warmup: before = the mapset-host
 batch HEAD (the binary the log above ends on), after = the byref batch
 HEAD. **All 23 checksums equal `expected.json` on all three runtimes**
@@ -911,7 +911,7 @@ shape, not as saturation.
   checksum was caught. `f64` arithmetic is IEEE and evaluated in the
   same order in rut and JS; the `nbody`/`spectral-norm` workloads keep
   the **same fixed-iteration Newton `fsqrt`** on both sides (rather than
-  rut's `Math.sqrt` vs JS's `Math.sqrt`) so the float checksums match
+  rut's `Math::sqrt` vs JS's `Math::sqrt`) so the float checksums match
   bit-for-bit; the runner still tolerates a 1e-9
   relative difference when comparing numeric checksums.
 
@@ -1418,7 +1418,7 @@ file, deleted after capture — dumps preserved in the batch run dir):
 instantiate `HashMap<i64, i64>` (and `<i32, i32>`, the row's shape), and
 dump the actual bench dir's program. What the binary contains:
 
-- The wrapper does not survive as functions. `HashMap.put/get/has/remove`
+- The wrapper does not survive as functions. `HashMap::put/get/has/remove`
   are **fully spliced into the instantiated consumer body** (the pkg is
   `inline = true` — source-inlined into the consumer's one compilation
   unit — then monomorphized per instantiation, then the tiny-body
@@ -1569,7 +1569,7 @@ opposite, so there is nothing to build — this note plus an observation
 line in RFC 0031 is the entire phase.
 
 Why the lever is dead: the wrapper never reaches the binary as a
-dispatch point. `HashMap.put/get/has/remove` are source-inlined (the
+dispatch point. `HashMap::put/get/has/remove` are source-inlined (the
 pkg is `inline = true`) and monomorphized per instantiation, the
 tiny-body splicer then inlines the `KeyLane` impl bodies, and the
 bench row's churn is one 389-op function whose `k.nentry(self.t)` is a
@@ -1687,7 +1687,7 @@ Honest neutrals and the stop-point sweep:
   predicts (raw stores delete `makeopt`s and cell traffic exactly where
   `[?prim]` backings exist — including the pure-rut `mapset` twins,
   which inherit the store for free through `pouch`/`mapset`'s own
-  `vals: [?V]` / `Vec<T>.buf`). `hashmap-str`'s −0.5% time with a −2 MB
+  `vals: [?V]` / `Vec<T>::buf`). `hashmap-str`'s −0.5% time with a −2 MB
   heap reads honestly as: the row is str-key dominated, the sidecar win
   is real but small.
 
@@ -2086,7 +2086,7 @@ wrapper-shaped op sequence through column vs sidecar in one Rust test
 (identical slots per key, identical checksum, pinned literal
 `5344915641404318251`), and the nmapset-int `churn` shape at n = 2000
 driven through the VM twice (`map_*` + column vs today's
-`nmapset.HashMap` sidecar wrapper) answering the same `2598000`.
+`nmapset::HashMap` sidecar wrapper) answering the same `2598000`.
 
 Sanity pass (house method: one probe binary per side, all 27 workloads,
 rut only — no consumer uses the column yet): **checksums bit-identical
@@ -2139,7 +2139,7 @@ and recorded in the class header comment:
   exactly like a KeyLane key); get has no `V` value to dispatch
   through. Rut's no-self trait methods (RFC 0012 §2, "engine
   contracts") have no call syntax on primitives — type names and type
-  params are not expressions (`V.dec(raw)` / `i64.dec(raw)` both
+  params are not expressions (`V::dec(raw)` / `i64::dec(raw)` both
   diagnose "unknown name"; there is no `::` path syntax), there is no
   `as V` cast to a type param, and the union bound is admission only,
   never per-member divergence (the phase-0c finding). Each class body
@@ -2510,7 +2510,7 @@ menu.
 
 `bytes` carries exactly four members (`len`, `decode`, `clone` — the
 one copy escape, RFC 0044 — and the `zeroed(n)`/`from([u8])`
-type-methods; `Vec<u8>.freeze()` mints). Element assignment is a
+type-methods; `Vec<u8>::freeze()` mints). Element assignment is a
 **compile-time diagnostic** ("`str`/`bytes` are immutable — element
 assignment is not allowed", `rut-lir/src/lir/slice.rs`), not a trap;
 there is no push/set/truncate/resize anywhere on the type. **§0.3's
@@ -2654,7 +2654,7 @@ class** — keys stay `str`-kind and the sv lanes are an s-lane overload
 The methods sit on the GENERIC class because rut has no
 per-instantiation divergence (the union bound is admission only — the
 round3 phase-0c verdict); the CONTRACT is `K = str` (the only key type
-with a range spelling), with `off`/`len` in bytes — note `str.slice`
+with a range spelling), with `off`/`len` in bytes — note `str::slice`
 is codepoint-offset, so the two spellings agree numerically only on
 ASCII parents (both bench rows are ASCII; the distinction is
 documented, not hidden). `HashSet`/`PrimMap*` stay range-less: no
@@ -2844,7 +2844,7 @@ sessions:
   `i+3` → `i+7`) moving the checksum by exactly the predicted
   `+200000`. The row computes its own answer; it is not an echo.
 - **Byte-vs-codepoint offsets**: the range methods take BYTE
-  windows; `str.slice` is codepoint-offset. The two spellings agree
+  windows; `str::slice` is codepoint-offset. The two spellings agree
   numerically only on ASCII parents — both view rows are ASCII, and
   the contract is documented in the `nmapset` pkg header (UTF-8
   boundary/past-end windows trap house `Invalid` host-side).
@@ -3116,7 +3116,7 @@ crossings, ONE row — revert is one commit deleting the three.
   round3 0c; a prim V would run but pay the box for nothing). The
   LEANER crossing shape, taken and documented: the wrap happens ONCE at
   put (`opaque(v)` — the box IS the stored unit), a get re-hands the
-  SAME box — no per-get wrap — and unwraps with `opaque.downcast<V>`
+  SAME box — no per-get wrap — and unwraps with `opaque::downcast<V>`
   to the LIVE inner cell (the one-cell law). Known terms recorded for
   phase-2 attribution: the per-put box mint, the per-get downcast, and
   the +32 B accounted box cell per live value — which is why raw heap
@@ -3249,7 +3249,7 @@ The ~+175 ns/get is the downcast package, term by term: the second
 crossing (`map_val_get_o` — a host frame the sidecar row never pays),
 `TidOf` + const-compare + branch + `Unbox` (+16 fuel ops ≈ 12-16 ns at
 the crossing-nop calibration), and the dominant unpriced term —
-**`opaque.downcast<V>` yields a `(V, bool)` TUPLE, and that tuple is a
+**`opaque::downcast<V>` yields a `(V, bool)` TUPLE, and that tuple is a
 real record cell**: the lowering is `Op::MakeRecord` (RFC 0014 v1.1),
 so every hit-get mints a tuple cell and releases it a few ops later
 (RFC 0040 accounting both ways). Phase-0 priced the sidecar LOAD at
@@ -3654,7 +3654,7 @@ sieve          2.483 ms  0.009 ms    181.1 ms   22201598      20.84 MB     —
 The refval-round2 batch's verdict, and the second half of the two-round
 story. **Round 1** (the refcolumn sections above): the val column lost
 +13.7% beyond noise, and the autopsy pinned the loss on the READ-BACK —
-`opaque.downcast<V>` minted a `(V, bool)` record cell per hit-get
+`opaque::downcast<V>` minted a `(V, bool)` record cell per hit-get
 (~+175 ns/get, ~+87 ms on the row). **Round 2** (this batch): phase 0
 changed the surface IN PLACE — `downcast` yields `?T`, the alias
 handoff, NO allocation on either branch (VERSION 6 -> 7) — then phase 1

@@ -22,19 +22,19 @@ use nmapset::{HashMap, HashSet};
 // over a used module's enum trips the completeness check's member probe
 // (an engine-side observation recorded in the commit body)
 fn dk_name(k: DecodeErrorKind) -> str {
-    if (k == DecodeErrorKind.Unexpected) { return "Unexpected"; }
-    if (k == DecodeErrorKind.Truncated) { return "Truncated"; }
-    if (k == DecodeErrorKind.InvalidUtf8) { return "InvalidUtf8"; }
-    if (k == DecodeErrorKind.WrongType) { return "WrongType"; }
-    if (k == DecodeErrorKind.Depth) { return "Depth"; }
-    if (k == DecodeErrorKind.Trailing) { return "Trailing"; }
+    if (k == DecodeErrorKind::Unexpected) { return "Unexpected"; }
+    if (k == DecodeErrorKind::Truncated) { return "Truncated"; }
+    if (k == DecodeErrorKind::InvalidUtf8) { return "InvalidUtf8"; }
+    if (k == DecodeErrorKind::WrongType) { return "WrongType"; }
+    if (k == DecodeErrorKind::Depth) { return "Depth"; }
+    if (k == DecodeErrorKind::Trailing) { return "Trailing"; }
     return "Unknown";
 }
 
 fn ek_name(k: EncodeErrorKind) -> str {
-    if (k == EncodeErrorKind.Depth) { return "Depth"; }
-    if (k == EncodeErrorKind.NotFinite) { return "NotFinite"; }
-    if (k == EncodeErrorKind.KeyUnsupported) { return "KeyUnsupported"; }
+    if (k == EncodeErrorKind::Depth) { return "Depth"; }
+    if (k == EncodeErrorKind::NotFinite) { return "NotFinite"; }
+    if (k == EncodeErrorKind::KeyUnsupported) { return "KeyUnsupported"; }
     return "Unknown";
 }
 
@@ -81,7 +81,7 @@ entry fn pair_enc_i64(v: i64) -> str {
 entry fn pair_enc_cycle() -> str {
     // a cyclic structure reaches the writer's depth
     // limit and answers (nil, Depth-err) — data, never a trap
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_array();
     w.begin_array();
     let e = w.error();
@@ -249,7 +249,7 @@ entry fn dec_vec(s: str) -> str {
 }
 
 entry fn enc_vec() -> str {
-    let mut v = Vec<JsonStr>.new();
+    let mut v = Vec<JsonStr>::new();
     v.push(JsonStr("a"));
     v.push(JsonStr("b"));
     let (s, e) = encodeJson(JsonVec(v));
@@ -275,10 +275,10 @@ entry fn dec_vec_vec(s: str) -> str {
 }
 
 entry fn enc_vec_vec() -> str {
-    let mut inner = Vec<JsonI64>.new();
+    let mut inner = Vec<JsonI64>::new();
     inner.push(JsonI64(1));
     inner.push(JsonI64(2));
-    let mut outer = Vec<JsonVec<JsonI64>>.new();
+    let mut outer = Vec<JsonVec<JsonI64>>::new();
     outer.push(JsonVec(inner));
     let (s, e) = encodeJson(JsonVec(outer));
     if (e != nil) { return enc_err(e); }
@@ -334,7 +334,7 @@ entry fn dec_hs(s: str) -> str {
     if (e != nil) { return dec_err(e); }
     let w: JsonArr<JsonI64> = v;
     let a: [JsonI64] = w.to_arr();
-    let mut set = HashSet<i64>.new();
+    let mut set = HashSet<i64>::new();
     for (let x of a) {
         let _ = set.put(x.get());
     }
@@ -443,9 +443,9 @@ impl DocRow {
 }
 
 entry fn enc_rows() -> str {
-    let mut v = Vec<DocRow>.new();
-    v.push(DocRow.new(1, "one"));
-    v.push(DocRow.new(2, "two"));
+    let mut v = Vec<DocRow>::new();
+    v.push(DocRow::new(1, "one"));
+    v.push(DocRow::new(2, "two"));
     let (s, e) = encodeJson(JsonVec(v));
     if (e != nil) { return enc_err(e); }
     let doc: str = s;
@@ -484,7 +484,7 @@ entry fn reader_depth_ok() -> str {
         doc = f"{doc}[";
         k += 1;
     }
-    let mut r = JsonReader.of(doc);
+    let mut r = JsonReader::of(doc);
     let mut k2: i32 = 0;
     while (k2 < 100) {
         r.begin_array();
@@ -501,7 +501,7 @@ entry fn reader_depth() -> str {
         doc = f"{doc}[";
         k += 1;
     }
-    let mut r = JsonReader.of(doc);
+    let mut r = JsonReader::of(doc);
     let mut k2: i32 = 0;
     while (k2 < 200) {
         r.begin_array();
@@ -521,7 +521,7 @@ entry fn dec_deep(s: str) -> str {
 }
 
 entry fn enc_deep(levels: i32) -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     let mut k: i32 = 0;
     while (k < levels) {
         w.begin_array();
@@ -535,7 +535,7 @@ entry fn enc_deep(levels: i32) -> str {
 // ---- the writer's public surface (the serde model: user impls drive it) ----
 
 entry fn writer_demo() -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("name");
     w.write_str("rut");
@@ -557,7 +557,7 @@ entry fn writer_demo() -> str {
 }
 
 entry fn writer_not_finite(v: f64) -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("bad");
     w.write_f64(v);
@@ -569,7 +569,7 @@ entry fn writer_not_finite(v: f64) -> str {
 // ---- the reader's public surface ----
 
 entry fn reader_walk(s: str) -> str {
-    let mut r = JsonReader.of(s);
+    let mut r = JsonReader::of(s);
     r.begin_object();
     let mut got_name = "";
     let mut got_age: i64 = 0;
@@ -630,7 +630,7 @@ entry fn enc_arr_nested() -> str {
     // the nested shape rides the writer directly: one JsonArr mint per
     // unit is the consumer lane's proven shape, and the output pin is
     // the writer's law anyway
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_array();
     w.begin_array();
     w.write_i64(1);
@@ -657,7 +657,7 @@ entry fn enc_arr_nested() -> str {
 //   e  the escape char (`\b` consumes the `b` -> value != "ab")
 //   .  content (passes through: `ab`)
 fn classify_one(cp: i32) -> str {
-    let ch = str.from_code(cp as u32);
+    let ch = str::from_code(cp as u32);
     // digit probe: the byte alone is a valid i64
     let (v, e) = decodeJson<JsonI64>(ch);
     if (e == nil) { return "d"; }
@@ -673,7 +673,7 @@ fn classify_one(cp: i32) -> str {
     let (v3, e3) = decodeJson<JsonStr>(doc3);
     if (e3 != nil) {
         let err: DecodeJsonError = e3;
-        if (err.kind == DecodeErrorKind.Unexpected) { return "c"; }
+        if (err.kind == DecodeErrorKind::Unexpected) { return "c"; }
         return "q"; // the early close answers Trailing
     }
     let sw: JsonStr = v3;
@@ -705,12 +705,12 @@ entry fn classify_report() -> str {
 //   ]  the byte closes the array cleanly (`[1]2]` -> Trailing)
 //   .  rejected (wrong closers AND content the element grammar misses)
 fn classify_more_one(cp: i32) -> str {
-    let ch = str.from_code(cp as u32);
+    let ch = str::from_code(cp as u32);
     let doc = f"[1{ch}2]";
     let (v, e) = decodeJson<JsonArr<JsonI64>>(doc);
     if (e == nil) { return ","; }
     let err: DecodeJsonError = e;
-    if (err.kind == DecodeErrorKind.Trailing) { return "]"; }
+    if (err.kind == DecodeErrorKind::Trailing) { return "]"; }
     return ".";
 }
 
@@ -728,7 +728,7 @@ entry fn classify_more_report() -> str {
 // i64 leaves cross the ~1 KB cap repeatedly; keys before containers
 // exercise the drain order; escapes and nesting ride along
 entry fn writer_chunk_shapes() -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("big");
     w.begin_array();
@@ -764,7 +764,7 @@ entry fn writer_chunk_shapes() -> str {
 // a top-level flat stream with no containers at all: the chunk cap is
 // what keeps this shape linear
 entry fn writer_flat_stream() -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     let mut i: i32 = 0;
     while (i < 300) {
         w.write_i64(i as i64);
@@ -778,7 +778,7 @@ entry fn writer_flat_stream() -> str {
 // NotFinite after a field run: the error offset must count every byte
 // already drained AND the pending chunk at fail time
 entry fn writer_not_finite_after_run(v: f64) -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("a");
     w.write_i64(1);
@@ -791,7 +791,7 @@ entry fn writer_not_finite_after_run(v: f64) -> str {
 
 // Depth with a pending chunk: the key's bytes count in the offset
 entry fn writer_depth_key_offset() -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("x");
     let mut i: i32 = 0;
@@ -809,7 +809,7 @@ entry fn writer_depth_key_offset() -> str {
 // the unbalanced clamp: a dangling key with no value and no end —
 // finish returns the accumulator as-is, chunk included
 entry fn writer_finish_dangling() -> str {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     w.begin_object();
     w.key("dangling");
     return f"RAW:{w.finish()}";

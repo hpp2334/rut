@@ -222,7 +222,7 @@ fn generic_instance_method_frames_compute_like_free_fns() {
          impl Store {\n\
              pub fn get<T>(self, a: Read<T>) -> T {\n\
                  let _ = a.peek();\n\
-                 return opaque.downcast<T>(self.cell);\n\
+                 return opaque::downcast<T>(self.cell);\n\
              }\n\
              pub fn lift<T>(self, f: fn(Ctx2) -> T) -> T {\n\
                  return f(Ctx2 { x: 6 });\n\
@@ -230,7 +230,7 @@ fn generic_instance_method_frames_compute_like_free_fns() {
          }\n\
          pub fn get_free<T>(st: Store, a: Read<T>) -> T {\n\
              let _ = a.peek();\n\
-             return opaque.downcast<T>(st.cell);\n\
+             return opaque::downcast<T>(st.cell);\n\
          }\n\
          entry fn main() -> i64 {\n\
              let s = Store { cell: opaque(41 as i64) };\n\

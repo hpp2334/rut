@@ -646,7 +646,7 @@ mod tests {
             "    fn area(self) -> f64 { return 3.14; }",
             "}",
             "fn go() -> f64 {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.area();",
             "}",
             "",
@@ -662,9 +662,9 @@ mod tests {
 
     #[test]
     fn enum_member_jumps_to_its_decl_ident() {
-        let src = "enum Color { Red, Blue }\nfn pick(c: Color) -> Color {\n    return c;\n}\nfn go() -> Color {\n    return Color.Red;\n}\n";
+        let src = "enum Color { Red, Blue }\nfn pick(c: Color) -> Color {\n    return c;\n}\nfn go() -> Color {\n    return Color::Red;\n}\n";
         let d = doc(&src);
-        let hits = def(&d, at(&d.src, "Color.Red;", 1) + 6, &[]);
+        let hits = def(&d, at(&d.src, "Color::Red;", 1) + 7, &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);
         let want = at(&d.src, "Red,", 1);
@@ -678,7 +678,7 @@ mod tests {
             "    r: f64;",
             "}",
             "fn make() -> Circle {",
-            "    return Circle.new(1.0);",
+            "    return Circle::new(1.0);",
             "}",
             "entry fn main() -> nil {",
             "    let c = make();",
@@ -688,8 +688,8 @@ mod tests {
         ]
         .join("\n");
         let d = doc(&src);
-        // the type token in `Circle.new` → the class decl ident
-        let hits = def(&d, at(&d.src, "Circle.new(1.0);", 1), &[]);
+        // the type token in `Circle::new` → the class decl ident
+        let hits = def(&d, at(&d.src, "Circle::new(1.0);", 1), &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);
         let want = at(&d.src, "class Circle", 1) + 6;
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn use_name_jumps_to_the_exporting_module() {
-        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n";
+        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
         let d = doc(&src);
         let gadgets = widget_index();
         let extra = [gadgets];
@@ -728,29 +728,29 @@ mod tests {
         let want = at(&normalize(WIDGET_DOC), "class Widget", 1) + 6;
         assert_eq!(span_of(&normalize(WIDGET_DOC), &ix, &hits[0]), (want, want + 6));
         // and a usage site resolves through the same edge
-        let hits = def(&d, at(&d.src, "= Widget.new();", 1) + 2, &extra);
+        let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].uri, WIDGET_URI);
     }
 
     #[test]
     fn the_use_graph_restricts_the_search_to_the_imported_pkg() {
-        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n";
+        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
         let d = doc(&src);
         let mut foreign = doc("class Widget {\n    other: i32;\n}\n").index;
         foreign.origin = "file:///ws/other/lib.rut".to_string();
         let extra = [widget_index(), foreign];
-        let hits = def(&d, at(&d.src, "= Widget.new();", 1) + 2, &extra);
+        let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "ambiguity from the OTHER pkg must not leak: {hits:?}");
         assert_eq!(hits[0].uri, WIDGET_URI);
     }
 
     #[test]
     fn unimported_names_keep_the_flat_chain() {
-        let src = "entry fn main() -> nil {\n    let w = Widget.new();\n}\n";
+        let src = "entry fn main() -> nil {\n    let w = Widget::new();\n}\n";
         let d = doc(&src);
         let extra = [widget_index()];
-        let hits = def(&d, at(&d.src, "= Widget.new();", 1) + 2, &extra);
+        let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].uri, WIDGET_URI);
     }
@@ -799,10 +799,10 @@ mod tests {
 
     #[test]
     fn std_use_jumps_to_the_true_source_path() {
-        let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec.new();\n}\n";
+        let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec::new();\n}\n";
         let d = doc(&src);
         let extra = crate::std_surface::indexes();
-        let hits = def(&d, at(&d.src, "= Vec.new();", 1) + 2, &extra);
+        let hits = def(&d, at(&d.src, "= Vec::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         // the TRUE rut/... path, not a label
         assert_eq!(hits[0].uri, "rut/pouch/mod.rut");
@@ -828,7 +828,7 @@ mod tests {
             "    r: f64;",
             "}",
             "fn go() -> f64 {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.r;",
             "}",
             "",
@@ -868,9 +868,9 @@ mod tests {
 
     #[test]
     fn type_definition_on_a_type_token_is_its_own_decl() {
-        let src = "class Circle {\n    r: f64;\n}\nfn go() -> f64 {\n    let c = Circle.new(1.0);\n    return c.r;\n}\n";
+        let src = "class Circle {\n    r: f64;\n}\nfn go() -> f64 {\n    let c = Circle::new(1.0);\n    return c.r;\n}\n";
         let d = doc(&src);
-        let hits = typedef(&d, at(&d.src, "Circle.new(1.0);", 1), &[]);
+        let hits = typedef(&d, at(&d.src, "Circle::new(1.0);", 1), &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);
         let want = at(&d.src, "class Circle", 1) + 6;
@@ -883,9 +883,9 @@ mod tests {
         let d = doc(src);
         // keywords, unknown names, and decl-less primitives are empty
         assert!(def(&d, 0, &[]).is_empty()); // `fn` keyword
-        let src2 = "entry fn main() -> nil {\n    let x = i32.max(1);\n}\n";
+        let src2 = "entry fn main() -> nil {\n    let x = i32::max(1);\n}\n";
         let d2 = doc(src2);
-        assert!(def(&d2, at(&d2.src, "i32.max", 1), &[]).is_empty(), "i32 has no decl to jump to");
+        assert!(def(&d2, at(&d2.src, "i32::max", 1), &[]).is_empty(), "i32 has no decl to jump to");
         let src3 = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
         let d3 = doc(src3);
         assert!(def(&d3, at(&d3.src, "mystery", 1), &[]).is_empty());

@@ -36,7 +36,7 @@ pub enum BVariant { Primary, Quiet }
 /// fields defaulted, `children` making the tree recursive. Semantic
 /// options ONLY: there is no `tag` field and no `class` field.
 pub struct Widget {
-    kind: WKind = WKind.Text;
+    kind: WKind = WKind::Text;
     // -- controls
     text: str = "";
     tvar: ?TVariant = nil; // Text's variant
@@ -48,17 +48,17 @@ pub struct Widget {
     // tree, never a pulled value; t1_render resolves them at the
     // render door — pull-on-read freshness, moved to where the tree
     // meets the page). nil = the literal arm.
-    text$: ?store.Derived<str> = nil; // a reactive Text content
-    value$: ?store.Derived<str> = nil; // a reactive Field value
-    live: ?store.Derived<Widget> = nil; // a reactive SUBTREE (tur's Each:
+    text$: ?store::Derived<str> = nil; // a reactive Text content
+    value$: ?store::Derived<str> = nil; // a reactive Field value
+    live: ?store::Derived<Widget> = nil; // a reactive SUBTREE (tur's Each:
     // the derived computes the whole branch; resolution splices it in)
     // -- semantic options
-    on_click: ?store.Mutation<str, opaque> = nil; // tur's onClick prop: the
+    on_click: ?store::Mutation<str, opaque> = nil; // tur's onClick prop: the
     // mutation the framework RUNS when this widget's listener fires
     // (clicks land here; the event detail is "")
-    on_input: ?store.Mutation<str, opaque> = nil; // tur's onInput prop: the
+    on_input: ?store::Mutation<str, opaque> = nil; // tur's onInput prop: the
     // mutation run with the input's carried value as the detail
-    on_row: ?store.Mutation<i64, opaque> = nil; // tur's
+    on_row: ?store::Mutation<i64, opaque> = nil; // tur's
     // `mutate((ctx, _ev) => act(ctx, index))` — the arg BOUND AS DATA,
     // never a runtime closure (a VM makeclosure inside a recompute
     // mints with a nil capture slot — the arena abort the rejected-add
@@ -71,7 +71,7 @@ pub struct Widget {
     pad: i32 = 0;
     size: i32 = 0;
     // -- layout
-    children: Vec<Widget> = Vec.new();
+    children: Vec<Widget> = Vec::new();
 }
 
 // ---- the raw constructors ---------------------------------------------
@@ -86,15 +86,15 @@ pub(pkg) fn of_kind(kind: WKind) -> Widget {
 }
 
 pub(pkg) fn of_text(tvar: TVariant, t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: tvar, text: t };
+    return Widget { kind: WKind::Text, tvar: tvar, text: t };
 }
 
 pub(pkg) fn of_button(bvar: BVariant, t: str) -> Widget {
-    return Widget { kind: WKind.Button, bvar: bvar, text: t };
+    return Widget { kind: WKind::Button, bvar: bvar, text: t };
 }
 
 pub(pkg) fn of_check(on: bool) -> Widget {
-    return Widget { kind: WKind.Checkbox, on: on };
+    return Widget { kind: WKind::Checkbox, on: on };
 }
 
 // ---- the fluent builders (impl Widget, `mut self -> Self`) ----------
@@ -119,7 +119,7 @@ impl Widget {
 
     /// Wire a reactive SUBTREE (tur's Each): the derived computes the
     /// whole branch; the diff splices it in at the render door.
-    pub fn live(mut self, d: store.Derived<Widget>) -> Self {
+    pub fn live(mut self, d: store::Derived<Widget>) -> Self {
         self.live = d;
         return self;
     }
@@ -149,14 +149,14 @@ impl Widget {
     /// tur's `onClick(mutate(...))`: the mutation the framework runs
     /// when this widget fires (buttons, checkboxes). The event's
     /// SEMANTICS ride the mutation, not a subject string.
-    pub fn on_click(mut self, m: store.Mutation<str, opaque>) -> Self {
+    pub fn on_click(mut self, m: store::Mutation<str, opaque>) -> Self {
         self.on_click = m;
         return self;
     }
 
     /// tur's `{ onInput: mutate(...) }`: the mutation run with the
     /// input's event-carried value (fields).
-    pub fn on_input(mut self, m: store.Mutation<str, opaque>) -> Self {
+    pub fn on_input(mut self, m: store::Mutation<str, opaque>) -> Self {
         self.on_input = m;
         return self;
     }
@@ -164,7 +164,7 @@ impl Widget {
     /// tur's captured-index click, DATA-SHAPED: the machine mutation
     /// plus its arg as fields — no runtime closure mint (see on_row's
     /// comment); `ev_run` feeds it the bound arg on the firing event.
-    pub fn on_row(mut self, m: store.Mutation<i64, opaque>, arg: i64) -> Self {
+    pub fn on_row(mut self, m: store::Mutation<i64, opaque>, arg: i64) -> Self {
         self.on_row = m;
         self.row_arg = arg;
         return self;
@@ -179,14 +179,14 @@ impl Widget {
     /// tur's `Text({ text: derive(...) })`: a REACTIVE text content —
     /// the derived resolves at the render door; the literal `text`
     /// it replaces is what the diff compares.
-    pub fn text_of(mut self, d: store.Derived<str>) -> Self {
+    pub fn text_of(mut self, d: store::Derived<str>) -> Self {
         self.text$ = d;
         return self;
     }
 
     /// The reactive field value — the derived resolves at the render
     /// door (the draft mirror without an eager pull at view build).
-    pub fn value_of(mut self, d: store.Derived<str>) -> Self {
+    pub fn value_of(mut self, d: store::Derived<str>) -> Self {
         self.value$ = d;
         return self;
     }
@@ -204,12 +204,12 @@ impl Widget {
     }
 
     fn variant_primary(mut self) -> Self {
-        self.bvar = BVariant.Primary;
+        self.bvar = BVariant::Primary;
         return self;
     }
 
     fn variant_quiet(mut self) -> Self {
-        self.bvar = BVariant.Quiet;
+        self.bvar = BVariant::Quiet;
         return self;
     }
 }
@@ -218,41 +218,41 @@ impl Widget {
 
 pub(pkg) fn kind_name(w: Widget) -> str {
     return when (w.kind) {
-        WKind.Column -> "Column",
-        WKind.Row -> "Row",
-        WKind.Spacer -> "Spacer",
-        WKind.Card -> "Card",
-        WKind.Text -> "Text",
-        WKind.Button -> "Button",
-        WKind.Checkbox -> "Checkbox",
-        WKind.Field -> "Field",
+        WKind::Column -> "Column",
+        WKind::Row -> "Row",
+        WKind::Spacer -> "Spacer",
+        WKind::Card -> "Card",
+        WKind::Text -> "Text",
+        WKind::Button -> "Button",
+        WKind::Checkbox -> "Checkbox",
+        WKind::Field -> "Field",
     };
 }
 
 pub(pkg) fn is_text(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Text -> true,
+        WKind::Text -> true,
         else -> false,
     };
 }
 
 pub(pkg) fn is_field(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Field -> true,
+        WKind::Field -> true,
         else -> false,
     };
 }
 
 pub(pkg) fn is_check(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Checkbox -> true,
+        WKind::Checkbox -> true,
         else -> false,
     };
 }
 
 pub(pkg) fn is_button(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Button -> true,
+        WKind::Button -> true,
         else -> false,
     };
 }
@@ -260,17 +260,17 @@ pub(pkg) fn is_button(w: Widget) -> bool {
 /// Whose text content is real: Text's words and a Button's label.
 pub(pkg) fn takes_text(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Text -> true,
-        WKind.Button -> true,
+        WKind::Text -> true,
+        WKind::Button -> true,
         else -> false,
     };
 }
 
 pub(pkg) fn takes_children(w: Widget) -> bool {
     return when (w.kind) {
-        WKind.Column -> true,
-        WKind.Row -> true,
-        WKind.Card -> true,
+        WKind::Column -> true,
+        WKind::Row -> true,
+        WKind::Card -> true,
         else -> false,
     };
 }

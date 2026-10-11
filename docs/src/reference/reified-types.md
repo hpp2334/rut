@@ -10,7 +10,7 @@ is VM data, not a script value.
 | Surface | Mechanism |
 |---|---|
 | `is` type tests — concrete and interface RHS | the value cell's descriptor (see [Interfaces and dispatch](interfaces.md)) |
-| `opaque.downcast<T>` recovery | the box's recorded runtime type (see [opaque — erasure and downcast](opaque.md)) |
+| `opaque::downcast<T>` recovery | the box's recorded runtime type (see [opaque — erasure and downcast](opaque.md)) |
 | `type_id<T>()` | the compile-time type-identity constant |
 | host boundary checks | every crossing is checked against the declared parameter type |
 | diagnostics | stack traces and host tooling read the same descriptors |
@@ -108,7 +108,7 @@ itable slots — no inheritance chain to walk (see
 
 `opaque` interacts with exactly one of these reads: `is` reads the
 **box's** own type, so every payload probe misses; only
-`opaque.downcast<T>`'s match test keeps reading the payload — the one
+`opaque::downcast<T>`'s match test keeps reading the payload — the one
 legitimate see-through.
 
 ## Boxing
@@ -116,7 +116,7 @@ legitimate see-through.
 Storing a value into an erasure box widens by the slot discipline: an
 integer box stores the 64-bit sign/zero-extended value, a float the
 64-bit width. A kind check plus
-`opaque.downcast<i64>()` / `downcast<f64>()` / `downcast<bool>()` /
+`opaque::downcast<i64>()` / `downcast<f64>()` / `downcast<bool>()` /
 `downcast<str>()` is therefore total in-branch: within the successful
 branch the value's type is the exact concrete type, and everything
 downstream optimizes as if the value had never been erased.

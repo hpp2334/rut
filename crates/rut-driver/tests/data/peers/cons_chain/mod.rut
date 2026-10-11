@@ -10,6 +10,6 @@ fn tag() -> str {
 }
 
 fn go() -> str {
-    let v = Vec<i64>.filled(7, 3);
+    let v = Vec<i64>::filled(7, 3);
     return JVecI64(v).json_serialize();
 }

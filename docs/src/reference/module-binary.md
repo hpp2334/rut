@@ -187,7 +187,7 @@ misbehaving at runtime.
 Module-level `let` and `static` initializers are **folded at compile
 time**. The surviving forms are: literals, enum members, operators over
 constants, record literals (immortal constant-pool cells), fixed-array
-literals, `Vec<T>(n)` / `Vec.from([...])` blobs, the layout builtins, and
+literals, `Vec<T>(n)` / `Vec::from([...])` blobs, the layout builtins, and
 `Array<T, N>.len()` with const-index bounds checks. A call to a user
 function in an initializer is a compile error — there is no deferred
 evaluation.

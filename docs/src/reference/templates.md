@@ -44,7 +44,7 @@ an internal native call — the only way to mint one.
 | `t.type_id(i) -> u32` | argument `i`'s runtime type id |
 
 Nothing else. Like `opaque`, a template cannot do anything until someone
-renders it: recover an argument with `opaque.downcast<T>(a)` — `i64` stays
+renders it: recover an argument with `opaque::downcast<T>(a)` — `i64` stays
 `i64`, so locale decimal separators and number formats are the renderer's
 choice, never baked into a pre-rendered string.
 
@@ -84,7 +84,7 @@ rut_vm::register!(hosts, "app::label", (rut_vm::Template,) -> (),
     |vm: &mut rut_vm::interp::Vm, t: rut_vm::Template| {
         for (chunk, arg) in t.parts().iter().zip(t.args().iter()) {
             // emit chunk; if the locale grammar needs arg i, recover it:
-            // let n: i64 = opaque.downcast-like read on the host side
+            // let n: i64 = opaque::downcast-like read on the host side
         }
         Ok(())
     });

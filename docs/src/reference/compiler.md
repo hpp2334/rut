@@ -133,7 +133,7 @@ exact concrete  >  I (interface-typed, satisfies I)
   monomorphic body), the call devirtualizes at body-compile time and
   the dispatch overhead is zero.
 - **Erasure sits off the lattice.** The `opaque` primitive is reached only
-  through the type-call `opaque(v)`, and `opaque.downcast<T>(o)` is the
+  through the type-call `opaque(v)`, and `opaque::downcast<T>(o)` is the
   refinement:
   the successful branch re-enters the *exact* lattice position, so
   downstream code optimizes as if nothing was erased. Downcast checks are

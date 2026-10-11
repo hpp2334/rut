@@ -21,7 +21,7 @@ entry fn main() -> opaque {
 }
 
 entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
-    let t = opaque.downcast<?Tally>(c);
+    let t = opaque::downcast<?Tally>(c);
     if (t == nil) {
         panic("fixture: the event container is not a Tally — host drift");
     }
@@ -41,7 +41,7 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
 /// The twin's usability probe: the container survived, the counter is
 /// real. -1 only when the container is NOT a Tally (host drift).
 entry fn hits(c: opaque) -> i64 {
-    let t = opaque.downcast<?Tally>(c);
+    let t = opaque::downcast<?Tally>(c);
     if (t == nil) { return -1; }
     return t.hits;
 }

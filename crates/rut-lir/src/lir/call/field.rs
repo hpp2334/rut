@@ -18,22 +18,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let ns = self.ctx.name(segs[0].name).to_string();
                 let fname = self.ctx.name(name).to_string();
-                self.ctx.err(sp, format!("`{ns}.{fname}` is not a namespace constant"));
+                self.ctx.err(sp, format!("`{ns}::{fname}` is not a namespace constant"));
                 return Err(());
             }
         }
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         // `p.x` auto-derefs: load the pointee cell first, then
-        // the field reads from it
-        let (rreg, rt) = match self.ctx.types.kind(rt).clone() {
-            TyKind::Opt { elem } if matches!(self.ctx.types.kind(elem), TyKind::Data { .. }) => {
-                let dreg = self.new_reg(elem);
-                self.emit(Op::GetF { dst: dreg, obj: rreg, field: 0, repr: Repr::Ref }, sp.lo);
-                (dreg, elem)
-            }
-            _ => (rreg, rt),
-        };
+        // the field reads from it — TRANSITIVE (`??T` chains),
+        // exactly the receiver law (`deref_for_use`); the postfix
+        // `.` builds Field nodes now, so every `p.x` lands here
+        let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
         if let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() {
             if let Some(fidx) = fields.iter().position(|f| f.name == name) {
                 let fty = fields[fidx].ty;

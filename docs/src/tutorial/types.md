@@ -30,7 +30,7 @@ enum Direction { Up, Down, Left, Right }
 
 entry fn main() {
     let log = Logger("enums");
-    log.info(f"{Light.Green} {Direction.Left} {Direction.Right}");
+    log.info(f"{Light::Green} {Direction::Left} {Direction::Right}");
 }
 ```
 
@@ -39,7 +39,7 @@ Green Left Right
 ```
 
 Members are the enum's values and are spelled qualified:
-`Light.Green`. A member is a symbol — there is no integer value
+`Light::Green`. A member is a symbol — there is no integer value
 under it to read or spell.
 
 `when` over an enum must be exhaustive — every member, or an `else`
@@ -184,7 +184,7 @@ impl Counter {
 
 entry fn main() {
     let log = Logger("counter");
-    let c = Counter.new();
+    let c = Counter::new();
     c.press();
     c.press();
     log.info(f"count={c.count()}");      // 2
@@ -197,8 +197,8 @@ count=2
 
 The pieces:
 
-- **A class method is just a function without `self`.** `Rect.new(w, h)`,
-  `Version.parse(s)`, `Rect.from_square(s)` — any no-`self` method
+- **A class method is just a function without `self`.** `Rect::new(w, h)`,
+  `Version::parse(s)`, `Rect::from_square(s)` — any no-`self` method
   returning `Self` is a constructor. `new` is a convention, not syntax.
 - **The `Self { .. }` literal is class-private** — legal anywhere in
   the class's own impl block, never outside. This is the seal.
@@ -225,7 +225,7 @@ impl Rect {
     }
 
     pub fn from_square(s: f32) -> Self {
-        return Rect.new(s, s);
+        return Rect::new(s, s);
     }
 
     pub fn area(self) -> f32 { return self.w * self.h; }
@@ -233,8 +233,8 @@ impl Rect {
 
 entry fn main() {
     let log = Logger("rect");
-    let r = Rect.new(3, 4);
-    let sq = Rect.from_square(2);
+    let r = Rect::new(3, 4);
+    let sq = Rect::from_square(2);
     log.info(f"area={r.area()} square={sq.area()}");
 }
 ```
@@ -310,7 +310,7 @@ impl Rect {
     }
 
     pub fn from_square(s: f32) -> Self {
-        return Rect.new(s, s);
+        return Rect::new(s, s);
     }
 
     pub fn area(self) -> f32 { return self.w * self.h; }
@@ -318,11 +318,11 @@ impl Rect {
 
 entry fn main() {
     let log = Logger("classes");
-    let c = Counter.new();
+    let c = Counter::new();
     c.press();
     c.press();
-    let r = Rect.new(3, 4);
-    let sq = Rect.from_square(2.0f32);
+    let r = Rect::new(3, 4);
+    let sq = Rect::from_square(2.0f32);
     log.info(f"count={c.count()} area={r.area()} square={sq.area()}");
 }
 ```

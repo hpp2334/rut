@@ -64,7 +64,7 @@ Some names are load-bearing and never rename:
 | kept | why |
 |---|---|
 | well-known names (`main`, the builtin members, the primitives) | never in the serialized tail |
-| host-fn registration names (`FuncCode.host_id`, `SurfaceFn.host`, host thunks) | the embedder's registry keys — `ink_host::log`, `rt:log`, … |
+| host-fn registration names (`FuncCode::host_id`, `SurfaceFn.host`, host thunks) | the embedder's registry keys — `ink_host::log`, `rt:log`, … |
 | export names | hosts call by string (`vm.call("main", …)`) |
 | package specs in instantiation rows | load-time unification keys |
 

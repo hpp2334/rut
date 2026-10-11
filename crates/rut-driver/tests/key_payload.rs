@@ -21,7 +21,7 @@ use keypayload::{ key_class };
 entry fn box_i32(k: i32) -> opaque { return opaque(k); }
 entry fn box_bool(k: bool) -> opaque { return opaque(k); }
 entry fn box_str(k: str) -> opaque { return opaque(k); }
-entry fn box_bytes() -> opaque { return opaque(bytes.from([1, 2, 3])); }
+entry fn box_bytes() -> opaque { return opaque(bytes::from([1, 2, 3])); }
 entry fn box_f64(k: f64) -> opaque { return opaque(k); }
 
 struct Pt { x: i32; y: i32 }

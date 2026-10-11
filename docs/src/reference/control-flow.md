@@ -68,7 +68,7 @@ zero small big
 
 | Pattern | Example |
 |---|---|
-| enum member (dotted path) | `Light.Green` |
+| enum member (dotted path) | `Light::Green` |
 | literal | `0`, `3.5`, `true`, `"text"` |
 | negative literal | `-1` |
 | alternatives (comma list) | `1, 2, 3` |
@@ -103,11 +103,11 @@ fn brake() { let log = Logger("t"); log.info("brake"); }
 fn stop() { let log = Logger("t"); log.info("stop"); }
 
 entry fn main() {
-    let l = Light.Yellow;
+    let l = Light::Yellow;
     when (l) {
-        Light.Green  -> { go(); },
-        Light.Yellow -> { brake(); },
-        Light.Red    -> { stop(); },   // every member: else optional
+        Light::Green  -> { go(); },
+        Light::Yellow -> { brake(); },
+        Light::Red    -> { stop(); },   // every member: else optional
     }
 }
 ```

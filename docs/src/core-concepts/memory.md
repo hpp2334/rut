@@ -84,7 +84,7 @@ impl Connection {
 
 entry fn main() {
     let log = Logger("rc");
-    let conn = Connection.open("tcp://edge", log);
+    let conn = Connection::open("tcp://edge", log);
     log.info("main is done — the count hits zero at the boundary");
 }
 ```
@@ -109,11 +109,11 @@ Two edge rules worth knowing:
 
 ## Weak references
 
-`Weak.new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps
+`Weak::new(v)` mints a `Weak<T>` over `v`'s cell that **never keeps
 anything alive**; `w.upgrade()` answers `?T` — the retained referent, or
 `nil` once it died. Construction is the class-method form, admission is
 checked (reference types only — `Weak<i32>` diagnoses), and
-`Weak.new(nil)` traps. The name is **import-gated** — spell
+`Weak::new(nil)` traps. The name is **import-gated** — spell
 `use core::{ Weak };`, or the bare `Weak` diagnoses
 `` `Weak` is not in scope — `use core::{ Weak }` ``.
 
@@ -133,7 +133,7 @@ class View {
 entry fn main() {
     let log = Logger("rc");
     let mut m = Model { name: "doc" };
-    let v = View { model: nil, observer: Weak.new(m) };   // observe without owning
+    let v = View { model: nil, observer: Weak::new(m) };   // observe without owning
     log.info(f"holding {m.name}; the view holds only a weak edge");
     m = Model { name: "next" };   // the old cell's last strong reference dies here
     log.info(f"upgrade() answers nil: {v.observer.upgrade() == nil}");

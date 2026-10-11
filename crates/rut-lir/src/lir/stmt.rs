@@ -871,12 +871,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             .iter()
                             .map(|s| self.ctx.name(s.name).to_string())
                             .collect::<Vec<_>>()
-                            .join("."),
+                            .join("::"),
                         PatKind::PatCtor { segs, .. } => segs
                             .iter()
                             .map(|s| self.ctx.name(s.name).to_string())
                             .collect::<Vec<_>>()
-                            .join("."),
+                            .join("::"),
                         PatKind::PatWild => "_".to_string(),
                     };
                     if seen.contains(&key) && key != "else" {
@@ -890,7 +890,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
                 for (m, _v) in &members {
                     let mtext = self.ctx.name(*m);
-                    if !seen.iter().any(|s| s.ends_with(&format!(".{mtext}")) || s == mtext) {
+                    if !seen.iter().any(|s| s.ends_with(&format!("::{mtext}")) || s == mtext) {
                         self.ctx.err(
                             sp,
                             format!(

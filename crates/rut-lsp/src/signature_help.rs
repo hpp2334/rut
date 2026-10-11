@@ -13,7 +13,7 @@
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
 //!   signature can never leak through (the known-receiver-is-final law).
 //!
-//! The signature renders verbatim (`FnDef.src` — fn name + params as
+//! The signature renders verbatim (`FnDef::src` — fn name + params as
 //! written, the hover render's own slices); the ACTIVE parameter is the
 //! comma/paren depth at the request position. F-strings cannot miscount
 //! — the lexer hands an f-string over as ONE token, so commas and parens
@@ -410,7 +410,7 @@ mod tests {
             "    fn grown(self, k: f64) -> Circle { return self; }",
             "}",
             "fn go() -> Circle {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.grown(2.0);",
             "}",
             "",

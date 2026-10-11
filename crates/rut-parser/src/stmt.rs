@@ -599,8 +599,8 @@ impl PatternFrame {
         }
     }
 
-    /// dotted path segments; generic args pause at a child frame and
-    /// resume through `genargs_done` — the loops are iterative (C2).
+    /// `::`-separated path segments; generic args pause at a child frame
+    /// and resume through `genargs_done` — the loops are iterative (C2).
     /// `self.sp` extends as segments land so the node span covers the
     /// whole path (spans on every node).
     fn path_run(&mut self, p: &mut Parser) -> Step {
@@ -616,14 +616,14 @@ impl PatternFrame {
                 return self.genargs_top(p);
             }
             self.segs.push(PathSeg { name, generics: Vec::new() });
-            if !p.eat_punct(Tok::Dot) {
+            if !p.eat_punct(Tok::Colon2) {
                 return self.path_end(p);
             }
         }
     }
 
     fn path_resume(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::Dot) {
+        if p.eat_punct(Tok::Colon2) {
             self.path_run(p)
         } else {
             self.path_end(p)

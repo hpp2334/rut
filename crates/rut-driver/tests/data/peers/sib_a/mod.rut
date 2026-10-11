@@ -11,7 +11,7 @@ pub class Slot {
 
 impl Slot {
     pub fn make(v: i64) -> Self {
-        let mut items = Vec<i64>.filled(v, 2);
+        let mut items = Vec<i64>::filled(v, 2);
         return Self { v: items };
     }
 

@@ -22,8 +22,8 @@ impl Node {
 }
 
 fn make_cycle() -> ?Node {                  // a -> b -> a : strong cycle
-    let a: ?Node = Node.new();
-    let b: ?Node = Node.new();
+    let a: ?Node = Node::new();
+    let b: ?Node = Node::new();
     a.link(b);
     b.link(a);
     return a;

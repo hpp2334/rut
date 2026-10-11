@@ -237,7 +237,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.cur_mod = saved_mod;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!(
-                "call arity: `{}.{}` takes {} parameter{}, {} given",
+                "call arity: `{}::{}` takes {} parameter{}, {} given",
                 self.ctx.name(dname),
                 self.ctx.name(mname),
                 ptys.len(),

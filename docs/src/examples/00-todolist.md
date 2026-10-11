@@ -62,7 +62,7 @@ pub class TodoList {
 
 impl TodoList {
     pub fn new() -> Self {
-        return Self { items: Vec.new(), next_id: 1 };
+        return Self { items: Vec::new(), next_id: 1 };
     }
 
     // ---- CREATE ----
@@ -77,7 +77,7 @@ impl TodoList {
     // ---- DELETE ----
 
     pub fn remove(mut self, id: i32) -> bool {
-        let kept: Vec<Todo> = Vec.new();
+        let kept: Vec<Todo> = Vec::new();
         let mut removed = false;
         for (let t of self.items) {
             when (t.id == id) {
@@ -94,7 +94,7 @@ impl TodoList {
 
 entry fn main() {
     let log = Logger("todos");
-    let mut list = TodoList.new();
+    let mut list = TodoList::new();
     list.add("implement the VM");
     list.add("ship the demo");
     let first = list.remove(1);
@@ -130,18 +130,18 @@ struct Lists {
 }
 
 fn at(c: opaque, h: u32) -> TodoList {
-    let lists = opaque.downcast<?Lists>(c);
+    let lists = opaque::downcast<?Lists>(c);
     return lists.lists[h as i32];
 }
 
 entry fn createContainer() -> opaque {
-    let ls: ?Lists = Lists { lists: Vec.new() };
+    let ls: ?Lists = Lists { lists: Vec::new() };
     return opaque(ls);
 }
 
 entry fn create(c: opaque) -> u32 {
-    let k = opaque.downcast<?Lists>(c);
-    k.lists.push(TodoList.new());
+    let k = opaque::downcast<?Lists>(c);
+    k.lists.push(TodoList::new());
     return (k.lists.len() - 1) as u32;
 }
 ```
@@ -151,7 +151,7 @@ surface — distinct from `pub`, which is use-visibility for other rut
 modules and carries no crossing limits
 ([Modules and visibility](../reference/modules-and-visibility.md)).
 Second, erasure is the `opaque(v)` type-call and recovery is
-`opaque.downcast<T>(o) -> ?T` — a wrong box answers `nil`, never a
+`opaque::downcast<T>(o) -> ?T` — a wrong box answers `nil`, never a
 trap ([opaque — erasure and downcast](../reference/opaque.md)). The
 internal helper `at` is an ordinary `fn` and may speak in full types.
 
@@ -196,7 +196,7 @@ produces ([Value boundary and borrows](../reference/value-boundary.md)).
   diagnostic, never a call-time surprise.
 - State lives rut-side in one `opaque` container the host holds and
   re-passes; plain values cross, instances never do.
-- Erasure is `opaque(v)`; recovery is `opaque.downcast<T> -> ?T`.
+- Erasure is `opaque(v)`; recovery is `opaque::downcast<T> -> ?T`.
 - Budgets (fuel + heap) are the embedder's call, and every embedder
   mistake comes back as a named trap.
 - The same file works as a library: entries are compilation roots, so

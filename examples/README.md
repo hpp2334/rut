@@ -39,7 +39,7 @@ every one against its `.expected` sidecar. The parser conformance suite
 
 The std tree ships as committed per-package bundles
 (`dist/std/<pkg>.rutbundle`, packed + freshness-gated by
-`scripts/pack-std.cjs`), served by jsDelivr at an immutable
+`scripts/pack-std::cjs`), served by jsDelivr at an immutable
 `@std-vNN` tag and pinned by sha256 — the pin is law at the mount door
 on every load, offline or not (the committed artifact IS the cache; a
 project manifest is the only url carrier, and the embedder seeds the
@@ -187,7 +187,7 @@ The locked rulings, user-visible as spells:
   JsonReader`): [by-reference](../docs/src/reference/by-reference-and-nullable.md)
   sharing is the default; `?` only where
   absence is a legitimate state.
-- **`decodeJsonBytes` is strict UTF-8** — `bytes.decode()` is lossy,
+- **`decodeJsonBytes` is strict UTF-8** — `bytes::decode()` is lossy,
   so the bytes entry validates first (invalid octets → `InvalidUtf8`,
   never a silent U+FFFD). That is why there are two decode entries:
   [type aliases](../docs/src/reference/type-aliases.md) keep `str | bytes`
@@ -273,7 +273,7 @@ for zero need). The rulings, user-visible as spells:
   behavior: every cap answers identical content and `len`; a negative
   hint is the host fn's `Invalid` trap.
 - **`append_code` inherits the engine's rule**: a surrogate mints
-  U+FFFD at the host fn — the `str.from_code` rule, decided below the
+  U+FFFD at the host fn — the `str::from_code` rule, decided below the
   pkg.
 - **Growth is budgeted**: every geometric grow consults the embedder's
   heap budget BEFORE it grows (`charge_public`), so the wasm cap
@@ -295,7 +295,7 @@ The run recipe:
 
 - **A module dir**: `[deps]` strbuild by path — `rut run <dir>`.
 - **A taste in ten lines**:
-  `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
+  `let mut b = StringBuilder::with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
 
 ## The keyed collections — one family, the values in the entries
@@ -358,7 +358,7 @@ twin; `HashSet` has always been the one spelling.
 One compat note: json's decode-side diagnostics did NOT move — a map
 keyed by `bytes` diagnoses exactly as before ("this key type has no
 JSON spelling"), because the decode wrapper family carries the law:
-`JMapBytes.decode` always answers the bytes-keys disclosure error (the
+`JMapBytes::decode` always answers the bytes-keys disclosure error (the
 wrapper exists so the law is testable; the `dec_hm_bytes_key` pin
 holds verbatim).
 
@@ -376,7 +376,7 @@ Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
 - **A taste in ten lines**:
-  `let mut m = HashMap<str, i64>.new(); m.put(k, v); let v = m.get(k);`
+  `let mut m = HashMap<str, i64>::new(); m.put(k, v); let v = m.get(k);`
 - **The bench rows**: `node benches/run.mjs --workload
   nmapset-int`, `--workload nmap-hashset`, `--workload
   nmap-knucleotide` (the `nmap-primmap` twin was RETIRED with the
@@ -452,7 +452,7 @@ as a PAIR:
   ```rut
   let client = HttpClient();
   let resp = await client.request()
-      .method(ClientQueryMethod.Post)
+      .method(ClientQueryMethod::Post)
       .url("https://example.com/api")
       .header("Accept", "application/json")
       .body(payload)

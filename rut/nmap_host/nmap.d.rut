@@ -12,7 +12,7 @@
 // opens the key box for hash/eq and admits the closed key set, the
 // entry retains the value box, `-> ?opaque` answers the STORED box
 // (nil = absent; the aliasing law rides the box — two gets name one
-// box, and `opaque.downcast<V>` IS the box's inner cell), and
+// box, and `opaque::downcast<V>` IS the box's inner cell), and
 // `map_hvremove` releases the held box in-crossing (the box's own
 // release walks the payload).
 // Reading an `Empty` entry — an `hput` birth with no value — TRAPS

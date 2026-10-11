@@ -36,7 +36,7 @@ use rgh_host::{ out, eprint, write_file, append_file, exit };
 
 // ------------------------------------------------------------- argv ----
 
-// The argv splitter. No `str.split` primitive exists — the 02-digest
+// The argv splitter. No `str::split` primitive exists — the 02-digest
 // `split_chars` precedent — so carve on the three whitespace kinds the
 // host joins with (space/tab/newline) using the tokenizer primitive
 // `s.scan(from, set)`: a `[u8]` class table marks the three octets, the
@@ -57,7 +57,7 @@ fn ws_table() -> [u8] {
 
 fn split_argv(args: str) -> Vec<str> {
     let ws = ws_table();
-    let mut out: Vec<str> = Vec.new();
+    let mut out: Vec<str> = Vec::new();
     let n = args.len();
     let mut i: i32 = 0;
     while (i < n) {
@@ -125,15 +125,15 @@ struct Entry {
 // satisfaction is having the members on the type's OWN inherent impl,
 // and a container carries none — so the array shape rides this LOCAL
 // generic fn: at T = Entry it monomorphizes in THIS unit, and
-// `T.decode(r)` dispatches Entry's own `decode` member recursively.
+// `T::decode(r)` dispatches Entry's own `decode` member recursively.
 // (The wrapper route exists — `decodeJson<JsonVec<Entry>>` over
 // json's pouch group, `.to_vec()` unwraps — but the direct reader
 // loop keeps the recursive shape in one spelled place.)
 fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
-    let mut v = Vec<T>.new();
+    let mut v = Vec<T>::new();
     r.begin_array();
     while (r.more()) {
-        let (x, e) = T.decode(r);
+        let (x, e) = T::decode(r);
         if (e != nil) { return (nil, e); }
         v.push(x);
     }
@@ -185,7 +185,7 @@ impl Entry {
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
         if (name == nil) {
-            return (nil, DecodeJsonError { kind: DecodeErrorKind.WrongType, at: r.err_at() as i64, got: "", expected: "name" });
+            return (nil, DecodeJsonError { kind: DecodeErrorKind::WrongType, at: r.err_at() as i64, got: "", expected: "name" });
         }
         let nm: str = name;
         let mut sz: i64 = 0;
@@ -249,21 +249,21 @@ struct Root {
 // closure spells rides its compiled binary, and `decodeJsonBytes<Root>`
 // could never be seeded there (this pkg's Root did not exist at json's
 // pack time). This shim is the wrapper's reader-route tail as a LOCAL
-// generic fn: it monomorphizes in THIS unit, `T.decode(r)` dispatches
+// generic fn: it monomorphizes in THIS unit, `T::decode(r)` dispatches
 // Root's own `decode` member, and the wrapper's trailing-data check is
 // spelled
 // verbatim. The wrapper's strict UTF-8 DFA stays json-side — jsDelivr's
-// tree JSON is UTF-8, and `bytes.decode()` (lossy) never fires on it;
+// tree JSON is UTF-8, and `bytes::decode()` (lossy) never fires on it;
 // a body that somehow carried a broken octet surfaces as a reader
 // parse error, same exit code, one message.
 fn decode_root_bytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError) {
-    let mut r = JsonReader.of(b.decode());
-    let (v, e) = T.decode(r);
+    let mut r = JsonReader::of(b.decode());
+    let (v, e) = T::decode(r);
     if (e != nil) { return (nil, e); }
     if (!r.at_end()) {
         let at = r.here();
         let got = r.rest();
-        return (nil, DecodeJsonError { kind: DecodeErrorKind.Trailing, at: at as i64, got: got, expected: "end of input" });
+        return (nil, DecodeJsonError { kind: DecodeErrorKind::Trailing, at: at as i64, got: got, expected: "end of input" });
     }
     return (v, nil);
 }

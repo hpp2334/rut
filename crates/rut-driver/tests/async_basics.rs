@@ -306,7 +306,7 @@ use ink_host::{{ create_logger, logger_log }};
 use futures::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(log: opaque) -> nil {{
-    let buf = DropLog.new(log);
+    let buf = DropLog::new(log);
     logger_log(log, 2, "victim:park");
     await sleep(60);
     logger_log(log, 2, "victim:unreachable");
@@ -353,8 +353,8 @@ use ink_host::{{ create_logger, logger_log }};
 use futures::{{ launch_future, sleep, LaunchedFutureHandle }};
 
 async fn victim(log: opaque) -> nil {{
-    let a = DropTag.new(log, "drop:a");
-    let b = DropTag.new(log, "drop:b");
+    let a = DropTag::new(log, "drop:a");
+    let b = DropTag::new(log, "drop:b");
     await sleep(60);
     logger_log(log, 2, "unreachable");
 }}
@@ -444,7 +444,7 @@ entry fn main() -> nil {
 // ---- the sealed mint recovers as a live Future ----
 
 // The mint crosses SEALED (`__sleep -> opaque`): the rut face's
-// `opaque.downcast<Future<nil>>` recovers it, and the recovered frame
+// `opaque::downcast<Future<nil>>` recovers it, and the recovered frame
 // drives, parks, resumes, and aborts like any other.
 
 #[test]

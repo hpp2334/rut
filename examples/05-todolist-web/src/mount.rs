@@ -5,7 +5,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std-v8 plays the wire — the PINNED artifacts, so no gate
+//! dist/std-v9 plays the wire — the PINNED artifacts, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
@@ -168,7 +168,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.host_pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v8 plays the wire: the pinned artifacts prime ONE offline
+/// dist/std-v9 plays the wire: the pinned artifacts prime ONE offline
 /// cache per process (`DepRemote::write` is the stand-in for the GET —
 /// the ONCE-gated priming is the 03-plugin precedent), and every
 /// manifest-lane walk rides an `HttpRemote::offline` over it — a miss
@@ -189,7 +189,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v8");
+        let dist = base.join("../../dist/std-v9");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",

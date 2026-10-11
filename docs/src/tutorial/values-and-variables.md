@@ -149,7 +149,7 @@ open{close} braces
 
 What an f-string can render: integers (decimal), floats (shortest
 round-trip decimal: `3.5`, `0.1`), `bool` (`true`/`false`), `str`
-(contents), and enum members (their name: `Color.Green` renders
+(contents), and enum members (their name: `Color::Green` renders
 `Green`). Composite values — structs, classes, arrays, vecs — are a
 compile error inside an f-string; write a `to_string()`-style method
 and call it, or use a debug dump for development.
@@ -174,14 +174,14 @@ len=3 first=1 zero.len=34
 ```
 
 The growable sequence is `Vec<T>` (from the `pouch` package —
-`use pouch::{ Vec };`): `Vec.new()`, `Vec.from([..])`,
-`Vec<i32>.filled(0, 1024)`, `push`, `pop`, `len`. Indexing and
+`use pouch::{ Vec };`): `Vec::new()`, `Vec::from([..])`,
+`Vec<i32>::filled(0, 1024)`, `push`, `pop`, `len`. Indexing and
 `for..of` work the same on both. See [the standard library](stdlib.md)
 for the full surface.
 
 `bytes` is the binary primitive. `s.encode()` turns text into octets,
-`b.decode()` reads it back (lossy UTF-8), `bytes.zeroed(n)` and
-`bytes.from(a)` build buffers directly:
+`b.decode()` reads it back (lossy UTF-8), `bytes::zeroed(n)` and
+`bytes::from(a)` build buffers directly:
 
 ```rut
 use ink::{ Logger };
@@ -231,7 +231,7 @@ Equality follows the same split:
 | `str`, `bytes` | content comparison |
 | everything else | cell identity — two separately-built literals are never equal |
 
-The one copy escape hatch is `bytes.clone()` — a fresh buffer with the
+The one copy escape hatch is `bytes::clone()` — a fresh buffer with the
 same octets. There is no generic copy for any other type; if you need a
 divergent value, build a new one.
 
@@ -277,8 +277,8 @@ the two packages the program uses, and the program is
   "entry": { "lib": "./main.rut" },
 
   "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
   }
 }
 ```
@@ -306,8 +306,8 @@ fn literals(name: str) {
     let t = f"hi {name}!";           // format literal
     let ch = "h";                    // a 1-codepoint str
     let mut arr = [1, 2, 3];         // [i32] — fixed array
-    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat
-    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable
+    let mut zero: Vec<f32> = Vec<f32>::filled(0.0, 1024);  // growable, flat
+    let grow = Vec<i32>::from([1, 2, 3]);  // array -> growable
     arr[0] = 7;                      // element write needs `mut`
     zero[0] = 9.0f32;
     let bin = bytes(64);             // 64 zeroed octets

@@ -207,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             .map(|d| self.ctx.name(d).to_string())
                             .unwrap_or_else(|| self.ctx.type_name(rt).to_string());
                         self.ctx.err(sp, format!(
-                            "cannot infer `{}` of `{}.{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`.{}<{}>(..)`)",
+                            "cannot infer `{}` of `{}::{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`::{}<{}>(..)`)",
                             free_names, recv, self.ctx.name(name), self.ctx.name(name), free_names,
                         ));
                         return Err(());

@@ -153,7 +153,7 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
              fn get(self, i: i32) -> T { return self.buf[i]; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let mut b: Box2<i32> = Box2.new();\n\
+             let mut b: Box2<i32> = Box2::new();\n\
              b.push(5);\n\
              b.push(7);\n\
              b[0] = 6;\n\

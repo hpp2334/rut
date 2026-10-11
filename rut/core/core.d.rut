@@ -33,12 +33,12 @@
 prelude builtin fn panic(msg: str) -> nil;
 
 // v1.1 codepoint access (`char` is gone): `s.code()` reads
-// the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
+// the FIRST codepoint as a `u32` (traps on empty); `str::from_code(n)`
 // builds the 1-codepoint str. Compiler-lowered, no use needed for
-// the method form; the type-method spells `str.from_code(..)`.
+// the method form; the type-method spells `str::from_code(..)`.
 //
 // pub method  s.code() -> u32
-// pub type-method  str.from_code(n: u32) -> str
+// pub type-method  str::from_code(n: u32) -> str
 
 prelude builtin fn string_join(parts: [str]) -> str;  // join in one pass
 
@@ -63,7 +63,7 @@ prelude builtin class StackTrace {
 
 // The weak reference: a WeakBox side cell holding an
 // UNRETAINED word to the referent — a weak never keeps anything alive.
-// Construction is the class-method form `Weak.new(v)` (compiler-lowered,
+// Construction is the class-method form `Weak::new(v)` (compiler-lowered,
 // like the other builtin statics): it mints `Weak<T>` over v's cell and
 // traps on a nil `v`
 // ("weak on nil"); `T` must be a reference type (`Weak<i32>` diagnoses —
@@ -81,7 +81,7 @@ pub builtin class Weak<T> {
                                   // fresh ?T, or nil once the referent
                                   // died (repeat upgrades are stable)
 }
-// type-static: Weak.new(v) -> Weak<T> — the construction (the retired
+// type-static: Weak::new(v) -> Weak<T> — the construction (the retired
 // bare type-call diagnoses, naming this form)
 
 
@@ -122,7 +122,7 @@ prelude builtin primitive bytes {
                                     // every binding shares its cell,
                                     // this member mints a fresh one
 }
-// type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: [u8]) -> bytes
+// type-methods: bytes::zeroed(n) -> bytes, bytes::from(a: [u8]) -> bytes
 // NOTE: `Option`/`Result`/`own` were removed in v1.1 — absence is
 // `nil` on a `?T` or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.
@@ -134,12 +134,12 @@ prelude builtin primitive bytes {
 // removal and its replacement.
 
 // the erasure box: any value goes in via `opaque(v)`,
-// `opaque.downcast<T>(o)` recovers it (and `x is T` probes it). A
+// `opaque::downcast<T>(o)` recovers it (and `x is T` probes it). A
 // boot-table type whose member is the static on the primitive; the free
 // `downcast<T>` fn is gone — the member form is the one surface
 // (builtin-surface phase 2 deleted the engine alias too: a bare
 // `downcast<T>(o)` call diagnoses with the removal). Construction is a
-// CALL of the type name itself — `opaque.new(v)` was folded into
+// CALL of the type name itself — `opaque::new(v)` was folded into
 // `opaque(v)` in the `?T` sweep, there is no `new` static.
 // The recovery is the nullable: a match IS the box's inner
 // cell (the alias law — mutation through it is the source's; a prim

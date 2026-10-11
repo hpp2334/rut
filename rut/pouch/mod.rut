@@ -29,7 +29,7 @@ pub class Vec<T> {
 
 impl<T> Vec<T> {
     pub fn new() -> Self {
-        return Vec.with_capacity(0);
+        return Vec::with_capacity(0);
     }
 
     pub fn with_capacity(cap: i32) -> Self {
@@ -98,7 +98,7 @@ impl<T> Vec<T> {
         for (let i = 0; i < n; i += 1) {
             a[i] = self.buf[i];
         }
-        return bytes.from(a);
+        return bytes::from(a);
     }
 
     // Copy the live elements into a fresh, exactly-sized `[T]`. The

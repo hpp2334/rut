@@ -613,7 +613,7 @@ entry fn main() -> i32 {
     let _ = std::fs::remove_dir_all(&ws);
     std::fs::create_dir_all(ws.join("gadgets")).unwrap();
     let lib_src = "class Widget {\n    id: i32;\n}\n";
-    let main_src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n";
+    let main_src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
     let lib_uri = format!("file://{}/gadgets/lib.rut", ws.to_str().unwrap());
     let main_uri = format!("file://{}/main.rut", ws.to_str().unwrap());
     std::fs::write(ws.join("gadgets/lib.rut"), lib_src).unwrap();
@@ -715,7 +715,7 @@ fn write_dep_fixture(name: &str) -> DepFixture {
 
     // the url rows: pouch pinned + PRIMED from the committed bundle,
     // ghost pinned but primed nowhere (the miss), bare unpinned
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle";
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
     const GHOST_URL: &str = "https://example.invalid/ghost.rutbundle";
     const BARE_URL: &str = "https://example.invalid/bare.rutbundle";
     let pouch_cache = rut_lsp::deps::cache_path(POUCH_URL); // .rut/cache/<sha256(url)>.rutbundle
@@ -743,10 +743,10 @@ use gadgets::layout::{ Column };
 use pouch::{ Vec };
 mod helpers;
 fn main() -> nil {
-    let w = Widget.new();
+    let w = Widget::new();
     let v: Vec<i32> = Vec.new();
     let c: Column = Column { w: 1 };
-    let a: helpers.Slot = helpers.mk(1);
+    let a: helpers::Slot = helpers::mk(1);
     v.push(1);
 }
 ";
@@ -786,7 +786,7 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
         .await;
 
     // the path dep OUTSIDE the scan root: go-to-definition from the
-    // `Widget.new()` use site lands in the dep's own file
+    // `Widget::new()` use site lands in the dep's own file
     let (l, c) = pos_of(&fx.main_src, "Widget", 1);
     let resp = editor
         .request(

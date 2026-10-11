@@ -54,7 +54,7 @@ entry fn main() {
     let cast = 300 as u8;      // 44
     let x = 3;
     let y = 4;
-    log.info(f"{cast} {Math.sqrt((x * x + y * y) as f64)}");
+    log.info(f"{cast} {Math::sqrt((x * x + y * y) as f64)}");
 }
 ```
 
@@ -139,14 +139,14 @@ Formattable types and their rendering:
 | `f32`/`f64` | shortest round-trip decimal (`3.5`, `0.1`, `1e300`) |
 | `bool` | `true` / `false` |
 | `str` | contents, verbatim |
-| enum | member name (`Color.Red` → `"Red"`) |
+| enum | member name (`Color::Red` → `"Red"`) |
 
 Everything else — struct/class values, vecs and fixed arrays, `?T`
 boxes, `opaque`, tuples — is a **compile error** inside `f"..."`
 (preventing accidental implementation-detail printing). Write a
 `to_string() -> str` method on your type and call it explicitly, and
 route developer output through your host logger (for example the `ink`
-package's `Logger.debug(f"...")`).
+package's `Logger::debug(f"...")`).
 
 The accumulator idiom `out = f"{out}{chunk}"` is recognized by the
 compiler and appends in place — amortized O(1) instead of copying the

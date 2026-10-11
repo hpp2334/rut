@@ -1,4 +1,4 @@
-//! `bytes.clone()` — the one copy escape hatch. Every cell
+//! `bytes::clone()` — the one copy escape hatch. Every cell
 //! type shares on binding; the clone member is the ONE explicit,
 //! one-shot buffer copy. These tests pin the surface end-to-end: the
 //! member compiles, lowers to the `BytesClone` native (a fresh buffer,
@@ -72,7 +72,7 @@ fn run_main(app_src: &str) -> i32 {
 fn clone_lowers_to_the_fresh_buffer_native() {
     let out = compile_program(
         "entry fn main() -> i32 {\n\
-             let a = bytes.from([1u8, 2, 3]);\n\
+             let a = bytes::from([1u8, 2, 3]);\n\
              let b = a.clone();\n\
              if (a != b) { return 1; }\n\
              return a.len() * 10 + b.len();\n\
@@ -93,9 +93,9 @@ fn clone_content_compares_equal_and_runs() {
     // clone decodes and lenses exactly like the original.
     let sum = run_main(
         "entry fn main() -> i32 {\n\
-             let a = bytes.from([1u8, 2, 3]);\n\
+             let a = bytes::from([1u8, 2, 3]);\n\
              let b = a.clone();\n\
-             let c = bytes.from([1u8, 2, 4]);\n\
+             let c = bytes::from([1u8, 2, 4]);\n\
              if (a != b) { return 1; }\n\
              if (a == c) { return 2; }\n\
              if (b.decode() != a.decode()) { return 3; }\n\
@@ -109,7 +109,7 @@ fn clone_content_compares_equal_and_runs() {
 fn clone_takes_no_arguments_and_other_members_still_diagnose() {
     let ds: Vec<String> = compile_program(
         "entry fn main() -> i32 {\n\
-             let a = bytes.from([1u8]);\n\
+             let a = bytes::from([1u8]);\n\
              let b = a.clone(a);\n\
              return b.len();\n\
          }\n",
@@ -124,7 +124,7 @@ fn clone_takes_no_arguments_and_other_members_still_diagnose() {
     );
     let ds: Vec<String> = compile_program(
         "entry fn main() -> i32 {\n\
-             let a = bytes.from([1u8]);\n\
+             let a = bytes::from([1u8]);\n\
              return a.nope();\n\
          }\n",
     )

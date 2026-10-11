@@ -106,14 +106,14 @@ The shape, step by step:
   wire body is still unread.
 - From the `Response`, take one of two readbacks:
   - `await resp.body()` — drain the remaining body in one future;
-  - `resp.byte_stream()` then `await stream.next()` — one chunk per
+  - `resp.byte_stream()` then `await stream::next()` — one chunk per
     future, `nil` at end-of-stream, for bounded-memory downloads.
 
 Errors come back as data, not traps: status `0` is reserved for
 transport failure (`resp.transport_error()` carries the reason), any
 real status — 4xx and 5xx included — is a normal response
 (`resp.ok()` is the 2xx test), and a mid-read wire death surfaces as
-`nil` from `next()` with the reason in `stream.error()`.
+`nil` from `next()` with the reason in `stream::error()`.
 
 A complete request handler from the repository's GitHub-viewer example —
 send, then drain:

@@ -365,10 +365,12 @@ enum AtomStage {
     /// `[v; n]` — the value was parsed, the count is being fetched
     Repeat { value: NodeHandle<AnyExpr> },
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
-    PathDots { segs: Vec<PathSeg> },
+    /// a `::`-chain path: segments collected so far
+    PathColons { segs: Vec<PathSeg> },
+    /// generic args on the HEAD segment (`Vec<u32>::from(..)`)
     PathGen { segs: Vec<PathSeg>, args: Vec<NodeHandle<AnyTy>> },
-    PathDotGen { segs: Vec<PathSeg>, name: IdentId, args: Vec<NodeHandle<AnyTy>> },
-    PathDotCall { segs: Vec<PathSeg>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
+    /// generic args on a later `::` segment (`Option<T>::Some(x)`)
+    PathSegGen { segs: Vec<PathSeg>, name: IdentId, args: Vec<NodeHandle<AnyTy>> },
     Postfix { e: NodeHandle<AnyExpr> },
     PostDotGen { recv: NodeHandle<AnyExpr>, name: IdentId, args: Vec<NodeHandle<AnyTy>> },
     PostDotCall { recv: NodeHandle<AnyExpr>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
@@ -479,14 +481,14 @@ impl AtomFrame {
                 let first = PathSeg { name: p.interner.intern(&name), generics: Vec::new() };
                 let segs = vec![first];
                 // generic args on the head segment: `Vec<f32>(1024)`,
-                // `downcast<Point>(o)`, `MyMap<K, V>.new(..)`, `Option<T>.Some(x)`
+                // `downcast<Point>(o)`, `MyMap<K, V>::new(..)`, `Option<T>::Some(x)`
                 if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
                     p.bump();
                     self.stage = AtomStage::PathGen { segs, args: Vec::new() };
                     return self.genarg_top(p);
                 }
-                self.stage = AtomStage::PathDots { segs };
-                self.pathdots_top(p)
+                self.stage = AtomStage::PathColons { segs };
+                self.pathcolons_top(p)
             }
             _ => {
                 let found = p.peek(0).describe();
@@ -682,65 +684,33 @@ impl AtomFrame {
         Step::Pop(Done::Expr(p.expr(ExprKind::Struct { ty, fields }, self.lo.to(p.span()))))
     }
 
-    // -- path building: `a.b.c`, generic args on segments, method calls --
+    // -- path building: `a::b::c` — `::` separates NAME-RESOLUTION
+    //    segments (modules, enum members, statics, namespaces); the
+    //    postfix loop's `.` below is value access only --
 
-    fn pathdots_top(&mut self, p: &mut Parser) -> Step {
+    fn pathcolons_top(&mut self, p: &mut Parser) -> Step {
         loop {
-            if !p.eat_punct(Tok::Dot) {
+            if !p.eat_punct(Tok::Colon2) {
                 let segs = match &mut self.stage {
-                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    AtomStage::PathColons { segs } => std::mem::take(segs),
                     _ => unreachable!(),
                 };
                 let node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
                 return self.finish(p, node);
             }
-            // `.0` — a tuple field: close the path so far and
-            // switch to a Field node; the postfix loop chains from there
-            if let Tok::Int(v, None) = p.tok().clone() {
-                let segs = match &mut self.stage {
-                    AtomStage::PathDots { segs } => std::mem::take(segs),
-                    _ => unreachable!(),
-                };
-                let path_node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
-                p.bump(); // the digits
-                let fname = p.interner.intern(&v.to_string());
-                let fnode = p.expr(
-                    ExprKind::Field { recv: path_node, name: fname },
-                    self.lo.to(p.span()),
-                );
-                self.stage = AtomStage::Postfix { e: fnode };
-                return self.postfix_top(p);
-            }
-            let Some(name) = p.expect_ident("a member name") else {
+            let Some(name) = p.expect_ident("a path segment") else {
                 return Step::Pop(Done::Failed);
             };
             if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
                 p.bump();
                 let segs = match &mut self.stage {
-                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    AtomStage::PathColons { segs } => std::mem::take(segs),
                     _ => unreachable!(),
                 };
-                self.stage = AtomStage::PathDotGen { segs, name, args: Vec::new() };
+                self.stage = AtomStage::PathSegGen { segs, name, args: Vec::new() };
                 return self.genarg_top(p);
             }
-            if matches!(p.tok(), Tok::LParen) {
-                // a call after the segment: `p.area(..)`, `Vec.from(..)`,
-                // `MyMap<K, V>.new(..)` — a METHOD node over the path
-                // built so far (the resolver decides static vs instance)
-                p.bump();
-                let segs = match &mut self.stage {
-                    AtomStage::PathDots { segs } => std::mem::take(segs),
-                    _ => unreachable!(),
-                };
-                self.stage = AtomStage::PathDotCall {
-                    segs,
-                    name,
-                    generics: Vec::new(),
-                    args: Vec::new(),
-                };
-                return self.call_top(p);
-            }
-            if let AtomStage::PathDots { segs } = &mut self.stage {
+            if let AtomStage::PathColons { segs } = &mut self.stage {
                 segs.push(PathSeg { name, generics: Vec::new() });
             }
         }
@@ -783,25 +753,19 @@ impl AtomFrame {
                     let generics = std::mem::take(&mut segs[0].generics);
                     return self.struct_enter_gen(p, name, generics, true);
                 }
-                self.stage = AtomStage::PathDots { segs };
-                self.pathdots_top(p)
+                self.stage = AtomStage::PathColons { segs };
+                self.pathcolons_top(p)
             }
-            AtomStage::PathDotGen { segs, name, args } => {
+            AtomStage::PathSegGen { segs, name, args } => {
                 let args = std::mem::take(args);
                 let name = *name;
-                let segs = std::mem::take(segs);
-                // `.name<..>(..)` — the call follows the generic args
-                // directly; the args are the METHOD's type parameters
-                if matches!(p.tok(), Tok::LParen) {
-                    p.bump();
-                    self.stage = AtomStage::PathDotCall { segs, name, generics: args, args: Vec::new() };
-                    return self.call_top(p);
-                }
-                // no call: the generic args close the path's final segment
-                let mut segs = segs;
+                let mut segs = std::mem::take(segs);
+                // the generic args close this `::` segment; a following
+                // `(` is the postfix call over the whole path
+                // (`MyMap<K, V>::new(..)` — a `Call`, never a `Method`)
                 segs.push(PathSeg { name, generics: args });
-                self.stage = AtomStage::PathDots { segs };
-                self.pathdots_top(p)
+                self.stage = AtomStage::PathColons { segs };
+                self.pathcolons_top(p)
             }
             AtomStage::PostDotGen { recv, name, args } => {
                 let recv = *recv;
@@ -858,18 +822,6 @@ impl AtomFrame {
                 );
                 self.stage = AtomStage::Postfix { e: node };
                 self.postfix_top(p)
-            }
-            AtomStage::PathDotCall { segs, name, generics, args } => {
-                let name = *name;
-                let generics = std::mem::take(generics);
-                let args = std::mem::take(args);
-                let segs = std::mem::take(segs);
-                let recv = p.expr(ExprKind::Path { segs }, self.lo);
-                let node = p.expr(
-                    ExprKind::Method { recv, name, generics, args },
-                    self.lo.to(p.span()),
-                );
-                self.finish(p, node)
             }
             _ => unreachable!("call args at the wrong stage"),
         }
@@ -935,16 +887,14 @@ impl AtomFrame {
                         self.struct_pop(p)
                     }
                 }
-                AtomStage::PathGen { args, .. }
-                | AtomStage::PathDotGen { args, .. }
+            AtomStage::PathGen { args, .. }
+                | AtomStage::PathSegGen { args, .. }
                 | AtomStage::PostDotGen { args, .. } => {
                     // const-generic argument: integer expression
                     args.push(p.typ(TypeKind::TyConst(e), p.span()));
                     self.genarg_after_arg(p)
                 }
-                AtomStage::PostCall { args, .. }
-                | AtomStage::PostDotCall { args, .. }
-                | AtomStage::PathDotCall { args, .. } => {
+                AtomStage::PostCall { args, .. } | AtomStage::PostDotCall { args, .. } => {
                     args.push(e);
                     self.call_after_arg(p)
                 }
@@ -955,14 +905,14 @@ impl AtomFrame {
                     self.stage = AtomStage::Postfix { e: node };
                     self.postfix_top(p)
                 }
-                AtomStage::Postfix { .. } | AtomStage::PathDots { .. } => {
+                AtomStage::Postfix { .. } | AtomStage::PathColons { .. } => {
                     unreachable!("atom frame received an operand at the wrong stage")
                 }
             },
             Done::Ty(t) => {
                 match &mut self.stage {
                     AtomStage::PathGen { args, .. }
-                    | AtomStage::PathDotGen { args, .. }
+                    | AtomStage::PathSegGen { args, .. }
                     | AtomStage::PostDotGen { args, .. } => args.push(t),
                     _ => unreachable!("atom frame received a type at the wrong stage"),
                 }

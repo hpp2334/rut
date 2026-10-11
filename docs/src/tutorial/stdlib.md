@@ -67,7 +67,7 @@ entry fn main() {
     log.info(f"starts={s.starts_with(0, head)}");
     let joined = string_join(["rut", "runs"]);
     log.info(f"joined={joined}");
-    let h = str.from_code(72);
+    let h = str::from_code(72);
     log.info(f"from_code={h}");
 }
 ```
@@ -83,7 +83,7 @@ from_code=H
 
 `s.slice` deserves a second look: no octets move; the view records a
 window over the parent, prints, compares by content, iterates, and can
-re-slice. Codepoint access is spelled with integers — `str.from_code(n)`
+re-slice. Codepoint access is spelled with integers — `str::from_code(n)`
 builds the 1-codepoint `str` for a `u32`. Tokenizing rides
 `s.scan(from, set)` over a caller-owned `[u8]` class
 table. See [string slicing and views](../reference/string-views.md).
@@ -98,8 +98,8 @@ entry fn main() {
     let b = "rut runs".encode();
     log.info(f"len={b.len()} decode={b.decode()}");
     let copy = b.clone();     // the ONLY copy escape hatch
-    let z = bytes.zeroed(4);
-    let from = bytes.from([1, 2, 3]);
+    let z = bytes::zeroed(4);
+    let from = bytes::from([1, 2, 3]);
     log.info(f"same={copy == b} zeroed={z.len()} from={from.len()}");
 }
 ```
@@ -112,10 +112,10 @@ same=true zeroed=4 from=3
 ### Erasure and cleanup
 
 `opaque(v)` seals any value for recovery with
-`opaque.downcast<T>(o) -> ?T` — see [errors and
+`opaque::downcast<T>(o) -> ?T` — see [errors and
 optionality](errors.md). Marking a `[disposal]` member on a type gives it
 cleanup code that runs when its cell's refcount reaches zero, and
-`Weak.new(v)` holds a non-keeping reference (`upgrade() -> ?T`, `nil`
+`Weak::new(v)` holds a non-keeping reference (`upgrade() -> ?T`, `nil`
 once the referent died) — the memory stories live in
 [the Rc heap and destructors](../reference/rc-heap.md) and
 [weak references](../reference/weak-refs.md).
@@ -142,10 +142,10 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("pouch");
-    let mut xs: Vec<i32> = Vec.new();         // or Vec.with_capacity(64)
+    let mut xs: Vec<i32> = Vec::new();         // or Vec::with_capacity(64)
     xs.push(10);                              // amortized O(1)
-    let v = Vec<f32>.filled(0.0, 1024);       // n slots of one value
-    let w = Vec<i32>.from([1, 2, 3]);         // from a fixed array (copies)
+    let v = Vec<f32>::filled(0.0, 1024);       // n slots of one value
+    let w = Vec<i32>::from([1, 2, 3]);         // from a fixed array (copies)
     let x = xs[0];                            // indexing
     xs[0] = 42;                               // needs a `mut` binding
     let last = xs.pop();                      // removes + returns; traps if empty
@@ -222,7 +222,7 @@ use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger("flow");
-    let nums: Vec<i32> = Vec.new();
+    let nums: Vec<i32> = Vec::new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5);
 
     // entry through the spelled adapter → adapters → consumer
@@ -234,7 +234,7 @@ entry fn main() -> nil {
     let total: i32 = picked.fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
 
     // a fresh chain re-drives the same source
-    let mut joined: Vec<str> = Vec.new();
+    let mut joined: Vec<str> = Vec::new();
     src.into_flow().skip(1).for_each(fn(x: i32) -> nil {
         joined.push(f"{x}");                    // a shared cell survives the closure
     });
@@ -280,7 +280,7 @@ use ink::{ Logger };
 entry fn main() {
     let log = Logger("strbuild");
     let n = 3;
-    let mut b = StringBuilder();     // or StringBuilder.with_cap(1024)
+    let mut b = StringBuilder();     // or StringBuilder::with_cap(1024)
     b.append("count: ");
     b.append_code(33);                   // one codepoint
     b.append(f" up to {n}");             // appends are amortized O(1)
@@ -311,12 +311,12 @@ entry fn main() {
     let x: f64 = -2.0;
     let a: f64 = 3.0;
     let b: f64 = 7.0;
-    let d = Math.sqrt(2.0);        // f64 host fns: sin, pow, atan2, fma, ...
-    let f = Math.sqrt_f(2.0f32);   // f32 twins under a `_f` suffix
-    let mx = Math.max(a, b);
-    let sg = Math.signum(x);
-    log.info(f"sqrt={d} sqrt_f={f} pi={Math.PI}");
-    log.info(f"abs={Math.abs(x)} min={Math.min(a, b)} max={mx} signum={sg}");
+    let d = Math::sqrt(2.0);        // f64 host fns: sin, pow, atan2, fma, ...
+    let f = Math::sqrt_f(2.0f32);   // f32 twins under a `_f` suffix
+    let mx = Math::max(a, b);
+    let sg = Math::signum(x);
+    log.info(f"sqrt={d} sqrt_f={f} pi={Math::PI}");
+    log.info(f"abs={Math::abs(x)} min={Math::min(a, b)} max={mx} signum={sg}");
 }
 ```
 
@@ -413,7 +413,7 @@ entry fn main() {
     let log = Logger("std");
 
     // Vec: build, pop, read
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
@@ -421,7 +421,7 @@ entry fn main() {
     log.info(f"len={v.len()} last={last} first={v[0]}");
 
     // fixed arrays + string_join from core
-    let parts: Vec<str> = Vec.from(["rut", "runs"]);
+    let parts: Vec<str> = Vec::from(["rut", "runs"]);
     log.info(f"joined={string_join(parts.as_array())}");
 
     // StringBuilder: amortized appends, one materialization
@@ -433,9 +433,9 @@ entry fn main() {
     log.info(s);
 
     // calc's Math namespace (f64) and its f32 twins (_f)
-    let d = Math.sqrt(2.0);
-    let f = Math.sqrt_f(2.0);
-    log.info(f"sqrt2 f64~{d} f32~{f} pi={Math.PI}");
+    let d = Math::sqrt(2.0);
+    let f = Math::sqrt_f(2.0);
+    log.info(f"sqrt2 f64~{d} f32~{f} pi={Math::PI}");
 
     // assert: the bug-catcher this file wrote itself
     assert(v.len() == 2, "vec should hold two");

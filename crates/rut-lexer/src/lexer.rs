@@ -596,6 +596,7 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b">>", Tok::Shr),
     (b"->", Tok::Arrow),
     (b"=>", Tok::FatArrow),
+    (b"::", Tok::Colon2),
     (b"==", Tok::EqEq),
     (b"!=", Tok::NotEq),
     (b"<=", Tok::LtEq),

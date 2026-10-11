@@ -28,7 +28,7 @@ pub class TodoList {
 
 impl TodoList {
     pub fn new() -> Self {
-        return Self { items: Vec.new(), next_id: 1 };
+        return Self { items: Vec::new(), next_id: 1 };
     }
 
     // ---- CREATE ----
@@ -89,7 +89,7 @@ impl TodoList {
     // ---- DELETE ----
 
     pub fn remove(mut self, id: i32) -> bool {
-        let kept: Vec<Todo> = Vec.new();
+        let kept: Vec<Todo> = Vec::new();
         let mut removed = false;
         for (let t of self.items) {
             when (t.id == id) {
@@ -106,7 +106,7 @@ impl TodoList {
 
 /// The host-held container: one opaque box around all live lists.
 /// `createContainer` boxes it; every entry takes it back as its first
-/// argument and recovers it with `opaque.downcast<T>` (a wrong box is `nil`).
+/// argument and recovers it with `opaque::downcast<T>` (a wrong box is `nil`).
 struct Lists {
     lists: Vec<TodoList>;    // handle = index; handles stay stable while held
 }
@@ -114,20 +114,20 @@ struct Lists {
 /// Recover list `h` out of the container. Internal — an ordinary fn,
 /// unrestricted types.
 fn at(c: opaque, h: u32) -> TodoList {
-    let lists = opaque.downcast<?Lists>(c);
+    let lists = opaque::downcast<?Lists>(c);
     return lists.lists[h as i32];
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn createContainer() -> opaque {
-    let ls: ?Lists = Lists { lists: Vec.new() };
+    let ls: ?Lists = Lists { lists: Vec::new() };
     return opaque(ls);
 }
 
 entry fn create(c: opaque) -> u32 {
-    let k = opaque.downcast<?Lists>(c);
-    k.lists.push(TodoList.new());
+    let k = opaque::downcast<?Lists>(c);
+    k.lists.push(TodoList::new());
     return (k.lists.len() - 1) as u32;
 }
 

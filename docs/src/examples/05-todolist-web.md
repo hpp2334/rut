@@ -34,7 +34,7 @@ cd examples/05-todolist-web
 cargo build -p todolist-web --target wasm32-unknown-unknown --release
 wasm-bindgen --target web --out-dir gen --out-name web_host \
   ../../target/wasm32-unknown-unknown/release/todolist_web.wasm
-python3 -m http.server        # then open http://localhost:8000/
+python3 -m http::server        # then open http://localhost:8000/
 ```
 
 What you'll see: type a title — the status line echoes the typing and
@@ -76,7 +76,7 @@ pump reports *while keeping the page alive*.
 ```rut
 fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
     let booked = t1_event(r.t1, id, detail);
-    let req = opaque.downcast<Req>(booked);
+    let req = opaque::downcast<Req>(booked);
     if (req != nil) {
         tim_after(req.latency, req.tag);
     }
@@ -155,7 +155,7 @@ dependency list, re-recorded on every recompute. The domain's counts
 line is the worked example (`rut/biz/world/mod.rut`):
 
 ```rut
-let counts$ = store.derive(fn (ctx) -> str {
+let counts$ = store::derive(fn (ctx) -> str {
     let items = ctx.get(items$);
     let reqs = ctx.get(reqs$);
     let mut open = 0;
@@ -216,10 +216,10 @@ privacy boundary, which is why there are exactly two
   "deps": {
     // the sibling package — the consumer's own local package
     "ui":      { "path": "../ui" },
-    // the toolchain's packages, from jsDelivr at the std-v8 tag,
+    // the toolchain's packages, from jsDelivr at the std-v9 tag,
     // pinned by sha256
-    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/nmapset.rutbundle", "sha256": "ee9a7cf00c7ab18b6037badfcac49f1abb1c94036c5349288570a43da7ecc598" }
+    "pouch":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle", "sha256": "ee9a7cf00c7ab18b6037badfcac49f1abb1c94036c5349288570a43da7ecc598" }
   }
 }
 ```

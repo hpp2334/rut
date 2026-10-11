@@ -183,7 +183,7 @@ host bodies ride `.host_pkg(..)`:
 
 ```rust
 let loaded = block_on(rut_native::load_path_session_with(base, &remote))?;
-let rgh_host = rut_native::dir_pkgs(&base.join("rgh_host"))?;   // example-local rows
+let rgh_host = rut_native::dir_pkgs(&base::join("rgh_host"))?;   // example-local rows
 
 let mut chain = rut_driver::RutRun::new().pkgs(&loaded);        // the manifest closure
 chain = chain

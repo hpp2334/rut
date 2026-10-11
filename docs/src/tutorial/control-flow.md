@@ -135,7 +135,7 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 
 entry fn main() {
     let log = Logger("swap");
-    let xs = Vec<i32>.from([1, 2, 3]);
+    let xs = Vec<i32>::from([1, 2, 3]);
     swap(xs, 0, 2);
     log.info(f"first={xs[0]} last={xs[2]}");
 }
@@ -187,11 +187,11 @@ fn brake() { Logger("light").info("brake"); }
 fn stop()  { Logger("light").info("stop"); }
 
 entry fn main() {
-    let l = Light.Yellow;
+    let l = Light::Yellow;
     when (l) {
-        Light.Green  -> { go(); },
-        Light.Yellow -> { brake(); },
-        Light.Red    -> { stop(); },
+        Light::Green  -> { go(); },
+        Light::Yellow -> { brake(); },
+        Light::Red    -> { stop(); },
     }
 }
 ```
@@ -205,7 +205,7 @@ above are statement arms.
 
 ### Patterns
 
-The patterns are: enum members (`Light.Red`), literals (integers,
+The patterns are: enum members (`Light::Red`), literals (integers,
 floats, `bool`, `str`), comma-separated alternatives, and `else`.
 There are no ranges, no destructuring, and no guards — an `if` inside
 the arm body does that job.
@@ -229,9 +229,9 @@ fn stop()  { Logger("light").info("stop"); }
 
 fn drive(l: Light) {
     when (l) {
-        Light.Green  -> { go(); },
-        Light.Yellow -> { brake(); },
-        Light.Red    -> { stop(); },   // all members: no else needed
+        Light::Green  -> { go(); },
+        Light::Yellow -> { brake(); },
+        Light::Red    -> { stop(); },   // all members: no else needed
     }
 }
 
@@ -243,7 +243,7 @@ fn describe(n: i32) -> str {
 }
 
 entry fn main() {
-    drive(Light.Red);
+    drive(Light::Red);
     let log = Logger("light");
     log.info(describe(0));
     log.info(describe(7));
@@ -293,9 +293,9 @@ enum Light { Green, Yellow, Red }
 
 fn light_for(i: i32) -> Light {
     return when (i) {
-        0    -> Light.Green,
-        1    -> Light.Yellow,
-        else -> Light.Red,
+        0    -> Light::Green,
+        1    -> Light::Yellow,
+        else -> Light::Red,
     };
 }
 
@@ -318,17 +318,17 @@ enum Light { Green, Yellow, Red }
 
 fn action(l: Light) -> str {
     return when (l) {
-        Light.Green  -> "go",
-        Light.Yellow -> "brake",
-        Light.Red    -> "stop",
+        Light::Green  -> "go",
+        Light::Yellow -> "brake",
+        Light::Red    -> "stop",
     };
 }
 
 fn light_for(i: i32) -> Light {
     return when (i) {
-        0    -> Light.Green,
-        1    -> Light.Yellow,
-        else -> Light.Red,
+        0    -> Light::Green,
+        1    -> Light::Yellow,
+        else -> Light::Red,
     };
 }
 

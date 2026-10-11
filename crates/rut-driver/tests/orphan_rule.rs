@@ -45,7 +45,7 @@ impl<T> Box<T> {
 }
 pub class IntBox(Box<i32>);
 impl IntBox {
-    pub fn new(v: i32) -> Self { return IntBox(Box<i32>.new(v)); }
+    pub fn new(v: i32) -> Self { return IntBox(Box<i32>::new(v)); }
     pub fn get(self) -> i32 { return self.inner.get(); }
 }
 ";
@@ -156,7 +156,7 @@ impl MarkedBox {
     pub fn mark(self) -> i32 { return self.inner.get(); }
 }
 entry fn main() -> i32 {
-    let m: MarkedBox = MarkedBox(IntBox.new(7));
+    let m: MarkedBox = MarkedBox(IntBox::new(7));
     return m.mark();
 }
 "),
@@ -304,7 +304,7 @@ impl Todo {
 }
 
 entry fn main() -> ?str {
-    let mut v = Vec<Todo>.new();
+    let mut v = Vec<Todo>::new();
     v.push(Todo { name: \"a\", n: 1 });
     let (doc, e) = encodeJson(JsonVec(v));
     if (e != nil) { return nil; }

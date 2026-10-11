@@ -15,9 +15,9 @@ enum Light { Green, Yellow, Red }
 
 fn drive(l: Light) {              // statement usage = nil-typed when
     when (l) {
-        Light.Green  -> { go(); },
-        Light.Yellow -> { brake(); },
-        Light.Red    -> { stop(); },   // all members: no else needed
+        Light::Green  -> { go(); },
+        Light::Yellow -> { brake(); },
+        Light::Red    -> { stop(); },   // all members: no else needed
     }
 }
 
@@ -28,5 +28,5 @@ fn stop() { /* ... */ }
 entry fn main() {
     let log = Logger("when");
     log.info(describe(2));               // "small"
-    drive(Light.Yellow);
+    drive(Light::Yellow);
 }

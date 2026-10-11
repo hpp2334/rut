@@ -10,7 +10,7 @@ use std::path::Path;
 use plugin::Plugin;
 
 /// The pack lane with the url dep's bytes primed from the committed
-/// artifacts — dist/std-v8 plays the wire: an OFFLINE remote is warmed
+/// artifacts — dist/std-v9 plays the wire: an OFFLINE remote is warmed
 /// via `DepRemote::write` (the stand-in for the GET), so the gate
 /// cannot network by construction. The rode-along law carries the
 /// pouch group inside the output.
@@ -26,7 +26,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let manifest_text =
         std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
-    let dist = d.join("../../../dist/std-v8");
+    let dist = d.join("../../../dist/std-v9");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
         let artifact = url.rsplit('/').next().unwrap_or_default();
@@ -79,7 +79,7 @@ fn prime_project_cache() {
         let manifest_text =
             std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
         let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
-        let dist = d.join("../../../dist/std-v8");
+        let dist = d.join("../../../dist/std-v9");
         let remote = rut_native::HttpRemote::offline(d.join(".rut").join("cache"));
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };

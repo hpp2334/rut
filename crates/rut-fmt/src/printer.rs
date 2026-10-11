@@ -991,7 +991,7 @@ impl<'a> P<'a> {
             TypeKind::TyPath { segs } => {
                 for (i, seg) in segs.iter().enumerate() {
                     if i > 0 {
-                        self.text(".");
+                        self.text("::");
                     }
                     self.text(self.a.name(seg.name));
                     if !seg.generics.is_empty() {
@@ -1541,7 +1541,7 @@ impl<'a> P<'a> {
     fn path(&mut self, segs: &[PathSeg]) {
         for (i, seg) in segs.iter().enumerate() {
             if i > 0 {
-                self.text(".");
+                self.text("::");
             }
             self.text(self.a.name(seg.name));
             if !seg.generics.is_empty() {

@@ -131,10 +131,10 @@ export class RutLsp {
   /// read before the next request resets it
   private put(s: string): [number, number] {
     const bytes = this.enc.encode(s);
-    const ptr = this.e.rut_alloc(bytes.length);
+    const ptr = this.e.rut_alloc(bytes::length);
     if (ptr === 0) throw new Error("rut-lsp wasm: arena overflow");
-    new Uint8Array(this.e.memory.buffer, ptr, bytes.length).set(bytes);
-    return [ptr, bytes.length];
+    new Uint8Array(this.e.memory.buffer, ptr, bytes::length).set(bytes);
+    return [ptr, bytes::length];
   }
 
   /// `rut_begin` -> write inputs -> call -> read the JSON envelope

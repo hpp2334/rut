@@ -81,7 +81,7 @@ impl<K, V> Box<K, V> {
     let out = compile(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let b: Box<Token, i32> = Box.new(Token {{ v: 1 }}, 2);\n\
+         \x20   let b: Box<Token, i32> = Box::new(Token {{ v: 1 }}, 2);\n\
          \x20   return b.val() + b.key().v;\n\
          }}\n"
     ));
@@ -95,7 +95,7 @@ impl<K, V> Box<K, V> {
     let ds = diags_of(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let b: Box<str, i32> = Box.new(\"k\", 2);\n\
+         \x20   let b: Box<str, i32> = Box::new(\"k\", 2);\n\
          \x20   return 0;\n\
          }}\n"
     ));
@@ -133,7 +133,7 @@ fn bound_proves_the_widening_inside_the_class_body() {
          \x20   }\n\
          }\n\
          entry fn main() -> i32 {\n\
-         \x20   let b: Box<Token, i32> = Box.new(Token.new(), 2);\n\
+         \x20   let b: Box<Token, i32> = Box::new(Token::new(), 2);\n\
          \x20   return b.key_slot().hash() as i32;\n\
          }\n",
     );
@@ -163,7 +163,7 @@ impl<K, V> Box<K, V> {
     let out = compile(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let b: Box<Token, i32> = Box.new(Token {{ v: 1 }}, 2);\n\
+         \x20   let b: Box<Token, i32> = Box::new(Token {{ v: 1 }}, 2);\n\
          \x20   return b.v;\n\
          }}\n"
     ));
@@ -172,7 +172,7 @@ impl<K, V> Box<K, V> {
     let ds = diags_of(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let b: Box<bool, i32> = Box.new(true, 2);\n\
+         \x20   let b: Box<bool, i32> = Box::new(true, 2);\n\
          \x20   return 0;\n\
          }}\n"
     ));
@@ -202,8 +202,8 @@ impl<K, V> Box<K, V> {
     let out = compile(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let a: Box<i32, str> = Box.new(1, \"x\");\n\
-         \x20   let b: Box<Token, str> = Box.new(Token {{ v: 2 }}, \"y\");\n\
+         \x20   let a: Box<i32, str> = Box::new(1, \"x\");\n\
+         \x20   let b: Box<Token, str> = Box::new(Token {{ v: 2 }}, \"y\");\n\
          \x20   return a.k + b.k.v;\n\
          }}\n"
     ));
@@ -212,7 +212,7 @@ impl<K, V> Box<K, V> {
     let ds = diags_of(&format!(
         "{shape}\
          entry fn main() -> i32 {{\n\
-         \x20   let b: Box<bool, str> = Box.new(true, \"x\");\n\
+         \x20   let b: Box<bool, str> = Box::new(true, \"x\");\n\
          \x20   return 0;\n\
          }}\n"
     ));

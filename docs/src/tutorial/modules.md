@@ -104,7 +104,7 @@ greet/
 
   "deps": {
     // the toolchain's pouch package, from jsDelivr — pinned by sha256
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" }
   }
 }
 ```
@@ -120,7 +120,7 @@ pub struct Greeting {
 
 impl Greeting {
     pub fn new(to: str) -> Self {
-        return Self { to: to, lines: Vec.new() };
+        return Self { to: to, lines: Vec::new() };
     }
 
     pub fn add(mut self, line: str) {
@@ -154,7 +154,7 @@ surface `ink_host`; you never spell it):
     // your own package: a sibling directory
     "greet": { "path": "../pkg" },
     // the toolchain's ink package, from jsDelivr — pinned by sha256
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
   }
 }
 ```
@@ -166,7 +166,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("app");
-    let mut g = Greeting.new("rut");
+    let mut g = Greeting::new("rut");
     g.add("hello");
     g.add("from a package");
     log.info(g.render());
@@ -202,7 +202,7 @@ app/
 ```
 
 Each file is its own module: cross-file references are qualified
-(`domain.Todo`, `world.boot(..)`), and visibility is per module —
+(`domain::Todo`, `world::boot(..)`), and visibility is per module —
 private to the declaring module, `pub(pkg)` to share inside the
 package, `pub` to cross packages. Cross-package references still go
 through `use` paths (`use app::world::{ World }`).

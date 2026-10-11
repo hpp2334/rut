@@ -60,7 +60,7 @@ entry fn main() -> i32 {
     let vb: bool = unopaque<bool>(bb);
     let bs = opaque(\"hi\");
     let vs: str = unopaque<str>(bs);
-    let bz = opaque(bytes.from([1u8, 2u8, 3u8]));
+    let bz = opaque(bytes::from([1u8, 2u8, 3u8]));
     let vz: bytes = unopaque<bytes>(bz);
     let bp = opaque(Point { x: 3, y: 4 });
     let vp: Point = unopaque<Point>(bp);

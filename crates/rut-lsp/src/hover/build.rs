@@ -515,7 +515,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
         }
     }
     // module lets — with the index's types/fns in place so a
-    // `let c = Circle.new(..)` at module scope infers its type
+    // `let c = Circle::new(..)` at module scope infers its type
     let lets = std::mem::take(&mut pending_lets);
     for (name, ty, init, vis, span) in lets {
         let text = ast.name(name).to_string();

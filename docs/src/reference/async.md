@@ -132,7 +132,7 @@ bodies. A world that offers neither simply has no launcher; `await`
 still works inline.
 
 The crossings cross as **`opaque`**: `opaque(f)` seals a frame on the
-way out, `opaque.downcast<Future<nil>>(b) -> ?Future<nil>` recovers it
+way out, `opaque::downcast<Future<nil>>(b) -> ?Future<nil>` recovers it
 on the way in ([opaque — erasure and downcast](opaque.md)). `sleep(ms)` is
 literally that downcast over the engine's minted sleep frame.
 

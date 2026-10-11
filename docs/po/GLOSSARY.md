@@ -20,7 +20,7 @@ source text by design; a partially translated book is a valid book.
 | handle | 句柄 | the handle copies, not the cell → 复制的是句柄，不是单元 |
 | sharing | 共享 | "sharing is the law/default" → 共享是默认法则 |
 | erasure box | 擦除盒 | `opaque` stays code: 擦除盒（`opaque`） |
-| downcast | 向下转型 | prose only; `opaque.downcast<T>` stays code |
+| downcast | 向下转型 | prose only; `opaque::downcast<T>` stays code |
 | fuel | 燃料 | out of fuel → 燃料耗尽 |
 | budget | 预算 | heap budget → 堆预算 |
 | heap | 堆 | the Rc heap → Rc 堆；the VM heap → VM 堆 |
@@ -108,7 +108,7 @@ context; after that, use the zh-CN rendering alone.
 1. **Code never translates.** Inline code spans, fenced code blocks,
    identifiers, type names, field/method names, keywords, numeric
    literals, and URLs stay byte-identical: `rut`, `opaque`,
-   `opaque.downcast<T>`, `entry fn main`, `rut.jsonc`, `.d.rut`,
+   `opaque::downcast<T>`, `entry fn main`, `rut.jsonc`, `.d.rut`,
    `mod.rutbundle`, `rc`, `spawn`, CLI verbs (`rut run`, `rut build`,
    `rut check`, `rut fmt`, `rut doc`, …), package names (`core`,
    `ink`, `pouch`, …).
@@ -148,7 +148,7 @@ context; after that, use the zh-CN rendering alone.
 | file module | 文件模块 | a `mod NAME;`-declared child: `NAME/mod.rut` beside the declaring file（`mod` 为代码） |
 | root module | 根模块 | the package's `mod.rut` beside its manifest |
 | module tree | 模块树 | the mounted file-module set of a package |
-| qualified position | 限定位置 | the dot-spelled intra-module reference（`layout.Column` stays code）；dot → 点号 |
+| qualified position | 限定位置 | the dot-spelled intra-module reference（`layout::Column` stays code）；dot → 点号 |
 | use path | use 路径 | the `::`-spelled import path（`use` 为代码） |
 | mount | 挂载 | mounting is declared, not discovered → 挂载由声明决定，而非目录发现 |
 | declarations are the graph | 声明即图 | the `mod` decls ARE the module set — never a directory listing |

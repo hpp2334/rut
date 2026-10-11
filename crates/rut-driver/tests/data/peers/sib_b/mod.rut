@@ -9,7 +9,7 @@ pub class Crate {
 
 impl Crate {
     pub fn make(v: i64) -> Self {
-        let mut items = Vec<i64>.filled(v, 3);
+        let mut items = Vec<i64>::filled(v, 3);
         return Self { v: items };
     }
 

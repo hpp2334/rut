@@ -140,7 +140,7 @@ impl DeriveCtx {
 }
 
 /// The mutation fn's world: get + set. set delegates to the ONE write
-/// lane (the str content-skip and the gen bump live in Store.set), so
+/// lane (the str content-skip and the gen bump live in Store::set), so
 /// every write in the app lands in exactly one place.
 pub class MutCtx {
     store: Store;
@@ -193,7 +193,7 @@ impl Store {
             programs: HashMap(),
             edges: HashMap(),
             seen: HashMap(),
-            in_flight: Vec.new(),
+            in_flight: Vec::new(),
             n_recomputes: 0,
         };
     }
@@ -258,7 +258,7 @@ impl Store {
         } else {
             self.ensure_fresh<T>(id);
         }
-        return opaque.downcast<T>(self.kv.get(id));
+        return opaque::downcast<T>(self.kv.get(id));
     }
 
     /// The one WRITE — over sources (plain) and mutations (programs).
@@ -275,7 +275,7 @@ impl Store {
         let k = self.kind_of(id);
         if (k == 2) {
             let p = self.programs.get(id);
-            let f = opaque.downcast<fn(MutCtx, A) -> R>(p);
+            let f = opaque::downcast<fn(MutCtx, A) -> R>(p);
             return f(MutCtx { store: self }, arg);
         }
         if (k == 0) {
@@ -284,13 +284,13 @@ impl Store {
                 if (p != nil) {
                     // never-written has no content to skip: any first
                     // write is a change
-                    let prev = opaque.downcast<str>(p);
+                    let prev = opaque::downcast<str>(p);
                     // the lane's argument read back at the lane's own type:
                     // the box erases A, the downcast answers nil for a
                     // non-str write on this lane (a compile-valid body for
                     // every A — a Source's R IS its A, but the
                     // body must compile for the general Writable<A, R>)
-                    let cur = opaque.downcast<str>(opaque(arg));
+                    let cur = opaque::downcast<str>(opaque(arg));
                     // the compare rides a NAMED bool: the ?str compare
                     // directly in an `if` condition beside the generic
                     // downcast<R> return trips a checker edge (the spike's
@@ -298,13 +298,13 @@ impl Store {
                     // never meets this) — same law, same bytes of meaning
                     let same: bool = prev == cur;
                     if (same) {
-                        return opaque.downcast<R>(opaque(arg)); // content-equal: no bump, nothing stales
+                        return opaque::downcast<R>(opaque(arg)); // content-equal: no bump, nothing stales
                     }
                 }
             }
             self.kv.put(id, opaque(arg));
             self.bump(id);
-            return opaque.downcast<R>(opaque(arg));
+            return opaque::downcast<R>(opaque(arg));
         }
         panic("store: a derived is not writable — read it with get");
     }
@@ -324,9 +324,9 @@ impl Store {
             return;
         }
         self.in_flight.push(id);
-        self.edges.put(id, Vec.new()); // re-bind: this compute re-records
+        self.edges.put(id, Vec::new()); // re-bind: this compute re-records
         let p = self.programs.get(id);
-        let f = opaque.downcast<fn(DeriveCtx) -> T>(p);
+        let f = opaque::downcast<fn(DeriveCtx) -> T>(p);
         let v = f(DeriveCtx { store: self, reader: id });
         self.kv.put(id, opaque(v));
         self.bump(id); // the VALUE moved — downstream keys on this gen

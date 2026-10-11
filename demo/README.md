@@ -82,7 +82,7 @@ page. Phase 4's recorded drive (headless Chrome, static server):
 
 ```
 cd demo && npm run build
-(cd dist && python3 -m http.server 8123)   # any static server works
+(cd dist && python3 -m http::server 8123)   # any static server works
 # open http://127.0.0.1:8123/
 ```
 

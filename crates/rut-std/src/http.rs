@@ -664,7 +664,7 @@ use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.post(url, "hi".encode()).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     // the readbacks are ?str — nil-check, then deref, then log (the
@@ -688,7 +688,7 @@ async fn probe(log: opaque, url: str) -> nil {
 }
 
 async fn streamed(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
     let mut total: i32 = 0;
@@ -889,7 +889,7 @@ use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     let b = await resp.body();
     logger_log(log, 2, f"drain={b.len()}");
@@ -961,7 +961,7 @@ use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     // body first, THEN a stream mint: the mint degrades to a dead
     // reader — immediate EOF, empty error
@@ -986,7 +986,7 @@ async fn probe(log: opaque, url: str) -> nil {
 // the other order: stream first, then body — the drain degrades to
 // empty
 async fn probe2(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
     let c = await s.next();
@@ -1075,14 +1075,14 @@ use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let _ = await client.get("fixture://get").build().send();
     let _ = await client.post("fixture://post", "p".encode()).build().send();
     let _ = await client.put("fixture://put", "p".encode()).build().send();
     let _ = await client.patch("fixture://patch", "p".encode()).build().send();
     let _ = await client.del("fixture://delete").build().send();
     let _ = await client.request()
-        .method(ClientQueryMethod.Put)
+        .method(ClientQueryMethod::Put)
         .url("fixture://manual")
         .header("Accept", "application/json")
         .header("X-Trace", "t-1")
@@ -1232,7 +1232,7 @@ use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
 async fn streamed(log: opaque, url: str) -> nil {
-    let client = HttpClient.new();
+    let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     let s = resp.byte_stream();

@@ -21,11 +21,11 @@
 // mutation). MINTING and OBSERVABILITY live on the store; the two
 // VERBS live on the handles, and the store's own are module-private:
 //
-//   store.source<T>(v)                  -> Source<T>     mint
-//   store.source_str(v)                 -> Source<str>   mint (str lane)
-//   store.derive<T>(fn (ctx) -> T)      -> Derived<T>    deps DISCOVERED
-//   store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
-//   store.recompute_count() / store.deps_of(a)           observability
+//   store::source<T>(v)                  -> Source<T>     mint
+//   store::source_str(v)                 -> Source<str>   mint (str lane)
+//   store::derive<T>(fn (ctx) -> T)      -> Derived<T>    deps DISCOVERED
+//   store::mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
+//   store::recompute_count() / store::deps_of(a)           observability
 //   a.get()                             -> T             THE read (handle)
 //   a.set(v)                            -> nil           the plain write (Source)
 //   m.run(arg)                          -> R             the invocation (Mutation)

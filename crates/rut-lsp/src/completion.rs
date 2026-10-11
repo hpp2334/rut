@@ -98,8 +98,8 @@ pub fn complete(
         out.extend(auto_import_completions(idxs, ast, toks, pos, src));
         return out;
     };
-    // the qualified-position spelling: positions qualify with `.` —
-    // `helpers.mk(`, `let c: layout.Column` — so a receiver that
+    // the qualified-position spelling: positions qualify with `::` —
+    // `helpers::mk(`, `let c: layout::Column` — so a receiver that
     // resolves as a MOD HEAD offers the module's members (the same
     // tier the `::` form rides). A resolved head is final; an unknown
     // one falls through to the member tier
@@ -276,7 +276,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
                 }
                 break;
             }
-            Tok::Ident(_) | Tok::Colon | Tok::LBrace | Tok::Comma => seg.insert(0, t),
+            Tok::Ident(_) | Tok::Colon | Tok::Colon2 | Tok::LBrace | Tok::Comma => seg.insert(0, t),
             _ => return None,
         }
         if j == 0 {
@@ -287,7 +287,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     // no `::` typed yet — still the module-NAME tier (the partial
     // ident is the prefix, the segments stay empty); a `::` anywhere
     // switches to the names tier of the spelled path
-    let has_sep = seg.iter().any(|t| t.tok == Tok::Colon);
+    let has_sep = seg.iter().any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
     let segments: Vec<String> = if has_sep {
         seg.iter()
             .filter_map(|t| match &t.tok {
@@ -448,7 +448,7 @@ fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, Strin
     loop {
         match &toks[j].tok {
             Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => run.insert(0, &toks[j]),
-            Tok::Colon => run.insert(0, &toks[j]),
+            Tok::Colon | Tok::Colon2 => run.insert(0, &toks[j]),
             // the anchor — anything else (including reserved keywords)
             _ => break,
         }
@@ -463,7 +463,10 @@ fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, Strin
     let mut ended_on_ident = false;
     for t in &run {
         match &t.tok {
+            // `::` lexes as ONE Colon2 token now — the same two-colon
+            // count the separator law reads
             Tok::Colon => colons += 1,
+            Tok::Colon2 => colons += 2,
             Tok::Ident(s) => {
                 match colons {
                     0 => {}

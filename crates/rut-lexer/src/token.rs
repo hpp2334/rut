@@ -17,7 +17,7 @@ pub enum Tok {
 
     // punctuation & operators — exhaustive, single flat enum
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
-    Comma, Semi, Colon, Dot, DotDot, Arrow, FatArrow, // . .. -> =>
+    Comma, Semi, Colon, Colon2, Dot, DotDot, Arrow, FatArrow, // : :: . .. -> =>
     Plus, Minus, Star, Slash, Percent,               // + - * / %
     AmpAmp, PipePipe, Bang,                          // && || !
     Eq, EqEq, NotEq, Lt, Gt, LtEq, GtEq,             // = == != < > <= >=
@@ -78,6 +78,7 @@ impl Token {
             LBrace => "`{`".into(), RBrace => "`}`".into(),
             LBracket => "`[`".into(), RBracket => "`]`".into(),
             Comma => "`,`".into(), Semi => "`;`".into(), Colon => "`:`".into(),
+            Colon2 => "`::`".into(),
             Dot => "`.`".into(), DotDot => "`..`".into(),
             Arrow => "`->`".into(), FatArrow => "`=>`".into(),
             Plus => "`+`".into(), Minus => "`-`".into(),

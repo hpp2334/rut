@@ -6,7 +6,7 @@ use calc::{ Math };
 // checksum. Scale: n = 100_000.
 //
 // The LCG and the checksum use the `wrapping_*` methods (RFC 0004 §3) so the i32
-// math matches JavaScript's `Math.imul(...) | 0` exactly.
+// math matches JavaScript's `Math::imul(...) | 0` exactly.
 
 fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
     if (lo >= hi) {
@@ -32,7 +32,7 @@ fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
 
 entry fn main() -> nil {
     let n = 10000;
-    let xs: Vec<i32> = Vec.new();
+    let xs: Vec<i32> = Vec::new();
     let mut x: i32 = 42;
     for (let i = 0; i < n; i += 1) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);

@@ -22,7 +22,7 @@ impl Rect {
     }
 
     pub fn from_square(s: f32) -> Self {   // named constructors are siblings
-        return Rect.new(s, s);
+        return Rect::new(s, s);
     }
 
     pub fn area(self) -> f32 { return self.w * self.h; }
@@ -30,7 +30,7 @@ impl Rect {
 
 entry fn main() {
     let log = Logger("t");
-    let r = Rect.from_square(3);
+    let r = Rect::from_square(3);
     log.info(f"area={r.area()}");
 }
 ```
@@ -43,8 +43,8 @@ area=9
   constructible.** No outside literal exists:
 
   ```rut
-  let r = Rect.new(3, 4);            // the one construction surface
-  let v = Version.parse("1.2");      // ?Version — nil on failure
+  let r = Rect::new(3, 4);            // the one construction surface
+  let v = Version::parse("1.2");      // ?Version — nil on failure
   // Rect { w: 1, h: 1 };            // ERROR: classes have no outside literal
   ```
 
@@ -90,7 +90,7 @@ designated surfaces, one law:
 |---|---|---|---|---|
 | `[disposal]` | cell death | the engine, at refcount zero | the engine — `(mut self, cx: DisposalContext)` | eagerly queued at death ([the Rc heap](rc-heap.md)) |
 | `[iterable]` | `for (x of it)` | the for-of desugar | the member — its `emit` parameter fixes `E` | fused into the loop ([interfaces](interfaces.md)) |
-| `[constructor]` | the call form `Type(..)` | user code | the member — its parameters fix the call's shape | byte-identical to `Point.from_xy(..)` |
+| `[constructor]` | the call form `Type(..)` | user code | the member — its parameters fix the call's shape | byte-identical to `Point::from_xy(..)` |
 
 `[constructor]` designates the class's construction surface — the
 call form `Type(..)` binds to the one marked member:
@@ -111,7 +111,7 @@ impl Point {
 
 entry fn main() {
     let log = Logger("t");
-    let p = Point(1.0, 2.0);      // sugar for Point.from_xy(1.0, 2.0)
+    let p = Point(1.0, 2.0);      // sugar for Point::from_xy(1.0, 2.0)
     log.info(f"p=({p.x}, {p.y})");
 }
 ```
@@ -121,7 +121,7 @@ p=(1, 2)
 ```
 
 - **Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers
-  byte-identically to `Point.from_xy(1.0, 2.0)` — the marker changes
+  byte-identically to `Point::from_xy(1.0, 2.0)` — the marker changes
   what the call form binds to, never what the call compiles to.
   `Point` as a bare (non-call) expression stays an error: the
   construction surface is the call form `Type(..)`, never the bare
@@ -151,14 +151,14 @@ p=(1, 2)
 - **The seal holds.** Visibility rides the method's `pub` — an
   unannotated (module-private) constructor answers `Type(..)` only
   inside its own module. Outside, the used-class hint says so: "`Point`
-  constructs through its class methods (`Point.new(..)`) — mark one
+  constructs through its class methods (`Point::new(..)`) — mark one
   `[constructor]` to call the class itself". Arity is the member
-  call's — the refusal names the member (`Point.from_xy`).
+  call's — the refusal names the member (`Point::from_xy`).
 - **Resolution order for `Name(args)`**: a local fn value, then free
   fns, then the prelude, then the newtype mint, then the designated
   constructor, then the error — a free fn named `Point` wins.
 - **Generics ride the method-call path.** `Box(3)` infers exactly
-  like `Box.of(3)` — the sugar IS the member call after resolution.
+  like `Box::of(3)` — the sugar IS the member call after resolution.
 - **Named constructors stay live.** `new`, `from_square`, `parse`,
   `open`, `default` — every existing class method keeps its place;
   the marker designates one of them as the call form's target, it
@@ -229,7 +229,7 @@ like every class.
   method that mutates declares `mut self` and requires a `let mut`
   receiver (see [Modules and visibility](modules-and-visibility.md)).
 - A method **without** a `self` parameter is a **class method** —
-  invoked on the class itself (`Rect.new(..)`, `Self.new(..)` inside
+  invoked on the class itself (`Rect::new(..)`, `Self.new(..)` inside
   the body). Presence or absence of `self` is the whole distinction.
   Class methods are ordinary functions: they validate, default,
   cache, register, or hand out singletons.

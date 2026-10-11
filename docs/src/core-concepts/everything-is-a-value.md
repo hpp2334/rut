@@ -5,7 +5,7 @@ are exactly two ways a value can exist. Primitives and `fn` values are
 *immediate* — moved by copying their bits. Every other type is a
 *cell* — a heap object whose **handle** is what gets copied. That single
 split explains assignment, parameter passing, equality, and what
-`bytes.clone()` is for.
+`bytes::clone()` is for.
 
 ## The two regimes
 
@@ -54,7 +54,7 @@ dangles, and there is no borrow checker because there are no loans.
 
 If you want a value that aliases nothing, you build one: a literal, a
 constructor, a copy of the fields you need. The language has exactly one
-copy escape hatch — `bytes.clone()`, a one-shot deep copy of a binary
+copy escape hatch — `bytes::clone()`, a one-shot deep copy of a binary
 buffer, for interop hand-offs. There is no generic `clone`: a divergent
 value of any other type is unreachable by construction, which is what
 makes aliasing something you can reason about locally.
@@ -113,7 +113,7 @@ Identity is the only equality full sharing can defend: two separately
 built `[1, 2]` arrays are two cells, so `[1,2] == [1,2]` is `false`.
 Content comparison is a loop over fields, written where content is the
 contract. The one place identity quietly behaves like value equality:
-enum variants are immortal singletons, so `Flavor.Sour == Flavor.Sour`
+enum variants are immortal singletons, so `Flavor::Sour == Flavor::Sour`
 is `true`.
 
 ## The answer channel: a pair
@@ -131,7 +131,7 @@ use ink::{ Logger };
 
 fn parse_hex(s: str) -> (bytes, str) {
     if (s.len() % 2 != 0) {
-        return (bytes.zeroed(0), "hex: odd-length input");
+        return (bytes::zeroed(0), "hex: odd-length input");
     }
     let n = s.len() / 2;
     let mut buf: [u8] = [0u8; n];
@@ -139,11 +139,11 @@ fn parse_hex(s: str) -> (bytes, str) {
         let hi = hex_digit(s.code_at(i * 2));
         let lo = hex_digit(s.code_at(i * 2 + 1));
         if (hi < 0 || lo < 0) {
-            return (bytes.zeroed(0), "hex: not a digit");
+            return (bytes::zeroed(0), "hex: not a digit");
         }
         buf[i] = ((hi * 16) + lo) as u8;
     }
-    return (bytes.from(buf), "");       // (data, "") on success
+    return (bytes::from(buf), "");       // (data, "") on success
 }
 
 fn hex_digit(c: u32) -> i64 {
@@ -187,7 +187,7 @@ boundary the same pair crosses field by field, which makes
   `i32` buffer; growable sequences of primitives store raw payloads with
   a one-byte nil tag — no per-element heap box.
 - **Erasure is a box.** `opaque(v)` mints an erasure box; recovery is
-  `opaque.downcast<T>(o)`, checked against the runtime type. See
+  `opaque::downcast<T>(o)`, checked against the runtime type. See
   [reified types](reified-types.md) and the reference on
   [`opaque`](../reference/opaque.md).
 

@@ -53,7 +53,7 @@ use ink::Logger;
 
 entry fn main() {
     let log = Logger("uses");
-    let v = Vec<i32>.new();
+    let v = Vec<i32>::new();
     log.info(f"{v.len()}");
 }
 ```
@@ -99,8 +99,8 @@ Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through
 
 Inside one package, a declaration of another module is nameable where
 a path is legal — a type annotation, a call, a field read — by
-**dot-qualified position**: `layout.Column`, `store.Source<str>`,
-`widget.mk(3)`. The head resolves against the current module's scope,
+**dot-qualified position**: `layout::Column`, `store::Source<str>`,
+`widget::mk(3)`. The head resolves against the current module's scope,
 then the module's ancestors up to the package root; positions never
 take a package head — `use` statements are the only cross-package
 door. Two spellings, two doors:

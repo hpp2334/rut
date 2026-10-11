@@ -111,11 +111,13 @@ pub(crate) fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
     toks.iter().rev().find(|t| t.span.lo <= pos && pos <= t.span.hi)
 }
 
-/// when the hovered token follows a dot: the receiver's source text —
-/// an identifier, or the `str` primitive for string literals
+/// when the hovered token follows a `.` (value access) or a `::`
+/// (name resolution — enum members, namespace consts): the head's
+/// source text — an identifier, or the `str` primitive for string
+/// literals
 pub(crate) fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
     let i = toks.iter().position(|x| x.span.lo == t.span.lo)?;
-    if i < 2 || toks[i - 1].tok != Tok::Dot {
+    if i < 2 || !(toks[i - 1].tok == Tok::Dot || toks[i - 1].tok == Tok::Colon2) {
         return None;
     }
     match &toks[i - 2].tok {
@@ -141,7 +143,7 @@ pub(crate) fn used_ifaces(ast: &Ast) -> HashSet<String> {
 
 /// decl-site hover: the exact name-span match in the decl layer —
 /// fields (the owning type's member render), enum members (the enum's
-/// block, matching what `Color.Red` shows), module lets, and `mod
+/// block, matching what `Color::Red` shows), module lets, and `mod
 /// NAME;` namespace edges (the kind, the mounted file, the child
 /// count)
 fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String> {
@@ -346,7 +348,7 @@ pub(crate) fn member_target<'a>(
         return MemberHit::Found(MemberTarget::Member(ti, ty, f, None));
     }
     if ty.form == TyForm::Enum {
-        // `Color.Red` — the member IS an enum member; hover shows the enum
+        // `Color::Red` — the member IS an enum member; hover shows the enum
         if let Some(m) = ty.fields.iter().find(|f| f.name == member) {
             return MemberHit::Found(MemberTarget::EnumMember(ti, ty, m));
         }

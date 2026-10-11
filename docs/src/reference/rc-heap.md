@@ -18,7 +18,7 @@ Everything except primitives and `fn` values is a heap cell:
 Assignment, argument passing, and returning copy the **handle** (retain),
 never the bytes. Mutation through one alias is visible through every
 alias — reference semantics is the one default regime; there is no eager
-copy anywhere. `bytes.clone()` is the **only** copy escape hatch.
+copy anywhere. `bytes::clone()` is the **only** copy escape hatch.
 
 There is no borrow syntax and no lifetimes: a handle simply keeps its
 referent alive, so nothing dangles.

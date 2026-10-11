@@ -91,7 +91,7 @@ use std::rc::Rc;
 const DISP: &str = r#"
 use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
 "#;
 
 #[test]

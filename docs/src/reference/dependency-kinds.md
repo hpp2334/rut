@@ -117,7 +117,7 @@ this CDN — that is the recommended import for everything the toolchain
 ships. A `path` row is for **your own local packages**: a sibling
 directory in the same project (the modules tutorial's `greet` app
 mounting `../pkg` is the shape). The tag advances with format changes
-(`std-v8` today) and is never re-pointed, so a pin at a tag stays
+(`std-v9` today) and is never re-pointed, so a pin at a tag stays
 honest forever.
 
 The std tree ships as committed per-package bundles —
@@ -127,7 +127,7 @@ manifests in the quick-start, the tutorial, and the examples carry the
 real pins — a pin at an immutable tag cannot rot). Tags advance
 (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively;
 the artifacts are committed at `dist/std/`, packed by
-`scripts/pack-std.cjs` (whose `--check` gate is a pure byte-equality
+`scripts/pack-std::cjs` (whose `--check` gate is a pure byte-equality
 repack — CI never touches the network).
 
 **What a url row can deliver** is the engine's instantiation law, read

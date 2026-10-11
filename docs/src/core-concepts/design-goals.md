@@ -97,7 +97,7 @@ Erasure is never silent — it is spelled and checked:
 - **Interface-typed values** (`s: Drawable`) for polymorphism. Dispatch is
   dynamic only where a value may be one of several concrete types, and an
   interface-typed value still carries its exact class at runtime.
-- **The `opaque` box** (`opaque(v)`, `opaque.downcast<T>(o)`) for
+- **The `opaque` box** (`opaque(v)`, `opaque::downcast<T>(o)`) for
   storage. Erasure mints a checked box; recovery checks the runtime type
   and yields `nil` on a mismatch — never a silent wrong-type read.
 

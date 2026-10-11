@@ -1,8 +1,8 @@
 // bytes — the binary primitive: a flat u8 buffer.
-// `str.encode()` mints one from text, `bytes.decode()` reads it back
-// (lossy UTF-8), and the type-methods build one directly (`bytes.from`
-// over a [u8], `bytes.zeroed(n)`). Bindings SHARE the buffer like every
-// cell — assignment never copies — and `bytes.clone()` is
+// `str::encode()` mints one from text, `bytes::decode()` reads it back
+// (lossy UTF-8), and the type-methods build one directly (`bytes::from`
+// over a [u8], `bytes::zeroed(n)`). Bindings SHARE the buffer like every
+// cell — assignment never copies — and `bytes::clone()` is
 // the ONE copy escape hatch: it mints a fresh buffer with
 // the same octets. `==` on bytes is CONTENT equality, so
 // a buffer and its clone compare true — the copy is for OWNERSHIP
@@ -20,8 +20,8 @@ entry fn main() {
     log.info(f"round={b.decode() == s} octets={b.len()} chars={s.len()}");
 
     // building buffers directly: from a [u8], or zeroed to a length
-    let header = bytes.from([82, 85, 84]);
-    let scratch = bytes.zeroed(16);
+    let header = bytes::from([82, 85, 84]);
+    let scratch = bytes::zeroed(16);
     log.info(f"header={header.decode()} scratch.len={scratch.len()}");
 
     // the sharing law: assignment aliases — one buffer, two names

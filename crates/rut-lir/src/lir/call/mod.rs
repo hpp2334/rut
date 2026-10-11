@@ -118,10 +118,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         if segs.len() == 2 {
-            // the qualified call (`layout.mk(..)`) rides FIRST: the
+            // the qualified call (`layout::mk(..)`) rides FIRST: the
             // head names a child mod of the current module or of an
             // ancestor. `None` falls to the static-call form
-            // (`Type.member(..)`) — today's arm, unchanged.
+            // (`Type::member(..)`) — the type/enum/namespace lane.
             if let Some(r) =
                 self.compile_qualified_call(&segs[..1], segs[1].name, &segs[1].generics, &args, expected, sp)
             {
@@ -140,12 +140,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // its qualified spelling.
             if let Some(home) = self.ctx.type_home(base) {
                 if home != self.ctx.cur_mod {
-                    let q = home.replace('/', ".");
-                    let prefix = if q.is_empty() { String::new() } else { format!("{q}.") };
+                    let q = home.replace('/', "::");
+                    let prefix = if q.is_empty() { String::new() } else { format!("{q}::") };
                     self.ctx.err(
                         sp,
                         format!(
-                            "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}.{}`(..)",
+                            "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}::{}`(..)",
                             self.ctx.name(base),
                             crate::check::ModInputs::display(&home),
                             prefix,
@@ -156,12 +156,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
             }
+            // an in-scope TYPE PARAMETER as the static head (the
+            // rut-json batch phase 1's sanctioned checker gap 2):
+            // `T::decode(r)` — the trait's Self param spelled by name
+            // (the no-self law). The body compiles per
+            // instantiation, so the parameter names its substituted
+            // concrete type here; the trait impl on THAT type answers.
+            if segs[0].generics.is_empty() {
+                if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t) {
+                    let ifaces = self.iface_bounds.get(&base).cloned();
+                    return self.compile_bound_param_static_call(concrete, ifaces, member, args, expected, sp);
+                }
+            }
             let base_generics = segs[0].generics.clone();
             let member_generics = segs[1].generics.clone();
             return self.compile_static_call(base, base_generics, member, member_generics, args, expected, sp);
         }
         if segs.len() >= 3 {
-            // `pkg.a.Type.member(..)` — the unified mod walk, then the
+            // `pkg::a::Type::member(..)` — the unified mod walk, then the
             // leaf or the static form on the walked module's type
             if let Some(r) = self.compile_qualified_call(
                 &segs[..segs.len() - 1],
@@ -180,8 +192,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "unknown call path `{}` — calls go through a module (`mod.fn(..)`) or a type (`Type.member(..)`)",
-                    segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
+                    "unknown call path `{}` — calls go through a module (`mod::fn(..)`) or a type (`Type::member(..)`)",
+                    segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join("::")
                 ),
             );
             return Err(());
@@ -467,7 +479,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if name == sym::WEAK {
             self.ctx.err(
                 sp,
-                "`Weak(v)` is not a function — construction is a class method: `Weak.new(v)`",
+                "`Weak(v)` is not a function — construction is a class method: `Weak::new(v)`",
             );
             return Err(());
         }
@@ -493,7 +505,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             if d.kind == crate::check::DataKind::Class {
                 self.ctx.err(sp, format!(
-                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    "`{}` constructs through its class methods (`{0}::new(..)`) — mark one `[constructor]` to call the class itself",
                     self.ctx.name(name)
                 ));
             } else {
@@ -524,7 +536,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(&t) = self.ctx.extern_types.get(&name) {
             if self.ctx.extern_classes.contains(&t) {
                 self.ctx.err(sp, format!(
-                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    "`{}` constructs through its class methods (`{0}::new(..)`) — mark one `[constructor]` to call the class itself",
                     self.ctx.name(name)
                 ));
             } else {
@@ -546,7 +558,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
-    /// The qualified CALL (`layout.column(..)`, two segments): the
+    /// The qualified CALL (`layout::column(..)`, two segments): the
     /// head names a child `mod` of the current module or of an
     /// ancestor; the leaf is that module's fn (the ordinary free-fn
     /// call) or its type-call (newtype / designated constructor),
@@ -579,13 +591,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
     }
 
-    /// The unified qualified CALL (`layout.mk(3)`, `pkg.a.five()`,
-    /// `a.c.Circle.area(..)`): `segs` is the receiver path, `name` the
+    /// The unified qualified CALL (`layout::mk(3)`, `pkg::a::five()`,
+    /// `a::c::Circle::area(..)`): `segs` is the receiver path, `name` the
     /// trailing member. The head names a child `mod` of the current
     /// module or of an ancestor (nearest scope wins; the unit's own
     /// pkg name names the root); each further segment walks child mods
     /// until one names a TYPE of the walked module — the static form
-    /// (`Type.member(..)`) — or the walk exhausts and `name` is the
+    /// (`Type::member(..)`) — or the walk exhausts and `name` is the
     /// leaf (a fn, or the module's type-call). Every crossing runs the
     /// visibility predicate. `None` = the head is not a module — the
     /// caller's ordinary arms carry on.
@@ -623,7 +635,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             // a non-mod segment ends the chain — only as the LAST
             // receiver segment, the walked module's static form
-            // (`Type.member(..)`)
+            // (`Type::member(..)`)
             if i != segs.len() - 1 {
                 self.ctx.err(
                     sp,
@@ -731,7 +743,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             if d.kind == crate::check::DataKind::Class {
                 self.ctx.err(sp, format!(
-                    "`{}` constructs through its class methods (`{0}.new(..)`) — mark one `[constructor]` to call the class itself",
+                    "`{}` constructs through its class methods (`{0}::new(..)`) — mark one `[constructor]` to call the class itself",
                     self.ctx.name(name)
                 ));
             } else {

@@ -103,7 +103,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .collect::<Vec<_>>()
                         .join(", ");
                     self.ctx.err(sp, format!(
-                        "cannot infer `{}` of `{}.{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`.{}<{}>(..)`)",
+                        "cannot infer `{}` of `{}::{}` from an unannotated lambda — annotate its parameters (`fn(x: T) ..`) or spell the type argument (`::{}<{}>(..)`)",
                         free_names,
                         self.ctx.name(dname),
                         self.ctx.name(mname),
@@ -168,7 +168,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for g in &decl_generics {
             if !subst.iter().any(|(n, _)| n == g) {
                 self.ctx.err(sp, format!(
-                    "cannot infer generic parameter `{}` of `{}.{}` — annotate the call: `.{}<..>(..)`",
+                    "cannot infer generic parameter `{}` of `{}::{}` — annotate the call: `::{}<..>(..)`",
                     self.ctx.name(*g), self.ctx.name(dname), self.ctx.name(mname), self.ctx.name(mname)
                 ));
                 return Err(());

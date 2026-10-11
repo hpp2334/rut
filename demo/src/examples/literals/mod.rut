@@ -1,6 +1,6 @@
 use pouch::{ Vec };
 // literals & inference. Construction is a TYPE-CALL
-// (`Vec<f32>.filled(0.0, 1024)`).
+// (`Vec<f32>::filled(0.0, 1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`[T]`, non-growable);
 // growables are `Vec<T>`. Both carry the engine-woven iteration
 // contract (`Iterable`, `iterate` in core), so `a[i]`, `a.len()` and
@@ -28,8 +28,8 @@ fn literals(name: str) {
     let t = f"hi {name}!";           // format literal (§4.1)
     let ch = "h";                    // 1-codepoint str (`char` is gone)
     let mut arr = [1, 2, 3];         // [i32] — heap cell
-    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);    // growable, zeroed, flat
-    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable (copies elements)
+    let mut zero: Vec<f32> = Vec<f32>::filled(0.0, 1024);    // growable, zeroed, flat
+    let grow = Vec<i32>::from([1, 2, 3]);  // array -> growable (copies elements)
     arr[0] = 7;                      // static sequence write (fused arrset)
     zero[0] = 9.0f32;                // through the Vec
     let bin = bytes(64);             // binary data: 64 zeroed octets

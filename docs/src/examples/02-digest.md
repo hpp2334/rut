@@ -132,25 +132,25 @@ whole admission; the package's writer does the byte work
 impl Json {
     pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         when (self.tag) {
-            JTag.Null -> { w.write_raw("null"); },
-            JTag.False -> { w.write_raw("false"); },
-            JTag.True -> { w.write_raw("true"); },
-            JTag.Num -> { w.write_raw(self.num); },
-            JTag.Str -> { w.write_str(self.str); },
-            JTag.Arr -> {
+            JTag::Null -> { w.write_raw("null"); },
+            JTag::False -> { w.write_raw("false"); },
+            JTag::True -> { w.write_raw("true"); },
+            JTag::Num -> { w.write_raw(self.num); },
+            JTag::Str -> { w.write_str(self.str); },
+            JTag::Arr -> {
                 w.begin_array();
                 for (let i = 0; i < self.arr.len(); i += 1) {
-                    let ae: Json = opaque.downcast<Json>(self.arr[i]);
+                    let ae: Json = opaque::downcast<Json>(self.arr[i]);
                     let e = ae.encode(w);
                     if (e != nil) { return e; }
                 }
                 w.end_array();
             },
-            JTag.Obj -> {
+            JTag::Obj -> {
                 w.begin_object();
                 for (let i = 0; i < self.keys.len(); i += 1) {
                     w.key(self.keys[i]);
-                    let ve: Json = opaque.downcast<Json>(self.vals[i]);
+                    let ve: Json = opaque::downcast<Json>(self.vals[i]);
                     let e = ve.encode(w);
                     if (e != nil) { return e; }
                 }

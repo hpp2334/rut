@@ -16,74 +16,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        // static receiver? `Vec.from(..)`, `Option.some(v)`, `Color.to_int(c)`,
-        // `Circle.new(..)` arrive as Method over a TYPE-name path — route to
-        // the static-call compiler when the head is not shadowed by a local.
-        // The head may carry generic args (`Vec<u32>.from(..)`) — they go
-        // along; compile_static_call decides which statics can use them.
-        if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
-            if self.lookup(segs[0].name).is_none() {
-                // the qualified call (phase 3): the receiver path names
-                // a child mod of the current module or of an ancestor —
-                // `layout.mk(3)`, `pkg.a.five()`, `a.c.Circle.area(..)`.
-                // `None` falls through to the ordinary arms.
-                if segs[0].generics.is_empty() {
-                    if let Some(r) =
-                        self.compile_qualified_call(&segs, name, &generics, &args, expected, sp)
-                    {
-                        return r;
-                    }
-                }
-                if segs.len() == 1 {
-                    let base = segs[0].name;
-                // `Vec` is an ordinary class (pouch), so it routes
-                // here through `find_data`, like any other class; the
-                // core statics (`opaque`) route only
-                // when used
-                let is_type = matches!(base, sym::STR | sym::BYTES)
-                    || self.ctx.extern_native_types.contains_key(&base)
-                    || self.ctx.is_extern_namespace(base)
-                    || self.ctx.find_enum(base).is_some()
-                    || self.ctx.find_data(base).is_some()
-                    || self.ctx.extern_types.contains_key(&base)
-                    || self.ctx.extern_generics.contains_key(&base);
-                if is_type {
-                    // the static head is a bare type name: it resolves
-                    // in the CURRENT module (phase 3) — a type of
-                    // another module names its qualified spelling
-                    if let Some(home) = self.ctx.type_home(base) {
-                        if home != self.ctx.cur_mod {
-                            let q = home.replace('/', ".");
-                            let prefix =
-                                if q.is_empty() { String::new() } else { format!("{q}.") };
-                            self.ctx.err(sp, format!(
-                                "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}.{}`(..)",
-                                self.ctx.name(base),
-                                crate::check::ModInputs::display(&home),
-                                prefix,
-                                self.ctx.name(base),
-                                self.ctx.name(name),
-                            ));
-                            return Err(());
-                        }
-                    }
-                    return self.compile_static_call(base, segs[0].generics.clone(), name, generics, args, expected, sp);
-                }
-                // an in-scope TYPE PARAMETER as the static receiver (the
-                // rut-json batch phase 1's sanctioned checker gap 2):
-                // `T.decode(r)` — the trait's Self param spelled by name
-                // (the no-self law). The body compiles per
-                // instantiation, so the parameter names its substituted
-                // concrete type here; the trait impl on THAT type answers.
-                if segs[0].generics.is_empty() {
-                    if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t) {
-                        let ifaces = self.iface_bounds.get(&base).cloned();
-                        return self.compile_bound_param_static_call(concrete, ifaces, name, args, expected, sp);
-                    }
-                }
-                }
-            }
-        }
+        // `Method` is VALUE access now: `::` builds name-resolution paths
+        // (`Vec::from(..)`, `Color::to_int(c)`, `Circle::new(..)`, namespace
+        // heads), and those arrive as `Call { callee: Path[..] }` — the
+        // callee-path lane routes them (compile_path_call). A postfix `.`'
+        // receiver here is always a value expression: a local (`p.m(..)`),
+        // a field chain, a `::`-path VALUE (`Dial::Low.flipped()` — the
+        // enum-member value dispatches its own method). The old
+        // static-receiver spellings (`Vec.from(..)`) stop resolving: the
+        // bare type name is not a value, and the miss diagnoses below.
         // receiver bypass: a mutating method operates
         // on the ORIGINAL binding — a single-name receiver uses its register
         // raw instead of a boundary clone; a PROMOTED binding reads
@@ -467,7 +408,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the engine's downcast static
         match self.ctx.types.kind(rt).clone() {
             TyKind::Opaque => {
-                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque.downcast<T>(o)`");
+                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`");
                 return Err(());
             }
             _ => {}
@@ -672,7 +613,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 fn recv_name(ctx: &crate::check::Ctx, recv: NodeHandle<AnyExpr>) -> String {
     match ctx.ast.expr(recv) {
         ExprKind::Path { segs } => {
-            segs.iter().map(|s| ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
+            segs.iter().map(|s| ctx.name(s.name).to_string()).collect::<Vec<_>>().join("::")
         }
         _ => "expr".to_string(),
     }

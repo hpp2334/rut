@@ -27,7 +27,7 @@ use json::{ EncodeJsonError, JsonWriter };
 // ---------------------------------------------------------------- hex ---
 
 fn hex_digits() -> Vec<str> {
-    let d: Vec<str> = Vec.new();
+    let d: Vec<str> = Vec::new();
     let src = "0123456789abcdef";
     for (let c of src) {
         d.push(f"{c}");
@@ -66,15 +66,15 @@ fn hex_val(c: str) -> i32 {
 
 entry fn hex_dec(s: str) -> (bytes, str) {
     if (s.len() % 2 != 0) {
-        return (bytes.zeroed(0), "hex: odd-length input");
+        return (bytes::zeroed(0), "hex: odd-length input");
     }
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     let mut cur: u32 = 0;
     let mut i = 0;
     for (let c of s) {
         let v = hex_val(f"{c}");
         if (v < 0) {
-            return (bytes.zeroed(0), f"hex: invalid character at index {i}");
+            return (bytes::zeroed(0), f"hex: invalid character at index {i}");
         }
         if (i % 2 == 0) {
             cur = v as u32;
@@ -89,7 +89,7 @@ entry fn hex_dec(s: str) -> (bytes, str) {
 // ------------------------------------------------------------ base64 ---
 
 fn b64_table(url: bool) -> Vec<str> {
-    let mut t: Vec<str> = Vec.new();
+    let mut t: Vec<str> = Vec::new();
     let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for (let c of alpha) {
         t.push(f"{c}");
@@ -128,7 +128,7 @@ entry fn b64_enc(data: bytes, url: bool) -> str {
 
 entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
     let t = b64_table(url);
-    let mut vals: Vec<u32> = Vec.new();
+    let mut vals: Vec<u32> = Vec::new();
     let mut pad = 0;
     for (let c of s) {
         let cs = f"{c}";
@@ -136,22 +136,22 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
             pad = pad + 1;
         } else {
             if (pad > 0) {
-                return (bytes.zeroed(0), "base64: data after padding");
+                return (bytes::zeroed(0), "base64: data after padding");
             }
             let mut v: u32 = 256;
             for (let i = 0; i < t.len(); i += 1) {
                 if (t[i] == cs) { v = i as u32; }
             }
             if (v == 256) {
-                return (bytes.zeroed(0), f"base64: invalid character `{cs}`");
+                return (bytes::zeroed(0), f"base64: invalid character `{cs}`");
             }
             vals.push(v);
         }
     }
     if (vals.len() % 4 == 1) {
-        return (bytes.zeroed(0), "base64: impossible length");
+        return (bytes::zeroed(0), "base64: impossible length");
     }
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     let n = vals.len();
     for (let i = 0; i < n; i += 4) {
         let mut rem = n - i;
@@ -241,13 +241,13 @@ fn rotr64(x: u64, n: u64) -> u64 {
 }
 
 fn copy_bytes(msg: bytes) -> Vec<u8> {
-    let m: Vec<u8> = Vec.new();
+    let m: Vec<u8> = Vec::new();
     for (let b of msg) { m.push(b); }
     return m;
 }
 
 fn md5_k() -> Vec<u32> {
-    let k: Vec<u32> = Vec<u32>.from([
+    let k: Vec<u32> = Vec<u32>::from([
         3614090360u32, 3905402710u32, 606105819, 3250441966u32,
         4118548399u32, 1200080426, 2821735955u32, 4249261313u32,
         1770035416, 2336552879u32, 4294925233u32, 2304563134u32,
@@ -269,7 +269,7 @@ fn md5_k() -> Vec<u32> {
 }
 
 fn md5_s() -> Vec<u32> {
-    let s: Vec<u32> = Vec<u32>.from([
+    let s: Vec<u32> = Vec<u32>::from([
         7, 12, 17, 22,
         7, 12, 17, 22,
         7, 12, 17, 22,
@@ -306,7 +306,7 @@ fn md5_impl(msg: bytes) -> bytes {
     let s = md5_s();
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut x: Vec<u32> = Vec.new();
+        let mut x: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             x.push(m[o] as u32 | (m[o + 1] as u32 << 8) | (m[o + 2] as u32 << 16) | (m[o + 3] as u32 << 24));
@@ -343,7 +343,7 @@ fn md5_impl(msg: bytes) -> bytes {
         c0 = c0.wrapping_add(c);
         d0 = d0.wrapping_add(d);
     }
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     let mut w = a0;
     for (let i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
     w = b0;
@@ -383,7 +383,7 @@ fn sha1_impl(msg: bytes) -> bytes {
     let mut h4: u32 = 0xC3D2E1F0u32;
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u32> = Vec.new();
+        let mut w: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32);
@@ -425,8 +425,8 @@ fn sha1_impl(msg: bytes) -> bytes {
         h3 = h3.wrapping_add(d);
         h4 = h4.wrapping_add(e);
     }
-    let mut out: Vec<u8> = Vec.new();
-    let ws: Vec<u32> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
+    let ws: Vec<u32> = Vec::new();
     ws.push(h0); ws.push(h1); ws.push(h2); ws.push(h3); ws.push(h4);
     for (let j = 0; j < 5; j += 1) {
         out.push(((ws[j] >> 24) & 0xFF) as u8);
@@ -438,7 +438,7 @@ fn sha1_impl(msg: bytes) -> bytes {
 }
 
 fn sha256_k() -> Vec<u32> {
-    let k: Vec<u32> = Vec<u32>.from([
+    let k: Vec<u32> = Vec<u32>::from([
         1116352408, 1899447441, 3049323471u32, 3921009573u32,
         961987163, 1508970993, 2453635748u32, 2870763221u32,
         3624381080u32, 310598401, 607225278, 1426881987,
@@ -466,11 +466,11 @@ fn sha256_impl(msg: bytes) -> bytes {
     m = mp;
     let h = sha256_h();
     let k = sha256_k();
-    let mut st: Vec<u32> = Vec.new();
+    let mut st: Vec<u32> = Vec::new();
     for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u32> = Vec.new();
+        let mut w: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32);
@@ -513,7 +513,7 @@ fn sha256_impl(msg: bytes) -> bytes {
         st[6] = (st[6]).wrapping_add(g);
         st[7] = (st[7]).wrapping_add(hh);
     }
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
         out.push(((st[j] >> 24) & 0xFF) as u8);
         out.push(((st[j] >> 16) & 0xFF) as u8);
@@ -524,7 +524,7 @@ fn sha256_impl(msg: bytes) -> bytes {
 }
 
 fn sha512_k() -> Vec<u64> {
-    let k: Vec<u64> = Vec<u64>.from([
+    let k: Vec<u64> = Vec<u64>::from([
         4794697086780616226u64, 8158064640168781261u64, 13096744586834688815u64, 16840607885511220156u64,
         4131703408338449720u64, 6480981068601479193u64, 10538285296894168987u64, 12329834152419229976u64,
         15566598209576043074u64, 1334009975649890238u64, 2608012711638119052u64, 6128411473006802146u64,
@@ -567,11 +567,11 @@ fn sha512_impl(msg: bytes) -> bytes {
     m.push((bits & 0xFF) as u8);
     let h = sha512_h();
     let k = sha512_k();
-    let mut st: Vec<u64> = Vec.new();
+    let mut st: Vec<u64> = Vec::new();
     for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
     let blocks = m.len() / 128;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u64> = Vec.new();
+        let mut w: Vec<u64> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 128 + j * 8;
             let mut word: u64 = 0;
@@ -618,7 +618,7 @@ fn sha512_impl(msg: bytes) -> bytes {
         st[6] = (st[6]).wrapping_add(g);
         st[7] = (st[7]).wrapping_add(hh);
     }
-    let mut out: Vec<u8> = Vec.new();
+    let mut out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
         out.push(((st[j] >> 56) & 0xFF) as u8);
         out.push(((st[j] >> 48) & 0xFF) as u8);
@@ -644,7 +644,7 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
         "sha1"   -> (sha1_impl(data), ""),
         "sha256" -> (sha256_impl(data), ""),
         "sha512" -> (sha512_impl(data), ""),
-        else     -> (bytes.zeroed(0), f"unknown algorithm: {algo}"),
+        else     -> (bytes::zeroed(0), f"unknown algorithm: {algo}"),
     };
 }
 
@@ -677,30 +677,30 @@ struct Json {
 fn noopaque() -> opaque { return opaque(0); }
 
 fn noopaques() -> Vec<opaque> {
-    let v: Vec<opaque> = Vec.new();
+    let v: Vec<opaque> = Vec::new();
     return v;
 }
 fn nostrings() -> Vec<str> {
-    let v: Vec<str> = Vec.new();
+    let v: Vec<str> = Vec::new();
     return v;
 }
 
-fn jnull() -> Json { return Json { tag: JTag.Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jnull() -> Json { return Json { tag: JTag::Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 fn jbool(b: bool) -> Json {
-    if (b) { return Json { tag: JTag.True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-    return Json { tag: JTag.False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
+    if (b) { return Json { tag: JTag::True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+    return Json { tag: JTag::False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
 }
-fn jnum(n: str) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jstr(s: str) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jarr() -> Json { return Json { tag: JTag.Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jnum(n: str) -> Json { return Json { tag: JTag::Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jstr(s: str) -> Json { return Json { tag: JTag::Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jarr() -> Json { return Json { tag: JTag::Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jobj() -> Json { return Json { tag: JTag::Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 
 /// The parser cursor. Strings iterate as `char`s, so the source is
 /// split once into single-char strings and walked by index.
 struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
 
 fn split_chars(s: str) -> Vec<str> {
-    let cs: Vec<str> = Vec.new();
+    let cs: Vec<str> = Vec::new();
     for (let c of s) { cs.push(f"{c}"); }
     return cs;
 }
@@ -788,7 +788,7 @@ fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
 fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
-    let out: Vec<str> = Vec.new();
+    let out: Vec<str> = Vec::new();
     let mut closed = false;
     let mut open = true;
     while (open && cur.pos < cur.cs.len()) {
@@ -828,7 +828,7 @@ fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
 
 fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
-    let chars: Vec<str> = Vec.new();
+    let chars: Vec<str> = Vec::new();
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -897,7 +897,7 @@ fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
-        let kdoc = opaque.downcast<Json>(unwrap_box(key));
+        let kdoc = opaque::downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
@@ -949,29 +949,29 @@ fn unwrap_box(r: (opaque, str)) -> opaque {
 impl Json {
     pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
         when (self.tag) {
-            JTag.Null -> { w.write_raw("null"); },
-            JTag.False -> { w.write_raw("false"); },
-            JTag.True -> { w.write_raw("true"); },
-            JTag.Num -> { w.write_raw(self.num); },
-            JTag.Str -> { w.write_str(self.str); },
-            JTag.Arr -> {
+            JTag::Null -> { w.write_raw("null"); },
+            JTag::False -> { w.write_raw("false"); },
+            JTag::True -> { w.write_raw("true"); },
+            JTag::Num -> { w.write_raw(self.num); },
+            JTag::Str -> { w.write_str(self.str); },
+            JTag::Arr -> {
                 w.begin_array();
                 for (let i = 0; i < self.arr.len(); i += 1) {
                     // downcast binds ?Json; the match law makes the
                     // coerced binding the box's inner cell (a method
                     // call ON the ?Json form is "CallM to a non-method"
                     // in the verifier — coerce first, then dispatch)
-                    let ae: Json = opaque.downcast<Json>(self.arr[i]);
+                    let ae: Json = opaque::downcast<Json>(self.arr[i]);
                     let e = ae.encode(w);
                     if (e != nil) { return e; }
                 }
                 w.end_array();
             },
-            JTag.Obj -> {
+            JTag::Obj -> {
                 w.begin_object();
                 for (let i = 0; i < self.keys.len(); i += 1) {
                     w.key(self.keys[i]);
-                    let ve: Json = opaque.downcast<Json>(self.vals[i]);
+                    let ve: Json = opaque::downcast<Json>(self.vals[i]);
                     let e = ve.encode(w);
                     if (e != nil) { return e; }
                 }
@@ -1008,14 +1008,14 @@ fn json_parse(s: str) -> (opaque, str) {
 }
 
 entry fn json_enc(o: opaque) -> str {
-    let j = opaque.downcast<Json>(o);
+    let j = opaque::downcast<Json>(o);
     // the member+writer route, spelled directly (the CDN-bundle law:
     // json's generic-fn bodies are owner-anchored — `encodeJson<Json>`
     // can never ride json's binary, because THIS pkg's Json did not
     // exist at json's pack time; the member dispatch here is local —
     // `j.encode(w)` binds Json's own inherent member). Same semantics
     // as the `encodeJson` wrapper it replaces.
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     let e = j.encode(w);
     if (e != nil) {
         // unreachable for any tree this file builds (the private
@@ -1033,10 +1033,10 @@ entry fn json_roundtrip(s: str) -> (str, str) {
     if (v.1 != "") {
         return ("", v.1);
     }
-    let vv = opaque.downcast<Json>(v.0);
+    let vv = opaque::downcast<Json>(v.0);
     // the member+writer route — see json_enc's note (the CDN-bundle
     // law); same semantics as the `encodeJson` wrapper it replaces
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     let e = vv.encode(w);
     if (e != nil) {
         let err: EncodeJsonError = e;
@@ -1070,7 +1070,7 @@ entry fn sample_doc() -> opaque {
 }
 
 fn sha256_h() -> Vec<u32> {
-    let h: Vec<u32> = Vec<u32>.from([
+    let h: Vec<u32> = Vec<u32>::from([
         1779033703, 3144134277u32, 1013904242, 2773480762u32,
         1359893119, 2600822924u32, 528734635, 1541459225,
     ]);
@@ -1078,7 +1078,7 @@ fn sha256_h() -> Vec<u32> {
 }
 
 fn sha512_h() -> Vec<u64> {
-    let h: Vec<u64> = Vec<u64>.from([
+    let h: Vec<u64> = Vec<u64>::from([
         7640891576956012808u64, 13503953896175478587u64, 4354685564936845355u64, 11912009170470909681u64,
         5840696475078001361u64, 11170449401992604703u64, 2270897969802886507u64, 6620516959819538809u64,
     ]);

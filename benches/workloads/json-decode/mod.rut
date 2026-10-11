@@ -32,7 +32,7 @@ fn lcg(x: u32) -> u32 {
 }
 
 fn alpha_vec() -> Vec<str> {
-    let a: Vec<str> = Vec.new();
+    let a: Vec<str> = Vec::new();
     for (let c of "abcdefghijklmnopqrstuvwx") {
         a.push(f"{c}");
     }
@@ -62,7 +62,7 @@ fn val_text(sign: u32, mag: u32) -> str {
 // every record draws in the fixed order: id, name, active, score, six
 // vals, tags, meta (rev + kind).
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
-    let parts: Vec<str> = Vec.new();
+    let parts: Vec<str> = Vec::new();
     let mut x: u32 = 42;
     for (let i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
@@ -127,30 +127,30 @@ struct Json {
 fn noopaque() -> opaque { return opaque(0); }
 
 fn noopaques() -> Vec<opaque> {
-    let v: Vec<opaque> = Vec.new();
+    let v: Vec<opaque> = Vec::new();
     return v;
 }
 fn nostrings() -> Vec<str> {
-    let v: Vec<str> = Vec.new();
+    let v: Vec<str> = Vec::new();
     return v;
 }
 
-fn jnull() -> Json { return Json { tag: JTag.Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jnull() -> Json { return Json { tag: JTag::Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 fn jbool(b: bool) -> Json {
-    if (b) { return Json { tag: JTag.True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-    return Json { tag: JTag.False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
+    if (b) { return Json { tag: JTag::True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+    return Json { tag: JTag::False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
 }
-fn jnum(n: str) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jstr(s: str) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jarr() -> Json { return Json { tag: JTag.Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jnum(n: str) -> Json { return Json { tag: JTag::Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jstr(s: str) -> Json { return Json { tag: JTag::Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jarr() -> Json { return Json { tag: JTag::Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jobj() -> Json { return Json { tag: JTag::Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 
 /// The parser cursor. Strings iterate as `char`s, so the source is
 /// split once into single-char strings and walked by index.
 struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
 
 fn split_chars(s: str) -> Vec<str> {
-    let cs: Vec<str> = Vec.new();
+    let cs: Vec<str> = Vec::new();
     for (let c of s) { cs.push(f"{c}"); }
     return cs;
 }
@@ -238,7 +238,7 @@ fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
 fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
-    let out: Vec<str> = Vec.new();
+    let out: Vec<str> = Vec::new();
     let mut closed = false;
     let mut open = true;
     while (open && cur.pos < cur.cs.len()) {
@@ -278,7 +278,7 @@ fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
 
 fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
-    let chars: Vec<str> = Vec.new();
+    let chars: Vec<str> = Vec::new();
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -347,7 +347,7 @@ fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
-        let kdoc = opaque.downcast<Json>(unwrap_box(key));
+        let kdoc = opaque::downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
@@ -391,7 +391,7 @@ fn fold_str(mut h: i64, s: str) -> i64 {
 }
 
 /// A number lexeme -> its integer prefix, truncated to i64 (the JS twin
-/// folds BigInt(Math.trunc(v)) to the same signed-64 two's-complement).
+/// folds BigInt(Math::trunc(v)) to the same signed-64 two's-complement).
 /// This document has no exponents; '.' (or anything non-digit after the
 /// integer part) ends the scan; '-' only leads.
 fn lex_int(s: str) -> i64 {
@@ -418,27 +418,27 @@ fn lex_int(s: str) -> i64 {
 /// number lexemes via lex_int, fixed constants for the scalar tags —
 /// wrapped i64, mirrored bit-for-bit on the JS side.
 fn jdoc_sum(o: opaque) -> i64 {
-    let j = opaque.downcast<Json>(o);
+    let j = opaque::downcast<Json>(o);
     assert(j != nil, "json-decode: downcast failed in the fold pass");
     let mut s: i64 = 0;
     when (j.tag) {
-        JTag.Null -> { s = 1; },
-        JTag.False -> { s = 2; },
-        JTag.True -> { s = 3; },
-        JTag.Num -> { s = lex_int(j.num); },
-        JTag.Str -> {
+        JTag::Null -> { s = 1; },
+        JTag::False -> { s = 2; },
+        JTag::True -> { s = 3; },
+        JTag::Num -> { s = lex_int(j.num); },
+        JTag::Str -> {
             let mut t: i64 = 4;
             t = fold_str(t, j.str);
             s = t;
         },
-        JTag.Arr -> {
+        JTag::Arr -> {
             let mut t: i64 = 5;
             for (let i = 0; i < j.arr.len(); i += 1) {
                 t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.arr[i]));
             }
             s = t;
         },
-        JTag.Obj -> {
+        JTag::Obj -> {
             let mut t: i64 = 6;
             for (let i = 0; i < j.keys.len(); i += 1) {
                 t = fold_str(t, j.keys[i]);

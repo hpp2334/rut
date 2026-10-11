@@ -1,14 +1,14 @@
 // calc/calc.d.rut — `calc`, the `Math` namespace: the float
 // members are host functions (f64 bodies in `rut-std`, each with an
-// f32 twin under a `_f` suffix — `Math.sqrt_f(x: f32) -> f32`; rut has
+// f32 twin under a `_f` suffix — `Math::sqrt_f(x: f32) -> f32`; rut has
 // no overloading, so the width is in the name). No `host class`
 // namespace fiction: these are the module's own functions, reached
 // qualified —
 //
 //   use calc::{ Math };
-//   let d = Math.sqrt(x * x + y * y);
-//   let a = Math.abs(x);
-//   let hf = Math.sqrt_f(2.0); // f32
+//   let d = Math::sqrt(x * x + y * y);
+//   let a = Math::abs(x);
+//   let hf = Math::sqrt_f(2.0); // f32
 //
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
 // `checked_*`) moved to core — `builtin impl` methods on the
@@ -18,9 +18,9 @@
 //
 // Constants (f64, compiler-materialized — the surface grammar has no
 // `static` field form):
-//   Math.PI  Math.TAU  Math.E  Math.SQRT_2  Math.LN_2  Math.LN_10
-//   Math.LOG2_E  Math.LOG10_E  Math.INFINITY  Math.NEG_INFINITY
-//   Math.EPSILON  Math.MAX  Math.MIN  Math.MIN_POSITIVE
+//   Math::PI  Math::TAU  Math::E  Math::SQRT_2  Math::LN_2  Math::LN_10
+//   Math::LOG2_E  Math::LOG10_E  Math::INFINITY  Math::NEG_INFINITY
+//   Math::EPSILON  Math::MAX  Math::MIN  Math::MIN_POSITIVE
 //
 // Contract (std/core.d.rut): the surface is kept TRUE to the
 // implementation — signatures match the mount tables, never aspirational.

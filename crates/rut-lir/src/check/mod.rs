@@ -462,7 +462,7 @@ pub struct Ctx<'a> {
     /// only when bound
     pub extern_native_fns: std::collections::HashSet<IdentId>,
     /// Bound namespace heads (`Math` for `calc`) — the qualified
-    /// access form `<namespace>.<member>`. Name-generic: the
+    /// access form `<namespace>::<member>`. Name-generic: the
     /// LIR routes by membership here, never by a hardcoded string.
     pub extern_namespaces: std::collections::HashSet<IdentId>,
     /// instantiated generic types: id -> (decl, type args)
@@ -663,7 +663,7 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
                 .iter()
                 .map(|sg| ctx.name(sg.name).to_string())
                 .collect::<Vec<_>>()
-                .join(".");
+                .join("::");
             let last = segs.last().expect("path has a segment");
             if !last.generics.is_empty() {
                 s.push_str(&format!(
@@ -922,8 +922,8 @@ impl<'a> Ctx<'a> {
         if home == self.cur_mod {
             return None;
         }
-        let q = home.replace('/', ".");
-        let prefix = if q.is_empty() { String::new() } else { format!("{q}.") };
+        let q = home.replace('/', "::");
+        let prefix = if q.is_empty() { String::new() } else { format!("{q}::") };
         Some(format!(
             "`{}` is declared in module `{}` ({}) — qualify it: `{}{}` (a bare {} name resolves in the current module only)",
             self.name(name),
@@ -1724,7 +1724,7 @@ pub(crate) fn seg_str(ctx: &Ctx, segs: &[PathSeg]) -> String {
     segs.iter()
         .map(|s| ctx.name(s.name).to_string())
         .collect::<Vec<_>>()
-        .join(".")
+        .join("::")
 }
 
 // int suffix → type id

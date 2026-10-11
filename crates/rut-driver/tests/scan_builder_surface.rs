@@ -164,7 +164,7 @@ fn scan_matches_a_rut_side_reference_over_all_byte_values() {
     let mut c: i32 = 0;
     while (c < 256) {
         t[c] = 1;
-        let s = str.from_code(c as u32);
+        let s = str::from_code(c as u32);
         let r = s.scan(0, t);
         if ((r >> 8) as i32 != 0 || (r & 255) as i32 != 1) { return 1; }
         t[c] = 0;

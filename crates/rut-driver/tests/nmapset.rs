@@ -135,7 +135,7 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          use nmapset::{ HashMap };\n\
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
-         \x20   let mut m: HashMap<i32, str> = HashMap.new();\n\
+         \x20   let mut m: HashMap<i32, str> = HashMap::new();\n\
          \x20   for (let i = 0; i < 64; i += 1) {\n\
          \x20       assert(m.put(i, f\"v{i}\"), \"i32 map: first put must add\");\n\
          \x20   }\n\
@@ -178,7 +178,7 @@ fn hashmap_str_keys_and_hashset() {
          use nmapset::{ HashMap, HashSet };\n\
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
-         \x20   let mut sm: HashMap<str, i32> = HashMap.new();\n\
+         \x20   let mut sm: HashMap<str, i32> = HashMap::new();\n\
          \x20   for (let i = 0; i < 48; i += 1) {\n\
          \x20       assert(sm.put(f\"k{i}\", i * 2), \"str map: first put adds\");\n\
          \x20   }\n\
@@ -194,7 +194,7 @@ fn hashmap_str_keys_and_hashset() {
          \x20   assert(sm.remove(f\"k3\"), \"str map: remove\");\n\
          \x20   assert(sm.has(f\"k3\") == false, \"str map: removed is absent\");\n\
          \x20   acc = acc + sm.len();\n\
-         \x20   let mut s: HashSet<i32> = HashSet.new();\n\
+         \x20   let mut s: HashSet<i32> = HashSet::new();\n\
          \x20   for (let i = 0; i < 50; i += 1) {\n\
          \x20       assert(s.put(i), \"set: first add\");\n\
          \x20   }\n\
@@ -208,7 +208,7 @@ fn hashmap_str_keys_and_hashset() {
          \x20   assert(s.remove(37), \"set: remove\");\n\
          \x20   assert(s.remove(37) == false, \"set: second remove\");\n\
          \x20   acc = acc + s.len();\n\
-         \x20   let mut ss: HashSet<str> = HashSet.new();\n\
+         \x20   let mut ss: HashSet<str> = HashSet::new();\n\
          \x20   for (let i = 0; i < 20; i += 1) {\n\
          \x20       assert(ss.put(f\"s{i}\"), \"str set: first add\");\n\
          \x20   }\n\
@@ -229,7 +229,7 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
     let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
+         \x20   let mut m: HashMap<str, str> = HashMap::new();\n\
          \x20   assert(m.put(\"alpha\", \"one\"), \"first put adds\");\n\
          \x20   assert(m.get(\"alpha\") == \"one\", \"value round-trips\");\n\
          \x20   assert(m.remove(\"alpha\"), \"remove answers true\");\n\
@@ -261,7 +261,7 @@ fn a_user_record_key_fails_at_compile_time_naming_the_union() {
          use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut pm: HashMap<Pt, i32> = HashMap.new();\n\
+         \x20   let mut pm: HashMap<Pt, i32> = HashMap::new();\n\
          \x20   assert(pm.put(Pt { x: 1, y: 2 }, 10), \"record map: first put\");\n\
          \x20   return pm.len();\n\
          }\n",
@@ -281,7 +281,7 @@ fn an_unhashable_key_type_is_refused_at_the_instantiation() {
         "struct Boxy { v: i32 }\n\
          use nmapset::{ HashMap };\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut m: HashMap<Boxy, i32> = HashMap.new();\n\
+         \x20   let mut m: HashMap<Boxy, i32> = HashMap::new();\n\
          \x20   return 0;\n\
          }\n",
     );
@@ -299,8 +299,8 @@ fn nmapset_instantiates_the_wrapper_classes() {
     let out = compile_pkg_app(
         "use nmapset::{ HashMap, HashSet };\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut m: HashMap<i32, i32> = HashMap.new();\n\
-         \x20   let mut s: HashSet<i32> = HashSet.new();\n\
+         \x20   let mut m: HashMap<i32, i32> = HashMap::new();\n\
+         \x20   let mut s: HashSet<i32> = HashSet::new();\n\
          \x20   m.put(1, 2);\n\
          \x20   s.put(3);\n\
          \x20   return m.len() + s.len();\n\
@@ -331,7 +331,7 @@ const PARITY_BODY: &str = "\
          fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          entry fn main() -> i32 {\n\
          \x20   let mut fails = 0;\n\
-         \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
+         \x20   let mut m: HashMap<str, str> = HashMap::new();\n\
          \x20   assert(m.put(\"k\", \"old\"), \"first put adds\");\n\
          \x20   let p1 = m.get(\"k\");\n\
          \x20   let p2 = m.get(\"k\");\n\

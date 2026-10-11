@@ -358,11 +358,11 @@ impl MutationCtx {
   pub fn get<T>(self, r: Readable<T>) -> T { return r.get(); }
   pub fn set<T>(self, s: Writable<T>, v: T) -> nil { s.put(v); }
 }
-pub fn source_f64(v: f64) -> SourceF64 { return SourceF64.of(v); }
-pub fn source_str(v: str) -> SourceStr { return SourceStr.of(v); }
-pub fn source_bool(v: bool) -> SourceBool { return SourceBool.of(v); }
-pub fn static_value(v: f64) -> StaticValue { return StaticValue.of(v); }
-pub fn mutate_ctx() -> MutationCtx { return MutationCtx.over(0); }
+pub fn source_f64(v: f64) -> SourceF64 { return SourceF64::of(v); }
+pub fn source_str(v: str) -> SourceStr { return SourceStr::of(v); }
+pub fn source_bool(v: bool) -> SourceBool { return SourceBool::of(v); }
+pub fn static_value(v: f64) -> StaticValue { return StaticValue::of(v); }
+pub fn mutate_ctx() -> MutationCtx { return MutationCtx::over(0); }
 ";
 
 #[test]

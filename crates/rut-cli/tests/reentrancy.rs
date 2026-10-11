@@ -44,7 +44,7 @@ entry fn new_widget() -> opaque {
 }
 
 entry fn boom(i: i64) -> i64 {
-    let xs = Vec<i32>.filled(0, 0);
+    let xs = Vec<i32>::filled(0, 0);
     return xs[i as i32] as i64;
 }
 

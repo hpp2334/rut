@@ -77,7 +77,7 @@ fn precedence_matrix_survives_formatting() {
         r#"
 use ink::{ Logger };
 entry fn main() {
-    let log = Logger.new("p");
+    let log = Logger::new("p");
     let a = 1 + 2 * 3 - 4 / 2;          // 5
     let b = (1 + 2) * (3 - 4) / 2;      // -1.5 → int -1
     let c = 1 - 2 - 3;                  // left-assoc: -4
@@ -99,7 +99,7 @@ fn unary_chains_and_as_survive_formatting() {
         r#"
 use ink::{ Logger };
 entry fn main() {
-    let log = Logger.new("u");
+    let log = Logger::new("u");
     let x = 7;
     let a = -x + -(-x);                 // -7 + 7 = 0
     let b = !(a == 0);                  // false
@@ -122,7 +122,7 @@ class Box {
     v: i32;
 }
 entry fn main() {
-    let log = Logger.new("b");
+    let log = Logger::new("b");
     let bx = Box { v: 9 };
     let t = bx is Box;                   // the class check
     let y = true && false || true;       // && over ||
@@ -140,7 +140,7 @@ fn when_arms_trailing_commas_and_else_survive_formatting() {
         r#"
 use ink::{ Logger };
 entry fn main() {
-    let log = Logger.new("w");
+    let log = Logger::new("w");
     let describe = fn (n: i32) -> str {
         return when (n) {
             0 -> "zero",
@@ -163,7 +163,7 @@ fn fstring_holes_and_escapes_survive_formatting() {
         r#"
 use ink::{ Logger };
 entry fn main() {
-    let log = Logger.new("f");
+    let log = Logger::new("f");
     let name = "fmt";
     let n = 42;
     log.info(f"hi {name} n={n} sum={n + 8} braced={{literal}} tab\tend");
@@ -184,8 +184,8 @@ class P {
     y: i32;
 }
 entry fn main() {
-    let log = Logger.new("c");
-    let empty: Vec<i32> = Vec.new();
+    let log = Logger::new("c");
+    let empty: Vec<i32> = Vec::new();
     let xs = [1, 2, 3];
     let rep = [0; 3];
     let p = P { x: 1, y: 2 };
@@ -206,7 +206,7 @@ use ink::{ Logger };
 // a fn with comments EVERYWHERE
 entry fn main() {
     // before a statement
-    let log = Logger.new("cm"); // trailing on a statement
+    let log = Logger::new("cm"); // trailing on a statement
     /* a block comment
        spanning lines */
     let x = 1 + // inside an expression
@@ -233,8 +233,8 @@ pub fn pick(xs: Vec<i32>, i: i32) -> (i32, bool) {
     return (0, false);
 }
 entry fn main() {
-    let log = Logger.new("px");
-    let xs = Vec<i32>.from([10, 20, 30]);
+    let log = Logger::new("px");
+    let xs = Vec<i32>::from([10, 20, 30]);
     let a = xs[1] + xs.len();            // index + method
     let pair = pick(xs, 2);              // the (T, ok) record
     if (pair.1) {

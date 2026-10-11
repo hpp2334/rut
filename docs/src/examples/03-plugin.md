@@ -98,7 +98,7 @@ entry fn init(bus: opaque) -> opaque {
     subscribe(bus, "msg", "on_msg");
     subscribe(bus, "leave", "on_leave");
     subscribe(bus, "tick", "on_tick");
-    let mod_: ?Moderator = Moderator.new(bus);
+    let mod_: ?Moderator = Moderator::new(bus);
     return opaque(mod_);
 }
 ```

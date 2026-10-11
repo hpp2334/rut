@@ -623,7 +623,7 @@ mod tests {
 use ink::{Logger};
 
 entry fn main() {
-    let log = Logger.new("case");
+    let log = Logger::new("case");
     let mut i = 0;
     while (true) {
         i += 1;
@@ -638,7 +638,7 @@ entry fn main() {
 use ink::{Logger};
 
 entry fn main() {
-    let log = Logger.new("case");
+    let log = Logger::new("case");
     log.info("hello");
 }
 "#;
@@ -832,14 +832,14 @@ use strbuild::{ StringBuilder };
 use ink::{ Logger };
 
 entry fn main() {
-    let log = Logger.new("book");
+    let log = Logger::new("book");
     let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
         let v: JsonI64 = n;
         let shown: i64 = v.get();
         log.info(f"n={shown}");
     }
-    let mut b = StringBuilder.new();
+    let mut b = StringBuilder::new();
     b.append("count: ");
     b.append(f"up to 42");
     log.info(b.build());
@@ -878,7 +878,7 @@ async fn countdown(log: Logger, n: u32) {
 }
 
 entry fn main() {
-    let log = Logger.new("countdown");
+    let log = Logger::new("countdown");
     launch_future(countdown(log, 3));
 }
 "#;

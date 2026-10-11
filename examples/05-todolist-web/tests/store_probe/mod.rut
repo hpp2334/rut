@@ -18,7 +18,7 @@ entry fn store_new() -> opaque {
 }
 
 fn wt(c: opaque) -> ?World {
-    let w = opaque.downcast<?World>(c);
+    let w = opaque::downcast<?World>(c);
     if (w == nil) {
         panic("probe: the store container is not a World — host drift");
     }
@@ -179,7 +179,7 @@ entry fn atom_str_get(c: opaque, name: str) -> str {
 /// same title mark twice).
 entry fn atom_items_set(c: opaque, title: str) -> nil {
     let mut w = wt(c);
-    let fresh: Vec<Todo> = Vec.new();
+    let fresh: Vec<Todo> = Vec::new();
     fresh.push(Todo { id: 1, title: title, done: false });
     w.items$.set(fresh);
 }
@@ -198,9 +198,9 @@ pub class Probe {
 }
 
 entry fn probes_new() -> opaque {
-    let mut store = Store.new();
+    let mut store = Store::new();
     let items$ = store.source<i64>(0);
-    let log: Vec<str> = Vec.new();
+    let log: Vec<str> = Vec::new();
     let up$ = store.derive(fn (ctx) -> i64 {
         let v = ctx.get<i64, Source<i64>>(items$);
         log.push("up");
@@ -222,7 +222,7 @@ entry fn probes_new() -> opaque {
 }
 
 fn pt(c: opaque) -> ?Probe {
-    let p = opaque.downcast<?Probe>(c);
+    let p = opaque::downcast<?Probe>(c);
     return p;
 }
 
@@ -285,7 +285,7 @@ pub class CycleProbe {
 }
 
 entry fn probes_cycle_new() -> opaque {
-    let mut store = Store.new();
+    let mut store = Store::new();
     let mut h: CycleHolder = CycleHolder { };
     let a$ = store.derive(fn (ctx) -> i64 {
         let b: Derived<i64> = h.b$;
@@ -302,7 +302,7 @@ entry fn probes_cycle_new() -> opaque {
 }
 
 entry fn probe_cycle_get(c: opaque) -> i64 {
-    let p = opaque.downcast<?CycleProbe>(c);
+    let p = opaque::downcast<?CycleProbe>(c);
     return p.a$.get();
 }
 

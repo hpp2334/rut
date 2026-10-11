@@ -1,6 +1,6 @@
 // classes: sealed VALUE records, class-method construction.
-// Classes construct through their OWN class methods — Rect.new(3, 4),
-// Counter.new(), Version.parse("1.2"); no `constructor` keyword, no
+// Classes construct through their OWN class methods — Rect::new(3, 4),
+// Counter::new(), Version::parse("1.2"); no `constructor` keyword, no
 // type-calls. A class method is just a function without a `self`
 // receiver; it builds the instance with the class-private `Self { .. }`
 // literal. Instance methods spell `self` explicitly; a method
@@ -44,7 +44,7 @@ impl Rect {
     }
 
     pub fn from_square(s: f32) -> Self {     // named constructors are siblings:
-        return Rect.new(s, s);         // any no-self method returning Self
+        return Rect::new(s, s);         // any no-self method returning Self
     }
 
     pub fn area(self) -> f32 { return self.w * self.h; }
@@ -67,13 +67,13 @@ impl Version {
 
 fn classes() {
     let log = Logger("classes");
-    let c = Counter.new();         // class method -> construction
+    let c = Counter::new();         // class method -> construction
     c.press();
     c.press();
-    let r = Rect.new(3, 4);
-    let v = Version.parse("1.2");  // ?Version — nil on failure
+    let r = Rect::new(3, 4);
+    let v = Version::parse("1.2");  // ?Version — nil on failure
     log.info(f"count={c.count()} area={r.area()}");
-    // let bad = Rect.new(3);       // ERROR: arity — the class's construction
+    // let bad = Rect::new(3);       // ERROR: arity — the class's construction
                                      // contract is whatever its methods say
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }

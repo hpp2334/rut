@@ -84,13 +84,13 @@ alias the stored cells, and binding an element copies nothing.
 
 | Construction | Meaning |
 |---|---|
-| `Vec.new()` | empty |
-| `Vec.with_capacity(n)` | reserve `n` slots |
-| `Vec.filled(v, n)` | `n` slots of `v` |
-| `Vec.from(arr)` | copy a `[T]` |
+| `Vec::new()` | empty |
+| `Vec::with_capacity(n)` | reserve `n` slots |
+| `Vec::filled(v, n)` | `n` slots of `v` |
+| `Vec::from(arr)` | copy a `[T]` |
 
 Explicit type arguments may be spelled at the call:
-`Vec<i32>.from([1, 2, 3])`. Construction is always a method call (see
+`Vec<i32>::from([1, 2, 3])`. Construction is always a method call (see
 [Classes and constructors](classes.md)).
 
 | Member | Meaning |
@@ -124,7 +124,7 @@ struct Tile { v: i32; }
 entry fn main() {
     let log = Logger("t");
     let tile = Tile { v: 7 };
-    let w = Weak.new(tile);        // the class-method construction
+    let w = Weak::new(tile);        // the class-method construction
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
     log.info(f"{got.v}");
 }
@@ -134,7 +134,7 @@ entry fn main() {
 7
 ```
 
-- `Weak.new(v)` traps on a `nil` `v`; `T` must be a reference type
+- `Weak::new(v)` traps on a `nil` `v`; `T` must be a reference type
   (`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is
   legal and `upgrade()` answers `??U`.
 - The referent's death nulls every weak box before any user code runs;
@@ -160,7 +160,7 @@ copy (the aliasing law).
   means "not found".
 - **Errors** are the answer channel: `(?T, err)` — see
   [Primitive types](primitive-types.md).
-- **Type-erased recovery** is `opaque.downcast<T>(o) -> ?T` — the
+- **Type-erased recovery** is `opaque::downcast<T>(o) -> ?T` — the
   checked lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse,
   the bad-cast lane — see [opaque — erasure and downcast](opaque.md).
 

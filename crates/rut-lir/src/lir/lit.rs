@@ -805,7 +805,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if self.ctx.extern_classes.contains(&sty) {
             self.ctx.err(sp, format!(
-                "classes have no instance literal — construct through a class method (`{}.new(..)`)",
+                "classes have no instance literal — construct through a class method (`{}::new(..)`)",
                 self.ctx.type_name(sty)
             ));
             return Err(());

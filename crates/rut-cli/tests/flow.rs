@@ -7,8 +7,8 @@
 //! `StrFlow(s).into_flow()` / `BytesFlow(b).into_flow()` — primitives
 //! and bare containers carry no members, the wrappers ARE the
 //! manufacture), the adapters (`map`/`filter`/`take`/`skip`/`count`/
-//! `fold`/`enumerate`/`for_each`), the `VecFlow.from_flow` +
-//! `collected()` sink, the `SetFlow.from_flow` + `items()` sink, chains
+//! `fold`/`enumerate`/`for_each`), the `VecFlow::from_flow` +
+//! `collected()` sink, the `SetFlow::from_flow` + `items()` sink, chains
 //! feeding `for..of` (the `[iterable]` marker path), the identity row,
 //! and stop-propagation through `take`.
 //!
@@ -94,10 +94,10 @@ use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let nums: Vec<i32> = Vec::new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4); nums.push(5); nums.push(6);
-    let picked: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow()
+    let picked: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow()
         .map(fn(x: i32) -> i32 { return x * 2; })
         .filter(fn(x: i32) -> bool { return x > 3; })
         .take(4)).collected();
@@ -122,15 +122,15 @@ use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let nums: Vec<i32> = Vec::new();
     let mut i = 0;
     while (i < 10) { nums.push(i); i += 1; }
-    let page: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
+    let page: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
     log.info(f"page n={page.len} first={page[0]} last={page[page.len-1]}");
     let total: i32 = VecFlow<i32>(nums).into_flow().filter(fn(x: i32) -> bool { return x % 2 == 0; }).count();
     log.info(f"evens={total}");
-    let grabbed: Vec<i32> = Vec.new();
+    let grabbed: Vec<i32> = Vec::new();
     for (let x of VecFlow<i32>(nums).into_flow().take(4)) {
         grabbed.push(x);
     }
@@ -158,7 +158,7 @@ use flow::{ ArrFlow, StrFlow, BytesFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
+    let log = Logger::new("flow");
     let a: [i32] = [7, 8, 9];
     let n1: i32 = ArrFlow<i32>(a).into_flow().count();
     let s: str = "abc";
@@ -182,11 +182,11 @@ use flow::{ VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let nums: Vec<i32> = Vec::new();
     nums.push(10); nums.push(20); nums.push(30);
     let total: i32 = VecFlow<i32>(nums).into_flow().fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
-    let idx: Vec<str> = Vec.new();
+    let idx: Vec<str> = Vec::new();
     VecFlow<i32>(nums).into_flow().enumerate().for_each(fn(p: (i32, i32)) -> nil {
         idx.push(f"{p.0}:{p.1}");
     });
@@ -227,7 +227,7 @@ impl CountUp {
     // crossing probe pins below
     pub fn into_flow(self) -> Flow<i32> {
         let n: i32 = self.n;
-        return Flow.new(fn (emit: fn(i32) -> bool) -> nil {
+        return Flow::new(fn (emit: fn(i32) -> bool) -> nil {
             let mut i = 1;
             while (i <= n) {
                 if (!emit(i)) { return; }
@@ -238,14 +238,14 @@ impl CountUp {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let nums: Vec<i32> = Vec::new();
     nums.push(1); nums.push(2);
     // identity: the chain re-enters as a source
-    let reentered: Vec<i32> = VecFlow<i32>.from_flow(CountUp.new(4).into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow()).collected();
+    let reentered: Vec<i32> = VecFlow<i32>::from_flow(CountUp::new(4).into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow()).collected();
     log.info(f"reentered n={reentered.len} last={reentered[reentered.len-1]}");
     // the user iterable widens through its member, spelled at the sink
-    let out: Vec<i32> = VecFlow<i32>.from_flow(CountUp.new(4).into_flow()).collected();
+    let out: Vec<i32> = VecFlow<i32>::from_flow(CountUp::new(4).into_flow()).collected();
     log.info(f"countup n={out.len} last={out[out.len-1]}");
 }
 "#,
@@ -277,7 +277,7 @@ impl<T> Tube<T> {
     fn of(items: Vec<T>) -> Self { return Tube { items: items }; }
     pub fn into_flow(self) -> Flow<T> {
         let src: Vec<T> = self.items;
-        return Flow.new(fn (emit: fn(T) -> bool) -> nil {
+        return Flow::new(fn (emit: fn(T) -> bool) -> nil {
             for (let x of src) {
                 if (!emit(x)) { return; }
             }
@@ -286,10 +286,10 @@ impl<T> Tube<T> {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("foreign");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("foreign");
+    let nums: Vec<i32> = Vec::new();
     nums.push(5); nums.push(6); nums.push(7);
-    let n: i32 = Tube<i32>.of(nums).into_flow().map(fn(x: i32) -> i32 { return x * 10; }).count();
+    let n: i32 = Tube<i32>::of(nums).into_flow().map(fn(x: i32) -> i32 { return x * 10; }).count();
     log.info(f"tube n={n}");
 }
 "#,
@@ -313,10 +313,10 @@ use flow::{ ArrFlow, VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
+    let log = Logger::new("flow");
     let empty: [i32] = [];
     log.info(f"empty n={empty.len()} walked={ArrFlow<i32>(empty).into_flow().count()}");
-    let nums: Vec<i32> = Vec.new();
+    let nums: Vec<i32> = Vec::new();
     nums.push(5); nums.push(6); nums.push(7);
     let arr: [i32] = [5, 6, 7];
     let folded: i32 = ArrFlow<i32>(arr).into_flow().fold(0, fn(a: i32, x: i32) -> i32 { return a * 10 + x; });
@@ -339,9 +339,9 @@ use nmapset::{ HashSet };
 use ink::{ Logger };
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
+    let log = Logger::new("flow");
     let words: [str] = ["a", "b", "a", "c"];
-    let set: HashSet<str> = SetFlow<str>.from_flow(ArrFlow<str>(words).into_flow()).items();
+    let set: HashSet<str> = SetFlow<str>::from_flow(ArrFlow<str>(words).into_flow()).items();
     let has_a: bool = set.has("a");
     let has_c: bool = set.has("c");
     let has_z: bool = set.has("z");
@@ -384,18 +384,18 @@ impl Counting {
 }
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let mut c: Counting = Counting.new();
-    let stopped: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let mut c: Counting = Counting::new();
+    let stopped: Vec<i32> = Vec::new();
     for (let x of c) {
         if (stopped.len == 2) { break; }
         stopped.push(x);
     }
     log.info(f"stopped n={stopped.len} last={stopped[1]} driven={c.n}");
-    let nums: Vec<i32> = Vec.new();
+    let nums: Vec<i32> = Vec::new();
     let mut i = 0;
     while (i < 100) { nums.push(i + 1); i += 1; }
-    let out: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
+    let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
     log.info(f"out n={out.len} first={out[0]} last={out[1]}");
 }
 "#,
@@ -424,13 +424,13 @@ use ink::{ Logger };
 fn double(x: i32) -> i32 { return x * 2; }
 
 entry fn main() -> nil {
-    let log = Logger.new("flow");
-    let nums: Vec<i32> = Vec.new();
+    let log = Logger::new("flow");
+    let nums: Vec<i32> = Vec::new();
     nums.push(1); nums.push(2);
     // the bare fn path: `map(double)` infers R from double's return
-    let a: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map(double)).collected();
+    let a: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map(double)).collected();
     // the explicit spelling
-    let b: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; })).collected();
+    let b: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; })).collected();
     log.info(f"a={a.len} b={b.len}");
 }
 "#,
@@ -456,8 +456,8 @@ use pouch::{ Vec };
 use flow::{ VecFlow, Flow, FromFlow, IntoFlow };
 
 entry fn main() -> nil {
-    let nums: Vec<i32> = Vec.new();
-    let out: Vec<i32> = VecFlow<i32>.from_flow(VecFlow<i32>(nums).into_flow().map(fn(x) { return x * 2; })).collected();
+    let nums: Vec<i32> = Vec::new();
+    let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map(fn(x) { return x * 2; })).collected();
 }
 "#,
     ));
@@ -468,7 +468,7 @@ entry fn main() -> nil {
         .unwrap();
     assert!(
         out.graph.diags.iter().any(|d| {
-            d.msg.contains("cannot infer `R` of `Flow.map` from an unannotated lambda")
+            d.msg.contains("cannot infer `R` of `Flow::map` from an unannotated lambda")
                 && d.msg.contains("annotate its parameters")
         }),
         "{:?}",

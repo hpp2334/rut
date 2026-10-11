@@ -60,7 +60,7 @@
     },
     "namespace": {
       "type": "string",
-      "description": "The qualified-access head (calc's `Math`): `use calc::{ Math }` binds it and member access routes qualified (`Math.sqrt`, `Math.PI`). The surface grammar has no spelling for this — the manifest is its only form."
+      "description": "The qualified-access head (calc's `Math`): `use calc::{ Math }` binds it and member access routes qualified (`Math::sqrt`, `Math::PI`). The surface grammar has no spelling for this — the manifest is its only form."
     },
     "consts": {
       "type": "object",
@@ -81,7 +81,7 @@
           }
         ]
       },
-      "description": "The host body's compiler-materialized constants (name → f64; calc's `Math.PI` family). The surface grammar has no `static` field form, so the manifest is their only spelling."
+      "description": "The host body's compiler-materialized constants (name → f64; calc's `Math::PI` family). The surface grammar has no `static` field form, so the manifest is their only spelling."
     }
   },
   "definitions": {

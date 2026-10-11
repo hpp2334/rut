@@ -1,5 +1,5 @@
 //! The primitive-optional element store (the nmapset-round2
-//! phase-2 repr): a `[?prim]` backing — `pouch`'s `Vec<T>.buf` included —
+//! phase-2 repr): a `[?prim]` backing — `pouch`'s `Vec<T>::buf` included —
 //! holds each element as a raw payload plus a one-byte nil tag instead of a
 //! boxed one-slot cell. The element ops lower to the `OptPrim` repr family
 //! (the store elision removes the per-store `makeopt`; the deref fold
@@ -339,7 +339,7 @@ fn vec_backing_rides_the_prim_store() {
         r#"
         use pouch::{ Vec };
         entry fn main() -> i64 {
-            let mut v: Vec<i64> = Vec.new();
+            let mut v: Vec<i64> = Vec::new();
             for (let i = 0; i < 5000; i += 1) {
                 v.push((i as i64).wrapping_mul(3));
             }
@@ -419,7 +419,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let src = r#"
         use nmapset::{ HashMap };
         entry fn main() -> i64 {
-            let mut m: HashMap<i32, i64> = HashMap.new();
+            let mut m: HashMap<i32, i64> = HashMap::new();
             for (let i = 0; i < 1000; i += 1) {
                 if (m.put(i, (i as i64).wrapping_mul(1000003i64))) {
                     let _ = 0;
@@ -510,7 +510,7 @@ fn prim_store_release_walk_skips_element_slots() {
     let src = r#"
         use pouch::{ Vec };
         entry fn main() -> i64 {
-            let mut v: Vec<i64> = Vec.new();
+            let mut v: Vec<i64> = Vec::new();
             for (let i = 0; i < 100000; i += 1) {
                 v.push(i as i64);
             }

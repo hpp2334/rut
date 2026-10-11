@@ -75,8 +75,8 @@ impl Pad {
   [constructor] pub fn of(n: i32) -> Self { return Self { n: n }; }
   pub fn n(self) -> i32 { return self.n; }
 }
-pub fn wrap<T>(v: T) -> Hold<T> { return Hold.of(v); }
-pub fn pad(n: i32) -> Pad { return Pad.of(n); }
+pub fn wrap<T>(v: T) -> Hold<T> { return Hold::of(v); }
+pub fn pad(n: i32) -> Pad { return Pad::of(n); }
 pub fn demo() -> i32 { let h: Hold<i32> = wrap(7); return h.get(); }
 ";
 

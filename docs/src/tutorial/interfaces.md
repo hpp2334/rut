@@ -106,7 +106,7 @@ impl Circle {
 
 entry fn main() {
     let log = Logger("interfaces");
-    let c = Circle.new(1.0);
+    let c = Circle::new(1.0);
     log.info(f"r={c.r}");
 }
 ```
@@ -236,7 +236,7 @@ impl Square {
 
 entry fn main() {
     let log = Logger("interfaces");
-    let mut shapes: Vec<Shape> = Vec.new();   // each push checks
+    let mut shapes: Vec<Shape> = Vec::new();   // each push checks
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
     let mut total: f64 = 0.0;
@@ -321,7 +321,7 @@ impl Square {
 
 entry fn main() {
     let log = Logger("interfaces");
-    let mut shapes: Vec<Shape> = Vec.new();
+    let mut shapes: Vec<Shape> = Vec::new();
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 2.0 });
     let sq = Square { side: 2.0 };
@@ -373,7 +373,7 @@ impl CountUp {
 entry fn main() {
     let log = Logger("iter");
     let ups = CountUp { n: 4 };
-    let got: Vec<i32> = Vec.new();   // shared: survives the loop's captures
+    let got: Vec<i32> = Vec::new();   // shared: survives the loop's captures
     for (let v of ups) {
         got.push(v);
     }
@@ -434,7 +434,7 @@ entry fn main() {
     let sq = Square { side: 2.0 };
     log.info(f"is shape: {sq is Shape}");
 
-    let mut shapes: Vec<Shape> = Vec.new();   // heterogeneous storage
+    let mut shapes: Vec<Shape> = Vec::new();   // heterogeneous storage
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
     let mut total: f64 = 0.0;

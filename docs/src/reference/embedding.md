@@ -240,7 +240,7 @@ impl rut_native::DepRemote for Mem {
     }
     fn write(&self, url: &str, bytes: &[u8]) -> Result<(), rut_native::RemoteError> {
         self.0.retain(|(u, _)| u != url);
-        Ok(self.0.push((url.to_string(), bytes.to_vec())))
+        Ok(self.0.push((url.to_string(), bytes::to_vec())))
     }
 }
 ```

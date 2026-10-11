@@ -74,7 +74,7 @@ pub(crate) fn expr_ty(
 }
 
 /// a path names a local, a module let, an enum-member value
-/// (`Color.Red`), or — the shape the survey's receiver inference is
+/// (`Color::Red`), or — the shape the survey's receiver inference is
 /// FOR — a dotted field read: the parser spells `wrap.c` as a 2-segment
 /// path (`ExprKind::Field` is the tuple-`.0` form only), so `a.b.c`
 /// resolves as field-of-field reads through the binding pass
@@ -106,7 +106,7 @@ fn path_ty(
             }
             return Some(cur);
         }
-        // `Color.Red` — the head is the type; the member IS the enum
+        // `Color::Red` — the head is the type; the member IS the enum
         if is_cap(text) {
             return Some(text.to_string());
         }
@@ -131,6 +131,12 @@ fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option
             if let [one] = hits.as_slice() {
                 return one.ret.clone();
             }
+        }
+        // `Type::new(..)` — the static constructor call (the `::`-law
+        // shape of the old `Type.new(..)` Method): the head names the
+        // type, the binding takes it
+        if segs.len() == 2 && ast.name(segs[segs.len() - 1].name) == "new" {
+            return Some(ast.name(segs[0].name).to_string());
         }
     }
     None

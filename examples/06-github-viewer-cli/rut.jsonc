@@ -40,6 +40,6 @@
     "futures": {
       "path": "../../rut/futures"
     },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/http.rutbundle", "sha256": "98fee7a35f2ca70ccdafeaf384711062146eb5e178e533c8cb395729e3417c4c" }
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle", "sha256": "6db1a6ebf34778149766987bd5ee3b4d135f9767a179e67c624f1580ddb96959" }
   }
 }

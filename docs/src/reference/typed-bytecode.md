@@ -84,7 +84,7 @@ machine):
 | control | `Jmp`, `Br`, `BrTable` | `BrTable` arms in the `labels` pool |
 | calls | `Call`, `CallM`, `CallI`, `CallFn`, `CallNat`, `Ret` | see below |
 | records | `NewCell`, `MakeRecord`, `GetF`, `SetF` | `MakeRecord` allocates + initializes every field in one op; field operands bake the field's `Repr` |
-| ownership | `Own` (payload copy; `bytes.clone()`'s lowering) | opcode 90 (`OnDrop`) is retired — cell-death code is the `[disposal]` marker, dispatched by the release path, not an op ([the Rc heap](rc-heap.md)) |
+| ownership | `Own` (payload copy; `bytes::clone()`'s lowering) | opcode 90 (`OnDrop`) is retired — cell-death code is the `[disposal]` marker, dispatched by the release path, not an op ([the Rc heap](rc-heap.md)) |
 | nullables | `MakeOpt` | `T -> ?T`: box into a one-slot cell (shares, never copies) |
 | weak refs | `WeakNew`, `WeakUpgrade` | [Weak references](weak-refs.md) |
 | arrays | `ArrNew` (zeroed), `ArrLit` (fixed), `ArrGet`/`ArrSet`, `ArrGetF`/`ArrSetF` (fused field+index) | bounds trap; element repr baked in |
@@ -118,10 +118,10 @@ compiled-in table:
 | `StrLen` / `ArrLen` | `s.len()` (codepoints) / array and bytes length |
 | `StrJoin` | join an array of strings in one pass |
 | `StrSlice` / `ArrSlice` | `slice(from, to)` — O(1) views ([String slicing and views](string-views.md)) |
-| `BytesClone` | `bytes.clone()` — the one copy escape hatch |
+| `BytesClone` | `bytes::clone()` — the one copy escape hatch |
 | `CaptureTrace`, `TraceLen/Name/Line/Col/Render` | the stack-trace surface ([Diagnostics](diagnostics.md)) |
 | `StrScan`, `StrStartsWith` | fused host-side scan/classify and prefix test |
-| `StrFromCode` | `str.from_code(n)` — one codepoint to `str` |
+| `StrFromCode` | `str::from_code(n)` — one codepoint to `str` |
 
 Everything else rut spells with a name is ordinary rut code (`Vec`'s
 methods) or a bodyless host function. There is no `strcat` op and no
@@ -140,7 +140,7 @@ An op exists for exactly one of three reasons:
    `len` are ordinary calls through the view's builtin impl. The
    erasure primitive's names lower to primitives — the type-call
    `opaque(v)` to the
-   `Box` op, `opaque.downcast<T>(o)` to prelude code (below) — and both
+   `Box` op, `opaque::downcast<T>(o)` to prelude code (below) — and both
    are ambient: no `use` gates them ([opaque — erasure and
    downcast](opaque.md)).
 3. **Concrete memory + control + the type machine's two readbacks.** Ops
@@ -156,7 +156,7 @@ An op exists for exactly one of three reasons:
   type; `downcast` is the only see-through.
 - `x is I` with interface `I`: one `IsIface` descriptor scan — pure in
   `(recv, want)`, so repeated probes CSE and invariant ones hoist.
-- `opaque.downcast<T>(o)` (yielding `?T`): `TidOf`; branch on the
+- `opaque::downcast<T>(o)` (yielding `?T`): `TidOf`; branch on the
   compare against `T`'s id; `Unbox` on the hit arm, a nil box on the
   miss. The check is visible dataflow — the compiler CSEs repeated checks,
   hoists invariant ones, and folds a downcast chain over one cell into a

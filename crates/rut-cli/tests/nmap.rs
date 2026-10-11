@@ -138,15 +138,15 @@ entry fn str_keys() -> i64 {
 entry fn bytes_keys() -> i64 {
     let t = map_new(8);
     let mut fails: i64 = 0;
-    let b1 = bytes.from([1, 2, 3]);
-    let b2 = bytes.from([9, 9]);
+    let b1 = bytes::from([1, 2, 3]);
+    let b2 = bytes::from([9, 9]);
     if (map_hput(t, opaque(b1)) & 1 != 1) { fails += 1; }
     if (map_hput(t, opaque(b2)) & 1 != 1) { fails += 1; }
     if (map_len(t) != 2) { fails += 2; }
     // octet equality on a fresh copy
-    let again = bytes.from([1, 2, 3]);
+    let again = bytes::from([1, 2, 3]);
     if (map_hfind(t, opaque(again)) < 0) { fails += 4; }
-    let miss = bytes.from([4, 5]);
+    let miss = bytes::from([4, 5]);
     if (map_hfind(t, opaque(miss)) != -1) { fails += 8; }
     if (map_hput(t, opaque(b1)) & 1 != 0) { fails += 16; }
     if (map_hremove(t, opaque(b2)) < 0) { fails += 32; }
@@ -167,7 +167,7 @@ impl Bag {
 entry fn churn_tables(n: i64) -> nil {
     let mut i: i64 = 0;
     while (i < n) {
-        let b = Bag.adopt(map_new(16));
+        let b = Bag::adopt(map_new(16));
         map_hput(b.t, opaque(i));
         i += 1;
     }
@@ -257,7 +257,7 @@ entry fn sv_put_ok(t: opaque) -> i64 {
 // ---- the valued lanes (nmap-hostvals P5; the seal law, 2a) ----------
 // the value SEALS at the call — `opaque(v)` mints the erasure box, the
 // map stores it, and a hit answers the SAME box (`?opaque`) for the
-// caller's `opaque.downcast<V>` to open: a box holding ZERO still
+// caller's `opaque::downcast<V>` to open: a box holding ZERO still
 // reads as a hit (Some/None is the answer's own tag now, never the
 // raw word), a miss answers nil, replace keeps the handle and stores
 // the new box, remove answers the dead key's handle and kills the box.
@@ -272,13 +272,13 @@ entry fn valued_bits(t: opaque) -> i64 {
     if (map_hvput(t, opaque(1 as i64), opaque(0 as i64)) & 1 != 1) { fails += 1; }   // fresh; the box holds 0
     let raw = map_hvget(t, opaque(1 as i64));
     if (raw == nil) { fails += 10; }                             // a hit, never the miss
-    let z: ?i64 = opaque.downcast<i64>(raw);
+    let z: ?i64 = opaque::downcast<i64>(raw);
     if (z != 0) { fails += 100; }                                // the box holds a zero
     if (map_hvget(t, opaque(2 as i64)) != nil) { fails += 1000; }             // the miss
     if (map_hvput(t, opaque(1 as i64), opaque(5 as i64)) & 1 != 0) { fails += 10000; }  // replace: not newly
     let raw2 = map_hvget(t, opaque(1 as i64));
     if (raw2 == nil) { fails += 100000; }
-    let v: ?i64 = opaque.downcast<i64>(raw2);
+    let v: ?i64 = opaque::downcast<i64>(raw2);
     if (v != 5) { fails += 1000000; }
     if (map_hvremove(t, opaque(1 as i64)) < 0) { fails += 10000000; }
     if (map_hvget(t, opaque(1 as i64)) != nil) { fails += 100000000; }
@@ -302,13 +302,13 @@ entry fn valued_strs(t: opaque) -> i64 {
     let mut fails: i64 = 0;
     let a: str = "alpha-alpha-alpha-alpha";
     if (map_hvput(t, opaque(1 as i64), opaque(a)) & 1 != 1) { fails += 1; }
-    let got: ?str = opaque.downcast<str>(map_hvget(t, opaque(1 as i64)));
+    let got: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64)));
     if (got != a) { fails += 10; }
     if (map_hvput(t, opaque(2 as i64), opaque("beta-value")) & 1 != 1) { fails += 100; }
     if (map_hvput(t, opaque(1 as i64), opaque("gamma-value")) & 1 != 0) { fails += 1000; }   // replace
-    let g: ?str = opaque.downcast<str>(map_hvget(t, opaque(1 as i64)));
+    let g: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64)));
     if (g != "gamma-value") { fails += 10000; }
-    let b: ?str = opaque.downcast<str>(map_hvget(t, opaque(2 as i64)));
+    let b: ?str = opaque::downcast<str>(map_hvget(t, opaque(2 as i64)));
     if (b != "beta-value") { fails += 100000; }
     return fails;
 }

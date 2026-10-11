@@ -138,18 +138,19 @@ fn precedence_shapes() {
 
 #[test]
 fn prefix_and_postfix_compose() {
-    // `-a.b` → Unary(Neg, Path[a.b]) — dotted paths are one Path node;
-    // the unary wraps whatever the operand grammar built (v1 parity)
+    // `-a.b` → Unary(Neg, Field{recv: Path[a]}) — the postfix `.` is
+    // value access now: the path closes at `a`, the field chains as
+    // the postfix loop's Field node; the unary wraps whatever the
+    // operand grammar built
     let src = "fn f() -> nil { let x = -a.b; }";
     let ast = expr_of(src);
     let e = init_of(src);
     let Kind::Expr(ExprKind::Unary { op: UnOp::Neg, expr, .. }) = ast.kind(e.id()) else {
         panic!("Unary at top, got {:?}", ast.kind(e.id()));
     };
-    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(expr.id()) else {
-        panic!("Path under the unary, got {:?}", ast.kind(expr.id()));
+    let Kind::Expr(ExprKind::Field { .. }) = ast.kind(expr.id()) else {
+        panic!("Field under the unary, got {:?}", ast.kind(expr.id()));
     };
-    assert_eq!(segs.len(), 2);
 
     // postfix `.` on a non-path atom IS a Field node: `-(x).b`
     let src = "fn f() -> nil { let x = -(x).b; }";

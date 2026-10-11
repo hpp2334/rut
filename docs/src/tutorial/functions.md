@@ -24,12 +24,12 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 }
 
 fn length(pt: Point) -> f64 {
-    return Math.sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
+    return Math::sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
 entry fn main() {
     let log = Logger("fns");
-    let xs = Vec<i32>.from([1, 2, 3]);
+    let xs = Vec<i32>::from([1, 2, 3]);
     swap(xs, 0, 2);
     log.info(f"first={xs[0]} length={length(Point { x: 3, y: 4 })}");
 }
@@ -113,10 +113,10 @@ use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger("cap");
-    let mut xs: Vec<i32> = Vec.new();
+    let mut xs: Vec<i32> = Vec::new();
     xs.push(1);
     let len = fn() -> i32 { return xs.len(); };
-    let mut ys: Vec<i32> = Vec.new();
+    let mut ys: Vec<i32> = Vec::new();
     ys.push(9); ys.push(9);
     xs = ys;                       // a rebind the closure sees
     log.info(f"len={len()}");      // 2 — the closure shares the slot
@@ -267,7 +267,7 @@ entry fn main() {
         let sq = r * r;
         return sq * 3.14159265f32;
     };
-    log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum(Vec<i32>.from([1, 2, 3]))}");
+    log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum(Vec<i32>::from([1, 2, 3]))}");
 
     let head = first([10, 20], -1);       // first<i32> — monomorphized
     let name = first(["a", "b"], "?");    // first<str> — separate instance

@@ -51,7 +51,7 @@ fn samples_n() -> i32 { return 32; }
 // answers letter k of "abcde" repeated 2k+1 times ("a", "bbb",
 // "ccccc", "ddddddd", "eeeeeeeee"), built through the pkg itself.
 fn frags() -> Vec<str> {
-    let a: Vec<str> = Vec.new();
+    let a: Vec<str> = Vec::new();
     let letters = "abcde";
     let mut k: i32 = 0;
     for (let c of letters) {
@@ -76,7 +76,7 @@ fn round(fr: Vec<str>) -> i64 {
     let sn = samples_n();
 
     // ---- phase A: the churn (n appends into ONE 64-byte-hint builder) --
-    let mut b = StringBuilder.with_cap(64);
+    let mut b = StringBuilder::with_cap(64);
     let mut cps: i32 = 0;          // codepoints appended
     let mut ns: i32 = 0;           // samples taken
     let mut poss = [0; 32];        // sample start offsets (codepoints)
@@ -121,7 +121,7 @@ fn round(fr: Vec<str>) -> i64 {
         let hint = ((x >> 8) % 64) as i32;
         x = lcg(x);
         let cls = ((x >> 16) % 5) as i32;
-        let mut sb = StringBuilder.with_cap(hint);
+        let mut sb = StringBuilder::with_cap(hint);
         sb.append(fr[cls]);
         let built = sb.build();
         if (built != fr[cls]) {

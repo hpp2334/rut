@@ -162,7 +162,7 @@ impl Counter {
 
 entry fn main() {
     let log = Logger("t");
-    let c = Counter.new().bump().bump();
+    let c = Counter::new().bump().bump();
     log.info(f"{c.value()}");
 }
 ```

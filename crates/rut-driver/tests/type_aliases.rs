@@ -182,7 +182,7 @@ fn seal<T requires Enc>(x: T) -> i32 {
     let e: Enc = x;
     return e.enc().len();
 }
-entry fn main() -> i32 { let t: Token = Token.new(); return seal(t); }
+entry fn main() -> i32 { let t: Token = Token::new(); return seal(t); }
 ";
     let out = compile(src);
     assert!(out.diags.is_empty(), "Token satisfies Enc: {:?}", out.diags);
@@ -217,7 +217,7 @@ fn iface_object_satisfies_nothing() {
          }\n\
          fn seal<T requires Enc>(x: T) -> i32 { return 0; }\n\
          entry fn main() -> i32 {\n\
-             let w: Enc = Token.new();\n\
+             let w: Enc = Token::new();\n\
              return seal(w);\n\
          }\n",
     );
@@ -266,7 +266,7 @@ fn method_bounds_parse_and_collect() {
              fn new() -> Self { return Self { v: 0 }; }\n\
              fn wrap<T requires Enc>(self, x: T) -> i32 { return 0; }\n\
          }\n\
-         entry fn main() -> i32 { let w: W = W.new(); return w.v; }\n",
+         entry fn main() -> i32 { let w: W = W::new(); return w.v; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 }

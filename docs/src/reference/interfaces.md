@@ -204,7 +204,7 @@ entry fn main() {
 
     let s: Shape = Square { side: 2.0 };   // 3. satisfaction assertion
 
-    let mut shapes: Vec<Shape> = Vec.new();  // 4. heterogeneous: itable boxes
+    let mut shapes: Vec<Shape> = Vec::new();  // 4. heterogeneous: itable boxes
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
     let mut total: f64 = 0.0;
@@ -309,7 +309,7 @@ impl CountUp {
 
 entry fn main() {
     let log = Logger("t");
-    for (let v of CountUp.new(3)) {
+    for (let v of CountUp::new(3)) {
         log.info(f"tick {v}");
     }
 }

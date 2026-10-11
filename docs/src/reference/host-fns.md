@@ -78,7 +78,7 @@ Rules:
   declaration.
 - **`any` is not in the language.** An `any` spelling fails at
   resolution as an unknown type — there is no `any` type to write.
-  Seal polymorphic values with `opaque(v)` / `opaque.downcast<T>(v)`
+  Seal polymorphic values with `opaque(v)` / `opaque::downcast<T>(v)`
   ([opaque](opaque.md)).
 - **`builtin` is the engine's reservation** — spelled only in the
   toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder
@@ -157,7 +157,7 @@ with `.host_pkg(..)`:
 // one builder per host pkg; the scope string appears exactly once
 let mut logger = rut_vm::HostPkg::new("server");
 rut_vm::pkg_fn!(logger, "make", (&str,) -> OpaqueRef,
-    |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()));
+    |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name::to_string()));
 rut_vm::pkg_fn!(logger, "emit", (OpaqueRef, &str, &str) -> (),
     |_vm, _bus, _topic, _payload| Ok(()));
 
@@ -182,7 +182,7 @@ machinery:
 ```rust
 let mut hosts = rut_vm::interp::HostRegistry::new();
 hosts.register::<_, (&str,), OpaqueRef, _>(
-    "server::make", |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()),
+    "server::make", |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name::to_string()),
 );
 ```
 

@@ -5,7 +5,7 @@
 //! row. The pins here:
 //!
 //! - the sugar: `Point(..)` runs and lowers exactly like
-//!   `Point.from_xy(..)` (the IR dumps are byte-identical);
+//!   `Point::from_xy(..)` (the IR dumps are byte-identical);
 //! - the seal: visibility rides the member's `pub`, the designation
 //!   rides the bracket — the call IS the class-method call;
 //! - `?Self`: the marked member's try-construction makes `Type(..)`
@@ -137,7 +137,7 @@ fn the_call_form_runs_like_the_designated_member() {
         "{POINT}\n\
          entry fn main() -> i32 {{\n\
              let p = Point(1.0, 2.0);\n\
-             let q = Point.from_xy(1.0, 2.0);\n\
+             let q = Point::from_xy(1.0, 2.0);\n\
              if (p.manhattan() != q.manhattan()) {{ return 1; }}\n\
              if (p.manhattan() != 3.0) {{ return 2; }}\n\
              return 0;\n\
@@ -149,13 +149,13 @@ fn the_call_form_runs_like_the_designated_member() {
 
 #[test]
 fn the_lowering_is_byte_identical_to_the_member_call() {
-    // `Point(..)` IS `Point.from_xy(..)` — the compiled `main` bodies
+    // `Point(..)` IS `Point::from_xy(..)` — the compiled `main` bodies
     // dump identically (same inst, same ops; the spelling is sugar)
     let sugar = ir_of_main(&format!(
         "{POINT}\nentry fn main() -> f32 {{ let p = Point(1.0, 2.0); return p.manhattan(); }}\n"
     ));
     let explicit = ir_of_main(&format!(
-        "{POINT}\nentry fn main() -> f32 {{ let p = Point.from_xy(1.0, 2.0); return p.manhattan(); }}\n"
+        "{POINT}\nentry fn main() -> f32 {{ let p = Point::from_xy(1.0, 2.0); return p.manhattan(); }}\n"
     ));
     assert_eq!(sugar, explicit, "the sugar must lower byte-identically");
 }
@@ -192,19 +192,19 @@ fn try_ctor_yields_the_nullable() {
 #[test]
 fn arity_mismatch_names_the_member() {
     // the sugar's arity refusal is the member call's — it names
-    // `Point.from_xy` (byte-identical diagnostics, like lowering)
+    // `Point::from_xy` (byte-identical diagnostics, like lowering)
     let ds = diags_of(&format!(
         "{POINT}\nentry fn main() {{ let p = Point(1.0); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d == "call arity: `Point.from_xy` takes 2 parameters, 1 given"),
+        ds.iter().any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
         "the sugar's arity refusal names the member: {ds:?}"
     );
     let ds = diags_of(&format!(
-        "{POINT}\nentry fn main() {{ let p = Point.from_xy(1.0); }}\n"
+        "{POINT}\nentry fn main() {{ let p = Point::from_xy(1.0); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d == "call arity: `Point.from_xy` takes 2 parameters, 1 given"),
+        ds.iter().any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
         "the explicit spelling answers identically: {ds:?}"
     );
 }
@@ -304,7 +304,7 @@ fn an_enum_impl_marker_is_refused() {
     let ds = diags_of(
         "enum Color { Red, Green }\
          impl Color {\
-             [constructor] pub fn make() -> Color { return Color.Red; }\
+             [constructor] pub fn make() -> Color { return Color::Red; }\
          }\
          entry fn main() { }\n",
     );
@@ -433,7 +433,7 @@ fn the_no_ctor_miss_names_the_fix() {
          entry fn main() { let p = Point(1, 2); }\n",
     );
     assert!(
-        ds.iter().any(|d| d == "`Point` constructs through its class methods (`Point.new(..)`) — mark one `[constructor]` to call the class itself"),
+        ds.iter().any(|d| d == "`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself"),
         "the miss names the fix: {ds:?}"
     );
 }
@@ -442,7 +442,7 @@ fn the_no_ctor_miss_names_the_fix() {
 
 #[test]
 fn generic_class_ctor_rides_the_unification_path() {
-    // `Box(3)` lowers exactly like `Box.of(3)` — the type arguments
+    // `Box(3)` lowers exactly like `Box::of(3)` — the type arguments
     // infer from the expected type's instantiation (or refuse to,
     // identically)
     let v = run_returns(
@@ -455,7 +455,7 @@ fn generic_class_ctor_rides_the_unification_path() {
          entry fn main() -> i32 {\
              let b: Box<i32> = Box(3);\
              if (b.get() != 3) { return 1; }\
-             let b2 = Box<i32>.of(4);\
+             let b2 = Box<i32>::of(4);\
              if (b2.get() != 4) { return 2; }\
              return 0;\
          }\n",
@@ -471,7 +471,7 @@ fn generic_class_ctor_rides_the_unification_path() {
          entry fn main() { let b = Box(3); }\n",
     );
     assert!(
-        ds.iter().any(|d| d == "cannot infer the type arguments for `Box` — write `Box<..>.of(..)` or annotate the binding"),
+        ds.iter().any(|d| d == "cannot infer the type arguments for `Box` — write `Box<..>::of(..)` or annotate the binding"),
         "the sugar rides the member call's inference: {ds:?}"
     );
 }
@@ -503,7 +503,7 @@ fn a_used_class_call_form_mints_at_a_distance() {
             "use geometry::{Point};\
              entry fn main() -> i32 {\
                  let p = Point(1.0, 2.0);\
-                 let q = Point.from_xy(1.0, 2.0);\
+                 let q = Point::from_xy(1.0, 2.0);\
                  if (p.manhattan() != q.manhattan()) { return 1; }\
                  if (p.manhattan() != 3.0) { return 2; }\
                  return 0;\
@@ -530,7 +530,7 @@ fn a_private_ctor_does_not_cross() {
     ]);
     let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>();
     assert!(
-        ds.iter().any(|d| d == "`Point` constructs through its class methods (`Point.new(..)`) — mark one `[constructor]` to call the class itself"),
+        ds.iter().any(|d| d == "`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself"),
         "the private ctor never crosses: {ds:?}"
     );
     assert!(g.program.is_none(), "the consumer must refuse");

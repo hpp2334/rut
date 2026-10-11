@@ -593,7 +593,7 @@ mod tests {
     /// the CDN url's own sha256 — the cache filename rut-lsp computes
     /// (the URL STRING is hashed, never the bytes)
     const POUCH_CACHE: &str =
-        ".rut/cache/683a9cb219067e36be3ebf79fc895ff0930c10a47c058e386a226e428971a74f.rutbundle";
+        ".rut/cache/b8f8818a7044ac0c3b657cb2419659392ff314fe7c39efd33988396d95dc717d.rutbundle";
 
     /// read an export's result envelope — `[u32 le length][json]`. The
     /// heap is a byte array (align 1), so the length reads byte-wise —
@@ -693,7 +693,7 @@ mod tests {
 
         // the indexed surface resolves: the use name jumps to BOTH pouch
         // indexes — the std surface's true source path AND the bundle's
-        let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n";
+        let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n";
         let uri = "file:///ws/uses-pouch.rut";
         rut_begin();
         take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));

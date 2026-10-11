@@ -16,8 +16,8 @@
 //!   dev state stands when no `mod.rut` exists, and the ambiguity
 //!   (`entry.type`, no kind, no body) names both fixes;
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
-//!   section and loads mounting the same tree; the PUBLISHED std-v8
-//!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
+//!   section and loads mounting the same tree; the PUBLISHED std-v9
+//!   artifacts (the OLD flat envelope, committed at `dist/std-v9/`)
 //!   still load through the reader-compat lane, and a flat package
 //!   repacks byte-identically (the freshness gate over all 16);
 //! - a mod file's `use` statements join the run chain's closure check.
@@ -403,7 +403,7 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
     // legacy names) keeps loading through the reader's compat lane.
     // The published bytes are committed at `dist/std-v8/` so the gate
     // never networks; `dist/std` (the working envelope) is the
-    // freshness gate's business.
+    // freshness gate's business and `dist/std-v9/` the pin envelope.
     let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
@@ -420,7 +420,7 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
     assert_eq!(
         stems,
         vec!["http", "json", "nmapset", "pouch"],
-        "the pinned artifacts ride in dist/std-v8: {names:?}"
+        "the pinned artifacts ride in dist/std-v9: {names:?}"
     );
     for path in &names {
         let bytes = std::fs::read(path).expect("read the bundle");
@@ -554,7 +554,7 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
 // phase 3 — lir/resolution: visibility tiers, qualified positions,
 // use-through-mods
 //
-// Spelling note: positions qualify with `.` (`a.Pair`, `layout.mk(3)`,
+// Spelling note: positions qualify with `.` (`a.Pair`, `layout::mk(3)`,
 // `a.c.sup()`); `use` statements qualify with `::`. Positions never
 // take a package head — uses are the only cross-package door.
 // =====================================================================
@@ -620,7 +620,7 @@ fn qualified_positions_resolve_type_and_value() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 {\n    let r: a.Pair = a.pair(3);\n    return r.x + r.y;\n}\n",
+            "mod a;\nentry fn main() -> i32 {\n    let r: a::Pair = a::pair(3);\n    return r.x + r.y;\n}\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -640,14 +640,14 @@ fn qualified_calls_walk_ancestors_and_siblings() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\npub fn root_side() -> i32 { return 30; }\nentry fn main() -> i32 { return a.c.c2.seven(); }\n",
+            "mod a;\npub fn root_side() -> i32 { return 30; }\nentry fn main() -> i32 { return a::c::c2::seven(); }\n",
             vec![
                 ("a", Vis::Self_, "pub mod c;\npub fn five() -> i32 { return 5; }\n"),
                 ("a/c", Vis::Pub, "pub mod c2;\n"),
                 (
                     "a/c/c2",
                     Vis::Pub,
-                    "pub fn seven() -> i32 {\n    return pkg.root_side() + pkg.a.five() + 7;\n}\n",
+                    "pub fn seven() -> i32 {\n    return pkg::root_side() + pkg::a::five() + 7;\n}\n",
                 ),
             ],
         ),
@@ -661,7 +661,7 @@ fn leaf_not_found_names_the_module() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.ghost(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::ghost(); }\n",
             vec![("a", Vis::Self_, "pub fn five() -> i32 { return 5; }\n")],
         ),
     ];
@@ -680,7 +680,7 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.inner(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::inner(); }\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -698,7 +698,7 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.uses_inner(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::uses_inner(); }\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -715,9 +715,9 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.go(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::go(); }\n",
             vec![
-                ("a", Vis::Self_, "pub mod c;\npub fn go() -> i32 { return c.sup(); }\n"),
+                ("a", Vis::Self_, "pub mod c;\npub fn go() -> i32 { return c::sup(); }\n"),
                 ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
             ],
         ),
@@ -728,7 +728,7 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.c.sup(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::c::sup(); }\n",
             vec![
                 ("a", Vis::Self_, "pub mod c;\n"),
                 ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
@@ -747,11 +747,11 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.go(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::go(); }\n",
             vec![
-                ("a", Vis::Self_, "pub mod c;\npub mod d;\npub fn go() -> i32 { return d.reach(); }\n"),
+                ("a", Vis::Self_, "pub mod c;\npub mod d;\npub fn go() -> i32 { return d::reach(); }\n"),
                 ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
-                ("a/d", Vis::Pub, "pub fn reach() -> i32 { return a.c.sup(); }\n"),
+                ("a/d", Vis::Pub, "pub fn reach() -> i32 { return a::c::sup(); }\n"),
             ],
         ),
     ];
@@ -764,7 +764,7 @@ fn pub_pkg_stays_inside_its_package() {
     // dep (the root file, via the pkg head), never across the use door
     let dep = modpkg(
         "dep",
-        "pub mod alpha;\nentry fn main() -> i32 { return dep.alpha.inside(); }\n",
+        "pub mod alpha;\nentry fn main() -> i32 { return dep::alpha::inside(); }\n",
         vec![("alpha", Vis::Pub, "pub(pkg) fn inside() -> i32 { return 44; }\n")],
     );
     assert_eq!(run_main_pkgs(&[dep.clone()], "dep"), 44);
@@ -851,7 +851,7 @@ fn an_inherent_impl_in_the_wrong_module_is_rejected() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { return a.bumped(); }\n",
+            "mod a;\nentry fn main() -> i32 { return a::bumped(); }\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -864,7 +864,7 @@ fn an_inherent_impl_in_the_wrong_module_is_rejected() {
 
 #[test]
 fn a_package_head_in_a_position_names_the_use_fix() {
-    // dep is use-bound in pkg; `dep.alpha.top()` written directly in a
+    // dep is use-bound in pkg; `dep::alpha::top()` written directly in a
     // position refuses — uses are the only cross-package door
     let pkgs = vec![
         modpkg(
@@ -874,7 +874,7 @@ fn a_package_head_in_a_position_names_the_use_fix() {
         ),
         modpkg(
             "pkg",
-            "use dep::{};\nentry fn main() -> i32 { return dep.alpha.top(); }\n",
+            "use dep::{};\nentry fn main() -> i32 { return dep::alpha::top(); }\n",
             vec![],
         ),
     ];
@@ -898,7 +898,7 @@ fn use_bindings_are_per_file() {
         ),
         modpkg(
             "pkg",
-            "use dep::alpha::{cell};\nmod a;\nentry fn main() -> i32 { return cell() + a.go(); }\n",
+            "use dep::alpha::{cell};\nmod a;\nentry fn main() -> i32 { return cell() + a::go(); }\n",
             vec![("a", Vis::Self_, "pub fn go() -> i32 { return cell(); }\n")],
         ),
     ];
@@ -919,7 +919,7 @@ fn cross_file_methods_and_members_collect() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { let c: a.Acc = a.mk(40); return c.bump2(); }\n",
+            "mod a;\nentry fn main() -> i32 { let c: a::Acc = a::mk(40); return c.bump2(); }\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -959,7 +959,7 @@ fn qualified_iface_and_generic_types_resolve() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 {\n    let b: a.Box<i32> = a.mkbox(40);\n    return a.widen(b) + 2;\n}\n",
+            "mod a;\nentry fn main() -> i32 {\n    let b: a::Box<i32> = a::mkbox(40);\n    return a::widen(b) + 2;\n}\n",
             vec![(
                 "a",
                 Vis::Self_,
@@ -978,7 +978,7 @@ fn qualified_static_call_through_the_mod_path() {
         modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
         modpkg(
             "pkg",
-            "mod a;\nentry fn main() -> i32 { let c = a.Counter.make(41); return c.bump(); }\n",
+            "mod a;\nentry fn main() -> i32 { let c = a::Counter::make(41); return c.bump(); }\n",
             vec![(
                 "a",
                 Vis::Self_,

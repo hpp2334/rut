@@ -120,7 +120,7 @@ fn build_parent(n: i32) -> str {
 
 // the nmapset-str six-phase churn, RANGE-spelled
 fn churn_range(p: str, n: i32) -> i64 {
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap::new();
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {
         if (m.put_range(p, i * 6, 6, i)) { added += 1; }
@@ -168,7 +168,7 @@ fn churn_range(p: str, n: i32) -> i64 {
 
 // the identical churn, SLICE-spelled (the pre-phase-2 spelling)
 fn churn_slice(p: str, n: i32) -> i64 {
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap::new();
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {
         if (m.put(p.slice(i * 6, i * 6 + 6), i)) { added += 1; }
@@ -245,7 +245,7 @@ use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
     let seq = "ACGTTCAGGCATXZ";
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap::new();
     let mut f: i64 = 0;
     // range inserts, slice reads
     if (!m.put_range(seq, 0, 3, 1)) { f += 1; }      // "ACG"
@@ -301,7 +301,7 @@ entry fn main() -> i64 {
         let base = 1000 + i;
         p = f"{p}{base}";
     }
-    let mut m: HashMap<str, i32> = HashMap.with_capacity(4);
+    let mut m: HashMap<str, i32> = HashMap::with_capacity(4);
     let mut fails: i64 = 0;
     let n = 500;
     for (let i = 0; i < n; i += 1) {
@@ -341,8 +341,8 @@ use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
     let s = "abc";
-    let mut a: HashMap<str, i32> = HashMap.new();
-    let mut b: HashMap<str, i32> = HashMap.new();
+    let mut a: HashMap<str, i32> = HashMap::new();
+    let mut b: HashMap<str, i32> = HashMap::new();
     let mut f: i64 = 0;
     if (!a.put_range(s, 3, 0, 7)) { f += 1; }
     if (a.get("") != 7) { f += 2; }
@@ -379,7 +379,7 @@ const TRAP_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap::new();
     m.put("ok", 1);
     let utf8 = "héllo";
     m.get_range(utf8, 0, 2);   // byte 2 is mid-codepoint: trap
@@ -404,7 +404,7 @@ const PAST_END_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
-    let mut m: HashMap<str, i32> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap::new();
     m.put("ok", 1);
     let s = "abc";
     m.remove_range(s, 1, 3);   // 1 + 3 = 4 > 3 bytes: trap

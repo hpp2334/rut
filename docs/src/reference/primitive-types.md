@@ -26,7 +26,7 @@ integers:
 |---|---|
 | `s.code() -> u32` | the FIRST codepoint of `s` (traps on empty) |
 | `s.code_at(i: i32) -> u32` | the codepoint at codepoint index `i` (traps out of bounds — the index is a bug, not data) |
-| `str.from_code(n: u32) -> str` | the 1-codepoint `str` for `n` |
+| `str::from_code(n: u32) -> str` | the 1-codepoint `str` for `n` |
 
 Absence is `nil` on a nullable
 `?T`.
@@ -40,8 +40,8 @@ Absence is `nil` on a nullable
 `slice(from, to) -> str`, `starts_with(from, head) -> bool`,
 `scan(from, set) -> i64`.
 `bytes` members: `len()`, `decode() -> str` (UTF-8, lossy),
-`clone() -> bytes`; type-methods `bytes.zeroed(n) -> bytes` and
-`bytes.from(a: [u8]) -> bytes`. `str.encode()` and `bytes.decode()`
+`clone() -> bytes`; type-methods `bytes::zeroed(n) -> bytes` and
+`bytes::from(a: [u8]) -> bytes`. `str::encode()` and `bytes::decode()`
 convert between text and octets.
 
 ## One regime: primitives by value, everything else shared
@@ -55,7 +55,7 @@ interface-typed values, `?T` boxes alike. Writing is gated by the
 `mut`-binding law (see [Modules and visibility](modules-and-visibility.md)),
 never by the sharing.
 
-There is no eager copy: **`bytes.clone()` is the one
+There is no eager copy: **`bytes::clone()` is the one
 copy escape hatch**. There is no `&`/`*` syntax anywhere.
 `==` on cells is **identity** (the raw slot compare); `str`/`bytes`
 compare by content — the full table is in

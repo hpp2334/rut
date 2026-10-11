@@ -32,8 +32,8 @@ and where everything lives in the toolchain tree.
 
   "deps": {
     "greet": { "path": "../greet" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "128ffcf7daa2c43ed3ebad00a6a91ff7c4c494f2442c0a80d6f2c0daa455cc34" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle", "sha256": "04d069cdf71922e7cd41224ee813b78f568c66b878d909e92b026be2530e57c0" }
   }
 }
 ```
@@ -64,7 +64,7 @@ behind a syntax-stripping front stage: the comment and comma bytes
 become spaces before the parser sees them, so a syntax error keeps the
 parser's own wording under a `line N:` prefix that names the ORIGINAL
 file's line. The value laws are unchanged. Value errors are
-path-targeted (`deps.pouch: unknown key 'feats'`). Descriptors are
+path-targeted (`deps::pouch: unknown key 'feats'`). Descriptors are
 key/value objects; unknown descriptor keys are path-targeted manifest
 errors. Duplicate keys are last-wins. An `_`-key refuses loudly naming
 the fix — comments are the prose now.
@@ -125,7 +125,7 @@ Visibility is per module file ([Modules and
 visibility](modules-and-visibility.md)): plain declarations are visible
 in their own module and its descendants, `pub(pkg)` shares inside the
 package, `pub` crosses packages. Cross-file references inside one
-package are qualified positions (`layout.Column`, `widget.mk(3)` —
+package are qualified positions (`layout::Column`, `widget::mk(3)` —
 the dot spelling); `use` statements stay the only cross-package door
 (`use tur_kit::layout::{ Column }`).
 

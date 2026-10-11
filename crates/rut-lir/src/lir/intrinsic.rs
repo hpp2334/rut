@@ -141,7 +141,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let Some(ef) = self.ctx.extern_fn(member).cloned() else {
             let head = self.ctx.name(ns).to_string();
             let name = self.ctx.name(member).to_string();
-            self.ctx.err(sp, format!("`{head}.{name}` is not a namespace member"));
+            self.ctx.err(sp, format!("`{head}::{name}` is not a namespace member"));
             return Err(());
         };
         if args.len() != ef.params.len() {

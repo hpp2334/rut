@@ -56,7 +56,7 @@ struct Bank {
 }
 
 entry fn serialize(c: opaque) -> str {
-    let b = opaque.downcast<?Bank>(c);
+    let b = opaque::downcast<?Bank>(c);
     let xs = b.data;
     let mut out = "[";
     for (let i = 0; i < xs.len(); i += 1) {
@@ -70,7 +70,7 @@ entry fn serialize(c: opaque) -> str {
 
 entry fn main() {
     let log = Logger("sort");
-    let bank: ?Bank = Bank { data: Vec<i32>.from([5, 2, 9, 2]) };
+    let bank: ?Bank = Bank { data: Vec<i32>::from([5, 2, 9, 2]) };
     let c = opaque(bank);
     log.info(f"serialized: {serialize(c)}");
 }
@@ -92,7 +92,7 @@ are an ordinary value, not a trap — the empty string means success:
 
 ```rut
 entry fn sort(c: opaque, algo: str) -> str {
-    let b = opaque.downcast<?Bank>(c);
+    let b = opaque::downcast<?Bank>(c);
     let mut unknown = false;
     when (algo) {
         "insertion" -> { insertion_sort(b.data); },
@@ -128,8 +128,8 @@ use pouch::{ Vec };
 struct Bank { data: ?Vec<i32>; }   // inlined from above — the block runs alone
 
 entry fn fill(c: opaque, n: u32, seed: u32) {
-    let mut b = opaque.downcast<?Bank>(c);
-    let fresh: Vec<i32> = Vec.new();
+    let mut b = opaque::downcast<?Bank>(c);
+    let fresh: Vec<i32> = Vec::new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < n as i32; i += 1) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
@@ -143,7 +143,7 @@ entry fn main() {
     let bank: ?Bank = Bank { data: nil };
     let c = opaque(bank);
     fill(c, 8, 42);
-    let b = opaque.downcast<?Bank>(c);
+    let b = opaque::downcast<?Bank>(c);
     let xs = b.data;
     let mut out = "";
     for (let x of xs) {

@@ -17,8 +17,8 @@
 //! - [`index_dep`] indexes one dep source file: [`analysis::index_at`]
 //!   plus `module = Some(name)`, with `namespace`/`consts` minted onto
 //!   the index (a namespace-head type row, module-scope lets for the
-//!   consts — the `calc`/`Math.PI` shape: the engine binds
-//!   `use calc::{Math}` then routes `Math.sqrt`/`Math.PI` as qualified
+//!   consts — the `calc`/`Math::PI` shape: the engine binds
+//!   `use calc::{Math}` then routes `Math::sqrt`/`Math::PI` as qualified
 //!   access, and the member machinery resolves both through the minted
 //!   row).
 
@@ -78,7 +78,7 @@ pub struct DepTable {
     pub entries: Vec<EntrySource>,
     /// the qualified-access head (`calc`'s `Math`)
     pub namespace: Option<String>,
-    /// the compiler-materialized constants (`Math.PI`), name → f64
+    /// the compiler-materialized constants (`Math::PI`), name → f64
     pub consts: Vec<(String, f64)>,
     /// `type = "host"` — the entry surface is a pure `.d.rut` and its
     /// `mod` tree mounts the Decl flavor (`NAME/mod.d.rut` children,
@@ -398,7 +398,7 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 /// over `src` (origin stamped with `uri`, mode per the manifest), the
 /// module NAMED, and the manifest's `namespace`/`consts` minted on —
 /// a `TyForm::Namespace` type row for the head (the module's free fns
-/// as methods, the consts as fields: the qualified `Math.sqrt`/`Math.PI`
+/// as methods, the consts as fields: the qualified `Math::sqrt`/`Math::PI`
 /// shape resolves through the member machinery), module-scope lets for
 /// the consts (the bare `PI` form the compiler binds as an extern
 /// const once the pkg is used).
@@ -524,10 +524,10 @@ mod tests {
         let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
         match &pouch.source {
             DepSource::Url { url, sha256, cache_path } => {
-                assert_eq!(url, "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle");
+                assert_eq!(url, "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle");
                 assert_eq!(
                     sha256.as_deref(),
-                    Some("d0bc36bb385bcc14e76d6275c92613edeab2d46ae0d162f7104282caef1a12cd")
+                    Some("2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466")
                 );
                 assert_eq!(
                     cache_path,
@@ -626,7 +626,7 @@ pub host fn sqrt(x: f64) -> f64;
         // … the surface indexes …
         assert!(idx.fns.iter().any(|f| f.name == "sqrt" && f.owner.is_none()));
         // … the namespace head mints as a type row carrying the fns as
-        // methods and the consts as fields — the Math.sqrt/Math.PI shape
+        // methods and the consts as fields — the Math::sqrt/Math::PI shape
         let math = idx.ty("Math").expect("the namespace head mints");
         assert_eq!(math.form, TyForm::Namespace);
         assert!(math.is_pub);

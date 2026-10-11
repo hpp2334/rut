@@ -104,8 +104,8 @@ impl TypeFrame {
         }
     }
 
-    /// dotted path segments; generic args pause at a child frame and
-    /// resume through `genargs_done` — the loop is iterative (C2)
+    /// `::`-separated path segments; generic args pause at a child frame
+    /// and resume through `genargs_done` — the loop is iterative (C2)
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
             let Some(name) = p.expect_ident("a type name") else {
@@ -124,7 +124,7 @@ impl TypeFrame {
             if let TyStage::Path { segs, .. } = &mut self.stage {
                 segs.push(PathSeg { name, generics: Vec::new() });
             }
-            if !p.eat_punct(Tok::Dot) {
+            if !p.eat_punct(Tok::Colon2) {
                 return self.path_pop(p);
             }
         }
@@ -132,7 +132,7 @@ impl TypeFrame {
 
     /// resume after a generic-argument list completed one segment
     fn path_resume(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::Dot) {
+        if p.eat_punct(Tok::Colon2) {
             self.path_run(p)
         } else {
             self.path_pop(p)
@@ -397,9 +397,9 @@ impl Parser {
 
     /// §4.2 scan 2: from a `<` (at `self.pos`), is this a generic-argument
     /// list? Commits iff angle depth returns to 0 and the next token
-    /// continues a generic use (`(` call — TypeScript's rule —or `.`
-    /// path continuation, which the corpus needs for `MyMap<K, V>.new` /
-    /// `Option<T>.Some`). `>>` counts as two closers (span arithmetic).
+    /// continues a generic use (`(` call — TypeScript's rule —or `::`
+    /// path continuation, which the corpus needs for `MyMap<K, V>::new` /
+    /// `Option<T>::Some`). `>>` counts as two closers (span arithmetic).
     pub(crate) fn scan_is_generic_args(&self, _in_pattern: bool) -> bool {
         let mut depth = 1i32; // the `<` at self.pos
         let mut i = self.pos + 1;
@@ -436,13 +436,13 @@ impl Parser {
             i += 1;
             if depth == 0 {
                 // the commit followers: `(` (TypeScript's call rule),
-                // `.` (path continuation — `MyMap<K, V>.new`), and ` { `
+                // `::` (path continuation — `MyMap<K, V>::new`), and ` { `
                 // (the generic record literal — `Source<str> { .. }`). A comparison never sees one of the three
                 // directly after its `>`: the block brace trails a
                 // condition at depth 0 only when the `<` opened a type.
                 return matches!(
                     self.toks.get(i).map(|t| &t.tok),
-                    Some(Tok::LParen) | Some(Tok::Dot) | Some(Tok::LBrace)
+                    Some(Tok::LParen) | Some(Tok::Colon2) | Some(Tok::LBrace)
                 );
             }
             if depth < 0 {

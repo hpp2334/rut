@@ -72,7 +72,7 @@ fn dist_std() -> PathBuf {
 }
 
 /// The 16 pkgs: (tree dir, artifact name). Keep in sync with
-/// scripts/pack-std.cjs's PKGS table.
+/// scripts/pack-std::cjs's PKGS table.
 const PKGS: &[(&str, &str)] = &[
     ("pouch", "pouch"),
     ("flow", "flow"),
@@ -134,7 +134,7 @@ fn every_committed_artifact_is_byte_fresh() {
         assert_eq!(
             fresh, committed,
             "rut/{dir} repacks differently from the committed dist/std/{name}.rutbundle — \
-             run `node scripts/pack-std.cjs && node scripts/pack-std.cjs --pins`"
+             run `node scripts/pack-std::cjs && node scripts/pack-std::cjs --pins`"
         );
     }
 }
@@ -202,7 +202,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
         // json's compiled rows: the Writer class binds from the binary;
         // the interface crosses on the surface; the satisfaction is THIS
         // app's own members (structural, local dispatch)
-        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl Item {\n    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let mut w = JsonWriter.new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
+        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl Item {\n    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let mut w = JsonWriter::new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
     )
     .expect("the six-pin world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -241,7 +241,7 @@ fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
             sha256_hex(&torn_bytes)
         ),
         table,
-        "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>.new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
+        "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
     )
     .expect_err("the torn bundle refuses at mount");
     assert!(err.contains("`pouch` owns an open generic surface"), "{err}");
@@ -296,7 +296,7 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
             sha256_hex(&bytes)
         ),
         table,
-        "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>.new();\n    items.push(7);\n    items.push(9);\n    return items.len() as i32;\n}\n",
+        "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    items.push(9);\n    return items.len() as i32;\n}\n",
     )
     .expect("the CDN-pouch world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -377,7 +377,7 @@ impl Todo {
 }
 
 entry fn main() -> i32 {
-    let mut v: Vec<Todo> = Vec<Todo>.new();
+    let mut v: Vec<Todo> = Vec<Todo>::new();
     v.push(Todo { name: "write the book", n: 1 });
     v.push(Todo { name: "ship the CDN", n: 2 });
     let (text, e) = encodeJson(JsonVec(v));
@@ -443,7 +443,7 @@ fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
         &base,
         &rows,
         table,
-        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder.new();\n    b.append(\"mixed\");\n    return b.build();\n}\n",
+        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"mixed\");\n    return b.build();\n}\n",
     )
     .expect("the mixed world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -464,7 +464,7 @@ fn the_load_time_compile_is_deterministic() {
     // on-demand compilation is the deterministic compiler over the same
     // inputs — no clocks, no iteration-order hazards
     let (url, bytes) = artifact("pouch");
-    let src = "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>.new();\n    items.push(7);\n    return items.len() as i32;\n}\n";
+    let src = "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n";
     let mut outs: Vec<Vec<u8>> = Vec::new();
     for run in 0..2 {
         let base =
@@ -513,7 +513,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     .unwrap();
     std::fs::write(
         app.join("mod.rut"),
-        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder.new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
+        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();
     let session =

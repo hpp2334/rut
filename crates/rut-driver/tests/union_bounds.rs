@@ -121,7 +121,7 @@ fn union_bound_rejects_record_and_user_class_naming_the_bound() {
         "{MULTI_UNION}\
          class Tok {{ v: i32; }}\n\
          impl Tok {{ pub fn new() -> Self {{ return Self {{ v: 1 }}; }} }}\n\
-         entry fn probe() -> i64 {{ let t: Tok = Tok.new(); return take(t); }}\n"
+         entry fn probe() -> i64 {{ let t: Tok = Tok::new(); return take(t); }}\n"
     ));
     assert!(
         ds.iter().any(|d| d.contains("`Tok` does not satisfy `K` requires `i32 | i64 | bool`")),
@@ -291,8 +291,8 @@ fn class_body_method_call_through_the_union_bound() {
     let full = format!(
         "{src}\
          entry fn check() -> i64 {{\
-             let a: Box<i32, str> = Box.new(5, \"x\");\n\
-             let b: Box<i64, str> = Box.new(6i64, \"y\");\n\
+             let a: Box<i32, str> = Box::new(5, \"x\");\n\
+             let b: Box<i64, str> = Box::new(6i64, \"y\");\n\
              return (a.go() as i64) + (b.go() as i64);\n\
          }}\n"
     );
@@ -310,7 +310,7 @@ fn class_body_method_call_through_the_union_bound() {
          \x20   pub fn go(self) -> i32 { let kk = self.k; return kk.wrapping_mul(10) as i32; }\n\
          }\n\
          entry fn probe() -> i64 {\
-             let b: Box<i32, str> = Box.new(5, \"x\");\n\
+             let b: Box<i32, str> = Box::new(5, \"x\");\n\
              return b.go() as i64;\n\
          }\n",
     );

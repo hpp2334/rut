@@ -59,7 +59,7 @@ fn generic_class_monomorphizes_per_instantiation() {
              fn get(self) -> T { return self.value; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let b: Box<i32> = Box.new(41);\n\
+             let b: Box<i32> = Box::new(41);\n\
              return b.get() + 1;\n\
          }\n",
     );
@@ -85,8 +85,8 @@ fn two_instantiations_are_distinct() {
              fn fst(self) -> T { return self.a; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let x: Pair<i32> = Pair.new(1, 2);\n\
-             let y: Pair<i64> = Pair.new(3, 4);\n\
+             let x: Pair<i32> = Pair::new(1, 2);\n\
+             let y: Pair<i64> = Pair::new(3, 4);\n\
              return x.fst();\n\
          }\n",
     );
@@ -108,7 +108,7 @@ fn recursive_generic_terminates() {
          impl<T> Node<T> {\n\
              fn new(v: T) -> Self { return Self { value: v, next: nil }; }\n\
          }\n\
-         entry fn main() -> i32 { let n: Node<i32> = Node.new(1); return n.value; }\n",
+         entry fn main() -> i32 { let n: Node<i32> = Node::new(1); return n.value; }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
@@ -126,7 +126,7 @@ fn explicit_generic_static_path() {
              fn get(self) -> T { return self.value; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let b = Box<i32>.new(7);\n\
+             let b = Box<i32>::new(7);\n\
              return b.get();\n\
          }\n",
     );
@@ -144,7 +144,7 @@ fn vec_over_pointer_array_compiles() {
              len: i32;\n\
          }\n\
          impl<T> Vec<T> {\n\
-             fn new() -> Self { return Vec.with_capacity(0); }\n\
+             fn new() -> Self { return Vec::with_capacity(0); }\n\
              fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }\n\
              fn len(self) -> i32 { return self.len; }\n\
              fn push(mut self, v: T) -> nil {\n\
@@ -164,7 +164,7 @@ fn vec_over_pointer_array_compiles() {
              }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let mut v: Vec<i32> = Vec.new();\n\
+             let mut v: Vec<i32> = Vec::new();\n\
              v.push(1);\n\
              v.push(2);\n\
              return v.len();\n\

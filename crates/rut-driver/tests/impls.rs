@@ -185,7 +185,7 @@ fn static_dispatch_when_the_origin_is_single() {
              pub fn get(self) -> i32 { return self.v; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let b = B.new(7);\n\
+             let b = B::new(7);\n\
              let w: Get = b;\n\
              return w.get();\n\
          }\n",
@@ -227,7 +227,7 @@ fn for_of_without_an_impl_names_the_missing_contract() {
         "class Count { n: i32 }\n\
          impl Count { fn new() -> Self { return Self { n: 0 }; } }\n\
          entry fn main() -> i32 {\n\
-             let c = Count.new();\n\
+             let c = Count::new();\n\
              for (let v of c) { }\n\
              return 0;\n\
          }\n",
@@ -291,7 +291,7 @@ fn self_spells_the_impl_target() {
              fn bump(self) -> Self { return P { x: self.x + 1 }; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let p = P.new(1);\n\
+             let p = P::new(1);\n\
              let q = p.bump();\n\
              return q.x;\n\
          }\n",
@@ -612,7 +612,7 @@ impl Counter {\n\
 }\n\
 // same-module: the plain fn is right there — the ordinary law\n\
 pub fn peek(c: Counter) -> i32 { return c.secret(); }\n\
-pub fn fresh() -> Counter { return Counter.new(); }\n";
+pub fn fresh() -> Counter { return Counter::new(); }\n";
 
 #[test]
 fn pub_struct_methods_cross_private_ones_stay_home() {
@@ -667,7 +667,7 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
 
 // ---- enums as impl targets ------------------------------------------
 // `impl Color { .. }` attaches to the enum's decl slot: non-self
-// statics (`Color.default()`), self methods (`c.label()`), and the
+// statics (`Color::default()`), self methods (`c.label()`), and the
 // `[iterable]` member (`for (let v of c)` rides the same desugar as a
 // class's).
 
@@ -675,19 +675,19 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
 fn enum_inherent_statics_and_self_calls_compile() {
     let src = "enum Color { Red, Green, Blue }\n\
                impl Color {\n\
-               \x20   fn default() -> Self { return Color.Green; }\n\
+               \x20   fn default() -> Self { return Color::Green; }\n\
                \x20   fn label(self) -> str {\n\
                \x20       return when (self) {\n\
-               \x20           Color.Red -> \"red\",\n\
-               \x20           Color.Green -> \"green\",\n\
-               \x20           Color.Blue -> \"blue\",\n\
+               \x20           Color::Red -> \"red\",\n\
+               \x20           Color::Green -> \"green\",\n\
+               \x20           Color::Blue -> \"blue\",\n\
                \x20       };\n\
                \x20   }\n\
                }\n\
                entry fn main() -> i32 {\n\
-               \x20   let d: Color = Color.default();\n\
+               \x20   let d: Color = Color::default();\n\
                \x20   if (d.label() != \"green\") { return -1; }\n\
-               \x20   if (Color.Red.label() != \"red\") { return -2; }\n\
+               \x20   if (Color::Red.label() != \"red\") { return -2; }\n\
                \x20   return 7;\n\
                }\n";
     assert_eq!(run_main(src), 7);
@@ -707,22 +707,22 @@ fn iterable_member_drives_for_break_continue() {
                impl Lights {\n\
                \x20   fn new() -> Self { return Self { }; }\n\
                \x20   [iterable] fn iterate(self, emit: fn(Light) -> bool) {\n\
-               \x20       if (!emit(Light.Green)) { return; }\n\
-               \x20       if (!emit(Light.Yellow)) { return; }\n\
-               \x20       emit(Light.Red);\n\
+               \x20       if (!emit(Light::Green)) { return; }\n\
+               \x20       if (!emit(Light::Yellow)) { return; }\n\
+               \x20       emit(Light::Red);\n\
                \x20   }\n\
                }\n\
                entry fn main() -> i32 {\n\
                \x20   // the capture law: scalars copy into the emit closure,\n\
                \x20   // so the accumulator is a shared cell\n\
                \x20   let mut acc: ?Acc = Acc { };\n\
-               \x20   for (let v of Lights.new()) {\n\
+               \x20   for (let v of Lights::new()) {\n\
                \x20       acc.hits += 1;\n\
                \x20       if (acc.hits == 2) { break; }\n\
                \x20   }\n\
                \x20   if (acc.hits != 2) { return -1; }\n\
                \x20   let mut all: ?Acc = Acc { };\n\
-               \x20   for (let v of Lights.new()) {\n\
+               \x20   for (let v of Lights::new()) {\n\
                \x20       all.hits += 1;\n\
                \x20       continue;\n\
                \x20   }\n\
@@ -770,12 +770,12 @@ fn disposal_stays_data_only_for_enums() {
         "class Acc { n: i32 = 0; }\n\
          enum Light { Green, Red }\n\
          impl Light {\n\
-             [iterable] fn iterate(self, emit: fn(Light) -> bool) { emit(Light.Green); emit(Light.Red); }\n\
+             [iterable] fn iterate(self, emit: fn(Light) -> bool) { emit(Light::Green); emit(Light::Red); }\n\
          }\n\
          entry fn main() -> i32 {\n\
              let mut acc: ?Acc = Acc { };\n\
-             for (let l of Light.Red) {\n\
-                 let x = when (l) { Light.Green -> 1, Light.Red -> 2 };\n\
+             for (let l of Light::Red) {\n\
+                 let x = when (l) { Light::Green -> 1, Light::Red -> 2 };\n\
                  acc.n = acc.n + x;\n\
              }\n\
              return acc.n;\n\
@@ -791,9 +791,9 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
     let dep = rut_driver::compile_program(
         "pub enum Dial { Low, High }\n\
          impl Dial {\n\
-         \x20   pub fn default() -> Self { return Dial.Low; }\n\
+         \x20   pub fn default() -> Self { return Dial::Low; }\n\
          \x20   pub fn flipped(self) -> Self {\n\
-         \x20       return when (self) { Dial.Low -> Dial.High, Dial.High -> Dial.Low };\n\
+         \x20       return when (self) { Dial::Low -> Dial::High, Dial::High -> Dial::Low };\n\
          \x20   }\n\
          \x20   fn hidden(self) -> i32 { return 5; }\n\
          }\n",
@@ -809,8 +809,8 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
     let pub_only = rut_driver::compile_program(
         "use dial::{Dial};\n\
          entry fn main() -> i32 {\n\
-         \x20   let d = Dial.default().flipped();\n\
-         \x20   return when (d) { Dial.Low -> 1, Dial.High -> 2 };\n\
+         \x20   let d = Dial::default().flipped();\n\
+         \x20   return when (d) { Dial::Low -> 1, Dial::High -> 2 };\n\
          }\n",
         Mode::Impl,
         "app",
@@ -824,7 +824,7 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
     let private = rut_driver::compile_program(
         "use dial::{Dial};\n\
          entry fn main() -> i32 {\n\
-         \x20   return Dial.High.hidden();\n\
+         \x20   return Dial::High.hidden();\n\
          }\n",
         Mode::Impl,
         "app",
@@ -833,7 +833,7 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
     );
     let ds: Vec<String> = private.diags.iter().map(|d| d.msg.clone()).collect();
     assert!(
-        ds.iter().any(|d| d.contains("no method `hidden`") || d.contains("unknown name `Dial.hidden`")),
+        ds.iter().any(|d| d.contains("no method `hidden`") || d.contains("unknown name `Dial::hidden`")),
         "a private enum method is invisible at the consumer: {ds:?}"
     );
 }

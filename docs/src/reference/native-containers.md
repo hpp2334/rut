@@ -77,7 +77,7 @@ impl MyMap {
 }
 ```
 
-Consumers recover values with `opaque.downcast<V>(box)` — `nil` on
+Consumers recover values with `opaque::downcast<V>(box)` — `nil` on
 mismatch, checked, never a trap ([opaque](opaque.md)).
 
 ## The connection contract — two checkpoints

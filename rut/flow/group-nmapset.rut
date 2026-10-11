@@ -12,7 +12,7 @@
 use nmapset::{ HashSet };
 
 // The sink wrapper (the FromFlow member): the call site spells
-// `SetFlow<T>.from_flow(it)`, `items()` unwraps.
+// `SetFlow<T>::from_flow(it)`, `items()` unwraps.
 pub class SetFlow<T>(HashSet<T>);
 
 impl<T> SetFlow<T> {

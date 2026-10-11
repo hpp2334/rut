@@ -555,7 +555,7 @@ mod tests {
             "    fn area(self) -> f64 { return 3.14; }",
             "}",
             "fn go(c: Circle) -> f64 {",
-            "    let w = Circle.new(1.0);",
+            "    let w = Circle::new(1.0);",
             "    return c.area() + w.r;",
             "}",
             "",
@@ -570,7 +570,7 @@ mod tests {
             &[
                 at(&d.src, "c: Circle", 1) + 3,
                 at(&d.src, "impl Circle", 1) + 5,
-                at(&d.src, "= Circle.new", 1) + 2,
+                at(&d.src, "= Circle::new", 1) + 2,
             ],
             &[],
         );
@@ -674,7 +674,7 @@ mod tests {
     }
 
     fn widget_user() -> (Doc, String) {
-        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n";
+        let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
         (doc(src), normalize(src))
     }
 
@@ -692,12 +692,12 @@ mod tests {
             ast: &main.ast,
             idxs: &idxs,
         };
-        let hits = references(&ctx, at(&norm, "Widget.new", 1), false);
+        let hits = references(&ctx, at(&norm, "Widget::new", 1), false);
         let mut offs = ref_offsets(&norm, DOC, &hits);
         offs.sort();
         assert_eq!(
             offs,
-            vec![at(&norm, "Widget }", 1), at(&norm, "Widget.new", 1)],
+            vec![at(&norm, "Widget }", 1), at(&norm, "Widget::new", 1)],
             "{hits:?}"
         );
     }
@@ -722,7 +722,7 @@ mod tests {
         assert!(hits.iter().all(|l| l.uri == DOC), "{hits:?}");
         let mut offs = ref_offsets(&norm, DOC, &hits);
         offs.sort();
-        assert_eq!(offs, vec![at(&norm, "Widget }", 1), at(&norm, "Widget.new", 1)]);
+        assert_eq!(offs, vec![at(&norm, "Widget }", 1), at(&norm, "Widget::new", 1)]);
     }
 
     #[test]
@@ -740,7 +740,7 @@ mod tests {
             ast: &main.ast,
             idxs: &idxs,
         };
-        let hits = references(&ctx, at(&norm, "Widget.new", 1), false);
+        let hits = references(&ctx, at(&norm, "Widget::new", 1), false);
         assert_eq!(hits.len(), 2, "use name + usage only: {hits:?}");
     }
 

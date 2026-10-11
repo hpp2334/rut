@@ -57,7 +57,7 @@ fn declared_binders_collect_and_the_impl_compiles() {
              pub fn get(self) -> T { return self.v; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let b: Box2<i32> = Box2.new(7);\n\
+             let b: Box2<i32> = Box2::new(7);\n\
              return b.get();\n\
          }\n",
     );
@@ -109,7 +109,7 @@ fn multi_binder_head_declares_both() {
              pub fn new(k: K, v: V) -> Self { return Self { k: k, v: v }; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let p: Pair2<i32, i32> = Pair2.new(1, 2);\n\
+             let p: Pair2<i32, i32> = Pair2::new(1, 2);\n\
              return p.k;\n\
          }\n",
     );
@@ -128,7 +128,7 @@ fn a_renamed_binder_is_the_head_spelling_law() {
              pub fn get(self) -> T { return self.v; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let b: Box2<i32> = Box2.new(9);\n\
+             let b: Box2<i32> = Box2::new(9);\n\
              return b.get();\n\
          }\n",
     );
@@ -146,7 +146,7 @@ fn concrete_head_names_stay_concrete() {
              pub fn coded(self) -> str { return \"holder\"; }\n\
          }\n\
          entry fn main() -> str {\n\
-             let h: Holder<i32> = Holder.new();\n\
+             let h: Holder<i32> = Holder::new();\n\
              return h.coded();\n\
          }\n",
     );

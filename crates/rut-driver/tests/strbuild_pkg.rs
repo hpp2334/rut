@@ -8,7 +8,7 @@
 //! The pins (survey §1.1/§1.5/§2 — the host admits nothing new):
 //! - append/len/build round trips (ASCII, astral, empty)
 //! - the codepoint rule: astral = ONE codepoint in `len`; a surrogate
-//!   append_code mints U+FFFD at the host fn (the str.from_code rule)
+//!   append_code mints U+FFFD at the host fn (the str::from_code rule)
 //! - the growth law: geometric growth is invisible to content
 //! - the share/copy law: alias and param appends visible
 //!   through the original; build twice = same text; the built str

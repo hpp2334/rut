@@ -4,7 +4,7 @@
 //!
 //! * **TYPE** (`InlayHintKind::TYPE`) — unannotated `let`s, for-of /
 //!   for-c loop variables, and module lets: the inferred type rendered
-//!   at the binding's end (`let c⌊: Circle⌋ = Circle.new(..)`). An
+//!   at the binding's end (`let c⌊: Circle⌋ = Circle::new(..)`). An
 //!   explicit annotation is never restated. `Binding::inferred` IS the
 //!   unannotated-and-derived law for fn-locals; for module lets the
 //!   AST's `ty: None` decides and `LetDef::ty` supplies the text.
@@ -415,7 +415,7 @@ mod tests {
             "    r: f64;",
             "}",
             "fn go() -> f64 {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.r;",
             "}",
             "",
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn annotated_lets_are_never_restated() {
-        let src = "class Circle {\n    r: f64;\n}\nfn go() -> nil {\n    let c: Circle = Circle.new(1.0);\n}\n";
+        let src = "class Circle {\n    r: f64;\n}\nfn go() -> nil {\n    let c: Circle = Circle::new(1.0);\n}\n";
         let d = doc(&src);
         assert!(w(&d, &[]).all().is_empty());
     }
@@ -486,7 +486,7 @@ mod tests {
             "    r: f64;",
             "}",
             "fn go() -> f64 {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.r;",
             "}",
             "",
@@ -597,7 +597,7 @@ mod tests {
             "    fn grown(self, k: f64) -> Circle { return self; }",
             "}",
             "fn go() -> Circle {",
-            "    let c = Circle.new(1.0);",
+            "    let c = Circle::new(1.0);",
             "    return c.grown(2.0);",
             "}",
             "",

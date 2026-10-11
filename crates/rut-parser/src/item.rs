@@ -160,12 +160,11 @@ impl UseFrame {
             return Step::Pop(Done::Failed);
         };
         self.path.push(pkg);
-        if !p.eat_punct(Tok::Colon) {
+        if !p.eat_punct(Tok::Colon2) {
             p.err_here("expected `::` after the package name — use paths spell `use <pkg>::{A, B};`");
             p.sync_stmt();
             return Step::Pop(Done::Failed);
         }
-        p.expect(Tok::Colon);
         if p.eat_punct(Tok::LBrace) {
             if !self.brace_names(p) {
                 p.sync_stmt();
@@ -180,10 +179,9 @@ impl UseFrame {
                     return Step::Pop(Done::Failed);
                 };
                 self.path.push(seg);
-                if !p.eat_punct(Tok::Colon) {
+                if !p.eat_punct(Tok::Colon2) {
                     break;
                 }
-                p.expect(Tok::Colon);
                 if p.eat_punct(Tok::LBrace) {
                     if !self.brace_names(p) {
                         p.sync_stmt();

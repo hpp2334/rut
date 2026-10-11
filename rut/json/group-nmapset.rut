@@ -80,7 +80,7 @@ fn key_bool(t: str) -> ?bool {
 // the text names itself; `at` rides the reader's position)
 fn map_err(at: i64, kt: str, want: str) -> DecodeJsonError {
     return DecodeJsonError {
-        kind: DecodeErrorKind.WrongType,
+        kind: DecodeErrorKind::WrongType,
         at: at,
         got: kt,
         expected: want,
@@ -93,14 +93,14 @@ pub class JMapStr<V requires JsonDeserialize>(HashMap<str, V>);
 
 impl<V> JMapStr<V> {
     pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<str, V>.new();
+        let mut m = HashMap<str, V>::new();
         r.begin_object();
         while (r.more()) {
             let kt = r.next_key();
             if (r.failed()) { return (nil, r.error()); }
             // verbatim (escaped by the reader's string law already)
             let kk: str = kt;
-            let (v, e) = V.decode(r);
+            let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
             let _ = m.put(kk, v);
         }
@@ -115,7 +115,7 @@ pub class JMapI64<V requires JsonDeserialize>(HashMap<i64, V>);
 
 impl<V> JMapI64<V> {
     pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<i64, V>.new();
+        let mut m = HashMap<i64, V>::new();
         r.begin_object();
         while (r.more()) {
             let kt = r.next_key();
@@ -123,7 +123,7 @@ impl<V> JMapI64<V> {
             let k = key_i64(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
             let kk: i64 = k;
-            let (v, e) = V.decode(r);
+            let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
             let _ = m.put(kk, v);
         }
@@ -138,7 +138,7 @@ pub class JMapBool<V requires JsonDeserialize>(HashMap<bool, V>);
 
 impl<V> JMapBool<V> {
     pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<bool, V>.new();
+        let mut m = HashMap<bool, V>::new();
         r.begin_object();
         while (r.more()) {
             let kt = r.next_key();
@@ -146,7 +146,7 @@ impl<V> JMapBool<V> {
             let k = key_bool(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
             let kk: bool = k;
-            let (v, e) = V.decode(r);
+            let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
             let _ = m.put(kk, v);
         }
@@ -161,7 +161,7 @@ pub class JMapU64<V requires JsonDeserialize>(HashMap<u64, V>);
 
 impl<V> JMapU64<V> {
     pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<u64, V>.new();
+        let mut m = HashMap<u64, V>::new();
         r.begin_object();
         while (r.more()) {
             let kt = r.next_key();
@@ -169,7 +169,7 @@ impl<V> JMapU64<V> {
             let k = key_u64(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
             let kk: u64 = k;
-            let (v, e) = V.decode(r);
+            let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
             let _ = m.put(kk, v);
         }
@@ -196,10 +196,10 @@ pub class JSet<T requires JsonDeserialize>(HashSet<T>);
 
 impl<T> JSet<T> {
     pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut s = HashSet<T>.new();
+        let mut s = HashSet<T>::new();
         r.begin_array();
         while (r.more()) {
-            let (x, e) = T.decode(r);
+            let (x, e) = T::decode(r);
             if (e != nil) { return (nil, e); }
             let _ = s.put(x);
         }

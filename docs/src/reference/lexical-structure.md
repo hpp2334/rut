@@ -55,7 +55,7 @@ Contextual words — ordinary identifiers elsewhere:
 | `entry` | `entry fn` at module scope publishes the function to the embedder |
 | `self` | the explicit receiver, first parameter of an instance method |
 | `Self` | names the enclosing class inside its body; the class-private literal `Self { .. }` |
-| `new` | not special — the conventional construction-method name (`Rect.new(..)`) |
+| `new` | not special — the conventional construction-method name (`Rect::new(..)`) |
 | `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
@@ -99,7 +99,7 @@ sugar over it.
   `push(v)`, `checked_add(y)`, `string_len(s)`.
 - **Construction is a method call; the call form binds by
   designation.** User classes construct through their own class
-  methods: `Rect.new(3, 4)`, `Rect.from(other)`, `Version.parse(s)` —
+  methods: `Rect::new(3, 4)`, `Rect::from(other)`, `Version::parse(s)` —
   see [Classes and constructors](classes.md). A class that designates
   a `[constructor]` member additionally takes the call form:
   `Point(1.0, 2.0)` is sugar for the designated member call,
@@ -107,8 +107,8 @@ sugar over it.
   no marker: `class JsonI64(i64);` constructs as the call
   `JsonI64(64)` — the compiler-provided positional mint (see
   [Newtypes](classes.md#newtypes-the-one-field-wrapper)). Only builtin
-  surfaces keep the other call forms: `bytes.zeroed(n)`, `opaque(v)`,
-  the repeat `[v; n]`, and `Vec<T>.from(..)` (see
+  surfaces keep the other call forms: `bytes::zeroed(n)`, `opaque(v)`,
+  the repeat `[v; n]`, and `Vec<T>::from(..)` (see
   [Builtin generic types](builtin-generic-types.md)).
 - The trailing-`$` marker is kept meaningful by this style rule alone;
   the compiler attaches no semantics to it.

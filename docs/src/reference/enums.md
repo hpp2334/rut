@@ -20,7 +20,7 @@ enum Direction { Up, Down, Left, Right }
 
 entry fn main() {
     let log = Logger("t");
-    log.info(f"{Color.Blue} {Direction.Right}");
+    log.info(f"{Color::Blue} {Direction::Right}");
 }
 ```
 
@@ -45,8 +45,8 @@ enum Light { Red, Yellow, Green }
 
 entry fn main() {
     let log = Logger("t");
-    let l = Light.Yellow;
-    log.info(f"{l == Light.Yellow}");   // true — members are immortal singleton cells
+    let l = Light::Yellow;
+    log.info(f"{l == Light::Yellow}");   // true — members are immortal singleton cells
 }
 ```
 
@@ -55,7 +55,7 @@ true
 ```
 
 - An enum value renders as its member name in format strings:
-  `f"{Color.Red}"` is `"Red"`.
+  `f"{Color::Red}"` is `"Red"`.
 - Enums are ordinary shared values: binding shares the singleton.
 
 ## Exhaustive `when`
@@ -74,11 +74,11 @@ fn brake() { let log = Logger("t"); log.info("brake"); }
 fn stop() { let log = Logger("t"); log.info("stop"); }
 
 entry fn main() {
-    let l = Light.Yellow;
+    let l = Light::Yellow;
     when (l) {
-        Light.Green  -> { go(); },
-        Light.Yellow -> { brake(); },
-        Light.Red    -> { stop(); },   // all members: no else needed
+        Light::Green  -> { go(); },
+        Light::Yellow -> { brake(); },
+        Light::Red    -> { stop(); },   // all members: no else needed
     }
 }
 ```
@@ -100,21 +100,21 @@ use ink::{ Logger };
 enum Dial { Low, High }
 
 impl Dial {
-    fn default() -> Self { return Dial.Low; }
+    fn default() -> Self { return Dial::Low; }
     fn flipped(self) -> Dial {
         return when (self) {
-            Dial.Low  -> Dial.High,
-            Dial.High -> Dial.Low,
+            Dial::Low  -> Dial::High,
+            Dial::High -> Dial::Low,
         };
     }
 }
 
 entry fn main() {
     let log = Logger("t");
-    let d = Dial.default().flipped();
+    let d = Dial::default().flipped();
     log.info(when (d) {
-        Dial.Low  -> "low",
-        Dial.High -> "high",
+        Dial::Low  -> "low",
+        Dial::High -> "high",
     });
 }
 ```
@@ -123,9 +123,9 @@ entry fn main() {
 high
 ```
 
-- A non-self method is a namespaced function: `Dial.default()`.
+- A non-self method is a namespaced function: `Dial::default()`.
   `Self` spells the enum, so `-> Self` is the return type and
-  `Dial.Low` mints the member.
+  `Dial::Low` mints the member.
 - A `self` method dispatches on the value: `d.flipped()` — the
   receiver crosses as the singleton cell it already is.
 - Method visibility is real: `pub fn` exports cross-module, plain
@@ -147,9 +147,9 @@ impl Light {
         for (let i = 0; i < 3; i += 1) {
             if (!emit(cur)) { return; }
             cur = when (cur) {
-                Light.Green  -> Light.Yellow,
-                Light.Yellow -> Light.Red,
-                Light.Red    -> Light.Green,
+                Light::Green  -> Light::Yellow,
+                Light::Yellow -> Light::Red,
+                Light::Red    -> Light::Green,
             };
         }
     }
@@ -157,7 +157,7 @@ impl Light {
 
 entry fn main() {
     let log = Logger("t");
-    for (let l of Light.Red) {
+    for (let l of Light::Red) {
         log.info(f"{l}");
     }
 }

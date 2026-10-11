@@ -38,7 +38,7 @@ marker word is the designation, not a name. The two builtin spellings
 | `panic(msg: str) -> nil` | abort with the message |
 | `string_join(parts: [str]) -> str` | join in one pass |
 | `capture_stacktrace() -> StackTrace` | opt-in stack snapshot: raw frames only, symbols resolved lazily per access |
-| `str.from_code(n: u32) -> str` | the 1-codepoint string |
+| `str::from_code(n: u32) -> str` | the 1-codepoint string |
 
 ### Primitives and their members
 
@@ -58,14 +58,14 @@ builtin primitive bytes {
     fn decode(self) -> str;                  // UTF-8, lossy
     fn clone(self) -> bytes;                 // the one copy escape hatch
 }
-// type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: [u8]) -> bytes
+// type-methods: bytes::zeroed(n) -> bytes, bytes::from(a: [u8]) -> bytes
 
 builtin primitive opaque {
     fn downcast<T>(o: Self) -> ?T;           // nil on mismatch; `x is T` probes
 }
 ```
 
-Construction keeps its builtin forms: `opaque(v)` seals, `Weak.new(v)`
+Construction keeps its builtin forms: `opaque(v)` seals, `Weak::new(v)`
 wraps (the class-method construction; the `Weak` name itself is
 import-gated — `use core::{ Weak }`) ([opaque](opaque.md),
 [weak references](weak-refs.md)).
@@ -75,7 +75,7 @@ import-gated — `use core::{ Weak }`) ([opaque](opaque.md),
 | class | members |
 |---|---|
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
-| `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }` |
+| `Weak<T>` | `Weak::new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died. **import-gated** — `use core::{ Weak }` |
 | `DisposalContext` | no members — the engine-minted parameter of a `[disposal]` member; it exists so the context can grow without touching the marker's signature |
 
 ### Engine contracts — markers and the closed async pair
@@ -198,7 +198,7 @@ use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger("flow");
-    let nums: Vec<i32> = Vec.new();
+    let nums: Vec<i32> = Vec::new();
     nums.push(1); nums.push(2); nums.push(3); nums.push(4);
     let src: VecFlow<i32> = VecFlow(nums);       // the spelled manufacture
     // entry → adapters → consumers: one drive, stage by stage
@@ -221,7 +221,7 @@ picked=3
 | `filter(p: fn(E) -> bool) -> Self` | keep the elements the predicate admits |
 | `take(n)` / `skip(n)` | the first `n` / everything after the first `n` — the counter is a record the drive mutates, so a drained stage stays drained |
 | `count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> Flow<(i32, E)>` | the one-drive consumers |
-| `W<T>.from_flow(it: Flow<E>) -> W<T>` | the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and `SetFlow<T>`; `collected()` / `items()` unwrap the materialized container |
+| `W<T>::from_flow(it: Flow<E>) -> W<T>` | the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and `SetFlow<T>`; `collected()` / `items()` unwrap the materialized container |
 | `for (x of chain)` | chains are iterable — the `[iterable]` member on `Flow<E>` feeds the ordinary desugar |
 
 **Import the interfaces you spell and the pipeline type**: `use flow::{
@@ -272,9 +272,9 @@ entry fn main() {
     let log = Logger("t");
     let x = 3.0f64;
     let y = 4.0f64;
-    let d = Math.sqrt(x * x + y * y);
-    let a = Math.abs(x);
-    let hf = Math.sqrt_f(2.0);            // f32 twin — the width is in the name
+    let d = Math::sqrt(x * x + y * y);
+    let a = Math::abs(x);
+    let hf = Math::sqrt_f(2.0);            // f32 twin — the width is in the name
     log.info(f"{d} {a} {hf}");
 }
 ```
@@ -287,7 +287,7 @@ Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`,
 `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`,
 `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`,
 `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`.
-Constants: `Math.PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`,
+Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`,
 `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`,
 `MIN_POSITIVE`. Integer numeric methods are core's, not `calc`'s.
 
@@ -349,7 +349,7 @@ pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJ
   `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer
   without the peers mounts json light.
 - The writer accumulates through `strbuild`'s `StringBuilder`; the reader
-  rides the core `str.scan`/`starts_with` primitives and O(1) string
+  rides the core `str::scan`/`starts_with` primitives and O(1) string
   views.
 
 ### `strbuild` — the builder
@@ -368,7 +368,7 @@ use strbuild::{ StringBuilder };
 entry fn main() {
     let log = Logger("t");
     let k = "name";
-    let mut b = StringBuilder.with_cap(1024);   // octet hint
+    let mut b = StringBuilder::with_cap(1024);   // octet hint
     b.append(f"{k}=");
     b.append_code(0x21);
     let s = b.build();                          // the ONE materialization
@@ -409,7 +409,7 @@ For the common accumulator shape no builder is needed at all:
 - `async_host` declares the engine rows (`__launch`, `__abort`,
   `__sleep`, `__sleep_yield`); `futures` restores the typed surface:
   `launch_future(f: Future<T>) -> LaunchedFutureHandle<T>`,
-  `LaunchedFutureHandle.abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
+  `LaunchedFutureHandle::abort() -> bool`, `sleep(ms: u32) -> Future<nil>`.
   Each embedder offers `rut/futures` (a `rut_native::tree_pkg` walk) and
   installs `rut_std::async_host::pkg()` on the chain; a world that
   offers neither has no launcher
@@ -426,7 +426,7 @@ For the common accumulator shape no builder is needed at all:
   use http::{ HttpClient, ClientQueryMethod };
 
   let resp = await HttpClient().request()
-      .method(ClientQueryMethod.Post)
+      .method(ClientQueryMethod::Post)
       .url("https://example.com/api")
       .header("Accept", "application/json")
       .body(payload)

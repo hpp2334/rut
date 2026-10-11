@@ -254,7 +254,7 @@ fn braced_one_field_class_has_no_constructor() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d == "`Plain` constructs through its class methods (`Plain.new(..)`) — mark one `[constructor]` to call the class itself"),
+        ds.iter().any(|d| d == "`Plain` constructs through its class methods (`Plain::new(..)`) — mark one `[constructor]` to call the class itself"),
         "a braced class keeps the seal, the miss names the fix: {ds:?}"
     );
 }
@@ -325,7 +325,7 @@ fn adapter_wrapper_constructs_across_modules() {
     let root = rut_driver::compile_program(
         "use theirjson::{ TheirJson, TheirVal };\n\
          entry fn main() -> i32 {\n\
-             let w = TheirJson(TheirVal.new(7));\n\
+             let w = TheirJson(TheirVal::new(7));\n\
              return w.n();\n\
          }\n",
         Mode::Impl,

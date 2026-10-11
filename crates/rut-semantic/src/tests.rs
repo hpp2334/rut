@@ -72,7 +72,7 @@ fn members_fields_and_locals() {
 
 #[test]
 fn f_string_tiles_and_lexes_holes() {
-    let src = "fn f() -> nil { log.info(f\"{color_name(Color.Red)} area={c.area()}\"); }";
+    let src = "fn f() -> nil { log.info(f\"{color_name(Color::Red)} area={c.area()}\"); }";
     let spans = classify_src(src);
     // the whole literal tiles with strings + hole tokens, no overlap
     let lit = src.find("f\"").unwrap() as u32;
@@ -100,7 +100,7 @@ fn types_struct_literals_and_patterns() {
                struct Point { x: f64; y: f64; }\n\
                fn make(c: Color) -> Point {\n\
                    let p = Point { x: 1, y: 2 };\n\
-                   return when (c) { Color.Red -> p, _ -> p, };\n\
+                   return when (c) { Color::Red -> p, _ -> p, };\n\
                }\n";
     let spans = classify_src(src);
     // decl name, param type, literal type

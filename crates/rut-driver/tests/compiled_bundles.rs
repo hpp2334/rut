@@ -215,7 +215,7 @@ fn a_source_group_splices_into_a_consumer_session() {
         "consumer",
         "use boxy::{ Holder };\nuse util::{ twice };\n\n\
          entry fn go2() -> i64 {\n\
-         \x20   let h = Holder<i64>.make(5);\n\
+         \x20   let h = Holder<i64>::make(5);\n\
          \x20   return twice(h.get());\n\
          }\n",
     ));
@@ -443,7 +443,7 @@ fn peer_groups_ride_v5_as_compiled_rows() {
         "mod.rut",
         "use peered::{ TagBadge };\nuse tagger::{ Badge };\nuse base::{ b };\n\n\
          entry fn go() -> str {\n\
-         \x20   let b2 = Badge.new();\n\
+         \x20   let b2 = Badge::new();\n\
          \x20   let _ = b();\n\
          \x20   return TagBadge(b2).tag();\n\
          }\n",

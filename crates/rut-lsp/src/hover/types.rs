@@ -25,7 +25,7 @@ pub enum TyForm {
     Alias,
     /// a dep manifest's `namespace` head (`calc`'s `Math`) — no surface
     /// decl spells it, the mint in `deps::index_dep` records it so the
-    /// qualified shape (`Math.sqrt`, `Math.PI`) resolves like the
+    /// qualified shape (`Math::sqrt`, `Math::PI`) resolves like the
     /// engine's bound namespace
     Namespace,
 }

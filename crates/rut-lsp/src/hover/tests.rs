@@ -92,12 +92,12 @@ fn area(self) -> f64 { return 3.14; }
 fn grow(self, k: f64) -> nil { self.r = self.r * k; }
 }
 fn use_it() -> f64 {
-let c = Circle.new(1.0);
+let c = Circle::new(1.0);
 return c.area();
 }
 ";
     // 2nd occurrence: the call `c.area()`, receiver inferred from
-    // `let c = Circle.new(..)`
+    // `let c = Circle::new(..)`
     let md = hover_nth(src, "area", 1).unwrap();
     assert!(md.contains("fn area(self) -> f64"), "{md}");
     assert!(md.contains("in `Circle`"), "{md}");
@@ -241,7 +241,7 @@ r: f64;
 fn area(self) -> f64 { return 3.14; }
 }
 fn go() -> f64 {
-let c: ?Circle = Circle.new(1.0);
+let c: ?Circle = Circle::new(1.0);
 return c.area();
 }
 ";
@@ -340,11 +340,11 @@ class Circle {
 r: f64;
 }
 fn go() -> f64 {
-let c = Circle.new(1.0);
+let c = Circle::new(1.0);
 return c.r;
 }
 ";
-    // the use of `c` in `c.r` — inferred from the `Circle.new` init
+    // the use of `c` in `c.r` — inferred from the `Circle::new` init
     let md = hover_nth(src, "c", 1).unwrap();
     assert!(md.contains("let c: Circle"), "{md}");
     assert!(md.contains("type inferred"), "{md}");
@@ -466,7 +466,7 @@ fn fn_result_receiver_resolves_members() {
 class Circle {
 r: f64;
 }
-fn mk() -> Circle { return Circle.new(1.0); }
+fn mk() -> Circle { return Circle::new(1.0); }
 fn go() -> f64 {
 let d = mk();
 return d.r;

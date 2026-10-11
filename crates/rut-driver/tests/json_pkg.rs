@@ -635,7 +635,7 @@ fn peer_gate_light_diagnoses_full_dispatches() {
     // reference site (D2 — the optional peer's miss names the pkg, the
     // peer, and the fix); WITH them it compiles clean —
     // the rows' runtime dispatch is vec_group's proof above.
-    let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>.new();\n    v.push(1);\n}\n";
+    let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>::new();\n    v.push(1);\n}\n";
     let light = rut_native::load_dir(Path::new(LIGHT)).expect("mount light");
     let err = rut_driver::RutRun::new()
         .pkgs(&light)

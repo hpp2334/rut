@@ -58,16 +58,16 @@
 //
 // THE READER (survey §2.2, reshaped by the json-perf batch phase 2): a
 // direct cursor over the doc str. The codepoint-split column is GONE —
-// `JsonReader.of` materializes nothing (the split was 15.1% of the
+// `JsonReader::of` materializes nothing (the split was 15.1% of the
 // json-roundtrip row's fuel); every classify rides the general
-// scan/classify primitive (`str.scan`: a host-side loop over a
+// scan/classify primitive (`str::scan`: a host-side loop over a
 // caller-supplied `[u8]` class table, one rut call per token boundary
 // instead of one op per codepoint), single-codepoint reads ride
 // `code_at`, and literal prefixes ride `starts_with`. Cursor arithmetic
 // and offsets stay CODEPOINT-based exactly as before (`at`/`got`
 // semantics unchanged; token payloads still carve as O(1)
 // views of `src`). The strict UTF-8 DFA (§2.2) gates the bytes entry —
-// `bytes.decode()` is LOSSY, never trusted on unvalidated input;
+// `bytes::decode()` is LOSSY, never trusted on unvalidated input;
 // invalid octets answer `InvalidUtf8`, never a silent U+FFFD.
 //
 // THE WRITER (survey §2.3, reshaped by the json-perf batch: phase 1's
@@ -149,7 +149,7 @@ impl JsonWriter {
         qt[0x5C] = 2;
         let mut c: i32 = 0;
         while (c < 0x20) { qt[c] = 3; c += 1; }
-        return Self { out: StringBuilder.with_cap(1024), depth: 0, st_kind: [0; 128],
+        return Self { out: StringBuilder::with_cap(1024), depth: 0, st_kind: [0; 128],
                       st_key: [nil; 128], st_n: [0; 128], top: 0, k: nil,
                       at: 0, path: "", qt: qt };
     }
@@ -218,7 +218,7 @@ impl JsonWriter {
 
     pub fn begin_object(mut self) {
         if (self.failed()) { return; }
-        if (self.depth >= 128) { self.fail(EncodeErrorKind.Depth); return; }
+        if (self.depth >= 128) { self.fail(EncodeErrorKind::Depth); return; }
         self.value_comma();
         self.st_kind[self.top] = 1;
         self.st_key[self.top] = nil;
@@ -230,7 +230,7 @@ impl JsonWriter {
 
     pub fn begin_array(mut self) {
         if (self.failed()) { return; }
-        if (self.depth >= 128) { self.fail(EncodeErrorKind.Depth); return; }
+        if (self.depth >= 128) { self.fail(EncodeErrorKind::Depth); return; }
         self.value_comma();
         self.st_kind[self.top] = 2;
         self.st_key[self.top] = nil;
@@ -307,7 +307,7 @@ impl JsonWriter {
     pub fn write_f64(mut self, v: f64) {
         if (self.failed()) { return; }
         if (v != v || v > 1.7976931348623157e308f64 || v < -1.7976931348623157e308f64) {
-            self.fail(EncodeErrorKind.NotFinite);
+            self.fail(EncodeErrorKind::NotFinite);
             return;
         }
         self.write_raw(f"{v}");
@@ -334,7 +334,7 @@ impl JsonWriter {
     // local f-string accumulator it replaces was the one place the
     // slice-per-char disease could still reach an escaped doc.
     fn quote_slow(self, s: str, first: i32) -> str {
-        let b = StringBuilder.with_cap(s.len() * 2 + 2);
+        let b = StringBuilder::with_cap(s.len() * 2 + 2);
         b.append("\"");
         if (first > 0) { b.append(s.slice(0, first)); }
         let n = s.len();
@@ -459,7 +459,7 @@ impl JsonReader {
 
     fn char_text(self, p: i32) -> str {
         if (p < 0 || p >= self.n) { return ""; }
-        return str.from_code(self.src.code_at(p));
+        return str::from_code(self.src.code_at(p));
     }
 
     pub fn skip_ws(mut self) {
@@ -493,7 +493,7 @@ impl JsonReader {
         self.skip_ws();
         if (self.lit_consume("null")) { return true; }
         if (self.peek() == 0x6E) {
-            self.fail(DecodeErrorKind.Unexpected, self.pos, self.lit_text(4), "null");
+            self.fail(DecodeErrorKind::Unexpected, self.pos, self.lit_text(4), "null");
         }
         return false;
     }
@@ -525,16 +525,16 @@ impl JsonReader {
         if (self.lit("true")) { self.pos += 4; return true; }
         if (self.lit("false")) { self.pos += 5; return false; }
         if (self.pos >= self.n) {
-            self.fail(DecodeErrorKind.Truncated, self.n, "", "a bool");
+            self.fail(DecodeErrorKind::Truncated, self.n, "", "a bool");
             return false;
         }
         let c = self.peek();
         if (c == 0x74 || c == 0x66) {
             // a broken true/false is a grammar miss, not a type mismatch
-            self.fail(DecodeErrorKind.Unexpected, self.pos, self.lit_text(5), "true or false");
+            self.fail(DecodeErrorKind::Unexpected, self.pos, self.lit_text(5), "true or false");
             return false;
         }
-        self.fail(DecodeErrorKind.WrongType, self.pos, self.char_text(self.pos), "a bool");
+        self.fail(DecodeErrorKind::WrongType, self.pos, self.char_text(self.pos), "a bool");
         return false;
     }
 
@@ -554,7 +554,7 @@ impl JsonReader {
     // a fraction, never head a multi-digit integer
     fn check_lead_zero(mut self, first: i32) -> bool {
         if (self.pos - first >= 2 && self.src.code_at(first) as i32 == 0x30) {
-            self.fail(DecodeErrorKind.Unexpected, first, self.lexeme_from(first), "a JSON number");
+            self.fail(DecodeErrorKind::Unexpected, first, self.lexeme_from(first), "a JSON number");
             return false;
         }
         return true;
@@ -573,9 +573,9 @@ impl JsonReader {
         let c = self.peek();
         if (c < 0x30 || c > 0x39) {
             if (c == -1) {
-                self.fail(DecodeErrorKind.Truncated, self.n, "", what);
+                self.fail(DecodeErrorKind::Truncated, self.n, "", what);
             } else {
-                self.fail(DecodeErrorKind.WrongType, self.pos, self.char_text(self.pos), what);
+                self.fail(DecodeErrorKind::WrongType, self.pos, self.char_text(self.pos), what);
             }
             return false;
         }
@@ -593,7 +593,7 @@ impl JsonReader {
         if (!self.check_lead_zero(digit_start)) { return 0; }
         if (digits <= 0) {
             // unreachable — signed_head admits a digit — kept for symmetry
-            self.fail(DecodeErrorKind.Truncated, self.n, "", "an i64");
+            self.fail(DecodeErrorKind::Truncated, self.n, "", "an i64");
             return 0;
         }
         // the schema-vs-doc law (§2.4): a float LEXEME into i64 is
@@ -601,7 +601,7 @@ impl JsonReader {
         let c = self.peek();
         if (c == 0x2E || c == 0x65 || c == 0x45) {
             self.scan_float_tail();
-            self.fail(DecodeErrorKind.WrongType, start, self.src.slice(start, self.pos), "an i64");
+            self.fail(DecodeErrorKind::WrongType, start, self.src.slice(start, self.pos), "an i64");
             return 0;
         }
         // negative accumulation keeps i64::MIN exact: acc ≤ 0 always.
@@ -632,7 +632,7 @@ impl JsonReader {
             overflow = true;
         }
         if (overflow) {
-            self.fail(DecodeErrorKind.WrongType, start, self.src.slice(start, self.pos), "an i64");
+            self.fail(DecodeErrorKind::WrongType, start, self.src.slice(start, self.pos), "an i64");
             return 0;
         }
         // the negative accumulation folds MIN exactly; the positive
@@ -650,9 +650,9 @@ impl JsonReader {
             if (self.failed()) { return; }
             if (fd <= 0) {
                 if (self.pos >= self.n) {
-                    self.fail(DecodeErrorKind.Truncated, self.n, "", "a JSON number");
+                    self.fail(DecodeErrorKind::Truncated, self.n, "", "a JSON number");
                 } else {
-                    self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "a JSON number");
+                    self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "a JSON number");
                 }
                 return;
             }
@@ -667,9 +667,9 @@ impl JsonReader {
             if (self.failed()) { return; }
             if (ed <= 0) {
                 if (self.pos >= self.n) {
-                    self.fail(DecodeErrorKind.Truncated, self.n, "", "a JSON number");
+                    self.fail(DecodeErrorKind::Truncated, self.n, "", "a JSON number");
                 } else {
-                    self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "a JSON number");
+                    self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "a JSON number");
                 }
             }
         }
@@ -708,9 +708,9 @@ impl JsonReader {
             if (self.failed()) { return 0.0; }
             if (frac_len <= 0) {
                 if (self.pos >= self.n) {
-                    self.fail(DecodeErrorKind.Truncated, self.n, "", "an f64");
+                    self.fail(DecodeErrorKind::Truncated, self.n, "", "an f64");
                 } else {
-                    self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "an f64");
+                    self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "an f64");
                 }
                 return 0.0;
             }
@@ -726,9 +726,9 @@ impl JsonReader {
             if (self.failed()) { return 0.0; }
             if (ed <= 0) {
                 if (self.pos >= self.n) {
-                    self.fail(DecodeErrorKind.Truncated, self.n, "", "an f64");
+                    self.fail(DecodeErrorKind::Truncated, self.n, "", "an f64");
                 } else {
-                    self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "an f64");
+                    self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "an f64");
                 }
                 return 0.0;
             }
@@ -875,9 +875,9 @@ impl JsonReader {
         self.skip_ws();
         if (self.peek() != 0x22) {
             if (self.pos >= self.n) {
-                self.fail(DecodeErrorKind.Truncated, self.n, "", "a string");
+                self.fail(DecodeErrorKind::Truncated, self.n, "", "a string");
             } else {
-                self.fail(DecodeErrorKind.WrongType, self.pos, self.char_text(self.pos), "a string");
+                self.fail(DecodeErrorKind::WrongType, self.pos, self.char_text(self.pos), "a string");
             }
             return "";
         }
@@ -891,13 +891,13 @@ impl JsonReader {
             if (cls == 0) {
                 // end of doc, no close quote
                 self.pos = stop;
-                self.fail(DecodeErrorKind.Truncated, self.n, "", "a string");
+                self.fail(DecodeErrorKind::Truncated, self.n, "", "a string");
                 return "";
             }
             if (cls == 2) {
                 // a raw control character is invalid JSON — never carried
                 self.pos = stop;
-                self.fail(DecodeErrorKind.Unexpected, stop, self.char_text(stop), "a string");
+                self.fail(DecodeErrorKind::Unexpected, stop, self.char_text(stop), "a string");
                 return "";
             }
             if (cls == 3) {
@@ -907,7 +907,7 @@ impl JsonReader {
                 esc = true;
                 self.pos = stop + 1;
                 if (self.pos >= self.n) {
-                    self.fail(DecodeErrorKind.Truncated, self.n, "", "a string");
+                    self.fail(DecodeErrorKind::Truncated, self.n, "", "a string");
                     return "";
                 }
                 self.pos = stop + 2;
@@ -923,7 +923,7 @@ impl JsonReader {
 
     fn unescape(mut self, raw: str) -> str {
         let rl = raw.len();
-        let mut b = StringBuilder.with_cap(rl);
+        let mut b = StringBuilder::with_cap(rl);
         let mut i: i32 = 0;
         while (i < rl) {
             let c = raw.code_at(i) as i32;
@@ -934,7 +934,7 @@ impl JsonReader {
             }
             i += 1;
             if (i >= rl) {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, "\\", "an escape");
+                self.fail(DecodeErrorKind::Unexpected, self.pos, "\\", "an escape");
                 return "";
             }
             let e = raw.code_at(i) as i32;
@@ -960,14 +960,14 @@ impl JsonReader {
                         && raw.code_at(nx) as i32 == 0x5C
                         && raw.code_at(nx + 1) as i32 == 0x75;
                     if (!ok) {
-                        self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, nx), "a surrogate pair");
+                        self.fail(DecodeErrorKind::Unexpected, self.pos, raw.slice(i - 2, nx), "a surrogate pair");
                         return "";
                     }
                     let h2 = self.hex4_at(raw, nx + 2);
                     if (self.failed()) { return ""; }
                     let lo = h2.0;
                     if (lo < 0xDC00 || lo > 0xDFFF) {
-                        self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, nx + 6), "a surrogate pair");
+                        self.fail(DecodeErrorKind::Unexpected, self.pos, raw.slice(i - 2, nx + 6), "a surrogate pair");
                         return "";
                     }
                     let joined: u32 = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
@@ -978,7 +978,7 @@ impl JsonReader {
                 if (cp >= 0xDC00 && cp <= 0xDFFF) {
                     // a lone low surrogate cannot occur in any rut str —
                     // never a silent replacement char (survey §2.3)
-                    self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, i + 4), "a codepoint");
+                    self.fail(DecodeErrorKind::Unexpected, self.pos, raw.slice(i - 2, i + 4), "a codepoint");
                     return "";
                 }
                 b.append_code(cp);
@@ -987,7 +987,7 @@ impl JsonReader {
             }
             let ec = raw.slice(i, i + 1);
             let got = f"\\{ec}";
-            self.fail(DecodeErrorKind.Unexpected, self.pos, got, "an escape");
+            self.fail(DecodeErrorKind::Unexpected, self.pos, got, "an escape");
             return "";
         }
         return b.build();
@@ -1002,7 +1002,7 @@ impl JsonReader {
             let c = raw.code_at(i + j) as i32;
             let d = hex_digit(c);
             if (d < 0) {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i + j, i + j + 1), "4 hex digits");
+                self.fail(DecodeErrorKind::Unexpected, self.pos, raw.slice(i + j, i + j + 1), "4 hex digits");
                 return (0, i);
             }
             v = v * 16 + d as u32;
@@ -1027,14 +1027,14 @@ impl JsonReader {
         self.depth += 1;
         if (self.depth > 128) {
             // survey §2.5: enforced on container entry, at the bracket
-            self.fail(DecodeErrorKind.Depth, self.pos, "", what);
+            self.fail(DecodeErrorKind::Depth, self.pos, "", what);
             return;
         }
         if (self.peek() != opener) {
             if (self.pos >= self.n) {
-                self.fail(DecodeErrorKind.Truncated, self.n, "", what);
+                self.fail(DecodeErrorKind::Truncated, self.n, "", what);
             } else {
-                self.fail(DecodeErrorKind.WrongType, self.pos, self.char_text(self.pos), what);
+                self.fail(DecodeErrorKind::WrongType, self.pos, self.char_text(self.pos), what);
             }
             return;
         }
@@ -1055,9 +1055,9 @@ impl JsonReader {
         self.skip_ws();
         if (self.peek() != closer) {
             if (self.pos >= self.n) {
-                self.fail(DecodeErrorKind.Truncated, self.n, self.char_text(self.pos), "the container's closer");
+                self.fail(DecodeErrorKind::Truncated, self.n, self.char_text(self.pos), "the container's closer");
             } else {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "the container's closer");
+                self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "the container's closer");
             }
             return;
         }
@@ -1066,7 +1066,7 @@ impl JsonReader {
 
     // more elements/members? consumes the separating comma — the loop
     // shape every decode impl spells:
-    //   r.begin_array(); while (r.more()) { .. T.decode(r) .. } r.end_array();
+    //   r.begin_array(); while (r.more()) { .. T::decode(r) .. } r.end_array();
     // The ws-skip and the look-ahead are ONE fused scan: the tok
     // table's classes dispatch `,` `]` `}` and "a value" without a
     // second peek.
@@ -1084,7 +1084,7 @@ impl JsonReader {
             self.pos = (r2 >> 8) as i32;
             let c2 = (r2 & 255) as i32;
             if (c2 == 5 || c2 == 3) {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "an element or member");
+                self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "an element or member");
                 return false;
             }
             return true;
@@ -1099,9 +1099,9 @@ impl JsonReader {
         self.skip_ws();
         if (self.peek() != 0x3A) {
             if (self.pos >= self.n) {
-                self.fail(DecodeErrorKind.Truncated, self.n, "", "':'");
+                self.fail(DecodeErrorKind::Truncated, self.n, "", "':'");
             } else {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "':'");
+                self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "':'");
             }
             return "";
         }
@@ -1156,7 +1156,7 @@ impl JsonReader {
             let _ = self.read_f64();
             return;
         }
-        self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "a JSON value");
+        self.fail(DecodeErrorKind::Unexpected, self.pos, self.char_text(self.pos), "a JSON value");
     }
 }
 
@@ -1375,7 +1375,7 @@ impl JsonU64 {
         let v = gnu64(t);
         if (v == nil) {
             return (nil, DecodeJsonError {
-                kind: DecodeErrorKind.WrongType,
+                kind: DecodeErrorKind::WrongType,
                 at: r.here() as i64,
                 got: t,
                 expected: "a u64",
@@ -1408,7 +1408,7 @@ fn gnu64(t: str) -> ?u64 {
 // SOpt<T> — the optional row (survey §2.6): nil -> null, else T; null
 // -> nil, else T. THIS wrapper is what makes every optional field one
 // `?T`. The bound is the ENCODE direction (the wrapper's T must be
-// encodable); the decode member delegates to `T.decode` per
+// encodable); the decode member delegates to `T::decode` per
 // instantiation, so a decode-only T (JsonU64) cannot ride SOpt — spell
 // the optional inline in that shape's own decode (the struct-decode
 // convention anyway).
@@ -1431,7 +1431,7 @@ impl<T> SOpt<T> {
             return (SOpt(none), nil);
         }
         if (r.failed()) { return (nil, r.error()); }
-        let (v, e) = T.decode(r);
+        let (v, e) = T::decode(r);
         if (e != nil) { return (nil, e); }
         let some: ?T = v;
         return (SOpt(some), nil);
@@ -1476,7 +1476,7 @@ impl<T> JsonArr<T> {
         let mut first: ?T = nil;
         let mut i: i32 = 0;
         while (r.more()) {
-            let (x, e) = T.decode(r);
+            let (x, e) = T::decode(r);
             if (e != nil) { return (nil, e); }
             buf[i] = x;
             if (i == 0) { first = x; }
@@ -1508,27 +1508,27 @@ impl<T> JsonArr<T> {
 // `let (s, e) = encodeJson(v);` destructures in return position — no
 // record mints (02ced3e's fusion; this pkg is its real-world proof).
 pub fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError) {
-    let mut w = JsonWriter.new();
+    let mut w = JsonWriter::new();
     let e = v.encode(w);
     if (e != nil) { return (nil, e); }
     return (w.finish(), nil);
 }
 
 pub fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError) {
-    let mut r = JsonReader.of(s);
-    let (v, e) = T.decode(r);
+    let mut r = JsonReader::of(s);
+    let (v, e) = T::decode(r);
     if (e != nil) { return (nil, e); }
     if (!r.at_end()) {
         // trailing garbage after the value + whitespace
         let at = r.here();
         let got = r.rest();
-        return (nil, DecodeJsonError { kind: DecodeErrorKind.Trailing, at: at as i64, got: got, expected: "end of input" });
+        return (nil, DecodeJsonError { kind: DecodeErrorKind::Trailing, at: at as i64, got: got, expected: "end of input" });
     }
     return (v, nil);
 }
 
 // STRICT UTF-8 (survey §2.2): the DFA validates every octet first —
-// `bytes.decode()` is lossy and is never trusted on unvalidated input;
+// `bytes::decode()` is lossy and is never trusted on unvalidated input;
 // an invalid octet answers InvalidUtf8 naming the offset and the hex
 // byte, never a silent U+FFFD. Valid bytes re-enter the SAME str cursor.
 pub fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError) {
@@ -1570,13 +1570,13 @@ pub fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJson
         }
         return (nil, utf8_err(c as u32, i));
     }
-    let mut r = JsonReader.of(b.decode());
-    let (v, e) = T.decode(r);
+    let mut r = JsonReader::of(b.decode());
+    let (v, e) = T::decode(r);
     if (e != nil) { return (nil, e); }
     if (!r.at_end()) {
         let at = r.here();
         let got = r.rest();
-        return (nil, DecodeJsonError { kind: DecodeErrorKind.Trailing, at: at as i64, got: got, expected: "end of input" });
+        return (nil, DecodeJsonError { kind: DecodeErrorKind::Trailing, at: at as i64, got: got, expected: "end of input" });
     }
     return (v, nil);
 }
@@ -1603,6 +1603,6 @@ fn utf8_err(byte: u32, at: i32) -> ?DecodeJsonError {
     let lo = byte & 15;
     let hs = hex.slice(hi as i32, hi as i32 + 1);
     let ls = hex.slice(lo as i32, lo as i32 + 1);
-    return DecodeJsonError { kind: DecodeErrorKind.InvalidUtf8, at: at as i64, got: f"0x{hs}{ls}", expected: "UTF-8" };
+    return DecodeJsonError { kind: DecodeErrorKind::InvalidUtf8, at: at as i64, got: f"0x{hs}{ls}", expected: "UTF-8" };
 }
 

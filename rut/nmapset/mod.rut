@@ -18,7 +18,7 @@
 // The host opens the key box for hash/eq (the closed key set's own
 // bits/octets; anything else is an `Invalid` trap) and retains the
 // value box; `get` answers the stored box and recovers with
-// `opaque.downcast<V>` (the box IS the `?V`, its payload the inner
+// `opaque::downcast<V>` (the box IS the `?V`, its payload the inner
 // cell — the aliasing law rides the box).
 //
 // (The old `KeyLane` dispatch — a private interface satisfied per
@@ -43,7 +43,7 @@ pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 
 impl<K, V> HashMap<K, V> {
     [constructor] pub fn new() -> Self {
-        return HashMap.with_capacity(8);
+        return HashMap::with_capacity(8);
     }
 
     // `n` is the host table's reserve hint.
@@ -68,7 +68,7 @@ impl<K, V> HashMap<K, V> {
     pub fn get(self, k: K) -> ?V {
         let cell = map_hvget(self.t, opaque(k));
         if (cell == nil) { return nil; }
-        return opaque.downcast<V>(cell);
+        return opaque::downcast<V>(cell);
     }
 
     pub fn has(self, k: K) -> bool {
@@ -107,7 +107,7 @@ impl<K, V> HashMap<K, V> {
     pub fn get_range(self, parent: str, off: i32, len: i32) -> ?V {
         let cell = map_hvget_sv(self.t, parent, off, len);
         if (cell == nil) { return nil; }
-        return opaque.downcast<V>(cell);
+        return opaque::downcast<V>(cell);
     }
 
     pub fn has_range(self, parent: str, off: i32, len: i32) -> bool {
@@ -129,7 +129,7 @@ pub class HashSet<T requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 
 impl<T> HashSet<T> {
     [constructor] pub fn new() -> Self {
-        return HashSet.with_capacity(8);
+        return HashSet::with_capacity(8);
     }
 
     pub fn with_capacity(n: i32) -> Self {

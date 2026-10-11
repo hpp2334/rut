@@ -305,7 +305,7 @@ fn window_get_set_write_through_unchanged() {
     let src = "\
 use pouch::{ Vec };
 entry fn main() -> i32 {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3);
     let mut w = v.slice(1, 3);
     let x = w[0] + w[1];
@@ -322,7 +322,7 @@ fn window_bounds_traps_unchanged() {
     let src = "\
 use pouch::{ Vec };
 entry fn main() -> i32 {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
     return w[5];
@@ -349,7 +349,7 @@ fn sieve_shape_over_field_arrays_checksums() {
 use pouch::{ Vec };
 entry fn main() -> i32 {
     let limit: i32 = 10_000;
-    let mut marks = Vec<u8>.filled(0, limit + 1);
+    let mut marks = Vec<u8>::filled(0, limit + 1);
     let mut count = 0;
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {

@@ -13,7 +13,7 @@ use pouch::{ Vec };
 // checksum = 1000000000000.
 
 fn churn(n: i32, m: i32) -> i64 {
-    let mut v: Vec<i32> = Vec.new();
+    let mut v: Vec<i32> = Vec::new();
     // push churn: n values through the grow path
     for (let i = 0; i < n; i += 1) {
         v.push(i % m);

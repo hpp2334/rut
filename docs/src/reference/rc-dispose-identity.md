@@ -17,7 +17,7 @@ closures' captured cells — is a **heap cell handle**:
   sharing.
 
 There is no eager copy of any composite — bindings share by reference.
-**`bytes.clone()` is the one copy escape hatch**: a one-shot deep copy
+**`bytes::clone()` is the one copy escape hatch**: a one-shot deep copy
 of a buffer's octets. Every other type shares on binding; a divergent
 value of any other type is unreachable — build a new one instead.
 
@@ -98,7 +98,7 @@ struct Tile { v: i32; }
 entry fn main() {
     let log = Logger("t");
     let tile = Tile { v: 7 };
-    let w = Weak.new(tile);        // does NOT keep the cell alive
+    let w = Weak::new(tile);        // does NOT keep the cell alive
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
     log.info(f"{got.v}");
 }
@@ -129,13 +129,13 @@ element-wise story. `a != b` is its negation.
   everywhere, structural equality of two independently built cells is
   ambiguous, and identity is O(1) with no deep walk.
   `[1, 2] == [1, 2]` is **false** — two cells.
-- Enum members are immortal singletons, so `Flavor.Sour == Flavor.Sour`
+- Enum members are immortal singletons, so `Flavor::Sour == Flavor::Sour`
   is `true` — the one place identity quietly behaves as value.
 - `?T == ?T` is slot identity: two `nil`s are equal, a null and a box
   are not; `p == nil` derefs the nullable side and compares against the
   null slot.
 - An **identity-compare lint** flags `==` between two obviously fresh
-  composites (`Vec.from([..]) == Vec.from([..])`): "always false —
+  composites (`Vec::from([..]) == Vec::from([..])`): "always false —
   compare fields". Asserting distinctness is legitimate and
   suppressible.
 - Field-wise comparison is a library interface contract (`hash` + `eq`

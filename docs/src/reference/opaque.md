@@ -14,7 +14,7 @@ it. Its entire API:
 | Member | Meaning |
 |---|---|
 | `opaque(v)` | erasure: box any value; answers the `opaque` box |
-| `opaque.downcast<T>(o) -> ?T` | checked recovery: the box's inner cell on a match, `nil` on a mismatch |
+| `opaque::downcast<T>(o) -> ?T` | checked recovery: the box's inner cell on a match, `nil` on a mismatch |
 | `unopaque<T>(o) -> T` | the erasure inverse: the typed value on a match, the bad-cast trap on a mismatch |
 | `x is opaque` | the ordinary concrete test for the box type itself |
 
@@ -27,12 +27,12 @@ enum Flavor { Sour, Sweet }
 entry fn main() {
     let log = Logger("t");
     let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name
-    let p = opaque.downcast<Point>(box1);      // ?Point — the nullable
+    let p = opaque::downcast<Point>(box1);      // ?Point — the nullable
     when (p != nil) {
         true -> { log.info(f"point {p.x} {p.y}"); },
         else  -> { log.info("point: nil"); },
     }
-    let wrong = opaque.downcast<i32>(opaque(Flavor.Sour));  // nil, no trap
+    let wrong = opaque::downcast<i32>(opaque(Flavor::Sour));  // nil, no trap
     log.info(f"wrong == nil: {wrong == nil}");
 }
 ```
@@ -60,7 +60,7 @@ wrong == nil: true
       let mut n = 5;
       let b = opaque(n);    // a prim payload COPIES the bits
       n = 9;                // ...so the source moving stays out
-      log.info(f"{opaque.downcast<i32>(b)} vs {n}");
+      log.info(f"{opaque::downcast<i32>(b)} vs {n}");
   }
   ```
 
@@ -103,7 +103,7 @@ wrong == nil: true
   Reach for `downcast<T>` when `nil` is a meaningful miss; reach for
   `unopaque<T>` when only the exact type will do.
 - **The type argument must be concrete.** An interface-typed type argument
-  (`opaque.downcast<Drawable>`) is a compile error — interface-typed values
+  (`opaque::downcast<Drawable>`) is a compile error — interface-typed values
   have no recovery path by design.
 - **The opaque-is law: `is` names the box, never the payload.**
   `o is T` and `o is I` answer **by the box** — false for every payload
@@ -118,7 +118,7 @@ wrong == nil: true
   entry fn main() {
       let log = Logger("t");
       let b = opaque("hello");
-      log.info(f"{b is str} {opaque.downcast<str>(b) != nil}");
+      log.info(f"{b is str} {opaque::downcast<str>(b) != nil}");
   }
   ```
 
@@ -146,7 +146,7 @@ struct Point { x: i32; y: i32; }
 entry fn main() {
     let log = Logger("t");
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two")];
-    let vec: Vec<opaque> = Vec.from([opaque(5)]);
+    let vec: Vec<opaque> = Vec::from([opaque(5)]);
     log.info(f"{boxes.len()} {vec.len()}");
 }
 ```
@@ -162,7 +162,7 @@ entry fn main() {
 - The host side of the same surface: an embedder can mint the box over
   host data with no static rut shape. rut sees only the box —
   `o is opaque` is `true`, `o is T` misses for every rut `T`, and
-  `opaque.downcast<T>` answers `nil` for every `T` (the miss is checked,
+  `opaque::downcast<T>` answers `nil` for every `T` (the miss is checked,
   never a trap). The host borrows the payload back typed, call-scoped
   and borrow-guarded.
 - An `opaque` box can do nothing until it is recovered — no methods, no

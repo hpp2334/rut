@@ -2,7 +2,7 @@ use pouch::{ Vec };
 // opaque: explicit type erasure with checked recovery.
 // opaque(v) forgets the static type, keeps the runtime type FOR
 // downcast; `is` names the BOX, never the payload. Recovery is
-// opaque.downcast<T> -> `?T` — the nullable. A
+// opaque::downcast<T> -> `?T` — the nullable. A
 // match IS the box's inner cell (the alias law: writes through the
 // recovery are the source's, in both directions, through every holder);
 // a prim payload reads the copied value; a wrong type is `nil` — never
@@ -33,16 +33,16 @@ impl Session {
 fn erase_and_recover() {
     let log = Logger("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
-    let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
+    let box2 = opaque(Flavor::Sour);             // zero-copy (shares the cell)
     let box3 = opaque("hello");
 
-    let p = opaque.downcast<Point>(box1);       // ?Point — the nullable
+    let p = opaque::downcast<Point>(box1);       // ?Point — the nullable
     when (p != nil) {
         true -> { log.info(f"point {p.x} {p.y}"); },
         else  -> { log.info("point: nil"); },
     }
-    let wrong = opaque.downcast<i32>(box2);     // wrong type: nil, no trap
-    log.info(f"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
+    let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no trap
+    log.info(f"sour? {opaque::downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
     log.info(f"is str: {box3 is str}");   // `is` names the box — misses every payload type; downcast recovers
 }
 
@@ -50,8 +50,8 @@ fn alias_law() {
     let log = Logger("opaque");
     let mut pt = Point { x: 1, y: 2 };
     let b = opaque(pt);                         // the box shares pt's cell
-    let mut p = opaque.downcast<Point>(b);      // the ?T shares it too
-    let mut q = opaque.downcast<Point>(b);      // ...as does a second holder
+    let mut p = opaque::downcast<Point>(b);      // the ?T shares it too
+    let mut q = opaque::downcast<Point>(b);      // ...as does a second holder
     p.x = 9;                                    // write through a recovery...
     q.y = 7;                                    // ...through the other...
     pt.y = 5;                                   // ...and back from the source
@@ -60,12 +60,12 @@ fn alias_law() {
 
 fn share_vs_copy() {
     let log = Logger("opaque");
-    let s = Session.new("abc");
+    let s = Session::new("abc");
     let o = opaque(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
     let o2 = opaque(s);    // a private copy, new identity
 
-    log.info(f"same session: {opaque.downcast<Session>(o) != nil}");
+    log.info(f"same session: {opaque::downcast<Session>(o) != nil}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells
 }
 
@@ -74,13 +74,13 @@ fn prim_value() {
     let mut n = 5;
     let b = opaque(n);            // a prim payload COPIES the bits
     n = 9;                        // ...so the source moving stays out
-    let v = opaque.downcast<i32>(b);
+    let v = opaque::downcast<i32>(b);
     when (v != nil) {
         true -> { log.info(f"value {v}"); },
         else  -> { log.info("value: nil"); },
     }
     let sbox = opaque("s");
-    log.info(f"str box misses i32: {opaque.downcast<i32>(sbox) == nil}");
+    log.info(f"str box misses i32: {opaque::downcast<i32>(sbox) == nil}");
 }
 
 fn nested() {
@@ -88,8 +88,8 @@ fn nested() {
     // heterogeneous FIXED array — pure data, one shared cell per slot
     //
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];
-    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/interface RHS and names the BOX — the payload misses; recover via `opaque.downcast<T>`
-    let vec: Vec<opaque> = Vec.from([opaque(5)]);
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/interface RHS and names the BOX — the payload misses; recover via `opaque::downcast<T>`
+    let vec: Vec<opaque> = Vec::from([opaque(5)]);
     log.info(f"vec {vec.len()}");
 }
 

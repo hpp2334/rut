@@ -4,7 +4,7 @@
 // view type on the surface — a slice of a `str` IS a `str`: it prints,
 // compares by content, iterates, and `len()` counts its own codepoints.
 // Codepoints, not bytes: `char` is gone — `s.code()`
-// reads the FIRST codepoint as a `u32` and `str.from_code(n)` builds the
+// reads the FIRST codepoint as a `u32` and `str::from_code(n)` builds the
 // 1-codepoint str back. Slicing a view flattens onto the root, so views
 // never chain.
 
@@ -31,6 +31,6 @@ entry fn main() {
 
     // the codepoint surface: read the first codepoint, build one back
     let first = accented.code();
-    let same = str.from_code(first);
+    let same = str::from_code(first);
     log.info(f"code={first} back={same} round={same == accented.slice(0, 1)}");
 }
