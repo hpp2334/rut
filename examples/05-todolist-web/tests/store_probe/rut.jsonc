@@ -11,9 +11,10 @@
     "app": {
       "path": "../../rut/biz"
     },
-    // the toolchain's pouch, from the CDN — the same pinned jsDelivr row
-    // the app's own manifests spell (the tests prime an offline remote
-    // from the committed dist/std artifacts, so the gate never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" }
+    // the toolchain's pouch, from the CDN — the same rut.lock-pinned
+    // jsDelivr row the app's own manifests spell (the tests prime an
+    // offline remote from the committed dist/std artifacts, so the gate
+    // never networks)
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
   }
 }

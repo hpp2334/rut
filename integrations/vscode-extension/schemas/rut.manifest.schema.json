@@ -37,7 +37,7 @@
     },
     "deps": {
       "$ref": "#/definitions/depTable",
-      "description": "Transitively mounted dependencies: exact specifier → descriptor. Each descriptor names exactly ONE source — `path` (a module directory) or `url` (a remote `.rutbundle`) plus, only beside `url`, the `sha256` pin. The pin is law at the mount door: the bytes mount only when their sha256 matches.",
+      "description": "Transitively mounted dependencies: exact specifier → descriptor. Each descriptor names exactly ONE source — `path` (a module directory) or `url` (a remote `.rutbundle`); url rows are `{ \"url\": ... }` only, the `sha256` key is retired (pins live in the sibling `rut.lock` — the pin is law at the mount door).",
       "propertyNames": {
         "pattern": "^[a-zA-Z0-9_]+$",
         "description": "A bare package name — the specifier a `use` path spells."
@@ -98,7 +98,7 @@
       }
     },
     "depDescriptor": {
-      "description": "Exactly one source: a `path` directory or a pinned `url` bundle — never both, never neither.",
+      "description": "Exactly one source: a `path` directory or a `url` bundle — never both, never neither. Url rows are `{ \"url\": ... }` only — the `sha256` key is retired from the manifest grammar; pins live in the sibling `rut.lock` (run `rut install`).",
       "oneOf": [
         {
           "type": "object",
@@ -118,12 +118,7 @@
           "properties": {
             "url": {
               "type": "string",
-              "description": "The packed `.rutbundle` url (http/https)."
-            },
-            "sha256": {
-              "type": "string",
-              "pattern": "^[0-9a-fA-F]{64}$",
-              "description": "The pin: 64 hex digits of the bundle's sha256 (lowercase-normalized). The pin is law at the mount door — fetched or cached bytes mount only when their hash matches; an unpinned url never mounts from the editor."
+              "description": "The packed `.rutbundle` url (http/https). The pin is law at the mount door and lives in the sibling `rut.lock` — the manifest's `sha256` key is retired ('sha256' retired — pins live in rut.lock)."
             }
           },
           "required": [

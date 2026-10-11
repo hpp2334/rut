@@ -3,9 +3,9 @@
   // entry module, and the std closure mixes the two dep kinds the engine
   // allows over a CDN artifact.
   //
-  // THE CDN ROW: `http` ships as a COMMITTED v7 compiled bundle
-  // (dist/std/http.rutbundle, jsDelivr-served at the tag, sha256-pinned
-  // here — the pin is law at the mount door on every load). Its classes
+  // THE CDN ROW: `http` ships as a COMMITTED compiled bundle
+  // (dist/std-v9/http.rutbundle, jsDelivr-served at the tag, pinned in
+  // rut.lock — the pin is law at the mount door on every load). Its classes
   // are CONCRETE — the methods cross on the surface's inherent rows — and
   // its whole closure (http_host, strbuild, strbuild_host) rides inside.
   //
@@ -40,6 +40,6 @@
     "futures": {
       "path": "../../rut/futures"
     },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle", "sha256": "6db1a6ebf34778149766987bd5ee3b4d135f9767a179e67c624f1580ddb96959" }
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle" }
   }
 }

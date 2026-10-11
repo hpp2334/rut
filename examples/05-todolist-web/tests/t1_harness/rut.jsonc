@@ -7,11 +7,11 @@
     "ui": {
       "path": "../../rut/ui"
     },
-    // the toolchain's std closure, from the CDN — the same pinned
-    // jsDelivr rows the app's own manifests spell (the tests prime an
-    // offline remote from the committed dist/std artifacts, so the gate
-    // never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle", "sha256": "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle", "sha256": "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02" }
+    // the toolchain's std closure, from the CDN — the same rut.lock-
+    // pinned jsDelivr rows the app's own manifests spell (the tests prime
+    // an offline remote from the committed dist/std artifacts, so the
+    // gate never networks)
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" }
   }
 }
