@@ -25,6 +25,13 @@ and where everything lives in the toolchain tree.
   "entry": { "type": "./calc.d.rut" }
 }
 
+// the same surface, the default-root spelling: mod.d.rut beside the
+// manifest IS the root — entry.type is optional on a host pkg
+{
+  "name": "calc",
+  "type": "host"
+}
+
 // a consumer (an app directory): a `path` row for a sibling package
 // of your own, pinned url rows for the toolchain's packages
 {
@@ -43,8 +50,8 @@ The keys, all of them:
 | key | meaning |
 |---|---|
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
-| `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
-| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
+| `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
+| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
 | `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…", sha256 = "<64-hex>" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here. |
 | `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `dev-deps` | mounted only while building/testing this pkg itself |
@@ -132,15 +139,20 @@ the `::` spelling); `use` statements stay the only cross-package door
 ### Host surface trees
 
 A `type = "host"` package has no body — but its `.d.rut` surface
-organizes as the same kind of tree. `mod NAME;` in the surface file
-mounts `NAME/mod.d.rut` **beside the declaring file**, recursively and
+organizes as the same kind of tree. The **root surface** follows the
+same discovery law a body's `mod.rut` does: `mod.d.rut` beside the
+manifest is the default root (lib parity), and a spelled `entry.type`
+still wins — `calc.d.rut`, `engine.d.rut` and every other flat host
+pkg keep their custom root names. Neither present is the loud no-entry
+error naming both spellings. `mod NAME;` in the surface file mounts
+`NAME/mod.d.rut` **beside the declaring file**, recursively and
 cycle-guarded, exactly like a body tree with `mod.d.rut` as the module
 file:
 
 ```
 http_host/
-├── rut.jsonc           # type = "host", entry = ./http_host.d.rut
-├── http_host.d.rut     # the root surface: pub mod net;  pub mod stream;
+├── rut.jsonc           # type = "host" — no entry keys: mod.d.rut IS the root
+├── mod.d.rut           # the root surface: pub mod net;  pub mod stream;
 ├── net/
 │   └── mod.d.rut       # http_host::net — the request lane + readbacks
 └── stream/
@@ -220,7 +232,7 @@ demand:
 | `core` | the only standard package — the builtin surface, auto-offered by every run's `.compile()` |
 | `calc` | host pkg: the math surface — offer `rut_native::tree_pkg("calc")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std` |
-| `http_host` | host pkg, the surface-tree pilot — `net/` + `stream/` mods over the std HTTP rows ([project structure](#host-surface-trees)); bodies in `rut-std` |
+| `http_host` | host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
 | `ink`, `http`, `strbuild`, `futures` | inline rut wrappers over host rows (`inline = true`) |
 | `pouch` | the sequence library (plain linked package) |
 | `json` | the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md) |

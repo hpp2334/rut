@@ -70,7 +70,8 @@ pub struct DepTable {
     /// the manifest's `name` — what a `use` path spells
     pub name: Option<String>,
     /// the entry sources, in indexing order: the decl surface first
-    /// (`entry.type`, Decl mode), then the body — the root module
+    /// (`entry.type`, Decl mode — or the default root `mod.d.rut` when
+    /// a host pkg spells none), then the body — the root module
     /// `mod.rut` (Impl mode; the convention, not a key). An OLD
     /// published bundle's manifest (parsed through
     /// [`dep_table_compat`]) carries the repealed keys instead, mapped
@@ -156,9 +157,19 @@ pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
 fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     let mut entries = Vec::new();
     // the decl surface indexes in Decl mode; the body in Impl mode —
-    // the same split `analysis::mode_of` speaks for open documents
-    if let Some(ty) = &m.entry.type_path {
-        entries.push(EntrySource { path: bundle_key(ty)?, mode: Mode::Decl });
+    // the same split `analysis::mode_of` speaks for open documents.
+    // On a host pkg with no spelled surface, `mod.d.rut` beside the
+    // manifest IS the root (the loader's default-root discovery
+    // mirrored) — an unreadable row simply indexes nothing.
+    match &m.entry.type_path {
+        Some(ty) => entries.push(EntrySource { path: bundle_key(ty)?, mode: Mode::Decl }),
+        None if m.pkg_type == rut_driver::bundle::PkgType::Host => {
+            entries.push(EntrySource {
+                path: rut_driver::decl::DECL_CHILD_FILE.to_string(),
+                mode: Mode::Decl,
+            });
+        }
+        None => {}
     }
     // the body is the ROOT MODULE — `mod.rut` beside the manifest, the
     // convention every lane reads. A surface-only dev state (or a host
@@ -378,9 +389,10 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
 
 /// a bundle file's mod path: the rows lane's root rides as `mod.rut`
 /// (`Some("")`), a mounted child as `<path>/mod.rut` (a host tree's
-/// as `<path>/mod.d.rut`) — `Some(path)`; anything else is today's
-/// flat shape (`None`) — shared by both faces (the stdio walk and the
-/// wasm shim index identically)
+/// as `<path>/mod.d.rut`), the host default root as `mod.d.rut`
+/// (`Some("")` — the twin of the lib root's spelling) — `Some(path)`;
+/// anything else is today's flat shape (`None`) — shared by both faces
+/// (the stdio walk and the wasm shim index identically)
 pub fn bundle_file_mod_path(path: &str) -> Option<String> {
     if let Some(p) = path.strip_suffix("/mod.rut") {
         return Some(p.to_string());
@@ -388,7 +400,7 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
     if let Some(p) = path.strip_suffix(format!("/{}", rut_driver::decl::DECL_CHILD_FILE).as_str()) {
         return Some(p.to_string());
     }
-    if path == "mod.rut" {
+    if path == "mod.rut" || path == rut_driver::decl::DECL_CHILD_FILE {
         return Some(String::new());
     }
     None
@@ -733,11 +745,36 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(bundle_file_mod_path("mod.rut").as_deref(), Some(""));
         assert_eq!(bundle_file_mod_path("layout/mod.rut").as_deref(), Some("layout"));
         assert_eq!(bundle_file_mod_path("layout/grid/mod.rut").as_deref(), Some("layout/grid"));
-        // the host tree's Decl children spell the same mod paths
+        // the host tree's Decl children spell the same mod paths, and
+        // the bare `mod.d.rut` IS the host root — `Some("")`, the twin
+        // of the lib root's spelling
+        assert_eq!(bundle_file_mod_path("mod.d.rut").as_deref(), Some(""));
         assert_eq!(bundle_file_mod_path("net/mod.d.rut").as_deref(), Some("net"));
         assert_eq!(bundle_file_mod_path("net/tls/mod.d.rut").as_deref(), Some("net/tls"));
         assert_eq!(bundle_file_mod_path("pouch.rut"), None);
         assert_eq!(bundle_file_mod_path("myhost.d.rut"), None, "a surface root is a flat file");
+    }
+
+    #[test]
+    fn a_host_manifest_without_entry_type_discovers_the_default_root() {
+        // the lib-parity amendment: `mod.d.rut` beside the manifest is
+        // the auto-discovered root — the editor's dep table carries it
+        // as the Decl entry exactly like a spelled surface
+        let t = dep_table(r#"{ "name": "h", "type": "host" }"#).expect("parses");
+        assert!(t.host);
+        assert_eq!(
+            t.entries,
+            vec![EntrySource { path: "mod.d.rut".into(), mode: Mode::Decl }]
+        );
+        // a spelled surface still wins
+        let t = dep_table(
+            r#"{ "name": "h", "type": "host", "entry": { "type": "./h.d.rut" } }"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            t.entries,
+            vec![EntrySource { path: "h.d.rut".into(), mode: Mode::Decl }]
+        );
     }
 
     /// a host-tree bundle in the pack writer's shape: a `type = "host"`

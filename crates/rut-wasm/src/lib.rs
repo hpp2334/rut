@@ -808,6 +808,28 @@ entry fn main() {
     }
 
     #[test]
+    fn the_default_root_spelling_mounts_in_memory() {
+        // the lib-parity amendment: a host surface may ride the
+        // `mod.d.rut` ROOT spelling (the directory lanes' default) —
+        // the in-memory mount is name-blind, the tree still mounts and
+        // the rows still register path-qualified
+        let pkg = host_surface(
+            "root_host",
+            "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            "mod.d.rut",
+            &[("net", "pub host fn connect(url: str) -> opaque;\n")],
+        );
+        let rut_driver::PkgBody::Host { host_funcs, .. } = &pkg.body else {
+            panic!("a host body");
+        };
+        assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);
+        assert_eq!(
+            host_funcs.iter().map(|r| r.full_name("root_host")).collect::<Vec<_>>(),
+            vec!["root_host::legacy_ping", "root_host::net::connect"],
+        );
+    }
+
+    #[test]
     fn fresh_run_supersedes_a_parked_frame_and_resets_output() {
         let _g = lock();
         let bin = compile_case(FUEL_DEMO);

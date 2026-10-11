@@ -1,5 +1,7 @@
-// http_host/http_host.d.rut — the std HTTP surface's root: a `type =
-// "host"` pkg whose surface organizes as a MODULE TREE (the
+// http_host/mod.d.rut — the std HTTP surface's root: a `type =
+// "host"` pkg whose root surface is this file (the default root —
+// `mod.d.rut` beside the manifest, lib parity with a body's
+// `mod.rut`) and whose surface organizes as a MODULE TREE (the
 // host-.d.rut-mod-tree plan's pilot). The root declares the two lanes
 // — `net` (the request lane and the response readbacks) and `stream`
 // (the body lanes) — whose rows live in `net/mod.d.rut` and

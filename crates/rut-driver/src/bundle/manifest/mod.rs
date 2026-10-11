@@ -13,14 +13,16 @@
 //! }
 //! ```
 //!
-//! (`entry.type` is the surface — the ONLY entry key left. The body is
-//! `mod.rut` beside the manifest, the package's root module; its `mod`
-//! declarations mount the child tree. The repealed `entry.lib` /
-//! `entry.libs` keys refuse loudly, naming the fix — except inside a
-//! PUBLISHED bundle, whose manifest is forever old: the reader's
-//! compat lane parses them onto [`Manifest::legacy_entry`] so the
-//! pinned CDN tags keep loading. That is a loading law, not a
-//! transition.)
+//! (`entry.type` is the surface — the ONLY entry key left. On a host
+//! pkg it is OPTIONAL: `mod.d.rut` beside the manifest is the
+//! auto-discovered default root, lib-parity with a body's `mod.rut`,
+//! and a spelled `entry.type` still wins. The body is `mod.rut` beside
+//! the manifest, the package's root module; its `mod` declarations
+//! mount the child tree. The repealed `entry.lib` / `entry.libs` keys
+//! refuse loudly, naming the fix — except inside a PUBLISHED bundle,
+//! whose manifest is forever old: the reader's compat lane parses them
+//! onto [`Manifest::legacy_entry`] so the pinned CDN tags keep
+//! loading. That is a loading law, not a transition.)
 //!
 //! The declared kind: `"type": "lib"` (the default) is the ordinary
 //! source package; `"type": "host"` is a pure declaration surface the
@@ -287,13 +289,11 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
                         .into(),
                 ));
             }
-            if m.entry.type_path.is_none() {
-                return Err(ManifestError(
-                    "a `type = \"host\"` pkg needs `entry.type` — the declaration surface \
-                     is the whole pkg"
-                        .into(),
-                ));
-            }
+            // `entry.type` is OPTIONAL on a host pkg: `mod.d.rut`
+            // beside the manifest is the default root (lib parity with
+            // a body's `mod.rut`). The manifest cannot see files, so
+            // the BOTH-missing refusal is the mount doors' law — they
+            // probe `mod.d.rut` and name both spellings.
         }
         PkgType::Lib => {
             // the no-inference law, COMPAT shape: an old `entry.type` +
@@ -441,9 +441,20 @@ mod tests {
     }
 
     #[test]
-    fn host_pkg_needs_entry_type() {
-        let err = parse_manifest(r#"{"name": "h", "type": "host"}"#).unwrap_err();
-        assert!(err.to_string().contains("needs `entry.type`"), "{err}");
+    fn host_pkg_entry_type_is_optional_mod_d_rut_is_the_default_root() {
+        // the lib-parity amendment: `mod.d.rut` beside the manifest is
+        // the auto-discovered default root, so `entry.type` is
+        // OPTIONAL — the manifest cannot see files, so the
+        // BOTH-missing refusal is the mount doors' law
+        let m = parse_manifest(r#"{"name": "h", "type": "host"}"#).unwrap();
+        assert_eq!(m.pkg_type, PkgType::Host);
+        assert_eq!(m.entry.type_path, None);
+        // a spelled entry still parses (and wins at the mount doors)
+        let m = parse_manifest(
+            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
+        )
+        .unwrap();
+        assert_eq!(m.entry.type_path.as_deref(), Some("./h.d.rut"));
     }
 
     #[test]
@@ -485,9 +496,10 @@ mod tests {
 
     #[test]
     fn host_bundle_manifest_still_refuses_its_other_laws() {
-        // the bundle keys change nothing else: the deps tables, the body
-        // refusal, the `entry.type` requirement all still hold WITH the
-        // keys present
+        // the bundle keys change nothing else: the deps tables and the
+        // body refusal still hold WITH the keys present (`entry.type`
+        // stays optional — the default-root discovery is the mount
+        // doors' law, never the manifest's)
         for table in ["deps", "peer-deps", "dev-deps"] {
             let err = parse_manifest(&format!(
                 r#"{{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
@@ -500,11 +512,6 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("no body"), "{err}");
-        let err = parse_manifest(
-            r#"{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host"}"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("needs `entry.type`"), "{err}");
     }
 
     #[test]

@@ -415,6 +415,27 @@ fn read_root_module(dir: &str) -> Result<Option<String>, LoadError> {
     }
 }
 
+/// The host pkg's default root file — `mod.d.rut` beside the manifest,
+/// the lib body tree's `mod.rut` probe d-flavored (the Decl flavor's
+/// spelling; [`rut_driver::decl::DECL_CHILD_FILE`] is the same string).
+pub(crate) const DECL_ROOT_FILE: &str = "mod.d.rut";
+
+/// The `mod.d.rut` probe: the host arm's default root, [`read_root_module`]
+/// d-flavored — `Ok(Some(text))` when the directory carries one (it is
+/// the root surface), `Ok(None)` when absent. A file that exists but
+/// cannot be read is the loud read error, never a silent fallback.
+fn read_decl_root_module(dir: &str) -> Result<Option<String>, LoadError> {
+    let path = PathBuf::from(dir).join(DECL_ROOT_FILE);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if path.is_file() => Err(LoadError::law(format!(
+            "cannot read {}: {e}",
+            path.display()
+        ))),
+        Err(_) => Ok(None),
+    }
+}
+
 /// The dir lane's child lookup for the mod mount — the same three-case
 /// law the archive rows lane answers: `NAME/<child file>` reads (with
 /// its canonical identity — the cycle guard's key, so a symlinked
@@ -498,8 +519,12 @@ fn lib_pkg(
 ///   its `mod` declarations mount the child tree (`NAME/mod.d.rut`
 ///   beside the declaring file, recursively, cycle-guarded) and every
 ///   row carries the path it lives under. No body exists — the
-///   embedding Rust binds it at run time. A `mod.rut` beside the
-///   manifest is a body: refused (a host pkg is pure surface).
+///   embedding Rust binds it at run time. The root surface is the
+///   spelled `entry.type` when the manifest carries one, else
+///   `mod.d.rut` beside the manifest — the default root, lib parity
+///   with a body's `mod.rut`; neither present is the loud no-entry
+///   error naming both spellings. A `mod.rut` beside the manifest is a
+///   body: refused (a host pkg is pure surface).
 /// - a `type = "lib"` pkg (the default) — a source module: `mod.rut`
 ///   beside the manifest IS the body (the root module); the surface
 ///   derives from its exports. A declared surface with no `mod.rut` is
@@ -524,11 +549,6 @@ fn load_entry_module(
 ) -> Result<Pkg, LoadError> {
     match manifest.pkg_type {
         PkgType::Host => {
-            let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
-                LoadError::law(format!(
-                    "module in {dir} is a host pkg with no `entry.type`"
-                ))
-            })?;
             if dir_has_root_module(dir) {
                 return Err(LoadError::law(format!(
                     "module in {dir} is a `type = \"host\"` pkg but a `mod.rut` sits beside the \
@@ -536,7 +556,25 @@ fn load_entry_module(
                      files); drop the file or declare `type = \"lib\"`"
                 )));
             }
-            let key = src.resolve(dir, rel).map_err(LoadError::law)?;
+            // the root surface: a spelled `entry.type` WINS (existing
+            // flat pkgs keep their `calc.d.rut`-style roots); absent,
+            // `mod.d.rut` beside the manifest is the default root —
+            // neither present is the loud no-entry error naming both
+            // doors (the lib arm's ambiguity refusal, d-flavored)
+            let rel = match manifest.entry.type_path.as_ref() {
+                Some(rel) => rel.clone(),
+                None => match read_decl_root_module(dir)? {
+                    Some(_) => DECL_ROOT_FILE.to_string(),
+                    None => {
+                        return Err(LoadError::law(format!(
+                            "module in {dir} is a host pkg with no entry — spell \
+                             `\"entry\": {{ \"type\": \"<surface>.d.rut\" }}` or add a \
+                             `mod.d.rut` beside the manifest"
+                        )));
+                    }
+                },
+            };
+            let key = src.resolve(dir, &rel).map_err(LoadError::law)?;
             let src_text = read_source_text(src, &key)?;
             // the surface's mod tree mounts beside it — `NAME/mod.d.rut`
             // next to the declaring file, recursively, cycle-guarded;

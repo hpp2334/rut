@@ -7,13 +7,12 @@
   // scope-relative paths (`"net::http_send"`, `"stream::http_body"`);
   // the `http` package wraps them in the Response class.
   //
-  // The registration scope IS the package name; the use path spells
-  // the tree too (`use http_host::net::{ http_send, http_status }`).
+  // The root surface is `mod.d.rut` beside this manifest — the default
+  // root (lib parity with a body's `mod.rut`); no `entry.type` is
+  // spelled. The registration scope IS the package name; the use path
+  // spells the tree too (`use http_host::net::{ http_send, http_status }`).
   "format": "rutbundle",
   "format_version": 10,
   "name": "http_host",
-  "type": "host",
-  "entry": {
-    "type": "./http_host.d.rut"
-  }
+  "type": "host"
 }

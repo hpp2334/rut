@@ -157,11 +157,12 @@ fn the_artifact_set_spells_the_one_wire_number() {
             // single-package: manifest + surface, plus the rows envelope
             // when the surface is a mod tree (flat pkgs stay the
             // two-entry shape — the freshness gate proves the flat law;
-            // the http_host pilot is the committed tree)
+            // the http_host pilot is the committed tree, its root the
+            // default `mod.d.rut` spelling)
             let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
             if names.contains(&rut_driver::mods::ROWS_NAME) {
                 assert_eq!(names.len(), 3, "rut/{name}: {names:?}");
-                assert!(names.contains(&"http_host.d.rut"), "rut/{name}: {names:?}");
+                assert!(names.contains(&"mod.d.rut"), "rut/{name}: {names:?}");
             } else {
                 assert_eq!(names.len(), 2, "rut/{name}: {names:?}");
             }

@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:233
+#: src/reference/project-structure.md:245
 msgid "The playground"
 msgstr ""
 
@@ -10042,7 +10042,7 @@ msgstr ""
 msgid "Special meaning"
 msgstr ""
 
-#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:47
+#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:54
 msgid "`type`"
 msgstr ""
 
@@ -17850,7 +17850,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:266 src/reference/bundles.md:364
+#: src/reference/embedding.md:266 src/reference/bundles.md:371
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -19556,7 +19556,7 @@ msgstr ""
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:167 src/reference/stdlib.md:216
 #: src/reference/stdlib.md:383 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:43 src/reference/cli.md:172
+#: src/reference/project-structure.md:50 src/reference/cli.md:172
 msgid "meaning"
 msgstr ""
 
@@ -20437,7 +20437,7 @@ msgstr ""
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:117 src/reference/project-structure.md:218
+#: src/reference/stdlib.md:117 src/reference/project-structure.md:230
 msgid "package"
 msgstr ""
 
@@ -20472,7 +20472,7 @@ msgstr ""
 msgid "the `Logger` class over `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:225
+#: src/reference/stdlib.md:121 src/reference/project-structure.md:237
 msgid "`pouch`"
 msgstr ""
 
@@ -20493,7 +20493,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:123 src/reference/project-structure.md:226
+#: src/reference/stdlib.md:123 src/reference/project-structure.md:238
 msgid "`json`"
 msgstr ""
 
@@ -20515,7 +20515,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:125 src/reference/project-structure.md:221
+#: src/reference/stdlib.md:125 src/reference/project-structure.md:233
 msgid "`calc`"
 msgstr ""
 
@@ -23286,7 +23286,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:168 src/reference/bundles.md:291
+#: src/reference/module-binary.md:168 src/reference/bundles.md:298
 msgid "check"
 msgstr ""
 
@@ -23587,7 +23587,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:378
+#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:385
 msgid "CLI"
 msgstr ""
 
@@ -23973,19 +23973,20 @@ msgstr ""
 #: src/reference/loading.md:21
 msgid ""
 "A **directory is one module**: its `rut.jsonc` names the package (`name`) "
-"and its surface (`entry.type`), its body is the `mod.rut` module tree, and "
-"its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and "
-"rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: "
-"its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount "
-"`NAME/mod.d.rut` children beside the declaring file, recursively — and each "
-"row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep "
-"today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle "
-"guard, first-mount-wins, name-mismatch is an error — verifies every url "
-"dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, "
-"then one peer gate over the closed set ([Dependency "
-"kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip "
-"([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, "
-"root }`."
+"and its surface (`entry.type` — optional on a host pkg, where `mod.d.rut` "
+"beside the manifest is the default root and a spelled entry wins), its body "
+"is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the "
+"manifest ([Project structure and rut.jsonc](project-structure.md)). A `type "
+"= \"host\"` package has no body: its `.d.rut` surface is itself a module "
+"tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the "
+"declaring file, recursively — and each row registers path-qualified "
+"(`myhost::net::connect`; a flat pkg's rows keep today's bare shape). "
+"`rut_native::load_dir` walks `deps` recursively — cycle guard, "
+"first-mount-wins, name-mismatch is an error — verifies every url dep's "
+"`sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then "
+"one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). "
+"A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The "
+"yield is `rut_driver::Loaded { pkgs, root }`."
 msgstr ""
 
 #: src/reference/loading.md:22
@@ -24712,12 +24713,23 @@ msgid ""
 "```text\n"
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", "
 "\"format_version\": 10\n"
-"<pkg>.d.rut              the declaration surface — the root itself\n"
+"<pkg>.d.rut              the declaration surface — the root itself (the "
+"spelled\n"
+"                         entry.type), or mod.d.rut when it spells none\n"
 "rut.mods                 the surface's mod tree, when it has mod children\n"
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:114
+#: src/reference/bundles.md:115
+msgid ""
+"The root file is the spelled `entry.type` when the manifest carries one, "
+"else `mod.d.rut` beside the manifest — the default root, lib parity with a "
+"body's `mod.rut`. Old bundles whose manifest spells a custom surface name "
+"(`http_host.d.rut` and friends) load unchanged through that override lane — "
+"no re-pack, no version bump."
+msgstr ""
+
+#: src/reference/bundles.md:121
 msgid ""
 "The mod tree rides the same additive rows envelope a lib body tree uses (see "
 "[layout rules](#layout-rules)): the tree mounts at pack time (a declared "
@@ -24727,7 +24739,7 @@ msgid ""
 "no rows entry: its bundle stays the two-entry shape, byte-identical."
 msgstr ""
 
-#: src/reference/bundles.md:122
+#: src/reference/bundles.md:129
 msgid ""
 "`rut pack <host-dir>` works (the surface verifies by parsing and lowering "
 "once — the exact lane a mount runs — then rides as source), `--strip` "
@@ -24738,11 +24750,11 @@ msgid ""
 "compiled bundle: the surface lowers into the pkg's host rows."
 msgstr ""
 
-#: src/reference/bundles.md:131
+#: src/reference/bundles.md:138
 msgid "The manifest — `rut.jsonc`"
 msgstr ""
 
-#: src/reference/bundles.md:133
+#: src/reference/bundles.md:140
 msgid ""
 "First entry in the zip; JSONC (the directory grammar: `//` and `/* */` "
 "comments and trailing commas are legal); the same manifest grammar the "
@@ -24750,7 +24762,7 @@ msgid ""
 "makes a bundle-shaped directory pack unchanged:"
 msgstr ""
 
-#: src/reference/bundles.md:138
+#: src/reference/bundles.md:145
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -24771,7 +24783,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:156
+#: src/reference/bundles.md:163
 msgid ""
 "Directory loading **ignores** `format`/`format_version` — a directory is not "
 "a bundle — which is why the keys are safe to write into every module "
@@ -24779,22 +24791,22 @@ msgid ""
 "packs unchanged."
 msgstr ""
 
-#: src/reference/bundles.md:161
+#: src/reference/bundles.md:168
 msgid ""
 "The rest of the manifest grammar — deps tables, `inline`, `style` — is "
 "defined in [Project structure and rut.jsonc](project-structure.md); the "
 "dependency semantics are [Dependency kinds](dependency-kinds.md)."
 msgstr ""
 
-#: src/reference/bundles.md:166
+#: src/reference/bundles.md:173
 msgid "Url deps — bundles by reference"
 msgstr ""
 
-#: src/reference/bundles.md:168
+#: src/reference/bundles.md:175
 msgid "A consumer may pin a bundle by url instead of vendoring it:"
 msgstr ""
 
-#: src/reference/bundles.md:170
+#: src/reference/bundles.md:177
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -24806,7 +24818,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:178
+#: src/reference/bundles.md:185
 msgid ""
 "The mount is the bundle mount, one gate earlier: the embedder's remote "
 "produces the bytes (`DepRemote` — the standard `rut_native::HttpRemote` is "
@@ -24819,7 +24831,7 @@ msgid ""
 "metadata; loading a bundle never fetches)."
 msgstr ""
 
-#: src/reference/bundles.md:188
+#: src/reference/bundles.md:195
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
 "own `rut pack` output, satisfied by the rode-along groups: the archive's "
@@ -24832,11 +24844,11 @@ msgid ""
 "unpackaged), and a declared dep that did not ride."
 msgstr ""
 
-#: src/reference/bundles.md:199
+#: src/reference/bundles.md:206
 msgid "The wire version"
 msgstr ""
 
-#: src/reference/bundles.md:201
+#: src/reference/bundles.md:208
 msgid ""
 "`format_version` is 10 — the one bundle wire, both root kinds; the "
 "manifest's `type` routes lib-compiled vs host-decl. A loader refuses any "
@@ -24845,7 +24857,7 @@ msgid ""
 "directory`."
 msgstr ""
 
-#: src/reference/bundles.md:207
+#: src/reference/bundles.md:214
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped "
 "peer groups or a declared child module would load partial — semantically "
@@ -24856,7 +24868,7 @@ msgid ""
 "directory (`rut run <dir>`), as it always was outside bundles."
 msgstr ""
 
-#: src/reference/bundles.md:216
+#: src/reference/bundles.md:223
 msgid ""
 "Peer-gated packages publish inside a compiled bundle two ways, per their "
 "group-kind law: a NON-generic compiled declarer's peer groups compile into "
@@ -24869,7 +24881,7 @@ msgid ""
 "consumer's closure."
 msgstr ""
 
-#: src/reference/bundles.md:227
+#: src/reference/bundles.md:234
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into "
 "a fresh numeric range of the consuming run's world (boot passes through), "
@@ -24882,11 +24894,11 @@ msgid ""
 "independently, each numbering its own closure."
 msgstr ""
 
-#: src/reference/bundles.md:238
+#: src/reference/bundles.md:245
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:240
+#: src/reference/bundles.md:247
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -24903,40 +24915,40 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:256
+#: src/reference/bundles.md:263
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:258
+#: src/reference/bundles.md:265
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:260
+#: src/reference/bundles.md:267
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then dep groups in name order (deduplicated, recursive);"
 msgstr ""
 
-#: src/reference/bundles.md:263
+#: src/reference/bundles.md:270
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:264
+#: src/reference/bundles.md:271
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:266
+#: src/reference/bundles.md:273
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:270
+#: src/reference/bundles.md:277
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:272
+#: src/reference/bundles.md:279
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -24951,110 +24963,110 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:285
+#: src/reference/bundles.md:292
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:287
+#: src/reference/bundles.md:294
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:291
+#: src/reference/bundles.md:298
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:300
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:300
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:301
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:301
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:295
+#: src/reference/bundles.md:302
 msgid "`format_version` exactly 10"
 msgstr ""
 
-#: src/reference/bundles.md:295
+#: src/reference/bundles.md:302
 msgid ""
 "refuse — `this toolchain reads bundle format_version 10 only (found {v}) — "
 "re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:303
 msgid "a host root carrying a root `.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:303
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:297
+#: src/reference/bundles.md:304
 msgid "a host root carrying a `rut.scopes` ledger or a group entry"
 msgstr ""
 
-#: src/reference/bundles.md:297
+#: src/reference/bundles.md:304
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:298
+#: src/reference/bundles.md:305
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a bare package name"
 msgstr ""
 
-#: src/reference/bundles.md:298
+#: src/reference/bundles.md:305
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:299
+#: src/reference/bundles.md:306
 msgid "`<pkg>.rutc` decode: version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:299
+#: src/reference/bundles.md:306
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:307
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:307
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:308
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:308
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr ""
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:309
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:309
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:304
+#: src/reference/bundles.md:311
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:306
+#: src/reference/bundles.md:313
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at "
 "`dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell "
@@ -25062,7 +25074,7 @@ msgid ""
 "ARE the delivery and the publish act is a git tag:"
 msgstr ""
 
-#: src/reference/bundles.md:311
+#: src/reference/bundles.md:318
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25077,13 +25089,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:322
+#: src/reference/bundles.md:329
 msgid ""
 "`<tag>`/`<sha256>` are placeholders — real pins live in the examples "
 "(anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:332
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std::cjs` packs all "
 "15 (deterministic — same input ⇒ byte-identical, so freshness is a pure "
@@ -25093,7 +25105,7 @@ msgid ""
 "caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:338
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a "
 "compiled owner carries the generic instantiations its own pack closure "
@@ -25115,7 +25127,7 @@ msgid ""
 "law)."
 msgstr ""
 
-#: src/reference/bundles.md:350
+#: src/reference/bundles.md:357
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): first-mount-wins "
@@ -25124,25 +25136,25 @@ msgid ""
 "anyway — a closed bundle carries the rest."
 msgstr ""
 
-#: src/reference/bundles.md:357
+#: src/reference/bundles.md:364
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:359
+#: src/reference/bundles.md:366
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same splice rules:"
 msgstr ""
 
-#: src/reference/bundles.md:363
+#: src/reference/bundles.md:370
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:364
+#: src/reference/bundles.md:371
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:369
+#: src/reference/bundles.md:376
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -25154,11 +25166,11 @@ msgid ""
 "requires it."
 msgstr ""
 
-#: src/reference/bundles.md:381
+#: src/reference/bundles.md:388
 msgid "# default output: a sibling of the dir\n"
 msgstr ""
 
-#: src/reference/bundles.md:385
+#: src/reference/bundles.md:392
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."
@@ -25196,6 +25208,13 @@ msgid ""
 "  \"entry\": { \"type\": \"./calc.d.rut\" }\n"
 "}\n"
 "\n"
+"// the same surface, the default-root spelling: mod.d.rut beside the\n"
+"// manifest IS the root — entry.type is optional on a host pkg\n"
+"{\n"
+"  \"name\": \"calc\",\n"
+"  \"type\": \"host\"\n"
+"}\n"
+"\n"
 "// a consumer (an app directory): a `path` row for a sibling package\n"
 "// of your own, pinned url rows for the toolchain's packages\n"
 "{\n"
@@ -25216,51 +25235,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:41
+#: src/reference/project-structure.md:48
 msgid "The keys, all of them:"
 msgstr ""
 
-#: src/reference/project-structure.md:43
+#: src/reference/project-structure.md:50
 msgid "key"
 msgstr ""
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:52
 msgid "`name`"
 msgstr ""
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:52
 msgid ""
 "the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted "
 "spelling is a manifest error."
 msgstr ""
 
-#: src/reference/project-structure.md:46
+#: src/reference/project-structure.md:53
 msgid "`entry.type`"
 msgstr ""
 
-#: src/reference/project-structure.md:46
+#: src/reference/project-structure.md:53
 msgid ""
-"the declaration surface: one `.d.rut` file — the ONLY entry key left. On a "
-"lib pkg it is documentation surface (a surface-only dev state mounts as a "
+"the declaration surface: one `.d.rut` file — the ONLY entry key left. "
+"OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the "
+"root surface (lib parity with a body's `mod.rut`), and when spelled it wins. "
+"Neither present is the loud no-entry error naming both spellings. On a lib "
+"pkg it is documentation surface (a surface-only dev state mounts as a "
 "declaration unit; `host fn` text there is refused)"
 msgstr ""
 
-#: src/reference/project-structure.md:47
+#: src/reference/project-structure.md:54
 msgid ""
 "the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration "
 "surface whose `host fn`s the embedder binds at load ([Host fns and "
 "declaration files](host-fns.md)); the surface organizes as a module tree of "
-"`mod.d.rut` files ([below](#host-surface-trees)); `type = \"lib\"` (or "
-"absent) is the ordinary source package. The kind is never inferred — an "
-"`entry.type`\\-only manifest with no kind and no `mod.rut` is an error "
-"naming both fixes"
+"`mod.d.rut` files rooted at the default root or the spelled `entry.type` "
+"([below](#host-surface-trees)); `type = \"lib\"` (or absent) is the ordinary "
+"source package. The kind is never inferred — an `entry.type`\\-only manifest "
+"with no kind and no `mod.rut` is an error naming both fixes"
 msgstr ""
 
-#: src/reference/project-structure.md:48 src/reference/dependency-kinds.md:161
+#: src/reference/project-structure.md:55 src/reference/dependency-kinds.md:161
 msgid "`deps`"
 msgstr ""
 
-#: src/reference/project-structure.md:48
+#: src/reference/project-structure.md:55
 msgid ""
 "the transitively mounted dependencies — one source per descriptor: `pkg = { "
 "path = \"...\" }` (relative to this manifest) or `pkg = { url = "
@@ -25269,29 +25291,29 @@ msgid ""
 "`optional` is rejected here."
 msgstr ""
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:56
 msgid "`peer-deps`"
 msgstr ""
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:56
 msgid ""
 "presence-gated peers — descriptors accept `path`, `optional`, `lib` "
 "([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:164
+#: src/reference/project-structure.md:57 src/reference/dependency-kinds.md:164
 msgid "`dev-deps`"
 msgstr ""
 
-#: src/reference/project-structure.md:50
+#: src/reference/project-structure.md:57
 msgid "mounted only while building/testing this pkg itself"
 msgstr ""
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:58
 msgid "`inline`"
 msgstr ""
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:58
 msgid ""
 "`true` forces source-inlining into every consumer instead of linking "
 "(packages whose class methods must resolve at the call site — inherent impls "
@@ -25299,21 +25321,21 @@ msgid ""
 "instantiations owned by the declaring package)"
 msgstr ""
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:59
 msgid "`format`, `format_version`"
 msgstr ""
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:59
 msgid ""
 "bundle keys — ignored by directory loading, required by `rut pack` ([Module "
 "bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:60
 msgid "`style`"
 msgstr ""
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:60
 msgid ""
 "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default "
 "100). Schema-free at the manifest layer — unknown keys ride; malformed "
@@ -25321,7 +25343,7 @@ msgid ""
 "ancestor manifest of the formatted file; no manifest → defaults."
 msgstr ""
 
-#: src/reference/project-structure.md:55
+#: src/reference/project-structure.md:62
 msgid ""
 "The **body keys are repealed**: `entry.lib` and `entry.libs` refuse loudly, "
 "each error naming the fix — the root module is `mod.rut` beside the "
@@ -25330,7 +25352,7 @@ msgid ""
 "bundles](bundles.md).)"
 msgstr ""
 
-#: src/reference/project-structure.md:61
+#: src/reference/project-structure.md:68
 msgid ""
 "The manifest text is **JSONC** — `//` line comments, `/* */` block comments, "
 "and trailing commas are all legal — parsed by `serde_json` behind a "
@@ -25343,18 +25365,18 @@ msgid ""
 "`_`\\-key refuses loudly naming the fix — comments are the prose now."
 msgstr ""
 
-#: src/reference/project-structure.md:72
+#: src/reference/project-structure.md:79
 msgid "Resolution laws"
 msgstr ""
 
-#: src/reference/project-structure.md:74
+#: src/reference/project-structure.md:81
 msgid ""
 "**Exact, single-step.** A use path resolves only if a module with that "
 "`name` is mounted. Nothing is derived from directories or file layouts "
 "beyond the `mod` declarations the source itself spells."
 msgstr ""
 
-#: src/reference/project-structure.md:77
+#: src/reference/project-structure.md:84
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An "
 "already-mounted name (the embedder's, the root's, or an earlier dep's) is "
@@ -25362,40 +25384,40 @@ msgid ""
 "consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 
-#: src/reference/project-structure.md:82
+#: src/reference/project-structure.md:89
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with "
 "its key fails, naming both."
 msgstr ""
 
-#: src/reference/project-structure.md:84
+#: src/reference/project-structure.md:91
 msgid ""
 "**The cross-table law.** A name in `deps` beside `peer-deps` or `dev-deps` "
 "is an error naming both rows; peer + dev together is the sanctioned pairing."
 msgstr ""
 
-#: src/reference/project-structure.md:87
+#: src/reference/project-structure.md:94
 msgid ""
 "**`core` needs no `deps`** — `.compile()` auto-offers it unconditionally "
 "([core and the swappable packages](stdlib.md)); every name still requires "
 "`use core::{ .. };` per [core and the swappable packages](stdlib.md)."
 msgstr ""
 
-#: src/reference/project-structure.md:92
+#: src/reference/project-structure.md:99
 msgid "Module trees"
 msgstr ""
 
-#: src/reference/project-structure.md:94
+#: src/reference/project-structure.md:101
 msgid ""
 "A package's body is authored as a **file module tree** — the "
 "`tur_kit`\\-style layout:"
 msgstr ""
 
-#: src/reference/project-structure.md:107
+#: src/reference/project-structure.md:114
 msgid "The root module declares its children:"
 msgstr ""
 
-#: src/reference/project-structure.md:109
+#: src/reference/project-structure.md:116
 msgid ""
 "```rut\n"
 "// tur_kit/mod.rut\n"
@@ -25404,7 +25426,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:115
+#: src/reference/project-structure.md:122
 msgid ""
 "Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod NAME;`) "
 "in a file resolves against the sibling `NAME/mod.rut` directory. The loader "
@@ -25415,7 +25437,7 @@ msgid ""
 "file identity; a repeated declaration mounts once."
 msgstr ""
 
-#: src/reference/project-structure.md:124
+#: src/reference/project-structure.md:131
 msgid ""
 "Visibility is per module file ([Modules and "
 "visibility](modules-and-visibility.md)): plain declarations are visible in "
@@ -25426,24 +25448,30 @@ msgid ""
 "Column }`)."
 msgstr ""
 
-#: src/reference/project-structure.md:132
+#: src/reference/project-structure.md:139
 msgid "Host surface trees"
 msgstr ""
 
-#: src/reference/project-structure.md:134
+#: src/reference/project-structure.md:141
 msgid ""
 "A `type = \"host\"` package has no body — but its `.d.rut` surface organizes "
-"as the same kind of tree. `mod NAME;` in the surface file mounts "
-"`NAME/mod.d.rut` **beside the declaring file**, recursively and "
-"cycle-guarded, exactly like a body tree with `mod.d.rut` as the module file:"
+"as the same kind of tree. The **root surface** follows the same discovery "
+"law a body's `mod.rut` does: `mod.d.rut` beside the manifest is the default "
+"root (lib parity), and a spelled `entry.type` still wins — `calc.d.rut`, "
+"`engine.d.rut` and every other flat host pkg keep their custom root names. "
+"Neither present is the loud no-entry error naming both spellings. `mod "
+"NAME;` in the surface file mounts `NAME/mod.d.rut` **beside the declaring "
+"file**, recursively and cycle-guarded, exactly like a body tree with "
+"`mod.d.rut` as the module file:"
 msgstr ""
 
-#: src/reference/project-structure.md:140
+#: src/reference/project-structure.md:152
 msgid ""
 "```\n"
 "http_host/\n"
-"├── rut.jsonc           # type = \"host\", entry = ./http_host.d.rut\n"
-"├── http_host.d.rut     # the root surface: pub mod net;  pub mod stream;\n"
+"├── rut.jsonc           # type = \"host\" — no entry keys: mod.d.rut IS the "
+"root\n"
+"├── mod.d.rut           # the root surface: pub mod net;  pub mod stream;\n"
 "├── net/\n"
 "│   └── mod.d.rut       # http_host::net — the request lane + readbacks\n"
 "└── stream/\n"
@@ -25451,7 +25479,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:150
+#: src/reference/project-structure.md:162
 msgid ""
 "The tree is **declaration-lawed like everything else**: a declared child "
 "with no `NAME/mod.d.rut` beside it is a loud error naming the declaring "
@@ -25460,7 +25488,7 @@ msgid ""
 "`mod` edge and the `host fn` row is what a consumer's `use` crosses."
 msgstr ""
 
-#: src/reference/project-structure.md:157
+#: src/reference/project-structure.md:169
 msgid ""
 "What the tree changes is the **registration naming**: a row under `net/` "
 "registers as `pkg::net::name` (async families ride the qualified name too — "
@@ -25474,11 +25502,11 @@ msgid ""
 "entry) — [module bundles](bundles.md)."
 msgstr ""
 
-#: src/reference/project-structure.md:169
+#: src/reference/project-structure.md:181
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:199
+#: src/reference/project-structure.md:211
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
 "rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the "
@@ -25493,87 +25521,88 @@ msgid ""
 "— embedders take it without the server."
 msgstr ""
 
-#: src/reference/project-structure.md:213
+#: src/reference/project-structure.md:225
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:215
+#: src/reference/project-structure.md:227
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:218
+#: src/reference/project-structure.md:230
 msgid "shape"
 msgstr ""
 
-#: src/reference/project-structure.md:220
+#: src/reference/project-structure.md:232
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:220
+#: src/reference/project-structure.md:232
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's "
 "`.compile()`"
 msgstr ""
 
-#: src/reference/project-structure.md:221
+#: src/reference/project-structure.md:233
 msgid ""
 "host pkg: the math surface — offer `rut_native::tree_pkg(\"calc\")`, bind "
 "`rut_std::math::pkg()` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:222
+#: src/reference/project-structure.md:234
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:222
+#: src/reference/project-structure.md:234
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:223
+#: src/reference/project-structure.md:235
 msgid "`http_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:223
+#: src/reference/project-structure.md:235
 msgid ""
-"host pkg, the surface-tree pilot — `net/` + `stream/` mods over the std HTTP "
-"rows ([project structure](#host-surface-trees)); bodies in `rut-std`"
+"host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std "
+"HTTP rows, `net/` + `stream/` mods ([project "
+"structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:224
+#: src/reference/project-structure.md:236
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
-#: src/reference/project-structure.md:224
+#: src/reference/project-structure.md:236
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr ""
 
-#: src/reference/project-structure.md:225
+#: src/reference/project-structure.md:237
 msgid "the sequence library (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:226
+#: src/reference/project-structure.md:238
 msgid ""
 "the base pkg with `peer-deps`/`dev-deps` — the reference consumer of "
 "[Dependency kinds](dependency-kinds.md)"
 msgstr ""
 
-#: src/reference/project-structure.md:227
+#: src/reference/project-structure.md:239
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:227
+#: src/reference/project-structure.md:239
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:229
+#: src/reference/project-structure.md:241
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps "
 "are resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:235
+#: src/reference/project-structure.md:247
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "

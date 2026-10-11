@@ -27,7 +27,7 @@ msgstr "你的第一个 rut 程序"
 
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:233
+#: src/reference/project-structure.md:245
 msgid "The playground"
 msgstr "Playground"
 
@@ -10390,7 +10390,7 @@ msgid "Special meaning"
 msgstr "特殊含义"
 
 
-#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:47
+#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:54
 msgid "`type`"
 msgstr "`type`"
 
@@ -18464,7 +18464,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/embedding.md:266 src/reference/bundles.md:364
+#: src/reference/embedding.md:266 src/reference/bundles.md:371
 msgid "\"vendor/plugin.rutbundle\""
 msgstr "\"vendor/plugin.rutbundle\""
 
@@ -20361,7 +20361,7 @@ msgstr "生成行"
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:167 src/reference/stdlib.md:216
 #: src/reference/stdlib.md:383 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:43 src/reference/cli.md:172
+#: src/reference/project-structure.md:50 src/reference/cli.md:172
 msgid "meaning"
 msgstr "含义"
 
@@ -21362,7 +21362,7 @@ msgid "The swappable set"
 msgstr "可换集合"
 
 
-#: src/reference/stdlib.md:117 src/reference/project-structure.md:218
+#: src/reference/stdlib.md:117 src/reference/project-structure.md:230
 msgid "package"
 msgstr "包"
 
@@ -21405,7 +21405,7 @@ msgid "the `Logger` class over `ink_host`"
 msgstr "架在 `ink_host` 之上的 `Logger` 类"
 
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:225
+#: src/reference/stdlib.md:121 src/reference/project-structure.md:237
 msgid "`pouch`"
 msgstr "`pouch`"
 
@@ -21431,7 +21431,7 @@ msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:123 src/reference/project-structure.md:226
+#: src/reference/stdlib.md:123 src/reference/project-structure.md:238
 msgid "`json`"
 msgstr "`json`"
 
@@ -21457,7 +21457,7 @@ msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:125 src/reference/project-structure.md:221
+#: src/reference/stdlib.md:125 src/reference/project-structure.md:233
 msgid "`calc`"
 msgstr "`calc`"
 
@@ -24414,7 +24414,7 @@ msgid ""
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
 
-#: src/reference/module-binary.md:168 src/reference/bundles.md:291
+#: src/reference/module-binary.md:168 src/reference/bundles.md:298
 msgid "check"
 msgstr "检查"
 
@@ -24728,7 +24728,7 @@ msgid ""
 msgstr "宿主与声明的叶子组没有编译依赖，平凡地通过。被拒绝的世界不加 `--strip` 照样打包。"
 
 
-#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:378
+#: src/reference/symbol-stripping.md:100 src/reference/bundles.md:385
 msgid "CLI"
 msgstr "CLI"
 
@@ -25124,7 +25124,7 @@ msgstr ""
 
 #: src/reference/loading.md:21
 msgid ""
-"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type`), its body is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the declaring file, recursively — and each row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
+"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type` — optional on a host pkg, where `mod.d.rut` beside the manifest is the default root and a spelled entry wins), its body is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the declaring file, recursively — and each row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
 msgstr ""
 
 
@@ -25858,39 +25858,47 @@ msgstr "`type = \"host\"` 包的根**就是**它的声明面，所以宿主捆�
 msgid ""
 "```text\n"
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", \"format_version\": 10\n"
-"<pkg>.d.rut              the declaration surface — the root itself\n"
+"<pkg>.d.rut              the declaration surface — the root itself (the spelled\n"
+"                         entry.type), or mod.d.rut when it spells none\n"
 "rut.mods                 the surface's mod tree, when it has mod children\n"
 "```"
 msgstr ""
 
 
-#: src/reference/bundles.md:114
+#: src/reference/bundles.md:115
+msgid ""
+"The root file is the spelled `entry.type` when the manifest carries one, else `mod.d.rut` beside the manifest — the default root, lib parity with a body's `mod.rut`. Old bundles whose manifest spells a custom surface name (`http_host.d.rut` and friends) load unchanged through that override lane — no re-pack, no version bump."
+msgstr ""
+"根文件在清单写明了 `entry.type` 时就是那个文件，否则是清单旁的 `mod.d.rut` —— 默认根，与正文的 `mod.rut` 对等。清单写着自定义表面名（`http_host.d.rut` 等）的旧捆绑包经这条覆盖车道原样加载 —— 不重新打包，不改版本号。"
+
+
+#: src/reference/bundles.md:121
 msgid ""
 "The mod tree rides the same additive rows envelope a lib body tree uses (see [layout rules](#layout-rules)): the tree mounts at pack time (a declared child with no `NAME/mod.d.rut` refuses the pack), travels as path-keyed source rows, and remounts at load — a row under `net/` registers path-qualified exactly as it does from a directory. A FLAT host pkg writes no rows entry: its bundle stays the two-entry shape, byte-identical."
 msgstr ""
 "模块树骑在 lib 正文树所用的同一附加行信封上（见[布局法则](#layout-rules)）：树在打包时挂载（被声明却无 `NAME/mod.d.rut` 的子模块会拒绝打包），以按路径键的源码行旅行，并在加载时重新挂载 —— `net/` 下的一行注册为路径限定名，与从目录来时一模一样。扁平宿主包不写行条目：其捆绑包保持两条目形状，字节不变。"
 
 
-#: src/reference/bundles.md:122
+#: src/reference/bundles.md:129
 msgid ""
 "`rut pack <host-dir>` works (the surface verifies by parsing and lowering once — the exact lane a mount runs — then rides as source), `--strip` refuses on a host root (`no symbols to strip` — no programs, no sidecar), and `rut run <host.rutbundle>` refuses with intent: a host bundle carries a declaration surface — nothing to run; bind its rows from the embedder ([host fns](host-fns.md)). The mount is the same lane a host group rides inside a compiled bundle: the surface lowers into the pkg's host rows."
 msgstr ""
 "`rut pack <host-dir>` 可行（表面经解析与降低各一次来验证——挂载运行的同一条车道——然后以源码承载），`--strip` 在宿主根上拒绝（`no symbols to strip`——没有程序，没有旁车），`rut run <host.rutbundle>` 带着意图拒绝：宿主捆绑包携带的是声明表面——没有可运行的东西；从嵌入方绑定它的行（[宿主函数](host-fns.md)）。挂载与编译捆绑包内的宿主组走的是同一条车道：表面降低为该包的宿主行。"
 
 
-#: src/reference/bundles.md:131
+#: src/reference/bundles.md:138
 msgid "The manifest — `rut.jsonc`"
 msgstr "清单——`rut.jsonc`"
 
 
-#: src/reference/bundles.md:133
+#: src/reference/bundles.md:140
 msgid ""
 "First entry in the zip; JSONC (the directory grammar: `//` and `/* */` comments and trailing commas are legal); the same manifest grammar the directory form uses, byte-for-byte the directory's manifest — which is what makes a bundle-shaped directory pack unchanged:"
 msgstr ""
 "zip 中的第一个条目；JSONC（目录文法：`//` 与 `/* */` 注释以及尾随逗号都合法）；与目录形态使用同一份清单文法，逐字节就是目录的清单——这正是让捆绑包形态的目录原样打包的原因："
 
 
-#: src/reference/bundles.md:138
+#: src/reference/bundles.md:145
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25912,30 +25920,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:156
+#: src/reference/bundles.md:163
 msgid ""
 "Directory loading **ignores** `format`/`format_version` — a directory is not a bundle — which is why the keys are safe to write into every module manifest today: `examples/03-plugin/plugin` is a working directory that also packs unchanged."
 msgstr ""
 "目录加载**忽略** `format`/`format_version`——目录不是捆绑包——这正是今天把这些键安全写进每个模块清单的原因：`examples/03-plugin/plugin` 是一个工作目录，同时也能原封不动地打包。"
 
 
-#: src/reference/bundles.md:161
+#: src/reference/bundles.md:168
 msgid ""
 "The rest of the manifest grammar — deps tables, `inline`, `style` — is defined in [Project structure and rut.jsonc](project-structure.md); the dependency semantics are [Dependency kinds](dependency-kinds.md)."
 msgstr ""
 
 
-#: src/reference/bundles.md:166
+#: src/reference/bundles.md:173
 msgid "Url deps — bundles by reference"
 msgstr "url 依赖 — 按引用的捆绑包"
 
 
-#: src/reference/bundles.md:168
+#: src/reference/bundles.md:175
 msgid "A consumer may pin a bundle by url instead of vendoring it:"
 msgstr "消费者可以用 url 固定一个捆绑包，而不是将其内嵌（vendor）："
 
 
-#: src/reference/bundles.md:170
+#: src/reference/bundles.md:177
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25947,238 +25955,238 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:178
+#: src/reference/bundles.md:185
 msgid ""
 "The mount is the bundle mount, one gate earlier: the embedder's remote produces the bytes (`DepRemote` — the standard `rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and — before all of them — the **pin law**: the bytes must hash to the manifest row's `sha256`, on every load, or the load refuses naming the dep, the url, and both hashes. The url dep mounts as a **leaf**: its bundle brings the whole closure (every declared dep satisfied by an in-archive group — the closure law is unchanged, and a url row inside a packed bundle is inert metadata; loading a bundle never fetches)."
 msgstr ""
 
 
-#: src/reference/bundles.md:188
+#: src/reference/bundles.md:195
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's own `rut pack` output, satisfied by the rode-along groups: the archive's groups re-encode from the consumer session's units (one `.rutc` path), source groups copy their file set under the new prefix, and the same manifest + pins still pack byte-identically. The pack refuses, loudly and named, the cases that would emit a bundle the loader must reject: an archive source group still declaring `dev-deps` directories (vendor the dep), a compiled group the consumer's closure never uses (it cannot ride unpackaged), and a declared dep that did not ride."
 msgstr ""
 "由于清单逐字节随行，url 行会带进消费者自己的 `rut pack` 输出，由随行组满足：存档的组从消费者会话的 units 重新编码（唯一的 `.rutc` 路径），源码组把它的文件集复制到新前缀下，而相同清单 + 相同固定值仍逐字节相同地打包。打包会响亮地、指名道姓地拒绝那些会产出加载器必须拒绝的捆绑包的情形：仍在声明 `dev-deps` 目录的存档源码组（vendor 这个依赖）、消费者闭包从不使用的编译组（它无法未打包地承载），以及没有承载的已声明依赖。"
 
 
-#: src/reference/bundles.md:199
+#: src/reference/bundles.md:206
 msgid "The wire version"
 msgstr "线上版本"
 
 
-#: src/reference/bundles.md:201
+#: src/reference/bundles.md:208
 msgid ""
 "`format_version` is 10 — the one bundle wire, both root kinds; the manifest's `type` routes lib-compiled vs host-decl. A loader refuses any other value **before reading anything else** — refuse, never guess: `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`."
 msgstr ""
 "`format_version` 是 10——唯一的捆绑包线上格式，两种根皆然；清单的 `type` 路由 lib-编译与宿主-声明两种根。加载器**在读取其他任何东西之前**拒绝其他任何值——拒绝，绝不猜测：`this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`。"
 
 
-#: src/reference/bundles.md:207
+#: src/reference/bundles.md:214
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped peer groups or a declared child module would load partial — semantically wrong, so the closure law is checked at the mount. Compilation is the delivery contract — one exception, the riding law above: a pkg with an open generic surface rides its source beside the binary so consumer-spelled shapes stay servable. Source sharing as the general contract stays a directory (`rut run <dir>`), as it always was outside bundles."
 msgstr ""
 
 
-#: src/reference/bundles.md:216
+#: src/reference/bundles.md:223
 msgid ""
 "Peer-gated packages publish inside a compiled bundle two ways, per their group-kind law: a NON-generic compiled declarer's peer groups compile into its binary at pack time (the rows ride the binary; the group files do not travel), and a splice-needed declarer publishes as a source group, its group files riding beside the entry — the loader's peer gate appends by presence exactly as in a directory world ([Dependency kinds](dependency-kinds.md)). A generic-owning compiled declarer rides its group files too (the riding law), and the on-demand recompile splices exactly the rows whose peers are in the consumer's closure."
 msgstr ""
 "对等门控的包在编译捆绑包内以两种方式发布，依其组种类法则：非泛型的编译声明者，其对等组在打包期编译进它的二进制（行随二进制承载；组文件不旅行），需要拼接的声明者则以源码组发布，其组文件在入口旁承载——加载器的对等门按在场与否追加，与目录世界完全一样（[依赖种类](dependency-kinds.md)）。拥有泛型的编译声明者也承载自己的组文件（承载法则），按需重编译恰好拼接对等者在消费者闭包中的那些行。"
 
 
-#: src/reference/bundles.md:227
+#: src/reference/bundles.md:234
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the consuming run's world (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one world without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr ""
 
 
-#: src/reference/bundles.md:238
+#: src/reference/bundles.md:245
 msgid "The `bundle` module"
 msgstr "`bundle` 模块"
 
 
-#: src/reference/bundles.md:240
+#: src/reference/bundles.md:247
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, and the reader (both root kinds) live in the driver's `rut_driver::bundle` module — **pure and in-memory**: the walk adds every filesystem read. That half lives in `rut-native`, whose one-method `Source` trait is the one filesystem door: `rut_native::FsSource::at(dir)` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer needs the walk and lives beside it (`rut_native::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Loading a bundle into a run goes through `rut_native::load_bundle_session(path)` (the file read) or `rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
 
-#: src/reference/bundles.md:256
+#: src/reference/bundles.md:263
 msgid "Deterministic packing"
 msgstr "确定性打包"
 
 
-#: src/reference/bundles.md:258
+#: src/reference/bundles.md:265
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr "相同目录 + 相同工具链 ⇒ 逐字节相同的 `.rutbundle`："
 
 
-#: src/reference/bundles.md:260
+#: src/reference/bundles.md:267
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's binary, then dep groups in name order (deduplicated, recursive);"
 msgstr "固定条目顺序——先是 `rut.jsonc`，再是作用域台账、根的二进制，然后依赖组按名字排序（去重、递归）；"
 
 
-#: src/reference/bundles.md:263
+#: src/reference/bundles.md:270
 msgid "fixed (zeroed) timestamps;"
 msgstr "固定（清零）的时间戳；"
 
 
-#: src/reference/bundles.md:264
+#: src/reference/bundles.md:271
 msgid "STORE (no compression) — determinism over size."
 msgstr "STORE（不压缩）——确定性优先于体积。"
 
 
-#: src/reference/bundles.md:266
+#: src/reference/bundles.md:273
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module binary and verification](module-binary.md)): bundles are content-cacheable, and two builds of the same module diff to nothing."
 msgstr ""
 "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
 
 
-#: src/reference/bundles.md:270
+#: src/reference/bundles.md:277
 msgid "Stripping — the private sidecar"
 msgstr "剥离——私有的旁车"
 
 
-#: src/reference/bundles.md:272
+#: src/reference/bundles.md:279
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol table** at the sibling path `<out-without-ext>.rutsym`. Every renameable name in the `.rutc` binaries mangles to `%N` and every function's span/position tables leave — the sidecar carries exactly what left, so supplying it at load restores real names and line/col for stack-trace symbolication. The sidecar is never an entry inside the archive. It needs a fully-compiled closure (a source group that could bind a compiled group's surface is a pointed refusal); without `--strip`, packing is unchanged. The whole law lives in [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md). `run` accepts `--symbols <file.rutsym>` against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 "`rut pack <dir> --strip` 在上述内容之外，**外加一份私有符号表**，写在旁边的路径 `<out-without-ext>.rutsym`。`.rutc` 二进制里每个可改名的名字都改名为 `%N`，每个函数的区间/位置表都离开——旁车携带的正是离开的东西，因此在加载时提供它就能为栈追踪符号化还原真实名字与行/列。旁车绝不是归档里的一个条目。它需要一个全编译的闭包（可能绑定某编译组表面的源码组会被明确拒绝）；不加 `--strip` 时，打包一切照旧。完整的法则见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。`run` 对编译的捆绑包接受 `--symbols <file.rutsym>`（[rut CLI](cli.md)）。"
 
 
-#: src/reference/bundles.md:285
+#: src/reference/bundles.md:292
 msgid "Checks on load"
 msgstr "加载时的检查"
 
 
-#: src/reference/bundles.md:287
+#: src/reference/bundles.md:294
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle never executes. The order is the law: container, then manifest and version, then every group's decode, then the mount."
 msgstr "每项检查都在加载时、编译与链接之前运行——坏捆绑包绝不执行。顺序即法则：容器，然后清单与版本，然后每个组的解码，最后挂载。"
 
 
-#: src/reference/bundles.md:291
+#: src/reference/bundles.md:298
 msgid "rule on mismatch"
 msgstr "不匹配时的规则"
 
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:300
 msgid "zip entry CRC-32"
 msgstr "zip 条目 CRC-32"
 
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:300
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr "拒绝——损坏的捆绑包（点名该条目）"
 
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:301
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:301
 msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
 
-#: src/reference/bundles.md:295
+#: src/reference/bundles.md:302
 msgid "`format_version` exactly 10"
 msgstr "`format_version` 恰为 10"
 
 
-#: src/reference/bundles.md:295
+#: src/reference/bundles.md:302
 msgid ""
 "refuse — `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`"
 msgstr ""
 "拒绝——`this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory`"
 
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:303
 msgid "a host root carrying a root `.rutc`"
 msgstr "宿主根携带根 `.rutc`"
 
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:303
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr "拒绝——宿主捆绑包的根是它的表面，不是编译单元"
 
 
-#: src/reference/bundles.md:297
+#: src/reference/bundles.md:304
 msgid "a host root carrying a `rut.scopes` ledger or a group entry"
 msgstr "宿主根携带 `rut.scopes` 台账或组条目"
 
 
-#: src/reference/bundles.md:297
+#: src/reference/bundles.md:304
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr "拒绝——宿主捆绑包即其面，单包"
 
 
-#: src/reference/bundles.md:298
+#: src/reference/bundles.md:305
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not a bare package name"
 msgstr "编译根没有自己的 `rut.scopes` 台账，或台账行不是裸包名"
 
 
-#: src/reference/bundles.md:298
+#: src/reference/bundles.md:305
 msgid "refuse — a corrupt compiled bundle"
 msgstr "拒绝——损坏的编译捆绑包"
 
 
-#: src/reference/bundles.md:299
+#: src/reference/bundles.md:306
 msgid "`<pkg>.rutc` decode: version, tables, surface ids"
 msgstr "`<pkg>.rutc` 解码：版本、各表、表面 id"
 
 
-#: src/reference/bundles.md:299
+#: src/reference/bundles.md:306
 msgid "refuse — names the entry and the cause"
 msgstr "拒绝——点出条目与原因"
 
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:307
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr "编译组的台账行与其二进制自身的作用域一致"
 
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:307
 msgid "refuse — corrupt or doctored"
 msgstr "拒绝——损坏或被篡改"
 
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:308
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:308
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:309
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr "每个已声明依赖都被一个组满足（编译根）"
 
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:309
 msgid "refuse — names the missing group"
 msgstr "拒绝——点出缺失的组"
 
 
-#: src/reference/bundles.md:304
+#: src/reference/bundles.md:311
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr "CDN 上的 std 树——按包交付"
 
 
-#: src/reference/bundles.md:306
+#: src/reference/bundles.md:313
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at `dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell (15 today). jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE the delivery and the publish act is a git tag:"
 msgstr ""
 "std 树（`rut/`）以**已提交**的按包捆绑包交付于 `dist/std/<pkg>.rutbundle`——`deps` 行能拼写的每个包一个捆绑包（今日 15 个）。jsDelivr 的 gh 车道按 ref 服务仓库文件，所以工件**就是**交付，发布动作是一次 git tag："
 
 
-#: src/reference/bundles.md:311
+#: src/reference/bundles.md:318
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26193,71 +26201,71 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:322
+#: src/reference/bundles.md:329
 msgid ""
 "`<tag>`/`<sha256>` are placeholders — real pins live in the examples (anti-rot: docs never rot pins). The laws:"
 msgstr "`<tag>`/`<sha256>` 是占位符——真钉住在示例里（防腐：文档永不腐烂钉）。法则："
 
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:332
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std::cjs` packs all 15 (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate: `--check` repacks and byte-compiles, no network); `--pins` rewrites the example manifests' url/sha256 rows; `--tag` prints the publish commands. Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 "**已提交工件，不可变标签。** `scripts/pack-std::cjs` 打包全部 15 个（确定性——同输入 ⇒ 同字节，新鲜度是纯等值门：`--check` 重打包并逐字节比较，不触网）；`--pins` 重写示例清单的 url/sha256 行；`--tag` 打印发布命令。标签只前进（`std-vNN`），永不重指——jsDelivr 缓存很凶。"
 
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:338
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and, the generic-source riding law, a compiled pkg whose surface exports generics also rides the source that serves consumer-spelled shapes: at the consumer's link a request the ledger lacks lowers the ridden text in the consumer's session and compiles the monomorphized body under the declaring pkg's spec (one row program-wide, nothing persisted). So the CDN lane delivers **host surfaces** (decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `nmapset`, `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>` compile at the link from the ridden source). The riding law binds this lane too: a pkg that owns an open generic surface but carries no riding source refuses at the mount (`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory), and a bundle-mounted json names its pack-time dev closure in its ledger, so the consumer's closure must contain those names (`pouch`, `nmapset` beside `json` — the six-pin law)."
 msgstr ""
 "**编译捆绑包服务什么。**实例化以属主为锚：编译的属主在其台账中承载自己的打包闭包拼写的泛型实例化——而且，按泛型源码承载法则，表面导出泛型的编译 pkg 还在二进制旁承载服务消费者拼写形状的源码：在消费者的链接处，台账没有的请求会在消费者的会话中降低被承载的文本，并以声明 pkg 的 spec 编译单态化代码体（全程序一行，不持久化）。所以 CDN 车道交付**宿主表面**（声明捆绑包）、**具体类库**（`http`、`ink`、`strbuild`——方法在表面的固有行上跨越）、**以及泛型 owner**（`pouch`、`nmapset`、`json`、`futures`——`Vec<Todo>`、`Map<K,V>`、`decodeJson<T>` 在链接处从被承载的源码编译）。承载法则也约束这条车道：拥有开放泛型表面却不带承载源码的包在挂载时拒绝（`pouch` owns an open generic surface but its bundle carries no riding source — re-pack the directory），包装载的 json 还在其台账中命名其打包期开发闭包，因此消费者的闭包必须包含那些名字（`json` 旁的 `pouch`、`nmapset`——六钉法则）。"
 
 
-#: src/reference/bundles.md:350
+#: src/reference/bundles.md:357
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): first-mount-wins mounts one body, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. Pin sets stay minimal-top anyway — a closed bundle carries the rest."
 msgstr ""
 "**重复挂载是安全的。** 两个档案可携带同一组（`json` 与 `http` 的闭包都带 `strbuild`）：先挂载者胜挂载一个体，按档案的台账命名空间化让每个二进制的 id 都经自己档案的行解析。钉集反正保持最小顶——闭合捆绑包会带上其余。"
 
 
-#: src/reference/bundles.md:357
+#: src/reference/bundles.md:364
 msgid "Loading"
 msgstr "加载"
 
 
-#: src/reference/bundles.md:359
+#: src/reference/bundles.md:366
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same name resolution, same compile, same splice rules:"
 msgstr "捆绑包是目录形式之外的又一个解析来源——同样的名字解析、同样的编译、同样的拼接规则："
 
 
-#: src/reference/bundles.md:363
+#: src/reference/bundles.md:370
 msgid ""
 "// from a file\n"
 msgstr ""
 "// from a file\n"
 
 
-#: src/reference/bundles.md:364
+#: src/reference/bundles.md:371
 msgid ""
 "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:369
+#: src/reference/bundles.md:376
 msgid ""
 "After the offer, the package name resolves exactly as the directory form does — with one difference: a compiled group's body is the decoded program itself. The run assigns it a fresh scope, rebases its packed ids through the ledger, and pushes it; source groups offer as sources and compile (or splice) exactly as a directory world. Then the normal pipeline takes over ([Loading and the embed loop](loading.md)). Loose directories and loose `.rut` files stay valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
 
-#: src/reference/bundles.md:381
+#: src/reference/bundles.md:388
 msgid ""
 "# default output: a sibling of the dir\n"
 msgstr ""
 "# default output: a sibling of the dir\n"
 
 
-#: src/reference/bundles.md:385
+#: src/reference/bundles.md:392
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
@@ -26289,6 +26297,13 @@ msgid ""
 "  \"entry\": { \"type\": \"./calc.d.rut\" }\n"
 "}\n"
 "\n"
+"// the same surface, the default-root spelling: mod.d.rut beside the\n"
+"// manifest IS the root — entry.type is optional on a host pkg\n"
+"{\n"
+"  \"name\": \"calc\",\n"
+"  \"type\": \"host\"\n"
+"}\n"
+"\n"
 "// a consumer (an app directory): a `path` row for a sibling package\n"
 "// of your own, pinned url rows for the toolchain's packages\n"
 "{\n"
@@ -26304,184 +26319,184 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/project-structure.md:41
+#: src/reference/project-structure.md:48
 msgid "The keys, all of them:"
 msgstr "所有的键："
 
 
-#: src/reference/project-structure.md:43
+#: src/reference/project-structure.md:50
 msgid "key"
 msgstr "键"
 
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:52
 msgid "`name`"
 msgstr "`name`"
 
 
-#: src/reference/project-structure.md:45
+#: src/reference/project-structure.md:52
 msgid ""
 "the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error."
 msgstr "包的 use 路径名：只允许裸的 `[a-zA-Z0-9_]+`。带作用域或带引号的写法是清单错误。"
 
 
-#: src/reference/project-structure.md:46
+#: src/reference/project-structure.md:53
 msgid "`entry.type`"
 msgstr "`entry.type`"
 
 
-#: src/reference/project-structure.md:46
+#: src/reference/project-structure.md:53
 msgid ""
-"the declaration surface: one `.d.rut` file — the ONLY entry key left. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused)"
+"the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused)"
 msgstr ""
-"声明表面：一个 `.d.rut` 文件 —— 仅存的入口键。在 lib 包上它是文档表面（仅有表面的开发状态会作为声明单元挂载；其中的 `host fn` 文本会被拒绝）"
+"声明表面：一个 `.d.rut` 文件 —— 仅存的入口键。在宿主包上可选：缺省时，清单旁的 `mod.d.rut` 就是根表面（与正文的 `mod.rut` 对等）；写明时以写明的为准。两者都缺则是响亮的“无入口”错误，同时指出两种拼写。在 lib 包上它是文档表面（仅有表面的开发状态会作为声明单元挂载；其中的 `host fn` 文本会被拒绝）"
 
 
-#: src/reference/project-structure.md:47
+#: src/reference/project-structure.md:54
 msgid ""
-"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files ([below](#host-surface-trees)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind and no `mod.rut` is an error naming both fixes"
+"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind and no `mod.rut` is an error naming both fixes"
 msgstr ""
-"声明的种类：`type = \"host\"` 表示**宿主包** —— 一个纯声明表面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；该表面组织成一棵 `mod.d.rut` 文件的模块树（[见下](#host-surface-trees)）；`type = \"lib\"`（或省略）是普通的源码包。种类从不被推断 —— 一个只写 `entry.type`、既无种类又无 `mod.rut` 的清单是一个错误，同时指出两种修复方法"
+"声明的种类：`type = \"host\"` 表示**宿主包** —— 一个纯声明表面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；该表面组织成一棵 `mod.d.rut` 文件的模块树，根为默认根或写明的 `entry.type`（[见下](#host-surface-trees)）；`type = \"lib\"`（或省略）是普通的源码包。种类从不被推断 —— 一个只写 `entry.type`、既无种类又无 `mod.rut` 的清单是一个错误，同时指出两种修复方法"
 
 
-#: src/reference/project-structure.md:48 src/reference/dependency-kinds.md:161
+#: src/reference/project-structure.md:55 src/reference/dependency-kinds.md:161
 msgid "`deps`"
 msgstr "`deps`"
 
 
-#: src/reference/project-structure.md:48
+#: src/reference/project-structure.md:55
 msgid ""
 "the transitively mounted dependencies — one source per descriptor: `pkg = { path = \"...\" }` (relative to this manifest) or `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }` (a remote `.rutbundle`, the pin optional but recommended) ([Dependency kinds](dependency-kinds.md)). `optional` is rejected here."
 msgstr ""
 "传递挂载的依赖 — 每个描述符一个来源：`pkg = { path = \"...\" }`（相对本清单）或 `pkg = { url = \"https://…\", sha256 = \"<64-hex>\" }`（远程 `.rutbundle`，固定值可选但推荐）（[依赖种类](dependency-kinds.md)）。此处拒绝 `optional`。"
 
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:56
 msgid "`peer-deps`"
 msgstr "`peer-deps`"
 
 
-#: src/reference/project-structure.md:49
+#: src/reference/project-structure.md:56
 msgid ""
 "presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md))"
 msgstr "在场门控的 peer——描述符接受 `path`、`optional`、`lib`（[依赖种类](dependency-kinds.md)）"
 
 
-#: src/reference/project-structure.md:50 src/reference/dependency-kinds.md:164
+#: src/reference/project-structure.md:57 src/reference/dependency-kinds.md:164
 msgid "`dev-deps`"
 msgstr "`dev-deps`"
 
 
-#: src/reference/project-structure.md:50
+#: src/reference/project-structure.md:57
 msgid "mounted only while building/testing this pkg itself"
 msgstr "仅在构建/测试本包自身时挂载"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:58
 msgid "`inline`"
 msgstr "`inline`"
 
 
-#: src/reference/project-structure.md:51
+#: src/reference/project-structure.md:58
 msgid ""
 "`true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package)"
 msgstr ""
 "`true` 强制把源码内联进每个消费方而非链接（其类方法必须在调用点解析的包——固有 impl 尚不能跨表面；泛型导出自己就能链接，其实例化归声明包所有）"
 
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:59
 msgid "`format`, `format_version`"
 msgstr "`format`, `format_version`"
 
 
-#: src/reference/project-structure.md:52
+#: src/reference/project-structure.md:59
 msgid ""
 "bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md))"
 msgstr "捆绑包键——目录加载忽略，`rut pack` 要求（[模块捆绑包](bundles.md)）"
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:60
 msgid "`style`"
 msgstr ""
 
 
-#: src/reference/project-structure.md:53
+#: src/reference/project-structure.md:60
 msgid ""
 "formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults."
 msgstr ""
 "格式化器旋钮：`indent_width`（1–8，默认 4）、`max_width`（≥ 20，默认 100）。在清单层无模式——未知键放行；畸形值是格式化器错误，绝不是编译错误。解析：被格式化文件最近的祖先清单；没有清单 → 默认值。"
 
 
-#: src/reference/project-structure.md:55
+#: src/reference/project-structure.md:62
 msgid ""
 "The **body keys are repealed**: `entry.lib` and `entry.libs` refuse loudly, each error naming the fix — the root module is `mod.rut` beside the manifest, structure lives in `mod` directories. (Inside a _published_ bundle the old keys still load — the reader's compat lane; see [Module bundles](bundles.md).)"
 msgstr ""
 "**代码体键已废除**：`entry.lib` 与 `entry.libs` 会被大声拒绝，每个错误都给出修复方法 —— 根模块是清单旁边的 `mod.rut`，结构生活在 `mod` 目录里。（在*已发布*的捆绑包内部，旧键仍然可以加载 —— 读取器的兼容通道；见[模块捆绑包](bundles.md)。）"
 
 
-#: src/reference/project-structure.md:61
+#: src/reference/project-structure.md:68
 msgid ""
 "The manifest text is **JSONC** — `//` line comments, `/* */` block comments, and trailing commas are all legal — parsed by `serde_json` behind a syntax-stripping front stage: the comment and comma bytes become spaces before the parser sees them, so a syntax error keeps the parser's own wording under a `line N:` prefix that names the ORIGINAL file's line. The value laws are unchanged. Value errors are path-targeted (`deps::pouch: unknown key 'feats'`). Descriptors are key/value objects; unknown descriptor keys are path-targeted manifest errors. Duplicate keys are last-wins. An `_`\\-key refuses loudly naming the fix — comments are the prose now."
 msgstr ""
 "清单文本是 **JSONC**——`//` 行注释、`/* */` 块注释以及尾随逗号都合法——由 `serde_json` 在一个语法剥离前级之后解析：注释与逗号的字节在解析器看到之前变成空格，因此语法错误保留解析器自己的措辞，带有一个指出原始文件行的 `line N:` 前缀。值法则不变。值错误按路径定位（`deps::pouch: unknown key 'feats'`）。描述符是键/值对象；未知描述符键是按路径定位的清单错误。重复键后者胜。`_`\\-键大声拒绝并指出修复——注释才是散文。"
 
 
-#: src/reference/project-structure.md:72
+#: src/reference/project-structure.md:79
 msgid "Resolution laws"
 msgstr "解析法则"
 
 
-#: src/reference/project-structure.md:74
+#: src/reference/project-structure.md:81
 msgid ""
 "**Exact, single-step.** A use path resolves only if a module with that `name` is mounted. Nothing is derived from directories or file layouts beyond the `mod` declarations the source itself spells."
 msgstr ""
 "**精确、单步。** use 路径只有在名字为该 `name` 的模块已挂载时才能解析。除了源码自己写出的 `mod` 声明之外，不会从目录或文件布局推导任何东西。"
 
 
-#: src/reference/project-structure.md:77
+#: src/reference/project-structure.md:84
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An already-mounted name (the embedder's, the root's, or an earlier dep's) is never overwritten — which is what makes peer presence-by-name sound: the consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 "**遍历递归进行，带环守卫；先挂载者胜。**已挂载的名字（嵌入方的、根的、或更早依赖的）绝不被覆盖——这正是让 peer 按名字判在场得以健全的原因：消费方自己为某个包准备的路径永远压过声明者的 `path`。"
 
 
-#: src/reference/project-structure.md:82
+#: src/reference/project-structure.md:89
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with its key fails, naming both."
 msgstr "**名字不匹配是错误。**清单 `name` 与其键不一致的依赖会失败，并点名双方。"
 
 
-#: src/reference/project-structure.md:84
+#: src/reference/project-structure.md:91
 msgid ""
 "**The cross-table law.** A name in `deps` beside `peer-deps` or `dev-deps` is an error naming both rows; peer + dev together is the sanctioned pairing."
 msgstr ""
 "**跨表法则。**一个名字同时出现在 `deps` 与 `peer-deps` 或 `dev-deps` 里是错误，并点名两行；peer + dev 一起是被认可的组合。"
 
 
-#: src/reference/project-structure.md:87
+#: src/reference/project-structure.md:94
 msgid ""
 "**`core` needs no `deps`** — `.compile()` auto-offers it unconditionally ([core and the swappable packages](stdlib.md)); every name still requires `use core::{ .. };` per [core and the swappable packages](stdlib.md)."
 msgstr ""
 "**`core` 无需 `deps`** —— `.compile()` 无条件自动 offer 它（[core 与可换包](stdlib.md)）；每个名字仍须按 [core 与可换包](stdlib.md)拼 `use core::{ .. };`。"
 
 
-#: src/reference/project-structure.md:92
+#: src/reference/project-structure.md:99
 msgid "Module trees"
 msgstr "模块树"
 
 
-#: src/reference/project-structure.md:94
+#: src/reference/project-structure.md:101
 msgid ""
 "A package's body is authored as a **file module tree** — the `tur_kit`\\-style layout:"
 msgstr "包的代码体以**文件模块树**的形式编写 —— `tur_kit` 式的布局："
 
 
-#: src/reference/project-structure.md:107
+#: src/reference/project-structure.md:114
 msgid "The root module declares its children:"
 msgstr "根模块声明它的子模块："
 
 
-#: src/reference/project-structure.md:109
+#: src/reference/project-structure.md:116
 msgid ""
 "```rut\n"
 "// tur_kit/mod.rut\n"
@@ -26491,38 +26506,38 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/project-structure.md:115
+#: src/reference/project-structure.md:122
 msgid ""
 "Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod NAME;`) in a file resolves against the sibling `NAME/mod.rut` directory. The loader never reads a directory listing — an undeclared directory is invisible, a declared child that is missing (or whose directory carries no `mod.rut`) is a loud error naming both spellings, and a `NAME.rut` file where a module directory is expected says so. Mounting is recursive and cycle-guarded by file identity; a repeated declaration mounts once."
 msgstr ""
 "挂载**由声明决定，而非目录发现**：文件中的 `mod NAME;`（或 `pub mod NAME;`）对照同级的 `NAME/mod.rut` 目录解析。加载器从不读取目录列表 —— 未声明的目录不可见，被声明却缺失的子模块（或其目录里没有 `mod.rut`）是一个大声错误并给出两种拼法，期望模块目录却是 `NAME.rut` 文件时也会如实报告。挂载是递归的、以文件身份防环；重复声明只挂载一次。"
 
 
-#: src/reference/project-structure.md:124
+#: src/reference/project-structure.md:131
 msgid ""
 "Visibility is per module file ([Modules and visibility](modules-and-visibility.md)): plain declarations are visible in their own module and its descendants, `pub(pkg)` shares inside the package, `pub` crosses packages. Cross-file references inside one package are qualified positions (`layout::Column`, `widget::mk(3)` — the `::` spelling); `use` statements stay the only cross-package door (`use tur_kit::layout::{ Column }`)."
 msgstr ""
 "可见性按模块文件划分（[模块与可见性](modules-and-visibility.md)）：无标注声明在其自身模块及后代中可见，`pub(pkg)` 在包内共享，`pub` 跨包。同一包内的跨文件引用是限定位置（`layout::Column`、`widget::mk(3)` —— `::` 拼法）；`use` 语句仍是唯一的跨包之门（`use tur_kit::layout::{ Column }`）。"
 
 
-#: src/reference/project-structure.md:132
+#: src/reference/project-structure.md:139
 msgid "Host surface trees"
 msgstr "宿主表面树"
 
 
-#: src/reference/project-structure.md:134
+#: src/reference/project-structure.md:141
 msgid ""
-"A `type = \"host\"` package has no body — but its `.d.rut` surface organizes as the same kind of tree. `mod NAME;` in the surface file mounts `NAME/mod.d.rut` **beside the declaring file**, recursively and cycle-guarded, exactly like a body tree with `mod.d.rut` as the module file:"
+"A `type = \"host\"` package has no body — but its `.d.rut` surface organizes as the same kind of tree. The **root surface** follows the same discovery law a body's `mod.rut` does: `mod.d.rut` beside the manifest is the default root (lib parity), and a spelled `entry.type` still wins — `calc.d.rut`, `engine.d.rut` and every other flat host pkg keep their custom root names. Neither present is the loud no-entry error naming both spellings. `mod NAME;` in the surface file mounts `NAME/mod.d.rut` **beside the declaring file**, recursively and cycle-guarded, exactly like a body tree with `mod.d.rut` as the module file:"
 msgstr ""
-"`type = \"host\"` 包没有正文 —— 但它的 `.d.rut` 表面组织成同一类树。表面文件中的 `mod NAME;` **在声明文件旁**挂载 `NAME/mod.d.rut`，递归且防环，与以 `mod.d.rut` 为模块文件的正文树一模一样："
+"`type = \"host\"` 包没有正文 —— 但它的 `.d.rut` 表面组织成同一类树。**根表面**遵循与正文的 `mod.rut` 相同的发现法则：清单旁的 `mod.d.rut` 是默认根（与 lib 对等），写明的 `entry.type` 仍然优先 —— `calc.d.rut`、`engine.d.rut` 和其他所有扁平宿主包都保留各自的自定义根名。两者都缺则是响亮的“无入口”错误，同时指出两种拼写。表面文件中的 `mod NAME;` **在声明文件旁**挂载 `NAME/mod.d.rut`，递归且防环，与以 `mod.d.rut` 为模块文件的正文树一模一样："
 
 
-#: src/reference/project-structure.md:140
+#: src/reference/project-structure.md:152
 msgid ""
 "```\n"
 "http_host/\n"
-"├── rut.jsonc           # type = \"host\", entry = ./http_host.d.rut\n"
-"├── http_host.d.rut     # the root surface: pub mod net;  pub mod stream;\n"
+"├── rut.jsonc           # type = \"host\" — no entry keys: mod.d.rut IS the root\n"
+"├── mod.d.rut           # the root surface: pub mod net;  pub mod stream;\n"
 "├── net/\n"
 "│   └── mod.d.rut       # http_host::net — the request lane + readbacks\n"
 "└── stream/\n"
@@ -26531,126 +26546,127 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/project-structure.md:150
+#: src/reference/project-structure.md:162
 msgid ""
 "The tree is **declaration-lawed like everything else**: a declared child with no `NAME/mod.d.rut` beside it is a loud error naming the declaring file, a `mod.rut` beside a host manifest still refuses (the pkg is a pure surface — the message points at `mod.d.rut`), and the `pub` on both the `mod` edge and the `host fn` row is what a consumer's `use` crosses."
 msgstr ""
 "这棵树**和其他一切一样受声明法则约束**：被声明却旁边没有 `NAME/mod.d.rut` 的子模块是一个大声错误并点名声明文件，宿主清单旁的 `mod.rut` 仍会被拒绝（该包是纯表面 —— 消息指向 `mod.d.rut`），而 `mod` 边和 `host fn` 行上的 `pub` 正是消费者的 `use` 所跨越的门槛。"
 
 
-#: src/reference/project-structure.md:157
+#: src/reference/project-structure.md:169
 msgid ""
 "What the tree changes is the **registration naming**: a row under `net/` registers as `pkg::net::name` (async families ride the qualified name too — `pkg::net::send__start` et al), while the root's own rows keep the flat `pkg::name` shape. Consumers spell the tree in their uses (`use http_host::net::{ send }`), and the embedding Rust registers the bodies scope-relatively (`\"net::send\"` under `HostPkg::new(\"http_host\")` — [embedding and native modules](embedding.md)). Packing rides the same additive envelope a body tree uses: the tree travels as `rut.mods` source rows inside the bundle, and a FLAT host pkg packs byte-identically (no rows entry) — [module bundles](bundles.md)."
 msgstr ""
 "树改变的是**注册命名**：`net/` 下的一行注册为 `pkg::net::name`（异步家族也骑在限定名上 —— `pkg::net::send__start` 等），而根自己的行保持扁平的 `pkg::name` 形状。消费者在 use 里拼出这棵树（`use http_host::net::{ send }`），嵌入用的 Rust 以作用域相对路径注册函数体（`HostPkg::new(\"http_host\")` 下的 `\"net::send\"` —— [嵌入与原生模块](embedding.md)）。打包骑在正文树所用的同一附加信封上：树以 `rut.mods` 源码行的形式随捆绑包旅行，而扁平宿主包打包后字节不变（没有行条目）—— [模块捆绑包](bundles.md)。"
 
 
-#: src/reference/project-structure.md:169
+#: src/reference/project-structure.md:181
 msgid "The toolchain tree"
 msgstr "工具链树"
 
 
-#: src/reference/project-structure.md:199
+#: src/reference/project-structure.md:211
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the vm's `HostPkgContext`/`HostRegistry` for the install law), `rut-native` beside the driver (it depends on the driver, never the reverse — the driver is provably pure: no fs, no net, no `std::path`), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the frontend crates — tokens, diagnostics, and symbols need no VM — plus the driver's pure core for manifest and bundle parsing (the dep tables behind the editor's dep walk). Its classifier is `rut-semantic` (re-exported as `rut_lsp::semantic`), which sits on the frontend crates for the same reason — embedders take it without the server."
 msgstr ""
 "依赖线：`rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后；驱动层坐在 vm 的 `HostPkgContext`/`HostRegistry` 上以落安装法则），`rut-native` 在驱动层旁（它依赖驱动层，绝不反向 —— 驱动层可证纯净：无 fs、无网络、无 `std::path`），宿主（`rut-std`、`rut-wasm`）在其上，`rut-cli`/`demo` 再其上。`rut-lsp` 坐在前端 crate 上 —— token、诊断与符号不需要 VM —— 再加上驱动层的纯净核心做清单与捆绑包解析（编辑器依赖遍历背后的依赖表）。它的分类器是 `rut-semantic`（以 `rut_lsp::semantic` 再导出），出于同样的原因坐在前端 crate 上 —— 嵌入方不需要服务器也能取用它。"
 
 
-#: src/reference/project-structure.md:213
+#: src/reference/project-structure.md:225
 msgid "The in-tree packages"
 msgstr "树内包"
 
 
-#: src/reference/project-structure.md:215
+#: src/reference/project-structure.md:227
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr "`rut/` 收纳 CLI 按需 offer 的标准与可换包："
 
 
-#: src/reference/project-structure.md:218
+#: src/reference/project-structure.md:230
 msgid "shape"
 msgstr "形状"
 
 
-#: src/reference/project-structure.md:220
+#: src/reference/project-structure.md:232
 msgid "`core`"
 msgstr "`core`"
 
 
-#: src/reference/project-structure.md:220
+#: src/reference/project-structure.md:232
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's `.compile()`"
 msgstr "唯一的标准包 —— 内建表面，由每次运行的 `.compile()` 自动 offer"
 
 
-#: src/reference/project-structure.md:221
+#: src/reference/project-structure.md:233
 msgid ""
 "host pkg: the math surface — offer `rut_native::tree_pkg(\"calc\")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md))"
 msgstr ""
 "宿主包：数学表面 —— offer `rut_native::tree_pkg(\"calc\")`，绑定 `rut_std::math::pkg()`（[标准库](stdlib.md)）"
 
 
-#: src/reference/project-structure.md:222
+#: src/reference/project-structure.md:234
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 
 
-#: src/reference/project-structure.md:222
+#: src/reference/project-structure.md:234
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr "宿主包——扁平的 `.d.rut` 表面；函数体住在 `rut-std`"
 
 
-#: src/reference/project-structure.md:223
+#: src/reference/project-structure.md:235
 msgid "`http_host`"
 msgstr ""
 
 
-#: src/reference/project-structure.md:223
+#: src/reference/project-structure.md:235
 msgid ""
-"host pkg, the surface-tree pilot — `net/` + `stream/` mods over the std HTTP rows ([project structure](#host-surface-trees)); bodies in `rut-std`"
+"host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
+"宿主包，表面树试点 —— std HTTP 行之上的默认 `mod.d.rut` 根，`net/` + `stream/` 两个 mod（[项目结构](#host-surface-trees)）；函数体在 `rut-std`"
 
 
-#: src/reference/project-structure.md:224
+#: src/reference/project-structure.md:236
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr "`ink`, `http`, `strbuild`, `futures`"
 
 
-#: src/reference/project-structure.md:224
+#: src/reference/project-structure.md:236
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr "架在宿主行之上的内联 rut 包装（`inline = true`）"
 
 
-#: src/reference/project-structure.md:225
+#: src/reference/project-structure.md:237
 msgid "the sequence library (plain linked package)"
 msgstr "序列库（普通链接包）"
 
 
-#: src/reference/project-structure.md:226
+#: src/reference/project-structure.md:238
 msgid ""
 "the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md)"
 msgstr "带 `peer-deps`/`dev-deps` 的基础包——[依赖种类](dependency-kinds.md)的参考消费方"
 
 
-#: src/reference/project-structure.md:227
+#: src/reference/project-structure.md:239
 msgid "`nmapset`"
 msgstr "`nmapset`"
 
 
-#: src/reference/project-structure.md:227
+#: src/reference/project-structure.md:239
 msgid "native-key maps/sets over `nmap_host`"
 msgstr "架在 `nmap_host` 之上的原生键 map/set"
 
 
-#: src/reference/project-structure.md:229
+#: src/reference/project-structure.md:241
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps are resolved by name from manifests; a host may replace the non-`core` set wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 "引擎里没有任何东西知道可换包的名字——peer 与依赖都按名字从清单解析；宿主可以整体替换非 `core` 集合（[嵌入与原生模块](embedding.md)）。"
 
 
-#: src/reference/project-structure.md:235
+#: src/reference/project-structure.md:247
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR dump, and an optional binary; `run(binary, budget)` returning output lines, an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the ABI's uncapped encoding) and opts in through the page's fuel box; the heap defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so unbounded loops park and resume instead of hanging the page. The served artifact is deployed at <https://playground.rut.hpp2334.com>."
 msgstr ""

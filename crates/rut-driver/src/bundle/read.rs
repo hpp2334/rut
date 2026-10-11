@@ -80,8 +80,9 @@ pub enum Layout {
     Decl {
         /// the root manifest (byte-for-byte `rut.jsonc`, parsed)
         manifest: Manifest,
-        /// the surface text (the manifest's `entry.type` file) —
-        /// presence- and UTF-8-checked here
+        /// the surface text (the manifest's `entry.type` file, or the
+        /// default `mod.d.rut` root when it spells none) — presence-
+        /// and UTF-8-checked here
         surface: String,
     },
 }
@@ -229,15 +230,25 @@ impl Layout {
                 ));
             }
         }
-        let Some(rel) = &manifest.entry.type_path else {
-            return Err(
-                "rut.jsonc has no `entry.type` — a host bundle's root is its surface".into(),
-            );
+        // the surface entry: the spelled `entry.type` when the manifest
+        // carries one, else the default root — `mod.d.rut` beside the
+        // manifest, the directory lanes' discovery mirrored over the
+        // entries. An old bundle's manifest always spells the key, so
+        // the compat shape rides this arm unchanged.
+        let spelled = manifest.entry.type_path.as_deref();
+        let rel = match spelled {
+            Some(rel) => rel.strip_prefix("./").unwrap_or(rel),
+            None => crate::decl::DECL_CHILD_FILE,
         };
-        let rel = rel.strip_prefix("./").unwrap_or(rel);
-        let surface = bundle
-            .read(rel)
-            .map_err(|e| format!("{e} — a host bundle's root is its surface"))?;
+        let surface = bundle.read(rel).map_err(|e| {
+            if spelled.is_none() {
+                "rut.jsonc names no root — spell `\"entry\": { \"type\": \
+                 \"<surface>.d.rut\" }` or pack a `mod.d.rut` beside the manifest"
+                    .to_string()
+            } else {
+                format!("{e} — a host bundle's root is its surface")
+            }
+        })?;
         Ok(Layout::Decl { manifest, surface })
     }
 }

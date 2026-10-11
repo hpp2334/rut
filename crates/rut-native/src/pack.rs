@@ -206,19 +206,33 @@ pub fn pack_dir_opts_fetched(
 /// from the directory (`NAME/mod.d.rut` beside the declaring file) and
 /// the rows entry is written ONLY when children exist — a flat host
 /// pkg packs byte-identically, no new entries, no version bump.
+///
+/// The root surface is the spelled `entry.type` when the manifest
+/// carries one, else `mod.d.rut` beside the manifest — the load lane's
+/// default-root discovery, mirrored (the pack must verify the exact
+/// layout the reader mounts back). Neither present refuses, naming
+/// both doors.
 fn pack_host_root(
     dir: &Path,
     manifest: &Manifest,
     manifest_bytes: Vec<u8>,
 ) -> Result<Vec<u8>, PackError> {
-    let rel = manifest.entry.type_path.as_deref().ok_or_else(|| {
-        PackError::law(format!(
-            "{} is a host pkg with no `entry.type`",
-            dir.join(rut_driver::bundle::MANIFEST_NAME).display()
-        ))
-    })?;
-    let rel = rel.strip_prefix("./").unwrap_or(rel);
-    let src_path = dir.join(rel);
+    let rel = match manifest.entry.type_path.as_deref() {
+        Some(rel) => rel.strip_prefix("./").unwrap_or(rel).to_string(),
+        None => {
+            let default = dir.join(crate::walk::DECL_ROOT_FILE);
+            if default.is_file() {
+                crate::walk::DECL_ROOT_FILE.to_string()
+            } else {
+                return Err(PackError::law(format!(
+                    "{} is a host pkg with no entry — spell `\"entry\": {{ \"type\": \
+                     \"<surface>.d.rut\" }}` or add a `mod.d.rut` beside the manifest",
+                    dir.join(rut_driver::bundle::MANIFEST_NAME).display()
+                )));
+            }
+        }
+    };
+    let src_path = dir.join(&rel);
     let src = std::fs::read_to_string(&src_path)
         .map_err(|e| PackError::io(src_path.display(), e))?;
     // the surface's mod tree mounts from the directory —
@@ -243,7 +257,7 @@ fn pack_host_root(
     // — the exact shape the container lane reads back at load
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     entries.push((rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes));
-    let key = rut_driver::bundle::bundle_key(rel).map_err(PackError::law)?;
+    let key = rut_driver::bundle::bundle_key(&rel).map_err(PackError::law)?;
     entries.push((key, src.clone().into_bytes()));
     // the mod tree rides beside the file set (the rows envelope's
     // `""` row is the root surface the reader lowers from) — flat pkgs

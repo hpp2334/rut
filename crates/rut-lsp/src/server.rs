@@ -429,12 +429,14 @@ impl<'a> Walk<'a> {
     }
 
     /// the HOST surface tree (the Decl flavor of the mount): the root
-    /// `.d.rut` is the entries loop's Decl row (already indexed); its
-    /// `mod` declarations mount the `NAME/mod.d.rut` children, each
-    /// indexed under the pkg name at its mod path in Decl mode — the
-    /// qualified-host-use walk (`use myhost::net::{ connect }`)
-    /// resolves through exactly these stamps. A surface pkg with no
-    /// `entry.type` (or an unreadable one) mounts nothing.
+    /// `.d.rut` is the entries loop's Decl row (already indexed — the
+    /// spelled `entry.type`, or the default `mod.d.rut` root when the
+    /// manifest spells none); its `mod` declarations mount the
+    /// `NAME/mod.d.rut` children, each indexed under the pkg name at
+    /// its mod path in Decl mode — the qualified-host-use walk
+    /// (`use myhost::net::{ connect }`) resolves through exactly these
+    /// stamps. A surface pkg whose Decl row cannot be read mounts
+    /// nothing.
     fn mount_decl_tree(&mut self, dir: &Path, module: &str, table: &deps::DepTable) {
         let Some(entry) = table.entries.iter().find(|e| e.mode == Mode::Decl) else {
             return;
@@ -473,13 +475,19 @@ impl<'a> Walk<'a> {
 }
 
 /// a bundle file's mod path: the rows lane's root rides as `mod.rut`
-/// (`Some("")`), a mounted child as `<path>/mod.rut` (`Some(path)`);
-/// anything else is today's flat shape (`None`)
+/// (`Some("")`), a mounted child as `<path>/mod.rut` (a host tree's
+/// as `<path>/mod.d.rut`), the host default root as `mod.d.rut`
+/// (`Some("")`) — `Some(path)`; anything else is today's flat shape
+/// (`None`)
 fn mod_path_of_bundle_file(path: &str) -> Option<String> {
     match path.strip_suffix("/mod.rut") {
         Some(p) => Some(p.to_string()),
         None if path == "mod.rut" => Some(String::new()),
-        None => None,
+        None => match path.strip_suffix("/mod.d.rut") {
+            Some(p) => Some(p.to_string()),
+            None if path == "mod.d.rut" => Some(String::new()),
+            None => None,
+        },
     }
 }
 

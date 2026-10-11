@@ -440,8 +440,12 @@ pub fn bundle_entry_pkg(
 /// envelope when the tree mounts (the packer's host lane — `""` is the
 /// root `.d.rut`, each child its mod path), else the flat surface
 /// entry lowers alone — the byte-compat shape every pre-`mod` host
-/// bundle carries. The manifest's `namespace`/`consts` rows fold in
-/// either way.
+/// bundle carries. The flat lane's root file is the spelled
+/// `entry.type` when the manifest carries one, else `mod.d.rut` beside
+/// the manifest — the default root, the directory lanes' discovery
+/// mirrored over the entries; neither present is the loud no-entry
+/// error naming both doors. The manifest's `namespace`/`consts` rows
+/// fold in either way.
 fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -466,11 +470,32 @@ fn host_entry_pkg(
         let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
         return Ok(fold(m));
     }
-    let rel = manifest.entry.type_path.as_ref().ok_or_else(|| {
-        format!("module at bundle prefix `{prefix}` is a host pkg with no `entry.type`")
+    let spelled = manifest.entry.type_path.as_deref();
+    let key_rel = match spelled {
+        Some(rel) => rel.strip_prefix("./").unwrap_or(rel),
+        None => DECL_CHILD_FILE,
+    };
+    let key = bundle_key(&format!("{prefix}{key_rel}"))?;
+    let src = read_entry(entries, &key).map_err(|e| {
+        if spelled.is_none() {
+            // the both-missing refusal, bundle-flavored (a packed host
+            // bundle always carries a root — a manifest that names
+            // neither door is a packaging bug, named like the
+            // directory lanes')
+            format!(
+                "module at bundle prefix `{prefix}` is a host pkg with no entry — spell \
+                 `\"entry\": {{ \"type\": \"<surface>.d.rut\" }}` or pack a `mod.d.rut` \
+                 root beside the manifest"
+            )
+        } else {
+            e
+        }
     })?;
-    let src = read_entry(entries, &bundle_key(&format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel)))?)?;
-    let m = crate::decl::lower_decl_module(&src, &Default::default(), &format!("{prefix}{rel}"))?;
+    let origin = match spelled {
+        Some(rel) => format!("{prefix}{rel}"),
+        None => format!("{prefix}{DECL_CHILD_FILE}"),
+    };
+    let m = crate::decl::lower_decl_module(&src, &Default::default(), &origin)?;
     Ok(fold(m))
 }
 

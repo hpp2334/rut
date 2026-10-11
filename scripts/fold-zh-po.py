@@ -25,33 +25,25 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (the one-wire
-# bundles rewrite: `format_version` is 10 always and `type` routes
-# lib-compiled vs host-decl; the module binary states VERSION 21 once;
-# the riding law stated in the present tense with the mount refusal —
-# "`pouch` owns an open generic surface but its bundle carries no
-# riding source — re-pack the directory"; the 9 pin pages move to
-# `std-v8`; the `[constructor]` call-form mirrors lose the `.new()`
-# equivalence clauses). Terminology per docs/po/GLOSSARY.md (捆绑包 /
-# 编译根 / 声明根 / 承载法则 / 作用域台账 / 固定值 / 指定表面); code
-# spans and diagnostics byte-identical; URLs/shas are code spans; the
-# extracted markup style is mirrored (`**bold**`, `_emphasis_`,
-# full-width punctuation in prose). Everything not in FRESH either
-# keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
-# mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. Code blocks fold to "" (the untranslated set is code-only).
+# Fresh translations for the strings this sweep changed (the host-root
+# amendment: `mod.d.rut` beside the manifest is a host pkg's default
+# root, lib parity with a body's `mod.rut`; `entry.type` is optional
+# and a spelled entry wins — the project-structure keys rows, the
+# host-surface-trees prose, the http_host pilot row, and bundles.md's
+# override-lane paragraph). Terminology per docs/po/GLOSSARY.md (宿主包
+# / 声明表面 / 清单 / 捆绑包 / 车道); code spans and diagnostics
+# byte-identical; the extracted markup style is mirrored (`**bold**`,
+# link text translated, targets untouched, full-width punctuation in
+# prose). Everything not in FRESH either keeps its msgstr
+# byte-for-byte (unchanged msgid), rides MECH (the mechanical cutover
+# shapes), or folds to "" — the English fallback BY DESIGN. Code
+# blocks fold to "" (the untranslated set is code-only).
 # FRESH is pruned after every landed sweep: once a msgstr is folded
 # into zh_CN.po it is kept byte-for-byte by the fold itself, so the
 # dict only ever carries translations for the CURRENT sweep's new and
 # changed strings. The phase-2 sweep's `[constructor]`-designation
 # entries landed and were pruned; see the git history of this file.
-FRESH = {
-    # the current sweep's scratchpad: entries are consumed by ONE fold
-    # run (they cover new/changed msgids before zh_CN.po knows them) and
-    # must not outlive it — a stale entry is "unused" and the fold exits
-    # 1 on the next sweep. Keep this dict empty at commit: re-folding
-    # the committed state must stay green (idempotency law).
-}
+FRESH = {}
 
 
 

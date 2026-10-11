@@ -107,9 +107,16 @@ single-package, no ledger, no groups, nothing to decode:
 
 ```text
 rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
-<pkg>.d.rut              the declaration surface — the root itself
+<pkg>.d.rut              the declaration surface — the root itself (the spelled
+                         entry.type), or mod.d.rut when it spells none
 rut.mods                 the surface's mod tree, when it has mod children
 ```
+
+The root file is the spelled `entry.type` when the manifest carries
+one, else `mod.d.rut` beside the manifest — the default root, lib
+parity with a body's `mod.rut`. Old bundles whose manifest spells a
+custom surface name (`http_host.d.rut` and friends) load unchanged
+through that override lane — no re-pack, no version bump.
 
 The mod tree rides the same additive rows envelope a lib body tree
 uses (see [layout rules](#layout-rules)): the tree mounts at pack

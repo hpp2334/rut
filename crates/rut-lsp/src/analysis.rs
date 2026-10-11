@@ -421,5 +421,8 @@ mod tests {
     fn decl_mode_for_dot_d_rut() {
         assert_eq!(mode_of("x/y/plugin.d.rut"), Mode::Decl);
         assert_eq!(mode_of("x/y/main.rut"), Mode::Impl);
+        // the host default root routes Decl like every `.d.rut` surface
+        assert_eq!(mode_of("mod.d.rut"), Mode::Decl);
+        assert_eq!(mode_of("net/mod.d.rut"), Mode::Decl);
     }
 }
