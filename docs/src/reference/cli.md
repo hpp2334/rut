@@ -24,7 +24,11 @@ rut fetch <dir>
 rut dump <file.rut>
 ```
 
-Running `rut` with no subcommand prints the usage line to stderr.
+The arg surface is clap: `rut --help` prints the commands, `rut
+<command> --help` the flags. Running `rut` with no subcommand prints
+the help to stderr and exits 2; a parse error — an unknown flag, a
+dangling flag value, an unparsable `--fuel` — is the same exit 2 with
+clap's message. The usage sketch above stays the quick map.
 
 ## `run`
 

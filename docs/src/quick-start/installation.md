@@ -163,12 +163,30 @@ export PATH="$PWD/target/release:$PATH"
 ```
 
 All three lanes end in the same `rut` binary — call it by path or put
-it on your `PATH` (the pages here use the bare name). Running it with
-no subcommand prints the usage line:
+it on your `PATH` (the pages here use the bare name). `rut --help`
+prints the surface (and `rut <command> --help` each command's flags):
 
 ```sh
-rut
-# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | new <dir> | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>
+rut --help
+```
+
+```text
+the rut toolchain's temporary-run lane: run, scaffold, format, pack, fetch, inspect
+
+Usage: rut <COMMAND>
+
+Commands:
+  run    compile and run a module directory or a packed `.rutbundle`
+  new    scaffold a hello-world module directory (the std set as deps)
+  fmt    the source formatter — canonical house layout, rewrite in place
+  pack   pack a module directory into a deterministic `.rutbundle`
+  fetch  pre-warm the bundle cache for offline runs
+  dump   the AST + IR readbacks for one file
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 The binary embeds the whole engine: lexer, parser, compiler, typed

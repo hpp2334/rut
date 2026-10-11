@@ -722,18 +722,11 @@ msgstr ""
 #: src/quick-start/installation.md:165
 msgid ""
 "All three lanes end in the same `rut` binary — call it by path or put it on "
-"your `PATH` (the pages here use the bare name). Running it with no "
-"subcommand prints the usage line:"
+"your `PATH` (the pages here use the bare name). `rut --help` prints the "
+"surface (and `rut <command> --help` each command's flags):"
 msgstr ""
 
-#: src/quick-start/installation.md:170
-msgid ""
-"# usage: rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] "
-"[--symbols <file.rutsym>] | new <dir> | fmt <file.rut | dir> [--check] | "
-"pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>\n"
-msgstr ""
-
-#: src/quick-start/installation.md:174
+#: src/quick-start/installation.md:192
 msgid ""
 "The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, "
 "and the VM. The toolchain's standard packages (`core`, `pouch`, `ink`, "
@@ -744,11 +737,11 @@ msgid ""
 "module directory ([your first rut program](first-program.md))."
 msgstr ""
 
-#: src/quick-start/installation.md:183
+#: src/quick-start/installation.md:201
 msgid "Try it:"
 msgstr ""
 
-#: src/quick-start/installation.md:187
+#: src/quick-start/installation.md:205
 msgid ""
 "<<'EOF'\n"
 "// hello/rut.jsonc — the manifest IS the program's door\n"
@@ -775,13 +768,13 @@ msgid ""
 "rut run hello\n"
 msgstr ""
 
-#: src/quick-start/installation.md:213
+#: src/quick-start/installation.md:231
 msgid ""
 "The first run fetched `ink` from jsDelivr into `hello/.rut/cache`; `rut "
 "fetch hello` pre-warms that cache without running anything."
 msgstr ""
 
-#: src/quick-start/installation.md:216
+#: src/quick-start/installation.md:234
 msgid ""
 "The hand-typed walkthrough is the lesson — the manifest is what you are "
 "learning. When it is routine, `rut new hello` is the one-step equivalent: it "
@@ -789,7 +782,7 @@ msgid ""
 "whole swappable std set pinned as deps ([the rut CLI](../reference/cli.md))."
 msgstr ""
 
-#: src/quick-start/installation.md:222
+#: src/quick-start/installation.md:240
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut "
 "program](first-program.md) — and keep the lane's role in mind: the CLI is "
@@ -798,36 +791,36 @@ msgid ""
 "CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 
-#: src/quick-start/installation.md:229
+#: src/quick-start/installation.md:247
 msgid "Optional: the wasm playground"
 msgstr ""
 
-#: src/quick-start/installation.md:231
+#: src/quick-start/installation.md:249
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:239
+#: src/quick-start/installation.md:257
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifact into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:246
+#: src/quick-start/installation.md:264
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:248
+#: src/quick-start/installation.md:266
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:253
+#: src/quick-start/installation.md:271
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:254
+#: src/quick-start/installation.md:272
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -996,7 +989,7 @@ msgstr ""
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:124 src/reference/cli.md:137
+#: src/quick-start/first-program.md:124 src/reference/cli.md:141
 msgid "# rewrite in place\n"
 msgstr ""
 
@@ -1193,7 +1186,7 @@ msgid "Types"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
-#: src/reference/native-containers.md:115 src/reference/cli.md:242
+#: src/reference/native-containers.md:115 src/reference/cli.md:246
 msgid "Notes"
 msgstr ""
 
@@ -10137,7 +10130,7 @@ msgid ""
 ".. }`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:58 src/reference/cli.md:75
+#: src/reference/lexical-structure.md:58 src/reference/cli.md:79
 msgid "`new`"
 msgstr ""
 
@@ -17816,8 +17809,8 @@ msgid ""
 msgstr ""
 
 #: src/reference/embedding.md:206 src/reference/templates.md:17
-#: src/reference/dependency-kinds.md:220 src/reference/cli.md:48
-#: src/reference/cli.md:88 src/reference/cli.md:212
+#: src/reference/dependency-kinds.md:220 src/reference/cli.md:52
+#: src/reference/cli.md:92 src/reference/cli.md:216
 msgid "behavior"
 msgstr ""
 
@@ -18468,7 +18461,7 @@ msgstr ""
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:411 src/reference/cli.md:53
+#: src/reference/embedding.md:411 src/reference/cli.md:57
 msgid "heap limit"
 msgstr ""
 
@@ -18561,7 +18554,7 @@ msgstr ""
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:438 src/reference/cli.md:60
+#: src/reference/embedding.md:438 src/reference/cli.md:64
 msgid "`math::pkg()`"
 msgstr ""
 
@@ -18577,7 +18570,7 @@ msgstr ""
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:440 src/reference/cli.md:62
+#: src/reference/embedding.md:440 src/reference/cli.md:66
 msgid "`nmap::pkg()`"
 msgstr ""
 
@@ -18595,7 +18588,7 @@ msgid ""
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:442 src/reference/cli.md:64
+#: src/reference/embedding.md:442 src/reference/cli.md:68
 msgid "`async_host::pkg()`"
 msgstr ""
 
@@ -18603,7 +18596,7 @@ msgstr ""
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:443 src/reference/cli.md:65
+#: src/reference/embedding.md:443 src/reference/cli.md:69
 msgid "`http::pkg()`"
 msgstr ""
 
@@ -18615,7 +18608,7 @@ msgid ""
 "readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:444 src/reference/cli.md:63
+#: src/reference/embedding.md:444 src/reference/cli.md:67
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
@@ -19349,7 +19342,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-fns.md:130 src/reference/frontend.md:159
-#: src/reference/cli.md:223
+#: src/reference/cli.md:227
 msgid "Declaration mode"
 msgstr ""
 
@@ -19615,7 +19608,7 @@ msgstr ""
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:168 src/reference/stdlib.md:217
 #: src/reference/stdlib.md:384 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:50 src/reference/cli.md:234
+#: src/reference/project-structure.md:50 src/reference/cli.md:238
 msgid "meaning"
 msgstr ""
 
@@ -20607,7 +20600,7 @@ msgstr ""
 msgid "host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:128 src/reference/cli.md:65
+#: src/reference/stdlib.md:128 src/reference/cli.md:69
 msgid "the std HTTP lanes"
 msgstr ""
 
@@ -23502,7 +23495,7 @@ msgstr ""
 msgid "Two files leave the build:"
 msgstr ""
 
-#: src/reference/symbol-stripping.md:26 src/reference/cli.md:227
+#: src/reference/symbol-stripping.md:26 src/reference/cli.md:231
 msgid "file"
 msgstr ""
 
@@ -24148,7 +24141,7 @@ msgstr ""
 msgid "call"
 msgstr ""
 
-#: src/reference/loading.md:47 src/reference/cli.md:58
+#: src/reference/loading.md:47 src/reference/cli.md:62
 msgid "purpose"
 msgstr ""
 
@@ -26262,47 +26255,52 @@ msgid ""
 msgstr ""
 
 #: src/reference/cli.md:27
-msgid "Running `rut` with no subcommand prints the usage line to stderr."
+msgid ""
+"The arg surface is clap: `rut --help` prints the commands, `rut <command> "
+"--help` the flags. Running `rut` with no subcommand prints the help to "
+"stderr and exits 2; a parse error — an unknown flag, a dangling flag value, "
+"an unparsable `--fuel` — is the same exit 2 with clap's message. The usage "
+"sketch above stays the quick map."
 msgstr ""
 
-#: src/reference/cli.md:29 src/reference/cli.md:227
+#: src/reference/cli.md:33 src/reference/cli.md:231
 msgid "`run`"
 msgstr ""
 
-#: src/reference/cli.md:31
+#: src/reference/cli.md:35
 msgid ""
 "Compiles and executes. Two input forms — every rut program is a module "
 "directory ([project structure](project-structure.md)), so there is no "
 "loose-file shape:"
 msgstr ""
 
-#: src/reference/cli.md:35
+#: src/reference/cli.md:39
 msgid "input"
 msgstr ""
 
-#: src/reference/cli.md:35
+#: src/reference/cli.md:39
 msgid "pipeline"
 msgstr ""
 
-#: src/reference/cli.md:37
+#: src/reference/cli.md:41
 msgid "`dir` (a module directory with `rut.jsonc`)"
 msgstr ""
 
-#: src/reference/cli.md:37
+#: src/reference/cli.md:41
 msgid ""
 "load the whole graph, compile it, run the entry designation (below) "
 "([project structure](project-structure.md))"
 msgstr ""
 
-#: src/reference/cli.md:38
+#: src/reference/cli.md:42
 msgid "`mod.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:38
+#: src/reference/cli.md:42
 msgid "the packed form of the same contract ([module bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/cli.md:40
+#: src/reference/cli.md:44
 msgid ""
 "Anything else is refused at the door (exit 2): a loose `.rut` file is not a "
 "runnable unit — give the directory a `rut.jsonc` (`{\"name\": \"…\", "
@@ -26310,19 +26308,19 @@ msgid ""
 "commas are legal), or run a packed `.rutbundle`."
 msgstr ""
 
-#: src/reference/cli.md:46
+#: src/reference/cli.md:50
 msgid "Flags and defaults:"
 msgstr ""
 
-#: src/reference/cli.md:48 src/reference/cli.md:88 src/reference/cli.md:212
+#: src/reference/cli.md:52 src/reference/cli.md:92 src/reference/cli.md:216
 msgid "item"
 msgstr ""
 
-#: src/reference/cli.md:50
+#: src/reference/cli.md:54
 msgid "`--entry <fn>`"
 msgstr ""
 
-#: src/reference/cli.md:50
+#: src/reference/cli.md:54
 msgid ""
 "name the `entry fn` to run. Without the flag: exactly one `entry fn` runs "
 "the program; several refuse to guess (exit 1, naming the set); none reports "
@@ -26331,22 +26329,22 @@ msgid ""
 "loud error"
 msgstr ""
 
-#: src/reference/cli.md:51
+#: src/reference/cli.md:55
 msgid "`--fuel N`"
 msgstr ""
 
-#: src/reference/cli.md:51
+#: src/reference/cli.md:55
 msgid ""
 "cap the op budget per turn. Fuel is opt-in: without the flag the run is "
 "uncapped; a missing or unparsable value is a loud error (exit 2) — no silent "
 "default"
 msgstr ""
 
-#: src/reference/cli.md:52
+#: src/reference/cli.md:56
 msgid "`--symbols <file.rutsym>`"
 msgstr ""
 
-#: src/reference/cli.md:52
+#: src/reference/cli.md:56
 msgid ""
 "restore a [stripped artifact's](symbol-stripping.md) private symbol table — "
 "legal only against a compiled `.rutbundle` (the directory lane compiles "
@@ -26355,51 +26353,51 @@ msgid ""
 "names; sections naming modules the bundle does not carry warn"
 msgstr ""
 
-#: src/reference/cli.md:53
+#: src/reference/cli.md:57
 msgid "fixed at 64 MiB"
 msgstr ""
 
-#: src/reference/cli.md:54
+#: src/reference/cli.md:58
 msgid "interrupt check"
 msgstr ""
 
-#: src/reference/cli.md:54
+#: src/reference/cli.md:58
 msgid "every 1024 ops"
 msgstr ""
 
-#: src/reference/cli.md:56
+#: src/reference/cli.md:60
 msgid "Bodies bound by `run` (each rides the chain as `.host_pkg(..)`):"
 msgstr ""
 
-#: src/reference/cli.md:58
+#: src/reference/cli.md:62
 msgid "chain step"
 msgstr ""
 
-#: src/reference/cli.md:60
+#: src/reference/cli.md:64
 msgid "`calc`'s float fns"
 msgstr ""
 
-#: src/reference/cli.md:61
+#: src/reference/cli.md:65
 msgid "`logger::pkg` (sink: stdout)"
 msgstr ""
 
-#: src/reference/cli.md:61
+#: src/reference/cli.md:65
 msgid "the logger; silent no-op unless the program uses `ink`"
 msgstr ""
 
-#: src/reference/cli.md:62
+#: src/reference/cli.md:66
 msgid "the native key table behind `nmapset`"
 msgstr ""
 
-#: src/reference/cli.md:63
+#: src/reference/cli.md:67
 msgid "the crossing-benchmark rows"
 msgstr ""
 
-#: src/reference/cli.md:64
+#: src/reference/cli.md:68
 msgid "the async launchers"
 msgstr ""
 
-#: src/reference/cli.md:67
+#: src/reference/cli.md:71
 msgid ""
 "Execution: `main` is called with no arguments; then the async driving loop "
 "runs — drain the ready queue, advance the virtual clock to the next timer "
@@ -26407,17 +26405,17 @@ msgid ""
 "capped, so a program that never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/cli.md:72
+#: src/reference/cli.md:76
 msgid ""
 "A `.d.rut` input is refused: a declaration file is a surface, not a runnable "
 "module ([host fns and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/cli.md:78
+#: src/reference/cli.md:82
 msgid "# scaffold a hello-world module directory\n"
 msgstr ""
 
-#: src/reference/cli.md:81
+#: src/reference/cli.md:85
 msgid ""
 "Scaffolds a hello-world module directory: the manifest with the full "
 "swappable std set as pinned url deps, plus the root module — the same bytes "
@@ -26425,63 +26423,63 @@ msgid ""
 "is runnable as-is: `rut run hello` prints `hello, rut!`."
 msgstr ""
 
-#: src/reference/cli.md:86
+#: src/reference/cli.md:90
 msgid "Behavior:"
 msgstr ""
 
-#: src/reference/cli.md:90
+#: src/reference/cli.md:94
 msgid "package name"
 msgstr ""
 
-#: src/reference/cli.md:90
+#: src/reference/cli.md:94
 msgid ""
 "derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the "
 "manifest's law). An illegal name is refused, never sanitized (exit 2)"
 msgstr ""
 
-#: src/reference/cli.md:91
+#: src/reference/cli.md:95
 msgid "clobber refusal"
 msgstr ""
 
-#: src/reference/cli.md:91
+#: src/reference/cli.md:95
 msgid ""
 "a target already holding a `rut.jsonc` or a `mod.rut` is refused (exit 2, "
 "naming the file) — other pre-existing files are fine"
 msgstr ""
 
-#: src/reference/cli.md:92
+#: src/reference/cli.md:96
 msgid "parents"
 msgstr ""
 
-#: src/reference/cli.md:92
+#: src/reference/cli.md:96
 msgid "created as needed — `rut new a/b/hello` works"
 msgstr ""
 
-#: src/reference/cli.md:93
+#: src/reference/cli.md:97
 msgid "files written"
 msgstr ""
 
-#: src/reference/cli.md:93
+#: src/reference/cli.md:97
 msgid ""
 "`rut.jsonc` — the derived name plus the whole swappable std set (nine "
 "packages) as pinned url deps at the `@std-v9` tag; `mod.rut` — the ink hello"
 msgstr ""
 
-#: src/reference/cli.md:94
+#: src/reference/cli.md:98
 msgid "first run"
 msgstr ""
 
-#: src/reference/cli.md:94
+#: src/reference/cli.md:98
 msgid ""
 "fetches the std set (9 bundles) into `<dir>/.rut/cache` — `rut fetch <dir>` "
 "pre-warms without running"
 msgstr ""
 
-#: src/reference/cli.md:96
+#: src/reference/cli.md:100
 msgid "The two created files, for `rut new hello` — both verbatim:"
 msgstr ""
 
-#: src/reference/cli.md:98
+#: src/reference/cli.md:102
 msgid ""
 "```text\n"
 "{\n"
@@ -26547,63 +26545,63 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/cli.md:134 src/reference/cli.md:227
+#: src/reference/cli.md:138 src/reference/cli.md:231
 msgid "`fmt`"
 msgstr ""
 
-#: src/reference/cli.md:141
+#: src/reference/cli.md:145
 msgid "The canonical formatter. Behavior:"
 msgstr ""
 
-#: src/reference/cli.md:143
+#: src/reference/cli.md:147
 msgid ""
 "a **directory** argument is walked recursively; every `.rut` file is "
 "collected (sorted) and formatted;"
 msgstr ""
 
-#: src/reference/cli.md:145
+#: src/reference/cli.md:149
 msgid ""
 "style comes from the nearest ancestor `rut.jsonc`'s `style` block; no "
 "manifest → defaults ([project structure](project-structure.md));"
 msgstr ""
 
-#: src/reference/cli.md:147
+#: src/reference/cli.md:151
 msgid "`.d.rut` files are formatted in declaration mode;"
 msgstr ""
 
-#: src/reference/cli.md:148
+#: src/reference/cli.md:152
 msgid ""
 "a file that does not parse clean is **refused** (diagnostics listed, nonzero "
 "exit) — fmt never reformats on a parse error;"
 msgstr ""
 
-#: src/reference/cli.md:150
+#: src/reference/cli.md:154
 msgid ""
 "default mode rewrites in place and prints `formatted: <path>` per changed "
 "file;"
 msgstr ""
 
-#: src/reference/cli.md:152
+#: src/reference/cli.md:156
 msgid ""
 "`--check` writes nothing: it prints `unformatted: <path>` for each "
 "would-change file and exits nonzero, or `fmt: N file(s) formatted` when "
 "everything is clean."
 msgstr ""
 
-#: src/reference/cli.md:156
+#: src/reference/cli.md:160
 msgid "`pack`"
 msgstr ""
 
-#: src/reference/cli.md:159
+#: src/reference/cli.md:163
 msgid "# packed plugins/server -> server.rutbundle (18304 bytes)\n"
 msgstr ""
 
-#: src/reference/cli.md:161
+#: src/reference/cli.md:165
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 msgstr ""
 
-#: src/reference/cli.md:166
+#: src/reference/cli.md:170
 msgid ""
 "Packs a module directory into a **deterministic** `.rutbundle` — same input, "
 "same bytes. Without `-o`, the output is written beside the input as "
@@ -26620,7 +26618,7 @@ msgid ""
 "bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/cli.md:181
+#: src/reference/cli.md:185
 msgid ""
 "`--strip` mangles every renameable name and strips the symbolication tables "
 "from the emitted binaries, writing the private symbol table at the sibling "
@@ -26630,11 +26628,11 @@ msgid ""
 "`.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/cli.md:188 src/reference/cli.md:227
+#: src/reference/cli.md:192 src/reference/cli.md:231
 msgid "`dump`"
 msgstr ""
 
-#: src/reference/cli.md:194
+#: src/reference/cli.md:198
 msgid ""
 "Prints the compiler's view of one file: the `== AST ==` section followed by "
 "`== IR ==` (per-function typed register tables and op listings). Compilation "
@@ -26643,15 +26641,15 @@ msgid ""
 "inspecting a host surface's slots."
 msgstr ""
 
-#: src/reference/cli.md:200
+#: src/reference/cli.md:204
 msgid "`fetch`"
 msgstr ""
 
-#: src/reference/cli.md:203
+#: src/reference/cli.md:207
 msgid "# CI: warm the cache while the network is up\n"
 msgstr ""
 
-#: src/reference/cli.md:206
+#: src/reference/cli.md:210
 msgid ""
 "Walks a module **directory** with the url-dep remote and discards the result "
 "— every `deps` url is fetched (or found in the cache) and pinned, so a later "
@@ -26660,133 +26658,133 @@ msgid ""
 "law are the same lane `run`/`pack` use:"
 msgstr ""
 
-#: src/reference/cli.md:214
+#: src/reference/cli.md:218
 msgid "cache root"
 msgstr ""
 
-#: src/reference/cli.md:214
+#: src/reference/cli.md:218
 msgid ""
 "`<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides "
 "the root (CLI-side only — the walk never reads env). Entries named "
 "`<sha256(url)>.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:215
+#: src/reference/cli.md:219
 msgid "cache-first"
 msgstr ""
 
-#: src/reference/cli.md:215
+#: src/reference/cli.md:219
 msgid "a hit never touches the network — offline reloads are the point"
 msgstr ""
 
-#: src/reference/cli.md:216
+#: src/reference/cli.md:220
 msgid "miss"
 msgstr ""
 
-#: src/reference/cli.md:216
+#: src/reference/cli.md:220
 msgid ""
 "GET (redirects on), non-2xx is a loud error, a size cap refuses without "
 "buffering, the write is atomic (tmp + rename)"
 msgstr ""
 
-#: src/reference/cli.md:217
+#: src/reference/cli.md:221
 msgid "poisoned entry"
 msgstr ""
 
-#: src/reference/cli.md:217
+#: src/reference/cli.md:221
 msgid ""
 "the `sha256` pin is the loader's law at the mount door; when it refuses, the "
 "CLI maps the url back to its cache path, deletes the entry, and exits 2 — "
 "the next run re-fetches and heals"
 msgstr ""
 
-#: src/reference/cli.md:219
+#: src/reference/cli.md:223
 msgid ""
 "The wire is `rut-native`'s `http` feature (default on) — a build with "
 "`default-features = false` (the wasm graphs) has no transport at all: a "
 "cache miss errors loudly instead of networking."
 msgstr ""
 
-#: src/reference/cli.md:225
+#: src/reference/cli.md:229
 msgid "The file extension selects the parser mode:"
 msgstr ""
 
-#: src/reference/cli.md:227
+#: src/reference/cli.md:231
 msgid "mode"
 msgstr ""
 
-#: src/reference/cli.md:229
+#: src/reference/cli.md:233
 msgid "`*.rut`"
 msgstr ""
 
-#: src/reference/cli.md:229
+#: src/reference/cli.md:233
 msgid "implementation"
 msgstr ""
 
-#: src/reference/cli.md:229
+#: src/reference/cli.md:233
 msgid "runs `main`"
 msgstr ""
 
-#: src/reference/cli.md:229
+#: src/reference/cli.md:233
 msgid "formats impls"
 msgstr ""
 
-#: src/reference/cli.md:229
+#: src/reference/cli.md:233
 msgid "AST + IR of the module"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:234
 msgid "`*.d.rut`"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:234
 msgid "declaration"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:234
 msgid "refused (exit 2)"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:234
 msgid "formats the surface"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:234
 msgid "the surface's AST + IR"
 msgstr ""
 
-#: src/reference/cli.md:232
+#: src/reference/cli.md:236
 msgid "Exit codes"
 msgstr ""
 
-#: src/reference/cli.md:234
+#: src/reference/cli.md:238
 msgid "code"
 msgstr ""
 
-#: src/reference/cli.md:236
+#: src/reference/cli.md:240
 msgid "`0`"
 msgstr ""
 
-#: src/reference/cli.md:236
+#: src/reference/cli.md:240
 msgid "success"
 msgstr ""
 
-#: src/reference/cli.md:237
+#: src/reference/cli.md:241
 msgid "`1`"
 msgstr ""
 
-#: src/reference/cli.md:237
+#: src/reference/cli.md:241
 msgid ""
 "compile diagnostics; no binary emitted; binary decode or verify failure; VM "
 "boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt "
 "--check` found drift; `pack` or output-write failure"
 msgstr ""
 
-#: src/reference/cli.md:238
+#: src/reference/cli.md:242
 msgid "`2`"
 msgstr ""
 
-#: src/reference/cli.md:238
+#: src/reference/cli.md:242
 msgid ""
 "usage errors (missing arguments); unreadable input file; `run` on a "
 "`.d.rut`; `run` on an input that is neither a module directory nor a "
@@ -26794,11 +26792,11 @@ msgid ""
 "`sha256` pin refusal (the poisoned cache entry is evicted)"
 msgstr ""
 
-#: src/reference/cli.md:240
+#: src/reference/cli.md:244
 msgid "Diagnostics go to stderr; `pack`'s success line goes to stdout."
 msgstr ""
 
-#: src/reference/cli.md:244
+#: src/reference/cli.md:248
 msgid ""
 "The CLI offers and binds on behalf of the program, but it never injects "
 "names the program did not declare: a program that never spells `use ink::` "
@@ -26807,12 +26805,12 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/cli.md:249
+#: src/reference/cli.md:253
 msgid ""
 "The HTTP lane is native-only: the CLI build carries it, wasm builds do not."
 msgstr ""
 
-#: src/reference/cli.md:251
+#: src/reference/cli.md:255
 msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + "
 "`run <bundle>` is the shipping path — both run the identical contract "
