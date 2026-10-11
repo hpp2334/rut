@@ -4,6 +4,7 @@ mod cache;
 mod dump;
 mod fetch;
 mod fmt;
+mod new;
 mod pack;
 mod run;
 
@@ -65,6 +66,13 @@ fn main() {
             };
             run::run(path, fuel, symbols, entry);
         }
+        "new" => {
+            let Some(path) = args.get(2) else {
+                eprintln!("new: missing <dir>");
+                std::process::exit(2);
+            };
+            new::new(path);
+        }
         "fmt" => {
             let Some(path) = args.get(2) else {
                 eprintln!("fmt: missing <file.rut | dir>");
@@ -110,6 +118,6 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
+        "rut — run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] | new <dir> | fmt <file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] [--strip] | fetch <dir> | dump <file.rut>"
     );
 }
