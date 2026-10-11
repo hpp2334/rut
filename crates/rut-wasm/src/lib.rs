@@ -773,6 +773,40 @@ entry fn main() {
         assert_eq!(field(&j, "output"), "[]", "{j}");
     }
 
+    // ---- the wasm SURFACE MOUNT (the host-mod-tree plan): the wasm
+    // host has no filesystem — a surface's `mod NAME;` children mount
+    // from the in-memory map through the SAME declaration-driven core
+    // the FS lane runs, and the rows come out path-qualified ----
+
+    #[test]
+    fn a_host_surface_mounts_its_mod_tree_from_the_memory_map() {
+        let pkg = host_surface(
+            "tree_host",
+            "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            "tree_host.d.rut",
+            &[("net", "pub host async fn probe(k: str) -> i64;\n")],
+        );
+        let rut_driver::PkgBody::Host { host_funcs, .. } = &pkg.body else {
+            panic!("a host body");
+        };
+        assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);
+        assert_eq!(
+            host_funcs.iter().map(|r| r.full_name("tree_host")).collect::<Vec<_>>(),
+            vec!["tree_host::legacy_ping", "tree_host::net::probe"],
+            "the root row stays flat, the tree row registers path-qualified"
+        );
+        assert!(host_funcs[1].is_async, "the child's async row keeps its lane");
+        // a declared child with no map entry is the loud missing-child
+        // spelling, named for the wasm host's map lane
+        let err = std::panic::catch_unwind(|| {
+            host_surface("broken", "pub mod gone;\n", "broken.d.rut", &[])
+        })
+        .err()
+        .expect("the missing child must panic at the mount");
+        let msg = err.downcast_ref::<String>().cloned().unwrap_or_default();
+        assert!(msg.contains("`mod gone;`"), "{msg}");
+    }
+
     #[test]
     fn fresh_run_supersedes_a_parked_frame_and_resets_output() {
         let _g = lock();

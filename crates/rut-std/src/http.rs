@@ -1,19 +1,30 @@
 //! The std HTTP lane's bodies (the rut/http redesign): the host rows of
 //! `rut/http_host`, wrapped by `rut/http`'s class face (the ink
-//! pattern). Three ASYNC rows ride the host future lane —
-//! `register_async!` at the embedder, `Completer` answers, the take
-//! marshal crosses through a phase-1 return lane — and five sync
+//! pattern). The surface is a MOD TREE (the host-.d.rut-mod-tree
+//! plan's pilot): `net/` carries the send + the response readbacks,
+//! `stream/` the body lanes. Three ASYNC rows ride the host future
+//! lane — `register_async!` at the embedder, `Completer` answers, the
+//! take marshal crosses through a phase-1 return lane — and five sync
 //! readbacks ride the plain `register!` boundary:
 //!
 //! ```rut
+//! pub mod net;      // http_host/net/mod.d.rut
+//! pub mod stream;   // http_host/stream/mod.d.rut
+//!
+//! // net:
 //! pub host async fn http_send(c, method, url, headers, body) -> opaque;
-//! pub host async fn http_body(r: opaque) -> bytes;
-//! pub host async fn http_stream_next(s: opaque) -> ?bytes;
 //! pub host fn http_status(r: opaque) -> i32;
 //! pub host fn http_err(r: opaque) -> ?str;
 //! pub host fn http_read_err(r: opaque) -> ?str;
 //! pub host fn http_resp_stream(r: opaque) -> opaque;
+//! // stream:
+//! pub host async fn http_body(r: opaque) -> bytes;
+//! pub host async fn http_stream_next(s: opaque) -> ?bytes;
 //! ```
+//!
+//! The rows register path-qualified — the scope-relative spellings
+//! below (`"net::http_send__start"` et al, `"stream::http_body"`);
+//! the pkg scope prefixes once, at the install.
 //!
 //! The arrangement (the plan's streaming model, ruled):
 //!
@@ -233,7 +244,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     // after a stream mint) degrade to EMPTY — the disclosed law.
     rut_vm::pkg_async_fn!(
         pkg,
-        "http_body",
+        "stream::http_body",
         (Opaque<HttpResponse>,) -> Vec<u8>,
         move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
             let comp = CompleterOf::new();
@@ -267,7 +278,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     // immediate EOF. A failed completer is NOT the mid-read path.
     rut_vm::pkg_async_fn!(
         pkg,
-        "http_stream_next",
+        "stream::http_stream_next",
         (Opaque<HttpStream>,) -> Option<Vec<u8>>,
         move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
             let comp = CompleterOf::new();
@@ -302,7 +313,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     // the sync readbacks (the kept law: 0 is the transport verdict)
     rut_vm::pkg_fn!(
         pkg,
-        "http_status",
+        "net::http_status",
         (Opaque<HttpResponse>,) -> i32,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<i32, Trap> {
             Ok(r.with(|resp| resp.status as i32)?)
@@ -310,7 +321,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     );
     rut_vm::pkg_fn!(
         pkg,
-        "http_err",
+        "net::http_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
             Ok(r.with(|resp| resp.err.clone())?)
@@ -318,7 +329,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     );
     rut_vm::pkg_fn!(
         pkg,
-        "http_read_err",
+        "net::http_read_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
             Ok(r.with(|resp| resp.read.lock().expect("http read state").failed.clone())?)
@@ -329,7 +340,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
     // (immediate EOF) — the one-shot law's degrade, never a trap.
     rut_vm::pkg_fn!(
         pkg,
-        "http_resp_stream",
+        "net::http_resp_stream",
         (Opaque<HttpResponse>,) -> OpaqueRef,
         |vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<OpaqueRef, Trap> {
             let (src, dead) = r.with(|resp| {
@@ -513,7 +524,7 @@ where
     let mut pkg = HostPkg::new("http_host");
     rut_vm::pkg_async_fn!(
         pkg,
-        "http_send",
+        "net::http_send",
         (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
         move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
               -> CompleterOf<HttpResponse> {
@@ -548,7 +559,7 @@ pub fn pkg() -> HostPkg {
     );
     rut_vm::pkg_async_fn!(
         pkg,
-        "http_send",
+        "net::http_send",
         (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
         move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
               -> CompleterOf<HttpResponse> {
@@ -635,6 +646,7 @@ fn send_once(
 #[cfg(all(test, feature = "http"))]
 mod tests {
     use super::*;
+    use rut_driver::PkgBody;
     use std::rc::Rc;
 
     /// this test's host pkgs — the mounted decl surface the bodies must
@@ -647,7 +659,7 @@ mod tests {
     /// the drain, stream reads per chunk.
     const SRC: &str = r#"
 use http::{ HttpClient, ClientQueryMethod };
-use http_host::{ http_status, http_err, http_read_err };
+use http_host::net::{ http_status, http_err, http_read_err };
 use futures::launch_future;
 use ink_host::{ create_logger, logger_log };
 
@@ -1153,9 +1165,27 @@ entry fn boot() -> nil {
     #[test]
     fn the_decl_rows_join_both_lanes() {
         let world = rut_native::dir_pkgs(&std::path::Path::new(PKG_DIR).join("http_host"))
-            .expect("mount http_host")
-            .pkgs;
-        let ctx = rut_driver::host_pkg_ctx(&world);
+            .expect("mount http_host");
+        // the pilot's tree: net/ (send + the readbacks) and stream/ (the
+        // body lanes) — every row carries the mod path it lives under,
+        // and the registration strings are path-qualified
+        let m = world.pkg("http_host").expect("http_host mounted");
+        assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net", "stream"]);
+        let PkgBody::Host { host_funcs, .. } = &m.body else { panic!("a host body") };
+        assert_eq!(
+            host_funcs.iter().map(|r| r.full_name("http_host")).collect::<Vec<_>>(),
+            vec![
+                "http_host::net::http_send",
+                "http_host::net::http_status",
+                "http_host::net::http_err",
+                "http_host::net::http_read_err",
+                "http_host::net::http_resp_stream",
+                "http_host::stream::http_body",
+                "http_host::stream::http_stream_next",
+            ],
+            "net first, then stream, declaration order — the split surface"
+        );
+        let ctx = rut_driver::host_pkg_ctx(&world.pkgs);
         // the fixture lane installs the whole family over the virtual clock
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let (http_pkg, _fx) = pkg_with(|_m, _u, _h, _b| Ok(FixtureReply::ok(200, b"")));

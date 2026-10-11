@@ -108,7 +108,16 @@ single-package, no ledger, no groups, nothing to decode:
 ```text
 rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
 <pkg>.d.rut              the declaration surface — the root itself
+rut.mods                 the surface's mod tree, when it has mod children
 ```
+
+The mod tree rides the same additive rows envelope a lib body tree
+uses (see [layout rules](#layout-rules)): the tree mounts at pack
+time (a declared child with no `NAME/mod.d.rut` refuses the pack),
+travels as path-keyed source rows, and remounts at load — a row under
+`net/` registers path-qualified exactly as it does from a directory. A
+FLAT host pkg writes no rows entry: its bundle stays the two-entry
+shape, byte-identical.
 
 `rut pack <host-dir>` works (the surface verifies by parsing and
 lowering once — the exact lane a mount runs — then rides as source),

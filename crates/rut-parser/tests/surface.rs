@@ -38,6 +38,35 @@ fn host_fn_parses() {
     assert_eq!(generics.len(), 1, "builtin fn keeps its generics");
 }
 
+#[test]
+fn mod_decls_parse_in_decl_files() {
+    // the host surface tree's edges: `pub? mod NAME;` parses in a
+    // `.d.rut` (Mode::Decl) exactly as in a body file — the vis rides
+    // the declaring edge (`pub mod net;` is the cross-package shape
+    // the tree law reads), and the rows around it keep parsing
+    let src = "\
+pub mod net;
+mod helper;
+pub host fn legacy_ping() -> bool;
+";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 3, "one item per line: {items:?}");
+    let edge = |i: usize| match ast.item(items[i]) {
+        ItemKind::ModDecl { vis, name } => (*vis, ast.name(*name).to_string()),
+        k => panic!("expected a mod decl at {i}, got {k:?}"),
+    };
+    assert_eq!(edge(0), (Vis::Pub, "net".to_string()));
+    assert_eq!(edge(1), (Vis::Self_, "helper".to_string()));
+    let ItemKind::SurfaceFn { vis, linkage, name, .. } = ast.item(items[2]) else {
+        panic!("expected a SurfaceFn after the edges");
+    };
+    assert_eq!(*vis, Vis::Pub, "`pub host fn` keeps its pub beside mod edges");
+    assert_eq!(*linkage, Linkage::Host);
+    assert_eq!(ast.name(*name), "legacy_ping");
+}
+
 
 #[test]
 fn builtin_trait_spelling_is_removed() {

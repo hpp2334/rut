@@ -389,22 +389,34 @@ std pkgs (grep `rut/` — both count), redesigned around the host
 future lane (`pub host async fn` + `register_async!`). They arrive
 as a PAIR:
 
-- **`http_host`** — the pure declaration surface: THREE async rows
-  (the request, the drain, the stream read — each expands into its
+- **`http_host`** — the pure declaration surface, organized as a MOD
+  TREE (the host-surface pilot): `pub mod net;` + `pub mod stream;`
+  in the root `.d.rut`, the rows in `net/mod.d.rut` and
+  `stream/mod.d.rut` beside it. THREE async rows (the request, the
+  drain, the stream read — each expands into its
   `__start`/`__yield`/`__take`/`__cancel` family the weave drives)
   and FIVE sync readbacks, all concrete over the crossing set:
 
   ```rut
+  // net/mod.d.rut — the request lane + the readbacks
   pub host async fn http_send(c: opaque, method: str, url: str,
                               headers: str, body: bytes) -> opaque;
-  pub host async fn http_body(r: opaque) -> bytes;
-  pub host async fn http_stream_next(s: opaque) -> ?bytes;
-
   pub host fn http_status(r: opaque) -> i32;      // 0 = transport error
   pub host fn http_err(r: opaque) -> ?str;        // nil unless status 0
   pub host fn http_read_err(r: opaque) -> ?str;   // sticky mid-read failure
   pub host fn http_resp_stream(r: opaque) -> opaque; // mints the reader
+
+  // stream/mod.d.rut — the body lanes
+  pub host async fn http_body(r: opaque) -> bytes;
+  pub host async fn http_stream_next(s: opaque) -> ?bytes;
   ```
+
+  The tree changes the naming: the rows register path-qualified
+  (`http_host::net::http_send__start` et al), consumers spell the
+  paths in their uses (`use http_host::net::{ .. }` /
+  `use http_host::stream::{ .. }` — as `rut/http` does), and the
+  embedder registers the bodies scope-relatively (`"net::http_send"`,
+  `"stream::http_body"`).
 
   The response handle is an `opaque` payload owning
   `{ status, err, chunk source }`; status **0 is RESERVED for

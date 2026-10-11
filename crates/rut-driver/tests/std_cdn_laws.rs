@@ -154,9 +154,17 @@ fn the_artifact_set_spells_the_one_wire_number() {
             "rut/{dir}: the manifest packs the one wire number"
         );
         if is_host {
-            // single-package: manifest + surface, nothing else
+            // single-package: manifest + surface, plus the rows envelope
+            // when the surface is a mod tree (flat pkgs stay the
+            // two-entry shape — the freshness gate proves the flat law;
+            // the http_host pilot is the committed tree)
             let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-            assert_eq!(names.len(), 2, "rut/{name}: {names:?}");
+            if names.contains(&rut_driver::mods::ROWS_NAME) {
+                assert_eq!(names.len(), 3, "rut/{name}: {names:?}");
+                assert!(names.contains(&"http_host.d.rut"), "rut/{name}: {names:?}");
+            } else {
+                assert_eq!(names.len(), 2, "rut/{name}: {names:?}");
+            }
         } else {
             assert!(
                 bundle.bytes("rut.scopes").is_some(),

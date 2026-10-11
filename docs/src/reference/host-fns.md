@@ -245,18 +245,21 @@ that place.
 ## Async host fns
 
 ```rut
-// http_host.d.rut — an async row expands into a five-row family
+// http_host/net/mod.d.rut — an async row expands into a five-row
+// family on the path-qualified name
 pub host async fn http_send(c: opaque, method: str, url: str,
                             headers: str, body: bytes) -> opaque;
 ```
 
 The embedder binds the family with one spelling; the closure spawns
 the work, hands out a completer clone, and returns. On the installer
-lane the row names are bare and the scope prefixes at the install:
+lane the row name is the scope-relative spelling — bare for a root
+row, the mod path for a row under a surface tree (`net::http_send`;
+the scope itself prefixes once, at the install):
 
 ```rust
 let mut http = rut_vm::HostPkg::new("http_host");
-rut_vm::pkg_async_fn!(http, "http_send",
+rut_vm::pkg_async_fn!(http, "net::http_send",
     (OpaqueRef, &str, &str, &str, &[u8]) -> OpaqueRef,
     |c: OpaqueRef, method: &str, url: &str, headers: &str, body: &[u8]|
         -> rut_vm::Completer<OpaqueRef> {
@@ -274,9 +277,9 @@ rut_vm::pkg_async_fn!(http, "http_send",
 );
 // the built pkg rides the chain: RutRun::new()...host_pkg(http.build())
 
-// the raw lane (bare registry, full `scope::name` strings) — the
+// the raw lane (bare registry, full `scope::path::name` strings) — the
 // escape hatch, same emitter:
-// rut_vm::register_async!(hosts, "http_host::http_send", ...);
+// rut_vm::register_async!(hosts, "http_host::net::http_send", ...);
 ```
 
 `pkg_async_fn!(pkg, name, (P…) -> R, start [, abort])` (and its raw

@@ -91,6 +91,26 @@ let compiled = rut_driver::RutRun::new()
     .compile()?;
 ```
 
+**Rows under a surface's `mod` tree register scope-relatively.** A
+`type = "host"` pkg may organize its surface as a module tree (`pub
+mod net;` in the `.d.rut`, the rows in `net/mod.d.rut` — [project
+structure](project-structure.md)); a row under `net/` declares as
+`pkg::net::name` and its body registers under the path spelling
+**without** the pkg scope — the scope prefixes once, at the install:
+
+```rust
+let mut http = rut_vm::HostPkg::new("http_host");
+rut_vm::pkg_fn!(http, "net::http_status", (OpaqueRef,) -> i32,
+    |vm, r| Ok(status_of(r)));                    // → http_host::net::http_status
+rut_vm::pkg_async_fn!(http, "stream::http_body", (OpaqueRef,) -> Vec<u8>,
+    |r| drain(r));                                // → http_host::stream::http_body (+ family)
+// a bare spelling stays the ROOT row's shape ("map_new", not "net::map_new")
+```
+
+A path spelling for a row the surface declares flat (or vice versa)
+fails the install's contract check by name — the declared rows are
+the graph, the registration strings must spell the same tree.
+
 ### The `.compile()` law
 
 `RutRun::compile()` is the single terminal step. In order:
@@ -327,8 +347,8 @@ lives in `rut-native`.
 |---|---|
 | `Vm::builder()` | the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hooks(h)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts |
 | `HostRegistry::new()` | an empty binding table (the raw lane) |
-| `HostPkg::new(scope)` | a pkg builder; rows register under bare names, the scope prefixes at the install |
-| `pkg_fn!` / `pkg_async_fn!` | the builder's sugar: one spelling → one row / the five-row async family |
+| `HostPkg::new(scope)` | a pkg builder; rows register under bare names or scope-relative paths (`"net::connect"` — a row under the pkg's `mod net` tree; the scope itself is never part of the row name) and the scope prefixes once, at the install |
+| `pkg_fn!` / `pkg_async_fn!` | the builder's sugar: one spelling → one row / the five-row async family (the spelling may carry the mod path: `"net::send"` → `net::send__start` et al) |
 | `hosts.register::<_, (P…), R, _>(name, f)` | the raw lane: bind one body under a full `scope::name` string |
 | `hosts.verify_against(&expected)` | the raw lane's net: panic on declared-unbound / bound-undeclared / signature drift |
 | `vm.call::<A, R>(export, args)` | call an export with Rust values, get a Rust value back ([value boundary](value-boundary.md)) |
@@ -420,7 +440,7 @@ blanket-install their subset):
 | `nmap::pkg()` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
 | `strbuild::pkg()` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
 | `async_host::pkg()` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |
-| `http::pkg()` | the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)` |
+| `http::pkg()` | the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is a mod tree — the rows register scope-relatively (`net::http_send` + the readbacks, `stream::http_body`/`http_stream_next`) |
 | `bench_cross::pkg()` | the crossing-tax benchmark rows |
 
 ## In-tree examples

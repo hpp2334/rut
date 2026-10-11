@@ -124,7 +124,7 @@ constants are `calc`'s.
 | `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |
 | `calc` | host pkg | the `Math` namespace |
 | `async_host` / `futures` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
-| `http_host` / `http` | host pkg + rut pkg | the std HTTP lanes |
+| `http_host` / `http` | host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |
 
 ### `ink_host` and `ink` — logging
@@ -415,10 +415,12 @@ For the common accumulator shape no builder is needed at all:
   offers neither has no launcher
   ([launched futures](launched-futures.md), [host futures](host-futures.md)).
 - `http_host` declares the transport rows (three async, five sync
-  readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` /
-  `Request` / `Response` / `ByteStream` — async only at the points that
-  really wait, and `HttpClient()` constructs through the designated
-  `new`:
+  readbacks) as a surface tree — `net/` carries the send + the
+  response readbacks, `stream/` the body lanes ([project
+  structure](project-structure.md)); `http` wraps them in `HttpClient`
+  / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async
+  only at the points that really wait, and `HttpClient()` constructs
+  through the designated `new`:
 
   ```rut
   use http::{ HttpClient, ClientQueryMethod };

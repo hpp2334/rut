@@ -146,7 +146,7 @@ and the embedder binds it with **one closure** that starts the work and
 returns the future's state cell:
 
 ```rust
-rut_vm::register_async!(hosts, "http_host::http_stream_next",
+rut_vm::register_async!(hosts, "http_host::stream::http_stream_next",
     (Opaque<HttpStream>,) -> Option<Vec<u8>>,
     move |s: Opaque<HttpStream>| -> Completer<Option<Vec<u8>>> {
         let c = Completer::new();

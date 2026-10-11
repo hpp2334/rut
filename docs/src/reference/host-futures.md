@@ -140,10 +140,12 @@ The virtual clock works here too: drive with finite fuel and
 
 ## In-tree users
 
-The standard HTTP lane is a `register_async!` client: `http_send`,
-`http_body`, and `http_stream_next` are `pub host async fn` rows whose
+The standard HTTP lane is a `register_async!` client: `http_send`
+(living in the surface tree's `net/` mod), `http_body`, and
+`http_stream_next` (in `stream/`) are `pub host async fn` rows whose
 bodies park `Completer`s answered from reqwest worker threads (or the
-fixture lane's virtual clock). Mount it with `rut/http_host` +
+fixture lane's virtual clock); the registrations spell the paths
+(`"net::http_send__start"` et al). Mount it with `rut/http_host` +
 `rut/http`; the full walk-through is
 [the GitHub viewer example](../examples/06-github-viewer-cli.md).
 

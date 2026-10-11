@@ -1,42 +1,19 @@
-// http_host/http_host.d.rut — the std HTTP surface's host rows (the
-// rut/http redesign): THREE async rows (the request lane, the body
-// drain, the stream read) and FIVE sync readbacks, all concrete over
-// the crossing set. The bodies live in rut-std
-// (`http::pkg_with` — the fixture lane — and
-// `http::pkg()`, the reqwest lane); the async rows expand into
+// http_host/http_host.d.rut — the std HTTP surface's root: a `type =
+// "host"` pkg whose surface organizes as a MODULE TREE (the
+// host-.d.rut-mod-tree plan's pilot). The root declares the two lanes
+// — `net` (the request lane and the response readbacks) and `stream`
+// (the body lanes) — whose rows live in `net/mod.d.rut` and
+// `stream/mod.d.rut` beside this file. The rows register
+// path-qualified (`http_host::net::http_send__start` et al); the
+// embedding Rust binds them through the pkg scope
+// (`HostPkg::new("http_host")` + `"net::http_send"`).
+//
+// The bodies live in rut-std (`http::pkg_with` — the fixture lane —
+// and `http::pkg()`, the reqwest lane); the async rows expand into
 // their row families (`__start`/`__yield`/`__take`/`__cancel` — the
 // host future lane) and ride `register_async!` at the embedder.
-//
-// The handles: `http_send` answers the RESPONSE handle (opaque) — the
-// send resolves at HEADERS, the response body stays UNREAD (true
-// streaming: `http_body` drains it, `http_stream_next` walks it in
-// chunks, one or the other, never both — the one-shot law, late
-// second takers degrade). `http_resp_stream` mints the reader the
-// stream lane reads through. Status 0 is RESERVED for transport
-// failure (0 is never a real HTTP status); `http_err` answers that
-// failure's text; `http_read_err` answers the STICKY mid-read
-// failure — nil until one fails, then non-nil forever (a mid-read
-// wire death is DATA: `http_stream_next` answers nil, `http_body`
-// the short drain, the readback names it — never a trap).
-//
-// The crossings: `c` is the client handle (the rut/http `HttpClient`
-// face carries it; the lanes own their client state, so it passes
-// through untouched); `method` is the canonical verb str
-// ("GET"/"POST"/"PUT"/"PATCH"/"DELETE"); `headers` is "\n"-joined
-// `Name: value` lines ("" = none); request `body` bytes with empty =
-// none (the empty-vs-none merge at the crossing is disclosed).
+// `rut/http` (the class face) imports through the qualified spellings
+// (`use http_host::net::{ .. }`, `use http_host::stream::{ .. }`).
 
-pub host async fn http_send(c: opaque, method: str, url: str,
-                            headers: str, body: bytes) -> opaque;
-
-pub host async fn http_body(r: opaque) -> bytes;
-
-pub host async fn http_stream_next(s: opaque) -> ?bytes;
-
-pub host fn http_status(r: opaque) -> i32;      // 0 = transport failure
-
-pub host fn http_err(r: opaque) -> ?str;        // nil unless status 0
-
-pub host fn http_read_err(r: opaque) -> ?str;   // sticky mid-read failure
-
-pub host fn http_resp_stream(r: opaque) -> opaque;  // the reader mint
+pub mod net;
+pub mod stream;

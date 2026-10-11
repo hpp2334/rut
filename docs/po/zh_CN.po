@@ -6527,8 +6527,8 @@ msgstr "嵌入方用**一个闭包**绑定它：闭包启动工作并返回 futu
 
 
 #: src/core-concepts/async-model.md:149
-msgid "\"http_host::http_stream_next\""
-msgstr "\"http_host::http_stream_next\""
+msgid "\"http_host::stream::http_stream_next\""
+msgstr "\"http_host::stream::http_stream_next\""
 
 
 #: src/core-concepts/async-model.md:155
@@ -17840,9 +17840,9 @@ msgstr "树内使用者"
 
 #: src/reference/host-futures.md:143
 msgid ""
-"The standard HTTP lane is a `register_async!` client: `http_send`, `http_body`, and `http_stream_next` are `pub host async fn` rows whose bodies park `Completer`s answered from reqwest worker threads (or the fixture lane's virtual clock). Mount it with `rut/http_host` + `rut/http`; the full walk-through is [the GitHub viewer example](../examples/06-github-viewer-cli.md)."
+"The standard HTTP lane is a `register_async!` client: `http_send` (living in the surface tree's `net/` mod), `http_body`, and `http_stream_next` (in `stream/`) are `pub host async fn` rows whose bodies park `Completer`s answered from reqwest worker threads (or the fixture lane's virtual clock); the registrations spell the paths (`\"net::http_send__start\"` et al). Mount it with `rut/http_host` + `rut/http`; the full walk-through is [the GitHub viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
-"标准 HTTP 链路就是一个 `register_async!` 客户端：`http_send`、`http_body`、`http_stream_next` 都是 `pub host async fn` 行，它们的体停放一些 `Completer`，由 reqwest 的 worker 线程（或夹具链路的虚拟时钟）应答。用 `rut/http_host` + `rut/http` 挂载它；完整演练见 [GitHub 查看器示例](../examples/06-github-viewer-cli.md)。"
+"标准 HTTP 链路就是一个 `register_async!` 客户端：`http_send`（住在表面树的 `net/` 模块里）、`http_body` 与 `http_stream_next`（在 `stream/` 里）都是 `pub host async fn` 行，它们的体停放一些 `Completer`，由 reqwest 的 worker 线程（或夹具链路的虚拟时钟）应答；注册名写明路径（`\"net::http_send__start\"` 等）。用 `rut/http_host` + `rut/http` 挂载它；完整演练见 [GitHub 查看器示例](../examples/06-github-viewer-cli.md)。"
 
 
 #: src/reference/host-futures.md:150
@@ -17978,6 +17978,49 @@ msgstr ""
 
 
 #: src/reference/embedding.md:94
+msgid ""
+"**Rows under a surface's `mod` tree register scope-relatively.** A `type = \"host\"` pkg may organize its surface as a module tree (`pub mod net;` in the `.d.rut`, the rows in `net/mod.d.rut` — [project structure](project-structure.md)); a row under `net/` declares as `pkg::net::name` and its body registers under the path spelling **without** the pkg scope — the scope prefixes once, at the install:"
+msgstr ""
+"**表面 `mod` 树下的行以作用域相对路径注册。** `type = \"host\"` 包可以把表面组织成一棵模块树（`.d.rut` 里的 `pub mod net;`，各行在 `net/mod.d.rut` —— [项目结构](project-structure.md)）；`net/` 下的一行声明为 `pkg::net::name`，其函数体以**不含**包作用域的路径拼法注册 —— 作用域只在安装时加一次前缀："
+
+
+#: src/reference/embedding.md:101
+msgid "let mut http = rut_vm::HostPkg::new(\"http_host\");"
+msgstr ""
+
+
+#: src/reference/embedding.md:103
+msgid "\"net::http_status\""
+msgstr ""
+
+
+#: src/reference/embedding.md:104
+msgid "// → http_host::net::http_status\n"
+msgstr "// → http_host::net::http_status\n"
+
+
+#: src/reference/embedding.md:105
+msgid "\"stream::http_body\""
+msgstr ""
+
+
+#: src/reference/embedding.md:106
+msgid ""
+"// → http_host::stream::http_body (+ family)\n"
+"// a bare spelling stays the ROOT row's shape (\"map_new\", not \"net::map_new\")\n"
+msgstr ""
+"// → http_host::stream::http_body (+ family)\n"
+"// a bare spelling stays the ROOT row's shape (\"map_new\", not \"net::map_new\")\n"
+
+
+#: src/reference/embedding.md:110
+msgid ""
+"A path spelling for a row the surface declares flat (or vice versa) fails the install's contract check by name — the declared rows are the graph, the registration strings must spell the same tree."
+msgstr ""
+"表面声明为扁平的行却用了路径拼法（或反过来）会在安装的契约检查中按名失败 —— 声明的行就是图，注册字符串必须拼出同一棵树。"
+
+
+#: src/reference/embedding.md:113
 msgid "The `.compile()` law"
 msgstr "`.compile()` 法则"
 
@@ -18771,8 +18814,8 @@ msgstr "`math::pkg()`"
 
 #: src/reference/embedding.md:330
 msgid ""
-"a pkg builder; rows register under bare names, the scope prefixes at the install"
-msgstr "一个包构建器；行以裸名注册，作用域在安装时加前缀"
+"a pkg builder; rows register under bare names or scope-relative paths (`\"net::connect\"` — a row under the pkg's `mod net` tree; the scope itself is never part of the row name) and the scope prefixes once, at the install"
+msgstr "一个包构建器；行以裸名或作用域相对路径注册（`\"net::connect\"`——包的 `mod net` 树下的一行；行名里永远不含作用域本身），作用域只在安装时加一次前缀"
 
 
 #: src/reference/embedding.md:331 src/reference/loading.md:53
@@ -18781,8 +18824,9 @@ msgstr "`pkg_fn!` / `pkg_async_fn!`"
 
 
 #: src/reference/embedding.md:331
-msgid "the builder's sugar: one spelling → one row / the five-row async family"
-msgstr "构建器的糖——一次拼写 → 一行 / 五行异步家族（[嵌入与原生模块](embedding.md)）"
+msgid ""
+"the builder's sugar: one spelling → one row / the five-row async family (the spelling may carry the mod path: `\"net::send\"` → `net::send__start` et al)"
+msgstr "构建器的糖——一次拼写 → 一行 / 五行异步家族（拼写可以带上模块路径：`\"net::send\"` → `net::send__start` 等）"
 
 
 #: src/reference/embedding.md:332
@@ -19145,9 +19189,9 @@ msgstr "`http::pkg()`"
 
 #: src/reference/embedding.md:423
 msgid ""
-"the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`"
+"the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is a mod tree — the rows register scope-relatively (`net::http_send` + the readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
-"std HTTP 车道（reqwest；仅原生构建）；`http::pkg_with(f)` 是夹具孪生，返回 `(HostPkg, HttpFixture)`"
+"std HTTP 车道（reqwest；仅原生构建）；`http::pkg_with(f)` 是夹具孪生，返回 `(HostPkg, HttpFixture)`。`http_host` 表面是一棵模块树——各行以作用域相对路径注册（`net::http_send` 与各读回、`stream::http_body`/`http_stream_next`）"
 
 
 #: src/reference/embedding.md:424 src/reference/cli.md:60
@@ -20188,13 +20232,15 @@ msgstr "异步宿主函数"
 #: src/reference/host-fns.md:247
 msgid ""
 "```rut\n"
-"// http_host.d.rut — an async row expands into a five-row family\n"
+"// http_host/net/mod.d.rut — an async row expands into a five-row\n"
+"// family on the path-qualified name\n"
 "pub host async fn http_send(c: opaque, method: str, url: str,\n"
 "                            headers: str, body: bytes) -> opaque;\n"
 "```"
 msgstr ""
 "```rut\n"
-"// http_host.d.rut — an async row expands into a five-row family\n"
+"// http_host/net/mod.d.rut — an async row expands into a five-row\n"
+"// family on the path-qualified name\n"
 "pub host async fn http_send(c: opaque, method: str, url: str,\n"
 "                            headers: str, body: bytes) -> opaque;\n"
 "```"
@@ -20202,8 +20248,8 @@ msgstr ""
 
 #: src/reference/host-fns.md:253
 msgid ""
-"The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row names are bare and the scope prefixes at the install:"
-msgstr "嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上行名是裸名，作用域在安装时加前缀："
+"The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row name is the scope-relative spelling — bare for a root row, the mod path for a row under a surface tree (`net::http_send`; the scope itself prefixes once, at the install):"
+msgstr "嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上，行名是作用域相对拼写——根行是裸名，表面树下的一行带模块路径（`net::http_send`；作用域本身在安装时加一次前缀）："
 
 
 #: src/reference/host-fns.md:258
@@ -20212,7 +20258,7 @@ msgstr ""
 
 
 #: src/reference/host-fns.md:259
-msgid "\"http_send\""
+msgid "\"net::http_send\""
 msgstr ""
 
 
@@ -20234,9 +20280,9 @@ msgstr ""
 
 #: src/reference/host-fns.md:276
 msgid ""
-"// the raw lane (bare registry, full `scope::name` strings) — the\n"
+"// the raw lane (bare registry, full `scope::path::name` strings) — the\n"
 "// escape hatch, same emitter:\n"
-"// rut_vm::register_async!(hosts, \"http_host::http_send\", ...);\n"
+"// rut_vm::register_async!(hosts, \"http_host::net::http_send\", ...);\n"
 msgstr ""
 
 
@@ -21382,8 +21428,8 @@ msgstr "`http_host` / `http`"
 
 
 #: src/reference/stdlib.md:127
-msgid "host pkg + rut pkg"
-msgstr "宿主包 + rut 包"
+msgid "host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg"
+msgstr "宿主包（一棵模块树表面：`net/` + `stream/`）+ rut 包"
 
 
 #: src/reference/stdlib.md:127 src/reference/cli.md:62
@@ -22058,9 +22104,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:417
 msgid ""
-"`http_host` declares the transport rows (three async, five sync readbacks); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait, and `HttpClient()` constructs through the designated `new`:"
+"`http_host` declares the transport rows (three async, five sync readbacks) as a surface tree — `net/` carries the send + the response readbacks, `stream/` the body lanes ([project structure](project-structure.md)); `http` wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async only at the points that really wait, and `HttpClient()` constructs through the designated `new`:"
 msgstr ""
-"`http_host` 声明传输各行（三个异步，五个同步读回）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的，而 `HttpClient()` 经由被指定的 `new` 构造："
+"`http_host` 把传输各行（三个异步，五个同步读回）声明成一棵表面树——`net/` 载有发送与各响应读回，`stream/` 载有正文链路（[项目结构](project-structure.md)）；`http` 把它们包装成 `HttpClient` / `RequestBuilder` / `Request` / `Response` / `ByteStream`——只在真正等待的点是异步的，而 `HttpClient()` 经由被指定的 `new` 构造："
 
 
 #: src/reference/stdlib.md:423
@@ -25022,7 +25068,7 @@ msgstr ""
 
 #: src/reference/loading.md:21
 msgid ""
-"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type`), its body is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
+"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type`), its body is the `mod.rut` module tree, and its `deps`/`peer-deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the declaring file, recursively — and each row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — verifies every url dep's `sha256` pin at the mount door, runs the root-only `[dev-deps]` pass, then one peer gate over the closed set ([Dependency kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip ([Module bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
 msgstr ""
 
 
@@ -25757,8 +25803,16 @@ msgid ""
 "```text\n"
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", \"format_version\": 10\n"
 "<pkg>.d.rut              the declaration surface — the root itself\n"
+"rut.mods                 the surface's mod tree, when it has mod children\n"
 "```"
 msgstr ""
+
+
+#: src/reference/bundles.md:113
+msgid ""
+"The mod tree rides the same additive rows envelope a lib body tree uses (see [layout rules](#layout-rules)): the tree mounts at pack time (a declared child with no `NAME/mod.d.rut` refuses the pack), travels as path-keyed source rows, and remounts at load — a row under `net/` registers path-qualified exactly as it does from a directory. A FLAT host pkg writes no rows entry: its bundle stays the two-entry shape, byte-identical."
+msgstr ""
+"模块树骑在 lib 正文树所用的同一附加行信封上（见[布局法则](#layout-rules)）：树在打包时挂载（被声明却无 `NAME/mod.d.rut` 的子模块会拒绝打包），以按路径键的源码行旅行，并在加载时重新挂载 —— `net/` 下的一行注册为路径限定名，与从目录来时一模一样。扁平宿主包不写行条目：其捆绑包保持两条目形状，字节不变。"
 
 
 #: src/reference/bundles.md:113
@@ -26229,9 +26283,9 @@ msgstr ""
 
 #: src/reference/project-structure.md:47
 msgid ""
-"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind and no `mod.rut` is an error naming both fixes"
+"the declared kind: `type = \"host\"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files ([below](#host-surface-trees)); `type = \"lib\"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`\\-only manifest with no kind and no `mod.rut` is an error naming both fixes"
 msgstr ""
-"声明的种类：`type = \"host\"` 表示**宿主包** —— 一个纯声明表面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；`type = \"lib\"`（或省略）是普通的源码包。种类从不被推断 —— 一个只写 `entry.type`、既无种类又无 `mod.rut` 的清单是一个错误，同时指出两种修复方法"
+"声明的种类：`type = \"host\"` 表示**宿主包** —— 一个纯声明表面，其 `host fn` 由嵌入方在加载时绑定（[宿主函数与声明文件](host-fns.md)）；该表面组织成一棵 `mod.d.rut` 文件的模块树（[见下](#host-surface-trees)）；`type = \"lib\"`（或省略）是普通的源码包。种类从不被推断 —— 一个只写 `entry.type`、既无种类又无 `mod.rut` 的清单是一个错误，同时指出两种修复方法"
 
 
 #: src/reference/project-structure.md:48 src/reference/dependency-kinds.md:161
@@ -26396,6 +26450,46 @@ msgstr ""
 
 
 #: src/reference/project-structure.md:132
+msgid "Host surface trees"
+msgstr "宿主表面树"
+
+
+#: src/reference/project-structure.md:134
+msgid ""
+"A `type = \"host\"` package has no body — but its `.d.rut` surface organizes as the same kind of tree. `mod NAME;` in the surface file mounts `NAME/mod.d.rut` **beside the declaring file**, recursively and cycle-guarded, exactly like a body tree with `mod.d.rut` as the module file:"
+msgstr ""
+"`type = \"host\"` 包没有正文 —— 但它的 `.d.rut` 表面组织成同一类树。表面文件中的 `mod NAME;` **在声明文件旁**挂载 `NAME/mod.d.rut`，递归且防环，与以 `mod.d.rut` 为模块文件的正文树一模一样："
+
+
+#: src/reference/project-structure.md:140
+msgid ""
+"```\n"
+"http_host/\n"
+"├── rut.jsonc           # type = \"host\", entry = ./http_host.d.rut\n"
+"├── http_host.d.rut     # the root surface: pub mod net;  pub mod stream;\n"
+"├── net/\n"
+"│   └── mod.d.rut       # http_host::net — the request lane + readbacks\n"
+"└── stream/\n"
+"    └── mod.d.rut       # http_host::stream — the body lanes\n"
+"```"
+msgstr ""
+
+
+#: src/reference/project-structure.md:150
+msgid ""
+"The tree is **declaration-lawed like everything else**: a declared child with no `NAME/mod.d.rut` beside it is a loud error naming the declaring file, a `mod.rut` beside a host manifest still refuses (the pkg is a pure surface — the message points at `mod.d.rut`), and the `pub` on both the `mod` edge and the `host fn` row is what a consumer's `use` crosses."
+msgstr ""
+"这棵树**和其他一切一样受声明法则约束**：被声明却旁边没有 `NAME/mod.d.rut` 的子模块是一个大声错误并点名声明文件，宿主清单旁的 `mod.rut` 仍会被拒绝（该包是纯表面 —— 消息指向 `mod.d.rut`），而 `mod` 边和 `host fn` 行上的 `pub` 正是消费者的 `use` 所跨越的门槛。"
+
+
+#: src/reference/project-structure.md:157
+msgid ""
+"What the tree changes is the **registration naming**: a row under `net/` registers as `pkg::net::name` (async families ride the qualified name too — `pkg::net::send__start` et al), while the root's own rows keep the flat `pkg::name` shape. Consumers spell the tree in their uses (`use http_host::net::{ send }`), and the embedding Rust registers the bodies scope-relatively (`\"net::send\"` under `HostPkg::new(\"http_host\")` — [embedding and native modules](embedding.md)). Packing rides the same additive envelope a body tree uses: the tree travels as `rut.mods` source rows inside the bundle, and a FLAT host pkg packs byte-identically (no rows entry) — [module bundles](bundles.md)."
+msgstr ""
+"树改变的是**注册命名**：`net/` 下的一行注册为 `pkg::net::name`（异步家族也骑在限定名上 —— `pkg::net::send__start` 等），而根自己的行保持扁平的 `pkg::name` 形状。消费者在 use 里拼出这棵树（`use http_host::net::{ send }`），嵌入用的 Rust 以作用域相对路径注册函数体（`HostPkg::new(\"http_host\")` 下的 `\"net::send\"` —— [嵌入与原生模块](embedding.md)）。打包骑在正文树所用的同一附加信封上：树以 `rut.mods` 源码行的形式随捆绑包旅行，而扁平宿主包打包后字节不变（没有行条目）—— [模块捆绑包](bundles.md)。"
+
+
+#: src/reference/project-structure.md:169
 msgid "The toolchain tree"
 msgstr "工具链树"
 

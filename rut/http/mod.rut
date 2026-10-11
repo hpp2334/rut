@@ -37,10 +37,8 @@
 // Cancellation is best-effort (a worker thread finishes its blocking
 // read; the late result is discarded — disclosed).
 use core::{ Future };
-use http_host::{
-    http_send, http_body, http_stream_next,
-    http_status, http_err, http_read_err, http_resp_stream,
-};
+use http_host::net::{ http_send, http_status, http_err, http_read_err, http_resp_stream };
+use http_host::stream::{ http_body, http_stream_next };
 use strbuild::{ StringBuilder };
 
 // the method dial — a builder input, never a wire format (the wire

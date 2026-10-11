@@ -1,0 +1,16 @@
+// http_host/stream/mod.d.rut — the tree's BODY lanes: the drain and
+// the chunk read, both async (the host future lane). The rows register
+// path-qualified (`http_host::stream::http_body__start` et al) — the
+// embedder spells them scope-relative (`"stream::http_body"`),
+// `rut/http` imports them qualified (`use http_host::stream::{ .. }`).
+//
+// THE ONE-SHOT LAW lives across both mods: body xor stream per
+// response. `http_body` drains the remaining wire in ONE future (a
+// transport-failed response, or a response whose stream lane was
+// taken, degrades to EMPTY); `http_stream_next` answers one chunk per
+// future — nil = EOF-or-failed (`net`'s `http_read_err` names which).
+// Neither ever traps on network trouble.
+
+pub host async fn http_body(r: opaque) -> bytes;
+
+pub host async fn http_stream_next(s: opaque) -> ?bytes;

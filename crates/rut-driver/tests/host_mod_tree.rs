@@ -322,6 +322,89 @@ fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
 }
 
 #[test]
+fn the_same_leaf_name_in_two_mods_is_legal() {
+    // the mod path is the namespace: two mods may each declare a leaf
+    // of the same NAME — the rows differ by their paths, both register
+    // (`pkg::a::probe` vs `pkg::b::probe`), neither collides
+    let dir = make_pkg(
+        &scratch("same-leaf"),
+        &[
+            ("rut.jsonc", &host_manifest("duo", "duo.d.rut")),
+            ("duo.d.rut", "pub mod a;\npub mod b;\n"),
+            ("a/mod.d.rut", "pub host fn probe(x: str) -> i64;\n"),
+            ("b/mod.d.rut", "pub host fn probe(k: i64) -> i64;\n"),
+        ],
+    );
+    let loaded = load_path_session(Path::new(&dir)).expect("loads");
+    let rows = rows_of(loaded.pkg("duo").unwrap());
+    assert_eq!(
+        rows.iter().map(|r| r.full_name("duo")).collect::<Vec<_>>(),
+        vec!["duo::a::probe", "duo::b::probe"],
+        "the paths disambiguate the leaves"
+    );
+    assert_eq!(rows[0].params, vec![TY_STR]);
+    assert_eq!(rows[1].params, vec![rut_core::types::TY_I64]);
+    // and the embedder registers BOTH through the pkg scope
+    use rut_vm::HostPkg;
+    use rut_vm::interp::Vm;
+    let mut pkg = HostPkg::new("duo");
+    pkg.register::<_, (&str,), i64, _>("a::probe", |_vm: &mut Vm, s: &str| s.len() as i64);
+    pkg.register::<_, (i64,), i64, _>("b::probe", |_vm: &mut Vm, k: i64| k + 1);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .host_pkg(pkg.build())
+        .pkg(rut_driver::Pkg::source(
+            "app",
+            "use duo::a::{ probe };\n\nentry fn main() -> i64 {\n    return probe(\"hey\");\n}\n",
+        ))
+        .entrypoint("app")
+        .compile()
+        .expect("both leaves install");
+    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+}
+
+#[test]
+fn ensure_host_synthesizes_the_path_qualified_surface() {
+    // the compiler's host arm: a mod row's SurfaceFn spells the
+    // mod-path name (`net::connect`) with the REGISTRATION name riding
+    // `host` (`myhost::net::connect`); a flat root row stays bare on
+    // both. Read off the linked program's bodyless host funcs — the
+    // keys the boot join resolves.
+    let dir = tree_world("surface");
+    let loaded = load_path_session(Path::new(&dir)).expect("loads");
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .pkg(rut_driver::Pkg::source(
+            "app",
+            "use myhost::{ legacy_ping };\nuse myhost::net::tls::handshake;\n\nentry fn main() -> bool {\n    return legacy_ping();\n}\n",
+        ))
+        .entrypoint("app")
+        .compile()
+        .expect("compiles");
+    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    let prog = rut_core::link::flatten(compiled.graph.program.expect("linked"));
+    let mut host_rows: Vec<(String, String)> = prog
+        .funcs
+        .iter()
+        .filter_map(|f| {
+            let host = f.host_id?;
+            Some((prog.interner.name(f.name).to_string(), prog.interner.name(host).to_string()))
+        })
+        .collect();
+    host_rows.sort();
+    assert_eq!(
+        host_rows,
+        vec![
+            ("legacy_ping".to_string(), "myhost::legacy_ping".to_string()),
+            ("net::connect".to_string(), "myhost::net::connect".to_string()),
+            ("net::tls::handshake".to_string(), "myhost::net::tls::handshake".to_string()),
+        ],
+        "func name = the mod-path spelling (`net::connect`; root rows bare), \
+         host id = the registration spelling (`myhost::net::connect`)"
+    );
+}
+
+#[test]
 fn the_host_tree_mount_refuses_a_body_beside_the_manifest() {
     // the host pkg has no body: a `mod.rut` beside the manifest still
     // refuses, and the message points at the tree's `mod.d.rut` home

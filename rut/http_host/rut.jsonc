@@ -1,11 +1,14 @@
 {
-  // http_host/ — the std HTTP surface's host rows (the rut/http plan): a
-  // pure declaration surface. The embedding Rust binds the bodies
-  // (`http::pkg()` / `pkg_with`); the `http` package
-  // wraps them in the `Response` class.
+  // http_host/ — the std HTTP surface's host rows (the rut/http plan):
+  // a pure declaration surface organized as a MODULE TREE — `pub mod
+  // net;` + `pub mod stream;` in the root, the rows in `net/mod.d.rut`
+  // and `stream/mod.d.rut` beside it. The embedding Rust binds the
+  // bodies (`http::pkg()` / `pkg_with`) through the pkg scope with
+  // scope-relative paths (`"net::http_send"`, `"stream::http_body"`);
+  // the `http` package wraps them in the Response class.
   //
-  // The registration scope IS the package name; the use path spells it
-  // too (`use http_host::{ http_get, http_status }`).
+  // The registration scope IS the package name; the use path spells
+  // the tree too (`use http_host::net::{ http_send, http_status }`).
   "format": "rutbundle",
   "format_version": 10,
   "name": "http_host",
