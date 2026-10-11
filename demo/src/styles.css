@@ -330,6 +330,10 @@ button {
   color: #56b6c2;
 }
 
+.tok-namespace {
+  color: #56b6c2;
+}
+
 .tok-operator {
   color: #7f8b9b;
 }

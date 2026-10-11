@@ -5,9 +5,10 @@
 //! whole-construct spans, so name positions are **recovered**: a bounded
 //! scan for the matching `Ident` token inside the node's span (the parser
 //! itself matched by text, so this is reliable; a miss skips the name —
-//! never a wrong color). Value-position paths have no resolution in M1 —
-//! they classify by capitalization convention, like a TextMate grammar
-//! would, and full resolution lands with M2 modules.
+//! never a wrong color). `::` paths spell name resolution — their
+//! segments classify as the law's heads and members (modules read as
+//! `namespace`, never properties); value access after `.` rides the
+//! Field/Method nodes and keeps its own classes.
 
 mod legend;
 mod names;

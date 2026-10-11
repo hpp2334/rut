@@ -89,6 +89,9 @@
           "trait": [
             "entity.name.type.trait"
           ],
+          "namespace": [
+            "entity.name.namespace"
+          ],
           "operator": [
             "keyword.operator"
           ]

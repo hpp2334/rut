@@ -717,6 +717,16 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
 }
 
 #[test]
+fn qualified_type_positions_render_with_colon2() {
+    // `ty_src` joins a type path's segments with `::` — the
+    // name-resolution law's spelling (a dotted join would read value
+    // access into the annotation)
+    let src = "mod layout;\nentry fn main() -> nil {\n    let p: layout::Point = nil;\n}\n";
+    let md = hover_at(src, "p").unwrap();
+    assert!(md.contains("let p: layout::Point"), "{md}");
+}
+
+#[test]
 fn mod_decl_hover_shows_kind_mount_and_children() {
     // `pub mod layout;` in the doc — kind, the mounted file, the
     // child count read off the mounted index in the chain

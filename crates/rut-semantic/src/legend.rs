@@ -19,11 +19,14 @@ pub enum TokenType {
     EnumMember,
     Class,
     Interface,
+    /// a name-resolution module segment (`layout` in `layout::mk`) —
+    /// the `::` law's head class; `.` value access never spells one
+    Namespace,
     Operator,
     Comment,
 }
 
-pub const ALL: [TokenType; 15] = [
+pub const ALL: [TokenType; 16] = [
     TokenType::Keyword,
     TokenType::Number,
     TokenType::String,
@@ -37,6 +40,7 @@ pub const ALL: [TokenType; 15] = [
     TokenType::EnumMember,
     TokenType::Class,
     TokenType::Interface,
+    TokenType::Namespace,
     TokenType::Operator,
     TokenType::Comment,
 ];
@@ -57,6 +61,7 @@ impl TokenType {
             TokenType::EnumMember => "enumMember",
             TokenType::Class => "class",
             TokenType::Interface => "interface",
+            TokenType::Namespace => "namespace",
             TokenType::Operator => "operator",
             TokenType::Comment => "comment",
         }

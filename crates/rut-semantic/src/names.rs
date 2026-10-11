@@ -196,8 +196,10 @@ fn classify_expr(
                 push_name(toks, span, ast.name(*fid), TokenType::Property, out, false);
             }
         }
-        // dotted value paths (`Color.Red`, `self.center.x`) — capitalization
-        // convention until resolution exists (M2)
+        // `::` value paths (`Color::Red`, `layout::mk`, `i32::abs`) —
+        // the name-resolution law: interior segments are module/type
+        // heads, the leaf is the member. Value access after `.` rides
+        // Field/Method instead, so a `::` path never colors a property
         ExprKind::Path { segs } => {
             classify_path_segs(toks, ast, span, segs, out, TypeRule::Value);
         }
@@ -225,14 +227,21 @@ enum TypeRule {
     Type,
     /// last segment names an enum member (patterns)
     EnumLast,
-    /// value position: capitalized prefix = type, capitalized last =
-    /// enum member, else property; a lone lowercase seg is a variable
+    /// value position over a `::` chain — the resolution law's
+    /// capitalization reading: interior segments are name-resolution
+    /// heads (a lowercase head is a module, never a local; a
+    /// capitalized one a type), the leaf is the member (capitalized =
+    /// enum member/static, lowercase = the head's fn/const; a lone
+    /// lowercase seg is a local read). A property never appears here —
+    /// `.` spells value access
     Value,
 }
 
 /// Match path segments against the `Ident` tokens inside `span`, in order.
 /// Segments the token layer already owns by text (keywords, `Self`,
-/// primitives) advance without emitting — their token class stands.
+/// primitives) advance without emitting — their token class stands. The
+/// `::` separators lex as their own token and are skipped for free: the
+/// walk matches `Ident`s only.
 fn classify_path_segs(
     toks: &[Token],
     ast: &Ast,
@@ -258,26 +267,41 @@ fn classify_path_segs(
                     TypeRule::EnumLast => {
                         if i + 1 == n { TokenType::EnumMember } else { TokenType::Type }
                     }
-                    TypeRule::Value => {
-                        // primitives stay types even in call position —
-                        // the cast family `x as i32` / `x as f64` reads
-                        // as a type operation, not a variable
-                        if is_primitive_ty(s) {
-                            TokenType::Type
-                        } else if i + 1 == n {
-                            if is_cap(s) { TokenType::EnumMember }
-                            else if n == 1 { TokenType::Variable }
-                            else { TokenType::Property }
-                        } else if is_cap(s) {
-                            TokenType::Type
-                        } else {
-                            TokenType::Variable
-                        }
-                    }
+                    TypeRule::Value => value_seg_class(s, i, n),
                 };
                 out.push((tk.span, ty));
                 i += 1;
             }
         }
+    }
+}
+
+/// One `::` path segment in value position. Interior segments are the
+/// resolution heads: capitalized = a type/enum head, lowercase = a
+/// module head (the `namespace` class — never a local variable). The
+/// leaf is the member reached through the head: capitalized = an enum
+/// member/static/const, lowercase = the head's fn (a lone lowercase seg
+/// is a local read; call sites confirm with the function color). A
+/// multi-seg `::` path never yields `property` or bare-`variable`
+/// colors — that would read `.` value access into name resolution.
+fn value_seg_class(s: &str, i: usize, n: usize) -> TokenType {
+    // primitives stay types at every position — the cast family
+    // `x as i32` reads as a type operation, the associated-fn head
+    // `i32::abs` as a type's member lane
+    if is_primitive_ty(s) {
+        return TokenType::Type;
+    }
+    if i + 1 == n {
+        if is_cap(s) {
+            TokenType::EnumMember
+        } else if n == 1 {
+            TokenType::Variable
+        } else {
+            TokenType::Function
+        }
+    } else if is_cap(s) {
+        TokenType::Type
+    } else {
+        TokenType::Namespace
     }
 }

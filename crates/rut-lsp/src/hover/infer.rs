@@ -73,11 +73,12 @@ pub(crate) fn expr_ty(
     }
 }
 
-/// a path names a local, a module let, an enum-member value
-/// (`Color::Red`), or — the shape the survey's receiver inference is
-/// FOR — a dotted field read: the parser spells `wrap.c` as a 2-segment
-/// path (`ExprKind::Field` is the tuple-`.0` form only), so `a.b.c`
-/// resolves as field-of-field reads through the binding pass
+/// a `::` path names a module-qualified member: an enum-member value
+/// (`Color::Red` — the head IS the value's type), a namespace/type
+/// head's fn or const (a call site resolves through `call_ty`), or a
+/// plain local read (the lone-seg tail). Value access after `.` rides
+/// `ExprKind::Field` — those resolve as field-of-field reads through
+/// the binding pass, never here
 fn path_ty(
     ast: &Ast,
     binds: &[Binding],
@@ -95,7 +96,9 @@ fn path_ty(
         None
     };
     if segs.len() >= 2 {
-        // a binding leads the path — field reads through its type
+        // a RESOLVED head leads the walk — a binding head before `::`
+        // is not a name-resolution shape (locals are not namespaces),
+        // so this answers only when the head really binds a type text
         let head_ty = resolve(binds, pos, text)
             .and_then(|b| b.ty.clone())
             .or_else(self_ty);

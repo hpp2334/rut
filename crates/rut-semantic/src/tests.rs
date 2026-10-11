@@ -176,11 +176,38 @@ fn symbols_outline() {
 
 #[test]
 fn comment_is_appended_to_the_legend() {
-    assert_eq!(ALL.len(), 15);
-    assert_eq!(TokenType::Comment.index(), 14);
+    assert_eq!(ALL.len(), 16);
+    assert_eq!(TokenType::Comment.index(), 15);
     // the trailing append moved nothing
-    assert_eq!(TokenType::Operator.index(), 13);
+    assert_eq!(TokenType::Operator.index(), 14);
+    assert_eq!(TokenType::Namespace.index(), 13);
     assert_eq!(TokenType::legend().last().copied(), Some("comment"));
+}
+
+#[test]
+fn colon2_value_paths_classify_by_the_resolution_law() {
+    // `::` spells name resolution: interior segments are heads (a
+    // lowercase head is a module → namespace, a capitalized one a
+    // type), the leaf is the member (a lowercase fn, a capitalized
+    // enum member/static); a lone lowercase seg stays a local read and
+    // a property never appears — `.` spells value access
+    let src = "mod layout;\nenum Color { Red }\nentry fn main() -> nil {\n    let a = layout::mk();\n    let b = Color::Red;\n    let c = i32::abs(-1);\n    let d = b;\n}\n";
+    let spans = classify_src(src);
+    // the module head — namespace, not a local variable
+    assert_eq!(find(src, &spans, "layout"), vec![TokenType::Namespace]);
+    // the member fn through the module — function, not a property
+    assert_eq!(find(src, &spans, "mk"), vec![TokenType::Function]);
+    // the enum head + its member — type, then enumMember (decl + use)
+    assert_eq!(find(src, &spans, "Color"), vec![TokenType::Enum, TokenType::Type]);
+    assert_eq!(find(src, &spans, "Red"), vec![TokenType::EnumMember, TokenType::EnumMember]);
+    // a primitive head stays a type at an interior position (the
+    // token layer's class, confirmed by the path walk)
+    assert_eq!(find(src, &spans, "i32"), vec![TokenType::Type]);
+    assert_eq!(find(src, &spans, "abs"), vec![TokenType::Function]);
+    // the lone lowercase path is still the local read (decl + use)
+    assert_eq!(find(src, &spans, "b"), vec![TokenType::Variable, TokenType::Variable]);
+    // the law: `::` never colors a property
+    assert!(!spans.iter().any(|(_, t)| *t == TokenType::Property), "{spans:?}");
 }
 
 #[test]

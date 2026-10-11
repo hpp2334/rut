@@ -261,7 +261,9 @@ pub(crate) fn head_of_ty(text: &str) -> String {
     }
 }
 
-/// display text of a type node — the alias hover's `type X = <target>`
+/// display text of a type node — the alias hover's `type X = <target>`;
+/// path segments join with `::` (the name-resolution law's spelling —
+/// a `.` would read value access)
 pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     match ast.ty(h) {
         TypeKind::TyPath { segs } => {
@@ -269,7 +271,7 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
                 .iter()
                 .map(|sg| ast.name(sg.name).to_string())
                 .collect::<Vec<_>>()
-                .join(".");
+                .join("::");
             if let Some(last) = segs.last() {
                 if !last.generics.is_empty() {
                     s.push_str(&format!(

@@ -1,5 +1,7 @@
 //! Completions — member completion after `recv.`, bare-position
-//! completion, the use-path tiers, and the auto-import tier, over the
+//! completion, the use-path tiers, the `::` tiers (module members by
+//! tier, then the type-head lists: enum members, namespace statics, a
+//! type's associated fns), and the auto-import tier, over the
 //! same definition index hover uses. One rule for
 //! the member list (mirrors the compiler's): **members of `T` = T's own
 //! surface ∪ inherent `impl T { .. }` methods; on an interface `I` they
@@ -23,7 +25,7 @@ use ls_types::Range;
 use rut_ast::ast::{Ast, ItemKind};
 use rut_lexer::token::{Tok, Token};
 
-use crate::hover::lookup::used_ifaces;
+use crate::hover::lookup::{find_ty, used_ifaces};
 use crate::hover::types::{DefIndex, TyDef, TyForm};
 use crate::line_index::LineIndex;
 use crate::mods::{self, DocMods};
@@ -63,6 +65,7 @@ pub enum CompletionKind {
     Fn,
     Method,
     Field,
+    EnumMember,
 }
 
 /// Completions at `pos`: use-path tiers inside a `use` statement
@@ -85,11 +88,24 @@ pub fn complete(
     if let Some((segs, prefix)) = use_path_before(toks, pos) {
         return use_path_completions(idxs, &segs, &prefix);
     }
+    // a lone `:` under the cursor is the annotation boundary (`let c:
+    // ⏐`) — the `::` completion trigger rides the colon key, and here
+    // no member list makes sense (types ride `::`, values ride `.`);
+    // an honest empty beats the bare keyword table popping up
+    if colon_boundary_before(toks, pos) {
+        return Vec::new();
+    }
     if let Some((segs, prefix)) = qualified_path_before(toks, pos) {
         if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
             return out;
         }
-        // the head did not resolve to a module — `::` in a non-mod
+        // the head did not resolve to a module — the `::` law's other
+        // member lists ride the same trigger: enum members, namespace
+        // statics, a type head's associated fns
+        if let Some(out) = type_head_completions(idxs, &segs, &prefix) {
+            return out;
+        }
+        // the head resolved to nothing known — `::` in an unknown
         // context falls through to the tiers below
     }
     let Some((recv, prefix)) = recv_before(toks, pos) else {
@@ -505,6 +521,101 @@ fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, Strin
     Some((segs, prefix))
 }
 
+/// the annotation boundary: the token immediately before the cursor is
+/// a lone `:` (one colon — `::` lexes as its own Colon2). Type
+/// annotation positions get an honest empty from the trigger key.
+fn colon_boundary_before(toks: &[Token], pos: u32) -> bool {
+    match toks.iter().rposition(|t| t.span.lo < pos) {
+        Some(i) => toks[i].tok == Tok::Colon,
+        None => false,
+    }
+}
+
+/// Member completions after `<TypeHead>::` — the `::` law's member
+/// lists whose head is a type, reusing the index lookup hover's member
+/// lane keys on (`find_ty`): an enum head offers its members, a
+/// namespace head (a dep's minted `Math`) its consts + fns, any other
+/// type head its statics and associated fns (the inherent `impl T { fn
+/// .. }` rows — the owner string IS the type's name). An interface head
+/// offers nothing: its signatures ride receivers, never `::`. `None` =
+/// the head resolves to no indexed type (the caller falls through); a
+/// resolved head is FINAL — the filtered list is the answer even when
+/// empty (the known-head law, like the module tier's).
+fn type_head_completions(
+    idxs: &[&DefIndex],
+    segs: &[String],
+    prefix: &str,
+) -> Option<Vec<CompletionOut>> {
+    let (head, rest) = segs.split_first()?;
+    let (_ti, ty) = find_ty(idxs, head)?;
+    let mut out: Vec<CompletionOut> = Vec::new();
+    // a deeper walk under a type head descends nothing — types are not
+    // namespaces (`Color::Red::` answers empty, final)
+    if rest.is_empty() {
+        match ty.form {
+            // `Color::⏐` — the declared members
+            TyForm::Enum => {
+                for m in &ty.fields {
+                    push_item(
+                        &mut out,
+                        CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::EnumMember),
+                    );
+                }
+            }
+            // `Math::⏐` — the consts as fields, the module's fns as
+            // methods (the namespace mint's shape)
+            TyForm::Namespace => {
+                for f in &ty.fields {
+                    push_item(
+                        &mut out,
+                        CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Const),
+                    );
+                }
+                for m in &ty.methods {
+                    push_item(
+                        &mut out,
+                        CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::Fn),
+                    );
+                }
+            }
+            // `Greeter::⏐` — interface members ride receivers
+            TyForm::Interface => {}
+            // `Counter::⏐` — statics first, then the associated fns
+            _ => {
+                for f in &ty.fields {
+                    // a declared static — the rendered slice leads with
+                    // its modifiers (`static N: i32`, `pub static N: i32`)
+                    let bare = f
+                        .src
+                        .strip_prefix("pub ")
+                        .or_else(|| f.src.strip_prefix("pub(super) "))
+                        .or_else(|| f.src.strip_prefix("pub(pkg) "))
+                        .unwrap_or(&f.src);
+                    if bare.starts_with("static ") {
+                        push_item(
+                            &mut out,
+                            CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Field),
+                        );
+                    }
+                }
+                for i in idxs {
+                    for f in &i.fns {
+                        if f.owner.as_deref() == Some(head.as_str()) {
+                            push_item(
+                                &mut out,
+                                CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    Some(out)
+}
+
 /// the leaf scope for a resolved mod path — the open document itself
 /// when the path IS its own module (the pkg head resolving to the
 /// root from the root), else the chain index stamped for it
@@ -805,6 +916,7 @@ pub fn lsp_item(c: CompletionOut) -> CompletionItem {
             CompletionKind::Fn => CompletionItemKind::FUNCTION,
             CompletionKind::Method => CompletionItemKind::METHOD,
             CompletionKind::Field => CompletionItemKind::FIELD,
+            CompletionKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
         }),
         detail: (!c.detail.is_empty()).then_some(c.detail),
         documentation: (!c.doc.is_empty()).then(|| {
@@ -1234,6 +1346,109 @@ return c.;
         let items = complete_over_gadgets(flat_src, "let c: layout.", DocMods::default());
         let ls = labels(&items);
         assert!(!ls.contains(&"Column"), "no doc mods, no mod tier: {ls:?}");
+    }
+
+    // ---- the type-head tier (after `Type::`) ----
+
+    #[test]
+    fn colon2_completion_lists_the_enum_members() {
+        // `Color::⏐` — the enum head's member list rides name
+        // resolution, not a receiver dot
+        let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::\n}\n";
+        let items = complete_after(src, "Color::");
+        let ls = labels(&items);
+        assert!(ls.contains(&"Red"), "{ls:?}");
+        assert!(ls.contains(&"Green"), "{ls:?}");
+        let red = items.iter().find(|c| c.label == "Red").unwrap();
+        assert!(matches!(red.kind, CompletionKind::EnumMember), "{:?}", red.kind);
+        // the typed prefix filters the member list
+        let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::R\n}\n";
+        let items = complete_after(src, "Color::R");
+        let ls = labels(&items);
+        assert!(ls.contains(&"Red"), "{ls:?}");
+        assert!(!ls.contains(&"Green"), "{ls:?}");
+    }
+
+    #[test]
+    fn colon2_completion_lists_the_namespace_statics() {
+        // `Math::⏐` over the calc dep — the namespace head's consts
+        // and fns (the mint the manifest's namespace/consts ride)
+        let src = "pub host fn sqrt(x: f64) -> f64;\n";
+        let consts = vec![("PI".to_string(), 3.141592653589793f64)];
+        let calc = crate::deps::index_dep(
+            "calc",
+            "file:///deps/calc.d.rut",
+            src,
+            rut_parser::Mode::Decl,
+            Some("Math"),
+            &consts,
+        );
+        let doc = "entry fn main() -> nil {\n    let x = Math::\n}\n";
+        let s = rut_lexer::lexer::normalize(doc);
+        let (toks, _) = rut_lexer::lexer::lex(&s);
+        let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
+        let di = crate::hover::index(&s, &ast, &toks);
+        let idxs = [&di, &calc];
+        let pos = s.rfind("Math::").unwrap() as u32 + "Math::".len() as u32;
+        let items = complete(&idxs, &toks, &ast, pos, &s, &DocMods::default());
+        let ls = labels(&items);
+        assert!(ls.contains(&"sqrt"), "the namespace's fns complete: {ls:?}");
+        assert!(ls.contains(&"PI"), "the consts complete: {ls:?}");
+        let pi = items.iter().find(|c| c.label == "PI").unwrap();
+        assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
+        let sqrt = items.iter().find(|c| c.label == "sqrt").unwrap();
+        assert!(matches!(sqrt.kind, CompletionKind::Fn), "{:?}", sqrt.kind);
+    }
+
+    #[test]
+    fn colon2_completion_lists_the_type_head_associated_fns() {
+        // `Counter::⏐` — the statics + the inherent impl block's fns
+        // (the owner string IS the type's name); instance fields stay
+        // OFF — they ride a receiver dot, never `::`
+        let src = "\
+class Counter {
+n: i32;
+pub static COUNT: i32;
+}
+impl Counter {
+fn bump(mut self) -> i32 { return self.n; }
+fn mk() -> Counter { return Counter { n: 0 }; }
+}
+entry fn main() -> nil {
+    let c = Counter::
+}
+";
+        let items = complete_after(src, "Counter::");
+        let ls = labels(&items);
+        assert!(ls.contains(&"bump"), "{ls:?}");
+        assert!(ls.contains(&"mk"), "{ls:?}");
+        assert!(ls.contains(&"COUNT"), "the static rides the head: {ls:?}");
+        let count = items.iter().find(|c| c.label == "COUNT").unwrap();
+        assert!(matches!(count.kind, CompletionKind::Field), "{:?}", count.kind);
+        assert!(!ls.contains(&"n"), "instance fields ride a receiver: {ls:?}");
+    }
+
+    #[test]
+    fn colon2_interface_head_and_deeper_walks_offer_nothing() {
+        // an interface head: its signatures ride receivers, never `::`
+        // — the known head is FINAL (empty), never the bare tier
+        let src = "interface Greeter {\nfn greet(self) -> nil;\n}\nentry fn main() -> nil {\n    let g = Greeter::\n}\n";
+        assert!(complete_after(src, "Greeter::").is_empty(), "{:?}", complete_after(src, "Greeter::"));
+        // a known head with a non-matching prefix: filtered empty, final
+        let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::X\n}\n";
+        assert!(complete_after(src, "Color::X").is_empty());
+        // a type head is not a namespace: nothing descends past a member
+        let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::Red::\n}\n";
+        assert!(complete_after(src, "Color::Red::").is_empty());
+    }
+
+    #[test]
+    fn the_annotation_colon_completes_nothing() {
+        // `let c: ⏐` — the lone colon is the annotation boundary; the
+        // `::` trigger rides the colon key, and no member list makes
+        // sense here (an honest empty, never the keyword table)
+        let src = "enum Color { Red }\nentry fn main() -> nil {\n    let c: \n}\n";
+        assert!(complete_after(src, "let c:").is_empty());
     }
 
     // ---- the auto-import tier ----

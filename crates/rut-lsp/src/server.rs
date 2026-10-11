@@ -688,7 +688,10 @@ impl LanguageServer for Backend {
                 references_provider: Some(OneOf::Left(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_string()]),
+                    // `.` — member completion after a receiver; `:` —
+                    // the `::` tiers fire on the colon key (the lone
+                    // annotation `:` answers an honest empty)
+                    trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
                     ..Default::default()
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {

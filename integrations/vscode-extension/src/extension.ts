@@ -546,7 +546,9 @@ function registerCompletion(rut: RutWasm): vscode.Disposable {
         return rut.complete(doc.uri.toString(), position.line, position.character).map(toCompletionItem);
       },
     },
-    '.' // trigger: member completion after a receiver dot
+    '.', // trigger: member completion after a receiver dot
+    ':', // trigger: the `::` tiers (module members, enum members,
+    // namespace statics, associated fns) fire on the colon key
   );
 }
 
