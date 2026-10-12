@@ -2386,7 +2386,10 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn a1_zero_value_field_defaults() {
+fn a1_every_field_covered_replaces_zero_fill() {
+    // the zero-fill of yesteryear is gone: an empty literal over
+    // fields with no declared initializers yields the
+    // every-field-covered law's diagnostic...
     let src = r#"
 struct P3 { x: i32; s: str; }
 entry fn main() -> nil {
@@ -2394,9 +2397,29 @@ entry fn main() -> nil {
     Logger::new("t").info(f"x={p.x} s=[{p.s}]");
 }
 "#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("missing field `x` in the `P3` literal")),
+        "{:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+
+    // ...and the legal omission is the declared initializer: a spelled
+    // field rides beside the covered ones
+    let src = r#"
+struct P3 { x: i32 = 0; s: str = ""; }
+entry fn main() -> nil {
+    let p = P3 { x: 7 };
+    Logger::new("t").info(f"x={p.x} s=[{p.s}]");
+}
+"#;
     let (lines, trap, _) = run_case(src, 100_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["x=0 s=[]"]);
+    assert_eq!(lines, vec!["x=7 s=[]"]);
 }
 
 #[test]

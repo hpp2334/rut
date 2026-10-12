@@ -703,6 +703,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
                 return Err(());
             };
+            if set[fidx] {
+                self.ctx.err(self.ctx.ast.span(v.id()), format!(
+                    "duplicate field `{}` in the `{}` literal",
+                    self.ctx.name(*fname), self.ctx.name(dname)
+                ));
+                return Err(());
+            }
             let fty = field_list[fidx].1;
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
@@ -718,11 +725,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !set[fidx] {
                 match init {
                     None => {
-                        // zero-value defaults: an omitted field
-                        // takes its type's zero value
-                        let z = self.zero_value(*fty, sp)?;
-                        val_regs[fidx] = Some(z);
-                        continue;
+                        // the every-field-covered law: an omitted
+                        // field is legal only when the field declares
+                        // an initializer — no silent zero-fill
+                        self.ctx.err(sp, format!(
+                            "missing field `{}` in the `{}` literal (the every-field-covered law)",
+                            self.ctx.name(*fname), self.ctx.name(dname)
+                        ));
+                        return Err(());
                     }
                     Some(init) => {
                         // initializers are class code: resolve under the class subst,
@@ -754,40 +764,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let dst = self.new_reg(sty);
         { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: sty, argv_off, argc }, sp.lo); }
         Ok(sty)
-    }
-
-    /// The zero value of a type: `0`/`0.0`/`false`, the empty
-    /// string, `nil` for pointers, member 0 for enums, the all-zero record
-    /// for records.
-    pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
-        let reg = self.new_reg(ty);
-        match self.ctx.types.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Nil | TyKind::Opt { .. } => {
-                self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
-            }
-            TyKind::Str => {
-                let k = self.konst(ConstVal::Str(String::new()));
-                self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);
-            }
-            TyKind::Enum { .. } => {
-                self.emit(Op::EnumNew { dst: reg, ty, member: 0 }, sp.lo);
-            }
-            TyKind::Data { fields } => {
-                let mut vals = Vec::with_capacity(fields.len());
-                for f in &fields {
-                    vals.push(self.zero_value(f.ty, sp)?);
-                }
-                { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: reg, ty: ty, argv_off, argc }, sp.lo); }
-            }
-            _ => {
-                self.ctx.err(sp, format!(
-                    "a literal must initialize `{}` —it has no zero value",
-                    self.ctx.type_name(ty)
-                ));
-                return Err(());
-            }
-        }
-        Ok(reg)
     }
 
     /// Record literal for a USED struct: the layout is
