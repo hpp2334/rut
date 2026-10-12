@@ -52,6 +52,7 @@
 'use strict';
 
 const assert = require('node:assert');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -125,6 +126,45 @@ async function main() {
     bad.push(`legend drifted: ${JSON.stringify(legend)}`);
   }
   smokes++;
+
+  // ---- the corpus: zero false diagnostics through the SHIPPED wasm ----
+  // (the pre-align artifact flagged 15 of 53 files with 1,796 false
+  // diagnostics — every ?T site read `expected a type name`)
+  // THIS LOCK RUNS FIRST — ahead of every fail-fast (assert) lane that
+  // follows — so a drifted pin or a stale artifact can never die the
+  // gate early and mask the alignment verdict: a corpus violation lands
+  // in `bad` even when a later lane would have thrown first. (A
+  // hardcoded std-v8 URL pin once sat ahead of this block and did
+  // exactly that masking.)
+  const files = [...rutFiles(path.join(REPO, 'rut'))];
+  for (const root of CORPUS_ROOTS.slice(1)) files.push(...rutFiles(path.join(REPO, root)));
+  files.sort();
+  assert.ok(files.length >= MIN_CORPUS_FILES,
+    `corpus walk found only ${files.length} .rut files (expected >= ${MIN_CORPUS_FILES})`);
+
+  let symbols = 0;
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    // the absolute path AS the uri — the .d.rut suffix survives, so the
+    // module's mode_of picks Decl for the decl surfaces (core.d.rut &
+    // co.); a mode mistake here would light them up as diagnostics.
+    const uri = `file://${file}`;
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`${path.relative(REPO, file)}: ${a.diags.length} false diagnostic(s), first: ${JSON.stringify(a.diags[0].message)}`);
+      continue;
+    }
+    if (!(a.tokens.data && a.tokens.data.length > 0)) {
+      bad.push(`${path.relative(REPO, file)}: empty token stream`);
+    }
+    if (!path.basename(file).endsWith('.d.rut')) {
+      // Impl-mode files yield document symbols (corpus_classifies' law)
+      if (!a.symbols.length) {
+        bad.push(`${path.relative(REPO, file)}: no document symbols`);
+      }
+      symbols += a.symbols.length;
+    }
+  }
 
   // ---- the fixture: a current-grammar sample, analyzed clean ----
   const fixtureSrc = fs.readFileSync(FIXTURE, 'utf8');
@@ -598,9 +638,10 @@ async function main() {
     hintAt(digestSrc, /let src = "0123456789abcdef";/, 'src', ': str', 1,
       /^fn hex_val\(c: str\) -> i32 \{/m, 'digest str let');
     // `let d = hex_digits();` → Vec<str> — GT: the file's ANNOTATED
-    // `let d: Vec<str> = Vec.new();` three lines up
+    // `let d: Vec<str> = Vec::new();` three lines up (the corpus spells
+    // the paths grammar's `::` since fe7b5f94)
     hintAt(digestSrc, /let d = hex_digits\(\);/, 'd', ': Vec<str>', 1,
-      /^    let d: Vec<str> = Vec\.new\(\);/m, 'digest vec let');
+      /^    let d: Vec<str> = Vec::new\(\);/m, 'digest vec let');
     // `let v = hex_val(f"{c}");` → i32 — GT: the callee's `-> i32` ret
     hintAt(digestSrc, /let v = hex_val\(f/, 'v', ': i32', 1,
       /^fn hex_val\(c: str\) -> i32 \{/m, 'digest call ret let');
@@ -941,7 +982,8 @@ async function main() {
 
     // the manifest: the repo's own path+url fixture (03-plugin) — the
     // same bytes rut-lsp's dep_table unit test pins
-    const manifest = fs.readFileSync(path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc'), 'utf8');
+    const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
+    const manifest = fs.readFileSync(manifestPath, 'utf8');
     e.rut_begin();
     const table = take(e.rut_parse_manifest(...put(manifest)));
     assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
@@ -958,13 +1000,39 @@ async function main() {
     }, `path row: ${JSON.stringify(row('server'))}`);
     const pouchRow = row('pouch');
     assert.strictEqual(pouchRow.source.kind, 'url');
-    assert.strictEqual(pouchRow.source.url,
-      'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v8/dist/std/pouch.rutbundle');
-    assert.match(pouchRow.source.sha256, /^[0-9a-f]{64}$/, 'the pin rides');
-    // the cache path is computed RUST-side — sha256 of the URL string;
-    // JS never hashes (this constant is the pinned expectation)
+    // the expected URL comes from the FIXTURE's own bytes, never a
+    // hardcoded tag here — a std-tag sweep edits rut.jsonc and this
+    // gate follows it, so the two can never drift again (a pinned
+    // std-v8 URL once failed this lane BEFORE the corpus lock ran and
+    // masked the alignment verdict entirely)
+    const pouchUrl = manifest.match(/"pouch"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"/)[1];
+    assert.ok(pouchUrl, 'the fixture manifest carries a pouch url dep');
+    assert.strictEqual(pouchRow.source.url, pouchUrl);
+    // the manifest row mirrors the fixture bytes — and since the
+    // rut.lock migration (66c8e6a8) a manifest url row is
+    // { "url": ... } only, so the parsed sha256 rides as null
+    assert.strictEqual(pouchRow.source.sha256, null);
+    // the pin itself lives in the companion rut.lock (the pin is law
+    // at the mount door): hex64, riding the SAME url, and equal to the
+    // sha256 of the COMMITTED bundle bytes the url names (the tag
+    // segment of the url IS the dist dir) — all derived from fixture
+    // bytes, so a std-tag sweep edits the fixtures and this gate
+    // follows; no constant here can drift
+    const lock = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
+    const lockPouch = lock.match(/\{[^{}]*"pkg"\s*:\s*"pouch"[^{}]*\}/)[0];
+    assert.strictEqual(lockPouch.match(/"url"\s*:\s*"([^"]+)"/)[1], pouchUrl,
+      'the lock row rides the manifest url');
+    const pin = lockPouch.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/)[1];
+    assert.ok(pin, 'the lock pins the pouch bundle (hex64)');
+    const pouchBundle = fs.readFileSync(path.join(REPO, 'dist', pouchUrl.match(/rut@([^/]+)\//)[1], 'pouch.rutbundle'));
+    assert.strictEqual(crypto.createHash('sha256').update(pouchBundle).digest('hex'), pin,
+      'the lock pin matches the committed bundle bytes');
+    // the cache path is computed RUST-side — sha256 of the URL string
+    // (crates/rut-lsp/src/deps.rs cache_path); the binding never
+    // hashes, so the gate recomputes the SAME digest over the fixture
+    // URL and the row must equal it — derived, never a pinned constant
     assert.strictEqual(pouchRow.source.cache_path,
-      '.rut/cache/683a9cb219067e36be3ebf79fc895ff0930c10a47c058e386a226e428971a74f.rutbundle');
+      `.rut/cache/${crypto.createHash('sha256').update(pouchUrl).digest('hex')}.rutbundle`);
     assert.deepStrictEqual(table.dev_deps, []);
     assert.deepStrictEqual(table.peer_deps, []);
     smokes++;
@@ -1087,39 +1155,6 @@ async function main() {
     assert.ok(segHover && segHover.contents.value.includes('layout/mod.rut'),
       `segment hover missed: ${segHover && JSON.stringify(segHover.contents.value.slice(0, 80))}`);
     smokes++;
-  }
-
-  // ---- the corpus: zero false diagnostics through the SHIPPED wasm ----
-  // (the pre-align artifact flagged 15 of 53 files with 1,796 false
-  // diagnostics — every ?T site read `expected a type name`)
-  const files = [...rutFiles(path.join(REPO, 'rut'))];
-  for (const root of CORPUS_ROOTS.slice(1)) files.push(...rutFiles(path.join(REPO, root)));
-  files.sort();
-  assert.ok(files.length >= MIN_CORPUS_FILES,
-    `corpus walk found only ${files.length} .rut files (expected >= ${MIN_CORPUS_FILES})`);
-
-  let symbols = 0;
-  for (const file of files) {
-    const src = fs.readFileSync(file, 'utf8');
-    // the absolute path AS the uri — the .d.rut suffix survives, so the
-    // module's mode_of picks Decl for the decl surfaces (core.d.rut &
-    // co.); a mode mistake here would light them up as diagnostics.
-    const uri = `file://${file}`;
-    const a = rut.analyze(uri, src);
-    if (a.diags.length !== 0) {
-      bad.push(`${path.relative(REPO, file)}: ${a.diags.length} false diagnostic(s), first: ${JSON.stringify(a.diags[0].message)}`);
-      continue;
-    }
-    if (!(a.tokens.data && a.tokens.data.length > 0)) {
-      bad.push(`${path.relative(REPO, file)}: empty token stream`);
-    }
-    if (!path.basename(file).endsWith('.d.rut')) {
-      // Impl-mode files yield document symbols (corpus_classifies' law)
-      if (!a.symbols.length) {
-        bad.push(`${path.relative(REPO, file)}: no document symbols`);
-      }
-      symbols += a.symbols.length;
-    }
   }
 
   if (bad.length) {
