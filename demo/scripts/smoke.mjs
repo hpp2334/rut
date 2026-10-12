@@ -419,6 +419,11 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['values-and-pointers', /^struct Point \{/, 'struct', 'keyword'],
     ['values-and-pointers', /let mut p = Point \{/, 'mut', 'keyword'],
     ['sieve', /^use pouch::\{Vec\};/, 'use', 'keyword'],
+    ['sieve', /^entry fn main\(\) \{/, 'entry', 'keyword'],
+    // the rest of the use line: the path segment classifies namespace
+    // (lowercase), the imported name type (capitalized)
+    ['sieve', /^use pouch::\{Vec\};/, 'pouch', 'namespace'],
+    ['sieve', /^use pouch::\{Vec\};/, 'Vec', 'type'],
     ['fuel-demo', /while \(true\) \{/, 'while', 'keyword'],
     ['fuel-demo', /while \(true\) \{/, 'true', 'keyword'],
     ['ex-type-aliases', /^interface Labeled \{/, 'interface', 'keyword'],
@@ -441,6 +446,9 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['tuple-errors', /^fn parse_u8\(s: str\) -> \(i32, str\) \{/, 'parse_u8', 'function'],
     ['closures-generics', /^fn map<T, U>\(v: Vec<T>, f: fn\(T\) -> U\) -> Vec<U> \{/, 'map', 'function'],
     ['ex-closures-generics', /fn sum\(xs: Vec<i32>\) -> i32 \{/, 'sum', 'function'],
+    // lowercase use imports classify function (imports by case)
+    ['ex-structs', /^use calc::\{ sqrt \};/, 'sqrt', 'function'],
+    ['ex-classes', /^use core::\{ panic \};/, 'panic', 'function'],
     // strings
     ['hello-format', /let name = "rut";/, '"rut"', 'string'],
     ['when-exhaustive', /"red\+red"/, '"red+red"', 'string'],
