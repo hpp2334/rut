@@ -66,6 +66,50 @@ const ESCAPE = mode('', { begin: /\\(?:[tnrbf\\"'0]|u\{[0-9a-fA-F]{1,6}\})/ });
 const MEMBER_CALL = mode('title', { begin: /\.[A-Za-z_$][A-Za-z0-9_$]*(?=\s*\()/ });
 const MEMBER_FIELD = mode('property', { begin: /\.[A-Za-z_$][A-Za-z0-9_$]*/ });
 
+// Use lines — `use ink::{ Logger };` — mirror the classifier's law
+// (`crates/rut-semantic/src/names.rs`, ItemKind::Use): the path
+// segments read as their heads (lowercase = a module, capitalized = a
+// type), the imported names as the leaf members (capitalized = a type,
+// lowercase = a function). Scope mapping, on the grammar's
+// single-segment convention (title/property above): capitalized →
+// `type`, imported lowercase → `title` (the callable slot, like
+// MEMBER_CALL), lowercase segments → `meta` — the palette's qualifier
+// slot. The natural hljs scope for a module would be `namespace`, but
+// the book's two stylesheets (mdbook's bundled highlight.css and
+// theme/rut-book.css) only carry single-segment scopes and neither
+// knows `.hljs-namespace`; `meta` is styled by both.
+//
+// No container mode: one beginning at `use` would swallow the keyword
+// into its begin match (plain in the baked book — the book baker emits
+// begin text verbatim). Instead each ident carries a lookbehind keying
+// it to its use-line slot, so `use` itself stays with the keyword
+// machinery and every ident is one whole span. `self`/`super`/`Self`
+// are excluded — keyword words keep their keyword color, matching the
+// classifier's `owned_by_tokens` carve-out. Text outside use lines is
+// untouched: the lookbehind needs a `\buse\s` with no `;` before the
+// ident (`;` closes every use item), braces split segments from
+// imports, and comments/strings consume their own text first.
+
+// path segments — between `use` and the `{` of an import list. The
+// `(?<![A-Za-z0-9_$])` keeps a match from starting mid-word (without
+// it the lazy lookbehind gap can end inside `super`, leaving `s` plain
+// and `uper` classed); the lookahead hands keyword words to the
+// keyword machinery instead.
+const USE_SEGMENT = mode('meta', {
+  begin: /(?<=\buse\s[^;{}]*?)(?<![A-Za-z0-9_$])(?!(?:self|super)\b)[a-z_$][A-Za-z0-9_$]*/,
+});
+const USE_SEGMENT_TYPE = mode('type', {
+  begin: /(?<=\buse\s[^;{}]*?)(?<![A-Za-z0-9_$])(?!Self\b)[A-Z][A-Za-z0-9_$]*/,
+});
+
+// imported names — between the `{` of an import list and its `}`
+const USE_IMPORT_TYPE = mode('type', {
+  begin: /(?<=\buse\s[^;]*\{[^}]*?)(?<![A-Za-z0-9_$])(?!Self\b)[A-Z][A-Za-z0-9_$]*/,
+});
+const USE_IMPORT_FUNCTION = mode('title', {
+  begin: /(?<=\buse\s[^;]*\{[^}]*?)(?<![A-Za-z0-9_$])(?!(?:self|super)\b)[a-z_$][A-Za-z0-9_$]*/,
+});
+
 // Suffix included in the match, so `10u8`, `1.5f32`, `0xFFu64` color as
 // one number the way the lexer tokenizes them.
 const NUMBER = mode('number', {
@@ -123,6 +167,10 @@ export default function rutLanguage() {
       NUMBER,
       MEMBER_CALL,
       MEMBER_FIELD,
+      USE_SEGMENT,
+      USE_SEGMENT_TYPE,
+      USE_IMPORT_TYPE,
+      USE_IMPORT_FUNCTION,
     ],
   };
 }
