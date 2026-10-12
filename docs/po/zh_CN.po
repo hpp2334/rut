@@ -21372,7 +21372,7 @@ msgstr "rut 类型"
 msgid "direction"
 msgstr "方向"
 
-#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:65
+#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:88
 msgid "cost"
 msgstr "开销"
 
@@ -25013,21 +25013,28 @@ msgstr "诊断"
 
 #: src/reference/frontend.md:235
 msgid ""
-"One renderer serves every frontend stage: a primary line with a caret span, "
-"secondary labels, and notes, all over byte offsets "
-"(`rut_lexer::diag::render_diags`). Rendering sorts by span so multi-file "
-"output is stable. Suggestions are part of the message set: _did you mean "
-"`when`?_ for `switch`/`match`; _bind it to a name first_ for string literals "
-"in format-string holes; _classes have no instance literal — use "
-"`Circle(..)`_ for `Circle { .. }` on a class."
+"One renderer serves every frontend stage: a primary `error:` line, the rustc-"
+"style `--> file:line:col` arrow (1-based line and char column; the label is "
+"the module name — a pkg spec, a `spec/path` child, a real path from `rut "
+"fmt`), the caret line under the span, secondary labels, and notes, all over "
+"byte offsets (`rut_lexer::diag::render_diags`). Rendering sorts by (file, "
+"span start) and groups by file, so multi-file output is stable; a diag with "
+"no file of its own spells the fallback `--> line L, column C`. Suggestions "
+"are part of the message set: _did you mean `when`?_ for `switch`/`match`; "
+"_bind it to a name first_ for string literals in format-string holes; "
+"_classes have no instance literal — use `Circle(..)`_ for `Circle { .. }` on "
+"a class."
 msgstr ""
-"一个渲染器服务所有前端阶段：带插入符 span 的主行、次级标签和附注，全部基于字"
-"节偏移（`rut_lexer::diag::render_diags`）。渲染按 span 排序，因此多文件输出是"
-"稳定的。建议是消息集的一部分：对 `switch`/`match` 提示 _did you mean `when`?"
-"_；对格式化字符串洞里的字符串字面量提示 _先把它绑定到一个名字_；对类上的 "
-"`Circle { .. }` 提示 _类没有实例字面量——请用 `Circle(..)`_。"
+"一个渲染器服务所有前端阶段：主 `error:` 行、rustc 风格的 `--> file:line:col` "
+"箭头（行号与字符列均从 1 起计；标签是模块名——pkg 的 spec、`spec/path` 子模"
+"块，或 `rut fmt` 的真实路径）、span 之下的插入符行、次级标签和附注，全部基于"
+"字节偏移（`rut_lexer::diag::render_diags`）。渲染按（文件，span 起点）排序并"
+"按文件分组，因此多文件输出是稳定的；自身没有文件的诊断退回到 `--> line L, "
+"column C` 形式。建议是消息集的一部分：对 `switch`/`match` 提示 _did you mean "
+"`when`?_；对格式化字符串洞里的字符串字面量提示 _先把它绑定到一个名字_；对类上"
+"的 `Circle { .. }` 提示 _类没有实例字面量——请用 `Circle(..)`_。"
 
-#: src/reference/frontend.md:243
+#: src/reference/frontend.md:247
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
@@ -25036,18 +25043,18 @@ msgstr ""
 "只要存在任何诊断，编译就在 IR 之前停止——带诊断的模块绝不产出字节码。运行时的"
 "那一半故事见[诊断、追踪与符号化](diagnostics.md)。"
 
-#: src/reference/frontend.md:248
+#: src/reference/frontend.md:252
 msgid "The formatter"
 msgstr "格式化器"
 
-#: src/reference/frontend.md:250
+#: src/reference/frontend.md:254
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 "`rut fmt`（crate `rut-fmt`，CLI 子命令）从 AST 重排一个解析干净的模块："
 
-#: src/reference/frontend.md:253
+#: src/reference/frontend.md:257
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero lexer/"
@@ -25058,7 +25065,7 @@ msgstr ""
 "法/语法分析器的前提下找回每一条 `//` 与块注释：尾随的注释归到所属元素那一行，"
 "独占一行的注释按外围缩进放置。"
 
-#: src/reference/frontend.md:257
+#: src/reference/frontend.md:261
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat "
 "precedence would invert the tree, re-spells floats shortest round-trip from "
@@ -25069,7 +25076,7 @@ msgstr ""
 "特重新以最短往返形式书写浮点数，并按词法分析器转义集合的精确逆运算重新给字符"
 "串加引号（`0xff` 名正言顺地变成 `255`）。"
 
-#: src/reference/frontend.md:261
+#: src/reference/frontend.md:265
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
@@ -25079,7 +25086,7 @@ msgstr ""
 "（`fmt(fmt(x)) == fmt(x)`）；探针程序在格式化前后各跑一遍完整流水线，并记录到"
 "相同的输出。"
 
-#: src/reference/frontend.md:264
+#: src/reference/frontend.md:268
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
@@ -25087,7 +25094,7 @@ msgstr ""
 "**拒绝法则**——带诊断的源码会被拒绝：渲染诊断、以 1 退出、不重写任何东西。格式"
 "化器从不猜测。"
 
-#: src/reference/frontend.md:266
+#: src/reference/frontend.md:270
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -25095,11 +25102,11 @@ msgid ""
 "(project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:271
+#: src/reference/frontend.md:275
 msgid "Testing"
 msgstr "测试"
 
-#: src/reference/frontend.md:273
+#: src/reference/frontend.md:277
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, `examples/**/"
 "*.d.rut`, and playground classic must parse with zero diagnostics. Parser "
@@ -27866,18 +27873,49 @@ msgstr "一个模型服务所有前端与检查阶段（[前端](frontend.md)）
 
 #: src/reference/diagnostics.md:18
 msgid ""
-"Byte-offset spans; one renderer (`render_diags`) produces the caret form — a "
-"primary line, secondary labels, notes — sorted by span so output is stable "
-"across files and phases. The parser recovers at statement boundaries and "
-"keeps going, so a file yields many diagnostics, not one. Compilation stops "
-"before IR if any diagnostic exists; there is no warnings-only lane."
+"Byte-offset spans; `file` is the module the span indexes, as the producer's "
+"module name — a pkg spec (`hello`), a mounted child under it (`hello/"
+"layout`), or a formatter's real path — never a filesystem path, since loaded "
+"pkgs deliberately carry none. `None` means there is no position to show (a "
+"graph-level structural refusal) or the producer did not label."
 msgstr ""
-"字节偏移 span；一个渲染器（`render_diags`）产出插入符形态——主行、次级标签、附"
-"注——按 span 排序，因此输出跨文件、跨阶段保持稳定。语法分析器在语句边界恢复并"
-"继续前进，因此一个文件产出许多条诊断，而不是一条。只要存在任何诊断，编译就在 "
-"IR 之前停止；没有只警告的通道。"
+"字节偏移 span；`file` 是该 span 所索引的模块，取生产者的模块名——pkg 的 spec"
+"（`hello`）、其下挂载的子模块（`hello/layout`），或格式化器的真实路径——绝不"
+"是文件系统路径，因为已加载的包有意不携带路径。`None` 表示没有位置可显示（图"
+"级的结构性拒绝），或生产者未加标注。"
 
 #: src/reference/diagnostics.md:25
+msgid ""
+"One renderer (`render_diags`) produces the caret form: a primary `error:` "
+"line, the `-->` arrow with the file and the 1-based line and char column, "
+"the offending source line with carets under the span, secondary labels, "
+"notes. With a file and its source text:"
+msgstr ""
+"一个渲染器（`render_diags`）产出插入符形态：主 `error:` 行、带文件与从 1 起"
+"计行号和字符列的 `-->` 箭头、span 之下带插入符的出错源码行、次级标签、附注。"
+"有文件及其源码文本时："
+
+#: src/reference/diagnostics.md:37
+msgid ""
+"The fallbacks degrade honestly: a diag with no file spells the position "
+"alone (`--> line L, column C`), a file whose text is not loaded renders the "
+"bare arrow (`--> hello`), and a diag with neither is just the `error:` line. "
+"`rut run` renders the whole graph grouped by file — diags sort by (file, "
+"span start), the root labeled with its spec, each child with `spec/path`, "
+"each dep with its own spec — so output is stable across files and phases. "
+"The parser recovers at statement boundaries and keeps going, so a file "
+"yields many diagnostics, not one. Compilation stops before IR if any "
+"diagnostic exists; there is no warnings-only lane."
+msgstr ""
+"各种回退都诚实地降级：没有文件的诊断只标出位置（`--> line L, column C`），文"
+"本未加载的文件只渲染光秃秃的箭头（`--> hello`），两者皆无的诊断就只有 "
+"`error:` 一行。`rut run` 按文件分组渲染整张图——诊断按（文件，span 起点）排"
+"序，根以自己的 spec 标注，每个子模块用 `spec/path`，每个依赖用自己的 "
+"spec——因此输出跨文件、跨阶段保持稳定。语法分析器在语句边界恢复并继续前进，"
+"因此一个文件产出许多条诊断，而不是一条。只要存在任何诊断，编译就在 IR 之前停"
+"止；没有只警告的通道。"
+
+#: src/reference/diagnostics.md:48
 msgid ""
 "A compile trap worth knowing: name-level misses that involve [Dependency "
 "kinds](dependency-kinds.md) peers have dedicated diagnostics (a missing "
@@ -27887,15 +27925,15 @@ msgstr ""
 "中有专门的诊断（缺失的可选 peer 的集成绝不是一条光秃秃的 _unresolved "
 "name_）。"
 
-#: src/reference/diagnostics.md:30
+#: src/reference/diagnostics.md:53
 msgid "Runtime traces"
 msgstr "运行时追踪"
 
-#: src/reference/diagnostics.md:32
+#: src/reference/diagnostics.md:55
 msgid "Capture — raw pcs, nothing else"
 msgstr "捕获——只有原始 pc，别无其他"
 
-#: src/reference/diagnostics.md:34
+#: src/reference/diagnostics.md:57
 msgid ""
 "`capture_stacktrace() -> StackTrace` (a builtin: the engine itself "
 "implements it, compiler-lowered) walks the frame stack and stores raw frames:"
@@ -27903,7 +27941,7 @@ msgstr ""
 "`capture_stacktrace() -> StackTrace`（一个内建：引擎自己实现它，编译器下降）"
 "遍历帧栈并存储原始帧："
 
-#: src/reference/diagnostics.md:38
+#: src/reference/diagnostics.md:61
 msgid ""
 "the active frame innermost, then every saved frame outward, as `(func, call-"
 "site pc)` pairs — about 8 bytes per frame;"
@@ -27911,7 +27949,7 @@ msgstr ""
 "最内是活跃帧，然后向外是每个保存的帧，形如 `(func, call-site pc)` 对——每帧约 "
 "8 字节；"
 
-#: src/reference/diagnostics.md:40
+#: src/reference/diagnostics.md:63
 msgid ""
 "**no name lookup, no source access, no symbolication at capture** — capture "
 "is cheap enough for any error path;"
@@ -27919,17 +27957,17 @@ msgstr ""
 "**捕获时不查名字、不访问源码、不做符号化**——捕获足够便宜，任何错误路径都负担"
 "得起；"
 
-#: src/reference/diagnostics.md:42
+#: src/reference/diagnostics.md:65
 msgid ""
 "saved-frame pcs are resume points, so symbolication backs one op to the call "
 "site;"
 msgstr "保存帧的 pc 是恢复点，因此符号化会向回退一个操作到调用点；"
 
-#: src/reference/diagnostics.md:44
+#: src/reference/diagnostics.md:67
 msgid "target-independent by construction — the same walk runs on wasm."
 msgstr "从构造上与目标无关——同一遍历在 wasm 上同样运行。"
 
-#: src/reference/diagnostics.md:46
+#: src/reference/diagnostics.md:69
 msgid ""
 "The result lives in a dedicated immutable trace cell: a snapshot, shared by "
 "handle, safe to store in error tuples. It takes no user impls and **never "
@@ -27940,7 +27978,7 @@ msgstr ""
 "元组。它不需要任何用户 impl，而且**绝不跨越宿主边界**——追踪是 rut 侧的诊断对"
 "象（[宿主边界](../core-concepts/host-boundary.md)）。"
 
-#: src/reference/diagnostics.md:51
+#: src/reference/diagnostics.md:74
 msgid ""
 "```rut\n"
 "builtin class StackTrace {\n"
@@ -27962,32 +28000,32 @@ msgstr ""
 "}\n"
 "```"
 
-#: src/reference/diagnostics.md:61
+#: src/reference/diagnostics.md:84
 msgid ""
 "Out-of-range `i` traps `IndexOutOfBounds` — the index is a bug, not data."
 msgstr "越界的 `i` 触发 `IndexOutOfBounds` 陷阱——索引是 bug，不是数据。"
 
-#: src/reference/diagnostics.md:63
+#: src/reference/diagnostics.md:86
 msgid "The tiers"
 msgstr "分层"
 
-#: src/reference/diagnostics.md:65
+#: src/reference/diagnostics.md:88
 msgid "tier"
 msgstr "层"
 
-#: src/reference/diagnostics.md:65
+#: src/reference/diagnostics.md:88
 msgid "when it exists"
 msgstr "何时存在"
 
-#: src/reference/diagnostics.md:67
+#: src/reference/diagnostics.md:90
 msgid "`StackTrace` capture"
 msgstr "`StackTrace` 捕获"
 
-#: src/reference/diagnostics.md:67
+#: src/reference/diagnostics.md:90
 msgid "explicit; a depth-proportional frame walk (~30 ns base + ~0.2 ns/frame)"
 msgstr "显式；与深度成比例的帧遍历（约 30 ns 底价 + 每帧约 0.2 ns）"
 
-#: src/reference/diagnostics.md:67
+#: src/reference/diagnostics.md:90
 msgid ""
 "opt-in at raise sites — a rich err carries `trace: ?StackTrace` only where "
 "the producer decides the cost is worth it"
@@ -27995,49 +28033,49 @@ msgstr ""
 "在抛出点选择加入——只有当生产者判定代价值得时，富 err 才携带 `trace: ?"
 "StackTrace`"
 
-#: src/reference/diagnostics.md:68
+#: src/reference/diagnostics.md:91
 msgid "`Trap`"
 msgstr "`Trap`"
 
-#: src/reference/diagnostics.md:68
+#: src/reference/diagnostics.md:91
 msgid "automatic at trap unwind"
 msgstr "陷阱展开时自动"
 
-#: src/reference/diagnostics.md:68
+#: src/reference/diagnostics.md:91
 msgid "bugs, overflow, `panic` — the loud channel carries `kind` + message"
 msgstr "bug、溢出、`panic`——响亮通道携带 `kind` + 消息"
 
-#: src/reference/diagnostics.md:69
+#: src/reference/diagnostics.md:92
 msgid "`?` / err propagation"
 msgstr "`?` / err 传播"
 
-#: src/reference/diagnostics.md:69
+#: src/reference/diagnostics.md:92
 msgid "zero cost — no auto-capture on propagation"
 msgstr "零开销——传播时不自动捕获"
 
-#: src/reference/diagnostics.md:69
+#: src/reference/diagnostics.md:92
 msgid "always"
 msgstr "始终"
 
-#: src/reference/diagnostics.md:71
+#: src/reference/diagnostics.md:94
 msgid ""
 "Opt-in is the design: the cheap error path stays cheap, and capture is pay-"
 "per-capture."
 msgstr "选择加入就是设计：便宜的错误路径保持便宜，捕获按次付费。"
 
-#: src/reference/diagnostics.md:74
+#: src/reference/diagnostics.md:97
 msgid "Symbolication — lazy, per index"
 msgstr "符号化——惰性，按索引"
 
-#: src/reference/diagnostics.md:76
+#: src/reference/diagnostics.md:99
 msgid "Members symbolicate **on access**, against the loaded program:"
 msgstr "成员**在访问时**对照已加载的程序符号化："
 
-#: src/reference/diagnostics.md:78
+#: src/reference/diagnostics.md:101
 msgid "`name(i)` — one interner lookup for frame _i_'s function name."
 msgstr "`name(i)`——一次驻留器查找，取帧 _i_ 的函数名。"
 
-#: src/reference/diagnostics.md:79
+#: src/reference/diagnostics.md:102
 msgid ""
 "`line(i)` / `col(i)` — one direct read of the function's position table (pc "
 "→ `(line, col)`, parallel to the pc → byte-offset span table; [Module binary "
@@ -28046,11 +28084,11 @@ msgstr ""
 "`line(i)` / `col(i)`——对函数位置表的一次直接读取（pc → `(line, col)`，与 pc "
 "→ 字节偏移的 span 表平行；[模块二进制与校验](module-binary.md)）。"
 
-#: src/reference/diagnostics.md:82
+#: src/reference/diagnostics.md:105
 msgid "`render()` — the only whole-trace pass, innermost first:"
 msgstr "`render()`——唯一的一次整条追踪的遍历，最内帧在前："
 
-#: src/reference/diagnostics.md:89
+#: src/reference/diagnostics.md:112
 msgid ""
 "There is no eager symbolication and no frames array — a frame array would "
 "mint rut-side data per access and fix the representation into the surface."
@@ -28058,11 +28096,11 @@ msgstr ""
 "没有急切的符号化，也没有帧数组——帧数组会在每次访问时铸造 rut 侧数据，并把表示"
 "钉死在表面里。"
 
-#: src/reference/diagnostics.md:93
+#: src/reference/diagnostics.md:116
 msgid "Restoration paths"
 msgstr "还原路径"
 
-#: src/reference/diagnostics.md:95
+#: src/reference/diagnostics.md:118
 msgid ""
 "A trace is captured against whatever is loaded — possibly a stripped, "
 "published artifact. Four ways back to names:"
@@ -28070,7 +28108,7 @@ msgstr ""
 "追踪是针对当时加载的东西捕获的——可能是一个已剥离、已发布的产物。回到名字有四"
 "条路："
 
-#: src/reference/diagnostics.md:98
+#: src/reference/diagnostics.md:121
 msgid ""
 "**In-VM (the default).** The loaded program carries its interner and "
 "position tables; every member call symbolicates from them."
@@ -28078,7 +28116,7 @@ msgstr ""
 "**VM 内（默认）。**已加载的程序携带自己的驻留器与位置表；每次成员调用都从它们"
 "符号化。"
 
-#: src/reference/diagnostics.md:100
+#: src/reference/diagnostics.md:123
 msgid ""
 "**Recompile by determinism.** Serialization is deterministic — same source + "
 "same compiler version ⇒ byte-identical binary ⇒ identical pcs — so tooling "
@@ -28089,7 +28127,7 @@ msgstr ""
 "的二进制 ⇒ 相同的 pc——因此工具可以对照本地重建的二进制为捕获的追踪符号化（[编"
 "译器流水线](compiler.md)）。"
 
-#: src/reference/diagnostics.md:104
+#: src/reference/diagnostics.md:127
 msgid ""
 "**Stripped, no artifact.** Traces still _work_: they degrade to the pc-only "
 "render form above, and stay restorable via path 2 later."
@@ -28097,7 +28135,7 @@ msgstr ""
 "**已剥离、无产物。**追踪仍然_可用_：它们退化为上文仅 pc 的渲染形态，并且日后"
 "仍可经路径 2 还原。"
 
-#: src/reference/diagnostics.md:106
+#: src/reference/diagnostics.md:129
 msgid ""
 "**The stripped artifact's private symbol table.** Name resolution and "
 "position lookup follow the loaded program — so supplying a `.rutsym` sidecar "
@@ -28107,11 +28145,11 @@ msgid ""
 "stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/diagnostics.md:114
+#: src/reference/diagnostics.md:137
 msgid "Trap messages"
 msgstr "陷阱消息"
 
-#: src/reference/diagnostics.md:116
+#: src/reference/diagnostics.md:139
 msgid ""
 "A trap renders as its kind plus message, e.g. `IndexOutOfBounds: index 9, "
 "len 3`, `OutOfFuel: fuel exhausted — the frame is parked; add fuel and "
@@ -28126,17 +28164,17 @@ msgstr ""
 "消息，以及（经由 `vm.fuel_used`、`heap_usage()`）预算上下文（[VM 核心](vm-"
 "core.md)）。"
 
-#: src/reference/diagnostics.md:123
+#: src/reference/diagnostics.md:146
 msgid "Where the surfaces live"
 msgstr "表面住在哪里"
 
-#: src/reference/diagnostics.md:125
+#: src/reference/diagnostics.md:148
 msgid ""
 "`panic(msg)` — the core builtin that raises; the `[disposal]` marker is the "
 "cleanup surface ([The Rc heap and destructors](rc-heap.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:128
+#: src/reference/diagnostics.md:151
 msgid ""
 "`capture_stacktrace()` and the `StackTrace` class — ambient builtin names, "
 "no `use` required ([core and the swappable packages](stdlib.md))."
@@ -28144,7 +28182,7 @@ msgstr ""
 "`capture_stacktrace()` 与 `StackTrace` 类——环境自带的内建名字，无需 `use`"
 "（[core 与可换包](stdlib.md)）。"
 
-#: src/reference/diagnostics.md:131
+#: src/reference/diagnostics.md:154
 msgid ""
 "The web runner surfaces the same data in its envelope: `\"trap\"` beside "
 "`\"err\"` ([Loading and the embed loop](loading.md))."
@@ -30295,10 +30333,13 @@ msgid ""
 "subcommand prints the help to stderr and exits 2; a parse error — an unknown "
 "flag, a dangling flag value, an unparsable `--fuel` — is the same exit 2 "
 "with clap's message. The usage sketch above stays the quick map."
-msgstr "参数面由 clap 提供：`rut --help` 打印各命令，`rut <command> --help` 打印各标志。`run` 与"
-"`install` 的 `<dir>` 可省略 —— 省略时两者都作用于工作目录（`.`）：在模块目录内，`rut run` 运行它，`rut"
-"install` 把它的依赖固定进 `rut.lock`。不带子命令运行 `rut` 会把帮助打印到 stderr 并以退出码 2 结束；解析错误"
-"—— 未知标志、悬空的标志值、无法解析的 `--fuel` —— 同样以退出码 2 结束，并附带 clap 的消息。上面的用法速览仍是快速索引。"
+msgstr ""
+"参数面由 clap 提供：`rut --help` 打印各命令，`rut <command> --help` 打印各标"
+"志。`run` 与`install` 的 `<dir>` 可省略 —— 省略时两者都作用于工作目录"
+"（`.`）：在模块目录内，`rut run` 运行它，`rutinstall` 把它的依赖固定进 "
+"`rut.lock`。不带子命令运行 `rut` 会把帮助打印到 stderr 并以退出码 2 结束；解"
+"析错误—— 未知标志、悬空的标志值、无法解析的 `--fuel` —— 同样以退出码 2 结束，"
+"并附带 clap 的消息。上面的用法速览仍是快速索引。"
 
 #: src/reference/cli.md:37 src/reference/cli.md:320
 msgid "`run`"
@@ -31135,6 +31176,34 @@ msgid ""
 msgstr ""
 "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——"
 "两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
+
+#~ msgid ""
+#~ "One renderer serves every frontend stage: a primary line with a caret "
+#~ "span, secondary labels, and notes, all over byte offsets "
+#~ "(`rut_lexer::diag::render_diags`). Rendering sorts by span so multi-file "
+#~ "output is stable. Suggestions are part of the message set: _did you mean "
+#~ "`when`?_ for `switch`/`match`; _bind it to a name first_ for string "
+#~ "literals in format-string holes; _classes have no instance literal — use "
+#~ "`Circle(..)`_ for `Circle { .. }` on a class."
+#~ msgstr ""
+#~ "一个渲染器服务所有前端阶段：带插入符 span 的主行、次级标签和附注，全部基于"
+#~ "字节偏移（`rut_lexer::diag::render_diags`）。渲染按 span 排序，因此多文件"
+#~ "输出是稳定的。建议是消息集的一部分：对 `switch`/`match` 提示 _did you "
+#~ "mean `when`?_；对格式化字符串洞里的字符串字面量提示 _先把它绑定到一个名字"
+#~ "_；对类上的 `Circle { .. }` 提示 _类没有实例字面量——请用 `Circle(..)`_。"
+
+#~ msgid ""
+#~ "Byte-offset spans; one renderer (`render_diags`) produces the caret form "
+#~ "— a primary line, secondary labels, notes — sorted by span so output is "
+#~ "stable across files and phases. The parser recovers at statement "
+#~ "boundaries and keeps going, so a file yields many diagnostics, not one. "
+#~ "Compilation stops before IR if any diagnostic exists; there is no "
+#~ "warnings-only lane."
+#~ msgstr ""
+#~ "字节偏移 span；一个渲染器（`render_diags`）产出插入符形态——主行、次级标"
+#~ "签、附注——按 span 排序，因此输出跨文件、跨阶段保持稳定。语法分析器在语句边"
+#~ "界恢复并继续前进，因此一个文件产出许多条诊断，而不是一条。只要存在任何诊"
+#~ "断，编译就在 IR 之前停止；没有只警告的通道。"
 
 #~ msgid ""
 #~ "The arg surface is clap: `rut --help` prints the commands, `rut <command> "

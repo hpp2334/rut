@@ -228,14 +228,18 @@ nodes either: the parse's grouping *is* the tree.
 ## Diagnostics
 
 ```rust
-struct Diag { span: Span, msg: String,
+struct Diag { span: Span, msg: String, file: Option<String>,
               labels: Vec<(Span, String)>, notes: Vec<String> }
 ```
 
-One renderer serves every frontend stage: a primary line with a caret
-span, secondary labels, and notes, all over byte offsets
-(`rut_lexer::diag::render_diags`). Rendering sorts by span so multi-file
-output is stable. Suggestions are part of the message set:
+One renderer serves every frontend stage: a primary `error:` line, the
+rustc-style `--> file:line:col` arrow (1-based line and char column; the
+label is the module name — a pkg spec, a `spec/path` child, a real path
+from `rut fmt`), the caret line under the span, secondary labels, and
+notes, all over byte offsets (`rut_lexer::diag::render_diags`).
+Rendering sorts by (file, span start) and groups by file, so multi-file
+output is stable; a diag with no file of its own spells the fallback
+`--> line L, column C`. Suggestions are part of the message set:
 *did you mean `when`?* for `switch`/`match`; *bind it to a name first* for
 string literals in format-string holes; *classes have no instance literal —
 use `Circle(..)`* for `Circle { .. }` on a class.
