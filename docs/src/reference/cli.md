@@ -16,9 +16,9 @@ checkout, or a plain `cargo build --release`
 ([installation](../quick-start/installation.md)).
 
 ```sh
-rut run <dir | mod.rutbundle> [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
+rut run [<dir | mod.rutbundle>] [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
 rut new <dir>
-rut install <dir> [--locked]
+rut install [<dir>] [--locked]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out.rutbundle] [--strip]
 rut fetch <dir>
@@ -26,7 +26,10 @@ rut dump <file.rut>
 ```
 
 The arg surface is clap: `rut --help` prints the commands, `rut
-<command> --help` the flags. Running `rut` with no subcommand prints
+<command> --help` the flags. `run` and `install` take their `<dir>`
+optionally — omitted, both act on the working directory (`.`): inside
+a module directory, `rut run` runs it and `rut install` pins it.
+Running `rut` with no subcommand prints
 the help to stderr and exits 2; a parse error — an unknown flag, a
 dangling flag value, an unparsable `--fuel` — is the same exit 2 with
 clap's message. The usage sketch above stays the quick map.
@@ -161,8 +164,9 @@ entry fn main() {
 ## `install`
 
 ```sh
-rut install app/             # resolve the url deps, write rut.lock
-rut install app/ --locked    # CI: verify against rut.lock, write nothing
+rut install                    # resolve the url deps of the working directory, write rut.lock
+rut install app/               # resolve the url deps, write rut.lock
+rut install app/ --locked      # CI: verify against rut.lock, write nothing
 ```
 
 Resolves the closure's url deps and **pins them in `rut.lock`** — the

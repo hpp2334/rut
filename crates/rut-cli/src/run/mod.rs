@@ -13,6 +13,8 @@ use crate::cache;
 #[derive(clap::Args)]
 pub(crate) struct RunArgs {
     /// the module directory (`rut.jsonc`) or packed `.rutbundle` to run
+    /// — omitted, the working directory (`.`)
+    #[arg(default_value = ".")]
     path: String,
     /// name the `entry fn` to run — with several, the CLI refuses to guess
     #[arg(long, value_name = "FN")]

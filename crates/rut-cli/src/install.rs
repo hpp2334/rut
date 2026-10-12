@@ -14,6 +14,8 @@ use crate::cache;
 #[derive(clap::Args)]
 pub(crate) struct InstallArgs {
     /// the module directory whose url deps to resolve and pin
+    /// — omitted, the working directory (`.`)
+    #[arg(default_value = ".")]
     dir: String,
     /// verify the closure against the existing rut.lock — any drift
     /// refuses (exit 2) and nothing is written

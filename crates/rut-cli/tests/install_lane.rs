@@ -119,6 +119,23 @@ fn rut(cache: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+/// The same binary lane, spawned IN a working directory — `rut
+/// install` with no `<dir>` acts on the cwd.
+fn rut_in(cache: &Path, cwd: &Path, args: &[&str]) -> (i32, String, String) {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rut"))
+        .env("RUT_CACHE_DIR", cache)
+        .env_remove("XDG_CACHE_HOME")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .expect("run the rut binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
 /// Pack one leaf pkg (`name`, `body`) into bundle bytes — the served
 /// payload.
 fn leaf_bundle(tag: &str, name: &str, body: &str) -> Vec<u8> {
@@ -197,6 +214,33 @@ fn install_writes_a_deterministic_lock() {
 }
 
 // -- 2 ----------------------------------------------------------------
+
+/// `rut install` with no `<dir>`: the working directory is the walk
+/// root — same lane, same lock, `.` is the only spelling difference.
+#[test]
+fn install_defaults_to_the_working_directory() {
+    let bytes = leaf_bundle("cwd leaf", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let root = consumer_world("cwd consumer", &one_dep(&url));
+    let app = root.join("app");
+    let cache = root.join("cache");
+
+    let (code, out, err) = rut_in(&cache, &app, &["install"]);
+    assert_eq!(code, 0, "dirless install must succeed: {err}");
+    assert!(app.join("rut.lock").is_file(), "the lock lands in the cwd");
+    assert!(
+        out.contains("rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)"),
+        "{out}"
+    );
+
+    // --locked rides the same default
+    let (code, out, err) = rut_in(&cache, &app, &["install", "--locked"]);
+    assert_eq!(code, 0, "dirless --locked must verify: {err}");
+    assert!(out.contains("verified against rut.lock"), "{out}");
+}
 
 #[test]
 fn locked_passes_when_fresh() {

@@ -81,6 +81,38 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
 }
 
 #[test]
+fn run_defaults_to_the_working_directory() {
+    let root = hello_world("default-dir");
+    let dir = root.join("hello");
+
+    let out = Command::new(rut())
+        .current_dir(&dir)
+        .args(["run"])
+        .output()
+        .expect("run rut run (no dir)");
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn run_in_a_dir_without_a_manifest_refuses_naming_the_cwd_lock() {
+    let root = scratch("default-bare");
+    let out = Command::new(rut())
+        .current_dir(&root)
+        .args(["run"])
+        .output()
+        .expect("run rut run (bare cwd)");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("./rut.jsonc"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_loose_file_is_not_a_runnable_unit() {
     let root = scratch("loose");
     write(&root, "main.rut", "entry fn main() -> nil { return; }\n");
