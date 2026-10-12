@@ -463,8 +463,9 @@ impl<'a> GraphCompiler<'a> {
         // phase 3: the use statements' mod paths validate against the
         // DEPS' mounted trees (uses are the cross-package door — each
         // segment must be a `pub mod` of the dep, the leaf names a
-        // `pub` decl of the walked module). Flat uses skip the walk.
-        if !self.validate_qualified_uses(spec, &ast, &layout.files) {
+        // `pub` decl of the walked module). Flat uses validate their
+        // leaf list against the dep's root module at the same door.
+        if !self.validate_qualified_uses(spec, &ast, &layout) {
             return None;
         }
         let uses = uses_of(&ast);
@@ -973,14 +974,21 @@ fn attribute_diags(
 }
 
 impl GraphCompiler<'_> {
-    /// The use statements' qualified paths validate against the DEPS'
-    /// mounted trees (phase 3): `use dep::a::b::{C}` walks `a::b` —
-    /// each segment must be a `pub mod` of the dep (a plain `mod` is
-    /// invisible from outside the package), and each leaf name must be
-    /// a `pub` decl of the walked module. Flat use (`use dep::{A,B}`)
-    /// is today's shape and skips the walk. `false` = diagnosed, the
-    /// unit fails.
-    fn validate_qualified_uses(&mut self, spec: &str, ast: &Ast, files: &[(u32, String)]) -> bool {
+    /// The use statements validate against the DEPS' mounted trees
+    /// (phase 3): `use dep::a::b::{C}` walks `a::b` — each segment must
+    /// be a `pub mod` of the dep (a plain `mod` is invisible from
+    /// outside the package), and each leaf name must be a `pub` decl of
+    /// the walked module. Flat uses (`use dep::{A,B}` / `use dep::A;`)
+    /// validate each leaf against the dep's ROOT module — the surface
+    /// the flat binding walks — at the use line: a typo'd import is
+    /// rejected where it is written, not at a call site that may never
+    /// be written. `false` = diagnosed, the unit fails.
+    fn validate_qualified_uses(
+        &mut self,
+        spec: &str,
+        ast: &Ast,
+        layout: &rut_lir::check::ModInputs,
+    ) -> bool {
         let mut ok = true;
         let session = self.session;
         for it in ast.module_items(ast.root).to_vec() {
@@ -988,7 +996,69 @@ impl GraphCompiler<'_> {
                 continue;
             };
             if path.len() < 2 {
-                continue; // the flat spelling — today's shape
+                // the flat spelling — each leaf must be a decl of the
+                // dep's root module (or the dep's namespace head). The
+                // gate names only what the dep never declared, plus the
+                // mod names no surface carries: visibility stays the
+                // binding's business exactly as today — a private row
+                // keeps importing, and what the surface never exported
+                // keeps failing at its use site. A compiled dep's decls
+                // ride its binary (the binding gate answers), and an
+                // undeclared head keeps its D5 shape at the binding.
+                if let Err(e) = session.resolve_use(spec, ast.name(path[0]), &self.root) {
+                    self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+                    ok = false;
+                    continue;
+                }
+                let dep_name = ast.name(path[0]).to_string();
+                if !self.dep_rows_readable(&dep_name) {
+                    continue;
+                }
+                // the namespace head (`use calc::{Math}`) binds like a
+                // leaf — the manifest rides it, never a decl row
+                let ns = session
+                    .resolve(&dep_name)
+                    .ok()
+                    .and_then(|m| m.namespace.clone());
+                let span = ast.span(it.id());
+                let bad: Vec<Diag> = {
+                    let Some(table) = self.dep_mod_table(&dep_name) else { continue };
+                    // no root rows to read (a hand-built host surface
+                    // like `core` collects no root unit) — nothing
+                    // validates here
+                    let Some(rows) = table.get("") else { continue };
+                    names
+                        .iter()
+                        .filter_map(|&n| {
+                            let text = ast.name(n);
+                            if Some(text) == ns.as_deref() {
+                                return None;
+                            }
+                            match rows.iter().find(|d| d.name == text) {
+                                None => Some(Diag::new(
+                                    span,
+                                    format!("`{dep_name}` has no `{text}` — unknown import"),
+                                )),
+                                Some(d) if d.kind == crate::mods::DeclKind::Mod => Some(Diag::new(
+                                    span,
+                                    format!(
+                                        "`{text}` is a module of `{dep_name}` — a module is not \
+                                         imported; walk it: `use {dep_name}::{text}::{{ .. }}`"
+                                    ),
+                                )),
+                                Some(_) => None,
+                            }
+                        })
+                        .collect()
+                };
+                if !bad.is_empty() {
+                    // the use statement's span indexes the combined text
+                    // — attribute it like every compile diag (the
+                    // renderer spells `--> file:line:col` off it)
+                    self.diags.extend(attribute_diags(bad, spec, layout));
+                    ok = false;
+                }
+                continue;
             }
             let dep_name = ast.name(path[0]).to_string();
             // the nameability gate first: the head must be DECLARED,
@@ -1110,7 +1180,11 @@ impl GraphCompiler<'_> {
     /// consumers share it). A `PkgBody::Host` dep collects from its
     /// root surface + mounted tree (the body carries `root_surface`,
     /// the pkg carries `mods`), so a qualified-use leaf naming a host
-    /// row validates against the path-carrying rows.
+    /// row validates against the path-carrying rows. The PEER GROUPS'
+    /// decls join the root module's rows: a group splices into the
+    /// root at compile time (the `""` sentinel file), so its `pub`
+    /// decls are the unit's exports too — the leaf gates read the
+    /// surface the unit actually compiles, group text included.
     fn dep_mod_table(
         &mut self,
         spec: &str,
@@ -1118,8 +1192,17 @@ impl GraphCompiler<'_> {
         if !self.dep_decls.contains_key(spec) {
             let pkg = self.session.resolve(spec).ok()?;
             let (set, _) = crate::mods::collect_module_set(spec, pkg);
-            let table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
+            let mut table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
                 set.units.into_iter().map(|u| (u.path, u.decls)).collect();
+            if !pkg.peer_groups.is_empty() {
+                let root = table.entry(String::new()).or_default();
+                for group in &pkg.peer_groups {
+                    let (ast, d) = rut_parser::parse(group, Mode::Impl);
+                    if d.is_empty() {
+                        root.extend(crate::mods::decl_rows(&ast));
+                    }
+                }
+            }
             self.dep_decls.insert(spec.to_string(), table);
         }
         self.dep_decls.get(spec)

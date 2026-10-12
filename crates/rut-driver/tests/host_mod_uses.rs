@@ -98,14 +98,17 @@ fn a_flat_root_row_binds_unchanged() {
 #[test]
 fn a_flat_use_never_reaches_into_the_tree() {
     // the mod row's surface spelling is `net::connect` — a FLAT use of
-    // the bare leaf must not bind it (the qualified law's other half)
+    // the bare leaf must not bind it (the qualified law's other half).
+    // It never binds, and the use-line leaf gate now says so where the
+    // import is written: myhost's ROOT module has no `connect` (the
+    // row lives in `net`, the flat spelling walks no tree)
     let out = compile(
         myhost(),
         "use myhost::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("unknown function `connect`")),
-        "the flat spelling of a mod row must not bind: {:?}",
+        out.diags.iter().any(|d| d.msg.contains("`myhost` has no `connect` — unknown import")),
+        "the flat spelling of a mod row is rejected at the use line: {:?}",
         out.diags
     );
 }

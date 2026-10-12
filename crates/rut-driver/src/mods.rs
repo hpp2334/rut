@@ -376,8 +376,11 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
     (set, problems)
 }
 
-/// The declaration rows off one parsed file.
-fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
+/// The declaration rows off one parsed file. `pub(crate)`: the graph
+/// compiler's dep tables re-run it over peer-group texts — a group
+/// splices into the declarer's root module, so its rows are the unit's
+/// exports too.
+pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
     let mut out = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         let (name, vis, kind) = match ast.item(it) {
