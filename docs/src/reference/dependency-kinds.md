@@ -1,8 +1,8 @@
 # Dependency kinds
 
 Every package's `rut.jsonc` names the packages it relates to, and the
-*kind* of each relation decides how — and whether — it mounts. Three
-tables, one grammar:
+*kind* of each relation decides how — and whether — it mounts, and
+whether the declarer may name it. Three tables, one grammar:
 
 - **`deps`** — the transitively mounted dependencies.
 - **`peer-deps`** — **required by default**: not transitively pulled;
@@ -177,6 +177,10 @@ generics **also rides the source that serves consumer-spelled shapes**:
 | `peer-deps` with `optional = true` | the consumer's closure, if anywhere | never pulled | inert; referencing the integration is the dedicated missing-peer diagnostic |
 | `dev-deps` | the pkg's own self-build | root only — never walked for a dep | n/a (they exist to be there) |
 
+The tables decide mounting; what a mounted head lets its consumer
+*name* is the declaration-scoped law of
+[Nameability](#nameability) below.
+
 ## The mount law — four passes, one gate
 
 All loader-owned; the session stays I/O-free and the compile graph never
@@ -216,6 +220,67 @@ learns what a peer is.
    its origin-deduplicated leaf list (first position wins, topological
    order preserved); in the no-collision case the composed text is
    byte-identical to the pre-peer law.
+
+## Nameability
+
+The passes above decide what **mounts**; a separate, declaration-scoped
+law decides what a source may **name**. Mounting stays transitive —
+A's `deps` still pull B into the closure, and A still compiles against
+B's mounted rows — but nameability belongs to the consumer's own
+manifest: a package may `use` exactly the heads it declares itself,
+
+```text
+deps ∪ peer-deps ∪ (dev-deps, only when the package is the program root) ∪ core
+```
+
+— and there is no ambient tier. `core` rides unconditionally (the
+graph threads the prelude into every unit, and the resolver passes the
+`core` head without a row); every other head must be the consumer's
+own declaration. Over-declaring stays legal — the law bounds uses by
+declarations, never declarations by uses — so a row naming a head the
+source never spells is inert (D4 guards the bad *shape*, a name in two
+tables).
+
+The dedicated diagnostic is **D5**, and it fires only when a head is
+MOUNTED but UNDECLARED by the consumer — an unmounted head keeps its
+existing shape (`NoModule` for a name nothing offers, D2 for a missing
+optional peer). D5 names the mount edge — who pulled the head in — and
+the fix, in two renderings:
+
+- **The walked edge** (the consumer mounts through the dep walk, an
+  archive group, or a dev row — there is a first-mount `mounted_by`
+  edge to name): the puller and the jsonc row to add:
+
+  ```text
+  cannot resolve `b` — `b` is mounted in this program (pulled by `a`) but `app` does not declare it; add "b": { "path": ".." } to `app`'s `rut.jsonc` `deps`
+  ```
+
+- **The host edge** (a hand offer — no walk edge exists): the
+  "offered by the host" clause, and a fix that names the
+  manifest-builder doors, never a file:
+
+  ```text
+  cannot resolve `b` — `b` is mounted in this program (offered by the host) but `c` does not declare it; declare it in the pkg's manifest — `Manifest::lib("c", &["b"])` or a `"deps"` row through `parse_manifest(..)`
+  ```
+
+The closure check reads every mounted source's uses at every depth, so
+the law is per-package, not root-only: a dep naming a head it never
+declared is the same D5 with that dep as the consumer. dev-deps follow
+the same root-only law as their mount pass — the program root may name
+its dev-deps; a dep naming the root's dev-dep is D5.
+
+**This is a breaking law change.** Mounting was always transitive, and
+nameability used to ride along with it: a program could `use` any head
+the closure happened to contain. Previously-compiling programs that
+rode a transitive head now refuse with D5 and the fix row — add the
+head to the consumer's own manifest.
+
+Embedders and hand-mounted worlds are lawed by the same declaration
+table, carried structurally on the `Pkg` — `parse_manifest` for an
+embedded jsonc, `Manifest::lib(name, &[heads])` for an ad-hoc surface
+([embedding](embedding.md)). The wasm playground stamps the same
+shape, defaulting the program's declaration host-side to the offered
+lib names.
 
 **Groups are satisfaction-only.** A group file contains the peer
 integration's wrapper families — newtype class decls and their
@@ -257,6 +322,10 @@ never runtime traps):
   read the group file.
 - **D4** — the cross-table collision (both texts quoted above).
 
+The matrix's four are missing-*peer* shapes. The fifth diagnostic lives
+outside it: **D5** — a head mounted but undeclared by its consumer,
+both renderings quoted verbatim in [Nameability](#nameability).
+
 ## Interplay
 
 - **Placement and the gate — the gate precedes the compile.** The peer
@@ -283,8 +352,12 @@ never runtime traps):
   ([Module bundles](bundles.md)).
 - **The LSP completes group impls unconditionally.** Peer gating is a
   resolution-time concept the language server does not model; it embeds
-  the toolchain packages' sources and never parses manifests. Recorded
-  as accepted: the LSP is advisory; the compiler is the law.
+  the toolchain packages' sources and never parses manifests. The same
+  accepted divergence covers nameability: the server indexes every dep
+  it can reach (any depth, the root's dev-deps too) and completes heads
+  the compiler's D5 would refuse for an undeclaring consumer — it runs
+  no declaration-scoped filter and raises no D5. Recorded as accepted:
+  the LSP is advisory; the compiler is the law.
 
 ## Consuming a peer-gated package
 

@@ -101,6 +101,7 @@ source text by design; a partially translated book is a valid book.
 | poisoned entry | 被污染的缓存条目 | the eviction law → 驱逐法则 |
 | mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
 | rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
+| nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ `peer-deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

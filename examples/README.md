@@ -15,11 +15,17 @@ example:
 | [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`mod.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way since the riding law) |
 
 Every rut program here is a module dir with a `rut.jsonc` — the
-manifest is the deps carrier. `00`/`01`/`02` declare their third-party
-pkgs as URL rows pinned to the committed artifacts (`pouch`, plus
-`json` + `nmapset` for `02` — the generic owners, served since the
-generic-source riding law; `calc` takes no row anywhere: it is
-ambient, the embedder mounts std), and their embedders
+manifest is the deps carrier, and since the nameability law it is the
+declaration table too: a pkg may `use` exactly the heads its own
+manifest names (mounting stays transitive, but a head riding someone
+else's `deps` is mounted-not-nameable — the D5 diagnostic names the
+mount edge and the row to add; the old ambient tier is gone).
+`00`/`01`/`02` declare their third-party pkgs as URL rows pinned to
+the committed artifacts (`pouch`, plus `json` + `nmapset` for `02` —
+the generic owners, served since the generic-source riding law);
+`calc` is a declared path row into the toolchain tree wherever a
+program names it (`01`/`02` spell the row; `00` never uses `calc` and
+declares nothing for it), and their embedders
 (`src/main.rs`, `tests/session.rs`) mount through the manifest lane
 (`load_dir_session_with`, the committed artifacts seeding the fetcher
 — the seed IS the cache, the gates never touch the network) instead of

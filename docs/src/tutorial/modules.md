@@ -142,9 +142,14 @@ fn shout(msg: str) -> str {   // module-private: no `pub`, never importable
 }
 ```
 
-The app names its dependencies in `deps`, by url or path — each
-package pulls its own dependencies along (`ink` brings the host
-surface `ink_host`; you never spell it):
+The app names its dependencies in `deps`, by url or path. One table
+carries two laws: **mounting** is transitive — each package pulls its
+own dependencies along (`ink` brings the host surface `ink_host`; you
+never spell it) — while **nameability** is declaration-scoped: the app
+may `use` exactly the heads its own manifest names. `ink_host` mounts
+here, but only `ink` declared it, so only `ink`'s sources may name it;
+an app-level `use ink_host::` is refused, naming the fix (add the row
+to *your* `rut.jsonc` `deps`):
 
 ```jsonc
 // greet/app/rut.jsonc
@@ -192,7 +197,13 @@ dear rut, hello from a package
 ```
 
 Resolution walks `deps` recursively (a dep's own `deps` mount with
-it), with a cycle guard and first-mount-wins.
+it), with a cycle guard and first-mount-wins. The walk decides what is
+**mounted**; what a source may **name** is its own manifest's
+business: `deps` ∪ `peer-deps` ∪ `core` (plus `dev-deps` at the
+program root). A head that is mounted but undeclared — riding along on
+someone else's row — refuses with a dedicated diagnostic naming the
+mount edge and the row to add
+([dependency kinds](../reference/dependency-kinds.md)).
 
 ## One package, several files
 

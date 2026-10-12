@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:246
+#: src/reference/project-structure.md:250
 msgid "The playground"
 msgstr ""
 
@@ -326,7 +326,7 @@ msgstr ""
 msgid "Diagnostics, traces, and symbolication"
 msgstr ""
 
-#: src/SUMMARY.md:107 src/reference/embedding.md:260 src/reference/bundles.md:1
+#: src/SUMMARY.md:107 src/reference/embedding.md:296 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr ""
 
@@ -338,7 +338,7 @@ msgstr ""
 msgid "Project structure and rut.jsonc"
 msgstr ""
 
-#: src/SUMMARY.md:112 src/tutorial/modules.md:218
+#: src/SUMMARY.md:112 src/tutorial/modules.md:229
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr ""
@@ -1624,7 +1624,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
 #: src/tutorial/functions.md:242 src/tutorial/types.md:278
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:267 src/tutorial/async.md:180
+#: src/tutorial/modules.md:278 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr ""
@@ -3795,7 +3795,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:157
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:165
 msgid "Visibility"
 msgstr ""
 
@@ -3805,25 +3805,25 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:163
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:163
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:180 src/reference/host-futures.md:34
-#: src/reference/embedding.md:299 src/reference/embedding.md:317
-#: src/reference/embedding.md:347 src/reference/value-boundary.md:97
+#: src/reference/embedding.md:335 src/reference/embedding.md:353
+#: src/reference/embedding.md:383 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:297 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:165
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:173
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -3839,7 +3839,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:167
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:175
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -3952,12 +3952,17 @@ msgstr ""
 
 #: src/tutorial/modules.md:145
 msgid ""
-"The app names its dependencies in `deps`, by url or path — each package "
-"pulls its own dependencies along (`ink` brings the host surface `ink_host`; "
-"you never spell it):"
+"The app names its dependencies in `deps`, by url or path. One table carries "
+"two laws: **mounting** is transitive — each package pulls its own "
+"dependencies along (`ink` brings the host surface `ink_host`; you never "
+"spell it) — while **nameability** is declaration-scoped: the app may `use` "
+"exactly the heads its own manifest names. `ink_host` mounts here, but only "
+"`ink` declared it, so only `ink`'s sources may name it; an app-level `use "
+"ink_host::` is refused, naming the fix (add the row to _your_ `rut.jsonc` "
+"`deps`):"
 msgstr ""
 
-#: src/tutorial/modules.md:149
+#: src/tutorial/modules.md:154
 msgid ""
 "```jsonc\n"
 "// greet/app/rut.jsonc\n"
@@ -3976,7 +3981,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:164
+#: src/tutorial/modules.md:169
 msgid ""
 "```rut\n"
 "// greet/app/mod.rut\n"
@@ -3993,7 +3998,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:178
+#: src/tutorial/modules.md:183
 msgid ""
 "Run the app from its directory — `rut install` fetches the url deps and "
 "writes the app's `rut.lock` (the pin ledger every load verifies against; it "
@@ -4001,24 +4006,29 @@ msgid ""
 "run .`:"
 msgstr ""
 
-#: src/tutorial/modules.md:194
+#: src/tutorial/modules.md:199
 msgid ""
 "Resolution walks `deps` recursively (a dep's own `deps` mount with it), with "
-"a cycle guard and first-mount-wins."
+"a cycle guard and first-mount-wins. The walk decides what is **mounted**; "
+"what a source may **name** is its own manifest's business: `deps` ∪ "
+"`peer-deps` ∪ `core` (plus `dev-deps` at the program root). A head that is "
+"mounted but undeclared — riding along on someone else's row — refuses with a "
+"dedicated diagnostic naming the mount edge and the row to add ([dependency "
+"kinds](../reference/dependency-kinds.md))."
 msgstr ""
 
-#: src/tutorial/modules.md:197
+#: src/tutorial/modules.md:208
 msgid "One package, several files"
 msgstr ""
 
-#: src/tutorial/modules.md:199
+#: src/tutorial/modules.md:210
 msgid ""
 "A package's body can be split across files — **file modules**. The root "
 "module is `mod.rut` beside the manifest, and a `mod NAME;` declaration in it "
 "mounts the sibling `NAME/mod.rut` as a child module:"
 msgstr ""
 
-#: src/tutorial/modules.md:203
+#: src/tutorial/modules.md:214
 msgid ""
 "```text\n"
 "app/\n"
@@ -4030,7 +4040,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:212
+#: src/tutorial/modules.md:223
 msgid ""
 "Each file is its own module: cross-file references are qualified "
 "(`domain::Todo`, `world::boot(..)`), and visibility is per module — private "
@@ -4039,11 +4049,11 @@ msgid ""
 "app::world::{ World }`)."
 msgstr ""
 
-#: src/tutorial/modules.md:220
+#: src/tutorial/modules.md:231
 msgid "Beyond `deps`, a manifest can declare two other relations:"
 msgstr ""
 
-#: src/tutorial/modules.md:222
+#: src/tutorial/modules.md:233
 msgid ""
 "**`peer-deps`** — a package this one _integrates with_ but never pulls: the "
 "consumer supplies it, or (with `optional = true`) the integration mounts "
@@ -4052,13 +4062,13 @@ msgid ""
 "for programs that carry the container packages."
 msgstr ""
 
-#: src/tutorial/modules.md:228
+#: src/tutorial/modules.md:239
 msgid ""
 "**`dev-deps`** — mounted only when building/testing the package itself, "
 "never for a consumer."
 msgstr ""
 
-#: src/tutorial/modules.md:231
+#: src/tutorial/modules.md:242
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -4074,48 +4084,48 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:243
+#: src/tutorial/modules.md:254
 msgid "`entry fn` — the host-facing surface"
 msgstr ""
 
-#: src/tutorial/modules.md:245
+#: src/tutorial/modules.md:256
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function "
 "to the _embedding host_, with its signature checked against the boundary's "
 "crossing rules at compile time:"
 msgstr ""
 
-#: src/tutorial/modules.md:253
+#: src/tutorial/modules.md:264
 msgid ""
 "An embedded application drives these entries; `rut run` executes the "
 "program's entry designation — exactly one `entry fn` runs it, several take "
 "`--entry <name>`. See [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
 
-#: src/tutorial/modules.md:258
+#: src/tutorial/modules.md:269
 msgid "Tooling"
 msgstr ""
 
-#: src/tutorial/modules.md:261
+#: src/tutorial/modules.md:272
 msgid "# compile + run\n"
 msgstr ""
 
-#: src/tutorial/modules.md:262
+#: src/tutorial/modules.md:273
 msgid "# format in place\n"
 msgstr ""
 
-#: src/tutorial/modules.md:263
+#: src/tutorial/modules.md:274
 msgid "# a self-contained bundle\n"
 msgstr ""
 
-#: src/tutorial/modules.md:269
+#: src/tutorial/modules.md:280
 msgid ""
 "The `greet` project above is complete as shown — two directories, two "
 "manifests, two sources. Copy the trees into files and `rut run .` from "
 "`greet/app` to see:"
 msgstr ""
 
-#: src/tutorial/modules.md:277
+#: src/tutorial/modules.md:288
 msgid "Next: [async: futures and await](async.md)."
 msgstr ""
 
@@ -10515,6 +10525,17 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:84
 msgid ""
+"The head itself is **declaration-scoped**: a package may `use` exactly the "
+"heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps` when the "
+"package is the program root) ∪ `core`. Mounting stays transitive (a dep's "
+"own `deps` still join the program's closure), but a head that is mounted "
+"without being declared by _this_ package is the resolver's dedicated "
+"diagnostic, naming who pulled it in and the row to add ([dependency "
+"kinds](dependency-kinds.md))."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:92
+msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, "
 "`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
 "gated names resolve only through `use core::{ .. }`: the const `NAN`, the "
@@ -10527,11 +10548,11 @@ msgid ""
 "only through `use`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:98
+#: src/reference/modules-and-visibility.md:106
 msgid "Qualified positions"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:100
+#: src/reference/modules-and-visibility.md:108
 msgid ""
 "Inside one package, a declaration of another module is nameable where a path "
 "is legal — a type annotation, a call, a field read — by **qualified "
@@ -10545,48 +10566,48 @@ msgid ""
 "structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:112
+#: src/reference/modules-and-visibility.md:120
 msgid "form"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:112 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:120 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:112
+#: src/reference/modules-and-visibility.md:120
 msgid "door"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:114
+#: src/reference/modules-and-visibility.md:122
 msgid "use path"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:114
+#: src/reference/modules-and-visibility.md:122
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:114
+#: src/reference/modules-and-visibility.md:122
 msgid "`::` — cross-package, the import"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:115
+#: src/reference/modules-and-visibility.md:123
 msgid "qualified position"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:115
+#: src/reference/modules-and-visibility.md:123
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:115
+#: src/reference/modules-and-visibility.md:123
 msgid "`::` — intra-package, at the use site"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:117
+#: src/reference/modules-and-visibility.md:125
 msgid "Module-level `let`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:119
+#: src/reference/modules-and-visibility.md:127
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, "
 "builtin operators over load-time expressions, struct literals whose fields "
@@ -10595,18 +10616,18 @@ msgid ""
 "Calls to user functions are not load-time expressions."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:130
+#: src/reference/modules-and-visibility.md:138
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:134
+#: src/reference/modules-and-visibility.md:142
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:136
+#: src/reference/modules-and-visibility.md:144
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "`entry fn main` for a script, sync or async. `entry fn` publishes a function "
@@ -10615,18 +10636,18 @@ msgid ""
 "ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:143
+#: src/reference/modules-and-visibility.md:151
 msgid "Bindings: `let` vs `let mut`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:145
+#: src/reference/modules-and-visibility.md:153
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through "
 "`x`, and no `mut self` method calls on it. It is a **read-only view of the "
 "shared object**."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:148
+#: src/reference/modules-and-visibility.md:156
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object "
 "it holds**. Every non-primitive is a shared cell (see [By-reference and "
@@ -10635,59 +10656,59 @@ msgid ""
 "path must run through a `mut` binding."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:153
+#: src/reference/modules-and-visibility.md:161
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the "
 "caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn "
 "area(p: Point)` promises not to."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:159
+#: src/reference/modules-and-visibility.md:167
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:165
+#: src/reference/modules-and-visibility.md:173
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:166
+#: src/reference/modules-and-visibility.md:174
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:166
+#: src/reference/modules-and-visibility.md:174
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:167
+#: src/reference/modules-and-visibility.md:175
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:168
+#: src/reference/modules-and-visibility.md:176
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:168
+#: src/reference/modules-and-visibility.md:176
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:170
+#: src/reference/modules-and-visibility.md:178
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:172
+#: src/reference/modules-and-visibility.md:180
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed but "
 "gated nothing; the parser refuses them with the fix (bare private, or "
 "`pub(super)`/`pub(pkg)`/`pub`)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:175
+#: src/reference/modules-and-visibility.md:183
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, and the `mod` edge "
@@ -10696,14 +10717,14 @@ msgid ""
 "the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:180
+#: src/reference/modules-and-visibility.md:188
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:183
+#: src/reference/modules-and-visibility.md:191
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -10714,7 +10735,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:191
+#: src/reference/modules-and-visibility.md:199
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -16146,7 +16167,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:51 src/reference/embedding.md:412
+#: src/reference/resource-limits.md:51 src/reference/embedding.md:448
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -16162,7 +16183,7 @@ msgstr ""
 msgid "raise limit / free refs → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:411
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:447
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -16662,7 +16683,7 @@ msgstr ""
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:187 src/reference/embedding.md:358
+#: src/reference/async.md:187 src/reference/embedding.md:394
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
@@ -16682,7 +16703,7 @@ msgid ""
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:189 src/reference/embedding.md:360
+#: src/reference/async.md:189 src/reference/embedding.md:396
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
@@ -17586,15 +17607,19 @@ msgstr ""
 
 #: src/reference/embedding.md:129
 msgid ""
-"**the closure check** — every `use` name in every offered source resolves; a "
-"miss is `Err(RunError)`, carrying the resolver's own diagnostic;"
+"**the closure check** — every `use` name in every offered source resolves "
+"against the offered world AND its consumer's own manifest (nameability is "
+"declaration-scoped: `deps` ∪ `peer-deps` ∪ root `dev-deps` ∪ `core`; a "
+"mounted-but-undeclared head is the dedicated D5 diagnostic, its host clause "
+"naming the builder doors for a hand offer); a miss is `Err(RunError)`, "
+"carrying the resolver's own diagnostic;"
 msgstr ""
 
-#: src/reference/embedding.md:132
+#: src/reference/embedding.md:136
 msgid "**parse → check → LIR → link.**"
 msgstr ""
 
-#: src/reference/embedding.md:134
+#: src/reference/embedding.md:138
 msgid ""
 "Shape/closure failures (a bad package name, a missing entrypoint, an "
 "unresolved use) are `Err(RunError)`. Compile diagnostics are NOT errors: "
@@ -17602,40 +17627,40 @@ msgid ""
 "`compiled.graph.diags` before trusting `compiled.graph.program`."
 msgstr ""
 
-#: src/reference/embedding.md:139
+#: src/reference/embedding.md:143
 msgid ""
 "The registry is consumed by `.build()`: every host thunk the program "
 "declares is resolved against it once, at boot. A declared-but-unbound fn is "
 "a **construction error**, never a mid-run trap."
 msgstr ""
 
-#: src/reference/embedding.md:143
+#: src/reference/embedding.md:147
 msgid "The walk vs the offer"
 msgstr ""
 
-#: src/reference/embedding.md:145
+#: src/reference/embedding.md:149
 msgid "Two doors produce `Pkg`s; both feed the same chain."
 msgstr ""
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid ""
 "**The walk** ([`rut-native`](#getting-the-crates)) reads a module directory "
 "— or a packed `.rutbundle` — and yields the closure:"
 msgstr ""
 
-#: src/reference/embedding.md:150 src/reference/embedding.md:179
+#: src/reference/embedding.md:154 src/reference/embedding.md:183
 msgid "lane"
 msgstr ""
 
-#: src/reference/embedding.md:150 src/reference/embedding.md:179
+#: src/reference/embedding.md:154 src/reference/embedding.md:183
 msgid "what it does"
 msgstr ""
 
-#: src/reference/embedding.md:152
+#: src/reference/embedding.md:156
 msgid "`load_dir(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:152
+#: src/reference/embedding.md:156
 msgid ""
 "the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch "
 "is an error), the root's `rut.lock` read fresh (an unpinned url refuses, "
@@ -17644,100 +17669,100 @@ msgid ""
 "deps are the loud no-fetcher error."
 msgstr ""
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:157
 msgid "`load_dir_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:153
+#: src/reference/embedding.md:157
 msgid ""
 "the same walk; url `deps` rows are collected, gated against the root's "
 "`rut.lock`, fetched over the host's `DepRemote`, and pinned at the mount door"
 msgstr ""
 
-#: src/reference/embedding.md:154
+#: src/reference/embedding.md:158
 msgid "`load_dir_fetched(dir, &map)`"
 msgstr ""
 
-#: src/reference/embedding.md:154
+#: src/reference/embedding.md:158
 msgid ""
 "the walk over PRE-fetched url bytes — the sync core; tests and offline hosts "
 "hand a `url → bytes` map"
 msgstr ""
 
-#: src/reference/embedding.md:155 src/reference/embedding.md:306
+#: src/reference/embedding.md:159 src/reference/embedding.md:342
 msgid "`load_path_session(path)` / `load_path_session_with(path, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:155
+#: src/reference/embedding.md:159
 msgid ""
 "dispatch on the shape: a directory walks (above); a `.rutbundle` loads "
 "closed (below)"
 msgstr ""
 
-#: src/reference/embedding.md:157
+#: src/reference/embedding.md:161
 msgid ""
 "The yield is `rut_driver::Loaded { pkgs, root }` — pure pkgs plus the root's "
 "name. Offer it with `.pkgs(&loaded)` (every pkg, first-pkg-wins) or pick "
 "pieces with `loaded.pkg(name)`."
 msgstr ""
 
-#: src/reference/embedding.md:161
+#: src/reference/embedding.md:165
 msgid "**The offer** is a `Pkg` value handed to the chain by hand:"
 msgstr ""
 
-#: src/reference/embedding.md:163 src/reference/embedding.md:206
+#: src/reference/embedding.md:167 src/reference/embedding.md:242
 msgid "constructor"
 msgstr ""
 
-#: src/reference/embedding.md:163
+#: src/reference/embedding.md:167
 msgid "builds"
 msgstr ""
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "`Pkg::source(name, text)`"
 msgstr ""
 
-#: src/reference/embedding.md:165
+#: src/reference/embedding.md:169
 msgid "the ordinary `.rut` body"
 msgstr ""
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "`Pkg::decl(name, text)`"
 msgstr ""
 
-#: src/reference/embedding.md:166
+#: src/reference/embedding.md:170
 msgid "a `.d.rut` surface (declaration mode)"
 msgstr ""
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "`Pkg::host(name, rows)`"
 msgstr ""
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:171
 msgid "the native rows — exported constants, bodyless host fns"
 msgstr ""
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "`Pkg::compiled(name, program)`"
 msgstr ""
 
-#: src/reference/embedding.md:168
+#: src/reference/embedding.md:172
 msgid "a decoded `.rutc` binary pushed as-is"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "`Pkg::from_bundle(bytes)`"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:173
 msgid "the pure container parse — the bundle's pkgs as a `Loaded` (below)"
 msgstr ""
 
-#: src/reference/embedding.md:170 src/reference/embedding.md:333
+#: src/reference/embedding.md:174 src/reference/embedding.md:369
 msgid "`lower_decl_module(text, children, file)`"
 msgstr ""
 
-#: src/reference/embedding.md:170
+#: src/reference/embedding.md:174
 msgid ""
 "a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` "
 "is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with "
@@ -17745,7 +17770,7 @@ msgid ""
 "under"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:176
 msgid ""
 "`Pkg` is pure data: the walker-found metadata (the `[deps]` table, the "
 "`[peer-deps]` declarations, the peer-integration group texts) is pub data on "
@@ -17753,33 +17778,33 @@ msgid ""
 "hand — the graph only reads."
 msgstr ""
 
-#: src/reference/embedding.md:177
+#: src/reference/embedding.md:181
 msgid "Two offer lanes walk a directory **for someone else's program**:"
 msgstr ""
 
-#: src/reference/embedding.md:181
+#: src/reference/embedding.md:185
 msgid "`rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:181
+#: src/reference/embedding.md:185
 msgid ""
 "offer one package directory — and, recursively, its `[deps]` — as walked "
 "pkgs. No dev-deps pass, no peer gate: presence is the program's own "
 "`.compile()` law."
 msgstr ""
 
-#: src/reference/embedding.md:182
+#: src/reference/embedding.md:186
 msgid "`rut_native::tree_pkg(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:182
+#: src/reference/embedding.md:186
 msgid ""
 "one toolchain-tree package (`rut/calc`, `rut/futures`, …). A pkg whose "
 "`[deps]` pull a closure is refused — offer the whole walk (`load_dir`) "
 "instead, never a silently-truncated world."
 msgstr ""
 
-#: src/reference/embedding.md:184
+#: src/reference/embedding.md:188
 msgid ""
 "`core` is never offered — `.compile()` auto-rides it. `calc` and the async "
 "pair are ordinary tree packages: the host offers "
@@ -17788,11 +17813,61 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/embedding.md:190
+#: src/reference/embedding.md:194
+msgid "Hand mounts carry a manifest"
+msgstr ""
+
+#: src/reference/embedding.md:196
+msgid ""
+"A hand-offered world is lawed by the same declaration table as a walked one "
+"— nameability is declaration-scoped, so a consumer may `use` exactly the "
+"heads ITS manifest names — the manifest just travels structurally instead of "
+"as a file. Two builder doors:"
+msgstr ""
+
+#: src/reference/embedding.md:201
+msgid ""
+"**Real manifests** — parse the embedded jsonc and stamp it: "
+"`Pkg::manifest(parse_manifest(include_str!(\"../pkg/rut.jsonc\")))`. The "
+"tree's own `rut.jsonc` stays the single source of truth; the wasm host "
+"mounts every std pkg this way."
+msgstr ""
+
+#: src/reference/embedding.md:205
+msgid ""
+"**Ad-hoc surfaces** — `Manifest::lib(name, &[heads])` stamps the structural "
+"form directly, no json text anywhere. 05's `web` package is the worked "
+"example: embedder-registered, no artifact, no path/url — a structural-only "
+"declaration of the heads its sources name."
+msgstr ""
+
+#: src/reference/embedding.md:210
+msgid ""
+"A hand offer has no walk edge, so D5's mount edge renders the structural "
+"clause — _\"offered by the host\"_ — and the fix names the two builder "
+"doors, never a file ([dependency kinds](dependency-kinds.md)). "
+"Declared-unused rows stay legal: the law bounds uses by declarations, never "
+"declarations by uses."
+msgstr ""
+
+#: src/reference/embedding.md:216
+msgid ""
+"The wasm playground rides the same law with a host-side default: the page's "
+"compile lane accepts an optional consumer manifest (jsonc) beside the source "
+"— `rut_compile_manifest` in the raw ABI (a manifest that does not parse "
+"returns as a span-0 diagnostic) — while plain `rut_compile` defaults the "
+"program's declaration to the offered lib names (`ink_host`, `nmap_host`, "
+"`ink`, `pouch`, `nmapset`, `flow`, `async_host`, `futures`, `strbuild_host`, "
+"`strbuild`, `json`, `calc` — `core` stays row-free; the prelude is free by "
+"law), computed from the world the host actually mounts. A `use` outside the "
+"declared set is D5."
+msgstr ""
+
+#: src/reference/embedding.md:226
 msgid "Url deps — the remote policy (`DepRemote` + `HttpRemote`)"
 msgstr ""
 
-#: src/reference/embedding.md:192
+#: src/reference/embedding.md:228
 msgid ""
 "The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the "
 "remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes "
@@ -17801,7 +17876,7 @@ msgid ""
 "closed — they load with no remote named at all."
 msgstr ""
 
-#: src/reference/embedding.md:198
+#: src/reference/embedding.md:234
 msgid ""
 "The standard remote is **`rut_native::HttpRemote`** — cache-first: a hit "
 "NEVER touches the network, a miss GETs (redirects on, loud status errors, a "
@@ -17811,81 +17886,81 @@ msgid ""
 "noop-waker `block_on` poll loop the examples spell."
 msgstr ""
 
-#: src/reference/embedding.md:206 src/reference/templates.md:17
-#: src/reference/dependency-kinds.md:234 src/reference/cli.md:53
+#: src/reference/embedding.md:242 src/reference/templates.md:17
+#: src/reference/dependency-kinds.md:299 src/reference/cli.md:53
 #: src/reference/cli.md:94 src/reference/cli.md:207 src/reference/cli.md:301
 msgid "behavior"
 msgstr ""
 
-#: src/reference/embedding.md:208
+#: src/reference/embedding.md:244
 msgid "`HttpRemote::project_local(project)`"
 msgstr ""
 
-#: src/reference/embedding.md:208
+#: src/reference/embedding.md:244
 msgid ""
 "`<project>/.rut/cache` — hermetic, project-local; networks on a miss (the "
 "`http` feature, default on)"
 msgstr ""
 
-#: src/reference/embedding.md:209
+#: src/reference/embedding.md:245
 msgid "`HttpRemote::at(root)`"
 msgstr ""
 
-#: src/reference/embedding.md:209
+#: src/reference/embedding.md:245
 msgid "an explicit cache root, wire on"
 msgstr ""
 
-#: src/reference/embedding.md:210
+#: src/reference/embedding.md:246
 msgid "`HttpRemote::offline(root)`"
 msgstr ""
 
-#: src/reference/embedding.md:210
+#: src/reference/embedding.md:246
 msgid ""
 "**cache-only** — a miss never networks; the guaranteed-offline lane (CI "
 "gates, wasm-adjacent hosts)"
 msgstr ""
 
-#: src/reference/embedding.md:211
+#: src/reference/embedding.md:247
 msgid "`path_for(url)` / `evict(url)`"
 msgstr ""
 
-#: src/reference/embedding.md:211
+#: src/reference/embedding.md:247
 msgid "the concrete entry path / delete a poisoned entry"
 msgstr ""
 
-#: src/reference/embedding.md:213
+#: src/reference/embedding.md:249
 msgid ""
 "**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an "
 "`offline` remote, then load over it. The committed std artifacts play the "
 "wire — `DepRemote::write` is the stand-in for the GET:"
 msgstr ""
 
-#: src/reference/embedding.md:219
+#: src/reference/embedding.md:255
 msgid "// parsed from rut.jsonc\n"
 msgstr ""
 
-#: src/reference/embedding.md:220
+#: src/reference/embedding.md:256
 msgid "// prime the cache\n"
 msgstr ""
 
-#: src/reference/embedding.md:225
+#: src/reference/embedding.md:261
 msgid ""
 "**Memory hosts** (wasm, in-process tests) hand-roll the trait — one required "
 "method, sync impls are first-class via `std::future::ready`:"
 msgstr ""
 
-#: src/reference/embedding.md:236
+#: src/reference/embedding.md:272
 msgid "\"no bytes for {url}\""
 msgstr ""
 
-#: src/reference/embedding.md:248
+#: src/reference/embedding.md:284
 msgid ""
 "The walk still owns WHAT the bytes are: the pin is **lock law** — the root's "
 "`rut.lock` (url → sha256), gated before any fetch and verified at the mount "
 "door on every load — fresh fetch, cache hit, vendored map, test fixture."
 msgstr ""
 
-#: src/reference/embedding.md:253
+#: src/reference/embedding.md:289
 msgid ""
 "**The filesystem policy** is `rut_native::Source` — string keys, all key "
 "math in the impl. `FsSource::at(dir)` is the real filesystem with the root "
@@ -17895,25 +17970,25 @@ msgid ""
 "`dir_pkgs`\\-shaped collectors of your own."
 msgstr ""
 
-#: src/reference/embedding.md:262
+#: src/reference/embedding.md:298
 msgid ""
 "A packed `.rutbundle` is the same contract zipped — loading it never fetches "
 "(bundles are closed; their closure rode inside at pack time):"
 msgstr ""
 
-#: src/reference/embedding.md:266
+#: src/reference/embedding.md:302
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:267 src/reference/bundles.md:379
+#: src/reference/embedding.md:303 src/reference/bundles.md:379
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
-#: src/reference/embedding.md:268
+#: src/reference/embedding.md:304
 msgid "// from bytes (embedders, tests, wasm): the pure container parse\n"
 msgstr ""
 
-#: src/reference/embedding.md:273
+#: src/reference/embedding.md:309
 msgid ""
 "Both root kinds load (a compiled root with its groups and its pack-time "
 "scope ledger, rebased at the close of the world; a decl root as the pkg's "
@@ -17925,7 +18000,7 @@ msgid ""
 "the reader are [module bundles](bundles.md)."
 msgstr ""
 
-#: src/reference/embedding.md:283
+#: src/reference/embedding.md:319
 msgid ""
 "**What to take from a url** is the engine's instantiation law, read from the "
 "embedding side: a compiled bundle serves host surfaces, concrete-class libs, "
@@ -17940,39 +18015,39 @@ msgid ""
 "closure in its ledger, so the consumer's closure must contain those names."
 msgstr ""
 
-#: src/reference/embedding.md:297
+#: src/reference/embedding.md:333
 msgid "The walk API (`rut-native`)"
 msgstr ""
 
-#: src/reference/embedding.md:299 src/reference/embedding.md:317
-#: src/reference/embedding.md:347 src/reference/value-boundary.md:97
+#: src/reference/embedding.md:335 src/reference/embedding.md:353
+#: src/reference/embedding.md:383 src/reference/value-boundary.md:97
 #: src/reference/native-containers.md:103 src/reference/templates.md:39
 msgid "API"
 msgstr ""
 
-#: src/reference/embedding.md:301
+#: src/reference/embedding.md:337
 msgid "`Source`"
 msgstr ""
 
-#: src/reference/embedding.md:301
+#: src/reference/embedding.md:337
 msgid ""
 "the one filesystem door, STRING keys: `read(key)`, `resolve(from, spec)`, "
 "`root()` — the key math is the impl's; a `Path` crosses nothing"
 msgstr ""
 
-#: src/reference/embedding.md:302
+#: src/reference/embedding.md:338
 msgid "`FsSource::at(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:302
+#: src/reference/embedding.md:338
 msgid "the real filesystem with the root baked in"
 msgstr ""
 
-#: src/reference/embedding.md:303
+#: src/reference/embedding.md:339
 msgid "`DepRemote`"
 msgstr ""
 
-#: src/reference/embedding.md:303
+#: src/reference/embedding.md:339
 msgid ""
 "the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = "
 "Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the "
@@ -17982,217 +18057,217 @@ msgid ""
 "fixtures) are first-class"
 msgstr ""
 
-#: src/reference/embedding.md:304
+#: src/reference/embedding.md:340
 msgid "`HttpRemote`"
 msgstr ""
 
-#: src/reference/embedding.md:304
+#: src/reference/embedding.md:340
 msgid ""
 "the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss "
 "GETs on a private worker thread and writes back atomically; `project_local` "
 "/ `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete"
 msgstr ""
 
-#: src/reference/embedding.md:305
+#: src/reference/embedding.md:341
 msgid ""
 "`load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, "
 "&map)`"
 msgstr ""
 
-#: src/reference/embedding.md:305
+#: src/reference/embedding.md:341
 msgid ""
 "the walk and its fetched lanes — the yield is `rut_driver::Loaded` ([the "
 "walk vs the offer](#the-walk-vs-the-offer))"
 msgstr ""
 
-#: src/reference/embedding.md:306
+#: src/reference/embedding.md:342
 msgid "dispatch on the shape: directory walk or closed `.rutbundle`"
 msgstr ""
 
-#: src/reference/embedding.md:307
+#: src/reference/embedding.md:343
 msgid "`load_bundle_session(path)`"
 msgstr ""
 
-#: src/reference/embedding.md:307
+#: src/reference/embedding.md:343
 msgid ""
 "load a packed `.rutbundle` from disk — the pure container lane plus the file "
 "read"
 msgstr ""
 
-#: src/reference/embedding.md:308
+#: src/reference/embedding.md:344
 msgid "`dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:308
+#: src/reference/embedding.md:344
 msgid ""
 "the OFFER lane: a package directory walked for someone else's program (no "
 "dev pass, no gate)"
 msgstr ""
 
-#: src/reference/embedding.md:309
+#: src/reference/embedding.md:345
 msgid "`tree_pkg(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:309
+#: src/reference/embedding.md:345
 msgid "one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused"
 msgstr ""
 
-#: src/reference/embedding.md:310
+#: src/reference/embedding.md:346
 msgid "`load_module_source(path)`"
 msgstr ""
 
-#: src/reference/embedding.md:310
+#: src/reference/embedding.md:346
 msgid "one `.rut` file's text — a loose file is a single module, no manifest"
 msgstr ""
 
-#: src/reference/embedding.md:311
+#: src/reference/embedding.md:347
 msgid "`prefetch_urls(&src, &dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:311
+#: src/reference/embedding.md:347
 msgid ""
 "collect a manifest's url rows and fetch them — the `_with` lanes' input step"
 msgstr ""
 
-#: src/reference/embedding.md:312
+#: src/reference/embedding.md:348
 msgid ""
 "`pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family"
 msgstr ""
 
-#: src/reference/embedding.md:312
+#: src/reference/embedding.md:348
 msgid ""
 "pack a module directory into a deterministic `.rutbundle` — a **compiled** "
 "root for a lib pkg, a **decl** root for a host pkg (`type` routes; "
 "`format_version` is 10); returns the bytes ([module bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/embedding.md:313
+#: src/reference/embedding.md:349
 msgid "`default_out_path(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:313
+#: src/reference/embedding.md:349
 msgid "the conventional pack output path"
 msgstr ""
 
-#: src/reference/embedding.md:315
+#: src/reference/embedding.md:351
 msgid "The run chain API (`rut-driver`)"
 msgstr ""
 
-#: src/reference/embedding.md:319
+#: src/reference/embedding.md:355
 msgid "`RutRun::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:319
+#: src/reference/embedding.md:355
 msgid "the chain's head; compose with the chain methods, end at `.compile()`"
 msgstr ""
 
-#: src/reference/embedding.md:320
+#: src/reference/embedding.md:356
 msgid "`.pkg(pkg)` / `.pkgs(&loaded)`"
 msgstr ""
 
-#: src/reference/embedding.md:320
+#: src/reference/embedding.md:356
 msgid "offer — FIRST OFFER WINS: a pkg whose name is already offered is ignored"
 msgstr ""
 
-#: src/reference/embedding.md:321
+#: src/reference/embedding.md:357
 msgid "`.host_pkg(host_pkg)`"
 msgstr ""
 
-#: src/reference/embedding.md:321
+#: src/reference/embedding.md:357
 msgid ""
 "hand over one host pkg's bodies; installed at `.compile()` against the rows "
 "snapshot"
 msgstr ""
 
-#: src/reference/embedding.md:322 src/reference/loading.md:55
+#: src/reference/embedding.md:358 src/reference/loading.md:55
 msgid "`.symbols(&map)`"
 msgstr ""
 
-#: src/reference/embedding.md:322
+#: src/reference/embedding.md:358
 msgid ""
 "restore a stripped artifact's symbol table into the offered compiled pkgs "
 "([symbol stripping](symbol-stripping.md))"
 msgstr ""
 
-#: src/reference/embedding.md:323
+#: src/reference/embedding.md:359
 msgid "`.entrypoint(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:323
+#: src/reference/embedding.md:359
 msgid "the root pkg — the graph compiles it and its transitive uses"
 msgstr ""
 
-#: src/reference/embedding.md:324
+#: src/reference/embedding.md:360
 msgid "`.compile() -> Result<Compiled, RunError>`"
 msgstr ""
 
-#: src/reference/embedding.md:324
+#: src/reference/embedding.md:360
 msgid "the terminal step ([the law](#the-compile-law))"
 msgstr ""
 
-#: src/reference/embedding.md:325
+#: src/reference/embedding.md:361
 msgid "`Compiled { graph, hosts }`"
 msgstr ""
 
-#: src/reference/embedding.md:325
+#: src/reference/embedding.md:361
 msgid ""
 "the linked graph (diags inside — check `graph.diags` before trusting "
 "`graph.program`) and the host registry every `.host_pkg(..)` installed"
 msgstr ""
 
-#: src/reference/embedding.md:326
+#: src/reference/embedding.md:362
 msgid "`Loaded { pkgs, root }`"
 msgstr ""
 
-#: src/reference/embedding.md:326
+#: src/reference/embedding.md:362
 msgid "a walk's yield; `loaded.pkg(name)` picks one pkg"
 msgstr ""
 
-#: src/reference/embedding.md:327
+#: src/reference/embedding.md:363
 msgid "`Pkg::source / decl / host / compiled / from_bundle`"
 msgstr ""
 
-#: src/reference/embedding.md:327
+#: src/reference/embedding.md:363
 msgid "the offer constructors ([the offer](#the-walk-vs-the-offer))"
 msgstr ""
 
-#: src/reference/embedding.md:328
+#: src/reference/embedding.md:364
 msgid "`RunError`"
 msgstr ""
 
-#: src/reference/embedding.md:328
+#: src/reference/embedding.md:364
 msgid ""
 "why a run refused to compose or compile — shape (bad name, missing "
 "entrypoint) or closure (a `use` nothing offered resolves); the message IS "
 "the diagnostic"
 msgstr ""
 
-#: src/reference/embedding.md:329
+#: src/reference/embedding.md:365
 msgid "`declared_host_fns(pkgs)`"
 msgstr ""
 
-#: src/reference/embedding.md:329
+#: src/reference/embedding.md:365
 msgid ""
 "the declared rows, async-expanded, flattened — the raw lane's "
 "`verify_against` input"
 msgstr ""
 
-#: src/reference/embedding.md:330
+#: src/reference/embedding.md:366
 msgid "`host_pkg_ctx(pkgs)`"
 msgstr ""
 
-#: src/reference/embedding.md:330
+#: src/reference/embedding.md:366
 msgid ""
 "the declared rows, partitioned by scope — for hosts that build registries "
 "OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row "
 "host's `verify_against`)"
 msgstr ""
 
-#: src/reference/embedding.md:331
+#: src/reference/embedding.md:367
 msgid "`compile_module(src, mode, name)`"
 msgstr ""
 
-#: src/reference/embedding.md:331
+#: src/reference/embedding.md:367
 msgid ""
 "the single-source lane: the core prelude auto-rides, the source offers as "
 "the root pkg, one `.compile()` — returns diags, AST/IR dumps, and the "
@@ -18200,73 +18275,73 @@ msgid ""
 "a host that wants them offers `rut_native::tree_pkg(..)`"
 msgstr ""
 
-#: src/reference/embedding.md:332
+#: src/reference/embedding.md:368
 msgid ""
 "`compile_program(src, mode, name)` / `compile_program_resolved(..)` / "
 "`ir_dump_of(..)`"
 msgstr ""
 
-#: src/reference/embedding.md:332
+#: src/reference/embedding.md:368
 msgid "the raw pipeline pieces (tooling)"
 msgstr ""
 
-#: src/reference/embedding.md:333
+#: src/reference/embedding.md:369
 msgid ""
 "lower a `.d.rut` surface to host rows (`children` = the mounted `mod` tree — "
 "a declared child with no mounted `NAME/mod.d.rut` is a loud error; "
 "registration is path-qualified, `pkg::net::connect`)"
 msgstr ""
 
-#: src/reference/embedding.md:334
+#: src/reference/embedding.md:370
 msgid "`bundle::{parse_manifest, Bundle, Layout, ..}`"
 msgstr ""
 
-#: src/reference/embedding.md:334
+#: src/reference/embedding.md:370
 msgid ""
 "the container codec, the `rut.jsonc` grammar, the reader (both root kinds) — "
 "pure, in-memory"
 msgstr ""
 
-#: src/reference/embedding.md:335
+#: src/reference/embedding.md:371
 msgid "`pack::{pack, PackOpts, ..}`"
 msgstr ""
 
-#: src/reference/embedding.md:335
+#: src/reference/embedding.md:371
 msgid ""
 "the pure emit half of packing (`rut-native` owns the walk + dev tables + the "
 "gate)"
 msgstr ""
 
-#: src/reference/embedding.md:336
+#: src/reference/embedding.md:372
 msgid "`sha256_hex(bytes)`"
 msgstr ""
 
-#: src/reference/embedding.md:336
+#: src/reference/embedding.md:372
 msgid "pin arithmetic (pure)"
 msgstr ""
 
-#: src/reference/embedding.md:338
+#: src/reference/embedding.md:374
 msgid ""
 "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns "
 "and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:341
+#: src/reference/embedding.md:377
 msgid ""
 "The driver is provably pure: no fs, no net, no walk, no `std::path` anywhere "
 "in `rut-driver` — everything with a filesystem or a wire lives in "
 "`rut-native`."
 msgstr ""
 
-#: src/reference/embedding.md:345
+#: src/reference/embedding.md:381
 msgid "VM API (`rut_vm::interp`)"
 msgstr ""
 
-#: src/reference/embedding.md:349
+#: src/reference/embedding.md:385
 msgid "`Vm::builder()`"
 msgstr ""
 
-#: src/reference/embedding.md:349
+#: src/reference/embedding.md:385
 msgid ""
 "the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's "
 "`Compiled`) or `.program(rc)` for embedders holding a decoded binary, each "
@@ -18275,260 +18350,260 @@ msgid ""
 "mechanism law; explicit setters win over the compiled parts"
 msgstr ""
 
-#: src/reference/embedding.md:350
+#: src/reference/embedding.md:386
 msgid "`HostRegistry::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:350
+#: src/reference/embedding.md:386
 msgid "an empty binding table (the raw lane)"
 msgstr ""
 
-#: src/reference/embedding.md:351
+#: src/reference/embedding.md:387
 msgid "`HostPkg::new(scope)`"
 msgstr ""
 
-#: src/reference/embedding.md:351
+#: src/reference/embedding.md:387
 msgid ""
 "a pkg builder; rows register under bare names or scope-relative paths "
 "(`\"net::connect\"` — a row under the pkg's `mod net` tree; the scope itself "
 "is never part of the row name) and the scope prefixes once, at the install"
 msgstr ""
 
-#: src/reference/embedding.md:352 src/reference/loading.md:53
+#: src/reference/embedding.md:388 src/reference/loading.md:53
 msgid "`pkg_fn!` / `pkg_async_fn!`"
 msgstr ""
 
-#: src/reference/embedding.md:352
+#: src/reference/embedding.md:388
 msgid ""
 "the builder's sugar: one spelling → one row / the five-row async family (the "
 "spelling may carry the mod path: `\"net::send\"` → `net::send__start` et al)"
 msgstr ""
 
-#: src/reference/embedding.md:353
+#: src/reference/embedding.md:389
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr ""
 
-#: src/reference/embedding.md:353
+#: src/reference/embedding.md:389
 msgid "the raw lane: bind one body under a full `scope::name` string"
 msgstr ""
 
-#: src/reference/embedding.md:354
+#: src/reference/embedding.md:390
 msgid "`hosts.verify_against(&expected)`"
 msgstr ""
 
-#: src/reference/embedding.md:354
+#: src/reference/embedding.md:390
 msgid ""
 "the raw lane's net: panic on declared-unbound / bound-undeclared / signature "
 "drift"
 msgstr ""
 
-#: src/reference/embedding.md:355
+#: src/reference/embedding.md:391
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr ""
 
-#: src/reference/embedding.md:355
+#: src/reference/embedding.md:391
 msgid ""
 "call an export with Rust values, get a Rust value back ([value "
 "boundary](value-boundary.md))"
 msgstr ""
 
-#: src/reference/embedding.md:356
+#: src/reference/embedding.md:392
 msgid "`vm.resume::<R>()`"
 msgstr ""
 
-#: src/reference/embedding.md:356
+#: src/reference/embedding.md:392
 msgid "resume a budget-parked call after refueling"
 msgstr ""
 
-#: src/reference/embedding.md:357
+#: src/reference/embedding.md:393
 msgid "`vm.run_ready()`"
 msgstr ""
 
-#: src/reference/embedding.md:357
+#: src/reference/embedding.md:393
 msgid "drain the async ready queue once; returns frames run"
 msgstr ""
 
-#: src/reference/embedding.md:358
+#: src/reference/embedding.md:394
 msgid "the earliest timer deadline, if any"
 msgstr ""
 
-#: src/reference/embedding.md:359
+#: src/reference/embedding.md:395
 msgid "`vm.set_now(t_ms)`"
 msgstr ""
 
-#: src/reference/embedding.md:359
+#: src/reference/embedding.md:395
 msgid "advance the virtual clock"
 msgstr ""
 
-#: src/reference/embedding.md:360
+#: src/reference/embedding.md:396
 msgid "unfinished async work"
 msgstr ""
 
-#: src/reference/embedding.md:361
+#: src/reference/embedding.md:397
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/embedding.md:361
+#: src/reference/embedding.md:397
 msgid "budget meters"
 msgstr ""
 
-#: src/reference/embedding.md:362
+#: src/reference/embedding.md:398
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr ""
 
-#: src/reference/embedding.md:362
+#: src/reference/embedding.md:398
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr ""
 
-#: src/reference/embedding.md:363
+#: src/reference/embedding.md:399
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr ""
 
-#: src/reference/embedding.md:363
+#: src/reference/embedding.md:399
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr ""
 
-#: src/reference/embedding.md:365
+#: src/reference/embedding.md:401
 msgid "The canonical async driving loop (single-threaded; the host owns it):"
 msgstr ""
 
-#: src/reference/embedding.md:371
+#: src/reference/embedding.md:407
 msgid "// advance to the next timer\n"
 msgstr ""
 
-#: src/reference/embedding.md:378
+#: src/reference/embedding.md:414
 msgid ""
 "Cap the loop in embedders that cannot prove termination, so a program that "
 "never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/embedding.md:381
+#: src/reference/embedding.md:417
 msgid "Limits"
 msgstr ""
 
-#: src/reference/embedding.md:385
+#: src/reference/embedding.md:421
 msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
-#: src/reference/embedding.md:387
+#: src/reference/embedding.md:423
 msgid "// ops between interrupt checks\n"
 msgstr ""
 
-#: src/reference/embedding.md:391
+#: src/reference/embedding.md:427
 msgid ""
 "Exhaustion and interrupts surface as traps ([resource "
 "limits](resource-limits.md)). A trap inside re-entrant work propagates to "
 "the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
-#: src/reference/embedding.md:395
+#: src/reference/embedding.md:431
 msgid "Native fn rules"
 msgstr ""
 
-#: src/reference/embedding.md:397
+#: src/reference/embedding.md:433
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:400
+#: src/reference/embedding.md:436
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:402
+#: src/reference/embedding.md:438
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:405
+#: src/reference/embedding.md:441
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:409
+#: src/reference/embedding.md:445
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:409
+#: src/reference/embedding.md:445
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:411
+#: src/reference/embedding.md:447
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:412 src/reference/cli.md:58
+#: src/reference/embedding.md:448 src/reference/cli.md:58
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:413
+#: src/reference/embedding.md:449
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:413
+#: src/reference/embedding.md:449
 msgid "interrupt flag"
 msgstr ""
 
-#: src/reference/embedding.md:414
+#: src/reference/embedding.md:450
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:414
+#: src/reference/embedding.md:450
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:415
+#: src/reference/embedding.md:451
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:415
+#: src/reference/embedding.md:451
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:416
+#: src/reference/embedding.md:452
 msgid "`Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:416
+#: src/reference/embedding.md:452
 msgid "`panic`"
 msgstr ""
 
-#: src/reference/embedding.md:417
+#: src/reference/embedding.md:453
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:417
+#: src/reference/embedding.md:453
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:418
+#: src/reference/embedding.md:454
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:418
+#: src/reference/embedding.md:454
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:419
+#: src/reference/embedding.md:455
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:419
+#: src/reference/embedding.md:455
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:421
+#: src/reference/embedding.md:457
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:423
+#: src/reference/embedding.md:459
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
@@ -18537,11 +18612,11 @@ msgid ""
 "registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:429
+#: src/reference/embedding.md:465
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:431
+#: src/reference/embedding.md:467
 msgid ""
 "One `pkg()` builder per module; each rides the chain — "
 "`.host_pkg(rut_std::math::pkg())` — and installs at `.compile()` against the "
@@ -18549,61 +18624,61 @@ msgid ""
 "unmounted scope merges inert, so hosts blanket-install their subset):"
 msgstr ""
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:473
 msgid "builder"
 msgstr ""
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:473
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:439 src/reference/cli.md:65
+#: src/reference/embedding.md:475 src/reference/cli.md:65
 msgid "`math::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:439
+#: src/reference/embedding.md:475
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:440
+#: src/reference/embedding.md:476
 msgid "`logger::pkg(sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:440
+#: src/reference/embedding.md:476
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:441 src/reference/cli.md:67
+#: src/reference/embedding.md:477 src/reference/cli.md:67
 msgid "`nmap::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:441
+#: src/reference/embedding.md:477
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:442
+#: src/reference/embedding.md:478
 msgid "`strbuild::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:442
+#: src/reference/embedding.md:478
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:443 src/reference/cli.md:69
+#: src/reference/embedding.md:479 src/reference/cli.md:69
 msgid "`async_host::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:443
+#: src/reference/embedding.md:479
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:444 src/reference/cli.md:70
+#: src/reference/embedding.md:480 src/reference/cli.md:70
 msgid "`http::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:444
+#: src/reference/embedding.md:480
 msgid ""
 "the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the "
 "fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is "
@@ -18611,26 +18686,26 @@ msgid ""
 "readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:445 src/reference/cli.md:68
+#: src/reference/embedding.md:481 src/reference/cli.md:68
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:445 src/reference/stdlib.md:129
+#: src/reference/embedding.md:481 src/reference/stdlib.md:129
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:447
+#: src/reference/embedding.md:483
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:449
+#: src/reference/embedding.md:485
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:452
+#: src/reference/embedding.md:488
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std "
 "packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -20492,7 +20567,7 @@ msgstr ""
 msgid "The swappable set"
 msgstr ""
 
-#: src/reference/stdlib.md:117 src/reference/project-structure.md:231
+#: src/reference/stdlib.md:117 src/reference/project-structure.md:235
 msgid "package"
 msgstr ""
 
@@ -20528,7 +20603,7 @@ msgstr ""
 msgid "the `Logger` class over `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:121 src/reference/project-structure.md:238
+#: src/reference/stdlib.md:121 src/reference/project-structure.md:242
 msgid "`pouch`"
 msgstr ""
 
@@ -20557,7 +20632,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:124 src/reference/project-structure.md:239
+#: src/reference/stdlib.md:124 src/reference/project-structure.md:243
 msgid "`json`"
 msgstr ""
 
@@ -20579,7 +20654,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:126 src/reference/project-structure.md:234
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:238
 msgid "`calc`"
 msgstr ""
 
@@ -24064,7 +24139,9 @@ msgid ""
 "`RutRun::new().pkgs(&loaded)` offers every walked pkg — first-pkg-wins — and "
 "`.host_pkg(..)` hands over the host bodies. `core` auto-rides unless a pkg "
 "named `core` was offered; the closure check refuses a `use` name nothing "
-"offered resolves."
+"offered resolves — and a head that IS mounted but undeclared by its consumer "
+"(nameability is declaration-scoped: `deps` ∪ `peer-deps` ∪ root `dev-deps` ∪ "
+"`core`; [Dependency kinds](dependency-kinds.md))."
 msgstr ""
 
 #: src/reference/loading.md:23
@@ -24075,10 +24152,12 @@ msgstr ""
 msgid ""
 "`.compile()` mounts the offers into the run's internal table, runs the "
 "peer-gate append pass (idempotent per pkg), then compiles each module "
-"(sources, in dependency post-order); `inline = true` packages splice into "
-"their consumers instead of linking; host packages synthesize bodyless thunks "
-"from their declared surfaces; a bundle's compiled packages push their "
-"decoded binaries at fresh, rebased scopes ([The compiler "
+"(sources, in dependency post-order) — every use path resolves through the "
+"session's one resolver door, so a mounted-but-undeclared head is the "
+"dedicated D5 diagnostic naming the mount edge and the fix; `inline = true` "
+"packages splice into their consumers instead of linking; host packages "
+"synthesize bodyless thunks from their declared surfaces; a bundle's compiled "
+"packages push their decoded binaries at fresh, rebased scopes ([The compiler "
 "pipeline](compiler.md))."
 msgstr ""
 
@@ -25355,8 +25434,12 @@ msgstr ""
 
 #: src/reference/project-structure.md:56
 msgid ""
-"the transitively mounted dependencies — one source per descriptor: `pkg = { "
-"path = \"...\" }` (relative to this manifest) or `pkg = { url = "
+"the transitively mounted dependencies — and the declaration table: a pkg may "
+"`use` exactly the heads its manifest names (`deps` ∪ `peer-deps` ∪ `core`, "
+"plus `dev-deps` at the program root), so a head riding someone else's `deps` "
+"is mounted but not nameable "
+"([Nameability](dependency-kinds.md#nameability)). One source per descriptor: "
+"`pkg = { path = \"...\" }` (relative to this manifest) or `pkg = { url = "
 "\"https://…\" }` (a remote `.rutbundle`). Url rows carry **no pin**: the "
 "`sha256` key is retired from the grammar, and the pins live in the walk "
 "root's `rut.lock` beside this manifest — `rut install` writes it and every "
@@ -25445,11 +25528,14 @@ msgstr ""
 #: src/reference/project-structure.md:82
 msgid ""
 "**Exact, single-step.** A use path resolves only if a module with that "
-"`name` is mounted. Nothing is derived from directories or file layouts "
-"beyond the `mod` declarations the source itself spells."
+"`name` is mounted **and the consuming manifest declares it** — nameability "
+"is declaration-scoped, so a mounted-but-undeclared head is the D5 diagnostic "
+"naming the mount edge and the fix row ([Dependency "
+"kinds](dependency-kinds.md)). Nothing is derived from directories or file "
+"layouts beyond the `mod` declarations the source itself spells."
 msgstr ""
 
-#: src/reference/project-structure.md:85
+#: src/reference/project-structure.md:89
 msgid ""
 "**The walk is recursive, with a cycle guard; first mount wins.** An "
 "already-mounted name (the embedder's, the root's, or an earlier dep's) is "
@@ -25457,40 +25543,40 @@ msgid ""
 "consumer's own path for a package always beats the declarer's `path`."
 msgstr ""
 
-#: src/reference/project-structure.md:90
+#: src/reference/project-structure.md:94
 msgid ""
 "**Name mismatch is an error.** A dep whose manifest `name` disagrees with "
 "its key fails, naming both."
 msgstr ""
 
-#: src/reference/project-structure.md:92
+#: src/reference/project-structure.md:96
 msgid ""
 "**The cross-table law.** A name in `deps` beside `peer-deps` or `dev-deps` "
 "is an error naming both rows; peer + dev together is the sanctioned pairing."
 msgstr ""
 
-#: src/reference/project-structure.md:95
+#: src/reference/project-structure.md:99
 msgid ""
 "**`core` needs no `deps`** — `.compile()` auto-offers it unconditionally "
 "([core and the swappable packages](stdlib.md)); every name still requires "
 "`use core::{ .. };` per [core and the swappable packages](stdlib.md)."
 msgstr ""
 
-#: src/reference/project-structure.md:100
+#: src/reference/project-structure.md:104
 msgid "Module trees"
 msgstr ""
 
-#: src/reference/project-structure.md:102
+#: src/reference/project-structure.md:106
 msgid ""
 "A package's body is authored as a **file module tree** — the "
 "`tur_kit`\\-style layout:"
 msgstr ""
 
-#: src/reference/project-structure.md:115
+#: src/reference/project-structure.md:119
 msgid "The root module declares its children:"
 msgstr ""
 
-#: src/reference/project-structure.md:117
+#: src/reference/project-structure.md:121
 msgid ""
 "```rut\n"
 "// tur_kit/mod.rut\n"
@@ -25499,7 +25585,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:123
+#: src/reference/project-structure.md:127
 msgid ""
 "Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod NAME;`) "
 "in a file resolves against the sibling `NAME/mod.rut` directory. The loader "
@@ -25510,7 +25596,7 @@ msgid ""
 "file identity; a repeated declaration mounts once."
 msgstr ""
 
-#: src/reference/project-structure.md:132
+#: src/reference/project-structure.md:136
 msgid ""
 "Visibility is per module file ([Modules and "
 "visibility](modules-and-visibility.md)): plain declarations are visible in "
@@ -25521,11 +25607,11 @@ msgid ""
 "Column }`)."
 msgstr ""
 
-#: src/reference/project-structure.md:140
+#: src/reference/project-structure.md:144
 msgid "Host surface trees"
 msgstr ""
 
-#: src/reference/project-structure.md:142
+#: src/reference/project-structure.md:146
 msgid ""
 "A `type = \"host\"` package has no body — but its `.d.rut` surface organizes "
 "as the same kind of tree. The **root surface** follows the same discovery "
@@ -25538,7 +25624,7 @@ msgid ""
 "`mod.d.rut` as the module file:"
 msgstr ""
 
-#: src/reference/project-structure.md:153
+#: src/reference/project-structure.md:157
 msgid ""
 "```\n"
 "http_host/\n"
@@ -25552,7 +25638,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/project-structure.md:163
+#: src/reference/project-structure.md:167
 msgid ""
 "The tree is **declaration-lawed like everything else**: a declared child "
 "with no `NAME/mod.d.rut` beside it is a loud error naming the declaring "
@@ -25561,7 +25647,7 @@ msgid ""
 "`mod` edge and the `host fn` row is what a consumer's `use` crosses."
 msgstr ""
 
-#: src/reference/project-structure.md:170
+#: src/reference/project-structure.md:174
 msgid ""
 "What the tree changes is the **registration naming**: a row under `net/` "
 "registers as `pkg::net::name` (async families ride the qualified name too — "
@@ -25575,11 +25661,11 @@ msgid ""
 "entry) — [module bundles](bundles.md)."
 msgstr ""
 
-#: src/reference/project-structure.md:182
+#: src/reference/project-structure.md:186
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:212
+#: src/reference/project-structure.md:216
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
 "rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the "
@@ -25594,88 +25680,88 @@ msgid ""
 "— embedders take it without the server."
 msgstr ""
 
-#: src/reference/project-structure.md:226
+#: src/reference/project-structure.md:230
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:228
+#: src/reference/project-structure.md:232
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:231
+#: src/reference/project-structure.md:235
 msgid "shape"
 msgstr ""
 
-#: src/reference/project-structure.md:233
+#: src/reference/project-structure.md:237
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:233
+#: src/reference/project-structure.md:237
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's "
 "`.compile()`"
 msgstr ""
 
-#: src/reference/project-structure.md:234
+#: src/reference/project-structure.md:238
 msgid ""
 "host pkg: the math surface — offer `rut_native::tree_pkg(\"calc\")`, bind "
 "`rut_std::math::pkg()` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:235
+#: src/reference/project-structure.md:239
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:235
+#: src/reference/project-structure.md:239
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:236
+#: src/reference/project-structure.md:240
 msgid "`http_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:236
+#: src/reference/project-structure.md:240
 msgid ""
 "host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std "
 "HTTP rows, `net/` + `stream/` mods ([project "
 "structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:237
+#: src/reference/project-structure.md:241
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
-#: src/reference/project-structure.md:237
+#: src/reference/project-structure.md:241
 msgid "inline rut wrappers over host rows (`inline = true`)"
 msgstr ""
 
-#: src/reference/project-structure.md:238
+#: src/reference/project-structure.md:242
 msgid "the sequence library (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:239
+#: src/reference/project-structure.md:243
 msgid ""
 "the base pkg with `peer-deps`/`dev-deps` — the reference consumer of "
 "[Dependency kinds](dependency-kinds.md)"
 msgstr ""
 
-#: src/reference/project-structure.md:240
+#: src/reference/project-structure.md:244
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:240
+#: src/reference/project-structure.md:244
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:242
+#: src/reference/project-structure.md:246
 msgid ""
 "Nothing in the engine knows the swappable packages' names — peers and deps "
 "are resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:248
+#: src/reference/project-structure.md:252
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "
@@ -25690,8 +25776,8 @@ msgstr ""
 #: src/reference/dependency-kinds.md:3
 msgid ""
 "Every package's `rut.jsonc` names the packages it relates to, and the _kind_ "
-"of each relation decides how — and whether — it mounts. Three tables, one "
-"grammar:"
+"of each relation decides how — and whether — it mounts, and whether the "
+"declarer may name it. Three tables, one grammar:"
 msgstr ""
 
 #: src/reference/dependency-kinds.md:7
@@ -26011,16 +26097,22 @@ msgid "n/a (they exist to be there)"
 msgstr ""
 
 #: src/reference/dependency-kinds.md:180
+msgid ""
+"The tables decide mounting; what a mounted head lets its consumer _name_ is "
+"the declaration-scoped law of [Nameability](#nameability) below."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:184
 msgid "The mount law — four passes, one gate"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:182
+#: src/reference/dependency-kinds.md:186
 msgid ""
 "All loader-owned; the session stays I/O-free and the compile graph never "
 "learns what a peer is."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:185
+#: src/reference/dependency-kinds.md:189
 msgid ""
 "**The `deps` walk — unchanged.** Recursive, name order, first-mount-wins, "
 "cycle guard, name-mismatch error. While walking, the loader records each "
@@ -26028,7 +26120,7 @@ msgid ""
 "every dep's manifest anyway)."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:189
+#: src/reference/dependency-kinds.md:193
 msgid ""
 "**The dev pass — root only.** The program root's `dev-deps` mount exactly "
 "like `deps`. A dep's dev table is **never** walked — a consumer's world "
@@ -26038,19 +26130,19 @@ msgid ""
 "recorded)."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:196
+#: src/reference/dependency-kinds.md:200
 msgid ""
 "**The peer gate — one post-closure pass.** After the full closure exists, "
 "for every mounted package and every `peer-deps` entry:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:198
+#: src/reference/dependency-kinds.md:202
 msgid ""
 "**required**: the peer must resolve in the session, else the D1 error. Never "
 "auto-pulled."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:200
+#: src/reference/dependency-kinds.md:204
 msgid ""
 "**optional, present** (any reason): the declarer's group file (the "
 "descriptor's `lib`, an impl-only `.rut`) is appended to its `Module.source` "
@@ -26059,11 +26151,11 @@ msgid ""
 "wasm mounts) is untouched."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:205
+#: src/reference/dependency-kinds.md:209
 msgid "**optional, absent**: inert — the group simply never mounts."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:206
+#: src/reference/dependency-kinds.md:210
 msgid ""
 "**paths**: the program root's own peer paths are read and name-checked even "
 "when dev-deps already supplied presence — a broken path is the loud D3 "
@@ -26074,7 +26166,7 @@ msgid ""
 "names, so one pass is a fixpoint."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:215
+#: src/reference/dependency-kinds.md:219
 msgid ""
 "**Compile — unchanged.** The graph splices each compilation unit from its "
 "origin-deduplicated leaf list (first position wins, topological order "
@@ -26082,7 +26174,98 @@ msgid ""
 "the pre-peer law."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:220
+#: src/reference/dependency-kinds.md:224
+msgid "Nameability"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:226
+msgid ""
+"The passes above decide what **mounts**; a separate, declaration-scoped law "
+"decides what a source may **name**. Mounting stays transitive — A's `deps` "
+"still pull B into the closure, and A still compiles against B's mounted rows "
+"— but nameability belongs to the consumer's own manifest: a package may "
+"`use` exactly the heads it declares itself,"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:236
+msgid ""
+"— and there is no ambient tier. `core` rides unconditionally (the graph "
+"threads the prelude into every unit, and the resolver passes the `core` head "
+"without a row); every other head must be the consumer's own declaration. "
+"Over-declaring stays legal — the law bounds uses by declarations, never "
+"declarations by uses — so a row naming a head the source never spells is "
+"inert (D4 guards the bad _shape_, a name in two tables)."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:244
+msgid ""
+"The dedicated diagnostic is **D5**, and it fires only when a head is MOUNTED "
+"but UNDECLARED by the consumer — an unmounted head keeps its existing shape "
+"(`NoModule` for a name nothing offers, D2 for a missing optional peer). D5 "
+"names the mount edge — who pulled the head in — and the fix, in two "
+"renderings:"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:250
+msgid ""
+"**The walked edge** (the consumer mounts through the dep walk, an archive "
+"group, or a dev row — there is a first-mount `mounted_by` edge to name): the "
+"puller and the jsonc row to add:"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:254
+msgid ""
+"```text\n"
+"cannot resolve `b` — `b` is mounted in this program (pulled by `a`) but "
+"`app` does not declare it; add \"b\": { \"path\": \"..\" } to `app`'s "
+"`rut.jsonc` `deps`\n"
+"```"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:258
+msgid ""
+"**The host edge** (a hand offer — no walk edge exists): the \"offered by the "
+"host\" clause, and a fix that names the manifest-builder doors, never a file:"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:262
+msgid ""
+"```text\n"
+"cannot resolve `b` — `b` is mounted in this program (offered by the host) "
+"but `c` does not declare it; declare it in the pkg's manifest — "
+"`Manifest::lib(\"c\", &[\"b\"])` or a `\"deps\"` row through "
+"`parse_manifest(..)`\n"
+"```"
+msgstr ""
+
+#: src/reference/dependency-kinds.md:266
+msgid ""
+"The closure check reads every mounted source's uses at every depth, so the "
+"law is per-package, not root-only: a dep naming a head it never declared is "
+"the same D5 with that dep as the consumer. dev-deps follow the same "
+"root-only law as their mount pass — the program root may name its dev-deps; "
+"a dep naming the root's dev-dep is D5."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:272
+msgid ""
+"**This is a breaking law change.** Mounting was always transitive, and "
+"nameability used to ride along with it: a program could `use` any head the "
+"closure happened to contain. Previously-compiling programs that rode a "
+"transitive head now refuse with D5 and the fix row — add the head to the "
+"consumer's own manifest."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:278
+msgid ""
+"Embedders and hand-mounted worlds are lawed by the same declaration table, "
+"carried structurally on the `Pkg` — `parse_manifest` for an embedded jsonc, "
+"`Manifest::lib(name, &[heads])` for an ad-hoc surface "
+"([embedding](embedding.md)). The wasm playground stamps the same shape, "
+"defaulting the program's declaration host-side to the offered lib names."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:285
 msgid ""
 "**Groups are satisfaction-only.** A group file contains the peer "
 "integration's wrapper families — newtype class decls and their inherent "
@@ -26096,81 +26279,81 @@ msgid ""
 "declaration surfaces do not gate."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:232
+#: src/reference/dependency-kinds.md:297
 msgid "The missing-peer matrix"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:234
+#: src/reference/dependency-kinds.md:299
 msgid "case"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:236
+#: src/reference/dependency-kinds.md:301
 msgid "required peer absent from the consumer's closure"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:236
+#: src/reference/dependency-kinds.md:301
 msgid ""
 "**D1** — loud at mount: names the package, the peer, and the fix. Not "
 "silent, not auto-pulled."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:237
+#: src/reference/dependency-kinds.md:302
 msgid "optional peer absent, integration never touched"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:237
+#: src/reference/dependency-kinds.md:302
 msgid "nothing — silent success; that _is_ the feature"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:238
+#: src/reference/dependency-kinds.md:303
 msgid "optional peer absent, integration referenced"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:238
+#: src/reference/dependency-kinds.md:303
 msgid ""
 "**D2** — the dedicated missing-peer diagnostic; never a bare unresolved name"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:239
+#: src/reference/dependency-kinds.md:304
 msgid "peer present (any reason)"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:239
+#: src/reference/dependency-kinds.md:304
 msgid "the integration mounts automatically — presence-based resolution"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:240
+#: src/reference/dependency-kinds.md:305
 msgid "self-build / dev mode"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:240
+#: src/reference/dependency-kinds.md:305
 msgid "dev-deps guarantee presence; no missing case exists"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:241
+#: src/reference/dependency-kinds.md:306
 msgid "a `peer-deps` path that does not resolve"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:241
+#: src/reference/dependency-kinds.md:306
 msgid ""
 "**D3** — loud manifest error at the pkg's own build; for consumers, required "
 "⇒ D1, optional ⇒ inert"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:243
+#: src/reference/dependency-kinds.md:308
 msgid ""
 "The four diagnostics, verbatim shapes (all load/resolution-time errors, "
 "never runtime traps):"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:246
+#: src/reference/dependency-kinds.md:311
 msgid ""
 "**D1** — `pkg \\`json\\` requires the peer \\`nmapset\\`, and \\`nmapset\\` "
 "is not in this program's closure — peers are not pulled transitively: add "
 "\"nmapset\": { \"path\": \"..\" } to your \\`rut.jsonc\\` \\`deps\\``"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:249
+#: src/reference/dependency-kinds.md:314
 msgid ""
 "**D2** — `cannot resolve \\`pouch\\` — \\`json\\`'s pouch integration is not "
 "mounted because the optional peer \\`pouch\\` is absent from this program's "
@@ -26180,22 +26363,29 @@ msgid ""
 "never reach this path — D1 fires at mount."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:255
+#: src/reference/dependency-kinds.md:320
 msgid ""
 "**D3** — three shapes, all _a packaging bug in json_: cannot read a manifest "
 "at the peer path; the manifest there names it `other`; cannot read the group "
 "file."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:258
+#: src/reference/dependency-kinds.md:323
 msgid "**D4** — the cross-table collision (both texts quoted above)."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:260
+#: src/reference/dependency-kinds.md:325
+msgid ""
+"The matrix's four are missing-_peer_ shapes. The fifth diagnostic lives "
+"outside it: **D5** — a head mounted but undeclared by its consumer, both "
+"renderings quoted verbatim in [Nameability](#nameability)."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:329
 msgid "Interplay"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:262
+#: src/reference/dependency-kinds.md:331
 msgid ""
 "**Placement and the gate — the gate precedes the compile.** The peer gate "
 "runs at load; the group compiles inside the declaring package's unit. Peer "
@@ -26205,7 +26395,7 @@ msgid ""
 "home ([Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:269
+#: src/reference/dependency-kinds.md:338
 msgid ""
 "**Structural satisfaction is the consumer-side story**: a consumer's own "
 "types satisfy json's interfaces by having the members, whether or not any "
@@ -26213,7 +26403,7 @@ msgid ""
 "`JsonVec` spelling with `pouch` absent produces D2, never a mystery."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:274
+#: src/reference/dependency-kinds.md:343
 msgid ""
 "**Binary format untouched.** Group files declare no host fns (no binding "
 "obligations appear or vanish), add no binary sections, and touch nothing the "
@@ -26221,7 +26411,7 @@ msgid ""
 "consumer's binary differs only by which wrappers mounted."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:279
+#: src/reference/dependency-kinds.md:348
 msgid ""
 "**Dev-deps are invisible to bundles-as-consumers.** A packed package carries "
 "its peer groups; a consumer packing _their_ app never pulls the package's "
@@ -26229,19 +26419,23 @@ msgid ""
 "leak into consumer worlds ([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:284
+#: src/reference/dependency-kinds.md:353
 msgid ""
 "**The LSP completes group impls unconditionally.** Peer gating is a "
 "resolution-time concept the language server does not model; it embeds the "
-"toolchain packages' sources and never parses manifests. Recorded as "
-"accepted: the LSP is advisory; the compiler is the law."
+"toolchain packages' sources and never parses manifests. The same accepted "
+"divergence covers nameability: the server indexes every dep it can reach "
+"(any depth, the root's dev-deps too) and completes heads the compiler's D5 "
+"would refuse for an undeclaring consumer — it runs no declaration-scoped "
+"filter and raises no D5. Recorded as accepted: the LSP is advisory; the "
+"compiler is the law."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:289
+#: src/reference/dependency-kinds.md:362
 msgid "Consuming a peer-gated package"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:291
+#: src/reference/dependency-kinds.md:364
 msgid ""
 "```jsonc\n"
 "// an app that wants json's pouch integration\n"
@@ -26255,7 +26449,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:302
+#: src/reference/dependency-kinds.md:375
 msgid ""
 "The group mounts because `pouch` is anywhere in the closure — no extra "
 "declaration beyond having the package. Drop the `pouch` row and `json` "

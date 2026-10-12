@@ -53,7 +53,7 @@ The keys, all of them:
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
 | `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
-| `deps` | the transitively mounted dependencies — one source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`). Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
+| `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `peer-deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`). Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
 | `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `dev-deps` | mounted only while building/testing this pkg itself |
 | `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
@@ -79,9 +79,13 @@ the fix — comments are the prose now.
 
 ## Resolution laws
 
-- **Exact, single-step.** A use path resolves only if a module with that
-  `name` is mounted. Nothing is derived from directories or file
-  layouts beyond the `mod` declarations the source itself spells.
+- **Exact, single-step.** A use path resolves only if a module with
+  that `name` is mounted **and the consuming manifest declares it** —
+  nameability is declaration-scoped, so a mounted-but-undeclared head
+  is the D5 diagnostic naming the mount edge and the fix row
+  ([Dependency kinds](dependency-kinds.md)). Nothing is derived from
+  directories or file layouts beyond the `mod` declarations the source
+  itself spells.
 - **The walk is recursive, with a cycle guard; first mount wins.** An
   already-mounted name (the embedder's, the root's, or an earlier dep's)
   is never overwritten — which is what makes peer presence-by-name sound:

@@ -81,6 +81,14 @@ lands in type position (`Column` in an annotation) or value position
 (`Logger(..)`), so there is nothing for the user to annotate. An
 unreferenced use name is a lint, not an error.
 
+The head itself is **declaration-scoped**: a package may `use` exactly
+the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps`
+when the package is the program root) ∪ `core`. Mounting stays
+transitive (a dep's own `deps` still join the program's closure), but
+a head that is mounted without being declared by *this* package is the
+resolver's dedicated diagnostic, naming who pulled it in and the row
+to add ([dependency kinds](dependency-kinds.md)).
+
 The engine's builtin names — the primitives, `opaque`, `panic`,
 `type_id<T>()`, `str(x)` — are **ambient**: no `use` is
 needed for them. The gated names resolve only through

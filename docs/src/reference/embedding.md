@@ -127,7 +127,11 @@ the graph, the registration strings must spell the same tree.
    contract); an unmounted scope's rows merge inert — an embedder
    wiring bug is never a rut diagnostic;
 4. **the closure check** — every `use` name in every offered source
-   resolves; a miss is `Err(RunError)`, carrying the resolver's own
+   resolves against the offered world AND its consumer's own manifest
+   (nameability is declaration-scoped: `deps` ∪ `peer-deps` ∪ root
+   `dev-deps` ∪ `core`; a mounted-but-undeclared head is the dedicated
+   D5 diagnostic, its host clause naming the builder doors for a hand
+   offer); a miss is `Err(RunError)`, carrying the resolver's own
    diagnostic;
 5. **parse → check → LIR → link.**
 
@@ -186,6 +190,38 @@ async pair are ordinary tree packages: the host offers
 `rut_native::tree_pkg("calc")` when the program's surface needs it and
 binds `rut_std::math::pkg()` for the bodies ([core and the swappable
 packages](stdlib.md)).
+
+### Hand mounts carry a manifest
+
+A hand-offered world is lawed by the same declaration table as a walked
+one — nameability is declaration-scoped, so a consumer may `use`
+exactly the heads ITS manifest names — the manifest just travels
+structurally instead of as a file. Two builder doors:
+
+- **Real manifests** — parse the embedded jsonc and stamp it:
+  `Pkg::manifest(parse_manifest(include_str!("../pkg/rut.jsonc")))`.
+  The tree's own `rut.jsonc` stays the single source of truth; the wasm
+  host mounts every std pkg this way.
+- **Ad-hoc surfaces** — `Manifest::lib(name, &[heads])` stamps the
+  structural form directly, no json text anywhere. 05's `web` package
+  is the worked example: embedder-registered, no artifact, no path/url
+  — a structural-only declaration of the heads its sources name.
+
+A hand offer has no walk edge, so D5's mount edge renders the
+structural clause — *"offered by the host"* — and the fix names the two
+builder doors, never a file
+([dependency kinds](dependency-kinds.md)). Declared-unused rows stay
+legal: the law bounds uses by declarations, never declarations by uses.
+
+The wasm playground rides the same law with a host-side default: the
+page's compile lane accepts an optional consumer manifest (jsonc)
+beside the source — `rut_compile_manifest` in the raw ABI (a manifest
+that does not parse returns as a span-0 diagnostic) — while plain
+`rut_compile` defaults the program's declaration to the offered lib
+names (`ink_host`, `nmap_host`, `ink`, `pouch`, `nmapset`, `flow`,
+`async_host`, `futures`, `strbuild_host`, `strbuild`, `json`, `calc` —
+`core` stays row-free; the prelude is free by law), computed from the
+world the host actually mounts. A `use` outside the declared set is D5.
 
 ## Url deps — the remote policy (`DepRemote` + `HttpRemote`)
 
