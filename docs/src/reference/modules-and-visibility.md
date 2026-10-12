@@ -200,4 +200,6 @@ and every class member — carries a visibility:
   representation. Only `pub` names enter a module's export table; a
   non-exported declaration is *known* inside its module but *nameable*
   nowhere else — which is how libraries hide implementation surfaces
-  behind exported ones.
+  behind exported ones. Hiding stops at the checker's door: every
+  non-generic, non-async fn/method body is type-checked even when
+  nothing calls it.
