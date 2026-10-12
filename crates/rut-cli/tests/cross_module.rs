@@ -73,7 +73,7 @@ fn cross_module_member_call_runs_the_foreign_members() {
     let out = run_graph(&[
         ("shapes", SHAPES),
         ("app", "\
-use shapes::{Point, make_point};
+use shapes::Point;
 entry fn main() -> i32 {
     let p = Point { x: 3.0 };
     let a = p.area();

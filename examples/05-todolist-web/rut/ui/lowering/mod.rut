@@ -41,6 +41,7 @@ pub(pkg) fn tag_of_kind(w: widget::Widget) -> str {
     if (k == widget::WKind::Checkbox) { return "button"; }
     if (k == widget::WKind::Field) { return "input"; }
     panic("t1: unknown widget kind");
+    return ""; // unreachable: the panic above is the loud answer
 }
 
 fn tvar_token(v: widget::TVariant) -> str {
@@ -50,12 +51,14 @@ fn tvar_token(v: widget::TVariant) -> str {
     if (v == widget::TVariant::Pending) { return "t1-text--pending"; }
     if (v == widget::TVariant::Muted) { return "t1-text--muted"; }
     panic("t1: unknown text variant");
+    return ""; // unreachable: the panic above is the loud answer
 }
 
 fn bvar_token(v: widget::BVariant) -> str {
     if (v == widget::BVariant::Primary) { return "t1-btn--primary"; }
     if (v == widget::BVariant::Quiet) { return "t1-btn--quiet"; }
     panic("t1: unknown button variant");
+    return ""; // unreachable: the panic above is the loud answer
 }
 
 fn check_token(on: bool) -> str {
@@ -84,6 +87,7 @@ fn ladder_token(name: str, n: i32) -> str {
         return f"t1-{name}-16";
     }
     panic(f"t1: {name} {n} is off the utility ladder — 0/4/8/12/16 only");
+    return ""; // unreachable: the panic above is the loud answer
 }
 
 /// Space-join two tokens, skipping empties.

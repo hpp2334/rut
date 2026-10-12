@@ -307,6 +307,7 @@ impl Store {
             return opaque::downcast<R>(opaque(arg));
         }
         panic("store: a derived is not writable — read it with get");
+        return opaque::downcast<R>(opaque(arg)); // unreachable: the panic above is the loud answer
     }
 
     // ---- the pull ----

@@ -1155,6 +1155,7 @@ entry fn main() -> (?str, str) {
     const SOFT_PANIC: &str = r#"
 entry fn main() -> (?str, str) {
     panic("wiring drift");
+    return (nil, ""); // unreachable: the panic above is the loud answer
 }
 "#;
 
