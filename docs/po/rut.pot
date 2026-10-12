@@ -338,7 +338,7 @@ msgstr ""
 msgid "Project structure and rut.jsonc"
 msgstr ""
 
-#: src/SUMMARY.md:112 src/tutorial/modules.md:229
+#: src/SUMMARY.md:112 src/tutorial/modules.md:231
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr ""
@@ -1328,23 +1328,24 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:52
 msgid ""
 "Every type has a zero value: `0` for numbers, `false` for `bool`, the empty "
-"string, `nil` for nullables. Omit a field in a struct literal and it takes "
-"the field's initializer if there is one, else the type's zero value (see "
-"[structs, enums, and classes](types.md))."
+"string, `nil` for nullables. But nothing fills a struct literal's fields for "
+"you: a literal must cover every field — spelled in the literal, or covered "
+"by the field's declared initializer (see [structs, enums, and "
+"classes](types.md))."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:57
+#: src/tutorial/values-and-variables.md:58
 msgid "Numbers"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:59
+#: src/tutorial/values-and-variables.md:60
 msgid ""
 "An unsuffixed integer literal defaults to `i32`; an unsuffixed float "
 "defaults to `f32`. The default is also a _ceiling_: a literal adapts to the "
 "expected type only while it fits the default."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:63
+#: src/tutorial/values-and-variables.md:64
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1364,13 +1365,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:83
+#: src/tutorial/values-and-variables.md:84
 msgid ""
 "Conversions are explicit casts: `expr as T`. Casts truncate like C — they "
 "never trap."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:86
+#: src/tutorial/values-and-variables.md:87
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1383,11 +1384,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:100
+#: src/tutorial/values-and-variables.md:101
 msgid "Arithmetic has two sharp edges:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:102
+#: src/tutorial/values-and-variables.md:103
 msgid ""
 "**Mixed widths do not mix.** Both operands must have the same width — "
 "convert one side first. `let mut total = 0.0;` makes an `f32`, and adding an "
@@ -1395,24 +1396,24 @@ msgid ""
 "mean double precision."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:106
+#: src/tutorial/values-and-variables.md:107
 msgid ""
 "**Overflow, division by zero, and out-of-bounds indexing trap.** For the "
 "explicit non-trapping ladder (`wrapping_add`, `saturating_mul`, "
 "`checked_add`), see [the standard library](stdlib.md)."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:110
+#: src/tutorial/values-and-variables.md:111
 msgid "Text: plain, raw, and format strings"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:112
+#: src/tutorial/values-and-variables.md:113
 msgid ""
 "Three literal forms. A plain string is always inert — no interpolation ever "
 "happens implicitly."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:115
+#: src/tutorial/values-and-variables.md:116
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1428,7 +1429,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:132
+#: src/tutorial/values-and-variables.md:133
 msgid ""
 "Plain and format strings share the same escapes (`\\t \\n"
 " \\r \\\\ \\\"` and `\\u{...}`). In an f-string, `{ expr }` splices any "
@@ -1436,7 +1437,7 @@ msgid ""
 "(bind one to a variable first). `{{` and `}}` are literal braces:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:137
+#: src/tutorial/values-and-variables.md:138
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1448,7 +1449,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:150
+#: src/tutorial/values-and-variables.md:151
 msgid ""
 "What an f-string can render: integers (decimal), floats (shortest round-trip "
 "decimal: `3.5`, `0.1`), `bool` (`true`/`false`), `str` (contents), and enum "
@@ -1458,15 +1459,15 @@ msgid ""
 "development."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:157
+#: src/tutorial/values-and-variables.md:158
 msgid "Sequences and buffers"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:159
+#: src/tutorial/values-and-variables.md:160
 msgid "The fixed array `[T]` is built from a literal or a repeat:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:161
+#: src/tutorial/values-and-variables.md:162
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1480,7 +1481,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:176
+#: src/tutorial/values-and-variables.md:177
 msgid ""
 "The growable sequence is `Vec<T>` (from the `pouch` package — `use pouch::{ "
 "Vec };`): `Vec::new()`, `Vec::from([..])`, `Vec<i32>::filled(0, 1024)`, "
@@ -1488,14 +1489,14 @@ msgid ""
 "standard library](stdlib.md) for the full surface."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:182
+#: src/tutorial/values-and-variables.md:183
 msgid ""
 "`bytes` is the binary primitive. `s.encode()` turns text into octets, "
 "`b.decode()` reads it back (lossy UTF-8), `bytes::zeroed(n)` and "
 "`bytes::from(a)` build buffers directly:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:186
+#: src/tutorial/values-and-variables.md:187
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1509,18 +1510,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:201
+#: src/tutorial/values-and-variables.md:202
 msgid "Sharing: the one rule"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:203
+#: src/tutorial/values-and-variables.md:204
 msgid ""
 "Primitives and `fn` values **copy** on assignment, argument passing, and "
 "return. **Every other value is a shared cell**: `let q = p` is an O(1) "
 "handle move, and a write through any alias is visible through all of them."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:208
+#: src/tutorial/values-and-variables.md:209
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1537,67 +1538,67 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:226
+#: src/tutorial/values-and-variables.md:227
 msgid "Equality follows the same split:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:228
+#: src/tutorial/values-and-variables.md:229
 msgid "Operands"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:228
+#: src/tutorial/values-and-variables.md:229
 #: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "`==` means"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:230
+#: src/tutorial/values-and-variables.md:231
 msgid "numbers, `bool`"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:230
+#: src/tutorial/values-and-variables.md:231
 msgid "value comparison"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:231
+#: src/tutorial/values-and-variables.md:232
 msgid "`str`, `bytes`"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:231
+#: src/tutorial/values-and-variables.md:232
 msgid "content comparison"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:232
+#: src/tutorial/values-and-variables.md:233
 msgid "everything else"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:232
+#: src/tutorial/values-and-variables.md:233
 msgid "cell identity — two separately-built literals are never equal"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:234
+#: src/tutorial/values-and-variables.md:235
 msgid ""
 "The one copy escape hatch is `bytes::clone()` — a fresh buffer with the same "
 "octets. There is no generic copy for any other type; if you need a divergent "
 "value, build a new one."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:238
+#: src/tutorial/values-and-variables.md:239
 msgid ""
 "Absence is `nil` on a nullable `?T` — see [errors and "
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:241
+#: src/tutorial/values-and-variables.md:242
 #: src/reference/literals-and-inference.md:79
 msgid "Tuples"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:243
+#: src/tutorial/values-and-variables.md:244
 msgid "Records `(A, B)` are first-class values with numeric fields:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:245
+#: src/tutorial/values-and-variables.md:246
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1615,27 +1616,27 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:264
+#: src/tutorial/values-and-variables.md:265
 msgid ""
 "The pair is also rut's standard error channel — the next chapters use it "
 "constantly."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
-#: src/tutorial/functions.md:242 src/tutorial/types.md:278
+#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:312
+#: src/tutorial/functions.md:242 src/tutorial/types.md:283
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:278 src/tutorial/async.md:180
+#: src/tutorial/modules.md:280 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:269
+#: src/tutorial/values-and-variables.md:270
 msgid ""
 "Put this in a module directory and run it: `literals/rut.jsonc` names the "
 "two packages the program uses, and the program is `literals/mod.rut`:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:273
+#: src/tutorial/values-and-variables.md:274
 msgid ""
 "```jsonc\n"
 "// literals/rut.jsonc\n"
@@ -1654,13 +1655,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:286
+#: src/tutorial/values-and-variables.md:287
 msgid ""
 "Save the program as `literals/mod.rut`, then `rut install literals` (fetches "
 "the two url deps and writes `rut.lock`) and `rut run literals`:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:290
+#: src/tutorial/values-and-variables.md:291
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -1704,7 +1705,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:330
+#: src/tutorial/values-and-variables.md:331
 msgid "Next: [control flow and `when`](control-flow.md)."
 msgstr ""
 
@@ -2549,8 +2550,8 @@ msgid ""
 "    let log = Logger(\"structs\");\n"
 "    let p = Point { x: 1, y: 2 };                    // every field, by "
 "name\n"
-"    let s = Style {};                                // defaults fill the "
-"rest\n"
+"    let s = Style {};                                // declared "
+"initializers fill the rest\n"
 "    let r = Rect { min: Point { x: 0, y: 0 }, max: p };\n"
 "    log.info(f\"r.max.x={r.max.x} width={s.width}\");\n"
 "}\n"
@@ -2559,13 +2560,21 @@ msgstr ""
 
 #: src/tutorial/types.md:89
 msgid ""
+"A literal must cover **every** field — spelled in the literal, or covered by "
+"the field's declared initializer. Omitting a field with no initializer is a "
+"compile error, and so is spelling a field twice (see "
+"[structs](../reference/structs.md) for the exact diagnostics)."
+msgstr ""
+
+#: src/tutorial/types.md:94
+msgid ""
 "All fields are public, always — member visibility in a struct is a compile "
 "error. Privacy is what classes are for. Methods live in `impl` blocks with "
 "real visibility — `pub fn` exports cross-module, plain `fn` stays "
 "module-private (see [structs](../reference/structs.md))."
 msgstr ""
 
-#: src/tutorial/types.md:95
+#: src/tutorial/types.md:100
 msgid ""
 "**Structs share.** A struct value is a handle to a heap cell: assignment, "
 "arguments, and returns all pass the handle, and a write through any alias is "
@@ -2573,7 +2582,7 @@ msgid ""
 "parameter:"
 msgstr ""
 
-#: src/tutorial/types.md:100
+#: src/tutorial/types.md:105
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2590,20 +2599,20 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:118
+#: src/tutorial/types.md:123
 msgid ""
 "`==` on struct values is **cell identity** — `q == p` is true (one cell), `p "
 "== Point { x: 4, y: 2 }` is false (a different cell). To compare field by "
 "field, write a function."
 msgstr ""
 
-#: src/tutorial/types.md:122
+#: src/tutorial/types.md:127
 msgid ""
 "Recursive shapes are legal — a record may name itself through a nullable "
 "field, because `?Node` is one word:"
 msgstr ""
 
-#: src/tutorial/types.md:125
+#: src/tutorial/types.md:130
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2633,11 +2642,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:156
+#: src/tutorial/types.md:161
 msgid "Classes — sealed records"
 msgstr ""
 
-#: src/tutorial/types.md:158
+#: src/tutorial/types.md:163
 msgid ""
 "A class adds two things to a struct: module-private fields and construction "
 "gated through class methods. There is no outside literal — the only way to "
@@ -2647,7 +2656,7 @@ msgid ""
 "zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 
-#: src/tutorial/types.md:166
+#: src/tutorial/types.md:171
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2678,37 +2687,37 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:198
+#: src/tutorial/types.md:203
 msgid "The pieces:"
 msgstr ""
 
-#: src/tutorial/types.md:200
+#: src/tutorial/types.md:205
 msgid ""
 "**A class method is just a function without `self`.** `Rect::new(w, h)`, "
 "`Version::parse(s)`, `Rect::from_square(s)` — any no-`self` method returning "
 "`Self` is a constructor. `new` is a convention, not syntax."
 msgstr ""
 
-#: src/tutorial/types.md:203
+#: src/tutorial/types.md:208
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the "
 "class's own impl block, never outside. This is the seal."
 msgstr ""
 
-#: src/tutorial/types.md:205
+#: src/tutorial/types.md:210
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; `mut "
 "self` marks methods that write. A computed property is a method "
 "(`c.count()`)."
 msgstr ""
 
-#: src/tutorial/types.md:208
+#: src/tutorial/types.md:213
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it "
 "can check arguments and refuse:"
 msgstr ""
 
-#: src/tutorial/types.md:211
+#: src/tutorial/types.md:216
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2742,13 +2751,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:246
+#: src/tutorial/types.md:251
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, "
 "not a crash:"
 msgstr ""
 
-#: src/tutorial/types.md:249
+#: src/tutorial/types.md:254
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -2760,39 +2769,39 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:258
+#: src/tutorial/types.md:263
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code "
 "sharing is composition (hold a helper in a field) or free functions; "
 "polymorphism is structural interfaces — the next chapter."
 msgstr ""
 
-#: src/tutorial/types.md:262
+#: src/tutorial/types.md:267
 msgid "Visibility recap"
 msgstr ""
 
-#: src/tutorial/types.md:264
+#: src/tutorial/types.md:269
 msgid "Struct members: public, always."
 msgstr ""
 
-#: src/tutorial/types.md:265
+#: src/tutorial/types.md:270
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers "
 "(also `pub(mod)`, `pub(super)`, `pub(self)`)."
 msgstr ""
 
-#: src/tutorial/types.md:267
+#: src/tutorial/types.md:272
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, "
 "a bare `class Helper` stays in its module. See [modules and "
 "packages](modules.md)."
 msgstr ""
 
-#: src/tutorial/types.md:271
+#: src/tutorial/types.md:276
 msgid "Struct or class?"
 msgstr ""
 
-#: src/tutorial/types.md:273
+#: src/tutorial/types.md:278
 msgid ""
 "Default to a struct: data in, data out, shared like every other value. Reach "
 "for a class when the type has rules that construction must enforce, holds "
@@ -2800,7 +2809,7 @@ msgid ""
 "explicit cleanup."
 msgstr ""
 
-#: src/tutorial/types.md:280
+#: src/tutorial/types.md:285
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2853,7 +2862,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:334
+#: src/tutorial/types.md:339
 msgid "Next: [interfaces and impl blocks](interfaces.md)."
 msgstr ""
 
@@ -3795,7 +3804,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:165
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:169
 msgid "Visibility"
 msgstr ""
 
@@ -3805,12 +3814,12 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:175
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:175
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -3823,7 +3832,7 @@ msgstr ""
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:173
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:177
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -3839,7 +3848,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:175
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:179
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -3878,26 +3887,28 @@ msgid ""
 "are core's import-gated names — the disposal context `DisposalContext` and "
 "the weak reference `Weak` — they resolve only through `use core::{ .. }`, "
 "like any package name. Package names from your manifest are imported the "
-"same way; an unused name in a `use` is a lint, not an error."
+"same way; an unused name in a `use` is a lint, not an error, while a name "
+"the target doesn't export is rejected at the use line itself — `` `ink` has "
+"no `Nope` — unknown import ``."
 msgstr ""
 
-#: src/tutorial/modules.md:82
+#: src/tutorial/modules.md:84
 msgid ""
 "Within one module, everything is visible — including declarations later in "
 "the file. Order never matters."
 msgstr ""
 
-#: src/tutorial/modules.md:85
+#: src/tutorial/modules.md:87
 msgid "Packages: `rut.jsonc`"
 msgstr ""
 
-#: src/tutorial/modules.md:87
+#: src/tutorial/modules.md:89
 msgid ""
 "A package is a directory with a manifest. The small but complete case — one "
 "library package and one app:"
 msgstr ""
 
-#: src/tutorial/modules.md:100
+#: src/tutorial/modules.md:102
 msgid ""
 "```jsonc\n"
 "// greet/pkg/rut.jsonc\n"
@@ -3915,7 +3926,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:113
+#: src/tutorial/modules.md:115
 msgid ""
 "```rut\n"
 "// greet/pkg/mod.rut\n"
@@ -3950,7 +3961,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:145
+#: src/tutorial/modules.md:147
 msgid ""
 "The app names its dependencies in `deps`, by url or path. One table carries "
 "two laws: **mounting** is transitive — each package pulls its own "
@@ -3962,7 +3973,7 @@ msgid ""
 "`deps`):"
 msgstr ""
 
-#: src/tutorial/modules.md:154
+#: src/tutorial/modules.md:156
 msgid ""
 "```jsonc\n"
 "// greet/app/rut.jsonc\n"
@@ -3981,7 +3992,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:169
+#: src/tutorial/modules.md:171
 msgid ""
 "```rut\n"
 "// greet/app/mod.rut\n"
@@ -3998,7 +4009,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:183
+#: src/tutorial/modules.md:185
 msgid ""
 "Run the app from its directory — `rut install` fetches the url deps and "
 "writes the app's `rut.lock` (the pin ledger every load verifies against; it "
@@ -4006,7 +4017,7 @@ msgid ""
 "run .`:"
 msgstr ""
 
-#: src/tutorial/modules.md:199
+#: src/tutorial/modules.md:201
 msgid ""
 "Resolution walks `deps` recursively (a dep's own `deps` mount with it), with "
 "a cycle guard and first-mount-wins. The walk decides what is **mounted**; "
@@ -4017,18 +4028,18 @@ msgid ""
 "kinds](../reference/dependency-kinds.md))."
 msgstr ""
 
-#: src/tutorial/modules.md:208
+#: src/tutorial/modules.md:210
 msgid "One package, several files"
 msgstr ""
 
-#: src/tutorial/modules.md:210
+#: src/tutorial/modules.md:212
 msgid ""
 "A package's body can be split across files — **file modules**. The root "
 "module is `mod.rut` beside the manifest, and a `mod NAME;` declaration in it "
 "mounts the sibling `NAME/mod.rut` as a child module:"
 msgstr ""
 
-#: src/tutorial/modules.md:214
+#: src/tutorial/modules.md:216
 msgid ""
 "```text\n"
 "app/\n"
@@ -4040,7 +4051,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:223
+#: src/tutorial/modules.md:225
 msgid ""
 "Each file is its own module: cross-file references are qualified "
 "(`domain::Todo`, `world::boot(..)`), and visibility is per module — private "
@@ -4049,11 +4060,11 @@ msgid ""
 "app::world::{ World }`)."
 msgstr ""
 
-#: src/tutorial/modules.md:231
+#: src/tutorial/modules.md:233
 msgid "Beyond `deps`, a manifest can declare two other relations:"
 msgstr ""
 
-#: src/tutorial/modules.md:233
+#: src/tutorial/modules.md:235
 msgid ""
 "**`peer-deps`** — a package this one _integrates with_ but never pulls: the "
 "consumer supplies it, or (with `optional = true`) the integration mounts "
@@ -4062,13 +4073,13 @@ msgid ""
 "for programs that carry the container packages."
 msgstr ""
 
-#: src/tutorial/modules.md:239
+#: src/tutorial/modules.md:241
 msgid ""
 "**`dev-deps`** — mounted only when building/testing the package itself, "
 "never for a consumer."
 msgstr ""
 
-#: src/tutorial/modules.md:242
+#: src/tutorial/modules.md:244
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -4084,48 +4095,48 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:254
+#: src/tutorial/modules.md:256
 msgid "`entry fn` — the host-facing surface"
 msgstr ""
 
-#: src/tutorial/modules.md:256
+#: src/tutorial/modules.md:258
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function "
 "to the _embedding host_, with its signature checked against the boundary's "
 "crossing rules at compile time:"
 msgstr ""
 
-#: src/tutorial/modules.md:264
+#: src/tutorial/modules.md:266
 msgid ""
 "An embedded application drives these entries; `rut run` executes the "
 "program's entry designation — exactly one `entry fn` runs it, several take "
 "`--entry <name>`. See [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
 
-#: src/tutorial/modules.md:269
+#: src/tutorial/modules.md:271
 msgid "Tooling"
 msgstr ""
 
-#: src/tutorial/modules.md:272
+#: src/tutorial/modules.md:274
 msgid "# compile + run\n"
 msgstr ""
 
-#: src/tutorial/modules.md:273
+#: src/tutorial/modules.md:275
 msgid "# format in place\n"
 msgstr ""
 
-#: src/tutorial/modules.md:274
+#: src/tutorial/modules.md:276
 msgid "# a self-contained bundle\n"
 msgstr ""
 
-#: src/tutorial/modules.md:280
+#: src/tutorial/modules.md:282
 msgid ""
 "The `greet` project above is complete as shown — two directories, two "
 "manifests, two sources. Copy the trees into files and `rut run .` from "
 "`greet/app` to see:"
 msgstr ""
 
-#: src/tutorial/modules.md:288
+#: src/tutorial/modules.md:290
 msgid "Next: [async: futures and await](async.md)."
 msgstr ""
 
@@ -10520,10 +10531,13 @@ msgid ""
 "the leaf). rut is fully statically typed: the compiler resolves every used "
 "name and knows from usage whether it lands in type position (`Column` in an "
 "annotation) or value position (`Logger(..)`), so there is nothing for the "
-"user to annotate. An unreferenced use name is a lint, not an error."
+"user to annotate. A use line may spell only what the target exports: a name "
+"the target doesn't declare is rejected at the use line itself — `` `ink` has "
+"no `Nope` — unknown import `` — not later, at a call site that might never "
+"be written. An unreferenced use name is a lint, not an error."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:84
+#: src/reference/modules-and-visibility.md:88
 msgid ""
 "The head itself is **declaration-scoped**: a package may `use` exactly the "
 "heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps` when the "
@@ -10534,7 +10548,7 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:92
+#: src/reference/modules-and-visibility.md:96
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, "
 "`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
@@ -10548,11 +10562,11 @@ msgid ""
 "only through `use`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:106
+#: src/reference/modules-and-visibility.md:110
 msgid "Qualified positions"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:108
+#: src/reference/modules-and-visibility.md:112
 msgid ""
 "Inside one package, a declaration of another module is nameable where a path "
 "is legal — a type annotation, a call, a field read — by **qualified "
@@ -10566,48 +10580,48 @@ msgid ""
 "structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:120
+#: src/reference/modules-and-visibility.md:124
 msgid "form"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:120 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:124 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:120
+#: src/reference/modules-and-visibility.md:124
 msgid "door"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "use path"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "`::` — cross-package, the import"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "qualified position"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "`::` — intra-package, at the use site"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:125
+#: src/reference/modules-and-visibility.md:129
 msgid "Module-level `let`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:127
+#: src/reference/modules-and-visibility.md:131
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, "
 "builtin operators over load-time expressions, struct literals whose fields "
@@ -10616,18 +10630,18 @@ msgid ""
 "Calls to user functions are not load-time expressions."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:138
+#: src/reference/modules-and-visibility.md:142
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:142
+#: src/reference/modules-and-visibility.md:146
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:144
+#: src/reference/modules-and-visibility.md:148
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "`entry fn main` for a script, sync or async. `entry fn` publishes a function "
@@ -10636,18 +10650,18 @@ msgid ""
 "ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:151
+#: src/reference/modules-and-visibility.md:155
 msgid "Bindings: `let` vs `let mut`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:153
+#: src/reference/modules-and-visibility.md:157
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through "
 "`x`, and no `mut self` method calls on it. It is a **read-only view of the "
 "shared object**."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:156
+#: src/reference/modules-and-visibility.md:160
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object "
 "it holds**. Every non-primitive is a shared cell (see [By-reference and "
@@ -10656,59 +10670,59 @@ msgid ""
 "path must run through a `mut` binding."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:161
+#: src/reference/modules-and-visibility.md:165
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the "
 "caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn "
 "area(p: Point)` promises not to."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:167
+#: src/reference/modules-and-visibility.md:171
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:173
+#: src/reference/modules-and-visibility.md:177
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:174
+#: src/reference/modules-and-visibility.md:178
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:174
+#: src/reference/modules-and-visibility.md:178
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:175
+#: src/reference/modules-and-visibility.md:179
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:176
+#: src/reference/modules-and-visibility.md:180
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:176
+#: src/reference/modules-and-visibility.md:180
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:178
+#: src/reference/modules-and-visibility.md:182
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:180
+#: src/reference/modules-and-visibility.md:184
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed but "
 "gated nothing; the parser refuses them with the fix (bare private, or "
 "`pub(super)`/`pub(pkg)`/`pub`)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:183
+#: src/reference/modules-and-visibility.md:187
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, and the `mod` edge "
@@ -10717,14 +10731,14 @@ msgid ""
 "the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:188
+#: src/reference/modules-and-visibility.md:192
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:191
+#: src/reference/modules-and-visibility.md:195
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -10735,7 +10749,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:199
+#: src/reference/modules-and-visibility.md:203
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -12255,16 +12269,27 @@ msgid "Fields may be given in any order, by name."
 msgstr ""
 
 #: src/reference/structs.md:98
-msgid "The literal must initialize **every** field that has no initializer."
-msgstr ""
-
-#: src/reference/structs.md:99
 msgid ""
-"An omitted field with an initializer takes it; `{}` with all-default fields "
-"is legal."
+"**The every-field-covered law**: a literal must cover **every** field — "
+"spelled in the literal, or covered by the field's declared initializer "
+"(`tag: str = \"...\"`). Omitting a field that has no initializer is a "
+"compile error — ``missing field `b` in the `P` literal (the "
+"every-field-covered law)`` — the silent zero-fill default is gone."
 msgstr ""
 
-#: src/reference/structs.md:102
+#: src/reference/structs.md:104
+msgid ""
+"A field spelled twice is a compile error — ``duplicate field `a` in the `P` "
+"literal`` — there is no last-wins."
+msgstr ""
+
+#: src/reference/structs.md:106
+msgid ""
+"An omitted field with an initializer takes it; `{}` with all-initialized "
+"fields is legal."
+msgstr ""
+
+#: src/reference/structs.md:109
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12276,8 +12301,8 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"t\");\n"
 "    let q = Point { x: 9, y: 9 };\n"
-"    let s = Style {};                     // zero-value defaults fill the "
-"fields\n"
+"    let s = Style {};                     // the declared initializers fill "
+"the fields\n"
 "    let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's "
 "cell\n"
 "    log.info(f\"{s.color} {r.max.x}\");\n"
@@ -12285,11 +12310,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:122
+#: src/reference/structs.md:129
 msgid "All fields public, always"
 msgstr ""
 
-#: src/reference/structs.md:124
+#: src/reference/structs.md:131
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a "
 "compile error (privacy needs construction control, which is the class's job "
@@ -12297,18 +12322,18 @@ msgid ""
 "members."
 msgstr ""
 
-#: src/reference/structs.md:129
+#: src/reference/structs.md:136
 msgid "Methods live in impl blocks"
 msgstr ""
 
-#: src/reference/structs.md:131
+#: src/reference/structs.md:138
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse "
 "error. Methods live in the inherent `impl S { .. }`, in the type's module "
 "only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
-#: src/reference/structs.md:136
+#: src/reference/structs.md:143
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -12324,14 +12349,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:147
+#: src/reference/structs.md:154
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports "
 "cross-module, plain `fn` is module-private. `Self` spells the struct, in "
 "signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 
-#: src/reference/structs.md:152
+#: src/reference/structs.md:159
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12352,30 +12377,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:174
+#: src/reference/structs.md:181
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for the members other code observes."
 msgstr ""
 
-#: src/reference/structs.md:177
+#: src/reference/structs.md:184
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:179
+#: src/reference/structs.md:186
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs "
 "construction control, which is the class's job — see [Classes and "
 "constructors](classes.md));"
 msgstr ""
 
-#: src/reference/structs.md:182
+#: src/reference/structs.md:189
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open "
 "literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:186
+#: src/reference/structs.md:193
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, "
 "`[disposal]`. And the old \"no destructor\" limit is gone: a shared value "
@@ -12384,18 +12409,18 @@ msgid ""
 "at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/structs.md:193
+#: src/reference/structs.md:200
 msgid "Interfaces and representation"
 msgstr ""
 
-#: src/reference/structs.md:195
+#: src/reference/structs.md:202
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same "
 "handle** — no allocation, no copy: the interface-typed value aliases the "
 "record, and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:199
+#: src/reference/structs.md:206
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -12403,7 +12428,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:204
+#: src/reference/structs.md:211
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."
@@ -12486,14 +12511,15 @@ msgid ""
 "**The `Self { field: expr, .. }` literal is the class-private construction** "
 "— legal anywhere inside the class body (class methods and instance methods "
 "alike); the class name spells it inside the body too (`Rect { .. }`). The "
-"literal must initialize every field without an initializer; field "
-"initializers run for omitted fields. Private fields are settable in the "
-"literal — inside the class body only. That privacy _is_ the seal: outside "
-"code can build a class value only by calling a class method that chooses to "
-"build one."
+"literal must initialize every field without an initializer — the "
+"every-field-covered law, structs and classes alike — and a field spelled "
+"twice is an error; field initializers run for omitted fields. Private fields "
+"are settable in the literal — inside the class body only. That privacy _is_ "
+"the seal: outside code can build a class value only by calling a class "
+"method that chooses to build one."
 msgstr ""
 
-#: src/reference/classes.md:69
+#: src/reference/classes.md:71
 msgid ""
 "**No implicit default construction.** A class whose fields all have "
 "initializers still needs an explicit `fn new() -> Self { return Self {}; }` "
@@ -12501,13 +12527,13 @@ msgid ""
 "method is **sealed** — constructible only inside its own body."
 msgstr ""
 
-#: src/reference/classes.md:75
+#: src/reference/classes.md:77
 msgid ""
 "**No parameter properties**: parameters are parameters — the `Self { field: "
 "name }` literal makes the param→field mapping explicit."
 msgstr ""
 
-#: src/reference/classes.md:78
+#: src/reference/classes.md:80
 msgid ""
 "**`async` class methods are allowed** — same function, `await` in the body. "
 "No partially constructed instance ever exists across an `await`: the `Self { "
@@ -12515,105 +12541,105 @@ msgid ""
 "frame."
 msgstr ""
 
-#: src/reference/classes.md:83
+#: src/reference/classes.md:85
 msgid "`[constructor]` — the designated construction surface"
 msgstr ""
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:87
 msgid ""
 "A bracket marker designates THE member a surface binds to — the member's "
 "name is free; the designation routes the call. Three designated surfaces, "
 "one law:"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "marker"
 msgstr ""
 
-#: src/reference/classes.md:89 src/reference/stdlib.md:117
+#: src/reference/classes.md:91 src/reference/stdlib.md:117
 #: src/reference/stdlib.md:217
 msgid "surface"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "caller"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "signature owner"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "body compiled"
 msgstr ""
 
-#: src/reference/classes.md:91 src/reference/stdlib.md:89
+#: src/reference/classes.md:93 src/reference/stdlib.md:89
 msgid "`[disposal]`"
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "cell death"
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "the engine, at refcount zero"
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "the engine — `(mut self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/classes.md:92 src/reference/stdlib.md:88
+#: src/reference/classes.md:94 src/reference/stdlib.md:88
 msgid "`[iterable]`"
 msgstr ""
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "`for (x of it)`"
 msgstr ""
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "the for-of desugar"
 msgstr ""
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "the member — its `emit` parameter fixes `E`"
 msgstr ""
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "fused into the loop ([interfaces](interfaces.md))"
 msgstr ""
 
-#: src/reference/classes.md:93 src/reference/stdlib.md:90
+#: src/reference/classes.md:95 src/reference/stdlib.md:90
 msgid "`[constructor]`"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "the call form `Type(..)`"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "user code"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "the member — its parameters fix the call's shape"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "byte-identical to `Point::from_xy(..)`"
 msgstr ""
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:97
 msgid ""
 "`[constructor]` designates the class's construction surface — the call form "
 "`Type(..)` binds to the one marked member:"
 msgstr ""
 
-#: src/reference/classes.md:98
+#: src/reference/classes.md:100
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12637,7 +12663,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:123
+#: src/reference/classes.md:125
 msgid ""
 "**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to "
 "`Point::from_xy(1.0, 2.0)` — the marker changes what the call form binds to, "
@@ -12646,7 +12672,7 @@ msgid ""
 "the bare name."
 msgstr ""
 
-#: src/reference/classes.md:129
+#: src/reference/classes.md:131
 msgid ""
 "**One designated constructor per class, on the inherent impl only.** Class "
 "bodies stay fields-only; a second `[constructor]` member is refused — "
@@ -12662,14 +12688,14 @@ msgid ""
 "and `[constructor]`\"."
 msgstr ""
 
-#: src/reference/classes.md:142
+#: src/reference/classes.md:144
 msgid ""
 "**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> "
 "?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` "
 "on a refused construction, exactly like the method call it is."
 msgstr ""
 
-#: src/reference/classes.md:146
+#: src/reference/classes.md:148
 msgid ""
 "**Newtypes never carry it** — `JsonI64(64)` is already the newtype's "
 "construction surface, the compiler-provided positional mint; there is "
@@ -12678,7 +12704,7 @@ msgid ""
 "singletons."
 msgstr ""
 
-#: src/reference/classes.md:151
+#: src/reference/classes.md:153
 msgid ""
 "**The seal holds.** Visibility rides the method's `pub` — an unannotated "
 "(module-private) constructor answers `Type(..)` only inside its own module. "
@@ -12688,20 +12714,20 @@ msgid ""
 "(`Point::from_xy`)."
 msgstr ""
 
-#: src/reference/classes.md:157
+#: src/reference/classes.md:159
 msgid ""
 "**Resolution order for `Name(args)`**: a local fn value, then free fns, then "
 "the prelude, then the newtype mint, then the designated constructor, then "
 "the error — a free fn named `Point` wins."
 msgstr ""
 
-#: src/reference/classes.md:160
+#: src/reference/classes.md:162
 msgid ""
 "**Generics ride the method-call path.** `Box(3)` infers exactly like "
 "`Box::of(3)` — the sugar IS the member call after resolution."
 msgstr ""
 
-#: src/reference/classes.md:162
+#: src/reference/classes.md:164
 msgid ""
 "**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, "
 "`default` — every existing class method keeps its place; the marker "
@@ -12709,18 +12735,18 @@ msgid ""
 "siblings."
 msgstr ""
 
-#: src/reference/classes.md:167
+#: src/reference/classes.md:169
 msgid "Newtypes: the one-field wrapper"
 msgstr ""
 
-#: src/reference/classes.md:169
+#: src/reference/classes.md:171
 msgid ""
 "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary "
 "class: exactly one field, `inner`, of the wrapped type. The positional "
 "spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr ""
 
-#: src/reference/classes.md:174
+#: src/reference/classes.md:176
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -12734,7 +12760,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:185
+#: src/reference/classes.md:187
 msgid ""
 "**The wrapped type is unrestricted** — primitives, composites, tuples, fn "
 "types, another module's class: `class Opt(?i64);`, `class Pair((i32, "
@@ -12744,7 +12770,7 @@ msgid ""
 "declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr ""
 
-#: src/reference/classes.md:192
+#: src/reference/classes.md:194
 msgid ""
 "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability "
 "exists exactly where the constructor is spelled. And no implicit forwarding: "
@@ -12752,14 +12778,14 @@ msgid ""
 "ordinary visibility) and its `impl` methods."
 msgstr ""
 
-#: src/reference/classes.md:197
+#: src/reference/classes.md:199
 msgid ""
 "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never "
 "`JsonExt`). Per-type wrappers with type-specific bodies when the bodies "
 "differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr ""
 
-#: src/reference/classes.md:201
+#: src/reference/classes.md:203
 msgid ""
 "**The generic instantiation law**: a binder is determined by the wrapped "
 "argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a "
@@ -12770,7 +12796,7 @@ msgid ""
 "str>(7)`, never `Pair<i32>(7)`."
 msgstr ""
 
-#: src/reference/classes.md:209
+#: src/reference/classes.md:211
 msgid ""
 "**The third-party adapter** (the orphan case, dissolved): `class "
 "TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the "
@@ -12778,7 +12804,7 @@ msgid ""
 "the newtype flag rides the class's surface row like the class itself does."
 msgstr ""
 
-#: src/reference/classes.md:214
+#: src/reference/classes.md:216
 msgid ""
 "A braced class — even one with a single `inner` field — has no call "
 "construction of its own: the positional spelling is what provides the "
@@ -12787,17 +12813,17 @@ msgid ""
 "the marker — its mint already IS `Name(v)`; everything else stays sealed."
 msgstr ""
 
-#: src/reference/classes.md:221
+#: src/reference/classes.md:223
 msgid ""
 "At runtime the construction mints a real cell: the wrapper is a value like "
 "every class."
 msgstr ""
 
-#: src/reference/classes.md:224
+#: src/reference/classes.md:226
 msgid "Methods: explicit `self`"
 msgstr ""
 
-#: src/reference/classes.md:226
+#: src/reference/classes.md:228
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the "
 "first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields "
@@ -12805,7 +12831,7 @@ msgid ""
 "`let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/classes.md:231
+#: src/reference/classes.md:233
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on "
 "the class itself (`Rect::new(..)`, `Self.new(..)` inside the body). Presence "
@@ -12813,23 +12839,23 @@ msgid ""
 "functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 
-#: src/reference/classes.md:236
+#: src/reference/classes.md:238
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes "
 "an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr ""
 
-#: src/reference/classes.md:239
+#: src/reference/classes.md:241
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, "
 "with the same visibility forms as fields."
 msgstr ""
 
-#: src/reference/classes.md:242
+#: src/reference/classes.md:244
 msgid "Member visibility"
 msgstr ""
 
-#: src/reference/classes.md:244
+#: src/reference/classes.md:246
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and "
 "visibility](modules-and-visibility.md)): an unannotated field or method is "
@@ -12839,11 +12865,11 @@ msgid ""
 "its module."
 msgstr ""
 
-#: src/reference/classes.md:251
+#: src/reference/classes.md:253
 msgid "Reference semantics and equality"
 msgstr ""
 
-#: src/reference/classes.md:253
+#: src/reference/classes.md:255
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see "
 "[By-reference and nullable](by-reference-and-nullable.md)): assignment "
@@ -12851,17 +12877,17 @@ msgid ""
 "field-wise comparison is an interface you write for it."
 msgstr ""
 
-#: src/reference/classes.md:258
+#: src/reference/classes.md:260
 msgid "No inheritance"
 msgstr ""
 
-#: src/reference/classes.md:260
+#: src/reference/classes.md:262
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no "
 "method overriding, no `super.m()`, no `protected`."
 msgstr ""
 
-#: src/reference/classes.md:262
+#: src/reference/classes.md:264
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or "
 "free functions; polymorphism is only the structural kind — a type used "
@@ -12869,7 +12895,7 @@ msgid ""
 "dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/classes.md:266
+#: src/reference/classes.md:268
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell "
 "payload (see [Reified types and layout](reified-types.md)) — no prefix "

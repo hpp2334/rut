@@ -25,48 +25,119 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (the `rut new`
-# documentation: cli.md gains the usage row and the `## new` section —
-# purpose sentence, behavior table, the two-file text listing;
-# first-program.md gains the scaffold shortcut after the manual
-# walkthrough; installation.md's usage line gains `new <dir>` and the
-# Try-it gains the one-step-equivalent sentence; stdlib.md's swappable
-# table gains the `flow` row. The std-v9 pin sweep touches only code
-# blocks — those fold to ""). Terminology per docs/po/GLOSSARY.md
-# (脚手架 / 拒绝覆盖 / 基名 / 派生名 / 可换 std 集合 / 推送管线 /
-# 固定值 / 退出码); code spans byte-identical (`rut new <dir>`,
-# `rut.jsonc`, `mod.rut`, `@std-v9`); link text translated, targets
-# untouched ([rut CLI](../reference/cli.md), [你的第一个 rut 程序]);
-# full-width punctuation in prose. Everything not in FRESH either
-# keeps its msgstr byte-for-byte (unchanged msgid), rides MECH (the
-# mechanical cutover shapes), or folds to "" — the English fallback BY
-# DESIGN. Code blocks fold to "" (the untranslated set is code-only).
-# FRESH is pruned after every landed sweep: once a msgstr is folded
-# into zh_CN.po it is kept byte-for-byte by the fold itself, so the
-# dict only ever carries translations for the CURRENT sweep's new and
-# changed strings. This sweep's seventeen entries landed and were
-# pruned; see the git history of this file.
+# Fresh translations for the strings this sweep changed (phase(11)
+# docs: the every-field-covered + duplicate-field literal laws and the
+# unknown-import law — structs.md, classes.md, types.md,
+# values-and-variables.md, modules-and-visibility.md,
+# tutorial/modules.md). Terminology per docs/po/GLOSSARY.md
+# (字段全覆盖法则 / 重复字段 / 未知导入 / 环境自带 / 声明初始化器);
+# code spans byte-identical (`tag: str = "..."`, `{}`, `use`,
+# `` `ink` has no `Nope` — unknown import ``, the missing/duplicate
+# field diagnostics — diagnostic text stays English inside the
+# sentence); link text translated, targets untouched; full-width
+# punctuation in prose. Everything not in FRESH either keeps its
+# msgstr byte-for-byte (unchanged msgid) or folds to "" — the English
+# fallback BY DESIGN. Code blocks fold to "" (the untranslated set is
+# code-only). FRESH is pruned after every landed sweep; the phase(9)
+# definite-return entry landed and was pruned; see the git history of
+# this file.
 FRESH = {
-    # phase(9) definite-return: the functions reference page's new
-    # bullet (the law + what the analysis sees). Code spans byte-
-    # identical (`return`, `break`/`continue`, `if`/`else`, `when`,
-    # `while (true)`); the diagnostic text stays English inside the
-    # sentence, as quoted; full-width punctuation in prose.
-    "A function WITH a result arrow must return on every path: a body that can "
-    "fall off the end diagnoses — `missing return: 'f' is '-> str' but a path "
-    "reaches the end of the body`, naming the function and its arrow — instead of "
-    "handing the caller a never-written value. The analysis sees `return`, "
-    "`break`/`continue`, an `if`/`else` whose arms both return, an exhaustive "
-    "`when` whose arms all return, and a `while (true)` with no `break` bound to "
-    "it (the scan-loop shape); dead statements after a `return` are still just "
-    "dead code. The same law covers the closure block form.":
-    "带结果箭头的函数必须在每条路径上返回：函数体可能执行到末尾自然结束时"
-    "会诊断——`missing return: 'f' is '-> str' but a path reaches the end of "
-    "the body`，点名函数及其箭头——而不是把一个从未写入的值交给调用方。"
-    "该分析能看到 `return`、`break`/`continue`、两个分支都返回的 "
-    "`if`/`else`、所有臂都返回的穷尽 `when`，以及没有绑定到自身的 "
-    "`break` 的 `while (true)`（扫描循环形态）；`return` 之后的死语句"
-    "仍然只是死代码。闭包块形式同样适用这条法则。",
+    # structs.md — the law bullets.
+    "**The every-field-covered law**: a literal must cover **every** field — "
+    "spelled in the literal, or covered by the field's declared initializer "
+    "(`tag: str = \"...\"`). Omitting a field that has no initializer is a "
+    "compile error — ``missing field `b` in the `P` literal (the "
+    "every-field-covered law)`` — the silent zero-fill default is gone.":
+    "**字段全覆盖法则**：字面量必须覆盖**每一个**字段——要么在字面量里写出，"
+    "要么由该字段的声明初始化器（`tag: str = \"...\"`）覆盖。省略一个没有初"
+    "始化器的字段是编译错误——``missing field `b` in the `P` literal (the "
+    "every-field-covered law)``——悄无声息的零值填充默认已不复存在。",
+
+    "A field spelled twice is a compile error — ``duplicate field `a` in the "
+    "`P` literal`` — there is no last-wins.":
+    "把一个字段写两遍是编译错误——``duplicate field `a` in the `P` "
+    "literal``——不存在“后者胜”（last-wins）。",
+
+    "An omitted field with an initializer takes it; `{}` with all-initialized "
+    "fields is legal.":
+    "带初始化器的字段被省略时取其初始化器；当所有字段都有初始化器时，`{}` "
+    "是合法的。",
+
+    # classes.md — the Self-literal bullet, extended with the two laws.
+    "**The `Self { field: expr, .. }` literal is the class-private "
+    "construction** — legal anywhere inside the class body (class methods and "
+    "instance methods alike); the class name spells it inside the body too "
+    "(`Rect { .. }`). The literal must initialize every field without an "
+    "initializer — the every-field-covered law, structs and classes alike — "
+    "and a field spelled twice is an error; field initializers run for "
+    "omitted fields. Private fields are settable in the literal — inside the "
+    "class body only. That privacy _is_ the seal: outside code can build a "
+    "class value only by calling a class method that chooses to build one.":
+    "**`Self { field: expr, .. }` 字面量是类私有的构造方式** —— "
+    "在类体内的任何地方都合法（类方法和实例方法皆可）；在体内也可以用类名来"
+    "写（`Rect { .. }`）。字面量必须初始化每个没有初始化式的字段——字段全"
+    "覆盖法则，结构体与类一视同仁——把一个字段写两遍也是错误；被省略的字段"
+    "会运行其字段初始化式。私有字段可以在字面量中赋值 —— 但仅在类体内。这份"
+    "隐私 _正是_ 密封性所在：外部代码只能通过调用一个愿意构建实例的类方法来构"
+    "建类值。",
+
+    # types.md — the new law paragraph.
+    "A literal must cover **every** field — spelled in the literal, or "
+    "covered by the field's declared initializer. Omitting a field with no "
+    "initializer is a compile error, and so is spelling a field twice (see "
+    "[structs](../reference/structs.md) for the exact diagnostics).":
+    "字面量必须覆盖**每一个**字段——要么在字面量里写出，要么由该字段的声明"
+    "初始化器覆盖。省略一个没有初始化器的字段是编译错误，把一个字段写两遍也"
+    "是编译错误（确切的诊断信息见[结构体](../reference/structs.md)）。",
+
+    # values-and-variables.md — the zero-value paragraph, second half
+    # rewritten (the zero-fill claim is gone).
+    "Every type has a zero value: `0` for numbers, `false` for `bool`, the "
+    "empty string, `nil` for nullables. But nothing fills a struct literal's "
+    "fields for you: a literal must cover every field — spelled in the "
+    "literal, or covered by the field's declared initializer (see [structs, "
+    "enums, and classes](types.md)).":
+    "每个类型都有零值：数字是 `0`，`bool` 是 `false`，字符串是空串，可空类"
+    "型是 `nil`。但没有任何东西会替你填充结构体字面量的字段：字面量必须覆盖"
+    "每一个字段——要么在字面量里写出，要么由该字段的声明初始化器覆盖（参见"
+    "[结构体、枚举与类](types.md)）。",
+
+    # modules-and-visibility.md — the Uses paragraph, extended with the
+    # unknown-import law (old translation's unchanged head carried over).
+    "Importing a _module itself_ (`use tur_kit::layout;`) is an error — "
+    "modules are namespaces, not values; the diagnostic names the fix (spell "
+    "a name at the leaf). rut is fully statically typed: the compiler "
+    "resolves every used name and knows from usage whether it lands in type "
+    "position (`Column` in an annotation) or value position (`Logger(..)`), "
+    "so there is nothing for the user to annotate. A use line may spell only "
+    "what the target exports: a name the target doesn't declare is rejected "
+    "at the use line itself — `` `ink` has no `Nope` — unknown import `` — "
+    "not later, at a call site that might never be written. An unreferenced "
+    "use name is a lint, not an error.":
+    "导入_模块本身_（`use tur_kit::layout;`）是一个错误 —— 模块是命名空间，"
+    "不是值；诊断会给出修复方法（在叶子处写出一个名字）。rut 是完全静态类型"
+    "的：编译器解析每一个用到的名字，并根据用法判断它落在类型位置（注解中的 "
+    "`Column`）还是值位置（`Logger(..)`），因此用户无需任何标注。use 行只能"
+    "写出目标所导出的名字：目标没有声明的名字会在 use 行本身被拒绝——`` "
+    "`ink` has no `Nope` — unknown import ``——而不是稍后在一个可能永远写不出"
+    "来的调用点。未被引用的 use 名是一个 lint，不是错误。",
+
+    # tutorial/modules.md — the use paragraph, extended with the law.
+    "Builtin names — the primitives, `str`/`bytes` members, `panic`, "
+    "`Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` "
+    "needed. The exceptions are core's import-gated names — the disposal "
+    "context `DisposalContext` and the weak reference `Weak` — they resolve "
+    "only through `use core::{ .. }`, like any package name. Package names "
+    "from your manifest are imported the same way; an unused name in a `use` "
+    "is a lint, not an error, while a name the target doesn't export is "
+    "rejected at the use line itself — `` `ink` has no `Nope` — unknown "
+    "import ``.":
+    "内置名字——原语、`str`/`bytes` 成员、`panic`、`Vec`\\-free 数组文法、"
+    "`opaque`——都是**环境自带**的：无需 `use`。例外是 core 的导入把守名字"
+    "——disposal 上下文 `DisposalContext` 与弱引用 `Weak`——它们只能像任何包"
+    "名一样经 `use core::{ .. }` 解析。清单点名的包名以同样的方式导入；`use` "
+    "里未被使用的名字是 lint，不是错误，而目标没有导出的名字会在 use 行本身"
+    "被拒绝——`` `ink` has no `Nope` — unknown import ``。",
 }
 
 

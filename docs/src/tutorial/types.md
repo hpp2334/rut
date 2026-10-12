@@ -76,7 +76,7 @@ struct Style {
 entry fn main() {
     let log = Logger("structs");
     let p = Point { x: 1, y: 2 };                    // every field, by name
-    let s = Style {};                                // defaults fill the rest
+    let s = Style {};                                // declared initializers fill the rest
     let r = Rect { min: Point { x: 0, y: 0 }, max: p };
     log.info(f"r.max.x={r.max.x} width={s.width}");
 }
@@ -85,6 +85,11 @@ entry fn main() {
 ```text
 r.max.x=1 width=1
 ```
+
+A literal must cover **every** field — spelled in the literal, or
+covered by the field's declared initializer. Omitting a field with no
+initializer is a compile error, and so is spelling a field twice (see
+[structs](../reference/structs.md) for the exact diagnostics).
 
 All fields are public, always — member visibility in a struct is a
 compile error. Privacy is what classes are for. Methods live in

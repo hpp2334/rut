@@ -78,8 +78,12 @@ modules are namespaces, not values; the diagnostic names the fix
 (spell a name at the leaf). rut is fully statically typed: the
 compiler resolves every used name and knows from usage whether it
 lands in type position (`Column` in an annotation) or value position
-(`Logger(..)`), so there is nothing for the user to annotate. An
-unreferenced use name is a lint, not an error.
+(`Logger(..)`), so there is nothing for the user to annotate. A use
+line may spell only what the target exports: a name the target doesn't
+declare is rejected at the use line itself —
+`` `ink` has no `Nope` — unknown import `` — not later, at a call site
+that might never be written. An unreferenced use name is a lint, not
+an error.
 
 The head itself is **declaration-scoped**: a package may `use` exactly
 the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps`

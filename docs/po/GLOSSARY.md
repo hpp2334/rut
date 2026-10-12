@@ -172,3 +172,6 @@ context; after that, use the zh-CN rendering alone.
 | clobber | 覆盖 | refuse to clobber → 拒绝覆盖（已有的文件）；clobber refusal → 拒绝覆盖 |
 | basename | 基名 | the target's basename → 目标的基名 |
 | derived name | 派生名 | the package name derived from the basename → 从基名派生的包名 |
+| every-field-covered law | 字段全覆盖法则 | 字面量必须覆盖每个字段——在字面量里写出，或由该字段的声明初始化器（declared initializer）覆盖；省略无初始化器字段是编译错误（`missing field … (the every-field-covered law)` 诊断原文保留） |
+| duplicate field | 重复字段 | `duplicate field … in the … literal` 诊断原文保留；无“后者胜”（last-wins） |
+| unknown import | 未知导入 | use 行即拒绝点；`` `X` has no `Y` — unknown import `` 诊断原文保留 |

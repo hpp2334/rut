@@ -77,7 +77,9 @@ Builtin names — the primitives, `str`/`bytes` members, `panic`,
 disposal context `DisposalContext` and the weak reference `Weak` —
 they resolve only through `use core::{ .. }`, like any package name.
 Package names from your manifest are imported the same way; an unused
-name in a `use` is a lint, not an error.
+name in a `use` is a lint, not an error, while a name the target
+doesn't export is rejected at the use line itself —
+`` `ink` has no `Nope` — unknown import ``.
 
 Within one module, everything is visible — including declarations
 later in the file. Order never matters.

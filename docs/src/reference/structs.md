@@ -95,9 +95,16 @@ everywhere — function bodies and module-level `let` initializers alike
 — and it allocates the cell.
 
 - Fields may be given in any order, by name.
-- The literal must initialize **every** field that has no initializer.
-- An omitted field with an initializer takes it; `{}` with all-default
-  fields is legal.
+- **The every-field-covered law**: a literal must cover **every** field
+  — spelled in the literal, or covered by the field's declared
+  initializer (`tag: str = "..."`). Omitting a field that has no
+  initializer is a compile error — ``missing field `b` in the `P`
+  literal (the every-field-covered law)`` — the silent zero-fill
+  default is gone.
+- A field spelled twice is a compile error — ``duplicate field `a` in
+  the `P` literal`` — there is no last-wins.
+- An omitted field with an initializer takes it; `{}` with
+  all-initialized fields is legal.
 
 ```rut
 use ink::{ Logger };
@@ -109,7 +116,7 @@ struct Rect { min: Point; max: Point; }
 entry fn main() {
     let log = Logger("t");
     let q = Point { x: 9, y: 9 };
-    let s = Style {};                     // zero-value defaults fill the fields
+    let s = Style {};                     // the declared initializers fill the fields
     let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell
     log.info(f"{s.color} {r.max.x}");
 }

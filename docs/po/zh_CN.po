@@ -407,7 +407,7 @@ msgid "Project structure and rut.jsonc"
 msgstr "项目结构与 rut.jsonc"
 
 
-#: src/SUMMARY.md:112 src/tutorial/modules.md:229
+#: src/SUMMARY.md:112 src/tutorial/modules.md:231
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
 msgstr "依赖种类"
@@ -1464,24 +1464,24 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:52
 msgid ""
-"Every type has a zero value: `0` for numbers, `false` for `bool`, the empty string, `nil` for nullables. Omit a field in a struct literal and it takes the field's initializer if there is one, else the type's zero value (see [structs, enums, and classes](types.md))."
+"Every type has a zero value: `0` for numbers, `false` for `bool`, the empty string, `nil` for nullables. But nothing fills a struct literal's fields for you: a literal must cover every field — spelled in the literal, or covered by the field's declared initializer (see [structs, enums, and classes](types.md))."
 msgstr ""
-"每个类型都有零值：数字是 `0`，`bool` 是 `false`，字符串是空串，可空类型是 `nil`。在结构体字面量里省略一个字段，若该字段有初始化器，就取初始化器，否则取该类型的零值（参见[结构体、枚举与类](types.md)）。"
+"每个类型都有零值：数字是 `0`，`bool` 是 `false`，字符串是空串，可空类型是 `nil`。但没有任何东西会替你填充结构体字面量的字段：字面量必须覆盖每一个字段——要么在字面量里写出，要么由该字段的声明初始化器覆盖（参见[结构体、枚举与类](types.md)）。"
 
 
-#: src/tutorial/values-and-variables.md:57
+#: src/tutorial/values-and-variables.md:58
 msgid "Numbers"
 msgstr "数字"
 
 
-#: src/tutorial/values-and-variables.md:59
+#: src/tutorial/values-and-variables.md:60
 msgid ""
 "An unsuffixed integer literal defaults to `i32`; an unsuffixed float defaults to `f32`. The default is also a _ceiling_: a literal adapts to the expected type only while it fits the default."
 msgstr ""
 "不带后缀的整数字面量默认为 `i32`；不带后缀的浮点字面量默认为 `f32`。默认值同时也是_上限_：只有当字面量装得进默认类型时，它才会适配到期望的类型。"
 
 
-#: src/tutorial/values-and-variables.md:63
+#: src/tutorial/values-and-variables.md:64
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1501,13 +1501,13 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:83
+#: src/tutorial/values-and-variables.md:84
 msgid ""
 "Conversions are explicit casts: `expr as T`. Casts truncate like C — they never trap."
 msgstr "转换是显式的：`expr as T`。`as` 转换像 C 一样截断——绝不触发陷阱。"
 
 
-#: src/tutorial/values-and-variables.md:86
+#: src/tutorial/values-and-variables.md:87
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1521,37 +1521,37 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:100
+#: src/tutorial/values-and-variables.md:101
 msgid "Arithmetic has two sharp edges:"
 msgstr "算术有两处锋利的边缘："
 
 
-#: src/tutorial/values-and-variables.md:102
+#: src/tutorial/values-and-variables.md:103
 msgid ""
 "**Mixed widths do not mix.** Both operands must have the same width — convert one side first. `let mut total = 0.0;` makes an `f32`, and adding an `f64` to it is a type error; annotate `let mut total: f64 = 0.0;` when you mean double precision."
 msgstr ""
 "**不同宽度不能混用。**两个操作数必须有相同的宽度——先把其中一侧转换过去。`let mut total = 0.0;` 得到一个 `f32`，给它加上 `f64` 是类型错误；要双精度时，请标注 `let mut total: f64 = 0.0;`。"
 
 
-#: src/tutorial/values-and-variables.md:106
+#: src/tutorial/values-and-variables.md:107
 msgid ""
 "**Overflow, division by zero, and out-of-bounds indexing trap.** For the explicit non-trapping ladder (`wrapping_add`, `saturating_mul`, `checked_add`), see [the standard library](stdlib.md)."
 msgstr ""
 "**溢出、除以零和越界索引都会触发陷阱。**显式的非陷阱阶梯（`wrapping_add`、`saturating_mul`、`checked_add`）见[标准库](stdlib.md)。"
 
 
-#: src/tutorial/values-and-variables.md:110
+#: src/tutorial/values-and-variables.md:111
 msgid "Text: plain, raw, and format strings"
 msgstr "文本：普通、原始与格式化字符串"
 
 
-#: src/tutorial/values-and-variables.md:112
+#: src/tutorial/values-and-variables.md:113
 msgid ""
 "Three literal forms. A plain string is always inert — no interpolation ever happens implicitly."
 msgstr "三种字面量形式。普通字符串永远是惰性的——绝不会隐式发生插值。"
 
 
-#: src/tutorial/values-and-variables.md:115
+#: src/tutorial/values-and-variables.md:116
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1568,14 +1568,14 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:132
+#: src/tutorial/values-and-variables.md:133
 msgid ""
 "Plain and format strings share the same escapes (`\\t \\n \\r \\\\ \\\"` and `\\u{...}`). In an f-string, `{ expr }` splices any expression — identifiers, calls, arithmetic — except nested string literals (bind one to a variable first). `{{` and `}}` are literal braces:"
 msgstr ""
 "普通字符串与格式化字符串共享同一套转义（`\\t \\n \\r \\\\ \\\"` 和 `\\u{...}`）。在 f-string 里，`{ expr }` 可以拼进任何表达式——标识符、调用、算术——但不能嵌套字符串字面量（先把字符串绑定到一个变量）。`{{` 与 `}}` 是字面量的花括号："
 
 
-#: src/tutorial/values-and-variables.md:137
+#: src/tutorial/values-and-variables.md:138
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1588,24 +1588,24 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:150
+#: src/tutorial/values-and-variables.md:151
 msgid ""
 "What an f-string can render: integers (decimal), floats (shortest round-trip decimal: `3.5`, `0.1`), `bool` (`true`/`false`), `str` (contents), and enum members (their name: `Color::Green` renders `Green`). Composite values — structs, classes, arrays, vecs — are a compile error inside an f-string; write a `to_string()`\\-style method and call it, or use a debug dump for development."
 msgstr ""
 "f-string 能渲染的东西：整数（十进制）、浮点数（最短往返十进制：`3.5`、`0.1`）、`bool`（`true`/`false`）、`str`（内容），以及枚举成员（它们的名字：`Color::Green` 渲染为 `Green`）。复合值——结构体、类、数组、vec——在 f-string 里是编译错误；写一个 `to_string()` 风格的方法并调用它，或者在开发时用调试转储。"
 
 
-#: src/tutorial/values-and-variables.md:157
+#: src/tutorial/values-and-variables.md:158
 msgid "Sequences and buffers"
 msgstr "序列与缓冲区"
 
 
-#: src/tutorial/values-and-variables.md:159
+#: src/tutorial/values-and-variables.md:160
 msgid "The fixed array `[T]` is built from a literal or a repeat:"
 msgstr "定长数组 `[T]` 由字面量或重复表达式构建："
 
 
-#: src/tutorial/values-and-variables.md:161
+#: src/tutorial/values-and-variables.md:162
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1620,21 +1620,21 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:176
+#: src/tutorial/values-and-variables.md:177
 msgid ""
 "The growable sequence is `Vec<T>` (from the `pouch` package — `use pouch::{ Vec };`): `Vec::new()`, `Vec::from([..])`, `Vec<i32>::filled(0, 1024)`, `push`, `pop`, `len`. Indexing and `for..of` work the same on both. See [the standard library](stdlib.md) for the full surface."
 msgstr ""
 "可增长序列是 `Vec<T>`（来自 `pouch` 包——`use pouch::{ Vec };`）：`Vec::new()`、`Vec::from([..])`、`Vec<i32>::filled(0, 1024)`、`push`、`pop`、`len`。索引和 `for..of` 在两者身上的工作方式相同。完整表面见[标准库](stdlib.md)。"
 
 
-#: src/tutorial/values-and-variables.md:182
+#: src/tutorial/values-and-variables.md:183
 msgid ""
 "`bytes` is the binary primitive. `s.encode()` turns text into octets, `b.decode()` reads it back (lossy UTF-8), `bytes::zeroed(n)` and `bytes::from(a)` build buffers directly:"
 msgstr ""
 "`bytes` 是二进制基本类型。`s.encode()` 把文本变成八位组，`b.decode()` 把它读回来（有损 UTF-8），`bytes::zeroed(n)` 与 `bytes::from(a)` 直接构建缓冲区："
 
 
-#: src/tutorial/values-and-variables.md:186
+#: src/tutorial/values-and-variables.md:187
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1649,19 +1649,19 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:201
+#: src/tutorial/values-and-variables.md:202
 msgid "Sharing: the one rule"
 msgstr "共享：唯一法则"
 
 
-#: src/tutorial/values-and-variables.md:203
+#: src/tutorial/values-and-variables.md:204
 msgid ""
 "Primitives and `fn` values **copy** on assignment, argument passing, and return. **Every other value is a shared cell**: `let q = p` is an O(1) handle move, and a write through any alias is visible through all of them."
 msgstr ""
 "基本类型与 `fn` 值在赋值、传参和返回时**复制**。**其余每个值都是共享单元**：`let q = p` 是一次 O(1) 的句柄移动，经由任何一个别名做出的写入，经由所有别名都可见。"
 
 
-#: src/tutorial/values-and-variables.md:208
+#: src/tutorial/values-and-variables.md:209
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1679,78 +1679,78 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:226
+#: src/tutorial/values-and-variables.md:227
 msgid "Equality follows the same split:"
 msgstr "相等性遵循同样的切分："
 
 
-#: src/tutorial/values-and-variables.md:228
+#: src/tutorial/values-and-variables.md:229
 msgid "Operands"
 msgstr "操作数"
 
 
-#: src/tutorial/values-and-variables.md:228
+#: src/tutorial/values-and-variables.md:229
 #: src/reference/rc-dispose-identity.md:121
 #: src/reference/by-reference-and-nullable.md:97
 msgid "`==` means"
 msgstr "`==` 的含义"
 
 
-#: src/tutorial/values-and-variables.md:230
+#: src/tutorial/values-and-variables.md:231
 msgid "numbers, `bool`"
 msgstr "数字、`bool`"
 
 
-#: src/tutorial/values-and-variables.md:230
+#: src/tutorial/values-and-variables.md:231
 msgid "value comparison"
 msgstr "值比较"
 
 
-#: src/tutorial/values-and-variables.md:231
+#: src/tutorial/values-and-variables.md:232
 msgid "`str`, `bytes`"
 msgstr "`str`、`bytes`"
 
 
-#: src/tutorial/values-and-variables.md:231
+#: src/tutorial/values-and-variables.md:232
 msgid "content comparison"
 msgstr "内容比较"
 
 
-#: src/tutorial/values-and-variables.md:232
+#: src/tutorial/values-and-variables.md:233
 msgid "everything else"
 msgstr "其余一切"
 
 
-#: src/tutorial/values-and-variables.md:232
+#: src/tutorial/values-and-variables.md:233
 msgid "cell identity — two separately-built literals are never equal"
 msgstr "单元同一性——两个分别构建的字面量永不相等"
 
 
-#: src/tutorial/values-and-variables.md:234
+#: src/tutorial/values-and-variables.md:235
 msgid ""
 "The one copy escape hatch is `bytes::clone()` — a fresh buffer with the same octets. There is no generic copy for any other type; if you need a divergent value, build a new one."
 msgstr ""
 "唯一的复制逃生舱是 `bytes::clone()`——一个装着相同八位组的新缓冲区。其他任何类型都没有泛型复制；如果你需要一个会分叉的值，就新建一个。"
 
 
-#: src/tutorial/values-and-variables.md:238
+#: src/tutorial/values-and-variables.md:239
 msgid ""
 "Absence is `nil` on a nullable `?T` — see [errors and optionality](errors.md)."
 msgstr "缺失是可空 `?T` 上的 `nil`——参见[错误与可空性](errors.md)。"
 
 
-#: src/tutorial/values-and-variables.md:241
+#: src/tutorial/values-and-variables.md:242
 #: src/reference/literals-and-inference.md:79
 msgid "Tuples"
 msgstr "元组"
 
 
-#: src/tutorial/values-and-variables.md:243
+#: src/tutorial/values-and-variables.md:244
 msgid "Records `(A, B)` are first-class values with numeric fields:"
 msgstr "记录 `(A, B)` 是带数字字段的一等值："
 
 
-#: src/tutorial/values-and-variables.md:245
+#: src/tutorial/values-and-variables.md:246
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1769,28 +1769,28 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:264
+#: src/tutorial/values-and-variables.md:265
 msgid ""
 "The pair is also rut's standard error channel — the next chapters use it constantly."
 msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节会不断用到它。"
 
 
-#: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:312
-#: src/tutorial/functions.md:242 src/tutorial/types.md:278
+#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:312
+#: src/tutorial/functions.md:242 src/tutorial/types.md:283
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:278 src/tutorial/async.md:180
+#: src/tutorial/modules.md:280 src/tutorial/async.md:180
 #: src/tutorial/stdlib.md:401
 msgid "Put it together"
 msgstr "综合运用"
 
 
-#: src/tutorial/values-and-variables.md:269
+#: src/tutorial/values-and-variables.md:270
 msgid ""
 "Put this in a module directory and run it: `literals/rut.jsonc` names the two packages the program uses, and the program is `literals/mod.rut`:"
 msgstr "把这些放进一个模块目录并运行：`literals/rut.jsonc` 写明程序用到的两个包，程序本体是 `literals/mod.rut`："
 
 
-#: src/tutorial/values-and-variables.md:273
+#: src/tutorial/values-and-variables.md:274
 msgid ""
 "```jsonc\n"
 "// literals/rut.jsonc\n"
@@ -1807,14 +1807,14 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:286
+#: src/tutorial/values-and-variables.md:287
 msgid ""
 "Save the program as `literals/mod.rut`, then `rut install literals` (fetches the two url deps and writes `rut.lock`) and `rut run literals`:"
 msgstr ""
 "把程序保存为 `literals/mod.rut`，然后 `rut install literals`（取回两个 url 依赖并写入 `rut.lock`）、`rut run literals`："
 
 
-#: src/tutorial/values-and-variables.md:290
+#: src/tutorial/values-and-variables.md:291
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -1854,7 +1854,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/values-and-variables.md:330
+#: src/tutorial/values-and-variables.md:331
 msgid "Next: [control flow and `when`](control-flow.md)."
 msgstr "下一章：[控制流与 when](control-flow.md)。"
 
@@ -2712,7 +2712,7 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"structs\");\n"
 "    let p = Point { x: 1, y: 2 };                    // every field, by name\n"
-"    let s = Style {};                                // defaults fill the rest\n"
+"    let s = Style {};                                // declared initializers fill the rest\n"
 "    let r = Rect { min: Point { x: 0, y: 0 }, max: p };\n"
 "    log.info(f\"r.max.x={r.max.x} width={s.width}\");\n"
 "}\n"
@@ -2722,19 +2722,26 @@ msgstr ""
 
 #: src/tutorial/types.md:89
 msgid ""
+"A literal must cover **every** field — spelled in the literal, or covered by the field's declared initializer. Omitting a field with no initializer is a compile error, and so is spelling a field twice (see [structs](../reference/structs.md) for the exact diagnostics)."
+msgstr ""
+"字面量必须覆盖**每一个**字段——要么在字面量里写出，要么由该字段的声明初始化器覆盖。省略一个没有初始化器的字段是编译错误，把一个字段写两遍也是编译错误（确切的诊断信息见[结构体](../reference/structs.md)）。"
+
+
+#: src/tutorial/types.md:94
+msgid ""
 "All fields are public, always — member visibility in a struct is a compile error. Privacy is what classes are for. Methods live in `impl` blocks with real visibility — `pub fn` exports cross-module, plain `fn` stays module-private (see [structs](../reference/structs.md))."
 msgstr ""
 "所有字段永远公开——给结构体成员标注可见性是编译错误。私有正是类存在的意义。方法住在 `impl` 块里，可见性是真实的——`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见（参见[结构体](../reference/structs.md)）。"
 
 
-#: src/tutorial/types.md:95
+#: src/tutorial/types.md:100
 msgid ""
 "**Structs share.** A struct value is a handle to a heap cell: assignment, arguments, and returns all pass the handle, and a write through any alias is visible through all of them. Writing needs a `mut` binding or `mut` parameter:"
 msgstr ""
 "**结构体共享。**结构体值是指向堆单元的句柄：赋值、实参和返回传递的都是句柄，经由任何别名做出的写入，经所有别名都可见。写入需要 `mut` 绑定或 `mut` 参数："
 
 
-#: src/tutorial/types.md:100
+#: src/tutorial/types.md:105
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2752,20 +2759,20 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/types.md:118
+#: src/tutorial/types.md:123
 msgid ""
 "`==` on struct values is **cell identity** — `q == p` is true (one cell), `p == Point { x: 4, y: 2 }` is false (a different cell). To compare field by field, write a function."
 msgstr ""
 "结构体值上的 `==` 是**单元同一性**——`q == p` 为 true（同一个单元），`p == Point { x: 4, y: 2 }` 为 false（另一个单元）。想逐字段比较，就写一个函数。"
 
 
-#: src/tutorial/types.md:122
+#: src/tutorial/types.md:127
 msgid ""
 "Recursive shapes are legal — a record may name itself through a nullable field, because `?Node` is one word:"
 msgstr "递归的形状是合法的——记录可以经由可空字段指涉自身，因为 `?Node` 就是一个词："
 
 
-#: src/tutorial/types.md:125
+#: src/tutorial/types.md:130
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2796,18 +2803,18 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/types.md:156
+#: src/tutorial/types.md:161
 msgid "Classes — sealed records"
 msgstr "类——封闭的记录"
 
 
-#: src/tutorial/types.md:158
+#: src/tutorial/types.md:163
 msgid ""
 "A class adds two things to a struct: module-private fields and construction gated through class methods. There is no outside literal — the only way to build a class value from outside is to call a class method that chooses to. (Cleanup hooks are not a class privilege: mark a `[disposal]` member on either shape, and the engine calls it when the value's cell refcount reaches zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 
 
-#: src/tutorial/types.md:166
+#: src/tutorial/types.md:171
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2839,37 +2846,37 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/types.md:198
+#: src/tutorial/types.md:203
 msgid "The pieces:"
 msgstr "组成部分如下："
 
 
-#: src/tutorial/types.md:200
+#: src/tutorial/types.md:205
 msgid ""
 "**A class method is just a function without `self`.** `Rect::new(w, h)`, `Version::parse(s)`, `Rect::from_square(s)` — any no-`self` method returning `Self` is a constructor. `new` is a convention, not syntax."
 msgstr ""
 "**类方法就是不带 `self` 的函数。**`Rect::new(w, h)`、`Version::parse(s)`、`Rect::from_square(s)`——任何不带 `self` 且返回 `Self` 的方法都是构造器。`new` 是约定，不是语法。"
 
 
-#: src/tutorial/types.md:203
+#: src/tutorial/types.md:208
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the class's own impl block, never outside. This is the seal."
 msgstr "**`Self { .. }` 字面量是类私有的**——在类自己的 impl 块内的任何地方都合法，出了它就再也不合法。这就是封闭。"
 
 
-#: src/tutorial/types.md:205
+#: src/tutorial/types.md:210
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; `mut self` marks methods that write. A computed property is a method (`c.count()`)."
 msgstr "**实例方法把 `self` 显式写成第一个参数**；`mut self` 标记会写入的方法。计算属性就是一个方法（`c.count()`）。"
 
 
-#: src/tutorial/types.md:208
+#: src/tutorial/types.md:213
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it can check arguments and refuse:"
 msgstr "**构造即验证。**构造器是一个普通函数——它可以检查实参并拒绝："
 
 
-#: src/tutorial/types.md:211
+#: src/tutorial/types.md:216
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2904,13 +2911,13 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/types.md:246
+#: src/tutorial/types.md:251
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, not a crash:"
 msgstr "_try_ 构造器以可空作答——`nil` 是一次验证失败，不是崩溃："
 
 
-#: src/tutorial/types.md:249
+#: src/tutorial/types.md:254
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -2931,48 +2938,48 @@ msgstr ""
 "```"
 
 
-#: src/tutorial/types.md:258
+#: src/tutorial/types.md:263
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code sharing is composition (hold a helper in a field) or free functions; polymorphism is structural interfaces — the next chapter."
 msgstr ""
 
 
-#: src/tutorial/types.md:262
+#: src/tutorial/types.md:267
 msgid "Visibility recap"
 msgstr "可见性小结"
 
 
-#: src/tutorial/types.md:264
+#: src/tutorial/types.md:269
 msgid "Struct members: public, always."
 msgstr "结构体成员：永远公开。"
 
 
-#: src/tutorial/types.md:265
+#: src/tutorial/types.md:270
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers (also `pub(mod)`, `pub(super)`, `pub(self)`)."
 msgstr "类成员：不标注即模块私有；`pub` 对导入方可见（另有 `pub(mod)`、`pub(super)`、`pub(self)`）。"
 
 
-#: src/tutorial/types.md:267
+#: src/tutorial/types.md:272
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, a bare `class Helper` stays in its module. See [modules and packages](modules.md)."
 msgstr ""
 "类型本身遵循同一条规则：`pub class Vec<T>` 可被导入，裸的 `class Helper` 则留在其模块内。参见[模块与包](modules.md)。"
 
 
-#: src/tutorial/types.md:271
+#: src/tutorial/types.md:276
 msgid "Struct or class?"
 msgstr "结构体还是类？"
 
 
-#: src/tutorial/types.md:273
+#: src/tutorial/types.md:278
 msgid ""
 "Default to a struct: data in, data out, shared like every other value. Reach for a class when the type has rules that construction must enforce, holds private state that outsiders must not read, or owns a resource that needs explicit cleanup."
 msgstr ""
 "默认选结构体：数据进、数据出，像其他一切值一样共享。当类型带有构造时必须强制执行的规则、持有外人不得读取的私有状态、或拥有需要显式清理的资源时，才选类。"
 
 
-#: src/tutorial/types.md:280
+#: src/tutorial/types.md:285
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3026,7 +3033,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/types.md:334
+#: src/tutorial/types.md:339
 msgid "Next: [interfaces and impl blocks](interfaces.md)."
 msgstr ""
 
@@ -3994,7 +4001,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:165
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:169
 msgid "Visibility"
 msgstr "可见性"
 
@@ -4005,13 +4012,13 @@ msgid ""
 msgstr "每个声明都有一个可见性，不标注即**模块私有**——这是安全的默认。除非写明 `pub`，任何东西都不会外泄："
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:175
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr "形式"
 
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:171
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:175
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -4025,7 +4032,7 @@ msgid "Meaning"
 msgstr "含义"
 
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:173
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:177
 msgid "`pub fn ..`"
 msgstr "`pub fn ..`"
 
@@ -4045,7 +4052,7 @@ msgid "visible everywhere in this package's module tree"
 msgstr "在本包的模块树内处处可见"
 
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:175
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:179
 msgid "`pub(super) fn ..`"
 msgstr "`pub(super) fn ..`"
 
@@ -4084,28 +4091,29 @@ msgstr "`use` 以类 Rust 的路径导入名字："
 
 #: src/tutorial/modules.md:74
 msgid ""
-"Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions are core's import-gated names — the disposal context `DisposalContext` and the weak reference `Weak` — they resolve only through `use core::{ .. }`, like any package name. Package names from your manifest are imported the same way; an unused name in a `use` is a lint, not an error."
+"Builtin names — the primitives, `str`/`bytes` members, `panic`, `Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. The exceptions are core's import-gated names — the disposal context `DisposalContext` and the weak reference `Weak` — they resolve only through `use core::{ .. }`, like any package name. Package names from your manifest are imported the same way; an unused name in a `use` is a lint, not an error, while a name the target doesn't export is rejected at the use line itself — `` `ink` has no `Nope` — unknown import ``."
 msgstr ""
+"内置名字——原语、`str`/`bytes` 成员、`panic`、`Vec`\\-free 数组文法、`opaque`——都是**环境自带**的：无需 `use`。例外是 core 的导入把守名字——disposal 上下文 `DisposalContext` 与弱引用 `Weak`——它们只能像任何包名一样经 `use core::{ .. }` 解析。清单点名的包名以同样的方式导入；`use` 里未被使用的名字是 lint，不是错误，而目标没有导出的名字会在 use 行本身被拒绝——`` `ink` has no `Nope` — unknown import ``。"
 
 
-#: src/tutorial/modules.md:82
+#: src/tutorial/modules.md:84
 msgid ""
 "Within one module, everything is visible — including declarations later in the file. Order never matters."
 msgstr "在同一模块内，一切彼此可见——包括文件中靠后的声明。顺序从不重要。"
 
 
-#: src/tutorial/modules.md:85
+#: src/tutorial/modules.md:87
 msgid "Packages: `rut.jsonc`"
 msgstr "包：`rut.jsonc`"
 
 
-#: src/tutorial/modules.md:87
+#: src/tutorial/modules.md:89
 msgid ""
 "A package is a directory with a manifest. The small but complete case — one library package and one app:"
 msgstr "包是带有清单的目录。小而完整的案例——一个库包加一个应用："
 
 
-#: src/tutorial/modules.md:100
+#: src/tutorial/modules.md:102
 msgid ""
 "```jsonc\n"
 "// greet/pkg/rut.jsonc\n"
@@ -4122,7 +4130,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:113
+#: src/tutorial/modules.md:115
 msgid ""
 "```rut\n"
 "// greet/pkg/mod.rut\n"
@@ -4158,14 +4166,14 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:145
+#: src/tutorial/modules.md:147
 msgid ""
 "The app names its dependencies in `deps`, by url or path. One table carries two laws: **mounting** is transitive — each package pulls its own dependencies along (`ink` brings the host surface `ink_host`; you never spell it) — while **nameability** is declaration-scoped: the app may `use` exactly the heads its own manifest names. `ink_host` mounts here, but only `ink` declared it, so only `ink`'s sources may name it; an app-level `use ink_host::` is refused, naming the fix (add the row to _your_ `rut.jsonc` `deps`):"
 msgstr ""
 "应用在 `deps` 中按 url 或 path 点名自己的依赖。一张表承载两条法则：**挂载**是传递的——每个包会把自己的依赖一起拉进来（`ink` 带来宿主表面 `ink_host`；你从不拼写它）——而**可命名性**按声明划定：应用只能 `use` 自己清单点名的头。`ink_host` 在这里被挂载，但声明它的是 `ink`，所以只有 `ink` 的源码可以命名它；应用层的 `use ink_host::` 会被拒绝，并给出修复（把这行加进*你自己的* `rut.jsonc` `deps`）："
 
 
-#: src/tutorial/modules.md:154
+#: src/tutorial/modules.md:156
 msgid ""
 "```jsonc\n"
 "// greet/app/rut.jsonc\n"
@@ -4184,7 +4192,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:169
+#: src/tutorial/modules.md:171
 msgid ""
 "```rut\n"
 "// greet/app/mod.rut\n"
@@ -4202,33 +4210,33 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:183
+#: src/tutorial/modules.md:185
 msgid ""
 "Run the app from its directory — `rut install` fetches the url deps and writes the app's `rut.lock` (the pin ledger every load verifies against; it pins the whole closure, including the url row `../pkg` declares), then `rut run .`:"
 msgstr ""
 "在应用自己的目录里运行它——`rut install` 取回 url 依赖并写入应用的 `rut.lock`（每次加载都对照校验的固定值清单；它固定整个闭包，包括 `../pkg` 声明的那条 url 行），然后 `rut run .`："
 
 
-#: src/tutorial/modules.md:199
+#: src/tutorial/modules.md:201
 msgid ""
 "Resolution walks `deps` recursively (a dep's own `deps` mount with it), with a cycle guard and first-mount-wins. The walk decides what is **mounted**; what a source may **name** is its own manifest's business: `deps` ∪ `peer-deps` ∪ `core` (plus `dev-deps` at the program root). A head that is mounted but undeclared — riding along on someone else's row — refuses with a dedicated diagnostic naming the mount edge and the row to add ([dependency kinds](../reference/dependency-kinds.md))."
 msgstr ""
 "解析递归遍历 `deps`（依赖自己的 `deps` 随它一起挂载），带循环守卫和先挂载者胜。遍历决定什么被**挂载**；而源码能**命名**什么，由它自己的清单说了算：`deps` ∪ `peer-deps` ∪ `core`（程序根上再加 `dev-deps`）。一个已挂载但未声明的头——搭别人行的便车——会被专门的诊断拒绝，指名挂载边和要添加的行（[依赖种类](../reference/dependency-kinds.md)）。"
 
 
-#: src/tutorial/modules.md:208
+#: src/tutorial/modules.md:210
 msgid "One package, several files"
 msgstr "一个包，多个文件"
 
 
-#: src/tutorial/modules.md:210
+#: src/tutorial/modules.md:212
 msgid ""
 "A package's body can be split across files — **file modules**. The root module is `mod.rut` beside the manifest, and a `mod NAME;` declaration in it mounts the sibling `NAME/mod.rut` as a child module:"
 msgstr ""
 "包的代码体可以拆分到多个文件中 —— **文件模块**。根模块是清单旁边的 `mod.rut`，其中的 `mod NAME;` 声明把同级的 `NAME/mod.rut` 挂载为子模块："
 
 
-#: src/tutorial/modules.md:214
+#: src/tutorial/modules.md:216
 msgid ""
 "```text\n"
 "app/\n"
@@ -4241,32 +4249,32 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:223
+#: src/tutorial/modules.md:225
 msgid ""
 "Each file is its own module: cross-file references are qualified (`domain::Todo`, `world::boot(..)`), and visibility is per module — private to the declaring module, `pub(pkg)` to share inside the package, `pub` to cross packages. Cross-package references still go through `use` paths (`use app::world::{ World }`)."
 msgstr ""
 "每个文件都是独立的模块：跨文件引用使用限定位置（`domain::Todo`、`world::boot(..)`），可见性按模块划分 —— 对声明模块私有，`pub(pkg)` 在包内共享，`pub` 跨包可见。跨包引用仍然走 `use` 路径（`use app::world::{ World }`）。"
 
 
-#: src/tutorial/modules.md:231
+#: src/tutorial/modules.md:233
 msgid "Beyond `deps`, a manifest can declare two other relations:"
 msgstr "除 `deps` 之外，清单还能声明另外两种关系："
 
 
-#: src/tutorial/modules.md:233
+#: src/tutorial/modules.md:235
 msgid ""
 "**`peer-deps`** — a package this one _integrates with_ but never pulls: the consumer supplies it, or (with `optional = true`) the integration mounts only if the peer is already in the program's closure. The standard library's `json` package uses this to attach its `Vec`/map serialization impls only for programs that carry the container packages."
 msgstr ""
 "**`peer-deps`**——本包_与之集成_但从不拉取的包：由消费方提供，或者（当 `optional = true` 时）仅当该 peer 已经在程序的闭包里才挂载集成。标准库的 `json` 包正是用它来只为携带容器包的程序附加自己的 `Vec`/map 序列化 impl。"
 
 
-#: src/tutorial/modules.md:239
+#: src/tutorial/modules.md:241
 msgid ""
 "**`dev-deps`** — mounted only when building/testing the package itself, never for a consumer."
 msgstr "**`dev-deps`**——只在构建/测试该包自身时挂载，对消费方从不挂载。"
 
 
-#: src/tutorial/modules.md:242
+#: src/tutorial/modules.md:244
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -4282,58 +4290,58 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/modules.md:254
+#: src/tutorial/modules.md:256
 msgid "`entry fn` — the host-facing surface"
 msgstr "`entry fn`——面向宿主的表面"
 
 
-#: src/tutorial/modules.md:256
+#: src/tutorial/modules.md:258
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function to the _embedding host_, with its signature checked against the boundary's crossing rules at compile time:"
 msgstr "`pub` 把名字发布给其他 _rut_ 模块。`entry` 把函数发布给_嵌入宿主_，其签名在编译期按边界的穿越规则检查："
 
 
-#: src/tutorial/modules.md:264
+#: src/tutorial/modules.md:266
 msgid ""
 "An embedded application drives these entries; `rut run` executes the program's entry designation — exactly one `entry fn` runs it, several take `--entry <name>`. See [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
 "嵌入式应用驱动这些入口；`rut run` 执行程序的入口指派——恰好一个 `entry fn` 时运行它，多个时用 `--entry <name>` 指定。参见[宿主边界](../core-concepts/host-boundary.md)。"
 
 
-#: src/tutorial/modules.md:269
+#: src/tutorial/modules.md:271
 msgid "Tooling"
 msgstr "工具"
 
 
-#: src/tutorial/modules.md:272
-msgid ""
-"# compile + run\n"
-msgstr ""
-"# compile + run\n"
-
-
-#: src/tutorial/modules.md:273
-msgid ""
-"# format in place\n"
-msgstr ""
-"# format in place\n"
-
-
 #: src/tutorial/modules.md:274
 msgid ""
+"# compile + run\n"
+msgstr ""
+"# compile + run\n"
+
+
+#: src/tutorial/modules.md:275
+msgid ""
+"# format in place\n"
+msgstr ""
+"# format in place\n"
+
+
+#: src/tutorial/modules.md:276
+msgid ""
 "# a self-contained bundle\n"
 msgstr ""
 "# a self-contained bundle\n"
 
 
-#: src/tutorial/modules.md:280
+#: src/tutorial/modules.md:282
 msgid ""
 "The `greet` project above is complete as shown — two directories, two manifests, two sources. Copy the trees into files and `rut run .` from `greet/app` to see:"
 msgstr ""
 "上面的 `greet` 项目如所示般完整——两个目录、两份清单、两个源文件。把这些目录树抄进文件，从 `greet/app` 运行 `rut run .`，就会看到："
 
 
-#: src/tutorial/modules.md:288
+#: src/tutorial/modules.md:290
 msgid "Next: [async: futures and await](async.md)."
 msgstr "下一章：[异步：future 与 await](async.md)。"
 
@@ -10881,210 +10889,210 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:76
 msgid ""
-"Importing a _module itself_ (`use tur_kit::layout;`) is an error — modules are namespaces, not values; the diagnostic names the fix (spell a name at the leaf). rut is fully statically typed: the compiler resolves every used name and knows from usage whether it lands in type position (`Column` in an annotation) or value position (`Logger(..)`), so there is nothing for the user to annotate. An unreferenced use name is a lint, not an error."
+"Importing a _module itself_ (`use tur_kit::layout;`) is an error — modules are namespaces, not values; the diagnostic names the fix (spell a name at the leaf). rut is fully statically typed: the compiler resolves every used name and knows from usage whether it lands in type position (`Column` in an annotation) or value position (`Logger(..)`), so there is nothing for the user to annotate. A use line may spell only what the target exports: a name the target doesn't declare is rejected at the use line itself — `` `ink` has no `Nope` — unknown import `` — not later, at a call site that might never be written. An unreferenced use name is a lint, not an error."
 msgstr ""
-"导入_模块本身_（`use tur_kit::layout;`）是一个错误 —— 模块是命名空间，不是值；诊断会给出修复方法（在叶子处写出一个名字）。rut 是完全静态类型的：编译器解析每一个用到的名字，并根据用法判断它落在类型位置（注解中的 `Column`）还是值位置（`Logger(..)`），因此用户无需任何标注。未被引用的 use 名是一个 lint，不是错误。"
+"导入_模块本身_（`use tur_kit::layout;`）是一个错误 —— 模块是命名空间，不是值；诊断会给出修复方法（在叶子处写出一个名字）。rut 是完全静态类型的：编译器解析每一个用到的名字，并根据用法判断它落在类型位置（注解中的 `Column`）还是值位置（`Logger(..)`），因此用户无需任何标注。use 行只能写出目标所导出的名字：目标没有声明的名字会在 use 行本身被拒绝——`` `ink` has no `Nope` — unknown import ``——而不是稍后在一个可能永远写不出来的调用点。未被引用的 use 名是一个 lint，不是错误。"
 
 
-#: src/reference/modules-and-visibility.md:84
+#: src/reference/modules-and-visibility.md:88
 msgid ""
 "The head itself is **declaration-scoped**: a package may `use` exactly the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps` when the package is the program root) ∪ `core`. Mounting stays transitive (a dep's own `deps` still join the program's closure), but a head that is mounted without being declared by _this_ package is the resolver's dedicated diagnostic, naming who pulled it in and the row to add ([dependency kinds](dependency-kinds.md))."
 msgstr ""
 "头本身是**按声明划定的**：一个包只能 `use` 自己清单点名的头——`deps` ∪ `peer-deps` ∪（作为程序根时的 `dev-deps`）∪ `core`。挂载仍是传递的（依赖自己的 `deps` 依然进入程序的闭包），但一个被挂载却未被*本*包声明的头会触发解析器的专门诊断，指名是谁把它拉进来的、要添加哪一行（[依赖种类](dependency-kinds.md)）。"
 
 
-#: src/reference/modules-and-visibility.md:92
+#: src/reference/modules-and-visibility.md:96
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The gated names resolve only through `use core::{ .. }`: the const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave never needs the import, only source that spells one of the names does. The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — the marker word is the designation, not a name ([Host fns and declaration files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through `use`."
 msgstr ""
 "引擎的内建名字——各基本类型、`opaque`、`panic`、`type_id<T>()`、`str(x)`——是**环境性的**：使用它们无需 `use`。被把守的名字只能经 `use core::{ .. }` 解析：常量 `NAN`、disposal 上下文 `DisposalContext`、弱引用 `Weak<T>`，以及封闭的 async 对（`Future<T>`、`RunContext`）——引擎的编织从不需要导入，需要导入的只是拼写了其中某个名字的源代码。括号标记（`[disposal]`/`[iterable]`/`[constructor]`）无需导入——标记词就是指定，不是名字（[宿主 fn 与声明文件](host-fns.md)）。包代码（`pouch`、`ink`、`nmapset`、...）只经 `use` 挂载。"
 
 
-#: src/reference/modules-and-visibility.md:106
+#: src/reference/modules-and-visibility.md:110
 msgid "Qualified positions"
 msgstr "限定位置"
 
 
-#: src/reference/modules-and-visibility.md:108
+#: src/reference/modules-and-visibility.md:112
 msgid ""
 "Inside one package, a declaration of another module is nameable where a path is legal — a type annotation, a call, a field read — by **qualified position**: `layout::Column`, `store::Source<str>`, `widget::mk(3)`. The head resolves against the current module's scope, then the module's ancestors up to the package root; positions never take a package head — `use` statements are the only cross-package door. `::` is THE path separator — every name-resolution path (use paths, qualified positions, enum members, statics/associated fns, extern namespaces) spells its segments with it; `.` is value access only (fields, instance methods, tuple indices — see [Lexical structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
 "在同一个包内，另一个模块的声明在路径合法之处 —— 类型注解、调用、字段读取 —— 都可以通过**限定位置**命名：`layout::Column`、`store::Source<str>`、`widget::mk(3)`。路径头先在当前模块作用域中解析，再沿模块祖先上溯到包根；位置永远不带包头 —— `use` 语句是唯一的跨包之门。`::` 是唯一的路径分隔符 —— 每一条名称解析路径（use 路径、限定位置、枚举成员、静态项/关联函数、extern 命名空间）的段都由它拼写；`.` 只做值访问（字段、实例方法、元组索引 —— 见[词法结构](lexical-structure.md)）。一个分隔符，两扇门："
 
 
-#: src/reference/modules-and-visibility.md:120
+#: src/reference/modules-and-visibility.md:124
 msgid "form"
 msgstr "形式"
 
 
-#: src/reference/modules-and-visibility.md:120 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:124 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr "拼写"
 
 
-#: src/reference/modules-and-visibility.md:120
+#: src/reference/modules-and-visibility.md:124
 msgid "door"
 msgstr "门"
 
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "use path"
 msgstr "use 路径"
 
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:126
 msgid "`::` — cross-package, the import"
 msgstr "`::` —— 跨包，导入语句"
 
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "qualified position"
 msgstr "限定位置"
 
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr "`a::b::C` / `a::b::f(..)`"
 
 
-#: src/reference/modules-and-visibility.md:123
+#: src/reference/modules-and-visibility.md:127
 msgid "`::` — intra-package, at the use site"
 msgstr "`::` —— 包内，在使用处"
 
 
-#: src/reference/modules-and-visibility.md:125
+#: src/reference/modules-and-visibility.md:129
 msgid "Module-level `let`"
 msgstr "模块级 `let`"
 
 
-#: src/reference/modules-and-visibility.md:127
+#: src/reference/modules-and-visibility.md:131
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, builtin operators over load-time expressions, struct literals whose fields are load-time expressions, fixed-array literals whose elements are, `type_id<T>()`, and builtin zero allocations (`[nil; n]` with a const `n`). Calls to user functions are not load-time expressions."
 msgstr ""
 "初始化式必须是**加载期表达式**：字面量、枚举成员、作用于加载期表达式的内置运算符、字段均为加载期表达式的结构体字面量、元素均为加载期表达式的定长数组字面量、`type_id<T>()`，以及内置的零值分配（`[nil; n]`，其中 `n` 为常量）。对用户函数的调用不是加载期表达式。"
 
 
-#: src/reference/modules-and-visibility.md:138
+#: src/reference/modules-and-visibility.md:142
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or held by the embedder and passed across the boundary. **No user code runs at load.**"
 msgstr "不存在可变的模块状态：程序状态在 `main` 中构造，或由嵌入方持有并跨边界传入。**加载期间不会运行任何用户代码。**"
 
 
-#: src/reference/modules-and-visibility.md:142
+#: src/reference/modules-and-visibility.md:146
 msgid "Entry points"
 msgstr "入口点"
 
 
-#: src/reference/modules-and-visibility.md:144
+#: src/reference/modules-and-visibility.md:148
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — `entry fn main` for a script, sync or async. `entry fn` publishes a function to the _embedder_; `entry` is orthogonal to visibility and does not combine with `pub`. Consequences of declarations-only loading: no use side-effect ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 "嵌入方加载模块后会显式调用一个入口函数 —— 脚本就是 `entry fn main`，同步或异步均可。`entry fn` 把函数发布给 _嵌入方_；`entry` 与可见性正交，且不与 `pub` 组合。只含声明的加载带来的结果：不存在 use 副作用的顺序问题，不存在加载顺序 bug，加载行为确定且开销低。"
 
 
-#: src/reference/modules-and-visibility.md:151
+#: src/reference/modules-and-visibility.md:155
 msgid "Bindings: `let` vs `let mut`"
 msgstr "绑定：`let` 与 `let mut`"
 
 
-#: src/reference/modules-and-visibility.md:153
+#: src/reference/modules-and-visibility.md:157
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through `x`, and no `mut self` method calls on it. It is a **read-only view of the shared object**."
 msgstr ""
 "`let x = e;` 以不可变方式绑定 —— 不能重新赋值，不能通过 `x` 给字段赋值，也不能对它调用 `mut self` 方法。它是**共享对象的只读视图**。"
 
 
-#: src/reference/modules-and-visibility.md:156
+#: src/reference/modules-and-visibility.md:160
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object it holds**. Every non-primitive is a shared cell (see [By-reference and nullable](by-reference-and-nullable.md)), so that write is visible through every other handle: `mut` is _permission_, never a copy. Every assignment path must run through a `mut` binding."
 msgstr ""
 "`let mut x = e;` 可以重新赋值，并授予**对其所持有对象**的写访问权。每个非基本类型值都是共享单元（参见[按引用与可空](by-reference-and-nullable.md)），因此这一写入会透过其他所有句柄可见：`mut` 是 _权限_，绝不是复制。每条赋值路径都必须经过 `mut` 绑定。"
 
 
-#: src/reference/modules-and-visibility.md:161
+#: src/reference/modules-and-visibility.md:165
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn area(p: Point)` promises not to."
 msgstr ""
 "参数可以声明 `mut name` —— 这是被调用方**改动调用方对象**的许可：`fn step(mut p: Point)` 会移动调用方的点；`fn area(p: Point)` 则承诺不这样做。"
 
 
-#: src/reference/modules-and-visibility.md:167
+#: src/reference/modules-and-visibility.md:171
 msgid ""
 "Modules form a tree per package (the package root is the root module `mod.rut`; each declared child is a module file). Every declaration — and every class member — carries a visibility:"
 msgstr ""
 "每个包的模块构成一棵树（包根就是根模块 `mod.rut`；每个被声明的子模块都是一个模块文件）。每个声明 —— 以及每个类成员 —— 都带有一个可见性："
 
 
-#: src/reference/modules-and-visibility.md:173
+#: src/reference/modules-and-visibility.md:177
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr "**public** —— 可被任何 rut 模块命名（包括其他包）"
 
 
-#: src/reference/modules-and-visibility.md:174
+#: src/reference/modules-and-visibility.md:178
 msgid "`pub(pkg) fn ..`"
 msgstr "`pub(pkg) fn ..`"
 
 
-#: src/reference/modules-and-visibility.md:174
+#: src/reference/modules-and-visibility.md:178
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr "在整个**包**内可见（整棵模块树）"
 
 
-#: src/reference/modules-and-visibility.md:175
+#: src/reference/modules-and-visibility.md:179
 msgid "visible to the **parent module's subtree** only"
 msgstr "仅对**父模块的子树**可见"
 
 
-#: src/reference/modules-and-visibility.md:176
+#: src/reference/modules-and-visibility.md:180
 msgid "_(unannotated)_"
 msgstr "_（无标注）_"
 
 
-#: src/reference/modules-and-visibility.md:176
+#: src/reference/modules-and-visibility.md:180
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr "模块私有 —— 在本模块及其后代中可见；**默认值**"
 
 
-#: src/reference/modules-and-visibility.md:178
+#: src/reference/modules-and-visibility.md:182
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child module sees its ancestors' privates, never a sibling's)."
 msgstr "无标注 = 对声明模块_及其后代_私有（子模块能看到祖先的私有项，永远看不到兄弟的）。"
 
 
-#: src/reference/modules-and-visibility.md:180
+#: src/reference/modules-and-visibility.md:184
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed but gated nothing; the parser refuses them with the fix (bare private, or `pub(super)`/`pub(pkg)`/`pub`)."
 msgstr ""
 "括号形式 `pub(mod)` / `pub(self)` 已废除 —— 它们能解析但什么也不约束；解析器会大声拒绝并给出修复方法（裸私有，或 `pub(super)`/`pub(pkg)`/`pub`）。"
 
 
-#: src/reference/modules-and-visibility.md:183
+#: src/reference/modules-and-visibility.md:187
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an impl exports with its target type), `fn`, `type` aliases, and the `mod` edge itself (`pub mod` opens the child's `pub` members to other packages; a plain `mod` keeps the child package-internal). On a `class` declaration it means the _type name_ is visible."
 msgstr ""
 "统一适用于：`let`、`enum`、`struct`、`class`、`interface`、`impl`（impl 随其目标类型一起导出）、`fn`、`type` 别名，以及 `mod` 边本身（`pub mod` 把子模块的 `pub` 成员开放给其他包；裸 `mod` 让子模块保持包内）。在 `class` 声明上，它指_类型名_可见。"
 
 
-#: src/reference/modules-and-visibility.md:188
+#: src/reference/modules-and-visibility.md:192
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is module-private; `pub` (optionally scoped) exposes it. See [Classes and constructors](classes.md)."
 msgstr "**类成员采用同样的形式**：未加注解的字段或方法是模块私有的；`pub`（可带作用域）将其公开。参见[类与构造器](classes.md)。"
 
 
-#: src/reference/modules-and-visibility.md:191
+#: src/reference/modules-and-visibility.md:195
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see [Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub fn` exports cross-module, plain `fn` is module-private — the same law a class's methods follow, enums included (see [Structs](structs.md) and [Enums](enums.md)). Interface members take no `pub` at all — they are as visible as their interface; satisfaction reads a type's **public** inherent members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/modules-and-visibility.md:199
+#: src/reference/modules-and-visibility.md:203
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones. Hiding stops at the checker's door: every non-generic, non-async fn/method body is type-checked even when nothing calls it."
 msgstr ""
@@ -12715,17 +12723,26 @@ msgstr "字段可以按名称以任意顺序给出。"
 
 
 #: src/reference/structs.md:98
-msgid "The literal must initialize **every** field that has no initializer."
-msgstr "字面量必须初始化**每个**没有初始化式的字段。"
-
-
-#: src/reference/structs.md:99
 msgid ""
-"An omitted field with an initializer takes it; `{}` with all-default fields is legal."
-msgstr "省略的、带初始化式的字段取其初始化式；全部字段都有默认值时，`{}` 合法。"
+"**The every-field-covered law**: a literal must cover **every** field — spelled in the literal, or covered by the field's declared initializer (`tag: str = \"...\"`). Omitting a field that has no initializer is a compile error — ``missing field `b` in the `P` literal (the every-field-covered law)`` — the silent zero-fill default is gone."
+msgstr ""
+"**字段全覆盖法则**：字面量必须覆盖**每一个**字段——要么在字面量里写出，要么由该字段的声明初始化器（`tag: str = \"...\"`）覆盖。省略一个没有初始化器的字段是编译错误——``missing field `b` in the `P` literal (the every-field-covered law)``——悄无声息的零值填充默认已不复存在。"
 
 
-#: src/reference/structs.md:102
+#: src/reference/structs.md:104
+msgid ""
+"A field spelled twice is a compile error — ``duplicate field `a` in the `P` literal`` — there is no last-wins."
+msgstr ""
+"把一个字段写两遍是编译错误——``duplicate field `a` in the `P` literal``——不存在“后者胜”（last-wins）。"
+
+
+#: src/reference/structs.md:106
+msgid ""
+"An omitted field with an initializer takes it; `{}` with all-initialized fields is legal."
+msgstr "带初始化器的字段被省略时取其初始化器；当所有字段都有初始化器时，`{}` 是合法的。"
+
+
+#: src/reference/structs.md:109
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12737,7 +12754,7 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"t\");\n"
 "    let q = Point { x: 9, y: 9 };\n"
-"    let s = Style {};                     // zero-value defaults fill the fields\n"
+"    let s = Style {};                     // the declared initializers fill the fields\n"
 "    let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell\n"
 "    log.info(f\"{s.color} {r.max.x}\");\n"
 "}\n"
@@ -12745,30 +12762,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:122
+#: src/reference/structs.md:129
 msgid "All fields public, always"
 msgstr "所有字段公开，始终如此"
 
 
-#: src/reference/structs.md:124
+#: src/reference/structs.md:131
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a compile error (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md)). Structs also have no `static` members."
 msgstr ""
 "结构体是开放的数据记录：结构体体内出现成员可见性标注是编译错误（隐私需要控制构造，那是类的职责 —— 参见[类与构造器](classes.md)）。结构体也没有 `static` 成员。"
 
 
-#: src/reference/structs.md:129
+#: src/reference/structs.md:136
 msgid "Methods live in impl blocks"
 msgstr "方法位于 impl 块中"
 
 
-#: src/reference/structs.md:131
+#: src/reference/structs.md:138
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse error. Methods live in the inherent `impl S { .. }`, in the type's module only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
 
-#: src/reference/structs.md:136
+#: src/reference/structs.md:143
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -12783,14 +12800,14 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:147
+#: src/reference/structs.md:154
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports cross-module, plain `fn` is module-private. `Self` spells the struct, in signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 "方法带有真实可见性——类的法则：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见。`Self` 拼写的就是这个结构体，签名（`-> Self`）和字面量（`Self { x: 1, y: 2 }`）里都一样："
 
 
-#: src/reference/structs.md:152
+#: src/reference/structs.md:159
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12812,54 +12829,54 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:174
+#: src/reference/structs.md:181
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight helpers, impl blocks for the members other code observes."
 msgstr ""
 
 
-#: src/reference/structs.md:177
+#: src/reference/structs.md:184
 msgid "Limits, exhaustively:"
 msgstr "限制，穷尽列举："
 
 
-#: src/reference/structs.md:179
+#: src/reference/structs.md:186
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md));"
 msgstr "**字段永远公开**——字段可见性没有调节项（私有需要构造控制，那是类的职责——参见[类与构造器](classes.md)）；"
 
 
-#: src/reference/structs.md:182
+#: src/reference/structs.md:189
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr "**构造就是字面量**——`Point { x: 1, y: 2 }` 到处可用（开放字面量 vs 类方法门禁_正是_结构体/类的分界）。"
 
 
-#: src/reference/structs.md:186
+#: src/reference/structs.md:193
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, `[disposal]`. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — mark a `[disposal]` member on the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
 
-#: src/reference/structs.md:193
+#: src/reference/structs.md:200
 msgid "Interfaces and representation"
 msgstr ""
 
 
-#: src/reference/structs.md:195
+#: src/reference/structs.md:202
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same handle** — no allocation, no copy: the interface-typed value aliases the record, and mutations through it are visible to every other handle."
 msgstr ""
 
 
-#: src/reference/structs.md:199
+#: src/reference/structs.md:206
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — primitive fields widened into their slot, composite fields as cell-handle slots (see [Reified types and layout](reified-types.md)). Recursive shapes (`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 "表示：单元内每个字段一个槽，按声明顺序排列 —— 基本类型字段宽化进自己的槽，复合字段作为单元句柄槽（参见[具体化类型与布局](reified-types.md)）。递归形状（`next: ?Node`）是合法的，因为复合字段是指针大小的。"
 
 
-#: src/reference/structs.md:204
+#: src/reference/structs.md:211
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is allowed."
 msgstr "结构体用于小型数据（点、矩形、颜色、配置），但任意大小都允许。"
@@ -12940,150 +12957,150 @@ msgstr ""
 
 #: src/reference/classes.md:60
 msgid ""
-"**The `Self { field: expr, .. }` literal is the class-private construction** — legal anywhere inside the class body (class methods and instance methods alike); the class name spells it inside the body too (`Rect { .. }`). The literal must initialize every field without an initializer; field initializers run for omitted fields. Private fields are settable in the literal — inside the class body only. That privacy _is_ the seal: outside code can build a class value only by calling a class method that chooses to build one."
+"**The `Self { field: expr, .. }` literal is the class-private construction** — legal anywhere inside the class body (class methods and instance methods alike); the class name spells it inside the body too (`Rect { .. }`). The literal must initialize every field without an initializer — the every-field-covered law, structs and classes alike — and a field spelled twice is an error; field initializers run for omitted fields. Private fields are settable in the literal — inside the class body only. That privacy _is_ the seal: outside code can build a class value only by calling a class method that chooses to build one."
 msgstr ""
-"**`Self { field: expr, .. }` 字面量是类私有的构造方式** —— 在类体内的任何地方都合法（类方法和实例方法皆可）；在体内也可以用类名来写（`Rect { .. }`）。字面量必须初始化每个没有初始化式的字段；被省略的字段会运行其字段初始化式。私有字段可以在字面量中赋值 —— 但仅在类体内。这份隐私 _正是_ 密封性所在：外部代码只能通过调用一个愿意构建实例的类方法来构建类值。"
+"**`Self { field: expr, .. }` 字面量是类私有的构造方式** —— 在类体内的任何地方都合法（类方法和实例方法皆可）；在体内也可以用类名来写（`Rect { .. }`）。字面量必须初始化每个没有初始化式的字段——字段全覆盖法则，结构体与类一视同仁——把一个字段写两遍也是错误；被省略的字段会运行其字段初始化式。私有字段可以在字面量中赋值 —— 但仅在类体内。这份隐私 _正是_ 密封性所在：外部代码只能通过调用一个愿意构建实例的类方法来构建类值。"
 
 
-#: src/reference/classes.md:69
+#: src/reference/classes.md:71
 msgid ""
 "**No implicit default construction.** A class whose fields all have initializers still needs an explicit `fn new() -> Self { return Self {}; }` if outsiders should build it. A class with no accessible constructing class method is **sealed** — constructible only inside its own body."
 msgstr ""
 "**没有隐式默认构造。** 一个所有字段都有初始化式的类，如果希望外部能构造它，仍然需要显式的 `fn new() -> Self { return Self {}; }`。没有任何可访问的构造类方法的类是**封闭的** —— 只能在自己的体内构造。"
 
 
-#: src/reference/classes.md:75
+#: src/reference/classes.md:77
 msgid ""
 "**No parameter properties**: parameters are parameters — the `Self { field: name }` literal makes the param→field mapping explicit."
 msgstr "**没有参数属性**：参数就是参数 —— `Self { field: name }` 字面量把参数→字段的映射写明确。"
 
 
-#: src/reference/classes.md:78
+#: src/reference/classes.md:80
 msgid ""
 "**`async` class methods are allowed** — same function, `await` in the body. No partially constructed instance ever exists across an `await`: the `Self { .. }` literal is an ordinary expression, and locals live in the coroutine frame."
 msgstr ""
 "**允许 `async` 类方法** —— 还是同一个函数，体内可以 `await`。`await` 之间永远不会存在部分构造的实例：`Self { .. }` 字面量是普通表达式，局部变量生活在协程帧里。"
 
 
-#: src/reference/classes.md:83
+#: src/reference/classes.md:85
 msgid "`[constructor]` — the designated construction surface"
 msgstr "`[constructor]`——指定的构造表面"
 
 
-#: src/reference/classes.md:85
+#: src/reference/classes.md:87
 msgid ""
 "A bracket marker designates THE member a surface binds to — the member's name is free; the designation routes the call. Three designated surfaces, one law:"
 msgstr "括号标记指定的是表面所绑定的**那一个**成员——成员的名字是自由的；指定路由调用。三个指定表面，一条法则："
 
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "marker"
 msgstr "标记"
 
 
-#: src/reference/classes.md:89 src/reference/stdlib.md:117
+#: src/reference/classes.md:91 src/reference/stdlib.md:117
 #: src/reference/stdlib.md:217
 msgid "surface"
 msgstr "表面"
 
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "caller"
 msgstr "调用者"
 
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "signature owner"
 msgstr "签名归属"
 
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:91
 msgid "body compiled"
 msgstr "体如何编译"
 
 
-#: src/reference/classes.md:91 src/reference/stdlib.md:89
+#: src/reference/classes.md:93 src/reference/stdlib.md:89
 msgid "`[disposal]`"
 msgstr "`[disposal]`"
 
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "cell death"
 msgstr "单元死亡"
 
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "the engine, at refcount zero"
 msgstr "引擎，在引用计数归零时"
 
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "the engine — `(mut self, cx: DisposalContext)`"
 msgstr "引擎——`(mut self, cx: DisposalContext)`"
 
 
-#: src/reference/classes.md:91
+#: src/reference/classes.md:93
 msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
 msgstr "死亡时即刻入队（[the Rc heap](rc-heap.md)）"
 
 
-#: src/reference/classes.md:92 src/reference/stdlib.md:88
+#: src/reference/classes.md:94 src/reference/stdlib.md:88
 msgid "`[iterable]`"
 msgstr "`[iterable]`"
 
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "`for (x of it)`"
 msgstr "`for (x of it)`"
 
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "the for-of desugar"
 msgstr "for-of 脱糖"
 
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "the member — its `emit` parameter fixes `E`"
 msgstr "成员——它的 `emit` 参数定下 `E`"
 
 
-#: src/reference/classes.md:92
+#: src/reference/classes.md:94
 msgid "fused into the loop ([interfaces](interfaces.md))"
 msgstr "融合进循环（[接口](interfaces.md)）"
 
 
-#: src/reference/classes.md:93 src/reference/stdlib.md:90
+#: src/reference/classes.md:95 src/reference/stdlib.md:90
 msgid "`[constructor]`"
 msgstr "`[constructor]`"
 
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "the call form `Type(..)`"
 msgstr "调用形式 `Type(..)`"
 
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "user code"
 msgstr "用户代码"
 
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "the member — its parameters fix the call's shape"
 msgstr "成员——它的参数定下调用的形状"
 
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:95
 msgid "byte-identical to `Point::from_xy(..)`"
 msgstr "与 `Point::from_xy(..)` 逐字节相同"
 
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:97
 msgid ""
 "`[constructor]` designates the class's construction surface — the call form `Type(..)` binds to the one marked member:"
 msgstr "`[constructor]` 指定类的构造表面——调用形式 `Type(..)` 绑定到那**一个**被标记的成员："
 
 
-#: src/reference/classes.md:98
+#: src/reference/classes.md:100
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13108,74 +13125,74 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/classes.md:123
+#: src/reference/classes.md:125
 msgid ""
 "**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to `Point::from_xy(1.0, 2.0)` — the marker changes what the call form binds to, never what the call compiles to. `Point` as a bare (non-call) expression stays an error: the construction surface is the call form `Type(..)`, never the bare name."
 msgstr ""
 "**是糖，不是新机制。** `Point(1.0, 2.0)` 的 lower 与 `Point::from_xy(1.0, 2.0)` 逐字节相同——标记改变的是调用形式绑定到谁，绝不是调用被编译成什么。`Point` 作为裸的（非调用）表达式仍是错误：构造表面是调用形式 `Type(..)`，绝不是裸名字。"
 
 
-#: src/reference/classes.md:129
+#: src/reference/classes.md:131
 msgid ""
 "**One designated constructor per class, on the inherent impl only.** Class bodies stay fields-only; a second `[constructor]` member is refused — \"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\". The member takes no receiver — \"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\" — and returns `Self` (or `?Self`): \"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\". An unknown bracket word was always refused, and the closed set now names three: \"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"."
 msgstr ""
 "**每个类至多一个被指定的构造器，且只在固有 impl 上。** 类主体保持只有字段；第二个 `[constructor]` 成员会被拒绝——\"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\"。该成员不带接收者——\"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\"——并且返回 `Self`（或 `?Self`）：\"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\"。未知的括号词从来都会被拒绝，而封闭集合现在点名三个：\"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"。"
 
 
-#: src/reference/classes.md:142
+#: src/reference/classes.md:144
 msgid ""
 "**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> ?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` on a refused construction, exactly like the method call it is."
 msgstr ""
 "**`?Self` 是 try 构造。** 拼写为 `fn parse(s: str) -> ?Self` 的构造器让 `Type(..)` 应答 `?Type`——调用产出可空，构造被拒时得到 `nil`，与它本来就是的那次方法调用完全一致。"
 
 
-#: src/reference/classes.md:146
+#: src/reference/classes.md:148
 msgid ""
 "**Newtypes never carry it** — `JsonI64(64)` is already the newtype's construction surface, the compiler-provided positional mint; there is nothing for the marker to designate. Structs and enums are refused too — structs construct by literal, and an enum's members are its own immortal singletons."
 msgstr ""
 "**新类型（newtype）从不携带它**——`JsonI64(64)` 已经是新类型的构造表面，即编译器提供的位置铸造；标记无可指定之物。结构体与枚举同样被拒绝——结构体以字面量构造，枚举的成员是它自己的不朽单例。"
 
 
-#: src/reference/classes.md:151
+#: src/reference/classes.md:153
 msgid ""
 "**The seal holds.** Visibility rides the method's `pub` — an unannotated (module-private) constructor answers `Type(..)` only inside its own module. Outside, the used-class hint says so: \"`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself\". Arity is the member call's — the refusal names the member (`Point::from_xy`)."
 msgstr ""
 "**密封依然成立。** 可见性跟随方法的 `pub`——未加注解的（模块私有）构造器只在自己的模块内应答 `Type(..)`。在模块之外，用到该类处的提示会说明这一点：\"`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself\"。参数个数沿用成员调用的——拒绝信息点名成员（`Point::from_xy`）。"
 
 
-#: src/reference/classes.md:157
+#: src/reference/classes.md:159
 msgid ""
 "**Resolution order for `Name(args)`**: a local fn value, then free fns, then the prelude, then the newtype mint, then the designated constructor, then the error — a free fn named `Point` wins."
 msgstr ""
 "**`Name(args)` 的解析顺序**：局部 fn 值，然后自由函数，然后 prelude，然后新类型铸造，然后被指定的构造器，最后才是错误——名为 `Point` 的自由函数胜出。"
 
 
-#: src/reference/classes.md:160
+#: src/reference/classes.md:162
 msgid ""
 "**Generics ride the method-call path.** `Box(3)` infers exactly like `Box::of(3)` — the sugar IS the member call after resolution."
 msgstr "**泛型走方法调用路径。** `Box(3)` 的推断与 `Box::of(3)` 完全一致——解析之后，糖**就是**那次成员调用。"
 
 
-#: src/reference/classes.md:162
+#: src/reference/classes.md:164
 msgid ""
 "**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, `default` — every existing class method keeps its place; the marker designates one of them as the call form's target, it does not remove the siblings."
 msgstr ""
 "**命名构造器依然可用。** `new`、`from_square`、`parse`、`open`、`default`——每个既有类方法都留在原位；标记只是把其中之一指定为调用形式的目标，绝不移除其余兄弟。"
 
 
-#: src/reference/classes.md:167
+#: src/reference/classes.md:169
 msgid "Newtypes: the one-field wrapper"
 msgstr "新类型：单字段包装器"
 
 
-#: src/reference/classes.md:169
+#: src/reference/classes.md:171
 msgid ""
 "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary class: exactly one field, `inner`, of the wrapped type. The positional spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr ""
 "`class Name(Wrapped);` —— 位置式单字段声明。它就是一个普通的类：恰好一个字段 `inner`，类型是被包装的类型。位置式写法额外提供了构造器——调用形式 `Name(value)`："
 
 
-#: src/reference/classes.md:174
+#: src/reference/classes.md:176
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -13190,127 +13207,127 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/classes.md:185
+#: src/reference/classes.md:187
 msgid ""
 "**The wrapped type is unrestricted** — primitives, composites, tuples, fn types, another module's class: `class Opt(?i64);`, `class Pair((i32, str));`, `class Cb(fn(i32) -> str);` are all legal. The wrapped position is a FIELD type, never an impl target — that is the point. A wrapper is how a primitive or a third-party type gains a capability satisfaction can't reach: declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr ""
 "**被包装的类型不受限制** —— 原始类型、复合类型、元组、fn 类型、另一个模块的类：`class Opt(?i64);`、`class Pair((i32, str));`、`class Cb(fn(i32) -> str);` 全都合法。被包装的位置是一个字段类型，绝不是 impl 目标——这正是要点。包装器，就是让原始类型或第三方类型获得满足（satisfaction）够不着的能力的方式：声明包装器，在其上实现，把包装器递过边界。"
 
 
-#: src/reference/classes.md:192
+#: src/reference/classes.md:194
 msgid ""
 "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability exists exactly where the constructor is spelled. And no implicit forwarding: the wrapper exposes exactly its own members — `inner` (the ordinary field, ordinary visibility) and its `impl` methods."
 msgstr ""
 "**绝不自动插入。** `dump(64)` 永远是错误；能力只存在于拼写出构造器的地方。也没有隐式转发：包装器暴露的恰好是它自己的成员——`inner`（普通字段，普通可见性）与它的 `impl` 方法。"
 
 
-#: src/reference/classes.md:197
+#: src/reference/classes.md:199
 msgid ""
 "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never `JsonExt`). Per-type wrappers with type-specific bodies when the bodies differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr ""
 "**命名法则**：包装器以它所包装的东西命名（`JsonI64`，绝不是 `JsonExt`）。方法体各异时用逐类型的包装器，各带自己的方法体；一致的地方用泛型包装器覆盖：`class DebugWrap<T>(T);`。"
 
 
-#: src/reference/classes.md:201
+#: src/reference/classes.md:203
 msgid ""
 "**The generic instantiation law**: a binder is determined by the wrapped argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a `Tail<i32>`), or by explicit type arguments at the constructor (`Converter<i32>(\"64\")` — `class Converter<T>(str);` cannot infer, the binder is not in `str`). If any binder is undetermined, the call spells ALL binders — all-or-nothing: `class Pair<A, B>(i32);` accepts `Pair<i32, str>(7)`, never `Pair<i32>(7)`."
 msgstr ""
 "**泛型实例化法则**：绑定名出现在被包装实参中时，由该实参确定（`class Tail<T>([T]);` → `Tail([1, 2])` 就是一个 `Tail<i32>`）；否则由构造器处的显式类型实参确定（`Converter<i32>(\"64\")` —— `class Converter<T>(str);` 无法推断，绑定名不在 `str` 里）。只要有任何一个绑定名未被确定，调用就必须拼写出全部绑定名——全有或全无：`class Pair<A, B>(i32);` 接受 `Pair<i32, str>(7)`，绝不接受 `Pair<i32>(7)`。"
 
 
-#: src/reference/classes.md:209
+#: src/reference/classes.md:211
 msgid ""
 "**The third-party adapter** (the orphan case, dissolved): `class TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the capability — consumers manufacture `TheirJson(x)` from their own modules; the newtype flag rides the class's surface row like the class itself does."
 msgstr ""
 "**第三方适配器**（孤儿情形，就此消解）：`class TheirJson(TheirType);` 加上固有的 `encode`，就把能力交到了他们的类型手里——使用方在自己的模块里制造 `TheirJson(x)`；newtype 标志与类本身一样，搭载在类的接口面行上。"
 
 
-#: src/reference/classes.md:214
+#: src/reference/classes.md:216
 msgid ""
 "A braced class — even one with a single `inner` field — has no call construction of its own: the positional spelling is what provides the newtype's constructor, and a braced class gains the call form only by designating a `[constructor]` member (above). A newtype itself never carries the marker — its mint already IS `Name(v)`; everything else stays sealed."
 msgstr ""
 "花括号类——哪怕只有一个 `inner` 字段——也没有自己的调用构造：位置式写法才是新类型构造器的提供者，而花括号类只有指定一个 `[constructor]` 成员（见上）才能获得调用形式。新类型本身从不携带该标记——它的铸造**就是** `Name(v)`；其余一切保持封闭。"
 
 
-#: src/reference/classes.md:221
+#: src/reference/classes.md:223
 msgid ""
 "At runtime the construction mints a real cell: the wrapper is a value like every class."
 msgstr "在运行时，这次构造铸造一个真实的单元：包装器和任何类一样，是一个值。"
 
 
-#: src/reference/classes.md:224
+#: src/reference/classes.md:226
 msgid "Methods: explicit `self`"
 msgstr "方法：显式 `self`"
 
 
-#: src/reference/classes.md:226
+#: src/reference/classes.md:228
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields through `self`. A method that mutates declares `mut self` and requires a `let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
 "**接收者是显式的。** 实例方法把接收者写为第一个参数 —— `fn add(self, x: i32, y: i32)` —— 体内透过 `self` 读取字段。会做修改的方法声明 `mut self`，并要求 `let mut` 接收者（参见[模块与可见性](modules-and-visibility.md)）。"
 
 
-#: src/reference/classes.md:231
+#: src/reference/classes.md:233
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on the class itself (`Rect::new(..)`, `Self.new(..)` inside the body). Presence or absence of `self` is the whole distinction. Class methods are ordinary functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 "**没有** `self` 参数的方法是**类方法** —— 在类本身上调用（`Rect::new(..)`，体内为 `Self.new(..)`）。有或没有 `self` 就是全部区别。类方法就是普通函数：它们做校验、给默认值、缓存、注册或发放单例。"
 
 
-#: src/reference/classes.md:236
+#: src/reference/classes.md:238
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr "**计算属性就是一个方法**（`c.count()`），可写的属性则接受一个参数（`c.set_count(n)`）。一种成员类别，一种调用约定。"
 
 
-#: src/reference/classes.md:239
+#: src/reference/classes.md:241
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, with the same visibility forms as fields."
 msgstr "**静态字段**在类体内声明为 `static name: T = init;`，拥有与字段相同的可见性形式。"
 
 
-#: src/reference/classes.md:242
+#: src/reference/classes.md:244
 msgid "Member visibility"
 msgstr "成员可见性"
 
 
-#: src/reference/classes.md:244
+#: src/reference/classes.md:246
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and visibility](modules-and-visibility.md)): an unannotated field or method is **module-private**; `pub`, `pub(mod)`, `pub(super)`, `pub(self)` expose it to the form's audience. The construction surface is therefore explicit: `pub fn new(..)` builds; unannotated members stay the class's own business within its module."
 msgstr ""
 "成员遵循与声明相同的可见性形式（参见[模块与可见性](modules-and-visibility.md)）：未加注解的字段或方法是**模块私有**的；`pub`、`pub(mod)`、`pub(super)`、`pub(self)` 将其暴露给相应形式的受众。构造面因此是显式的：`pub fn new(..)` 负责构建；未加注解的成员仍是类在其模块内的私事。"
 
 
-#: src/reference/classes.md:251
+#: src/reference/classes.md:253
 msgid "Reference semantics and equality"
 msgstr "引用语义与相等"
 
 
-#: src/reference/classes.md:253
+#: src/reference/classes.md:255
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see [By-reference and nullable](by-reference-and-nullable.md)): assignment shares, mutation is visible through aliases. `==` is cell identity; field-wise comparison is an interface you write for it."
 msgstr ""
 
 
-#: src/reference/classes.md:258
+#: src/reference/classes.md:260
 msgid "No inheritance"
 msgstr "没有继承"
 
 
-#: src/reference/classes.md:260
+#: src/reference/classes.md:262
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`."
 msgstr ""
 "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。"
 
 
-#: src/reference/classes.md:262
+#: src/reference/classes.md:264
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or free functions; polymorphism is only the structural kind — a type used through an interface whose members it has (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/classes.md:266
+#: src/reference/classes.md:268
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell payload (see [Reified types and layout](reified-types.md)) — no prefix layout, no fat pointers, and every object has exactly one concrete class forever. That keeps `is` a single descriptor check."
 msgstr ""

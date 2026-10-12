@@ -50,9 +50,10 @@ binding, assigning to a field (`p.x = 3`), or assigning to an element
 the same value, and what `mut` controls is only who may write.
 
 Every type has a zero value: `0` for numbers, `false` for `bool`, the
-empty string, `nil` for nullables. Omit a field in a struct literal and
-it takes the field's initializer if there is one, else the type's zero
-value (see [structs, enums, and classes](types.md)).
+empty string, `nil` for nullables. But nothing fills a struct literal's
+fields for you: a literal must cover every field — spelled in the
+literal, or covered by the field's declared initializer (see
+[structs, enums, and classes](types.md)).
 
 ## Numbers
 

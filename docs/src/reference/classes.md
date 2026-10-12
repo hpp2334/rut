@@ -61,7 +61,9 @@ area=9
   construction** — legal anywhere inside the class body (class methods
   and instance methods alike); the class name spells it inside the body
   too (`Rect { .. }`). The literal must initialize every field without
-  an initializer; field initializers run for omitted fields. Private
+  an initializer — the every-field-covered law, structs and classes
+  alike — and a field spelled twice is an error; field initializers
+  run for omitted fields. Private
   fields are settable in the literal — inside the class body only.
   That privacy *is* the seal: outside code can build a class value only
   by calling a class method that chooses to build one.
