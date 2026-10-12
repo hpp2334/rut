@@ -88,6 +88,21 @@ fn ir_dump(src: &str) -> String {
     rut_driver::ir_dump_of(&prog.funcs, &prog.interner)
 }
 
+/// main's own IR stream — the section from `fn #0` to the next `fn #`
+/// header. The fusion law lives at the CALL SITE: a small private
+/// helper splices into `main` and its handoff must fuse there. (Since
+/// dead private code became checked, the helper ALSO compiles standalone
+/// as an eager root — an unreachable body that legitimately builds its
+/// own return tuple — so the program-wide dump carries its mint; the
+/// elision pins read main's section, where the fusion must answer.)
+fn main_ir(src: &str) -> String {
+    let dump = ir_dump(src);
+    let start = dump.find("fn #0 ").expect("fn #0 (main) in the dump");
+    let rest = &dump[start..];
+    let end = rest[1..].find("\nfn #").map(|i| i + 1).unwrap_or(rest.len());
+    rest[..end].to_string()
+}
+
 // ---- the elision: destructured pairs never mint ------------------------
 
 /// The checkedadd row's exact shape — a helper fn returning
@@ -118,7 +133,7 @@ fn destructured_checked_pair_elides() {
             return s.wrapping_add(bad);
         }
     "#;
-    let dump = ir_dump(src);
+    let dump = main_ir(src);
     assert!(
         !dump.contains("makerecord"),
         "the destructured (i64, bool) pair must not mint:\n{dump}"
@@ -153,7 +168,7 @@ fn bound_pair_destructured_elides() {
             return v;
         }
     "#;
-    let dump = ir_dump(src);
+    let dump = main_ir(src);
     assert!(
         !dump.contains("makerecord"),
         "the bound-then-destructured pair must not mint:\n{dump}"
@@ -182,7 +197,7 @@ fn ref_component_pair_elides_to_one_retain_per_read() {
             return v + w + name.len() as i64 + other.len() as i64;
         }
     "#;
-    let dump = ir_dump(src);
+    let dump = main_ir(src);
     assert!(
         !dump.contains("makerecord"),
         "the (i64, str) pairs must not mint — the str handoff is a movref:\n{dump}"
@@ -203,7 +218,7 @@ fn three_field_return_family_elides() {
             return s + d + p;
         }
     "#;
-    let dump = ir_dump(src);
+    let dump = main_ir(src);
     assert!(
         !dump.contains("makerecord"),
         "the destructured 3-field tuple must not mint:\n{dump}"

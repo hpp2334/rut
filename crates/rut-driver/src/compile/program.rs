@@ -495,7 +495,11 @@ pub fn compile_program_resolved(
         }
     }
     // library surface: every non-generic `pub fn` is usable, so its body
-    // must be compiled even when nothing local calls it
+    // must be compiled even when nothing local calls it. PRIVATE free
+    // fns join the roots at the TAIL (see the dead-code-checking block
+    // before the final drain) — the pre-snapshot root set stays exactly
+    // what the published envelopes were packed with, so every id a
+    // consumer may already have bound keeps its local.
     for (name, node) in ctx.fn_nodes.clone() {
         let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
         if !is_pub {
@@ -516,7 +520,8 @@ pub fn compile_program_resolved(
     // them — the inherent surface rows carry the fn ids. Generic
     // classes monomorphize per instantiation (the owner-side request
     // machinery seeds their bodies); async and generic METHODS stay
-    // call-site shapes and cross no surface.
+    // call-site shapes and cross no surface. Private methods join at
+    // the tail (the dead-code-checking block).
     for (dname, d) in ctx.datas.clone() {
         if !d.generics.is_empty() {
             continue;
@@ -1299,6 +1304,92 @@ pub fn compile_program_resolved(
         let subst: Vec<(rut_core::IdentId, rut_core::types::TypeId)> =
             generics.iter().cloned().zip(args.iter().cloned()).collect();
         seeded_bodies.push(Inst { key: FnKey::Free(fname), subst, iface_origins: vec![] });
+    }
+    // the dead-code-checking roots: every PRIVATE non-generic non-async
+    // free fn and every private concrete-class/enum method compiles too
+    // — the fused typecheck+codegen walk must see real source whether or
+    // not anything calls it (a bogus body in dead code is a real
+    // diagnostic, and rut-lsp rides this lane). They run HERE, after the
+    // surface snapshot + seed attach + the seed scans: their bodies mint
+    // type rows, and a row minted before the snapshot would shift every
+    // later local and stale the ids a consumer already bound — the
+    // committed-envelope law (a bundle's surface must keep byte-matching
+    // this compile). Appended tail ids cross no surface; `ensure_inst`
+    // dedups, so a private fn an earlier root's call site already
+    // reached compiles exactly once.
+    //
+    // A private FREE fn with trait-object parameters stays call-site-
+    // shaped: the call mints its Inst with one concrete origin per box
+    // param (the specialization law — the origins ride the KEY), so an
+    // origin-less eager root would be a SECOND instantiation whose boxed
+    // lanes refuse (the origin law). Its body checks at its call sites,
+    // where the origins are known. Methods need no such gate — their
+    // Inst keys never carry origins — and generic/async bodies stay
+    // call-site shapes everywhere (no substitution / no weave).
+    {
+        let mut late_roots: Vec<Inst> = Vec::new();
+        for (name, node) in ctx.fn_nodes.clone() {
+            let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
+            if is_pub {
+                continue;
+            }
+            let fd = ctx.ast.fn_decl(node);
+            if !fd.generics.is_empty() || fd.is_async {
+                continue;
+            }
+            // the signature resolves in the fn's module (phase 3)
+            let saved_mod = ctx.cur_mod.clone();
+            ctx.cur_mod = ctx.mod_of(node.id()).to_string();
+            let boxed = fd.params.iter().any(|p| match ctx.ast.param(*p) {
+                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                    let ty = ctx.resolve_sig_ty(*t, &[], None);
+                    matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. })
+                }
+                _ => false,
+            });
+            ctx.cur_mod = saved_mod;
+            if boxed {
+                continue;
+            }
+            late_roots.push(Inst { key: FnKey::Free(name), subst: vec![], iface_origins: vec![] });
+        }
+        for (dname, d) in ctx.datas.clone() {
+            if !d.generics.is_empty() {
+                continue;
+            }
+            for (mname, mnode) in &d.methods {
+                let md = ctx.ast.method_decl(*mnode);
+                let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
+                if exported || md.is_async || !md.generics.is_empty() {
+                    continue;
+                }
+                late_roots.push(Inst {
+                    key: FnKey::Method { data: dname, name: *mname },
+                    subst: vec![],
+                    iface_origins: vec![],
+                });
+            }
+        }
+        for (ename, e) in ctx.enums.clone() {
+            for (mname, mnode) in &e.methods {
+                let md = ctx.ast.method_decl(*mnode);
+                if md.vis == Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty()
+                {
+                    continue;
+                }
+                late_roots.push(Inst {
+                    key: FnKey::Method { data: ename, name: *mname },
+                    subst: vec![],
+                    iface_origins: vec![],
+                });
+            }
+        }
+        for root in late_roots {
+            if ctx.compile_queue(root).is_err() {
+                diags.append(&mut ctx.diags);
+                return fail(diags, ast_dump, ast_json);
+            }
+        }
     }
     for inst in seeded_bodies {
         ctx.ensure_inst(inst);
