@@ -77,10 +77,44 @@ fn classify_item(
         // `builtin impl i32 { .. }` declares no new name — the primitive
         // is already in scope; only its methods classify (via Member nodes)
         ItemKind::BuiltinImpl { .. } => {}
-        // methods classify via their own Member nodes; use names need
-        // resolution (M2) — left unclassified; mod decls are
+        // methods classify via their own Member nodes; mod decls are
         // namespaces, their names classify in a later phase
-        ItemKind::Impl { .. } | ItemKind::Use { .. } | ItemKind::ModDecl { .. } | ItemKind::Module { .. } => {}
+        ItemKind::Impl { .. } | ItemKind::ModDecl { .. } | ItemKind::Module { .. } => {}
+        // use names classify best-effort by the capitalization law until
+        // real resolution (M2): the path segments read as their heads
+        // (lowercase = a module → namespace, capitalized = a type), the
+        // imported names as the leaf members (capitalized = a type,
+        // lowercase = a function)
+        ItemKind::Use { path, names } => {
+            // the ordered queue — path segments first, then the imports;
+            // the walk matches `Ident` texts against the head in order
+            // (same shape as `classify_path_segs` / the Enum arm)
+            let mut queue: Vec<(&str, TokenType)> = Vec::with_capacity(path.len() + names.len());
+            for id in path {
+                let s = ast.name(*id);
+                queue.push((s, if is_cap(s) { TokenType::Type } else { TokenType::Namespace }));
+            }
+            for id in names {
+                let s = ast.name(*id);
+                queue.push((s, if is_cap(s) { TokenType::Type } else { TokenType::Function }));
+            }
+            let mut i = 0;
+            for t in toks_in(toks, span) {
+                if i >= queue.len() {
+                    break;
+                }
+                if let Tok::Ident(s) = &t.tok {
+                    if s == queue[i].0 {
+                        if owned_by_tokens(s) {
+                            i += 1;
+                            continue; // the token layer's class stands
+                        }
+                        out.push((t.span, queue[i].1));
+                        i += 1;
+                    }
+                }
+            }
+        }
     }
 }
 

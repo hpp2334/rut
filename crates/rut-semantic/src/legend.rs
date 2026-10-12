@@ -77,10 +77,16 @@ impl TokenType {
 /// The highlighting keyword set: the grammar's reserved words
 /// (`rut_parser::is_reserved_kw`) plus the contextual/statement words the
 /// parser matches by text (`break`, `continue`, `as`, `super`, `default`)
-/// and the receiver `self`. `true`/`false` lex as `Tok::Bool` and are
-/// classified there (keyword constants).
+/// and the receiver `self`. `entry` joins by TEXT for highlighting only:
+/// contextual before `fn` in the grammar, never an identifier in
+/// practice — but NOT reserved, so a name position may still legally
+/// carry it, and `owned_by_tokens` semantics then keep the token layer's
+/// keyword class there (the AST pass skips token-owned texts, so no
+/// same-named name is reclassified). The corpus never spells an
+/// identifier `entry`, so the tradeoff costs nothing. `true`/`false` lex
+/// as `Tok::Bool` and are classified there (keyword constants).
 pub fn is_keyword(s: &str) -> bool {
-    matches!(s, "self" | "break" | "continue" | "as" | "super" | "default")
+    matches!(s, "self" | "break" | "continue" | "as" | "super" | "default" | "entry")
         || rut_parser::is_reserved_kw(s)
 }
 

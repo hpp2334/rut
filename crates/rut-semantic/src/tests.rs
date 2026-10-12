@@ -211,6 +211,37 @@ fn colon2_value_paths_classify_by_the_resolution_law() {
 }
 
 #[test]
+fn use_lines_classify_by_the_capitalization_law() {
+    // the use line colors best-effort, without resolution: a path
+    // segment reads as its head (lowercase → namespace, capitalized →
+    // type), an imported name as the leaf member (capitalized → type,
+    // lowercase → function); `entry` before `fn` is token-owned by text
+    let src = "use ink::{ Logger };\nentry fn main() -> nil {}\n";
+    let spans = classify_src(src);
+    assert_eq!(find(src, &spans, "ink"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "Logger"), vec![TokenType::Type]);
+    assert_eq!(find(src, &spans, "entry"), vec![TokenType::Keyword]);
+
+    // a lowercase import colors a function, its single-seg head a module
+    let src = "use mod::{ helper };\n";
+    let spans = classify_src(src);
+    assert_eq!(find(src, &spans, "mod"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "helper"), vec![TokenType::Function]);
+}
+
+#[test]
+fn multi_seg_use_paths_classify_each_lane() {
+    // `use pkg::mod::{ name };` — the interior segments are the module
+    // heads (namespace), the brace leaf the import (function when
+    // lowercase) — mirroring the corpus's `use http_host::net::{ .. };`
+    let src = "use http_host::net::{ http_send };\nentry fn main() -> nil {}\n";
+    let spans = classify_src(src);
+    assert_eq!(find(src, &spans, "http_host"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "net"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "http_send"), vec![TokenType::Function]);
+}
+
+#[test]
 fn line_comments_color_exactly_and_stop_at_newline() {
     let src = "// lead\nlet x = 1; // trail\nlet y = 2;\n";
     let spans = classify_source(src, Mode::Impl);
@@ -280,11 +311,12 @@ fn classify_source_tiles_sorted_and_disjoint() {
 #[test]
 fn broken_source_still_classifies_with_comments() {
     // missing closing brace — the recovery AST simply yields fewer names;
-    // `entry` is contextual (AST-owned), so it may drop its class, but
-    // reserved words (`let`, `fn`) are token-owned and never do
+    // `entry` is token-owned by text now, so like the reserved words
+    // (`let`, `fn`) it never drops its class
     let src = "// still colored\nentry fn main( {\n  let x = ;\n";
     let spans = classify_source(src, Mode::Impl);
     assert_eq!(find(src, &spans, "// still colored"), vec![TokenType::Comment]);
+    assert_eq!(find(src, &spans, "entry"), vec![TokenType::Keyword]);
     assert_eq!(find(src, &spans, "let"), vec![TokenType::Keyword]);
     assert_eq!(find(src, &spans, "fn"), vec![TokenType::Keyword]);
 }
