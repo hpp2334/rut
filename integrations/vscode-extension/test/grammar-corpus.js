@@ -146,6 +146,19 @@ const SNIPPETS = [
   // aligned-already guards: f-string holes re-enter source.rut; comments win.
   { name: 'f-string hole embedded', src: 'let t = f"{x}";', text: 'x', scope: 'meta.embedded.line.rut' },
   { name: 'comment rule wins', src: '// struct dataclass where string opaque ?', text: 'struct', scope: 'comment.line.double-slash.rut' },
+  // phase-3: the fallback mirrors the semantic classifier's use-line law —
+  // path segments: capitalized -> type, lowercase -> namespace; brace
+  // imports: capitalized -> type, lowercase -> function — plus the
+  // text-based `entry` keyword fold.
+  { name: 'entry keyword', src: 'entry fn main() { }', text: 'entry', scope: 'keyword.other.rut' },
+  { name: 'use path namespace', src: 'use http_host::net::{ http_send };', text: 'http_host', scope: 'entity.name.namespace.rut' },
+  { name: 'use capitalized path segment', src: 'use pkg::Net::{ http_send };', text: 'Net', scope: 'entity.name.type.rut' },
+  { name: 'use imported type', src: 'use pouch::{ Vec };', text: 'Vec', scope: 'entity.name.type.rut' },
+  { name: 'use imported function', src: 'use futures::{ sleep };', text: 'sleep', scope: 'entity.name.function.rut' },
+  { name: 'use multi-line brace list', src: 'use json::{\n  EncodeJsonError,\n  JsonWriter,\n};', text: 'JsonWriter', scope: 'entity.name.type.rut' },
+  // use-line rescues: token-owned words keep their class on use lines
+  // (`owned_by_tokens` — `opaque` stays the boot primitive's builtin type).
+  { name: 'use opaque stays builtin', src: 'use core::{ opaque };', text: 'opaque', scope: 'storage.type.builtin.rut' },
 ];
 
 function checkSnippets(grammar, bad) {
@@ -172,13 +185,22 @@ function checkSnippets(grammar, bad) {
       bad.push(`smoke '${s.name}': '${s.text}' not found whole-word in ${JSON.stringify(s.src)}`);
       continue;
     }
+    // multi-line snippets: token offsets are line-relative — lift them onto
+    // document offsets before the interval test below (line 1 maps to
+    // itself, so single-line snippets are unaffected).
+    const lineStarts = [0];
+    let lineAcc = 0;
+    for (const l of s.src.split(/\r?\n/)) { lineStarts.push(lineAcc + l.length + 1); lineAcc += l.length + 1; }
     for (const pos of at) {
       const end = pos + s.text.length;
       // TextMate emits tokens only where a rule matched; unmatched runs are
       // gaps — i.e. plain text with no scope of their own. So: a positive
       // scope claim needs an intersecting token carrying it; a negative
       // claim fails only if some intersecting token carries the scope.
-      const covering = toks.filter((t) => t.start < end && t.start + t.text.length > pos);
+      const covering = toks.filter((t) => {
+        const dStart = lineStarts[t.line - 1] + t.start;
+        return dStart < end && dStart + t.text.length > pos;
+      });
       if (s.scope && !covering.some((t) => hasScope(t, s.scope))) {
         const got = covering.map((t) => t.scopes.join(' ')).join(' | ') || '<gap>';
         bad.push(`smoke '${s.name}': '${s.text}' lacks ${s.scope} (covering: ${got})`);

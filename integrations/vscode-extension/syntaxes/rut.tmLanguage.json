@@ -16,6 +16,7 @@
     { "include": "#builtin-type" },
     { "include": "#type-alias" },
     { "include": "#control-keyword" },
+    { "include": "#use-line" },
     { "include": "#keyword" },
     { "include": "#builtin-keyword" },
     { "include": "#nullable-type" },
@@ -136,13 +137,46 @@
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|class|struct|interface|impl|requires|use|pub|static|extern|is|host|fn|as|super|default|self)\\b"
+      "match": "\\b(let|mut|enum|class|struct|interface|impl|requires|use|pub|static|extern|is|host|fn|as|super|default|self|entry)\\b"
     },
     "builtin-keyword": {
       "match": "\\b(builtin)(?=\\s+(?:fn|primitive|impl|trait)\\b)",
       "captures": {
         "1": { "name": "keyword.other.rut" }
       }
+    },
+    "use-line": {
+      "name": "meta.use.rut",
+      "begin": "\\b(use)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.rut" }
+      },
+      "end": "(;)",
+      "endCaptures": {
+        "1": { "name": "punctuation.separator.rut" }
+      },
+      "patterns": [
+        { "include": "#use-names" },
+        { "include": "#use-path" }
+      ]
+    },
+    "use-names": {
+      "begin": "\\{",
+      "end": "\\}|(?=;)",
+      "patterns": [
+        { "include": "#builtin-type" },
+        { "include": "#keyword" },
+        { "name": "entity.name.type.rut", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
+        { "name": "entity.name.function.rut", "match": "\\b[a-z_][A-Za-z0-9_]*\\b" }
+      ]
+    },
+    "use-path": {
+      "patterns": [
+        { "include": "#builtin-type" },
+        { "include": "#keyword" },
+        { "name": "entity.name.type.rut", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
+        { "name": "entity.name.namespace.rut", "match": "\\b[a-z_][A-Za-z0-9_]*\\b" }
+      ]
     },
     "nullable-type": {
       "name": "storage.type.nullable.rut",
