@@ -239,6 +239,7 @@ fn weave_async_body_infer(
         cell_counter: 0,
         async_infer: infer,
         async_founds: Vec::new(),
+        terminated: false,
     };
     // argv pair: reg 0 the frame, reg 1 the cx (the FuncCode params are
     // exactly these two — the driving loop supplies both per drive)

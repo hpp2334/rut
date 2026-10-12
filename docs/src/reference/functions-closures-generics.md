@@ -27,6 +27,16 @@ entry fn main() {
   (see [Modules and visibility](modules-and-visibility.md)).
 - A function without a result arrow returns `nil`; `return;` (or
   falling off the end) is its return.
+- A function WITH a result arrow must return on every path: a body
+  that can fall off the end diagnoses — `missing return: 'f' is
+  '-> str' but a path reaches the end of the body`, naming the
+  function and its arrow — instead of handing the caller a
+  never-written value. The
+  analysis sees `return`, `break`/`continue`, an `if`/`else` whose
+  arms both return, an exhaustive `when` whose arms all return, and a
+  `while (true)` with no `break` bound to it (the scan-loop shape);
+  dead statements after a `return` are still just dead code. The same
+  law covers the closure block form.
 - Methods are functions in impl blocks: the first parameter spelled
   `self` (or `mut self`) makes it an instance method; absence of `self`
   makes it a class method (see

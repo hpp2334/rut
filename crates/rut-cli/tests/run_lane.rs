@@ -353,3 +353,38 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
     assert!(stderr.contains("--> calc:2:"), "{stderr}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A non-nil fn that falls off the end of its body: the compile
+/// diagnoses (`missing return`) and `rut run` exits 1 — the diagnostic
+/// aborts the run BEFORE the entry executes, so the caller never reads
+/// the never-written answer register (the old null-reference crash).
+/// The renderer spells the rustc-style `-->` position line.
+#[test]
+fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
+    let root = scratch("missing-return");
+    let dir = root.join("hello");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
+    );
+    write(
+        &dir,
+        "mod.rut",
+        "fn f() -> str {\n    let x = 1;\n}\nentry fn main() -> str {\n    return f();\n}\n",
+    );
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <missing return>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("missing return"), "{stderr}");
+    assert!(stderr.contains("--> hello:1:"), "{stderr}");
+    // the caret line under the offending signature, the rustc form
+    assert!(
+        stderr.lines().any(|l| l.contains('|') && l.contains('^')),
+        "expected a caret line, got: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

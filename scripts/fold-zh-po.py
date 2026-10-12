@@ -46,7 +46,28 @@ PO = 'docs/po/zh_CN.po'
 # dict only ever carries translations for the CURRENT sweep's new and
 # changed strings. This sweep's seventeen entries landed and were
 # pruned; see the git history of this file.
-FRESH = {}
+FRESH = {
+    # phase(9) definite-return: the functions reference page's new
+    # bullet (the law + what the analysis sees). Code spans byte-
+    # identical (`return`, `break`/`continue`, `if`/`else`, `when`,
+    # `while (true)`); the diagnostic text stays English inside the
+    # sentence, as quoted; full-width punctuation in prose.
+    "A function WITH a result arrow must return on every path: a body that can "
+    "fall off the end diagnoses — `missing return: 'f' is '-> str' but a path "
+    "reaches the end of the body`, naming the function and its arrow — instead of "
+    "handing the caller a never-written value. The analysis sees `return`, "
+    "`break`/`continue`, an `if`/`else` whose arms both return, an exhaustive "
+    "`when` whose arms all return, and a `while (true)` with no `break` bound to "
+    "it (the scan-loop shape); dead statements after a `return` are still just "
+    "dead code. The same law covers the closure block form.":
+    "带结果箭头的函数必须在每条路径上返回：函数体可能执行到末尾自然结束时"
+    "会诊断——`missing return: 'f' is '-> str' but a path reaches the end of "
+    "the body`，点名函数及其箭头——而不是把一个从未写入的值交给调用方。"
+    "该分析能看到 `return`、`break`/`continue`、两个分支都返回的 "
+    "`if`/`else`、所有臂都返回的穷尽 `when`，以及没有绑定到自身的 "
+    "`break` 的 `while (true)`（扫描循环形态）；`return` 之后的死语句"
+    "仍然只是死代码。闭包块形式同样适用这条法则。",
+}
 
 
 

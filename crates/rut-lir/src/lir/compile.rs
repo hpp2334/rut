@@ -242,6 +242,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         cell_counter: 0,
         async_infer: false,
         async_founds: Vec::new(),
+        terminated: false,
         };
         // the capture law's pre-pass: names first (a fn-level walk over
         // the body), promotion at each `bind_local` once types resolve
@@ -334,8 +335,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if c.compile_block(body).is_err() {
             return Err(());
         }
-        // implicit `return` for nil fns; non-nil fns must return on all
-        // paths (checked loosely: a final Ret with default value)
+        // Definite-return analysis (the "checked loosely" comment, now
+        // real): a non-nil fn must return on every path — the silent
+        // fall-through used to land in the fallback Ret below and the
+        // caller read a never-written ABI answer register (debug:
+        // "null reference produced", release: SIGSEGV). The fallback
+        // Ret STILL emits — the IR stays verifier-well-formed ("must
+        // end in Ret") — and the diagnostic aborts the run before
+        // anything executes. `-> nil` fns keep the implicit return;
+        // entry fns ride this same path and are covered.
+        let body_is_block = matches!(c.ctx.ast.kind(body), Kind::Expr(ExprKind::Block { .. }));
+        if body_is_block && !c.terminated && ret_ty != TY_NIL {
+            // the AST carries no ident span — anchor at the `-> T` the
+            // message quotes (the fn node otherwise)
+            let sp = match ret {
+                Some(r) => c.ctx.ast.span(r.id()),
+                None => c.ctx.ast.span(node),
+            };
+            c.ctx.err(sp, format!(
+                "missing return: `{}` is `-> {}` but a path reaches the end of the body",
+                c.ctx.name(fn_name),
+                c.ctx.type_name(ret_ty)
+            ));
+        }
+        // implicit `return` for nil fns; non-nil fns diagnosed above —
+        // this fallback Ret is the dead tail the diagnostics reject
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
@@ -403,6 +427,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         cell_counter: 0,
         async_infer: false,
         async_founds: Vec::new(),
+        terminated: false,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -460,6 +485,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(block) = c.ctx.ast.narrow_block(body) {
             if c.compile_block(block).is_err() {
                 return Err(());
+            }
+            // the same definite-return law as compile_fn: the lambda's
+            // BLOCK form falls through exactly like a fn body (the
+            // arrow-expression form returns its expression — checked
+            // below); the fallback Ret still emits for IR well-formedness
+            if !c.terminated && ret_ty != TY_NIL {
+                c.ctx.err(c.ctx.ast.span(block.id()), format!(
+                    "missing return: `lambda` is `-> {}` but a path reaches the end of the body",
+                    c.ctx.type_name(ret_ty)
+                ));
             }
             c.emit(Op::Ret { val: None }, 0);
         } else {
@@ -543,6 +578,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         cell_counter: 0,
         async_infer: false,
         async_founds: Vec::new(),
+        terminated: false,
         };
         // the emit closure's own pre-pass: its frame promotes its own
         // bindings (nested lambdas / for-of bodies under the loop body)

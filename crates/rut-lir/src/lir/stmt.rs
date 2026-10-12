@@ -141,6 +141,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::If { cond, then, els } => {
+                // definite-return: the if terminates iff BOTH arms do —
+                // a missing `else` leaves the condition-false path open.
+                // Per-arm snapshot/clear: each arm's verdict is read off
+                // its own compile, then combined; the entry flag (dead
+                // code after a previous terminator) ORs back in.
+                let saved = self.terminated;
+                self.terminated = false;
                 self.compile_expr(cond, Some(TY_BOOL))?;
                 let cond_reg = self.last_reg;
                 let l_then = self.new_label();
@@ -150,7 +157,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.br(cond_reg, l_then, else_label);
                 self.bind(l_then);
                 self.compile_block(then)?;
+                let then_term = self.terminated;
+                self.terminated = false;
                 self.jmp(l_end);
+                let mut else_term = false;
                 if let Some(e) = els {
                     self.bind(else_label);
                     match e {
@@ -159,11 +169,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.compile_block(b)?;
                         }
                     }
+                    else_term = self.terminated;
                 }
+                self.terminated = saved || (then_term && else_term);
                 self.bind(l_end);
                 Ok(())
             }
             StmtKind::While { cond, body } => {
+                // Loops keep the conservative rule — the condition can
+                // be false on the first test, so the body's returns
+                // stay inside it — EXCEPT the `while (true)` scan-loop:
+                // with the condition spelled literal `true` and no
+                // `break` bound to THIS loop, the body's only exits are
+                // `return` and `continue`, so control can never reach
+                // the loop's end label (the json reader's shape; the
+                // same law rustc applies to `loop {}`). Snapshot in,
+                // restore-or-terminate out.
+                let saved = self.terminated;
+                self.terminated = false;
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -178,10 +201,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.loops.pop();
                 self.jmp(l_head);
                 self.bind(l_end);
+                self.terminated = saved || self.while_never_falls_through(cond, body);
                 Ok(())
             }
-            StmtKind::ForOf { var, iter, body } => self.compile_for_of(node.id(), var, iter, body, sp),
+            StmtKind::ForOf { var, iter, body } => {
+                // loops never terminate (see `While`)
+                let saved = self.terminated;
+                self.terminated = false;
+                let r = self.compile_for_of(node.id(), var, iter, body, sp);
+                self.terminated = saved;
+                r
+            }
             StmtKind::ForC { var, init, cond, update, body } => {
+                // loops never terminate (see `While`)
+                let saved = self.terminated;
+                self.terminated = false;
                 // induction var is loop-owned; bind directly
                 // to the initializer's register
                 let t = self.compile_expr(init, None)?;
@@ -204,9 +238,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.compile_expr(update, None)?;
                 self.jmp(l_head);
                 self.bind(l_end);
+                self.terminated = saved;
                 Ok(())
             }
             StmtKind::Return { value } => {
+                // every return shape below ends this statement — the
+                // inlined-method jump, the async frame's retire, the
+                // plain ABI ret
+                self.terminated = true;
                 // inlined method body: `return` targets the inliner's result
                 if let Some((dst, l_end)) = self.inline_ret {
                     if let Some(v) = value {
@@ -322,12 +361,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::WhenStmt { scrut, arms } => {
-                self.compile_when(scrut, &arms, None, sp)?;
+                // definite-return: an exhaustive `when` (exhaustiveness
+                // was enforced inside compile_when before the arms ran)
+                // terminates iff every arm does. compile_when writes the
+                // all-arms verdict into the flag on the statement form;
+                // the entry flag ORs back in for dead code.
+                let saved = self.terminated;
+                self.terminated = false;
+                self.compile_when(scrut, &arms, None, sp, true)?;
+                self.terminated |= saved;
                 Ok(())
             }
             StmtKind::Break => {
                 // inside a desugared `for..of` emit closure,
                 // stopping the iteration IS returning `false`
+                // (the desugar's own shape — no definite-return flag:
+                // the emit closure is checked by its compiler, not here)
                 if self.emit_closure {
                     let f = self.new_reg(TY_BOOL);
                     self.emit(Op::ConstRaw { dst: f, bits: 0 }, sp.lo);
@@ -339,10 +388,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(());
                 };
                 self.jmp(brk);
+                // REAL loop control: the jump leaves this statement —
+                // control re-enters at the loop's break label, never here
+                self.terminated = true;
                 Ok(())
             }
             StmtKind::Continue => {
                 // skipping to the next element IS returning `true`
+                // (the emit-closure desugar — see `Break`)
                 if self.emit_closure {
                     let t = self.new_reg(TY_BOOL);
                     self.emit(Op::ConstRaw { dst: t, bits: 1 }, sp.lo);
@@ -354,12 +407,87 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(());
                 };
                 self.jmp(cont);
+                self.terminated = true;
                 Ok(())
             }
             StmtKind::ExprStmt(e) => {
                 self.compile_expr(e, None)?;
                 Ok(())
             }
+        }
+    }
+
+    /// `while (true)` with no `break` bound to THIS loop never falls
+    /// through: every exit from the body region is a `return` (leaves
+    /// the fn) or a `continue` (re-enters the head), so the loop's end
+    /// label is unreachable — the scan-loop shape the json reader and
+    /// much of the corpus is written in. Any other loop keeps the
+    /// conservative verdict: a spelled condition can be false on the
+    /// first test, a bound `break` can jump past the end. Lambda and
+    /// `async {}` bodies are their own fn frames — nothing inside binds
+    /// to this loop (their `break`s diagnose there, their `return`s
+    /// answer their own fn) — so the walk stops at their edges.
+    fn while_never_falls_through(&self, cond: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>) -> bool {
+        if !matches!(self.ctx.ast.expr(cond), ExprKind::Lit(Lit::Bool(true))) {
+            return false;
+        }
+        !self.binds_break(body.id(), 0)
+    }
+
+    /// Does any `break` at relative loop `depth` appear under this
+    /// statement subtree? A nested loop deepens the count — a `break`
+    /// one level down belongs to the nested loop, never to the loop
+    /// being asked about.
+    fn binds_break(&self, node: NodeId, depth: u32) -> bool {
+        match self.ctx.ast.kind(node) {
+            Kind::Stmt(StmtKind::Break) => depth == 0,
+            // a block IS an expression kind here: fn/loop/if bodies are
+            // blocks, so the statement walk resumes through them
+            Kind::Expr(ExprKind::Block { stmts }) => {
+                stmts.iter().any(|s| self.binds_break(s.id(), depth))
+            }
+            // loops deepen: their breaks bind to them
+            Kind::Stmt(StmtKind::While { body, .. })
+            | Kind::Stmt(StmtKind::ForOf { body, .. })
+            | Kind::Stmt(StmtKind::ForC { body, .. }) => self.binds_break(body.id(), depth + 1),
+            Kind::Stmt(StmtKind::If { then, els, .. }) => {
+                if self.binds_break(then.id(), depth) {
+                    return true;
+                }
+                match els {
+                    Some(ElseBranch::If(h)) => self.binds_break(h.id(), depth),
+                    Some(ElseBranch::Block(b)) => self.binds_break(b.id(), depth),
+                    None => false,
+                }
+            }
+            Kind::Stmt(StmtKind::WhenStmt { arms, .. }) => arms
+                .iter()
+                .any(|a| self.binds_break_in_arm(a.id(), depth)),
+            Kind::Stmt(StmtKind::LetStmt { init, .. }) => self.binds_break_in_expr(init.id(), depth),
+            Kind::Stmt(StmtKind::ExprStmt(e)) => self.binds_break_in_expr(e.id(), depth),
+            _ => false,
+        }
+    }
+
+    /// The subtree walk over arm bodies and expressions: only
+    /// statement-bearing shapes can carry a `break` — block
+    /// expressions and `when` arms; a lambda or `async {}` body is its
+    /// own fn frame and stops the walk.
+    fn binds_break_in_expr(&self, node: NodeId, depth: u32) -> bool {
+        match self.ctx.ast.kind(node) {
+            Kind::Expr(ExprKind::Block { stmts }) => {
+                stmts.iter().any(|s| self.binds_break(s.id(), depth))
+            }
+            Kind::Expr(ExprKind::WhenExpr { arms, .. }) => arms
+                .iter()
+                .any(|a| self.binds_break_in_arm(a.id(), depth)),
+            _ => false,
+        }
+    }
+
+    fn binds_break_in_arm(&self, arm: NodeId, depth: u32) -> bool {
+        match self.ctx.ast.arm(NodeHandle::new(arm)) {
+            ArmKind::WhenArm { body, .. } => self.binds_break_in_expr(body.id(), depth),
         }
     }
 
@@ -755,6 +883,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         arms: &[NodeHandle<AnyArm>],
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
+        // the statement form: the all-arms-terminate verdict is written
+        // into the definite-return flag when this call returns (the
+        // expression form never touches the flag)
+        as_stmt: bool,
     ) -> TcResult<TypeId> {
         let st = self.compile_expr(scrut, None)?;
         let scrut_reg = self.last_reg;
@@ -778,8 +910,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None
         };
         let l_end = self.new_label();
-        // exhaustiveness + duplicates
+        // exhaustiveness + duplicates — enforced BEFORE the arms run, so
+        // the verdict below may assume every path enters some arm
         self.check_when_exhaustive(st, arms, sp)?;
+        // definite-return: conservative AND over the arms — one
+        // fall-through arm leaves the when's end reachable
+        let mut all_terminate = !arms.is_empty();
         for arm in arms {
             let arm = *arm;
             let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm) else { continue };
@@ -798,6 +934,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             self.bind(l_arm);
+            // per-arm snapshot/clear: the body's verdict is its own
+            let arm_saved = self.terminated;
+            self.terminated = false;
             // nil arms may be statement blocks (`-> { a(); b(); }`)
             // — blocks aren't value expressions in this
             // build, so compile them as scoped statement blocks
@@ -808,6 +947,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             } else {
                 self.compile_expr(*body, if result_ty != TY_NIL { Some(result_ty) } else { None })?
             };
+            all_terminate &= self.terminated;
+            self.terminated = arm_saved;
             if result_ty != TY_NIL {
                 if bt != result_ty {
                     self.ctx.err(self.ctx.ast.span(body.id()), format!(
@@ -826,6 +967,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.bind(l_next_arm);
         }
         self.bind(l_end);
+        if as_stmt {
+            // the statement form's verdict: an exhaustive when whose
+            // arms all terminate cannot reach its own end
+            self.terminated = all_terminate;
+        }
         if let Some(rr) = result_reg {
             // the when's value moves into a fresh register so the "value in
             // last_reg" convention holds for the ENCLOSING expression

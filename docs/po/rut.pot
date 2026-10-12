@@ -2263,7 +2263,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:76
+#: src/reference/functions-closures-generics.md:86
 msgid "Generics"
 msgstr ""
 
@@ -13877,33 +13877,45 @@ msgstr ""
 
 #: src/reference/functions-closures-generics.md:30
 msgid ""
+"A function WITH a result arrow must return on every path: a body that can "
+"fall off the end diagnoses — `missing return: 'f' is '-> str' but a path "
+"reaches the end of the body`, naming the function and its arrow — instead of "
+"handing the caller a never-written value. The analysis sees `return`, "
+"`break`/`continue`, an `if`/`else` whose arms both return, an exhaustive "
+"`when` whose arms all return, and a `while (true)` with no `break` bound to "
+"it (the scan-loop shape); dead statements after a `return` are still just "
+"dead code. The same law covers the closure block form."
+msgstr ""
+
+#: src/reference/functions-closures-generics.md:40
+msgid ""
 "Methods are functions in impl blocks: the first parameter spelled `self` (or "
 "`mut self`) makes it an instance method; absence of `self` makes it a class "
 "method (see [Classes and constructors](classes.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:34
+#: src/reference/functions-closures-generics.md:44
 msgid ""
 "`entry fn` publishes a function to the embedder (see [Modules and "
 "visibility](modules-and-visibility.md)); `async fn` declares a suspending "
 "function (see [Async and await](async.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:37
+#: src/reference/functions-closures-generics.md:47
 msgid ""
 "Function types are first-class: `fn apply(f: fn(i32) -> i32, v: i32) -> i32`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:39
+#: src/reference/functions-closures-generics.md:49
 msgid "Closures"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:41
+#: src/reference/functions-closures-generics.md:51
 msgid ""
 "The closure spelling is an **anonymous fn** — block bodies, no arrow form:"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:44
+#: src/reference/functions-closures-generics.md:54
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13920,13 +13932,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:62
+#: src/reference/functions-closures-generics.md:72
 msgid ""
 "An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of the "
 "function type, copyable like a primitive."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:64
+#: src/reference/functions-closures-generics.md:74
 msgid ""
 "**The capture law**: primitives, `nil`, and `fn` values copy — a captured "
 "scalar is the closure's own slot, and reassigning it inside the closure "
@@ -13940,7 +13952,7 @@ msgid ""
 "closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:78
+#: src/reference/functions-closures-generics.md:88
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13960,44 +13972,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:98
+#: src/reference/functions-closures-generics.md:108
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:102
+#: src/reference/functions-closures-generics.md:112
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an "
 "interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:104
+#: src/reference/functions-closures-generics.md:114
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or "
 "spell the bound (`T requires I`)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:107
+#: src/reference/functions-closures-generics.md:117
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:110
+#: src/reference/functions-closures-generics.md:120
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:117
+#: src/reference/functions-closures-generics.md:127
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and interface generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:121
+#: src/reference/functions-closures-generics.md:131
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -14005,7 +14017,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:126
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -14015,21 +14027,21 @@ msgid ""
 "interface bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:133
+#: src/reference/functions-closures-generics.md:143
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an "
 "interface type fails any bound — only a concrete type with the members "
 "admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:136
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains "
 "no method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:139
+#: src/reference/functions-closures-generics.md:149
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -14037,13 +14049,13 @@ msgid ""
 "instantiation still binds the concrete member's own method."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:144
+#: src/reference/functions-closures-generics.md:154
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:146
+#: src/reference/functions-closures-generics.md:156
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "

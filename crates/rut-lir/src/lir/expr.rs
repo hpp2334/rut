@@ -206,7 +206,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::ArrayRepeat { value, count } => {
                 self.compile_array_repeat(value, count, expected, sp)
             }
-            ExprKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp),
+            ExprKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp, false),
             ExprKind::Is { expr, ty } => {
                 let rt = self.compile_expr(expr, None)?;
                 let recv = self.last_reg;

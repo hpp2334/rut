@@ -210,6 +210,15 @@ pub struct FnCompiler<'a, 'b> {
     pub(crate) async_infer: bool,
     /// the infer pass's harvest: each `return`'s found type, in order
     pub(crate) async_founds: Vec<TypeId>,
+    /// Definite-return analysis: the last statement compiled cannot
+    /// fall through (`return`, real `break`/`continue`, an if/else
+    /// whose arms both terminate, an exhaustive `when` whose arms all
+    /// terminate). compile_fn reads it after the body: a non-nil fn
+    /// with the flag still clear has a path reaching the body's end —
+    /// the "checked loosely" comment, now a diagnostic. Sticky by
+    /// design: statements after a terminating one are dead code that
+    /// still compiles, and the flag never flips back on their account.
+    terminated: bool,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
